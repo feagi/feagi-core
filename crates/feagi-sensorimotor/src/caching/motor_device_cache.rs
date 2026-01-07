@@ -1,3 +1,4 @@
+use serde_json::json;
 use crate::data_pipeline::per_channel_stream_caches::MotorCorticalUnitCache;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::data_types::descriptors::*;
@@ -28,7 +29,6 @@ macro_rules! motor_unit_functions {
                 $(#[doc = $doc:expr])?
                 $cortical_type_key_name:ident => {
                     friendly_name: $friendly_name:expr,
-                    snake_case_name: $snake_case_name:expr,
                     accepted_wrapped_io_data_type: $accepted_wrapped_io_data_type:ident,
                     cortical_id_unit_reference: $cortical_id_unit_reference:expr,
                     number_cortical_areas: $number_cortical_areas:expr,
@@ -47,7 +47,6 @@ macro_rules! motor_unit_functions {
         $(
             motor_unit_functions!(@generate_functions
             $cortical_type_key_name,
-            $snake_case_name,
             $accepted_wrapped_io_data_type
             );
         )*
@@ -57,13 +56,10 @@ macro_rules! motor_unit_functions {
     // Helper macro to generate stage and other similar functions
     (@generate_similar_functions
         $cortical_type_key_name:ident,
-        $snake_case_name:expr,
         $wrapped_data_type:ident
     ) => {
         ::paste::paste! {
-
-
-            pub fn [<$snake_case_name _read_preprocessed_cache_value>](
+            pub fn [<$cortical_type_key_name:snake _read_preprocessed_cache_value>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel: CorticalChannelIndex,
@@ -75,7 +71,7 @@ macro_rules! motor_unit_functions {
                 Ok(val)
             }
 
-            pub fn [<$snake_case_name _read_postprocessed_cache_value>](
+            pub fn [<$cortical_type_key_name:snake _read_postprocessed_cache_value>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel: CorticalChannelIndex,
@@ -87,7 +83,7 @@ macro_rules! motor_unit_functions {
                 Ok(val)
             }
 
-            pub fn [<motor_ $snake_case_name _try_register_motor_callback>]<F>(
+            pub fn [<$cortical_type_key_name:snake _try_register_motor_callback>]<F>(
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -100,7 +96,7 @@ macro_rules! motor_unit_functions {
                 Ok(signal_index)
             }
 
-            pub fn [<$snake_case_name _get_single_stage_properties>](
+            pub fn [<$cortical_type_key_name:snake _get_single_stage_properties>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -112,7 +108,7 @@ macro_rules! motor_unit_functions {
                 Ok(stage)
             }
 
-            pub fn [<$snake_case_name _get_all_stage_properties>](
+            pub fn [<$cortical_type_key_name:snake _get_all_stage_properties>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex
@@ -123,7 +119,7 @@ macro_rules! motor_unit_functions {
                 Ok(stages)
             }
 
-            pub fn [<$snake_case_name _update_single_stage_properties>](
+            pub fn [<$cortical_type_key_name:snake _update_single_stage_properties>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -136,7 +132,7 @@ macro_rules! motor_unit_functions {
                 Ok(())
             }
 
-            pub fn [<$snake_case_name _update_all_stage_properties>](
+            pub fn [<$cortical_type_key_name:snake _update_all_stage_properties>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -148,7 +144,7 @@ macro_rules! motor_unit_functions {
                 Ok(())
             }
 
-            pub fn [<$snake_case_name _replace_single_stage>](
+            pub fn [<$cortical_type_key_name:snake _replace_single_stage>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -161,7 +157,7 @@ macro_rules! motor_unit_functions {
                 Ok(())
             }
 
-            pub fn [<$snake_case_name _replace_all_stages>](
+            pub fn [<$cortical_type_key_name:snake _replace_all_stages>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -173,7 +169,7 @@ macro_rules! motor_unit_functions {
                 Ok(())
             }
 
-            pub fn [<$snake_case_name _removing_all_stages>](
+            pub fn [<$cortical_type_key_name:snake _removing_all_stages>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex
@@ -190,11 +186,10 @@ macro_rules! motor_unit_functions {
     // Arm for WrappedIOType::GazeProperties
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         GazeProperties
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -204,8 +199,13 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let eccentricity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                let modularity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[1];
+                let eccentricity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let modularity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[1];
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = GazePropertiesNeuronVoxelXYZPDecoder::new_box(
                     eccentricity_cortical_id,
@@ -217,22 +217,21 @@ macro_rules! motor_unit_functions {
                 )?;
 
                 let initial_val: WrappedIOData = WrappedIOData::GazeProperties(GazeProperties::create_default_centered());
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, GazeProperties);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, GazeProperties);
     };
 
     // Arm for WrappedIOType::Percentage
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         Percentage
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -241,7 +240,7 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageNeuronVoxelXYZPDecoder::new_box(
                     cortical_id,
                     z_neuron_resolution,
@@ -251,23 +250,27 @@ macro_rules! motor_unit_functions {
                     PercentageChannelDimensionality::D1
                 )?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, Percentage);
     };
 
     // Arm for WrappedIOType::Percentage3D
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         Percentage_3D
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -276,7 +279,7 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageNeuronVoxelXYZPDecoder::new_box(
                     cortical_id,
@@ -286,23 +289,28 @@ macro_rules! motor_unit_functions {
                     false,
                     PercentageChannelDimensionality::D3
                 )?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOData::Percentage_3D(Percentage3D::new_zero());
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage3D);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, Percentage3D);
     };
 
     // Arm for WrappedIOType::SignedPercentage
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         SignedPercentage
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -311,7 +319,7 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageNeuronVoxelXYZPDecoder::new_box(
                     cortical_id,
                     z_neuron_resolution,
@@ -321,23 +329,27 @@ macro_rules! motor_unit_functions {
                     PercentageChannelDimensionality::D1
                 )?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0));
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, SignedPercentage);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, SignedPercentage);
     };
 
     // Arm for WrappedIOType::MiscData
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         MiscData
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -345,26 +357,29 @@ macro_rules! motor_unit_functions {
                 misc_data_dimensions: MiscDataDimensions
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, unit)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(cortical_id, misc_data_dimensions, number_channels)?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, MiscData);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, MiscData);
     };
 
     // Arm for WrappedIOType::ImageFrame
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         ImageFrame
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -372,16 +387,20 @@ macro_rules! motor_unit_functions {
                 image_properties: ImageFrameProperties,
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, unit)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = CartesianPlaneNeuronVoxelXYZPDecoder::new_box(cortical_id, &image_properties, number_channels)?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOType::ImageFrame(Some(image_properties)).create_blank_data_of_type()?;
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, ImageFrame);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, ImageFrame);
     };
 }
 
@@ -466,7 +485,7 @@ impl MotorDeviceCache {
 
     //region  JSON import / export
 
-    pub(crate) fn set_from_output_definition(&mut self, replacing_definition: &JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
+    pub(crate) fn import_from_output_definition(&mut self, replacing_definition: &JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
         self.reset();
         let output_units_and_decoder_properties = replacing_definition.get_output_units_and_decoder_properties();
         for (motor_unit, unit_and_decoder_definitions) in output_units_and_decoder_properties {

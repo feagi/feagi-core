@@ -23,6 +23,14 @@ pub struct JSONInputOutputDefinition {
 }
 
 impl JSONInputOutputDefinition {
+    
+    pub fn new() -> JSONInputOutputDefinition {
+        JSONInputOutputDefinition {
+            input_units_and_encoder_properties: HashMap::new(),
+            output_units_and_decoder_properties: HashMap::new(),
+        }
+    }
+    
     pub fn get_input_units_and_encoder_properties(&self) -> &HashMap<SensoryCorticalUnit, Vec<(JSONUnitDefinition, JSONEncoderProperties)>> {
         &self.input_units_and_encoder_properties
     }

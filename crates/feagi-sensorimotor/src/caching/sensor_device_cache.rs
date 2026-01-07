@@ -1,3 +1,4 @@
+use serde_json::json;
 use crate::data_types::descriptors::PercentageChannelDimensionality;
 use crate::data_pipeline::per_channel_stream_caches::SensoryCorticalUnitCache;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
@@ -186,21 +187,22 @@ macro_rules! sensor_unit_functions {
     // Arm for WrappedIOType::Boolean
     (@generate_functions
         $sensory_unit:ident,
-        $cortical_type_key_name:expr,
         Boolean
     ) => {
         ::paste::paste! {
-            pub fn [<$cortical_type_key_name:snake _register>](
+            pub fn [<$sensory_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $cortical_type_key_name:snake >](unit)[0];
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](unit)[0];
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = BooleanNeuronVoxelXYZPEncoder::new_box(cortical_id, number_channels)?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({}).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = false.into();
-                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, number_channels, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -211,11 +213,10 @@ macro_rules! sensor_unit_functions {
     // Arm for WrappedIOType::Percentage
     (@generate_functions
         $sensory_unit:ident,
-        $cortical_type_key_name:expr,
         Percentage
     ) => {
         ::paste::paste! {
-            pub fn [<$cortical_type_key_name:snake _register>](
+            pub fn [<$sensory_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -224,8 +225,8 @@ macro_rules! sensor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $cortical_type_key_name:snake >](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageNeuronVoxelXYZPEncoder::new_box(
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageNeuronVoxelXYZPEncoder::new_box(
                     cortical_id,
                     z_neuron_resolution,
                     number_channels,
@@ -234,8 +235,13 @@ macro_rules! sensor_unit_functions {
                     PercentageChannelDimensionality::D1
                 )?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
-                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, number_channels, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -246,11 +252,10 @@ macro_rules! sensor_unit_functions {
     // Arm for WrappedIOType::Percentage_3D
     (@generate_functions
         $sensory_unit:ident,
-        $cortical_type_key_name:expr,
         Percentage_3D
     ) => {
         ::paste::paste! {
-            pub fn [<$cortical_type_key_name:snake _register>](
+            pub fn [<$sensory_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -259,8 +264,8 @@ macro_rules! sensor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $cortical_type_key_name:snake >](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageNeuronVoxelXYZPEncoder::new_box(
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageNeuronVoxelXYZPEncoder::new_box(
                     cortical_id,
                     z_neuron_resolution,
                     number_channels,
@@ -269,8 +274,13 @@ macro_rules! sensor_unit_functions {
                     PercentageChannelDimensionality::D3
                 )?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
-                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, number_channels, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -281,11 +291,10 @@ macro_rules! sensor_unit_functions {
     // Arm for WrappedIOType::SignedPercentage_4D
     (@generate_functions
         $sensory_unit:ident,
-        $cortical_type_key_name:expr,
         SignedPercentage_4D
     ) => {
         ::paste::paste! {
-            pub fn [<$cortical_type_key_name:snake _register>](
+            pub fn [<$sensory_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -294,8 +303,8 @@ macro_rules! sensor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $cortical_type_key_name:snake >](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageNeuronVoxelXYZPEncoder::new_box(
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageNeuronVoxelXYZPEncoder::new_box(
                     cortical_id,
                     z_neuron_resolution,
                     number_channels,
@@ -304,8 +313,13 @@ macro_rules! sensor_unit_functions {
                     PercentageChannelDimensionality::D4
                 )?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
-                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, number_channels, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -316,32 +330,35 @@ macro_rules! sensor_unit_functions {
     // Arm for WrappedIOType::SegmentedImageFrame
     (@generate_functions
         $sensory_unit:ident,
-        $cortical_type_key_name:expr,
         SegmentedImageFrame
     ) => {
         ::paste::paste! {
-            pub fn [<$cortical_type_key_name:snake _register>](
+            pub fn [<$sensory_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
                 frame_change_handling: FrameChangeHandling,
                 input_image_properties: ImageFrameProperties,
                 segmented_image_properties: SegmentedImageFrameProperties,
-                 initial_gaze: GazeProperties
+                initial_gaze: GazeProperties
                 ) -> Result<(), FeagiDataError>
             {
                 // Bit more unique, we define a custom stage for all channels for segmentation by default
-                let cortical_ids: [CorticalID; 9] = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $cortical_type_key_name:snake >](frame_change_handling, unit);
+                let cortical_ids: [CorticalID; 9] = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](frame_change_handling, unit);
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SegmentedImageFrameNeuronVoxelXYZPEncoder::new_box(cortical_ids, segmented_image_properties, number_channels)?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOType::SegmentedImageFrame(Some(segmented_image_properties)).create_blank_data_of_type()?;
-                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, number_channels, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
 
                 let stage_properties = PipelineStageProperties::new_image_frame_segmentator(input_image_properties.clone(), segmented_image_properties.clone(), initial_gaze.clone());
 
                 for channel_index in 0..*number_channels {
                     let segmentator_pipeline = vec![stage_properties.clone()];
-                    self.[<$cortical_type_key_name:snake _replace_all_stages>](unit, channel_index.into(), segmentator_pipeline);
+                    self.[<$sensory_unit:snake _replace_all_stages>](unit, channel_index.into(), segmentator_pipeline);
                 }
                 Ok(())
             }
@@ -353,11 +370,10 @@ macro_rules! sensor_unit_functions {
     // Arm for WrappedIOType::MiscData
     (@generate_functions
         $sensory_unit:ident,
-        $cortical_type_key_name:expr,
         MiscData
     ) => {
         ::paste::paste! {
-            pub fn [<$cortical_type_key_name:snake _register>](
+            pub fn [<$sensory_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -365,11 +381,15 @@ macro_rules! sensor_unit_functions {
                 misc_data_dimensions: MiscDataDimensions
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $cortical_type_key_name:snake >](frame_change_handling, unit)[0];
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](frame_change_handling, unit)[0];
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = MiscDataNeuronVoxelXYZPEncoder::new_box(cortical_id, misc_data_dimensions, number_channels)?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;
-                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, number_channels, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -381,11 +401,10 @@ macro_rules! sensor_unit_functions {
     // Arm for WrappedIOType::ImageFrame
     (@generate_functions
         $sensory_unit:ident,
-        $cortical_type_key_name:expr,
         ImageFrame
     ) => {
         ::paste::paste! {
-            pub fn [<$cortical_type_key_name:snake _register>](
+            pub fn [<$sensory_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -393,11 +412,15 @@ macro_rules! sensor_unit_functions {
                 image_properties: ImageFrameProperties,
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $cortical_type_key_name:snake >](frame_change_handling, unit)[0];
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](frame_change_handling, unit)[0];
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = CartesianPlaneNeuronVoxelXYZPEncoder::new_box(cortical_id, &image_properties, number_channels)?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOType::ImageFrame(Some(image_properties)).create_blank_data_of_type()?;
-                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, number_channels, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -533,7 +556,7 @@ impl SensorDeviceCache {
 
     //region  JSON import / export
 
-    pub(crate) fn set_from_input_definition(&mut self, replacing_definition: &JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
+    pub(crate) fn import_from_input_definition(&mut self, replacing_definition: &JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
         self.reset();
         let input_units_and_encoder_properties = replacing_definition.get_input_units_and_encoder_properties();
         for (sensory_unit, unit_and_encoder_definitions) in input_units_and_encoder_properties {
