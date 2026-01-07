@@ -14,6 +14,7 @@ use feagi_structures::FeagiDataError;
 use std::fmt;
 #[cfg(feature = "sdk-video")]
 use std::sync::{Arc, Mutex, MutexGuard};
+use feagi_sensorimotor::ConnectorCache;
 
 /// High-level connector agent for managing sensor and motor device registrations
 ///
@@ -39,8 +40,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 #[derive(Debug)]
 #[cfg(feature = "sdk-video")]
 pub struct ConnectorAgent {
-    sensor_cache: Arc<Mutex<SensorDeviceCache>>,
-    motor_cache: Arc<Mutex<MotorDeviceCache>>,
+    cache: ConnectorCache
 }
 
 #[cfg(feature = "sdk-video")]
@@ -52,33 +52,30 @@ impl Default for ConnectorAgent {
 
 #[cfg(feature = "sdk-video")]
 impl ConnectorAgent {
-    /// Create a new ConnectorAgent with empty sensor and motor caches
     pub fn new() -> Self {
-        let sensors = Arc::new(Mutex::new(SensorDeviceCache::new()));
         ConnectorAgent {
-            sensor_cache: sensors.clone(),
-            motor_cache: Arc::new(Mutex::new(MotorDeviceCache::new(sensors))),
+            cache: ConnectorCache::new()
         }
     }
 
     /// Get a mutable guard to the sensor cache
     pub fn get_sensor_cache(&self) -> MutexGuard<'_, SensorDeviceCache> {
-        self.sensor_cache.lock().unwrap()
+        self.cache.get_sensor_cache()
     }
 
-    /// Get a shared reference (Arc) to the sensor cache
+    /// Get a shared reference (Arc) to the sensor cache, useful for callbacks
     pub fn get_sensor_cache_ref(&self) -> Arc<Mutex<SensorDeviceCache>> {
-        self.sensor_cache.clone()
+        self.cache.get_sensor_cache_ref()
     }
 
     /// Get a mutable guard to the motor cache
     pub fn get_motor_cache(&self) -> MutexGuard<'_, MotorDeviceCache> {
-        self.motor_cache.lock().unwrap()
+        self.cache.get_motor_cache()
     }
 
-    /// Get a shared reference (Arc) to the motor cache
+    /// Get a shared reference (Arc) to the motor cache, useful for callbacks
     pub fn get_motor_cache_ref(&self) -> Arc<Mutex<MotorDeviceCache>> {
-        self.motor_cache.clone()
+        self.cache.get_motor_cache_ref()
     }
 
     /// Export all device registrations as a JSON configuration
@@ -88,10 +85,7 @@ impl ConnectorAgent {
     pub fn export_device_registrations_as_config_json(
         &self,
     ) -> Result<serde_json::Value, FeagiDataError> {
-        let mut output = JSONInputOutputDefinition::new();
-        self.get_sensor_cache().export_to_input_definition(&mut output)?;
-        self.get_motor_cache().export_to_output_definition(&mut output)?;
-        Ok(serde_json::to_value(output).unwrap())
+        self.cache.export_device_registrations_as_config_json()
     }
 
     /// Import device registrations from a JSON configuration
@@ -103,11 +97,7 @@ impl ConnectorAgent {
         &mut self,
         json: serde_json::Value,
     ) -> Result<(), FeagiDataError> {
-        // NOTE: Wipes all registered devices
-        let definition: JSONInputOutputDefinition = serde_json::from_value(json)
-            .map_err(|err| FeagiDataError::DeserializationError(err.to_string()))?;
-        self.get_motor_cache().import_from_output_definition(&definition)?;
-        self.get_sensor_cache().import_from_input_definition(&definition)?;
+        self.cache.import_device_registrations_as_config_json(json)?;
         Ok(())
     }
 }

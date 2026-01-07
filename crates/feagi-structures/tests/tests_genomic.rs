@@ -234,8 +234,8 @@ mod test_motor_cortical_units {
 
     #[test]
     fn test_object_segmentation_cortical_id_and_default_topology() {
-        let group = CorticalGroupIndex::from(0u8);
-        let ids = MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation(
+        let group = CorticalUnitIndex::from(0u8);
+        let ids = MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
             FrameChangeHandling::Absolute,
             group,
         );
@@ -255,8 +255,8 @@ mod test_motor_cortical_units {
 
     #[test]
     fn test_text_english_output_cortical_id_and_default_topology() {
-        let group = CorticalGroupIndex::from(0u8);
-        let ids = MotorCorticalUnit::get_cortical_ids_array_for_text_english_output(
+        let group = CorticalUnitIndex::from(0u8);
+        let ids = MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
             FrameChangeHandling::Absolute,
             group,
         );
@@ -281,8 +281,8 @@ mod test_sensory_cortical_units {
 
     #[test]
     fn test_text_english_input_cortical_id_and_default_topology() {
-        let group = CorticalGroupIndex::from(0u8);
-        let ids = SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input(
+        let group = CorticalUnitIndex::from(0u8);
+        let ids = SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
             FrameChangeHandling::Absolute,
             group,
         );

@@ -394,7 +394,7 @@ mod xyzp_tests {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
         // Use a proper sensory cortical ID
-        let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
@@ -415,7 +415,7 @@ mod xyzp_tests {
     fn test_cortical_mapped_get_mut() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
@@ -435,7 +435,7 @@ mod xyzp_tests {
     fn test_cortical_mapped_remove() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
@@ -453,12 +453,12 @@ mod xyzp_tests {
     fn test_cortical_mapped_clear() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
         )[0];
-        let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Incremental,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
@@ -479,7 +479,7 @@ mod xyzp_tests {
     fn test_cortical_mapped_clear_neurons_only() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
@@ -500,12 +500,12 @@ mod xyzp_tests {
     fn test_cortical_mapped_iter() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
         )[0];
-        let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Incremental,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
@@ -546,12 +546,12 @@ mod xyzp_tests {
     fn test_cortical_mapped_keys() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
         )[0];
-        let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Incremental,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
@@ -568,12 +568,12 @@ mod xyzp_tests {
     fn test_cortical_mapped_into_iter() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
         )[0];
-        let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let id2 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Incremental,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
@@ -590,7 +590,7 @@ mod xyzp_tests {
     fn test_cortical_mapped_ensure_clear_and_borrow_mut() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
@@ -616,7 +616,7 @@ mod xyzp_tests {
         mapped.reserve(50);
         assert!(mapped.capacity() >= 50);
 
-        let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+        let id1 = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
             FrameChangeHandling::Absolute,
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
