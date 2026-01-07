@@ -9,3 +9,4 @@ mod feedbacks;
 
 pub use motor_device_cache::MotorDeviceCache;
 pub use sensor_device_cache::SensorDeviceCache;
+pub use feedbacks::FeedBackRegistration;

@@ -19,9 +19,11 @@ impl Default for ConnectorAgent {
 
 impl ConnectorAgent {
     pub fn new() -> Self {
+        
+        let sensors = Arc::new(Mutex::new(SensorDeviceCache::new()));
         ConnectorAgent {
-            sensor_cache: Arc::new(Mutex::new(SensorDeviceCache::new())),
-            motor_cache: Arc::new(Mutex::new(MotorDeviceCache::new())),
+            sensor_cache: sensors.clone(),
+            motor_cache: Arc::new(Mutex::new(MotorDeviceCache::new(sensors))),
         }
     }
 
@@ -48,7 +50,6 @@ impl ConnectorAgent {
         let mut output = JSONInputOutputDefinition::new();
         self.get_sensor_cache().export_to_input_definition(&mut output)?;
         self.get_motor_cache().export_to_output_definition(&mut output)?;
-        // TODO feedback
         Ok(serde_json::to_value(output).unwrap())
     }
 
@@ -56,10 +57,10 @@ impl ConnectorAgent {
         &mut self,
         json: serde_json::Value,
     ) -> Result<(), FeagiDataError> {
+        // NOTE: Wipes all registered devices
         let definition: JSONInputOutputDefinition = serde_json::from_value(json).map_err(|err | FeagiDataError::DeserializationError(err.to_string()))?;
         self.get_motor_cache().import_from_output_definition(&definition)?;
         self.get_sensor_cache().import_from_input_definition(&definition)?;
-        // TODO feedback
         Ok(())
     }
 

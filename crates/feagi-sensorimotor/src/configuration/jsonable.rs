@@ -5,6 +5,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount
 use feagi_structures::genomic::cortical_area::{CorticalID, IOCorticalAreaConfigurationFlag};
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+use crate::caching::FeedBackRegistration;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality, SegmentedImageFrameProperties};
 use crate::data_types::{GazeProperties, ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
@@ -18,19 +19,20 @@ use crate::wrapped_io_data::WrappedIOData;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct JSONInputOutputDefinition {
     input_units_and_encoder_properties: HashMap<SensoryCorticalUnit, Vec<(JSONUnitDefinition, JSONEncoderProperties)>>,
-    output_units_and_decoder_properties: HashMap<MotorCorticalUnit, Vec<(JSONUnitDefinition, JSONDecoderProperties)>>
-    // TODO feedbacks
+    output_units_and_decoder_properties: HashMap<MotorCorticalUnit, Vec<(JSONUnitDefinition, JSONDecoderProperties)>>,
+    feedbacks: Vec<FeedBackRegistration>
 }
 
 impl JSONInputOutputDefinition {
-    
+
     pub fn new() -> JSONInputOutputDefinition {
         JSONInputOutputDefinition {
             input_units_and_encoder_properties: HashMap::new(),
             output_units_and_decoder_properties: HashMap::new(),
+            feedbacks: Vec::new()
         }
     }
-    
+
     pub fn get_input_units_and_encoder_properties(&self) -> &HashMap<SensoryCorticalUnit, Vec<(JSONUnitDefinition, JSONEncoderProperties)>> {
         &self.input_units_and_encoder_properties
     }
@@ -80,6 +82,13 @@ impl JSONInputOutputDefinition {
         }
         let vec = self.input_units_and_encoder_properties.get_mut(&sensor).unwrap();
         vec.push((unit_definition, encoder_properties));
+    }
+
+    pub fn get_feedbacks(&self) -> &Vec<FeedBackRegistration> {
+        &self.feedbacks
+    }
+    pub fn set_feedbacks(&mut self, feedbacks: Vec<FeedBackRegistration>) {
+        self.feedbacks = feedbacks;
     }
 
 }

@@ -35,7 +35,7 @@ macro_rules! motor_cortical_units {
                 },
 
                 #[doc = "Gaze control, where the first 2 numbers are the XY center, and the last number is the relative size"]
-                Shock => {
+                Gaze => {
                     friendly_name: "Gaze Control",
                     accepted_wrapped_io_data_type: GazeProperties,
                     cortical_id_unit_reference: *b"gaz",
