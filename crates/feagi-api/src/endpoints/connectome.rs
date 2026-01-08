@@ -413,7 +413,13 @@ pub async fn get_area_synapses(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get neurons: {}", e)))?;
 
-    debug!(target: "feagi-api", "Getting synapses for area {} (idx={}): {} neurons", area_id, cortical_idx, neurons.len());
+    tracing::debug!(
+        target: "feagi-api",
+        "Getting synapses for area {} (idx={}): {} neurons",
+        area_id,
+        cortical_idx,
+        neurons.len()
+    );
 
     // Collect all outgoing synapses from neurons in this area
     // Access NPU through ConnectomeManager singleton
@@ -424,10 +430,13 @@ pub async fn get_area_synapses(
         .get_npu()
         .ok_or_else(|| ApiError::internal("NPU not initialized"))?;
     let lock_start = std::time::Instant::now();
-    warn!("[NPU-LOCK] CONNECTOME-API: Acquiring NPU lock for synapse queries");
+    tracing::debug!("[NPU-LOCK] CONNECTOME-API: Acquiring NPU lock for synapse queries");
     let npu_lock = npu_arc.lock().unwrap();
     let lock_wait = lock_start.elapsed();
-    warn!("[NPU-LOCK] CONNECTOME-API: Lock acquired (waited {:.2}ms)", lock_wait.as_secs_f64() * 1000.0);
+    tracing::debug!(
+        "[NPU-LOCK] CONNECTOME-API: Lock acquired (waited {:.2}ms)",
+        lock_wait.as_secs_f64() * 1000.0
+    );
 
     let mut all_synapses = Vec::new();
     for neuron_info in &neurons {

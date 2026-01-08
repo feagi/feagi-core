@@ -75,7 +75,7 @@ impl MotorCorticalUnitCache {
             initial_value
         )?;
 
-        motor_cortical_unit_cache.set_friendly_name(unit_definition.friendly_name.clone());
+        let _ = motor_cortical_unit_cache.set_friendly_name(unit_definition.friendly_name.clone());
 
         // Update all the channels
         for (index, device_group) in unit_definition.device_grouping.iter().enumerate() {
@@ -241,6 +241,7 @@ impl MotorCorticalUnitCache {
 
     //region Metadata
 
+    #[allow(dead_code)]
     pub fn get_friendly_name(&self) -> &Option<String> {
         &self.device_friendly_name
     }

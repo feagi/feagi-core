@@ -524,22 +524,22 @@ impl BurstLoopRunner {
     pub fn get_fcl_snapshot(&self) -> Vec<(NeuronId, f32)> {
         let lock_start = std::time::Instant::now();
         let thread_id = std::thread::current().id();
-        warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} attempting NPU lock for get_fcl_snapshot at {:?}", thread_id, lock_start);
+        debug!("[NPU-LOCK] BURST-RUNNER: Thread {:?} attempting NPU lock for get_fcl_snapshot at {:?}", thread_id, lock_start);
         let result = {
             let npu_lock = self.npu.lock().unwrap();
             let lock_acquired = std::time::Instant::now();
             let lock_wait = lock_acquired.duration_since(lock_start);
-            if lock_wait.as_millis() > 5 {
-                warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} acquired lock after {:.2}ms wait for get_fcl_snapshot", 
-                    thread_id,
-                    lock_wait.as_secs_f64() * 1000.0);
-            }
+            debug!(
+                "[NPU-LOCK] BURST-RUNNER: Thread {:?} acquired lock after {:.2}ms wait for get_fcl_snapshot",
+                thread_id,
+                lock_wait.as_secs_f64() * 1000.0
+            );
             let snapshot = npu_lock.get_last_fcl_snapshot();
             snapshot
         };
         let lock_released = std::time::Instant::now();
         let total_duration = lock_released.duration_since(lock_start);
-        warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} RELEASED NPU lock after get_fcl_snapshot (total: {:.2}ms, returned {} neurons)", 
+        debug!("[NPU-LOCK] BURST-RUNNER: Thread {:?} RELEASED NPU lock after get_fcl_snapshot (total: {:.2}ms, returned {} neurons)", 
             thread_id,
             total_duration.as_secs_f64() * 1000.0,
             result.len());
@@ -563,22 +563,22 @@ impl BurstLoopRunner {
     pub fn get_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
         let lock_start = std::time::Instant::now();
         let thread_id = std::thread::current().id();
-        warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} attempting NPU lock for get_fire_ledger_configs at {:?}", thread_id, lock_start);
+        debug!("[NPU-LOCK] BURST-RUNNER: Thread {:?} attempting NPU lock for get_fire_ledger_configs at {:?}", thread_id, lock_start);
         let result = {
             let npu_lock = self.npu.lock().unwrap();
             let lock_acquired = std::time::Instant::now();
             let lock_wait = lock_acquired.duration_since(lock_start);
-            if lock_wait.as_millis() > 5 {
-                warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} acquired lock after {:.2}ms wait for get_fire_ledger_configs", 
-                    thread_id,
-                    lock_wait.as_secs_f64() * 1000.0);
-            }
+            debug!(
+                "[NPU-LOCK] BURST-RUNNER: Thread {:?} acquired lock after {:.2}ms wait for get_fire_ledger_configs",
+                thread_id,
+                lock_wait.as_secs_f64() * 1000.0
+            );
             let configs = npu_lock.get_all_fire_ledger_configs();
             configs
         };
         let lock_released = std::time::Instant::now();
         let total_duration = lock_released.duration_since(lock_start);
-        warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} RELEASED NPU lock after get_fire_ledger_configs (total: {:.2}ms, returned {} configs)", 
+        debug!("[NPU-LOCK] BURST-RUNNER: Thread {:?} RELEASED NPU lock after get_fire_ledger_configs (total: {:.2}ms, returned {} configs)", 
             thread_id,
             total_duration.as_secs_f64() * 1000.0,
             result.len());
@@ -981,6 +981,7 @@ fn burst_loop(
 
         // Track time since last lock release to detect if something held it
         static LAST_LOCK_RELEASE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+        #[allow(dead_code)]
         static LAST_BURST_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
         
         let lock_start = Instant::now();
@@ -1338,7 +1339,7 @@ fn burst_loop(
         // Log lock release timing for diagnostics
         let lock_hold_duration = npu_lock_release_time.duration_since(lock_acquired);
         if lock_hold_duration.as_millis() > 5 || burst_num < 5 || burst_num.is_multiple_of(100) {
-            warn!(
+            debug!(
                 "[NPU-LOCK] Burst {} (thread={:?}): Lock RELEASED (held for {:.2}ms, total from acquisition: {:.2}ms)",
                 burst_num,
                 release_thread_id,
@@ -2050,7 +2051,7 @@ fn burst_loop(
         // CRITICAL: Break sleep into chunks to allow responsive shutdown
         // Maximum sleep chunk: 50ms to ensure shutdown responds within ~50ms
         // CRITICAL: Read frequency dynamically to allow runtime updates
-        let sleep_start = Instant::now();
+        let _sleep_start = Instant::now();
         let current_frequency_hz = *frequency_hz.lock().unwrap();
         let interval_sec = 1.0 / current_frequency_hz;
         let target_time = burst_start + Duration::from_secs_f64(interval_sec);
@@ -2061,7 +2062,7 @@ fn burst_loop(
             let overshoot = now.duration_since(target_time);
             if overshoot.as_millis() > 50 {
                 warn!(
-                    "[BURST-LOOP] ⚠️ Iteration overshoot: {:.2}ms past target (burst {}) - no sleep needed",
+                    "[BURST-LOOP] Iteration overshoot: {:.2}ms past target (burst {}) - no sleep needed",
                     overshoot.as_secs_f64() * 1000.0,
                     burst_num
                 );

@@ -749,6 +749,12 @@ where
         dispatch!(self, get_last_fcl_snapshot())
     }
 
+    pub fn get_last_fcl_snapshot_with_cortical_idx(
+        &self,
+    ) -> core::result::Result<Vec<(feagi_npu_neural::types::NeuronId, u32, f32)>, FeagiError> {
+        dispatch!(self, get_last_fcl_snapshot_with_cortical_idx())
+    }
+
     pub fn inject_sensory_with_potentials(
         &mut self,
         neurons: &[(feagi_npu_neural::types::NeuronId, f32)],

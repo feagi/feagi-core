@@ -308,7 +308,12 @@ impl SynapticPropagationEngine {
                 // Calculate base PSP: Use source neuron's MP if mp_driven_psp is enabled, else use static synapse PSP
                 let base_psp = if source_meta.mp_driven {
                     // mp_driven_psp enabled: use source neuron's current membrane potential
-                    neuron_membrane_potentials.get(&source_neuron).copied().unwrap_or(0)
+                    *neuron_membrane_potentials.get(&source_neuron).unwrap_or_else(|| {
+                        panic!(
+                            "Invariant violation: missing membrane potential for source neuron {} (mp_driven_psp=true). Refusing fallback to 0.",
+                            source_neuron.0
+                        )
+                    })
                 } else {
                     // mp_driven_psp disabled: use static PSP from synapse
                     synapse_storage.postsynaptic_potentials()[syn_idx]

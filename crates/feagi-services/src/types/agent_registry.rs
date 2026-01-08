@@ -4,7 +4,6 @@
 //! Agent registry types - shared between feagi-services and feagi-io
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Type of agent based on I/O direction and purpose
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

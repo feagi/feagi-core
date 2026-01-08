@@ -81,7 +81,7 @@ impl SensoryCorticalUnitCache {
             initial_value
         )?;
 
-        sensory_cortical_unit_cache.set_friendly_name(unit_definition.friendly_name.clone());
+        let _ = sensory_cortical_unit_cache.set_friendly_name(unit_definition.friendly_name.clone());
 
         // Update all the channels
         for (index, device_group) in unit_definition.device_grouping.iter().enumerate() {
@@ -118,6 +118,7 @@ impl SensoryCorticalUnitCache {
     ///
     /// # Returns
     /// The count of channels as a `CorticalChannelCount`.
+    #[allow(dead_code)]
     pub fn number_of_channels(&self) -> CorticalChannelCount {
         (self.pipeline_runners.len() as u32).try_into().unwrap()
     }
@@ -130,6 +131,7 @@ impl SensoryCorticalUnitCache {
     /// # Returns
     /// * `Ok(())` - If the channel exists
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
+    #[allow(dead_code)]
     pub fn verify_channel_exists(
         &self,
         channel_index: CorticalChannelIndex,
@@ -139,6 +141,7 @@ impl SensoryCorticalUnitCache {
     }
 
     /// Retrieves the expected input data type for a channel
+    #[allow(dead_code)]
     pub fn get_input_type_for_channel(
         &self,
         cortical_channel_index: CorticalChannelIndex,
@@ -166,6 +169,7 @@ impl SensoryCorticalUnitCache {
     /// # Returns
     /// * `Ok(&WrappedIOData)` - Reference to the unprocessed input data
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
+    #[allow(dead_code)]
     pub fn try_get_channel_preprocessed_value(
         &self,
         cortical_channel_index: CorticalChannelIndex,
@@ -372,6 +376,7 @@ impl SensoryCorticalUnitCache {
 
     //region Metadata
 
+    #[allow(dead_code)]
     pub fn get_friendly_name(&self) -> &Option<String> {
         &self.device_friendly_name
     }
@@ -464,6 +469,7 @@ impl SensoryCorticalUnitCache {
         }
     }
 
+    #[allow(dead_code)]
     fn get_encoder_json_properties(&self) -> Result<JSONEncoderProperties, FeagiDataError> {
         Ok(self.neuron_encoder.get_as_properties())
     }

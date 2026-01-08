@@ -196,7 +196,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
             
             // Log profiling for sequential path if slow
             if sequential_duration.as_millis() > 5 || candidates.len() > 5_000 {
-                tracing::warn!(
+                tracing::debug!(
                     "[PHASE2-PROFILE] Sequential processing: total={:.2}ms | candidates={} | fired={} | refractory={} | convert={:.2}ms | process={:.2}ms | count={:.2}ms | avg_per_candidate={:.3}μs",
                     sequential_duration.as_secs_f64() * 1000.0,
                     candidates.len(),
@@ -477,10 +477,10 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
     let sequential_duration = sequential_start.elapsed();
     let total_duration = total_start.elapsed();
 
-    // Log detailed profiling if processing is slow or periodically
-    // Use warn! level so it's visible in normal operation (helps identify bottlenecks)
+    // Log detailed profiling if processing is slow or periodically.
+    // Debug level by default to avoid log spam in normal operation.
     if total_duration.as_millis() > 10 || candidates.len() > 30_000 {
-        tracing::warn!(
+        tracing::debug!(
             "[PHASE2-PROFILE] SIMD batching breakdown: total={:.2}ms | separate={:.2}ms | memory={:.2}ms | batches={} | gather={:.2}ms | lif={:.2}ms | constraint={:.2}ms | scatter={:.2}ms | sequential={:.2}ms | candidates={} | simd_eligible={} | sequential_only={} | memory={}",
             total_duration.as_secs_f64() * 1000.0,
             separate_duration.as_secs_f64() * 1000.0,

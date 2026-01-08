@@ -1015,7 +1015,12 @@ impl<
             .write()
             .unwrap()
             .remove_synapses_from_sources(&source_ids)
-            .unwrap_or(0)
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Invariant violation: remove_synapses_from_sources failed (sources={}): {e:?}",
+                    source_ids.len()
+                )
+            })
     }
 
     /// Batch remove synapses between source and target neuron sets
@@ -1314,6 +1319,45 @@ impl<
             .unwrap()
             .last_fcl_snapshot
             .clone()
+    }
+
+    /// Get last FCL snapshot (captured before clear in previous burst), including cortical_idx resolution.
+    ///
+    /// Determinism/strictness:
+    /// - Memory neurons are resolved via `memory_candidate_cortical_idx` (they are not in `neuron_storage`).
+    /// - Regular neurons are resolved via `neuron_storage` cortical area mapping.
+    /// - If any neuron cannot be resolved, this returns an error (no silent fallback to core areas).
+    pub fn get_last_fcl_snapshot_with_cortical_idx(
+        &self,
+    ) -> core::result::Result<Vec<(NeuronId, u32, f32)>, FeagiError> {
+        // Clone snapshot + memory map under a single lock so they remain consistent.
+        let (snapshot, memory_map) = {
+            let fire_structures = self.fire_structures.lock().unwrap();
+            (
+                fire_structures.last_fcl_snapshot.clone(),
+                fire_structures.memory_candidate_cortical_idx.clone(),
+            )
+        };
+
+        let neuron_storage = self.neuron_storage.read().unwrap();
+        let mut out = Vec::with_capacity(snapshot.len());
+
+        for (neuron_id, potential) in snapshot {
+            let cortical_idx = if let Some(&idx) = memory_map.get(&neuron_id.0) {
+                idx
+            } else {
+                neuron_storage.get_cortical_area(neuron_id.0 as usize).ok_or_else(|| {
+                    FeagiError::RuntimeError(format!(
+                        "Unresolvable neuron cortical area in FCL snapshot: neuron_id={}",
+                        neuron_id.0
+                    ))
+                })?
+            };
+
+            out.push((neuron_id, cortical_idx, potential));
+        }
+
+        Ok(out)
     }
 
     // ===== END SENSORY INJECTION API =====
@@ -2990,7 +3034,12 @@ impl<
             .read()
             .unwrap()
             .get_cortical_area(neuron_id as usize)
-            .unwrap_or(0)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Invariant violation: cortical area missing for neuron_id={}. This previously fell back to cortical_idx=0 (_death), which is forbidden.",
+                    neuron_id
+                )
+            })
     }
 
     /// Get all neuron IDs in a specific cortical area

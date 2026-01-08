@@ -26,7 +26,7 @@ use feagi_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Instant;
-use crate::configuration::jsonable::{JSONInputOutputDefinition, JSONUnitDefinition};
+use crate::configuration::jsonable::JSONInputOutputDefinition;
 // InputOutputDefinition is used in commented-out code (lines 622, 645)
 // Uncomment when implementing set_from_input_definition and export_to_input_definition
 // use crate::configuration::jsonable::InputOutputDefinition;
@@ -653,6 +653,7 @@ impl SensorDeviceCache {
     }
 
     
+    #[allow(dead_code)]
     fn try_read_preprocessed_cached_value(
         &self,
         sensor_type: SensoryCorticalUnit,
@@ -682,6 +683,7 @@ impl SensorDeviceCache {
 
     //region Metadata
 
+    #[allow(dead_code)]
     fn get_unit_friendly_name(&self,
                               sensor_type: SensoryCorticalUnit,
                               unit_index: CorticalUnitIndex) -> Result<&Option<String>, FeagiDataError> {
@@ -690,6 +692,7 @@ impl SensorDeviceCache {
         Ok(sensor_stream_caches.get_friendly_name())
     }
 
+    #[allow(dead_code)]
     fn set_unit_friendly_name(&mut self,
                               sensor_type: SensoryCorticalUnit,
                               unit_index: CorticalUnitIndex,

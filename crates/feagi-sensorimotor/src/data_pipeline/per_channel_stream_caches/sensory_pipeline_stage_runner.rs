@@ -9,7 +9,7 @@ use crate::configuration::jsonable::JSONDeviceProperties;
 use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner};
 
 #[derive(Debug)]
-pub(crate) struct SensoryPipelineStageRunner {
+pub struct SensoryPipelineStageRunner {
     expected_processed_sensor_type: WrappedIOType, // The type expected to be output by the stage runner
     last_instant_data_processed: Instant,
     pipeline_stages: Vec<Box<dyn PipelineStage>>,
@@ -99,6 +99,7 @@ impl SensoryPipelineStageRunner {
         self.expected_processed_sensor_type
     }
 
+    #[allow(dead_code)]
     pub fn get_final_processed_type(&self) -> WrappedIOType {
         self.expected_processed_sensor_type
     }

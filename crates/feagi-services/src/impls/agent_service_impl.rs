@@ -412,7 +412,7 @@ impl AgentService for AgentServiceImpl {
 
         // Add input capability (feagi-sensorimotor format)
         // Note: cortical_mappings removed - device registrations are handled separately
-        if let Some(ref sensory) = agent.capabilities.sensory {
+        if let Some(ref _sensory) = agent.capabilities.sensory {
             // Return empty array since cortical_mappings no longer exist
             // Device registrations should be accessed via device_registrations endpoint
             capabilities.insert(

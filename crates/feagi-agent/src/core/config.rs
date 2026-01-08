@@ -8,7 +8,6 @@ use feagi_io::{
     AgentCapabilities, AgentType, MotorCapability, SensoryCapability, VisionCapability,
     VisualizationCapability,
 };
-use std::collections::HashMap;
 
 /// Agent configuration builder
 #[derive(Debug, Clone)]

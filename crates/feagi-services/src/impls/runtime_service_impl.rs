@@ -202,40 +202,36 @@ impl RuntimeService for RuntimeServiceImpl {
         // Previous code acquired lock twice: once for get_fcl_snapshot(), once for cortical_idx
         let lock_start = std::time::Instant::now();
         let thread_id = std::thread::current().id();
-        warn!("[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} attempting NPU lock for get_fcl_snapshot_with_cortical_idx at {:?}", thread_id, lock_start);
+        debug!("[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} attempting NPU lock for get_fcl_snapshot_with_cortical_idx at {:?}", thread_id, lock_start);
         let result: Vec<(u64, u32, f32)> = {
             // Acquire lock ONCE for both FCL snapshot and cortical_idx lookup
             let npu_lock = npu.lock().unwrap();
             let lock_acquired = std::time::Instant::now();
             let lock_wait = lock_acquired.duration_since(lock_start);
-            if lock_wait.as_millis() > 5 {
-                warn!("[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} acquired lock after {:.2}ms wait for get_fcl_snapshot_with_cortical_idx", 
-                    thread_id,
-                    lock_wait.as_secs_f64() * 1000.0);
-            } else {
-                debug!("[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} acquired lock immediately ({:.2}ms wait)", 
-                    thread_id,
-                    lock_wait.as_secs_f64() * 1000.0);
-            }
+            debug!(
+                "[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} acquired lock after {:.2}ms wait for get_fcl_snapshot_with_cortical_idx",
+                thread_id,
+                lock_wait.as_secs_f64() * 1000.0
+            );
             
-            // Get FCL snapshot while holding the lock (avoids double lock acquisition)
-            let fcl_data = npu_lock.get_last_fcl_snapshot();
-            debug!("[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} got FCL snapshot ({} neurons), getting cortical_idx", thread_id, fcl_data.len());
-            
-            // Process all neurons while still holding the lock
-            let result: Vec<(u64, u32, f32)> = fcl_data
-                .iter()
-                .map(|(neuron_id, potential)| {
-                    let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id.0);
-                    (neuron_id.0 as u64, cortical_idx, *potential)
-                })
-                .collect();
-            
-            result
+            // STRICT: Resolve cortical_idx without fallbacks (memory neurons are handled explicitly).
+            let fcl_data = npu_lock
+                .get_last_fcl_snapshot_with_cortical_idx()
+                .map_err(|e| ServiceError::Internal(format!("Failed to resolve FCL cortical_idx: {e}")))?;
+            debug!(
+                "[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} got FCL snapshot ({} neurons) with cortical_idx",
+                thread_id,
+                fcl_data.len()
+            );
+
+            fcl_data
+                .into_iter()
+                .map(|(neuron_id, cortical_idx, potential)| (neuron_id.0 as u64, cortical_idx, potential))
+                .collect()
         }; // Lock released here
         let lock_released = std::time::Instant::now();
         let _lock_hold_duration = lock_released.duration_since(lock_start);
-        warn!("[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} RELEASED NPU lock after get_fcl_snapshot_with_cortical_idx (total: {:.2}ms wait + {:.2}ms hold, {} neurons)", 
+        debug!("[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} RELEASED NPU lock after get_fcl_snapshot_with_cortical_idx (total: {:.2}ms wait + {:.2}ms hold, {} neurons)", 
             thread_id,
             lock_released.duration_since(lock_start).as_secs_f64() * 1000.0,
             lock_released.duration_since(lock_start).as_secs_f64() * 1000.0,
@@ -262,7 +258,7 @@ impl RuntimeService for RuntimeServiceImpl {
     }
 
     async fn get_fire_ledger_configs(&self) -> ServiceResult<Vec<(u32, usize)>> {
-        warn!("[NPU-LOCK] RUNTIME-SERVICE: get_fire_ledger_configs() called - this acquires NPU lock!");
+        debug!("[NPU-LOCK] RUNTIME-SERVICE: get_fire_ledger_configs() called - this acquires NPU lock!");
         let runner = self.burst_runner.read();
         let configs = runner.get_fire_ledger_configs();
         Ok(configs)
@@ -334,18 +330,25 @@ impl RuntimeService for RuntimeServiceImpl {
 
         // Inject using NPU's service layer method
         let lock_start = std::time::Instant::now();
-        warn!("[NPU-LOCK] RUNTIME-SERVICE: Acquiring lock for manual stimulation ({} coordinates) - THIS CAN BLOCK BURST LOOP!", xyzp_data.len());
+        debug!(
+            "[NPU-LOCK] RUNTIME-SERVICE: Acquiring lock for manual stimulation ({} coordinates) - THIS CAN BLOCK BURST LOOP!",
+            xyzp_data.len()
+        );
         let injected_count = {
             let mut npu_lock = npu
                 .lock()
                 .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
             let lock_wait = lock_start.elapsed();
-            warn!("[NPU-LOCK] RUNTIME-SERVICE: Lock acquired for manual stimulation (waited {:.2}ms)", 
-                lock_wait.as_secs_f64() * 1000.0);
+            debug!(
+                "[NPU-LOCK] RUNTIME-SERVICE: Lock acquired for manual stimulation (waited {:.2}ms)",
+                lock_wait.as_secs_f64() * 1000.0
+            );
             let result = npu_lock.inject_sensory_xyzp_by_id(&cortical_id_typed, xyzp_data);
             let lock_hold_duration = lock_start.elapsed();
-            warn!("[NPU-LOCK] RUNTIME-SERVICE: Releasing lock after manual stimulation (held for {:.2}ms)", 
-                lock_hold_duration.as_secs_f64() * 1000.0);
+            debug!(
+                "[NPU-LOCK] RUNTIME-SERVICE: Releasing lock after manual stimulation (held for {:.2}ms)",
+                lock_hold_duration.as_secs_f64() * 1000.0
+            );
             result
         };
 

@@ -9,7 +9,7 @@ use crate::configuration::jsonable::JSONDeviceProperties;
 use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner};
 
 #[derive(Debug)]
-pub(crate) struct MotorPipelineStageRunner {
+pub struct MotorPipelineStageRunner {
     expected_decoded_motor_type: WrappedIOType,
     last_instant_data_processed: Instant,
     pipeline_stages: Vec<Box<dyn PipelineStage>>,

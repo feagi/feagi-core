@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use feagi_structures::FeagiDataError;
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth};
-use feagi_structures::genomic::cortical_area::{CorticalID, IOCorticalAreaConfigurationFlag};
+use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use crate::caching::FeedBackRegistration;
@@ -222,8 +222,8 @@ impl JSONEncoderProperties {
             JSONEncoderProperties::MiscData(misc_data_dimensions) => {
                 Ok(WrappedIOData::MiscData(MiscData::new(misc_data_dimensions)?))
             }
-            JSONEncoderProperties::Percentage(neuron_depth, percentage, is_signed, number_dimensions) => {
-                match(number_dimensions) {
+            JSONEncoderProperties::Percentage(_neuron_depth, _percentage, is_signed, number_dimensions) => {
+                match number_dimensions {
                     PercentageChannelDimensionality::D1 => {
                         if *is_signed {
                             Ok(WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0)))
@@ -333,8 +333,8 @@ impl JSONDecoderProperties {
             JSONDecoderProperties::MiscData(misc_data_dimensions) => {
                 Ok(WrappedIOData::MiscData(MiscData::new(misc_data_dimensions)?))
             }
-            JSONDecoderProperties::Percentage(neuron_depth, percentage, is_signed, number_dimensions) => {
-                match(number_dimensions) {
+            JSONDecoderProperties::Percentage(_neuron_depth, _percentage_neuron_positioning, is_signed, number_dimensions) => {
+                match number_dimensions {
                     PercentageChannelDimensionality::D1 => {
                         if *is_signed {
                             Ok(WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0)))
@@ -365,7 +365,7 @@ impl JSONDecoderProperties {
                     }
                 }
             }
-            JSONDecoderProperties::GazeProperties(eccentricity, modularity, PercentageNeuronPositioning) => {
+            JSONDecoderProperties::GazeProperties(_eccentricity, _modularity, _percentage_neuron_positioning) => {
                 Ok(WrappedIOData::GazeProperties(GazeProperties::create_default_centered()))
             }
         }

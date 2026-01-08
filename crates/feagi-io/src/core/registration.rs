@@ -748,7 +748,7 @@ impl RegistrationHandler {
 
             for area_name in &source_areas {
                 let cortical_id_base64 = self.area_name_to_cortical_id(area_name)?;
-                let cortical_id = CorticalID::try_from_base_64(&cortical_id_base64)
+                let _cortical_id = CorticalID::try_from_base_64(&cortical_id_base64)
                     .map_err(|e| FeagiDataError::BadParameters(format!("Failed to parse cortical ID: {}", e)))?;
 
                 // Motor unit type and dimensions should come from motor.unit/motor.group or device_registrations

@@ -408,10 +408,13 @@ impl SensoryStream {
         // SECURITY GATE 1: Check if genome is loaded
         {
             let lock_start = std::time::Instant::now();
-            warn!("[NPU-LOCK] ZMQ-SENSORY: Acquiring lock for genome check");
+            debug!("[NPU-LOCK] ZMQ-SENSORY: Acquiring lock for genome check");
             let npu = npu_arc.lock().unwrap();
             let lock_wait = lock_start.elapsed();
-            warn!("[NPU-LOCK] ZMQ-SENSORY: Lock acquired for genome check (waited {:.2}ms)", lock_wait.as_secs_f64() * 1000.0);
+            debug!(
+                "[NPU-LOCK] ZMQ-SENSORY: Lock acquired for genome check (waited {:.2}ms)",
+                lock_wait.as_secs_f64() * 1000.0
+            );
             if !npu.is_genome_loaded() {
                 *rejected_no_genome.lock() += 1;
                 let count = *rejected_no_genome.lock();
@@ -499,11 +502,17 @@ impl SensoryStream {
             // Hold NPU lock for entire injection to ensure all data is added to pending_sensory_injections
             // before any burst can process it. This ensures the entire sensory frame is processed in ONE burst.
             let lock_start = std::time::Instant::now();
-            warn!("[NPU-LOCK] ZMQ-SENSORY: Acquiring lock for LARGE injection ({} neurons) - THIS CAN BLOCK BURST LOOP!", total_neurons);
+            debug!(
+                "[NPU-LOCK] ZMQ-SENSORY: Acquiring lock for LARGE injection ({} neurons) - THIS CAN BLOCK BURST LOOP!",
+                total_neurons
+            );
             let mut npu = npu_arc.lock().unwrap();
             let lock_wait = lock_start.elapsed();
-            warn!("[NPU-LOCK] ZMQ-SENSORY: Lock acquired for large injection (waited {:.2}ms, holding for {} neurons)", 
-                lock_wait.as_secs_f64() * 1000.0, total_neurons);
+            debug!(
+                "[NPU-LOCK] ZMQ-SENSORY: Lock acquired for large injection (waited {:.2}ms, holding for {} neurons)",
+                lock_wait.as_secs_f64() * 1000.0,
+                total_neurons
+            );
             npu.clear_pending_sensory_injections();
             
             // Process all cortical areas while holding the lock
@@ -548,8 +557,10 @@ impl SensoryStream {
             // The next burst will process ALL of them atomically
             let lock_hold_duration = lock_start.elapsed();
             drop(npu);
-            warn!("[NPU-LOCK] ZMQ-SENSORY: Lock released after large injection (held for {:.2}ms)", 
-                lock_hold_duration.as_secs_f64() * 1000.0);
+            debug!(
+                "[NPU-LOCK] ZMQ-SENSORY: Lock released after large injection (held for {:.2}ms)",
+                lock_hold_duration.as_secs_f64() * 1000.0
+            );
             
             let total_duration = injection_start.elapsed();
             if total_duration.as_millis() > 500 {
@@ -568,11 +579,16 @@ impl SensoryStream {
         } else {
             // Small injection: process normally (single lock acquisition)
             let lock_start = std::time::Instant::now();
-            warn!("[NPU-LOCK] ZMQ-SENSORY: Acquiring lock for small injection ({} neurons)", total_neurons);
+            debug!(
+                "[NPU-LOCK] ZMQ-SENSORY: Acquiring lock for small injection ({} neurons)",
+                total_neurons
+            );
             let mut npu = npu_arc.lock().unwrap();
             let lock_wait = lock_start.elapsed();
-            warn!("[NPU-LOCK] ZMQ-SENSORY: Lock acquired for small injection (waited {:.2}ms)", 
-                lock_wait.as_secs_f64() * 1000.0);
+            debug!(
+                "[NPU-LOCK] ZMQ-SENSORY: Lock acquired for small injection (waited {:.2}ms)",
+                lock_wait.as_secs_f64() * 1000.0
+            );
             
             // Clear pending injections for large frames
             if total_neurons > LARGE_FRAME_THRESHOLD {
@@ -615,8 +631,10 @@ impl SensoryStream {
             }
             let lock_hold_duration = lock_start.elapsed();
             drop(npu);
-            warn!("[NPU-LOCK] ZMQ-SENSORY: Lock released after small injection (held for {:.2}ms)", 
-                lock_hold_duration.as_secs_f64() * 1000.0);
+            debug!(
+                "[NPU-LOCK] ZMQ-SENSORY: Lock released after small injection (held for {:.2}ms)",
+                lock_hold_duration.as_secs_f64() * 1000.0
+            );
         }
         
         let t_inject_ms = t_inject_start.elapsed().as_secs_f64() * 1000.0;

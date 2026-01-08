@@ -118,10 +118,12 @@ pub async fn get_fcl(
 
     for (neuron_id, cortical_idx, _potential) in &fcl_data {
         // Map cortical_idx to cortical_id using actual stored values
-        let cortical_id = idx_to_id
-            .get(cortical_idx)
-            .cloned()
-            .unwrap_or_else(|| format!("area_{}", cortical_idx));
+        let cortical_id = idx_to_id.get(cortical_idx).cloned().ok_or_else(|| {
+            ApiError::internal(format!(
+                "Unmapped cortical_idx in FCL snapshot: idx={}. Refusing fallback (would corrupt determinism).",
+                cortical_idx
+            ))
+        })?;
 
         cortical_areas
             .entry(cortical_id)
@@ -218,11 +220,12 @@ pub async fn get_fire_queue(
     let mut total_fired: u64 = 0;
 
     for (cortical_idx, (neuron_ids, _, _, _, _)) in fq_sample {
-        // Use actual cortical_id from mapping, fallback to area_{idx} if not found
-        let cortical_id = idx_to_id
-            .get(&cortical_idx)
-            .cloned()
-            .unwrap_or_else(|| format!("area_{}", cortical_idx));
+        let cortical_id = idx_to_id.get(&cortical_idx).cloned().ok_or_else(|| {
+            ApiError::internal(format!(
+                "Unmapped cortical_idx in Fire Queue sample: idx={}. Refusing fallback (would corrupt determinism).",
+                cortical_idx
+            ))
+        })?;
 
         let fired_count = neuron_ids.len() as u64;
         info!(
@@ -371,8 +374,7 @@ pub async fn put_fire_ledger_default_window_size(
 pub async fn get_fire_ledger_areas_window_config(
     State(state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    use tracing::warn;
-    warn!("[NPU-LOCK] API: GET /v1/burst_engine/fire_ledger/areas_window_config called - this acquires NPU lock!");
+    tracing::debug!("[NPU-LOCK] API: GET /v1/burst_engine/fire_ledger/areas_window_config called - this acquires NPU lock!");
     let runtime_service = state.runtime_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
 
@@ -397,11 +399,12 @@ pub async fn get_fire_ledger_areas_window_config(
     // Convert to area_id -> window_size HashMap using actual cortical_id
     let mut areas: HashMap<String, usize> = HashMap::new();
     for (cortical_idx, window_size) in configs {
-        // Use actual cortical_id from mapping, fallback to area_{idx} if not found
-        let cortical_id = idx_to_id
-            .get(&cortical_idx)
-            .cloned()
-            .unwrap_or_else(|| format!("area_{}", cortical_idx));
+        let cortical_id = idx_to_id.get(&cortical_idx).cloned().ok_or_else(|| {
+            ApiError::internal(format!(
+                "Unmapped cortical_idx in Fire Ledger window config: idx={}. Refusing fallback (would corrupt determinism).",
+                cortical_idx
+            ))
+        })?;
         areas.insert(cortical_id, window_size);
     }
 

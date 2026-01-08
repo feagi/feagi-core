@@ -50,6 +50,7 @@ enum EncoderMode {
         processor: ImageFrameProcessor,
         prev_frame: ImageFrame,
         _input_props: ImageFrameProperties,
+        #[allow(dead_code)]
         output_props: ImageFrameProperties,
         // OPTIMIZATION: Reusable buffer to avoid allocations on each encode
         processed_buffer: ImageFrame,
@@ -58,7 +59,9 @@ enum EncoderMode {
         segmentator: ImageFrameSegmentator,
         brightness_contrast: ImageFrameProcessor,
         prev_frame: SegmentedImageFrame,
+        #[allow(dead_code)]
         input_props: ImageFrameProperties,
+        #[allow(dead_code)]
         output_props: SegmentedImageFrameProperties,
         gaze: GazeProperties,
         // OPTIMIZATION: Reusable buffers to avoid allocations on each encode

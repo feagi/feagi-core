@@ -265,7 +265,7 @@ impl<T: NeuralValue> NeuronArray<T> {
     /// Should be called after neurons are loaded (e.g., after genome load).
     pub fn prepopulate_cortical_area_cache(&self) {
         let mut index = match self.cortical_area_neuron_index.lock() {
-            Ok(mut idx) => idx,
+            Ok(idx) => idx,
             Err(_) => return, // Lock poisoned, skip
         };
         

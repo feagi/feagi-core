@@ -21,7 +21,6 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use serde::{Deserialize, Serialize};
 use crate::caching::{FeedBackRegistration, SensorDeviceCache};
 use crate::configuration::jsonable::JSONInputOutputDefinition;
 
@@ -510,7 +509,12 @@ impl MotorDeviceCache {
                 }
             };
 
-            sensors.segmented_vision_replace_single_stage(segmentation_unit_index, segmentation_channel_index, 0.into(), new_properties);
+            let _ = sensors.segmented_vision_replace_single_stage(
+                segmentation_unit_index,
+                segmentation_channel_index,
+                0.into(),
+                new_properties,
+            );
         };
 
         let index =  self.gaze_try_register_motor_callback(gaze_unit_index, gaze_channel_index, closure)?;

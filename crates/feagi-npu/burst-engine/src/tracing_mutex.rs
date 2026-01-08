@@ -15,8 +15,10 @@
 //! wrapper that behaves identically to std::sync::Mutex
 
 use std::sync::Mutex;
-use std::time::Instant;
+#[cfg(feature = "npu-lock-tracing")]
 use std::thread;
+#[cfg(feature = "npu-lock-tracing")]
+use std::time::Instant;
 
 #[cfg(feature = "npu-lock-tracing")]
 use tracing::{debug, warn};

@@ -345,7 +345,7 @@ impl PlasticityService {
             
             // Query FireLedger for upstream firing history (CPU-resident, dense burst-aligned windows)
             let plasticity_lock_start = std::time::Instant::now();
-            tracing::warn!(
+            tracing::debug!(
                 "[NPU-LOCK] PLASTICITY: Acquiring NPU lock for FireLedger query (burst {}, area {})",
                 current_timestep,
                 memory_area_idx
@@ -356,19 +356,17 @@ impl PlasticityService {
                 // Brief lock to query FireLedger - data is already CPU-resident from burst processing
                 let npu_lock = npu.lock().unwrap();
                 let plasticity_lock_wait = plasticity_lock_start.elapsed();
-                tracing::warn!(
+                tracing::debug!(
                     "[NPU-LOCK] PLASTICITY: Lock acquired (waited {:.2}ms, burst {}, area {})",
                     plasticity_lock_wait.as_secs_f64() * 1000.0,
                     current_timestep,
                     memory_area_idx
                 );
-                if plasticity_lock_wait.as_millis() > 5 {
-                    tracing::warn!(
-                        "[NPU-LOCK] PLASTICITY: ⚠️ Slow lock acquisition: {:.2}ms (burst {})",
-                        plasticity_lock_wait.as_secs_f64() * 1000.0,
-                        current_timestep
-                    );
-                }
+                tracing::debug!(
+                    "[NPU-LOCK] PLASTICITY: Slow lock acquisition: {:.2}ms (burst {})",
+                    plasticity_lock_wait.as_secs_f64() * 1000.0,
+                    current_timestep
+                );
 
                 let result = if temporal_depth == 0 || area_config.upstream_areas.is_empty() {
                     Vec::new()
@@ -447,16 +445,14 @@ impl PlasticityService {
                 
                 // Log lock hold time before release
                 let plasticity_lock_hold = plasticity_lock_start.elapsed();
-                if plasticity_lock_hold.as_millis() > 10 {
-                    tracing::warn!(
-                        "[NPU-LOCK] PLASTICITY: Lock held for {:.2}ms (burst {}) - releasing now",
-                        plasticity_lock_hold.as_secs_f64() * 1000.0,
-                        current_timestep
-                    );
-                }
+                tracing::debug!(
+                    "[NPU-LOCK] PLASTICITY: Lock held for {:.2}ms (burst {}) - releasing now",
+                    plasticity_lock_hold.as_secs_f64() * 1000.0,
+                    current_timestep
+                );
                 // Lock is released here when npu_lock goes out of scope
                 drop(npu_lock);
-                tracing::warn!(
+                tracing::debug!(
                     "[NPU-LOCK] PLASTICITY: Lock RELEASED (burst {}, total hold: {:.2}ms)",
                     current_timestep,
                     plasticity_lock_hold.as_secs_f64() * 1000.0
