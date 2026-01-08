@@ -20,10 +20,11 @@ use feagi_structures::genomic::cortical_area::descriptors::{CorticalUnitIndex, C
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_structures::FeagiDataError;
 
 use super::agent_registry::{
-    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
-    MotorUnit, SensoryCapability, SensoryUnit, VisionCapability, VisualizationCapability,
+    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorUnit,
+    SensoryUnit,
 };
 
 /// Type alias for registration callbacks
@@ -220,7 +221,7 @@ impl RegistrationHandler {
     ///
     /// For IPU/OPU areas, the name should be a valid prefix (e.g., "isvi") or a base64-encoded CorticalID.
     /// Uses null-byte padding for short prefixes (standard approach).
-    fn area_name_to_cortical_id(&self, area_name: &str) -> Result<String, String> {
+    fn area_name_to_cortical_id(&self, area_name: &str) -> Result<String, FeagiDataError> {
         // First, check if it's already a base64-encoded CorticalID
         if let Ok(cortical_id) = CorticalID::try_from_base_64(area_name) {
             return Ok(cortical_id.as_base_64());
@@ -237,7 +238,7 @@ impl RegistrationHandler {
         }
 
         // Failed - return error with guidance
-        Err(format!(
+        Err(FeagiDataError::BadParameters(format!(
             "Failed to create CorticalID from area name '{}' (length: {}). \
             The area name must be either:\n\
             1. A valid prefix (1-8 characters) that can be padded to 8 bytes, or\n\
@@ -246,7 +247,7 @@ impl RegistrationHandler {
             or provide a base64-encoded CorticalID.",
             area_name,
             area_name.len()
-        ))
+        )))
     }
 
 
@@ -258,7 +259,7 @@ impl RegistrationHandler {
         frame_change_handling: FrameChangeHandling,
         percentage_neuron_positioning: feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning,
         group: CorticalUnitIndex,
-    ) -> Result<Vec<CorticalID>, String> {
+    ) -> Result<Vec<CorticalID>, FeagiDataError> {
         // Dispatch to the appropriate get_cortical_ids_array_for method based on unit type
         // This is systematic (covers all types) not hardcoded for one specific type
         // Note: Method signatures vary based on cortical_type_parameters in the template:
@@ -345,7 +346,7 @@ impl RegistrationHandler {
 
     /// Helper function to safely call async code from sync context
     /// Always uses a separate thread to avoid blocking the current runtime
-    fn block_on_async_service<F>(&self, future_factory: F) -> Result<bool, String>
+    fn block_on_async_service<F>(&self, future_factory: F) -> Result<bool, FeagiDataError>
     where
         F: FnOnce() -> std::pin::Pin<
                 Box<
@@ -362,14 +363,14 @@ impl RegistrationHandler {
         let (tx, rx) = std::sync::mpsc::channel();
 
         std::thread::spawn(move || {
-            let result = (|| -> Result<bool, String> {
+            let result = (|| -> Result<bool, FeagiDataError> {
                 debug!("🦀 [REGISTRATION] Creating new tokio runtime in thread");
                 let rt = tokio::runtime::Runtime::new()
-                    .map_err(|e| format!("Failed to create runtime: {}", e))?;
+                    .map_err(|e| FeagiDataError::InternalError(format!("Failed to create runtime: {}", e)))?;
                 debug!("🦀 [REGISTRATION] Blocking on async future");
                 let result = rt
                     .block_on(future)
-                    .map_err(|e| format!("Service error: {}", e))?;
+                    .map_err(|e| FeagiDataError::InternalError(format!("Service error: {}", e)))?;
                 debug!("🦀 [REGISTRATION] Async future completed successfully");
                 Ok(result)
             })();
@@ -385,13 +386,13 @@ impl RegistrationHandler {
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 error!("🦀 [REGISTRATION] Timeout waiting for cortical area existence check (5s)");
-                Err("Timeout waiting for cortical area existence check (5s)".to_string())
+                Err(FeagiDataError::InternalError("Timeout waiting for cortical area existence check (5s)".to_string()))
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 error!(
                     "🦀 [REGISTRATION] Thread disconnected while checking cortical area existence"
                 );
-                Err("Thread disconnected while checking cortical area existence".to_string())
+                Err(FeagiDataError::InternalError("Thread disconnected while checking cortical area existence".to_string()))
             }
         }
     }
@@ -401,7 +402,7 @@ impl RegistrationHandler {
     fn ensure_cortical_areas_exist(
         &self,
         capabilities: &AgentCapabilities,
-    ) -> Result<CorticalAreaAvailability, String> {
+    ) -> Result<CorticalAreaAvailability, FeagiDataError> {
         let mut ipu_statuses = Vec::new();
         let mut opu_statuses = Vec::new();
 
@@ -425,7 +426,7 @@ impl RegistrationHandler {
             .lock()
             .as_ref()
             .ok_or_else(|| {
-                "GenomeService not available - required for cortical area management".to_string()
+                FeagiDataError::InternalError("GenomeService not available - required for cortical area management".to_string())
             })?
             .clone();
         let connectome_service = self
@@ -433,7 +434,7 @@ impl RegistrationHandler {
             .lock()
             .as_ref()
             .ok_or_else(|| {
-                "ConnectomeService not available - required for cortical area checking".to_string()
+                FeagiDataError::InternalError("ConnectomeService not available - required for cortical area checking".to_string())
             })?
             .clone();
 
@@ -505,12 +506,10 @@ impl RegistrationHandler {
                             let id = id_for_check.clone();
                             Box::pin(async move { service.cortical_area_exists(&id).await })
                         })
-                        .map_err(|e| {
-                            format!(
+                        .map_err(|e| FeagiDataError::InternalError(format!(
                                 "Failed to check cortical area existence for IPU area '{}': {}",
                                 area_key, e
-                            )
-                        })?;
+                            )))?;
 
                     if exists {
                         ipu_statuses.push(CorticalAreaStatus {
@@ -531,10 +530,10 @@ impl RegistrationHandler {
                             dimensions: None,
                             message: Some("Area missing and auto-create disabled".to_string()),
                         });
-                        return Err(format!(
+                        return Err(FeagiDataError::BadParameters(format!(
                             "Required IPU area '{}' is missing. Enable auto_create_missing_cortical_areas in config to auto-create.",
                             area_key
-                        ));
+                        )));
                     }
 
                     let create_params = feagi_services::types::CreateCorticalAreaParams {
@@ -565,7 +564,7 @@ impl RegistrationHandler {
                         handle.block_on(genome_service.create_cortical_areas(vec![create_params]))
                     } else {
                         let rt = tokio::runtime::Runtime::new()
-                            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+                            .map_err(|e| FeagiDataError::InternalError(format!("Failed to create tokio runtime: {}", e)))?;
                         rt.block_on(genome_service.create_cortical_areas(vec![create_params]))
                     };
 
@@ -587,20 +586,19 @@ impl RegistrationHandler {
                                 dimensions: None,
                                 message: Some(format!("Creation failed: {}", e)),
                             });
-                            return Err(format!("Failed to create IPU area '{}': {}", area_key, e));
+                            return Err(FeagiDataError::InternalError(format!("Failed to create IPU area '{}': {}", area_key, e)));
                         }
                     }
                 }
 
             } else {
                 // Legacy vision.target_cortical_area is no longer supported
-                return Err(format!(
+                return Err(FeagiDataError::BadParameters(
                     "Legacy vision.target_cortical_area is no longer supported in FEAGI 2.0 Rust SDK. \
                     Please provide either:\n\
                     1. device_registrations in capabilities, or\n\
-                    2. vision.unit and vision.group in the vision capability.\n\
-                    Agent: {}",
-                    request.agent_id
+                    2. vision.unit and vision.group in the vision capability."
+                        .to_string(),
                 ));
             }
         }
@@ -610,13 +608,12 @@ impl RegistrationHandler {
         if let Some(ref sensory) = capabilities.sensory {
             // Reject legacy cortical_mappings - agents must use new format
             if !sensory.cortical_mappings.is_empty() {
-                return Err(format!(
+                return Err(FeagiDataError::BadParameters(
                     "Legacy sensory.cortical_mappings are no longer supported in FEAGI 2.0 Rust SDK. \
                     Please provide either:\n\
                     1. device_registrations in capabilities, or\n\
-                    2. sensory.unit and sensory.group in the sensory capability.\n\
-                    Agent: {}",
-                    request.agent_id
+                    2. sensory.unit and sensory.group in the sensory capability."
+                        .to_string(),
                 ));
             }
             
@@ -751,21 +748,20 @@ impl RegistrationHandler {
                 cortical_ids.into_iter().map(|id| id.as_base_64()).collect()
             } else {
                 // Legacy motor.source_cortical_areas are no longer supported
-                return Err(format!(
+                return Err(FeagiDataError::BadParameters(
                     "Legacy motor.source_cortical_areas are no longer supported in FEAGI 2.0 Rust SDK. \
                     Please provide either:\n\
                     1. device_registrations in capabilities, or\n\
                     2. motor.unit and motor.group in the motor capability, or\n\
-                    3. motor.source_units array with unit+group specifications.\n\
-                    Agent: {}",
-                    request.agent_id
+                    3. motor.source_units array with unit+group specifications."
+                        .to_string(),
                 ));
             };
 
             for area_name in &source_areas {
                 let cortical_id_base64 = self.area_name_to_cortical_id(area_name)?;
                 let cortical_id = CorticalID::try_from_base_64(&cortical_id_base64)
-                    .map_err(|e| format!("Failed to parse cortical ID: {}", e))?;
+                    .map_err(|e| FeagiDataError::BadParameters(format!("Failed to parse cortical ID: {}", e)))?;
 
                 // Motor unit type and dimensions should come from motor.unit/motor.group or device_registrations
                 // This code path should only be reached when motor.unit/motor.group are provided
@@ -794,10 +790,10 @@ impl RegistrationHandler {
                     }
                 } else {
                     // This should not happen if validation above is correct
-                    return Err(format!(
+                    return Err(FeagiDataError::InternalError(format!(
                         "Motor unit type not available for area '{}'. This indicates a bug in registration logic.",
                         area_name
-                    ));
+                    )));
                 };
 
                 // Check if area exists (blocking call)
@@ -823,7 +819,7 @@ impl RegistrationHandler {
                 }
                 .map_err(|e| {
                     error!("🦀 [REGISTRATION] Failed to check OPU area existence for '{}' (cortical_id: {}): {}", area_name, cortical_id_base64, e);
-                    format!("Failed to check cortical area existence for OPU area '{}': {}", area_name, e)
+                    FeagiDataError::InternalError(format!("Failed to check cortical area existence for OPU area '{}': {}", area_name, e))
                 })?;
                 debug!(
                     "🦀 [REGISTRATION] OPU area '{}' exists: {}",
@@ -886,7 +882,7 @@ impl RegistrationHandler {
                     } else {
                         // Not in async context - create a new runtime
                         let rt = tokio::runtime::Runtime::new()
-                            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+                            .map_err(|e| FeagiDataError::InternalError(format!("Failed to create tokio runtime: {}", e)))?;
                         rt.block_on(genome_service.create_cortical_areas(vec![create_params]))
                     };
 
@@ -916,10 +912,10 @@ impl RegistrationHandler {
                                 dimensions: None,
                                 message: Some(format!("Creation failed: {}", e)),
                             });
-                            return Err(format!(
+                            return Err(FeagiDataError::InternalError(format!(
                                 "Failed to create OPU area '{}': {}",
                                 area_name, e
-                            ));
+                            )));
                         }
                     }
                 } else {
@@ -934,7 +930,7 @@ impl RegistrationHandler {
                         dimensions: None,
                         message: Some("Area missing and auto-create disabled".to_string()),
                     });
-                    return Err(format!("Required OPU area '{}' is missing. Enable auto_create_missing_cortical_areas in config to auto-create.", area_name));
+                    return Err(FeagiDataError::BadParameters(format!("Required OPU area '{}' is missing. Enable auto_create_missing_cortical_areas in config to auto-create.", area_name)));
                 }
             }
         }
@@ -950,14 +946,14 @@ impl RegistrationHandler {
         &self,
         request: RegistrationRequest,
     ) -> Result<RegistrationResponse, String> {
-        self.process_registration_impl(request)
+        self.process_registration_impl(request).map_err(|e| e.to_string())
     }
 
     /// Internal implementation
     fn process_registration_impl(
         &self,
         request: RegistrationRequest,
-    ) -> Result<RegistrationResponse, String> {
+    ) -> Result<RegistrationResponse, FeagiDataError> {
         let total_start = std::time::Instant::now();
         info!(
             "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] Processing registration for agent: {} (type: {})",
@@ -974,20 +970,20 @@ impl RegistrationHandler {
             match requested_transport.as_str() {
                 "websocket" => {
                     if !self.ws_enabled {
-                        return Err(format!(
+                        return Err(FeagiDataError::BadParameters(format!(
                             "Transport '{}' not supported: WebSocket is disabled in FEAGI configuration",
                             requested_transport
-                        ));
+                        )));
                     }
                 }
                 "zmq" | "shm" | "hybrid" => {
                     // ZMQ/SHM always available (for now)
                 }
                 other => {
-                    return Err(format!(
+                    return Err(FeagiDataError::BadParameters(format!(
                         "Transport '{}' not supported: Available transports are: zmq, websocket (if enabled), shm",
                         other
-                    ));
+                    )));
                 }
             }
             info!(
@@ -1076,7 +1072,7 @@ impl RegistrationHandler {
             "both" => AgentType::Both,
             "visualization" => AgentType::Visualization,
             "infrastructure" => AgentType::Infrastructure,
-            _ => return Err(format!("Invalid agent type: {}", request.agent_type)),
+            _ => return Err(FeagiDataError::BadParameters(format!("Invalid agent type: {}", request.agent_type))),
         };
 
         // Create agent info using the new constructor
@@ -1104,7 +1100,7 @@ impl RegistrationHandler {
         self.agent_registry
             .write()
             .register(agent_info.clone())
-            .map_err(|e| format!("Failed to register agent: {}", e))?;
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to register agent: {}", e)))?;
 
         // Verify registration
         let registry_count = self.agent_registry.read().get_all().len();
@@ -1172,7 +1168,7 @@ impl RegistrationHandler {
                     let register_start = std::time::Instant::now();
                     sensory_mgr
                         .register_agent(config)
-                        .map_err(|e| format!("Failed to register with burst engine: {}", e))?;
+                        .map_err(|e| FeagiDataError::InternalError(format!("Failed to register with burst engine: {}", e)))?;
                     let register_duration = register_start.elapsed();
 
                     info!(
@@ -1568,14 +1564,14 @@ impl RegistrationHandler {
     fn parse_capabilities(
         &self,
         caps_json: &serde_json::Value,
-    ) -> Result<AgentCapabilities, String> {
+    ) -> Result<AgentCapabilities, FeagiDataError> {
         // Check for legacy format and reject it
         if caps_json.get("input").is_some() || caps_json.get("output").is_some() {
-            return Err(
+            return Err(FeagiDataError::BadParameters(
                 "Legacy feagi-sensorimotor format with 'input'/'output' keys is no longer supported in FEAGI 2.0 Rust SDK. \
                 Please use the new AgentCapabilities format with device_registrations, sensory.unit/sensory.group, \
                 or motor.unit/motor.group.".to_string()
-            );
+            ));
         }
 
         // Unwrap if wrapped in "capabilities" key
@@ -1587,11 +1583,11 @@ impl RegistrationHandler {
 
         // Deserialize directly from JSON (new agent SDK format only)
         serde_json::from_value::<AgentCapabilities>(caps_json.clone())
-            .map_err(|e| format!(
+            .map_err(|e| FeagiDataError::DeserializationError(format!(
                 "Failed to parse capabilities as AgentCapabilities format: {}. \
                 Please ensure capabilities use the new FEAGI 2.0 Rust SDK format.",
                 e
-            ))
+            )))
     }
 
     /// Process deregistration request
@@ -1668,11 +1664,11 @@ impl RegistrationHandler {
                 all_agents.len(),
                 all_agents
             );
-            return Err(format!(
+            return Err(FeagiDataError::BadParameters(format!(
                 "Agent {} not found in registry (total registered: {})",
                 agent_id,
                 all_agents.len()
-            ));
+            )).to_string());
         }
 
         // Agent exists - update heartbeat
@@ -1733,6 +1729,6 @@ impl RegistrationHandlerTrait for RegistrationHandler {
         &self,
         request: RegistrationRequest,
     ) -> Result<RegistrationResponse, String> {
-        self.process_registration_impl(request)
+        self.process_registration_impl(request).map_err(|e| e.to_string())
     }
 }

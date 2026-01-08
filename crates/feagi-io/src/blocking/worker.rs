@@ -44,7 +44,7 @@ impl<T: Send + 'static> WorkerThread<T> {
     /// let worker = WorkerThread::spawn(
     ///     "zmq-sender".to_string(),
     ///     rx,
-    ///     |data: Vec<u8>| -> Result<(), String> {
+    ///     |data: Vec<u8>| -> Result<(), feagi_structures::FeagiDataError> {
     ///         // Process data
     ///         Ok(())
     ///     }
@@ -131,7 +131,7 @@ mod tests {
         let mut worker = WorkerThread::spawn(
             "test-worker".to_string(),
             rx,
-            move |n: usize| -> Result<(), String> {
+            move |n: usize| -> Result<(), feagi_structures::FeagiDataError> {
                 counter_clone.fetch_add(n, Ordering::Relaxed);
                 Ok(())
             },

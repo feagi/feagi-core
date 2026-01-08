@@ -13,6 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 use tokio::runtime::Runtime;
 use tracing::{error, info};
+use feagi_structures::FeagiDataError;
 
 /// WebSocket streams manager
 ///
@@ -271,7 +272,7 @@ impl WebSocketStreams {
     /// CRITICAL PERFORMANCE: Takes ownership of fire_data to move vectors instead of cloning
     fn serialize_fire_queue(
         fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
-    ) -> std::result::Result<Vec<u8>, String> {
+    ) -> std::result::Result<Vec<u8>, feagi_structures::FeagiDataError> {
         use feagi_serialization::FeagiByteContainer;
         use feagi_structures::genomic::cortical_area::CorticalID;
         use feagi_structures::neuron_voxels::xyzp::{
@@ -287,12 +288,11 @@ impl WebSocketStreams {
 
             // Create CorticalID from cortical_id (base64 encoded)
             let cortical_id =
-                CorticalID::try_from_base_64(&area_data.cortical_id).map_err(|e| {
-                    format!(
+                CorticalID::try_from_base_64(&area_data.cortical_id)
+                    .map_err(|e| FeagiDataError::BadParameters(format!(
                         "Failed to decode CorticalID from base64 '{}': {:?}",
                         area_data.cortical_id, e
-                    )
-                })?;
+                    )))?;
 
             // Create neuron voxel arrays - MOVE vectors instead of cloning (takes ownership)
             // This eliminates expensive cloning for large areas
@@ -301,8 +301,7 @@ impl WebSocketStreams {
                 area_data.coords_y,   // Move instead of clone
                 area_data.coords_z,   // Move instead of clone
                 area_data.potentials, // Move instead of clone
-            )
-            .map_err(|e| format!("Failed to create neuron arrays: {:?}", e))?;
+            )?;
 
             cortical_mapped.insert(cortical_id, neuron_arrays);
         }
@@ -310,8 +309,7 @@ impl WebSocketStreams {
         // Serialize to FeagiByteContainer
         let mut byte_container = FeagiByteContainer::new_empty();
         byte_container
-            .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)
-            .map_err(|e| format!("Failed to encode into FeagiByteContainer: {:?}", e))?;
+            .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)?;
 
         Ok(byte_container.get_byte_ref().to_vec())
     }

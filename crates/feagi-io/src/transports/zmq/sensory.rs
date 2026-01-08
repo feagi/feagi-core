@@ -8,6 +8,7 @@ use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use std::thread;
 use tracing::{debug, error, info, warn};
+use feagi_structures::FeagiDataError;
 
 /// Runtime configuration for the ZMQ sensory receiver.
 #[derive(Clone, Debug)]
@@ -37,15 +38,15 @@ impl Default for SensoryReceiveConfig {
 }
 
 impl SensoryReceiveConfig {
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), FeagiDataError> {
         if self.receive_high_water_mark < 0 {
-            return Err("receive_high_water_mark must be >= 0".to_string());
+            return Err(FeagiDataError::BadParameters("receive_high_water_mark must be >= 0".to_string()));
         }
         if self.poll_timeout_ms < 0 {
-            return Err("poll_timeout_ms must be >= 0".to_string());
+            return Err(FeagiDataError::BadParameters("poll_timeout_ms must be >= 0".to_string()));
         }
         if self.startup_drain_timeout_ms > 10000 {
-            return Err("startup_drain_timeout_ms must be <= 10000ms (10 seconds)".to_string());
+            return Err(FeagiDataError::BadParameters("startup_drain_timeout_ms must be <= 10000ms (10 seconds)".to_string()));
         }
         Ok(())
     }
@@ -77,7 +78,7 @@ impl SensoryStream {
         context: Arc<zmq::Context>,
         bind_address: &str,
         config: SensoryReceiveConfig,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, FeagiDataError> {
         config.validate()?;
         Ok(Self {
             context,
@@ -107,27 +108,29 @@ impl SensoryStream {
     }
 
     /// Start the sensory stream
-    pub fn start(&self) -> Result<(), String> {
+    pub fn start(&self) -> Result<(), FeagiDataError> {
         if *self.running.lock() {
-            return Err("Sensory stream already running".to_string());
+            return Err(FeagiDataError::BadParameters("Sensory stream already running".to_string()));
         }
 
         // Create PULL socket for receiving sensory data
-        let socket = self.context.socket(zmq::PULL).map_err(|e| e.to_string())?;
+        let socket = self.context.socket(zmq::PULL)
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to create ZMQ PULL socket: {}", e)))?;
 
         // Set socket options
         socket
             .set_linger(self.config.linger_ms)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set linger: {}", e)))?;
         socket
             .set_rcvhwm(self.config.receive_high_water_mark)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set receive HWM: {}", e)))?;
         socket
             .set_immediate(self.config.immediate)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set immediate: {}", e)))?;
 
         // Bind socket
-        socket.bind(&self.bind_address).map_err(|e| e.to_string())?;
+        socket.bind(&self.bind_address)
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
@@ -145,7 +148,7 @@ impl SensoryStream {
     }
 
     /// Stop the sensory stream
-    pub fn stop(&self) -> Result<(), String> {
+    pub fn stop(&self) -> Result<(), FeagiDataError> {
         *self.running.lock() = false;
 
         // Log final statistics
@@ -390,7 +393,7 @@ impl SensoryStream {
         agent_registry_mutex: &Arc<Mutex<Option<Arc<RwLock<crate::core::AgentRegistry>>>>>,
         rejected_no_genome: &Arc<Mutex<u64>>,
         rejected_no_agents: &Arc<Mutex<u64>>,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, FeagiDataError> {
         use feagi_serialization::FeagiByteContainer;
         use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
@@ -398,7 +401,7 @@ impl SensoryStream {
         let npu_lock = npu_mutex.lock();
         let npu_arc = match npu_lock.as_ref() {
             Some(n) => Arc::clone(n),
-            None => return Err("NPU not connected".to_string()),
+            None => return Err(FeagiDataError::InternalError("NPU not connected".to_string())),
         };
         drop(npu_lock); // Release early
 
@@ -415,7 +418,7 @@ impl SensoryStream {
                 if count == 1 || count.is_multiple_of(100) {
                     warn!("🚫 [ZMQ-SENSORY] [SECURITY] Rejected sensory data: No genome loaded (rejected {} total)", count);
                 }
-                return Err("Security: No genome loaded".to_string());
+                return Err(FeagiDataError::BadParameters("Security: No genome loaded".to_string()));
             }
         }
 
@@ -430,11 +433,11 @@ impl SensoryStream {
                     if count == 1 || count.is_multiple_of(100) {
                         warn!("🚫 [ZMQ-SENSORY] [SECURITY] Rejected sensory data: No registered sensory agents (rejected {} total)", count);
                     }
-                    return Err("Security: No registered sensory agents".to_string());
+                    return Err(FeagiDataError::BadParameters("Security: No registered sensory agents".to_string()));
                 }
             } else {
                 // AgentRegistry not connected yet - reject for safety
-                return Err("Security: AgentRegistry not connected".to_string());
+                return Err(FeagiDataError::InternalError("Security: AgentRegistry not connected".to_string()));
             }
         }
 
@@ -448,27 +451,26 @@ impl SensoryStream {
                 std::mem::swap(bytes, &mut data_vec);
                 Ok(())
             })
-            .map_err(|e| format!("Failed to load FeagiByteContainer: {:?}", e))?;
+            .map_err(|e| FeagiDataError::DeserializationError(format!("Failed to load FeagiByteContainer: {:?}", e)))?;
 
         // Verify container structure count
         let num_structures = byte_container
             .try_get_number_contained_structures()
-            .map_err(|e| format!("Failed to get structure count: {:?}", e))?;
+            .map_err(|e| FeagiDataError::DeserializationError(format!("Failed to get structure count: {:?}", e)))?;
 
         if num_structures == 0 {
-            return Err("FeagiByteContainer has no structures".to_string());
+            return Err(FeagiDataError::BadParameters("FeagiByteContainer has no structures".to_string()));
         }
 
         // Extract first structure (should be CorticalMappedXYZPNeuronVoxels)
         let boxed_struct = byte_container
-            .try_create_new_struct_from_index(0)
-            .map_err(|e| format!("Failed to deserialize structure from container: {:?}", e))?;
+            .try_create_new_struct_from_index(0)?;
 
         // Downcast to CorticalMappedXYZPNeuronVoxels using as_any().downcast_ref()
         let cortical_mapped = boxed_struct
             .as_any()
             .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()
-            .ok_or_else(|| "Structure is not CorticalMappedXYZPNeuronVoxels".to_string())?;
+            .ok_or_else(|| FeagiDataError::BadParameters("Structure is not CorticalMappedXYZPNeuronVoxels".to_string()))?;
 
         // ✅ CLEAN ARCHITECTURE: IOSystem just transports XYZP, NPU handles all neural logic
         // The NPU owns coordinate-to-ID conversion and does it efficiently in batch

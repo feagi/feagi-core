@@ -45,9 +45,11 @@ pub struct RegistrationResponse {
 
 impl RegistrationResponse {
     /// Parse from JSON value
-    pub fn from_json(value: &serde_json::Value) -> Result<Self, String> {
+    pub fn from_json(value: &serde_json::Value) -> Result<Self, feagi_structures::FeagiDataError> {
         serde_json::from_value(value.clone())
-            .map_err(|e| format!("Failed to parse registration response: {}", e))
+            .map_err(|e| feagi_structures::FeagiDataError::DeserializationError(
+                format!("Failed to parse registration response: {}", e)
+            ))
     }
 
     /// Get all available (enabled) transports

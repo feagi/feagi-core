@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::thread;
 use tracing::{error, info};
+use feagi_structures::FeagiDataError;
 
 /// API request from FastAPI process
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,7 +55,7 @@ pub struct ApiControlStream {
 
 impl ApiControlStream {
     /// Create a new API control stream
-    pub fn new(context: Arc<zmq::Context>, bind_address: &str) -> Result<Self, String> {
+    pub fn new(context: Arc<zmq::Context>, bind_address: &str) -> Result<Self, FeagiDataError> {
         // Create transport config
         let config = ServerConfig::new(bind_address)
             .base
@@ -69,7 +70,7 @@ impl ApiControlStream {
 
         // Create ZMQ router using internal transport primitives
         let router = ZmqRouter::new(context, server_config)
-            .map_err(|e| format!("Failed to create router: {}", e))?;
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to create router: {}", e)))?;
 
         Ok(Self {
             router: Arc::new(Mutex::new(Some(router))),
@@ -95,17 +96,17 @@ impl ApiControlStream {
     }
 
     /// Start the API control stream
-    pub fn start(&self) -> Result<(), String> {
+    pub fn start(&self) -> Result<(), FeagiDataError> {
         if *self.running.lock() {
-            return Err("API control stream already running".to_string());
+            return Err(FeagiDataError::BadParameters("API control stream already running".to_string()));
         }
 
         // Start the router transport
         let mut router_guard = self.router.lock();
         if let Some(router) = router_guard.as_mut() {
-            router.start().map_err(|e| e.to_string())?;
+            router.start().map_err(|e| FeagiDataError::InternalError(e.to_string()))?;
         } else {
-            return Err("Router not initialized".to_string());
+            return Err(FeagiDataError::InternalError("Router not initialized".to_string()));
         }
         drop(router_guard);
 
@@ -120,12 +121,12 @@ impl ApiControlStream {
     }
 
     /// Stop the API control stream
-    pub fn stop(&self) -> Result<(), String> {
+    pub fn stop(&self) -> Result<(), FeagiDataError> {
         *self.running.lock() = false;
 
         let mut router_guard = self.router.lock();
         if let Some(router) = router_guard.as_mut() {
-            router.stop().map_err(|e| e.to_string())?;
+            router.stop().map_err(|e| FeagiDataError::InternalError(e.to_string()))?;
         }
         *router_guard = None;
 

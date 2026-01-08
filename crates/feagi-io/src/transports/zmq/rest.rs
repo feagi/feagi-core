@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::thread;
 use tracing::{debug, error, info};
+use feagi_structures::FeagiDataError;
 
 /// REST request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,7 +40,7 @@ pub struct RestStream {
 
 impl RestStream {
     /// Create a new REST stream
-    pub fn new(context: Arc<zmq::Context>, bind_address: &str) -> Result<Self, String> {
+    pub fn new(context: Arc<zmq::Context>, bind_address: &str) -> Result<Self, FeagiDataError> {
         Ok(Self {
             context,
             bind_address: bind_address.to_string(),
@@ -55,23 +56,25 @@ impl RestStream {
     }
 
     /// Start the REST stream
-    pub fn start(&self) -> Result<(), String> {
+    pub fn start(&self) -> Result<(), FeagiDataError> {
         if *self.running.lock() {
-            return Err("REST stream already running".to_string());
+            return Err(FeagiDataError::BadParameters("REST stream already running".to_string()));
         }
 
         // Create ROUTER socket
         let socket = self
             .context
             .socket(zmq::ROUTER)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to create ZMQ ROUTER socket: {}", e)))?;
 
-        socket.set_linger(1000).map_err(|e| e.to_string())?;
+        socket.set_linger(1000)
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set linger: {}", e)))?;
         socket
             .set_router_mandatory(false)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set router mandatory: {}", e)))?;
 
-        socket.bind(&self.bind_address).map_err(|e| e.to_string())?;
+        socket.bind(&self.bind_address)
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
@@ -85,7 +88,7 @@ impl RestStream {
     }
 
     /// Stop the REST stream
-    pub fn stop(&self) -> Result<(), String> {
+    pub fn stop(&self) -> Result<(), FeagiDataError> {
         *self.running.lock() = false;
         *self.socket.lock() = None;
         Ok(())
@@ -324,19 +327,19 @@ impl RestStream {
         socket_mutex: &Arc<Mutex<Option<zmq::Socket>>>,
         identity: Vec<u8>,
         response_json: String,
-    ) -> Result<(), String> {
+    ) -> Result<(), FeagiDataError> {
         let sock_guard = socket_mutex.lock();
         let sock = match sock_guard.as_ref() {
             Some(s) => s,
-            None => return Err("Socket not available".to_string()),
+            None => return Err(FeagiDataError::InternalError("Socket not available".to_string())),
         };
 
         sock.send(&identity, zmq::SNDMORE)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to send identity: {}", e)))?;
         sock.send(Vec::<u8>::new(), zmq::SNDMORE)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to send empty frame: {}", e)))?;
         sock.send(response_json.as_bytes(), 0)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to send response: {}", e)))?;
 
         Ok(())
     }
