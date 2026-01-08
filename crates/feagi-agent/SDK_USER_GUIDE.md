@@ -118,6 +118,41 @@ The SDK provides building blocks:
 - Want ready-made encoders/decoders
 - Need topology management
 
+---
+
+## SDK Facade / Stability Model (Commercial Use)
+
+For production and commercial deployments, controller code must remain stable even as FEAGI internals evolve.
+The SDK therefore follows a **hybrid facade** strategy:
+
+- **Controllers should depend only on `feagi-agent`**.
+- FEAGI “model types” used by controllers (IDs, descriptors, frame types) are exposed via:
+  - `feagi_agent::sdk::types::*`
+- Internal crates like `feagi-structures` and `feagi-sensorimotor` may evolve, but as long as the
+  SDK surface remains stable, controller code should not need changes.
+
+**Rule of thumb:** if you feel you need to import `feagi_structures::*` or `feagi_sensorimotor::*`
+from controller code, request that the required type/function be added to `sdk::types` instead.
+
+### Stability Contract (SemVer + Deprecations + Contract Tests)
+
+To treat `feagi_agent::sdk::types` as a **stable API contract** suitable for commercial use:
+
+- **SemVer rules**
+  - **PATCH**: bugfixes only (no public API changes).
+  - **MINOR**: additive-only changes to the public API (new exports, new functions).
+  - **MAJOR**: any breaking change (removals/renames/signature changes, or semantic behavior changes).
+
+- **Deprecations**
+  - Items are **not removed immediately**. They are marked with `#[deprecated(since = \"x.y.z\", note = \"...\")]`.
+  - A supported replacement is provided.
+  - Removal happens only on the next **MAJOR** release after a deprecation window.
+
+- **Contract tests**
+  - We maintain Rust tests that assert the **SDK surface compiles** against `sdk::types`.
+  - We maintain parsing/shape tests for FEAGI HTTP responses that the SDK relies on (e.g., topology schema),
+    so internal/backend refactors don't silently break controller behavior.
+
 ```rust
 use feagi_agent::sdk::sensory::video::VideoEncoder;
 use feagi_agent::sdk::base::TopologyCache;

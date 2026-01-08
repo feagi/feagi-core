@@ -5,6 +5,7 @@
 
 use crate::sdk::error::{Result, SdkError};
 use feagi_structures::genomic::cortical_area::CorticalID;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -178,6 +179,15 @@ impl TopologyCache {
             .error_for_status()?;
 
         let payload: serde_json::Value = resp.json().await?;
+        Self::parse_topology_payload(cortical_id, &payload)
+    }
+
+    /// Parse the topology response payload from FEAGI.
+    ///
+    /// Exposed primarily for contract tests to ensure SDK parsing stays compatible with
+    /// FEAGI backend API changes.
+    pub fn parse_topology_payload(cortical_id: &CorticalID, payload: &Value) -> Result<CorticalTopology> {
+        let cortical_b64 = cortical_id.as_base_64();
         let info = payload
             .get(&cortical_b64)
             .ok_or_else(|| SdkError::TopologyNotFound(cortical_b64.clone()))?;

@@ -58,7 +58,7 @@ sdk = ["sdk-video", "sdk-text", "async", "anyhow"]
 sdk-io = ["feagi-sensorimotor", "reqwest"]
 
 sdk-video = ["sdk-io", "image"]
-sdk-text = ["tokenizers", "reqwest"]
+sdk-text = ["sdk-io", "tokenizers"]
 sdk-audio = []  # Future
 
 # Blocking variants

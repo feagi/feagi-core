@@ -12,6 +12,8 @@ pub mod error;
 pub mod motor;
 pub mod sensory;
 pub mod registration;
+#[cfg(feature = "sdk-io")]
+pub mod types;
 pub mod util;
 
 // Re-export commonly used types
