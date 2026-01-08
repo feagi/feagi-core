@@ -218,12 +218,8 @@ impl RegistrationHandler {
 
     /// Convert area name to CorticalID base64 string
     ///
-    /// For IPU/OPU areas, the name might be a short prefix (e.g., "svi").
-    /// We try multiple approaches to create a valid CorticalID:
-    /// 1. Try direct padding with null bytes (standard approach)
-    /// 2. If that fails, try padding with spaces (legacy compatibility)
-    /// 3. If both fail, try using try_from_base_64 if the name looks like base64
-    /// 4. If all fail, return an error with helpful message
+    /// For IPU/OPU areas, the name should be a valid prefix (e.g., "isvi") or a base64-encoded CorticalID.
+    /// Uses null-byte padding for short prefixes (standard approach).
     fn area_name_to_cortical_id(&self, area_name: &str) -> Result<String, String> {
         // First, check if it's already a base64-encoded CorticalID
         if let Ok(cortical_id) = CorticalID::try_from_base_64(area_name) {
@@ -240,83 +236,20 @@ impl RegistrationHandler {
             return Ok(cortical_id.as_base_64());
         }
 
-        // If null padding fails, try space padding (for legacy compatibility)
-        let mut bytes = [b' '; 8];
-        bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
-
-        if let Ok(cortical_id) = CorticalID::try_from_bytes(&bytes) {
-            return Ok(cortical_id.as_base_64());
-        }
-
-        // Both approaches failed - return detailed error
+        // Failed - return error with guidance
         Err(format!(
             "Failed to create CorticalID from area name '{}' (length: {}). \
-            Tried null-byte and space padding. \
-            The area name may be too short or in an invalid format. \
-            For IPU/OPU areas, use a valid 4-character prefix like 'isvi', 'imot', etc., \
+            The area name must be either:\n\
+            1. A valid prefix (1-8 characters) that can be padded to 8 bytes, or\n\
+            2. A base64-encoded CorticalID.\n\
+            For IPU/OPU areas, use valid prefixes like 'isvi', 'imot', 'oseg', etc., \
             or provide a base64-encoded CorticalID.",
             area_name,
             area_name.len()
         ))
     }
 
-    /// Find SensoryCorticalUnit by unit identifier bytes
-    fn find_sensory_unit_by_identifier(
-        &self,
-        identifier: [u8; 3],
-    ) -> Result<SensoryCorticalUnit, String> {
-        // Iterate through all SensoryCorticalUnit variants to find matching identifier
-        use SensoryCorticalUnit::*;
-        for unit in [
-            Infrared,
-            Proximity,
-            Shock,
-            Battery,
-            Servo,
-            AnalogGPIO,
-            DigitalGPIO,
-            MiscData,
-            TextEnglishInput,
-            Vision,
-            SegmentedVision,
-            Accelerometer,
-            Gyroscope,
-        ] {
-            if unit.get_cortical_id_unit_reference() == identifier {
-                return Ok(unit);
-            }
-        }
-        Err(format!(
-            "No SensoryCorticalUnit found for identifier: {:?}",
-            identifier
-        ))
-    }
 
-    /// Find MotorCorticalUnit by its 3-byte identifier (e.g., [b's', b'e', b'g'] for ObjectSegmentation)
-    fn find_motor_unit_by_identifier(
-        &self,
-        identifier: [u8; 3],
-    ) -> Result<MotorCorticalUnit, String> {
-        // Iterate through all MotorCorticalUnit variants to find matching identifier
-        use MotorCorticalUnit::*;
-        for unit in [
-            RotaryMotor,
-            PositionalServo,
-            Gaze,
-            MiscData,
-            TextEnglishOutput,
-            ObjectSegmentation,
-            SimpleVisionOutput,
-        ] {
-            if unit.get_cortical_id_unit_reference() == identifier {
-                return Ok(unit);
-            }
-        }
-        Err(format!(
-            "No MotorCorticalUnit found for identifier: {:?}",
-            identifier
-        ))
-    }
 
     /// Get all cortical IDs for a given SensoryCorticalUnit using generic method dispatch
     fn get_all_cortical_ids_for_unit(
@@ -660,567 +593,35 @@ impl RegistrationHandler {
                 }
 
             } else {
-            // For IPU areas, ensure 'i' prefix is present (e.g., "svi" -> "isvi")
-            let area_name = if vision.target_cortical_area.starts_with('i') {
-                vision.target_cortical_area.clone()
-            } else {
-                format!("i{}", vision.target_cortical_area)
-            };
-
-            // Convert area name to CorticalID to extract unit information
-            let base_cortical_id = match self.area_name_to_cortical_id(&area_name) {
-                Ok(id) => CorticalID::try_from_base_64(&id)
-                    .map_err(|e| format!("Failed to parse cortical ID: {}", e))?,
-                Err(e) => {
-                    error!(
-                        "🦀 [REGISTRATION] ❌ Failed to convert area name '{}' to CorticalID: {}",
-                        area_name, e
-                    );
-                    return Err(format!(
-                        "Invalid cortical area name '{}': {}. \
-                        For IPU areas, use a valid 4-character prefix like 'isvi', 'imot', etc.",
-                        vision.target_cortical_area, e
-                    ));
-                }
-            };
-
-            // Extract unit identifier from cortical ID (bytes 1-3 after 'i' prefix)
-            let cortical_id_bytes = base_cortical_id.as_bytes();
-            if cortical_id_bytes.len() < 4 || cortical_id_bytes[0] != b'i' {
+                // Legacy vision.target_cortical_area is no longer supported
                 return Err(format!(
-                    "Invalid IPU cortical ID format for '{}'",
-                    area_name
+                    "Legacy vision.target_cortical_area is no longer supported in FEAGI 2.0 Rust SDK. \
+                    Please provide either:\n\
+                    1. device_registrations in capabilities, or\n\
+                    2. vision.unit and vision.group in the vision capability.\n\
+                    Agent: {}",
+                    request.agent_id
                 ));
             }
-            let unit_identifier = [
-                cortical_id_bytes[1],
-                cortical_id_bytes[2],
-                cortical_id_bytes[3],
-            ];
-
-            // Extract group index from IO cortical ID (byte 7)
-            let group_index = cortical_id_bytes[7];
-            let group: CorticalUnitIndex = group_index.into();
-
-            // Find matching SensoryCorticalUnit by unit identifier
-            let sensory_unit = self.find_sensory_unit_by_identifier(unit_identifier)?;
-            let number_areas = sensory_unit.get_number_cortical_areas();
-
-            info!(
-                "🦀 [REGISTRATION] Detected cortical unit type: {} ({} areas)",
-                sensory_unit.get_snake_case_name(),
-                number_areas
-            );
-
-            if number_areas > 1 && self.auto_create_missing_areas {
-                // This cortical type requires multiple areas - create all of them
-                info!(
-                    "🦀 [REGISTRATION] Creating all {} cortical areas for {}",
-                    number_areas,
-                    sensory_unit.get_snake_case_name()
-                );
-
-                // Use default frame_change_handling (Absolute) - this should match what the encoder uses
-                // TODO: Get frame_change_handling from registration request if available
-                let frame_change_handling = FrameChangeHandling::Absolute;
-                use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
-                let percentage_neuron_positioning = PercentageNeuronPositioning::Linear; // Default
-
-                // Get all cortical IDs for this unit type using generic method dispatch
-                let cortical_ids = self.get_all_cortical_ids_for_unit(
-                    sensory_unit,
-                    frame_change_handling,
-                    percentage_neuron_positioning,
-                    group,
-                )?;
-
-                // Get topology (dimensions and positions) for all areas from the unit definition
-                let topology = sensory_unit.get_unit_default_topology();
-
-                info!(
-                    "🦀 [REGISTRATION] Generated {} cortical IDs for {} (group={})",
-                    cortical_ids.len(),
-                    sensory_unit.get_snake_case_name(),
-                    group_index
-                );
-
-                // Create all cortical areas using topology information
-                let mut create_params_list = Vec::new();
-                for (i, cortical_id) in cortical_ids.iter().enumerate() {
-                    let cortical_id_base64 = cortical_id.as_base_64();
-
-                    // Get dimensions and position from topology
-                    let (width, height, channels, x, y, z) =
-                        if let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(i as u8)) {
-                            let dims = unit_topology.channel_dimensions_default;
-                            let pos = unit_topology.relative_position;
-                            (
-                                dims[0] as usize,
-                                dims[1] as usize,
-                                dims[2] as usize,
-                                pos[0],
-                                pos[1],
-                                pos[2],
-                            )
-                        } else {
-                            // Fallback to default dimensions from vision capability if topology not available
-                            (
-                                vision.dimensions.0,
-                                vision.dimensions.1,
-                                vision.channels,
-                                0,
-                                0,
-                                0,
-                            )
-                        };
-
-                    // Check if this area already exists
-                    let exists = {
-                        let cortical_id_clone = cortical_id_base64.clone();
-                        let connectome_service_clone = connectome_service.clone();
-                        self.block_on_async_service(move || {
-                            let service = connectome_service_clone.clone();
-                            let id = cortical_id_clone.clone();
-                            Box::pin(async move { service.cortical_area_exists(&id).await })
-                        })
-                    }
-                    .map_err(|e| {
-                        error!(
-                            "🦀 [REGISTRATION] Failed to check existence for area {}: {}",
-                            i, e
-                        );
-                        format!("Failed to check cortical area existence: {}", e)
-                    })?;
-
-                    if exists {
-                        info!(
-                            "🦀 [REGISTRATION] Cortical area {} already exists (cortical_id: {})",
-                            i, cortical_id_base64
-                        );
-                        ipu_statuses.push(CorticalAreaStatus {
-                            area_name: format!("{}_area{}", area_name, i),
-                            cortical_id: cortical_id_base64,
-                            status: AreaStatus::Existing,
-                            dimensions: Some((width, height, channels)),
-                            message: None,
-                        });
-                    } else {
-                        let area_name_suffix = if number_areas > 1 {
-                            format!("{}_area{}", area_name, i)
-                        } else {
-                            area_name.clone()
-                        };
-                        create_params_list.push(feagi_services::types::CreateCorticalAreaParams {
-                            cortical_id: cortical_id_base64.clone(),
-                            name: area_name_suffix.clone(),
-                            dimensions: (width, height, channels),
-                            position: (x, y, z),
-                            area_type: "Sensory".to_string(),
-                            visible: Some(true),
-                            sub_group: None,
-                            neurons_per_voxel: Some(1),
-                            postsynaptic_current: None,
-                            plasticity_constant: None,
-                            degeneration: None,
-                            psp_uniform_distribution: None,
-                            firing_threshold_increment: None,
-                            firing_threshold_limit: None,
-                            consecutive_fire_count: None,
-                            snooze_period: None,
-                            refractory_period: None,
-                            leak_coefficient: None,
-                            leak_variability: None,
-                            burst_engine_active: None,
-                            properties: None,
-                        });
-
-                        info!("🦀 [REGISTRATION] Will create cortical area {}: {} ({}x{}x{}) at ({},{},{})",
-                              i, cortical_id_base64, width, height, channels, x, y, z);
-                    }
-                }
-
-                // Create all missing areas in one batch
-                if !create_params_list.is_empty() {
-                    info!(
-                        "🦀 [REGISTRATION] Creating {} cortical areas for {}...",
-                        create_params_list.len(),
-                        sensory_unit.get_snake_case_name()
-                    );
-
-                    let result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        handle.block_on(
-                            genome_service.create_cortical_areas(create_params_list.clone()),
-                        )
-                    } else {
-                        let rt = tokio::runtime::Runtime::new()
-                            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
-                        rt.block_on(
-                            genome_service.create_cortical_areas(create_params_list.clone()),
-                        )
-                    };
-
-                    match result {
-                        Ok(_) => {
-                            info!("🦀 [REGISTRATION] ✅ Successfully created {} cortical areas for {}", create_params_list.len(), sensory_unit.get_snake_case_name());
-                            for params in create_params_list {
-                                ipu_statuses.push(CorticalAreaStatus {
-                                    area_name: params.name.clone(),
-                                    cortical_id: params.cortical_id.clone(),
-                                    status: AreaStatus::Created,
-                                    dimensions: Some(params.dimensions),
-                                    message: Some("Auto-created during registration".to_string()),
-                                });
-                            }
-                        }
-                        Err(e) => {
-                            error!(
-                                "🦀 [REGISTRATION] ❌ Failed to create cortical areas for {}: {}",
-                                sensory_unit.get_snake_case_name(),
-                                e
-                            );
-                            return Err(format!(
-                                "Failed to create cortical areas for {}: {}",
-                                sensory_unit.get_snake_case_name(),
-                                e
-                            ));
-                        }
-                    }
-                } else {
-                    info!(
-                        "🦀 [REGISTRATION] All {} cortical areas already exist",
-                        sensory_unit.get_snake_case_name()
-                    );
-                }
-            } else if number_areas == 1 {
-                // Handle single cortical area - use the same generic approach
-                let cortical_id_base64 = base_cortical_id.as_base_64();
-
-                // Get topology for single area (index 0)
-                let topology = sensory_unit.get_unit_default_topology();
-                let (width, height, channels, x, y, z) =
-                    if let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(0u8)) {
-                        let dims = unit_topology.channel_dimensions_default;
-                        let pos = unit_topology.relative_position;
-                        (
-                            dims[0] as usize,
-                            dims[1] as usize,
-                            dims[2] as usize,
-                            pos[0],
-                            pos[1],
-                            pos[2],
-                        )
-                    } else {
-                        // Fallback to dimensions from vision capability
-                        (
-                            vision.dimensions.0,
-                            vision.dimensions.1,
-                            vision.channels,
-                            0,
-                            0,
-                            0,
-                        )
-                    };
-
-                // Check if area exists
-                debug!(
-                    "🦀 [REGISTRATION] Checking IPU area existence for '{}' (cortical_id: {})",
-                    area_name, cortical_id_base64
-                );
-                let cortical_id_clone = cortical_id_base64.clone();
-                let connectome_service_clone = connectome_service.clone();
-                let exists = {
-                    let cortical_id = cortical_id_clone.clone();
-                    self.block_on_async_service(move || {
-                        let service = connectome_service_clone.clone();
-                        let id = cortical_id.clone();
-                        Box::pin(async move {
-                            debug!("🦀 [REGISTRATION] Calling cortical_area_exists for IPU area '{}'", id);
-                            let result = service.cortical_area_exists(&id).await;
-                            debug!("🦀 [REGISTRATION] cortical_area_exists result for IPU area '{}': {:?}", id, result);
-                            result
-                        })
-                    })
-                }
-                .map_err(|e| {
-                    error!("🦀 [REGISTRATION] Failed to check IPU area existence for '{}' (cortical_id: {}): {}", area_name, cortical_id_base64, e);
-                    format!("Failed to check cortical area existence for IPU area '{}': {}", area_name, e)
-                })?;
-                debug!(
-                    "🦀 [REGISTRATION] IPU area '{}' exists: {}",
-                    area_name, exists
-                );
-
-                if exists {
-                    info!("🦀 [REGISTRATION] IPU area '{}' already exists", area_name);
-                    ipu_statuses.push(CorticalAreaStatus {
-                        area_name: area_name.clone(),
-                        cortical_id: cortical_id_base64,
-                        status: AreaStatus::Existing,
-                        dimensions: Some((width, height, channels)),
-                        message: None,
-                    });
-                } else if self.auto_create_missing_areas {
-                    // Create missing IPU area
-                    info!(
-                        "🦀 [REGISTRATION] Auto-creating missing IPU area '{}'",
-                        area_name
-                    );
-
-                    let create_params = feagi_services::types::CreateCorticalAreaParams {
-                        cortical_id: cortical_id_base64.clone(),
-                        name: area_name.clone(),
-                        dimensions: (width, height, channels),
-                        position: (x, y, z),
-                        area_type: "Sensory".to_string(),
-                        visible: Some(true),
-                        sub_group: None,
-                        neurons_per_voxel: Some(1),
-                        postsynaptic_current: None,
-                        plasticity_constant: None,
-                        degeneration: None,
-                        psp_uniform_distribution: None,
-                        firing_threshold_increment: None,
-                        firing_threshold_limit: None,
-                        consecutive_fire_count: None,
-                        snooze_period: None,
-                        refractory_period: None,
-                        leak_coefficient: None,
-                        leak_variability: None,
-                        burst_engine_active: None,
-                        properties: None,
-                    };
-
-                    // Try to use current runtime handle first, fallback to creating new runtime
-                    let result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        // We're in an async context - use block_on on the handle
-                        handle.block_on(genome_service.create_cortical_areas(vec![create_params]))
-                    } else {
-                        // Not in async context - create a new runtime
-                        let rt = tokio::runtime::Runtime::new()
-                            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
-                        rt.block_on(genome_service.create_cortical_areas(vec![create_params]))
-                    };
-
-                    match result {
-                        Ok(_) => {
-                            info!(
-                                "🦀 [REGISTRATION] ✅ Successfully created IPU area '{}'",
-                                area_name
-                            );
-                            ipu_statuses.push(CorticalAreaStatus {
-                                area_name: area_name.clone(),
-                                cortical_id: cortical_id_base64,
-                                status: AreaStatus::Created,
-                                dimensions: Some((width, height, channels)),
-                                message: Some("Auto-created during registration".to_string()),
-                            });
-                        }
-                        Err(e) => {
-                            error!(
-                                "🦀 [REGISTRATION] ❌ Failed to create IPU area '{}': {}",
-                                area_name, e
-                            );
-                            ipu_statuses.push(CorticalAreaStatus {
-                                area_name: area_name.clone(),
-                                cortical_id: cortical_id_base64,
-                                status: AreaStatus::Error,
-                                dimensions: None,
-                                message: Some(format!("Creation failed: {}", e)),
-                            });
-                            return Err(format!(
-                                "Failed to create IPU area '{}': {}",
-                                area_name, e
-                            ));
-                        }
-                    }
-                } else {
-                    warn!(
-                        "🦀 [REGISTRATION] ⚠️ IPU area '{}' is missing and auto-create is disabled",
-                        area_name
-                    );
-                    ipu_statuses.push(CorticalAreaStatus {
-                        area_name: area_name.clone(),
-                        cortical_id: cortical_id_base64,
-                        status: AreaStatus::Missing,
-                        dimensions: None,
-                        message: Some("Area missing and auto-create disabled".to_string()),
-                    });
-                    return Err(format!("Required IPU area '{}' is missing. Enable auto_create_missing_cortical_areas in config to auto-create.", area_name));
-                }
-            } else {
-                // number_areas == 0 or auto-create disabled - skip
-                warn!("🦀 [REGISTRATION] ⚠️ Cortical unit {} has {} areas but auto-create is disabled or invalid",
-                      sensory_unit.get_snake_case_name(), number_areas);
-            }
-        }
         }
 
-        // Handle sensory-mapped IPU areas (legacy sensory capability with cortical_mappings).
-        //
-        // This enables non-vision sensory modalities (e.g., iten) to trigger deterministic
-        // cortical area creation during agent registration.
+        // Handle sensory IPU areas - requires sensory.unit and sensory.group (new SDK format).
+        // Legacy sensory.cortical_mappings are no longer supported.
         if let Some(ref sensory) = capabilities.sensory {
-            for (area_key, _idx) in &sensory.cortical_mappings {
-                let cortical_id_base64 = self.area_name_to_cortical_id(area_key)?;
-                let cortical_id = CorticalID::try_from_base_64(&cortical_id_base64)
-                    .map_err(|e| format!("Failed to parse cortical ID: {}", e))?;
-
-                let cortical_id_bytes = cortical_id.as_bytes();
-                if cortical_id_bytes[0] != b'i' {
-                    return Err(format!(
-                        "Sensory cortical mapping '{}' does not refer to an IPU cortical ID",
-                        area_key
-                    ));
-                }
-
-                let unit_identifier = [
-                    cortical_id_bytes[1],
-                    cortical_id_bytes[2],
-                    cortical_id_bytes[3],
-                ];
-                let _group: CorticalUnitIndex = cortical_id_bytes[7].into();
-
-                let sensory_unit = self.find_sensory_unit_by_identifier(unit_identifier)?;
-                let number_areas = sensory_unit.get_number_cortical_areas();
-
-                // For multi-area units (like segmented_vision with 9 areas), skip auto-creation
-                // but still process mappings if vision capability already created the areas
-                let should_skip_creation = number_areas != 1;
-                let has_vision_capability = capabilities.vision.is_some();
-                
-                if should_skip_creation && !has_vision_capability {
-                    warn!(
-                        "🦀 [REGISTRATION] Sensory unit {} has {} areas; skipping auto-create via sensory.cortical_mappings (use vision-capability path for multi-area units)",
-                        sensory_unit.get_snake_case_name(),
-                        number_areas
-                    );
-                    continue;
-                }
-                
-                // For multi-area units with vision capability, skip creation but still verify existence
-                let skip_creation = should_skip_creation && has_vision_capability;
-                if skip_creation {
-                    info!(
-                        "🦀 [REGISTRATION] Sensory unit {} has {} areas; vision capability should have created areas, verifying existence",
-                        sensory_unit.get_snake_case_name(),
-                        number_areas
-                    );
-                }
-
-                // Check if this specific cortical ID exists
-                let exists = {
-                    let cortical_id_clone = cortical_id_base64.clone();
-                    let connectome_service_clone = connectome_service.clone();
-                    self.block_on_async_service(move || {
-                        let service = connectome_service_clone.clone();
-                        let id = cortical_id_clone.clone();
-                        Box::pin(async move { service.cortical_area_exists(&id).await })
-                    })
-                }
-                .map_err(|e| {
-                    format!(
-                        "Failed to check cortical area existence for sensory mapping '{}': {}",
-                        area_key, e
-                    )
-                })?;
-
-                // Derive deterministic name/dimensions from the unit template topology
-                let topology = sensory_unit.get_unit_default_topology();
-                let unit_topology = topology.get(&CorticalSubUnitIndex::from(0u8)).ok_or_else(|| {
-                    format!(
-                        "Sensory unit {} missing topology entry for area 0",
-                        sensory_unit.get_snake_case_name()
-                    )
-                })?;
-                let dims = unit_topology.channel_dimensions_default;
-                let pos = unit_topology.relative_position;
-
-                let area_prefix = std::str::from_utf8(&cortical_id_bytes[0..4])
-                    .map_err(|_| "Failed to decode IPU cortical ID prefix as UTF-8".to_string())?
-                    .trim_end_matches('\0')
-                    .trim_end_matches('_')
-                    .to_string();
-                let area_name = format!("{}_g{}", area_prefix, cortical_id_bytes[7]);
-
-                if exists {
-                    ipu_statuses.push(CorticalAreaStatus {
-                        area_name,
-                        cortical_id: cortical_id_base64,
-                        status: AreaStatus::Existing,
-                        dimensions: Some((dims[0] as usize, dims[1] as usize, dims[2] as usize)),
-                        message: None,
-                    });
-                } else if !skip_creation && self.auto_create_missing_areas {
-                    let create_params = feagi_services::types::CreateCorticalAreaParams {
-                        cortical_id: cortical_id_base64.clone(),
-                        name: area_name.clone(),
-                        dimensions: (dims[0] as usize, dims[1] as usize, dims[2] as usize),
-                        position: (pos[0], pos[1], pos[2]),
-                        area_type: "Sensory".to_string(),
-                        visible: Some(true),
-                        sub_group: None,
-                        neurons_per_voxel: Some(1),
-                        postsynaptic_current: None,
-                        plasticity_constant: None,
-                        degeneration: None,
-                        psp_uniform_distribution: None,
-                        firing_threshold_increment: None,
-                        firing_threshold_limit: None,
-                        consecutive_fire_count: None,
-                        snooze_period: None,
-                        refractory_period: None,
-                        leak_coefficient: None,
-                        leak_variability: None,
-                        burst_engine_active: None,
-                        properties: None,
-                    };
-
-                    let result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        handle.block_on(genome_service.create_cortical_areas(vec![create_params]))
-                    } else {
-                        let rt = tokio::runtime::Runtime::new()
-                            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
-                        rt.block_on(genome_service.create_cortical_areas(vec![create_params]))
-                    };
-
-                    match result {
-                        Ok(_) => {
-                            ipu_statuses.push(CorticalAreaStatus {
-                                area_name,
-                                cortical_id: cortical_id_base64,
-                                status: AreaStatus::Created,
-                                dimensions: Some((dims[0] as usize, dims[1] as usize, dims[2] as usize)),
-                                message: Some("Auto-created during registration".to_string()),
-                            });
-                        }
-                        Err(e) => {
-                            ipu_statuses.push(CorticalAreaStatus {
-                                area_name,
-                                cortical_id: cortical_id_base64,
-                                status: AreaStatus::Error,
-                                dimensions: None,
-                                message: Some(format!("Creation failed: {}", e)),
-                            });
-                            return Err(format!(
-                                "Failed to create IPU area '{}' from sensory mapping: {}",
-                                area_key, e
-                            ));
-                        }
-                    }
-                } else {
-                    ipu_statuses.push(CorticalAreaStatus {
-                        area_name,
-                        cortical_id: cortical_id_base64,
-                        status: AreaStatus::Missing,
-                        dimensions: None,
-                        message: Some("Area missing and auto-create disabled".to_string()),
-                    });
-                    return Err(format!(
-                        "Required IPU area '{}' is missing. Enable auto_create_missing_cortical_areas in config to auto-create.",
-                        area_key
-                    ));
-                }
+            // Reject legacy cortical_mappings - agents must use new format
+            if !sensory.cortical_mappings.is_empty() {
+                return Err(format!(
+                    "Legacy sensory.cortical_mappings are no longer supported in FEAGI 2.0 Rust SDK. \
+                    Please provide either:\n\
+                    1. device_registrations in capabilities, or\n\
+                    2. sensory.unit and sensory.group in the sensory capability.\n\
+                    Agent: {}",
+                    request.agent_id
+                ));
             }
+            
+            // Sensory.unit/sensory.group processing is handled above in the main IPU area creation logic
+            // (see lines ~600-1000 where sensory units with unit/group are processed)
         }
 
         // Handle OPU areas (from motor capabilities)
@@ -1349,7 +750,16 @@ impl RegistrationHandler {
 
                 cortical_ids.into_iter().map(|id| id.as_base_64()).collect()
             } else {
-                motor.source_cortical_areas.clone()
+                // Legacy motor.source_cortical_areas are no longer supported
+                return Err(format!(
+                    "Legacy motor.source_cortical_areas are no longer supported in FEAGI 2.0 Rust SDK. \
+                    Please provide either:\n\
+                    1. device_registrations in capabilities, or\n\
+                    2. motor.unit and motor.group in the motor capability, or\n\
+                    3. motor.source_units array with unit+group specifications.\n\
+                    Agent: {}",
+                    request.agent_id
+                ));
             };
 
             for area_name in &source_areas {
@@ -1357,53 +767,37 @@ impl RegistrationHandler {
                 let cortical_id = CorticalID::try_from_base_64(&cortical_id_base64)
                     .map_err(|e| format!("Failed to parse cortical ID: {}", e))?;
 
-                // Parse cortical ID to extract motor unit type and dimensions
-                let cortical_id_bytes = cortical_id.as_bytes();
-                let (motor_unit, dimensions, position) = if cortical_id_bytes.len() >= 4 && cortical_id_bytes[0] == b'o' {
-                    // Extract unit identifier from cortical ID (bytes 1-3 after 'o' prefix)
-                    let unit_identifier = [
-                        cortical_id_bytes[1],
-                        cortical_id_bytes[2],
-                        cortical_id_bytes[3],
-                    ];
-                    
-                    // Find matching MotorCorticalUnit
-                    match self.find_motor_unit_by_identifier(unit_identifier) {
-                        Ok(unit) => {
-                            // Get default topology/dimensions from motor unit template
-                            let topology = unit.get_unit_default_topology();
-                            if let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(0u8)) {
-                                let dims = unit_topology.channel_dimensions_default;
-                                let pos = unit_topology.relative_position;
-                                (
-                                    Some(unit),
-                                    (dims[0] as usize, dims[1] as usize, dims[2] as usize),
-                                    (pos[0], pos[1], pos[2]),
-                                )
-                            } else {
-                                // Fallback to generic dimensions
-                                (
-                                    Some(unit),
-                                    (motor.output_count, 1, 1),
-                                    (0, 0, 0),
-                                )
-                            }
-                        }
-                        Err(e) => {
-                            warn!(
-                                "🦀 [REGISTRATION] Could not find motor unit for identifier {:?}: {}. Using generic dimensions.",
-                                unit_identifier, e
-                            );
-                            (None, (motor.output_count, 1, 1), (0, 0, 0))
-                        }
+                // Motor unit type and dimensions should come from motor.unit/motor.group or device_registrations
+                // This code path should only be reached when motor.unit/motor.group are provided
+                let motor_unit = motor.unit.map(|u| match u {
+                    MotorUnit::RotaryMotor => MotorCorticalUnit::RotaryMotor,
+                    MotorUnit::PositionalServo => MotorCorticalUnit::PositionalServo,
+                    MotorUnit::Gaze => MotorCorticalUnit::Gaze,
+                    MotorUnit::MiscData => MotorCorticalUnit::MiscData,
+                    MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
+                    MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
+                    MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
+                });
+                
+                // Get dimensions from motor unit topology if available
+                let (dimensions, position) = if let Some(unit) = motor_unit {
+                    let topology = unit.get_unit_default_topology();
+                    if let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(0u8)) {
+                        let dims = unit_topology.channel_dimensions_default;
+                        let pos = unit_topology.relative_position;
+                        (
+                            (dims[0] as usize, dims[1] as usize, dims[2] as usize),
+                            (pos[0], pos[1], pos[2]),
+                        )
+                    } else {
+                        ((motor.output_count, 1, 1), (0, 0, 0))
                     }
                 } else {
-                    // Not an OPU cortical ID format - use generic dimensions
-                    warn!(
-                        "🦀 [REGISTRATION] OPU area '{}' does not have 'o' prefix - using generic dimensions",
+                    // This should not happen if validation above is correct
+                    return Err(format!(
+                        "Motor unit type not available for area '{}'. This indicates a bug in registration logic.",
                         area_name
-                    );
-                    (None, (motor.output_count, 1, 1), (0, 0, 0))
+                    ));
                 };
 
                 // Check if area exists (blocking call)
@@ -1752,28 +1146,17 @@ impl RegistrationHandler {
                     );
 
                     // Convert String keys to CorticalID for zero-copy hot path optimization
+                    // Note: cortical_mappings should be empty (rejected earlier), but process if present
                     let area_mapping: HashMap<CorticalID, u32> = sensory
                         .cortical_mappings
                         .iter()
                         .filter_map(|(name, &idx)| {
-                            // Try base64 first (standard format from SDK), then fall back to raw bytes
+                            // Only accept base64-encoded CorticalIDs (standard format)
                             match CorticalID::try_from_base_64(name) {
                                 Ok(id) => Some((id, idx)),
-                                Err(_) => {
-                                    // Fallback: try parsing as raw bytes (for legacy compatibility)
-                                    match CorticalID::try_from_bytes(&{
-                                        let mut bytes = [b'\0'; 8]; // Use null bytes, not spaces
-                                        let name_bytes = name.as_bytes();
-                                        let copy_len = name_bytes.len().min(8);
-                                        bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
-                                        bytes
-                                    }) {
-                                        Ok(id) => Some((id, idx)),
-                                        Err(e) => {
-                                            warn!("[REGISTRATION] Invalid cortical ID '{}': {:?}", name, e);
-                                            None
-                                        }
-                                    }
+                                Err(e) => {
+                                    warn!("[REGISTRATION] Invalid cortical ID '{}' (must be base64-encoded): {:?}", name, e);
+                                    None
                                 }
                             }
                         })
@@ -2179,27 +1562,22 @@ impl RegistrationHandler {
     }
 
     /// Parse capabilities from JSON
+    ///
+    /// Only supports the new FEAGI 2.0 Rust SDK format (AgentCapabilities struct).
+    /// Legacy feagi-sensorimotor format with "input"/"output" keys is no longer supported.
     fn parse_capabilities(
         &self,
         caps_json: &serde_json::Value,
     ) -> Result<AgentCapabilities, String> {
-        // Check if this is feagi-sensorimotor format (has "input"/"output" keys)
-        // This must be checked BEFORE attempting direct deserialization because
-        // AgentCapabilities has #[serde(flatten)] which will absorb these keys
-        // into the custom map, resulting in empty capabilities.
-        let has_legacy_format =
-            caps_json.get("input").is_some() || caps_json.get("output").is_some();
-
-        // Try to deserialize directly from JSON first (handles new agent SDK format)
-        // But skip this if we detected the legacy format
-        if !has_legacy_format {
-            if let Ok(capabilities) = serde_json::from_value::<AgentCapabilities>(caps_json.clone())
-            {
-                return Ok(capabilities);
-            }
+        // Check for legacy format and reject it
+        if caps_json.get("input").is_some() || caps_json.get("output").is_some() {
+            return Err(
+                "Legacy feagi-sensorimotor format with 'input'/'output' keys is no longer supported in FEAGI 2.0 Rust SDK. \
+                Please use the new AgentCapabilities format with device_registrations, sensory.unit/sensory.group, \
+                or motor.unit/motor.group.".to_string()
+            );
         }
 
-        // Support feagi-sensorimotor format: {"capabilities": {"input": {...}, "output": {...}}}
         // Unwrap if wrapped in "capabilities" key
         let caps_json = if let Some(caps_wrapper) = caps_json.get("capabilities") {
             caps_wrapper
@@ -2207,128 +1585,13 @@ impl RegistrationHandler {
             caps_json
         };
 
-        // Fall back to manual parsing for legacy format
-        let mut capabilities = AgentCapabilities::default();
-
-        // Parse vision capability (FEAGI 2.0)
-        if let Some(vision) = caps_json.get("vision") {
-            let modality = vision
-                .get("modality")
-                .and_then(|v| v.as_str())
-                .unwrap_or("camera")
-                .to_string();
-
-            // Parse dimensions - can be array [width, height] or tuple
-            let dimensions = if let Some(dims) = vision.get("dimensions") {
-                if let Some(arr) = dims.as_array() {
-                    if arr.len() >= 2 {
-                        (
-                            arr[0].as_u64().unwrap_or(0) as usize,
-                            arr[1].as_u64().unwrap_or(0) as usize,
-                        )
-                    } else {
-                        (0, 0)
-                    }
-                } else {
-                    (0, 0)
-                }
-            } else {
-                (0, 0)
-            };
-
-            let channels = vision.get("channels").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
-
-            let target_cortical_area = vision
-                .get("target_cortical_area")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-
-            let unit: Option<SensoryUnit> = vision
-                .get("unit")
-                .and_then(|v| serde_json::from_value::<SensoryUnit>(v.clone()).ok());
-            let group: Option<u8> = vision.get("group").and_then(|v| v.as_u64()).map(|v| v as u8);
-
-            // Accept either legacy target_cortical_area or semantic unit+group.
-            if !target_cortical_area.is_empty() || (unit.is_some() && group.is_some()) {
-                capabilities.vision = Some(VisionCapability {
-                    modality,
-                    dimensions,
-                    channels,
-                    target_cortical_area,
-                    unit,
-                    group,
-                });
-            }
-        }
-
-        // Parse input capability (feagi-sensorimotor format: ONLY "input"/"output" keys)
-        // Format: {"input": ["cortical_id1", "cortical_id2", ...]}
-        if let Some(input) = caps_json.get("input") {
-            if let Some(cortical_areas) = input.as_array() {
-                let mut cortical_mappings = HashMap::new();
-                for area_id in cortical_areas.iter().filter_map(|v| v.as_str()) {
-                    cortical_mappings.insert(area_id.to_string(), 0);
-                }
-
-                if !cortical_mappings.is_empty() {
-                    capabilities.sensory = Some(SensoryCapability {
-                        rate_hz: 30.0, // Default rate
-                        shm_path: None,
-                        cortical_mappings,
-                    });
-                }
-            }
-        }
-
-        // Parse output capability (feagi-sensorimotor format: ONLY "input"/"output" keys)
-        // Format: {"output": ["cortical_id1", "cortical_id2", ...]}
-        if let Some(output) = caps_json.get("output") {
-            if let Some(cortical_areas) = output.as_array() {
-                let source_cortical_areas: Vec<String> = cortical_areas
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect();
-
-                // Only create motor capability if source_cortical_areas is non-empty
-                // ARCHITECTURAL PRINCIPLE: Don't invent capabilities that weren't requested
-                if !source_cortical_areas.is_empty() {
-                    capabilities.motor = Some(MotorCapability {
-                        modality: "generic".to_string(),
-                        output_count: source_cortical_areas.len(),
-                        source_cortical_areas,
-                        unit: None,
-                        group: None,
-                        source_units: None,
-                    });
-                }
-            }
-        }
-
-        // Parse visualization capability
-        if let Some(viz) = caps_json.get("visualization") {
-            if viz
-                .get("enabled")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-            {
-                capabilities.visualization = Some(VisualizationCapability {
-                    visualization_type: viz
-                        .get("type")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("generic")
-                        .to_string(),
-                    resolution: None,
-                    refresh_rate: viz.get("rate_hz").and_then(|v| v.as_f64()),
-                    bridge_proxy: viz
-                        .get("bridge_proxy")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false),
-                });
-            }
-        }
-
-        Ok(capabilities)
+        // Deserialize directly from JSON (new agent SDK format only)
+        serde_json::from_value::<AgentCapabilities>(caps_json.clone())
+            .map_err(|e| format!(
+                "Failed to parse capabilities as AgentCapabilities format: {}. \
+                Please ensure capabilities use the new FEAGI 2.0 Rust SDK format.",
+                e
+            ))
     }
 
     /// Process deregistration request
