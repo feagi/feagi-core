@@ -9,7 +9,6 @@ use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::SensoryCorticalUnit;
-use std::collections::HashMap;
 
 /// Video encoding strategy
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,17 +104,8 @@ pub struct VideoEncoderConfig {
 impl VideoEncoderConfig {
     /// Convert to AgentConfig for core client
     pub fn to_agent_config(&self) -> Result<AgentConfig> {
-        let unit_index = CorticalUnitIndex::from(self.cortical_unit_id);
-
-        // Get cortical IDs for this encoding strategy
-        let cortical_ids = self.encoding_strategy.cortical_ids(unit_index);
-
-        // Build cortical mappings for registration
-        let mut cortical_mappings = HashMap::new();
-        for (idx, id) in cortical_ids.iter().enumerate() {
-            cortical_mappings.insert(id.as_base_64(), idx as u32);
-        }
-
+        // Device registrations are handled separately via ConnectorAgent and
+        // device_registrations in capabilities.
         let mut config = AgentConfig::new(self.agent_id.clone(), AgentType::Sensory)
             .with_registration_endpoint(format!(
                 "tcp://{}:{}",
@@ -128,7 +118,7 @@ impl VideoEncoderConfig {
             .with_heartbeat_interval(self.feagi_heartbeat_interval_s)
             .with_connection_timeout_ms(self.feagi_connection_timeout_ms)
             .with_registration_retries(self.feagi_registration_retries)
-            .with_sensory_capability(self.feagi_tick_hz as f64, None, cortical_mappings);
+            .with_sensory_capability(self.feagi_tick_hz as f64, None);
 
         // For segmented vision (9 areas), add semantic vision capability to auto-create areas.
         // The sensory mappings are still used to register with burst engine; this is purely

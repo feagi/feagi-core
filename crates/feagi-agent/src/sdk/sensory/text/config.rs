@@ -8,7 +8,6 @@ use crate::sdk::error::{Result, SdkError};
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalUnitIndex, CorticalSubUnitIndex};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, IOCorticalAreaConfigurationFlag};
 use feagi_structures::genomic::cortical_area::CorticalID;
-use std::collections::HashMap;
 
 /// Text encoder configuration
 ///
@@ -64,12 +63,8 @@ impl TextEncoderConfig {
 
     /// Convert to AgentConfig for core client
     pub fn to_agent_config(&self) -> Result<AgentConfig> {
-        let cortical_id = self.cortical_id();
-
-        // Build cortical mappings for registration
-        let mut cortical_mappings = HashMap::new();
-        cortical_mappings.insert(cortical_id.as_base_64(), 0);
-
+        // Device registrations are handled separately via ConnectorAgent and
+        // device_registrations in capabilities.
         let config = AgentConfig::new(self.agent_id.clone(), AgentType::Sensory)
             .with_registration_endpoint(format!(
                 "tcp://{}:{}",
@@ -82,7 +77,7 @@ impl TextEncoderConfig {
             .with_heartbeat_interval(self.feagi_heartbeat_interval_s)
             .with_connection_timeout_ms(self.feagi_connection_timeout_ms)
             .with_registration_retries(self.feagi_registration_retries)
-            .with_sensory_capability(self.feagi_tick_hz as f64, None, cortical_mappings);
+            .with_sensory_capability(self.feagi_tick_hz as f64, None);
 
         Ok(config)
     }

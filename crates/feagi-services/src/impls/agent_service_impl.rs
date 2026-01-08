@@ -115,7 +115,6 @@ impl AgentService for AgentServiceImpl {
                 capabilities.sensory = Some(SensoryCapability {
                     rate_hz: 30.0,
                     shm_path: None,
-                    cortical_mappings: std::collections::HashMap::new(),
                 });
             }
             AgentType::Motor => {
@@ -134,7 +133,6 @@ impl AgentService for AgentServiceImpl {
                 capabilities.sensory = Some(SensoryCapability {
                     rate_hz: 30.0,
                     shm_path: None,
-                    cortical_mappings: std::collections::HashMap::new(),
                 });
                 capabilities.motor = Some(MotorCapability {
                     modality: "generic".to_string(),
@@ -413,12 +411,13 @@ impl AgentService for AgentServiceImpl {
         }
 
         // Add input capability (feagi-sensorimotor format)
+        // Note: cortical_mappings removed - device registrations are handled separately
         if let Some(ref sensory) = agent.capabilities.sensory {
-            // Convert sensory capability to "input" format: array of cortical IDs
-            let input_areas: Vec<String> = sensory.cortical_mappings.keys().cloned().collect();
+            // Return empty array since cortical_mappings no longer exist
+            // Device registrations should be accessed via device_registrations endpoint
             capabilities.insert(
                 "input".to_string(),
-                serde_json::to_value(input_areas).unwrap_or(serde_json::Value::Null),
+                serde_json::to_value(Vec::<String>::new()).unwrap_or(serde_json::Value::Null),
             );
         }
 

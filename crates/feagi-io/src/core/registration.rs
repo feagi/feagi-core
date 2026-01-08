@@ -603,23 +603,11 @@ impl RegistrationHandler {
             }
         }
 
-        // Handle sensory IPU areas - requires sensory.unit and sensory.group (new SDK format).
-        // Legacy sensory.cortical_mappings are no longer supported.
-        if let Some(ref sensory) = capabilities.sensory {
-            // Reject legacy cortical_mappings - agents must use new format
-            if !sensory.cortical_mappings.is_empty() {
-                return Err(FeagiDataError::BadParameters(
-                    "Legacy sensory.cortical_mappings are no longer supported in FEAGI 2.0 Rust SDK. \
-                    Please provide either:\n\
-                    1. device_registrations in capabilities, or\n\
-                    2. sensory.unit and sensory.group in the sensory capability."
-                        .to_string(),
-                ));
-            }
-            
-            // Sensory.unit/sensory.group processing is handled above in the main IPU area creation logic
-            // (see lines ~600-1000 where sensory units with unit/group are processed)
-        }
+        // Handle sensory IPU areas
+        // Sensory capabilities are now used only for rate_hz and shm_path.
+        // Device registrations are handled separately via device_registrations in capabilities.
+        // Sensory.unit/sensory.group processing is handled above in the main IPU area creation logic
+        // (see lines ~600-1000 where sensory units with unit/group are processed)
 
         // Handle OPU areas (from motor capabilities)
         if let Some(ref motor) = capabilities.motor {
@@ -1141,22 +1129,13 @@ impl RegistrationHandler {
                         burst_lock_duration
                     );
 
-                    // Convert String keys to CorticalID for zero-copy hot path optimization
-                    // Note: cortical_mappings should be empty (rejected earlier), but process if present
-                    let area_mapping: HashMap<CorticalID, u32> = sensory
-                        .cortical_mappings
-                        .iter()
-                        .filter_map(|(name, &idx)| {
-                            // Only accept base64-encoded CorticalIDs (standard format)
-                            match CorticalID::try_from_base_64(name) {
-                                Ok(id) => Some((id, idx)),
-                                Err(e) => {
-                                    warn!("[REGISTRATION] Invalid cortical ID '{}' (must be base64-encoded): {:?}", name, e);
-                                    None
-                                }
-                            }
-                        })
-                        .collect();
+                    // Build area_mapping for burst engine registration
+                    // NOTE: cortical_mappings field removed from SensoryCapability.
+                    // For new SDK agents using device_registrations, area_mapping will be empty.
+                    // The burst engine should handle empty mappings gracefully or derive
+                    // cortical IDs from device_registrations separately.
+                    // TODO: Extract cortical IDs from device_registrations if available in capabilities
+                    let area_mapping: HashMap<CorticalID, u32> = HashMap::new();
 
                     let config = feagi_npu_burst_engine::AgentConfig {
                         agent_id: request.agent_id.clone(),

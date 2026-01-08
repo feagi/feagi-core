@@ -155,12 +155,11 @@ pub struct VisualizationCapability {
     pub bridge_proxy: bool,
 }
 
-/// Legacy sensory capability (for backward compatibility with existing code)
+/// Sensory capability for non-vision sensory modalities (text, audio, etc.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensoryCapability {
     pub rate_hz: f64,
     pub shm_path: Option<String>,
-    pub cortical_mappings: HashMap<String, u32>, // cortical_id -> cortical_idx
 }
 
 /// Agent capabilities describing what data it can provide/consume
