@@ -19,6 +19,7 @@ mod percentages;
 pub mod text_token;
 pub mod processing;
 mod segmented_image_frame;
+mod image_filtering_settings;
 
 pub use gaze_properties::GazeProperties;
 pub use image_frame::ImageFrame;

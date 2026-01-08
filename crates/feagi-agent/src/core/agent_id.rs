@@ -7,8 +7,8 @@ const MAX_AGENT_NAME_LENGTH: usize = 20;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AgentID {
     instance_id: u32,
-    manufacturer: [u8; MAX_MANUFACTURER_LENGTH],
-    agent_name: [u8; MAX_AGENT_NAME_LENGTH],
+    manufacturer: [u8; MAX_MANUFACTURER_LENGTH], //ASCII
+    agent_name: [u8; MAX_AGENT_NAME_LENGTH], //ASCII
     agent_version: u32,
 }
 

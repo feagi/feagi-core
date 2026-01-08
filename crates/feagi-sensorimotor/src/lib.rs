@@ -7,5 +7,6 @@ mod feagi_interfaces;
 pub mod wrapped_io_data;
 pub mod configuration;
 mod connector_cache;
+pub mod feedbacks;
 
 pub use connector_cache::ConnectorCache;
