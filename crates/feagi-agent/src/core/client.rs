@@ -421,11 +421,31 @@ impl AgentClient {
             .as_ref()
             .ok_or_else(|| SdkError::Other("Registration socket not initialized".to_string()))?;
 
+        let agent_type = match self.config.agent_type {
+            AgentType::Sensory => "sensory",
+            AgentType::Motor => "motor",
+            AgentType::Both => "both",
+            AgentType::Visualization => "visualization",
+            AgentType::Infrastructure => "infrastructure",
+        }
+        .to_string();
+        let capabilities = serde_json::to_value(&self.config.capabilities)
+            .map_err(|e| SdkError::Other(format!("Failed to serialize capabilities: {e}")))?;
+
+        let reconnect_spec = crate::core::heartbeat::ReconnectSpec {
+            agent_id: self.config.agent_id.clone(),
+            agent_type,
+            capabilities,
+            registration_retries: self.config.registration_retries,
+            retry_backoff_ms: self.config.retry_backoff_ms,
+        };
+
         let mut heartbeat = HeartbeatService::new(
             self.config.agent_id.clone(),
             Arc::clone(socket),
             self.config.heartbeat_interval,
-        );
+        )
+        .with_reconnect_spec(reconnect_spec);
 
         heartbeat.start()?;
         self.heartbeat = Some(heartbeat);

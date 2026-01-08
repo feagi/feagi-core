@@ -2957,6 +2957,71 @@ impl<
         updated_count
     }
 
+    /// Update postsynaptic potential (PSP / conductance) for all **existing outgoing synapses**
+    /// from neurons in the specified cortical area.
+    ///
+    /// @cursor:critical-path
+    ///
+    /// ## Why this exists
+    /// Synaptic propagation uses the PSP stored per-synapse in `SynapseStorage::postsynaptic_potentials`.
+    /// When a cortical area's `postsynaptic_current` is changed at runtime, the NPU must update the
+    /// existing synapses' PSP values to ensure firing influences downstream neurons deterministically.
+    ///
+    /// ## Returns
+    /// Number of synapses updated.
+    pub fn update_cortical_area_postsynaptic_current(
+        &mut self,
+        cortical_area: u32,
+        postsynaptic_potential: u8,
+    ) -> usize {
+        // Phase 1: Gather source neuron IDs for this cortical area.
+        // NeuronId == array index by design in this NPU (see process_single_neuron).
+        let source_neuron_ids: Vec<u32> = {
+            let neuron_storage = self.neuron_storage.read().unwrap();
+            let mut sources = Vec::new();
+            for idx in 0..neuron_storage.count() {
+                if neuron_storage.valid_mask()[idx] && neuron_storage.cortical_areas()[idx] == cortical_area {
+                    sources.push(idx as u32);
+                }
+            }
+            sources
+        };
+
+        if source_neuron_ids.is_empty() {
+            return 0;
+        }
+
+        // Phase 2: Update all synapses reachable from these sources using the propagation engine's index.
+        //
+        // Lock order: synapse_storage -> propagation_engine (matches other NPU paths to avoid deadlocks).
+        let mut synapse_storage = self.synapse_storage.write().unwrap();
+        let prop_engine = self.propagation_engine.read().unwrap();
+
+        let mut updated = 0usize;
+        for source_id in source_neuron_ids {
+            let src = NeuronId(source_id);
+            if let Some(indices) = prop_engine.synapse_index.get(&src) {
+                for &syn_idx in indices {
+                    // IMPORTANT: Avoid simultaneous mutable + immutable borrows from synapse_storage.
+                    // Take a short-lived immutable borrow to check validity, then (if valid) mutate PSP.
+                    let is_valid = {
+                        let valid = synapse_storage.valid_mask();
+                        syn_idx < valid.len() && valid[syn_idx]
+                    };
+
+                    if is_valid {
+                        let psps = synapse_storage.postsynaptic_potentials_mut();
+                        // syn_idx bounds already checked against valid.len(); lengths match by contract.
+                        psps[syn_idx] = postsynaptic_potential;
+                        updated += 1;
+                    }
+                }
+            }
+        }
+
+        updated
+    }
+
     /// Delete a neuron (mark as invalid)
     /// Returns true if successful, false if neuron out of bounds
     pub fn delete_neuron(&mut self, neuron_id: u32) -> bool {
@@ -3615,6 +3680,23 @@ fn phase1_injection_with_synapses<
                 fired_ids.len(),
                 synaptic_count
             );
+
+            // Fine-grained breakdown from the propagation engine (populated per-call).
+            if let Some(profile) = propagation_engine.last_profile() {
+                warn!(
+                    "[PHASE1-SYNAPTIC-PROFILE] fired={} synapse_indices={} unique_sources={} contributions={} | gather={:.2}ms metadata={:.2}ms compute={:.2}ms group={:.2}ms total={:.2}ms | rayon_threads={}",
+                    profile.fired_neurons,
+                    profile.synapse_indices,
+                    profile.unique_sources,
+                    profile.contributions,
+                    profile.gather_ms,
+                    profile.metadata_ms,
+                    profile.compute_ms,
+                    profile.group_ms,
+                    profile.total_ms,
+                    profile.rayon_threads
+                );
+            }
         }
     }
 

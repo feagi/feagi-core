@@ -734,6 +734,21 @@ where
         )
     }
 
+    /// Update postsynaptic potential (PSP / conductance) for all existing outgoing synapses
+    /// from neurons in a given cortical area.
+    ///
+    /// Returns number of synapses updated.
+    pub fn update_cortical_area_postsynaptic_current(
+        &mut self,
+        cortical_area: u32,
+        postsynaptic_potential: u8,
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            update_cortical_area_postsynaptic_current(cortical_area, postsynaptic_potential)
+        )
+    }
+
     pub fn sample_fire_queue(&mut self) -> Option<FireQueueSample> {
         match self {
             DynamicNPUGeneric::F32(npu) => npu.sample_fire_queue(),

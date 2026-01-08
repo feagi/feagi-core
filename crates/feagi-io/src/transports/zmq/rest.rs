@@ -289,8 +289,11 @@ impl RestStream {
                 })
             }
             Err(e) => {
-                error!(
-                    "🦀 [PNS] 💓 Heartbeat FAILED for '{}' at {}: {}",
+                // Heartbeats from unknown agents are rejected by design.
+                // This can happen if the agent never registered, was deregistered, or FEAGI restarted.
+                // Log at WARN (not ERROR) because this is a common, non-fatal condition.
+                tracing::warn!(
+                    "🦀 [PNS] 💓 Heartbeat rejected for '{}' at {}: {}",
                     agent_id, now, e
                 );
                 serde_json::json!({

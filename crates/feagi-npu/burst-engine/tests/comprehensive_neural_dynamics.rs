@@ -151,6 +151,54 @@ fn test_psp_below_threshold_no_fire() {
 }
 
 #[test]
+fn test_psp_update_rewrites_existing_outgoing_synapses() {
+    let mut npu = create_test_npu();
+
+    // Source neuron in area 10.
+    let source = add_test_neuron(&mut npu, 1.0, 0.0, false, 0, 10, 0);
+    // Target neuron in area 11 requires PSP >= 10 to fire.
+    let target = add_test_neuron(&mut npu, 10.0, 0.0, false, 0, 11, 0);
+
+    // Start with low PSP (conductance=1) so the target will not fire.
+    add_test_synapse(
+        &mut npu,
+        source,
+        target,
+        SynapticWeight(1),
+        SynapticConductance(1),
+        SynapseType::Excitatory,
+    );
+
+    // Burst 1: Fire source.
+    npu.inject_sensory_with_potentials(&[(source, 2.0)]);
+    let result1 = npu.process_burst().unwrap();
+    assert!(result1.fired_neurons.contains(&source), "Source should fire");
+
+    // Burst 2: Target should NOT fire (PSP=1 < threshold=10).
+    let result2 = npu.process_burst().unwrap();
+    assert!(
+        !result2.fired_neurons.contains(&target),
+        "Target should NOT fire before PSP update"
+    );
+
+    // Update PSP at the cortical-area level and ensure existing synapses are rewritten in-place.
+    let updated_synapses = npu.update_cortical_area_postsynaptic_current(10, 20);
+    assert_eq!(updated_synapses, 1, "Expected exactly one synapse to be updated");
+
+    // Burst 3: Fire source again.
+    npu.inject_sensory_with_potentials(&[(source, 2.0)]);
+    let result3 = npu.process_burst().unwrap();
+    assert!(result3.fired_neurons.contains(&source), "Source should fire again");
+
+    // Burst 4: Target SHOULD fire now (PSP=20 >= threshold=10).
+    let result4 = npu.process_burst().unwrap();
+    assert!(
+        result4.fired_neurons.contains(&target),
+        "Target should fire after PSP update rewrites existing synapse PSP"
+    );
+}
+
+#[test]
 fn test_psp_equals_threshold_fires() {
     let mut npu = create_test_npu();
     

@@ -10,6 +10,19 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use tracing::{debug, warn};
 
+/// Registration payload used to re-register an agent after FEAGI restarts.
+///
+/// @cursor:critical-path
+/// This is used ONLY for automatic recovery when FEAGI loses in-memory registry state.
+#[derive(Debug, Clone)]
+pub struct ReconnectSpec {
+    pub agent_id: String,
+    pub agent_type: String,
+    pub capabilities: serde_json::Value,
+    pub registration_retries: u32,
+    pub retry_backoff_ms: u64,
+}
+
 /// Heartbeat service managing periodic keepalive messages
 pub struct HeartbeatService {
     /// Agent ID
@@ -26,6 +39,9 @@ pub struct HeartbeatService {
 
     /// Thread handle
     thread: Option<JoinHandle<()>>,
+
+    /// Optional auto-reconnect/re-register configuration
+    reconnect: Option<ReconnectSpec>,
 }
 
 impl HeartbeatService {
@@ -42,7 +58,17 @@ impl HeartbeatService {
             interval: Duration::from_secs_f64(interval_secs),
             running: Arc::new(AtomicBool::new(false)),
             thread: None,
+            reconnect: None,
         }
+    }
+
+    /// Enable automatic re-register attempts when heartbeats are rejected due to agent not found.
+    ///
+    /// This is intended for FEAGI restarts (registry reset). It does NOT attempt reconnect
+    /// after voluntary deregistration because `AgentClient` stops this service on disconnect.
+    pub fn with_reconnect_spec(mut self, spec: ReconnectSpec) -> Self {
+        self.reconnect = Some(spec);
+        self
     }
 
     /// Start the heartbeat service
@@ -59,6 +85,7 @@ impl HeartbeatService {
         let socket = Arc::clone(&self.socket);
         let interval = self.interval;
         let running = Arc::clone(&self.running);
+        let reconnect = self.reconnect.clone();
 
         let thread = thread::spawn(move || {
             debug!("[HEARTBEAT] Service started for agent: {}", agent_id);
@@ -72,7 +99,7 @@ impl HeartbeatService {
                 }
 
                 // Send heartbeat
-                if let Err(e) = Self::send_heartbeat(&agent_id, &socket) {
+                if let Err(e) = Self::send_heartbeat(&agent_id, &socket, reconnect.as_ref()) {
                     warn!(
                         "[HEARTBEAT] Failed to send heartbeat for {}: {}",
                         agent_id, e
@@ -133,7 +160,11 @@ impl HeartbeatService {
     }
 
     /// Send a single heartbeat message
-    fn send_heartbeat(agent_id: &str, socket: &Arc<Mutex<zmq::Socket>>) -> Result<()> {
+    fn send_heartbeat(
+        agent_id: &str,
+        socket: &Arc<Mutex<zmq::Socket>>,
+        reconnect: Option<&ReconnectSpec>,
+    ) -> Result<()> {
         let message = serde_json::json!({
             "method": "POST",
             "path": "/v1/agent/heartbeat",
@@ -146,20 +177,21 @@ impl HeartbeatService {
             }
         });
 
-        let socket = socket
+        let socket_guard = socket
             .lock()
             .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
 
         // Send heartbeat request
-        socket.send(message.to_string().as_bytes(), 0)?;
+        socket_guard.send(message.to_string().as_bytes(), 0)?;
 
         // Wait for response (ROUTER replies are multipart: [empty][json] when seen by REQ)
-        if socket.poll(zmq::POLLIN, 1000)? > 0 {
-            let parts = socket.recv_multipart(0)?;
+        if socket_guard.poll(zmq::POLLIN, 1000)? > 0 {
+            let parts = socket_guard.recv_multipart(0)?;
             let last = parts
                 .last()
                 .ok_or_else(|| SdkError::Other("Heartbeat reply was empty".to_string()))?;
             let response: serde_json::Value = serde_json::from_slice(last)?;
+            drop(socket_guard);
 
             // Heartbeat response schema varies by FEAGI version/transport:
             // - Legacy: {"status":"success", ...}
@@ -178,11 +210,86 @@ impl HeartbeatService {
                 Ok(())
             } else {
                 warn!("[HEARTBEAT] ⚠ Heartbeat rejected: {:?}", response);
+                if Self::is_agent_not_registered(&response) {
+                    if let Some(spec) = reconnect {
+                        if Self::try_re_register(spec, socket).is_ok() {
+                            debug!(
+                                "[HEARTBEAT] ✓ Auto re-registered agent after heartbeat rejection: {}",
+                                agent_id
+                            );
+                            return Ok(());
+                        }
+                    }
+                }
                 Err(SdkError::HeartbeatFailed(format!("{:?}", response)))
             }
         } else {
+            drop(socket_guard);
             warn!("[HEARTBEAT] ⚠ Heartbeat timeout for {}", agent_id);
             Ok(()) // Don't treat timeout as fatal - just log it
+        }
+    }
+
+    /// Detect FEAGI responses indicating the agent is not currently registered.
+    fn is_agent_not_registered(response: &serde_json::Value) -> bool {
+        let status = response
+            .get("status")
+            .and_then(|v| v.as_u64())
+            .unwrap_or_default();
+        if status != 404 {
+            return false;
+        }
+        response
+            .get("body")
+            .and_then(|b| b.get("error"))
+            .and_then(|e| e.as_str())
+            .map(|s| s.contains("not found in registry") || s.contains("not found"))
+            .unwrap_or(false)
+    }
+
+    /// Attempt to re-register the agent (used after FEAGI restarts).
+    fn try_re_register(spec: &ReconnectSpec, socket: &Arc<Mutex<zmq::Socket>>) -> Result<()> {
+        let registration_msg = serde_json::json!({
+            "method": "POST",
+            "path": "/v1/agent/register",
+            "body": {
+                "agent_id": spec.agent_id,
+                "agent_type": spec.agent_type,
+                "capabilities": spec.capabilities,
+            }
+        });
+
+        let mut attempt = 0u32;
+        loop {
+            attempt += 1;
+            let socket = socket
+                .lock()
+                .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
+
+            socket.send(registration_msg.to_string().as_bytes(), 0)?;
+            if socket.poll(zmq::POLLIN, 1000)? > 0 {
+                let parts = socket.recv_multipart(0)?;
+                let last = parts
+                    .last()
+                    .ok_or_else(|| SdkError::Other("Registration reply was empty".to_string()))?;
+                let response: serde_json::Value = serde_json::from_slice(last)?;
+                let status_code = response
+                    .get("status")
+                    .and_then(|s| s.as_u64())
+                    .unwrap_or(500);
+                if status_code == 200 {
+                    return Ok(());
+                }
+            }
+
+            if attempt > spec.registration_retries {
+                return Err(SdkError::RegistrationFailed(
+                    "Auto re-register failed (exhausted retries)".to_string(),
+                ));
+            }
+
+            // Deterministic backoff controlled by AgentConfig (no hardcoded defaults here).
+            std::thread::sleep(Duration::from_millis(spec.retry_backoff_ms));
         }
     }
 

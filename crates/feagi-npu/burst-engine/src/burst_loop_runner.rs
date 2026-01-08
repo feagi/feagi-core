@@ -1202,6 +1202,19 @@ fn burst_loop(
                                     0
                                 }
                             }
+                            "postsynaptic_current" | "neuron_post_synaptic_potential" => {
+                                if let Some(psp) = update.value.as_f64() {
+                                    // PSP is stored in the NPU as u8 conductance (0..=255).
+                                    // Clamp deterministically (matches synaptogenesis behavior).
+                                    let psp_u8 = psp.clamp(0.0, 255.0) as u8;
+                                    npu_lock.update_cortical_area_postsynaptic_current(
+                                        update.cortical_idx,
+                                        psp_u8,
+                                    )
+                                } else {
+                                    0
+                                }
+                            }
                             "mp_driven_psp" | "neuron_mp_driven_psp" => {
                                 if let Some(enabled) = update.value.as_bool() {
                                     match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
@@ -1240,10 +1253,19 @@ fn burst_loop(
 
                         if count > 0 {
                             applied_count += 1;
-                            debug!(
-                                "[PARAM-QUEUE] Applied {}={} to {} neurons in area {}",
-                                update.parameter_name, update.value, count, update.cortical_id
-                            );
+                            if update.parameter_name == "postsynaptic_current"
+                                || update.parameter_name == "neuron_post_synaptic_potential"
+                            {
+                                debug!(
+                                    "[PARAM-QUEUE] Applied {}={} to {} synapses in area {}",
+                                    update.parameter_name, update.value, count, update.cortical_id
+                                );
+                            } else {
+                                debug!(
+                                    "[PARAM-QUEUE] Applied {}={} to {} neurons in area {}",
+                                    update.parameter_name, update.value, count, update.cortical_id
+                                );
+                            }
                         }
                     }
 
