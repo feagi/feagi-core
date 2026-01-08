@@ -35,6 +35,7 @@ pub use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
 
 // Core FEAGI structures (IDs, flags, and voxel containers)
 pub use feagi_structures::genomic::cortical_area::CorticalID;
+pub use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 pub use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalSubUnitIndex, CorticalUnitIndex,
 };

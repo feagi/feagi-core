@@ -12,5 +12,6 @@
 // Re-export types from feagi-services to break circular dependency
 pub use feagi_services::types::agent_registry::{
     AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
-    SensoryCapability, VisionCapability, VisualizationCapability,
+    MotorUnit, MotorUnitSpec, SensoryCapability, SensoryUnit, VisionCapability,
+    VisualizationCapability,
 };

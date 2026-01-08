@@ -124,6 +124,9 @@ impl AgentService for AgentServiceImpl {
                     modality: "generic".to_string(),
                     output_count: 0,
                     source_cortical_areas: vec![],
+                    unit: None,
+                    group: None,
+                    source_units: None,
                 });
             }
             AgentType::Both => {
@@ -137,6 +140,9 @@ impl AgentService for AgentServiceImpl {
                     modality: "generic".to_string(),
                     output_count: 0,
                     source_cortical_areas: vec![],
+                    unit: None,
+                    group: None,
+                    source_units: None,
                 });
             }
             AgentType::Infrastructure => {

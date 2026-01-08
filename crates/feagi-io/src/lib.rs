@@ -487,7 +487,10 @@ pub mod connectome;
 pub use core::{
     AgentCapabilities, AgentDisconnectedEvent, AgentInfo, AgentRegisteredEvent, AgentRegistry,
     AgentTransport, AgentType, HeartbeatTracker, IOConfig, IOError, MotorCapability,
+    MotorUnit,
+    MotorUnitSpec,
     MotorCommandEvent, RegistrationHandler, RegistrationRequest, RegistrationResponse, Result,
+    SensoryUnit,
     SensoryCapability, SensoryDataEvent, SharedFBC, StreamType, TransportConfig, TransportMode,
     VisionCapability, VisualizationCapability, VisualizationReadyEvent, WebSocketConfig,
 };

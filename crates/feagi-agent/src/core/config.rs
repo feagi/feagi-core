@@ -238,6 +238,8 @@ impl AgentConfig {
             dimensions,
             channels,
             target_cortical_area: target_cortical_area.into(),
+            unit: None,
+            group: None,
         });
         self
     }
@@ -260,6 +262,68 @@ impl AgentConfig {
             modality: modality.into(),
             output_count,
             source_cortical_areas,
+            unit: None,
+            group: None,
+            source_units: None,
+        });
+        self
+    }
+
+    /// Add vision capability using semantic unit + group (Option B contract).
+    ///
+    /// This avoids requiring SDK users to know FEAGI's internal cortical ID encoding.
+    pub fn with_vision_unit(
+        mut self,
+        modality: impl Into<String>,
+        dimensions: (usize, usize),
+        channels: usize,
+        unit: feagi_io::SensoryUnit,
+        group: u8,
+    ) -> Self {
+        self.capabilities.vision = Some(VisionCapability {
+            modality: modality.into(),
+            dimensions,
+            channels,
+            target_cortical_area: String::new(),
+            unit: Some(unit),
+            group: Some(group),
+        });
+        self
+    }
+
+    /// Add motor capability using semantic unit + group (Option B contract).
+    pub fn with_motor_unit(
+        mut self,
+        modality: impl Into<String>,
+        output_count: usize,
+        unit: feagi_io::MotorUnit,
+        group: u8,
+    ) -> Self {
+        self.capabilities.motor = Some(MotorCapability {
+            modality: modality.into(),
+            output_count,
+            source_cortical_areas: Vec::new(),
+            unit: Some(unit),
+            group: Some(group),
+            source_units: None,
+        });
+        self
+    }
+
+    /// Add multiple motor units using semantic unit + group pairs (Option B contract).
+    pub fn with_motor_units(
+        mut self,
+        modality: impl Into<String>,
+        output_count: usize,
+        source_units: Vec<feagi_io::MotorUnitSpec>,
+    ) -> Self {
+        self.capabilities.motor = Some(MotorCapability {
+            modality: modality.into(),
+            output_count,
+            source_cortical_areas: Vec::new(),
+            unit: None,
+            group: None,
+            source_units: Some(source_units),
         });
         self
     }
@@ -519,6 +583,9 @@ mod tests {
             modality: "servo".to_string(),
             output_count: 1,
             source_cortical_areas: vec!["motor".to_string()],
+            unit: None,
+            group: None,
+            source_units: None,
         });
         assert!(config.validate().is_err());
     }

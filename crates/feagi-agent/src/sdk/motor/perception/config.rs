@@ -71,10 +71,14 @@ impl PerceptionDecoderConfig {
     /// Convert to AgentConfig for core client
     pub fn to_agent_config(&self) -> Result<AgentConfig> {
         let cortical_ids = self.cortical_ids();
-        let motor_ids_b64 = cortical_ids
-            .iter()
-            .map(|id| id.as_base_64())
-            .collect::<Vec<_>>();
+        let output_count = cortical_ids.len();
+
+        let group = u8::try_from(self.cortical_unit_id).map_err(|_| {
+            SdkError::InvalidConfiguration(format!(
+                "cortical_unit_id {} out of range for u8 group",
+                self.cortical_unit_id
+            ))
+        })?;
 
         let config = AgentConfig::new(self.agent_id.clone(), AgentType::Motor)
             .with_registration_endpoint(format!(
@@ -92,7 +96,24 @@ impl PerceptionDecoderConfig {
             .with_heartbeat_interval(self.feagi_heartbeat_interval_s)
             .with_connection_timeout_ms(self.feagi_connection_timeout_ms)
             .with_registration_retries(self.feagi_registration_retries)
-            .with_motor_capability("motor", motor_ids_b64.len(), motor_ids_b64);
+            .with_motor_units(
+                "motor",
+                output_count,
+                vec![
+                    feagi_io::MotorUnitSpec {
+                        unit: feagi_io::MotorUnit::ObjectSegmentation,
+                        group,
+                    },
+                    feagi_io::MotorUnitSpec {
+                        unit: feagi_io::MotorUnit::SimpleVisionOutput,
+                        group,
+                    },
+                    feagi_io::MotorUnitSpec {
+                        unit: feagi_io::MotorUnit::TextEnglishOutput,
+                        group,
+                    },
+                ],
+            );
 
         Ok(config)
     }

@@ -476,16 +476,132 @@ impl AgentClient {
             .ok_or_else(|| SdkError::Other("No vision capability configured".to_string()))?;
 
         let (width, _height) = vision_cap.dimensions;
-        let cortical_area = &vision_cap.target_cortical_area;
 
-        // Create CorticalID from area name
-        let mut bytes = [b' '; 8];
-        let name_bytes = cortical_area.as_bytes();
-        let copy_len = name_bytes.len().min(8);
-        bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
-        let cortical_id = CorticalID::try_from_bytes(&bytes).map_err(|e| {
-            SdkError::Other(format!("Invalid cortical ID '{}': {:?}", cortical_area, e))
-        })?;
+        // Derive cortical ID in a language-agnostic way if semantic unit+group is provided.
+        let cortical_id = if let (Some(unit), Some(group_index)) = (vision_cap.unit, vision_cap.group) {
+            use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+            use feagi_structures::genomic::SensoryCorticalUnit;
+
+            let group: feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex =
+                group_index.into();
+            let frame_change_handling = feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute;
+            let percentage_neuron_positioning = PercentageNeuronPositioning::Linear;
+
+            let sensory_unit = match unit {
+                feagi_io::SensoryUnit::Infrared => SensoryCorticalUnit::Infrared,
+                feagi_io::SensoryUnit::Proximity => SensoryCorticalUnit::Proximity,
+                feagi_io::SensoryUnit::Shock => SensoryCorticalUnit::Shock,
+                feagi_io::SensoryUnit::Battery => SensoryCorticalUnit::Battery,
+                feagi_io::SensoryUnit::Servo => SensoryCorticalUnit::Servo,
+                feagi_io::SensoryUnit::AnalogGpio => SensoryCorticalUnit::AnalogGPIO,
+                feagi_io::SensoryUnit::DigitalGpio => SensoryCorticalUnit::DigitalGPIO,
+                feagi_io::SensoryUnit::MiscData => SensoryCorticalUnit::MiscData,
+                feagi_io::SensoryUnit::TextEnglishInput => SensoryCorticalUnit::TextEnglishInput,
+                feagi_io::SensoryUnit::Vision => SensoryCorticalUnit::Vision,
+                feagi_io::SensoryUnit::SegmentedVision => SensoryCorticalUnit::SegmentedVision,
+                feagi_io::SensoryUnit::Accelerometer => SensoryCorticalUnit::Accelerometer,
+                feagi_io::SensoryUnit::Gyroscope => SensoryCorticalUnit::Gyroscope,
+            };
+
+            // Use the first sub-unit as the default send target for simple APIs.
+            // More advanced encoders should use the sensor cache mapping APIs instead.
+            match sensory_unit {
+                SensoryCorticalUnit::Infrared => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::Proximity => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_proximity_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::Shock => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_shock_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::Battery => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_battery_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::Servo => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_servo_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::AnalogGPIO => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::DigitalGPIO => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_digital_g_p_i_o_with_parameters(group)[0]
+                }
+                SensoryCorticalUnit::MiscData => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                        frame_change_handling,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::TextEnglishInput => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
+                        frame_change_handling,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::Vision => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_vision_with_parameters(
+                        frame_change_handling,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::SegmentedVision => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                        frame_change_handling,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::Accelerometer => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_accelerometer_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::Gyroscope => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_gyroscope_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )[0]
+                }
+            }
+        } else {
+            let cortical_area = &vision_cap.target_cortical_area;
+
+            // Legacy: Create CorticalID from area name
+            let mut bytes = [b' '; 8];
+            let name_bytes = cortical_area.as_bytes();
+            let copy_len = name_bytes.len().min(8);
+            bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
+            CorticalID::try_from_bytes(&bytes).map_err(|e| {
+                SdkError::Other(format!("Invalid cortical ID '{}': {:?}", cortical_area, e))
+            })?
+        };
 
         // Convert flat neuron IDs to XYZP format
         let mut x_coords = Vec::with_capacity(neuron_pairs.len());
@@ -509,6 +625,7 @@ impl AgentClient {
                 .map_err(|e| SdkError::Other(format!("Failed to create neuron arrays: {:?}", e)))?;
 
         // Create cortical mapped data
+        let cortical_id_log = cortical_id.as_base_64();
         let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
         cortical_mapped.insert(cortical_id, neuron_arrays);
 
@@ -526,7 +643,7 @@ impl AgentClient {
         debug!(
             "[CLIENT] Sent {} bytes XYZP binary to {}",
             buffer.len(),
-            cortical_area
+            cortical_id_log
         );
         Ok(())
     }
