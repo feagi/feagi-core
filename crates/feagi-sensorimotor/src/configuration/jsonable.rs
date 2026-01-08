@@ -264,6 +264,7 @@ impl JSONEncoderProperties {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum JSONDecoderProperties {
+    CartesianPlane(ImageFrameProperties),
     MiscData(MiscDataDimensions),
     Percentage(NeuronDepth, PercentageNeuronPositioning, bool, PercentageChannelDimensionality),
     GazeProperties(NeuronDepth, NeuronDepth, PercentageNeuronPositioning), // eccentricity z depth, modularity z depth
@@ -272,6 +273,16 @@ pub enum JSONDecoderProperties {
 impl JSONDecoderProperties {
     pub fn to_box_decoder(&self, number_channels: CorticalChannelCount, cortical_ids: &[CorticalID]) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         match self {
+            JSONDecoderProperties::CartesianPlane(image_frame_properties) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
+                }
+                crate::neuron_voxel_coding::xyzp::decoders::CartesianPlaneNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.get(0).unwrap(),
+                    image_frame_properties,
+                    number_channels,
+                )
+            }
             JSONDecoderProperties::MiscData(misc_data_dimensions) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
@@ -314,6 +325,11 @@ impl JSONDecoderProperties {
 
     pub fn default_wrapped_value(&self) -> Result<WrappedIOData, FeagiDataError>  {
         match self {
+            JSONDecoderProperties::CartesianPlane(image_frame_properties) => {
+                Ok(WrappedIOData::ImageFrame(
+                    ImageFrame::new_from_image_frame_properties(image_frame_properties)?
+                ))
+            }
             JSONDecoderProperties::MiscData(misc_data_dimensions) => {
                 Ok(WrappedIOData::MiscData(MiscData::new(misc_data_dimensions)?))
             }

@@ -230,6 +230,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         system_service,
         snapshot_service: None,
         feagi_session_timestamp,
+        #[cfg(feature = "feagi-agent")]
+        agent_connectors: ApiState::init_agent_connectors(),
     };
 
     println!(

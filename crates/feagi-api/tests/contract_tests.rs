@@ -200,6 +200,8 @@ async fn create_test_server() -> axum::Router {
         system_service,
         snapshot_service: None,
         feagi_session_timestamp,
+        #[cfg(feature = "feagi-agent")]
+        agent_connectors: ApiState::init_agent_connectors(),
     };
 
     // Create router

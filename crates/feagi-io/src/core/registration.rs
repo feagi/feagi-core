@@ -19,7 +19,7 @@ pub use feagi_services::types::registration::{
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalUnitIndex, CorticalSubUnitIndex};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::SensoryCorticalUnit;
+use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 
 use super::agent_registry::{
     AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
@@ -288,6 +288,32 @@ impl RegistrationHandler {
         }
         Err(format!(
             "No SensoryCorticalUnit found for identifier: {:?}",
+            identifier
+        ))
+    }
+
+    /// Find MotorCorticalUnit by its 3-byte identifier (e.g., [b's', b'e', b'g'] for ObjectSegmentation)
+    fn find_motor_unit_by_identifier(
+        &self,
+        identifier: [u8; 3],
+    ) -> Result<MotorCorticalUnit, String> {
+        // Iterate through all MotorCorticalUnit variants to find matching identifier
+        use MotorCorticalUnit::*;
+        for unit in [
+            RotaryMotor,
+            PositionalServo,
+            Gaze,
+            MiscData,
+            TextEnglishOutput,
+            ObjectSegmentation,
+            SimpleVisionOutput,
+        ] {
+            if unit.get_cortical_id_unit_reference() == identifier {
+                return Ok(unit);
+            }
+        }
+        Err(format!(
+            "No MotorCorticalUnit found for identifier: {:?}",
             identifier
         ))
     }
@@ -1046,6 +1072,57 @@ impl RegistrationHandler {
         if let Some(ref motor) = capabilities.motor {
             for area_name in &motor.source_cortical_areas {
                 let cortical_id_base64 = self.area_name_to_cortical_id(area_name)?;
+                let cortical_id = CorticalID::try_from_base_64(&cortical_id_base64)
+                    .map_err(|e| format!("Failed to parse cortical ID: {}", e))?;
+
+                // Parse cortical ID to extract motor unit type and dimensions
+                let cortical_id_bytes = cortical_id.as_bytes();
+                let (motor_unit, dimensions, position) = if cortical_id_bytes.len() >= 4 && cortical_id_bytes[0] == b'o' {
+                    // Extract unit identifier from cortical ID (bytes 1-3 after 'o' prefix)
+                    let unit_identifier = [
+                        cortical_id_bytes[1],
+                        cortical_id_bytes[2],
+                        cortical_id_bytes[3],
+                    ];
+                    
+                    // Find matching MotorCorticalUnit
+                    match self.find_motor_unit_by_identifier(unit_identifier) {
+                        Ok(unit) => {
+                            // Get default topology/dimensions from motor unit template
+                            let topology = unit.get_unit_default_topology();
+                            if let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(0u8)) {
+                                let dims = unit_topology.channel_dimensions_default;
+                                let pos = unit_topology.relative_position;
+                                (
+                                    Some(unit),
+                                    (dims[0] as usize, dims[1] as usize, dims[2] as usize),
+                                    (pos[0], pos[1], pos[2]),
+                                )
+                            } else {
+                                // Fallback to generic dimensions
+                                (
+                                    Some(unit),
+                                    (motor.output_count, 1, 1),
+                                    (0, 0, 0),
+                                )
+                            }
+                        }
+                        Err(e) => {
+                            warn!(
+                                "🦀 [REGISTRATION] Could not find motor unit for identifier {:?}: {}. Using generic dimensions.",
+                                unit_identifier, e
+                            );
+                            (None, (motor.output_count, 1, 1), (0, 0, 0))
+                        }
+                    }
+                } else {
+                    // Not an OPU cortical ID format - use generic dimensions
+                    warn!(
+                        "🦀 [REGISTRATION] OPU area '{}' does not have 'o' prefix - using generic dimensions",
+                        area_name
+                    );
+                    (None, (motor.output_count, 1, 1), (0, 0, 0))
+                };
 
                 // Check if area exists (blocking call)
                 // Use helper function to safely call async code from sync context
@@ -1078,26 +1155,35 @@ impl RegistrationHandler {
                 );
 
                 if exists {
-                    info!("🦀 [REGISTRATION] OPU area '{}' already exists", area_name);
+                    let motor_unit_name = motor_unit.as_ref()
+                        .map(|u| u.get_snake_case_name())
+                        .unwrap_or_else(|| "unknown");
+                    info!(
+                        "🦀 [REGISTRATION] OPU area '{}' already exists (motor unit: {}, dimensions: {:?})",
+                        area_name, motor_unit_name, dimensions
+                    );
                     opu_statuses.push(CorticalAreaStatus {
                         area_name: area_name.clone(),
                         cortical_id: cortical_id_base64,
                         status: AreaStatus::Existing,
-                        dimensions: Some((motor.output_count, 1, 1)), // Default OPU dimensions
+                        dimensions: Some(dimensions),
                         message: None,
                     });
                 } else if self.auto_create_missing_areas {
-                    // Create missing OPU area
+                    // Create missing OPU area with dimensions from motor unit template
+                    let motor_unit_name = motor_unit.as_ref()
+                        .map(|u| u.get_snake_case_name())
+                        .unwrap_or_else(|| "generic");
                     info!(
-                        "🦀 [REGISTRATION] Auto-creating missing OPU area '{}'",
-                        area_name
+                        "🦀 [REGISTRATION] Auto-creating missing OPU area '{}' (motor unit: {}, dimensions: {:?})",
+                        area_name, motor_unit_name, dimensions
                     );
 
                     let create_params = feagi_services::types::CreateCorticalAreaParams {
                         cortical_id: cortical_id_base64.clone(),
                         name: area_name.clone(),
-                        dimensions: (motor.output_count, 1, 1), // OPU: output_count x 1 x 1
-                        position: (0, 0, 0),                    // Default position in root region
+                        dimensions,
+                        position,
                         area_type: "Motor".to_string(),
                         visible: Some(true),
                         sub_group: None,
@@ -1138,7 +1224,7 @@ impl RegistrationHandler {
                                 area_name: area_name.clone(),
                                 cortical_id: cortical_id_base64,
                                 status: AreaStatus::Created,
-                                dimensions: Some((motor.output_count, 1, 1)),
+                                dimensions: Some(dimensions),
                                 message: Some("Auto-created during registration".to_string()),
                             });
                         }

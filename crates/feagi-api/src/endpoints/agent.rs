@@ -14,7 +14,12 @@ use crate::v1::agent_dtos::*;
 use feagi_services::traits::agent_service::{
     AgentRegistration, HeartbeatRequest as ServiceHeartbeatRequest,
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
+
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::sdk::ConnectorAgent;
+#[cfg(feature = "feagi-agent")]
+use std::sync::{Arc, Mutex};
 
 /// Register a new agent with FEAGI and receive connection details including transport configuration and ports.
 #[utoipa::path(
@@ -41,6 +46,26 @@ pub async fn register_agent(
         .as_ref()
         .ok_or_else(|| ApiError::internal("Agent service not available"))?;
 
+    // Extract device_registrations from capabilities before they're moved
+    #[cfg(feature = "feagi-agent")]
+    let device_registrations_opt = request.capabilities
+        .get("device_registrations")
+        .and_then(|v| {
+            // Validate structure before cloning
+            if let Some(obj) = v.as_object() {
+                if obj.contains_key("input_units_and_encoder_properties")
+                    && obj.contains_key("output_units_and_decoder_properties")
+                    && obj.contains_key("feedbacks")
+                {
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        });
+
     let registration = AgentRegistration {
         agent_id: request.agent_id.clone(),
         agent_type: request.agent_type,
@@ -59,6 +84,37 @@ pub async fn register_agent(
                 "✅ [API] Agent '{}' registration succeeded (status: {})",
                 request.agent_id, response.status
             );
+            
+            // Initialize ConnectorAgent for this agent
+            // If capabilities contained device_registrations, import them
+            #[cfg(feature = "feagi-agent")]
+            if let Some(device_registrations_value) = device_registrations_opt {
+                let mut connectors = state.agent_connectors.write();
+                let connector = connectors
+                    .entry(request.agent_id.clone())
+                    .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new())))
+                    .clone();
+                
+                let mut connector_guard = connector.lock().unwrap();
+                if let Err(e) = connector_guard.import_device_registrations_as_config_json(device_registrations_value) {
+                    warn!(
+                        "⚠️ [API] Failed to import device registrations from capabilities for agent '{}': {}",
+                        request.agent_id, e
+                    );
+                } else {
+                    info!(
+                        "✅ [API] Imported device registrations from capabilities for agent '{}'",
+                        request.agent_id
+                    );
+                }
+            } else {
+                // Initialize empty ConnectorAgent even if no device_registrations
+                let mut connectors = state.agent_connectors.write();
+                connectors
+                    .entry(request.agent_id.clone())
+                    .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new())));
+            }
+            
             // Convert service TransportConfig to API TransportConfig
             let transports = response.transports.map(|ts| {
                 ts.into_iter()
@@ -604,4 +660,303 @@ pub async fn post_configure(
         ),
         ("status".to_string(), "not_yet_implemented".to_string()),
     ])))
+}
+
+/// Export device registrations for an agent
+///
+/// Returns the complete device registration configuration including
+/// sensor and motor device registrations, encoder/decoder properties,
+/// and feedback configurations in the format compatible with
+/// ConnectorAgent::export_device_registrations_as_config_json.
+#[utoipa::path(
+    get,
+    path = "/v1/agent/{agent_id}/device_registrations",
+    params(
+        ("agent_id" = String, Path, description = "Agent ID")
+    ),
+    responses(
+        (status = 200, description = "Device registrations exported successfully", body = DeviceRegistrationExportResponse),
+        (status = 404, description = "Agent not found"),
+        (status = 500, description = "Failed to export device registrations")
+    ),
+    tag = "agent"
+)]
+pub async fn export_device_registrations(
+    State(state): State<ApiState>,
+    Path(agent_id): Path<String>,
+) -> ApiResult<Json<DeviceRegistrationExportResponse>> {
+    info!(
+        "🦀 [API] Device registration export requested for agent '{}'",
+        agent_id
+    );
+
+    let agent_service = state
+        .agent_service
+        .as_ref()
+        .ok_or_else(|| ApiError::internal("Agent service not available"))?;
+
+    // Verify agent exists
+    let _properties = agent_service
+        .get_agent_properties(&agent_id)
+        .await
+        .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
+
+    // Get or create ConnectorAgent for this agent
+    #[cfg(feature = "feagi-agent")]
+    let device_registrations = {
+        // Get existing ConnectorAgent or create a new one
+        let connector = {
+            let connectors = state.agent_connectors.read();
+            connectors.get(&agent_id).cloned()
+        };
+
+        let connector = connector.unwrap_or_else(|| {
+            warn!(
+                "⚠️ [API] No ConnectorAgent found for agent '{}', creating empty one",
+                agent_id
+            );
+            // Create new ConnectorAgent for this agent and store it
+            let new_connector = Arc::new(Mutex::new(ConnectorAgent::new()));
+            let mut connectors = state.agent_connectors.write();
+            connectors.insert(agent_id.clone(), new_connector.clone());
+            new_connector
+        });
+
+        // Export device registrations using ConnectorAgent method
+        let connector_guard = connector.lock().unwrap();
+        match connector_guard.export_device_registrations_as_config_json() {
+            Ok(registrations) => {
+                // Log what we're exporting for debugging
+                let input_count = registrations
+                    .get("input_units_and_encoder_properties")
+                    .and_then(|v| v.as_object())
+                    .map(|m| m.len())
+                    .unwrap_or(0);
+                let output_count = registrations
+                    .get("output_units_and_decoder_properties")
+                    .and_then(|v| v.as_object())
+                    .map(|m| m.len())
+                    .unwrap_or(0);
+                let feedback_count = registrations
+                    .get("feedbacks")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                
+                info!(
+                    "📤 [API] Exporting device registrations for agent '{}': {} input units, {} output units, {} feedbacks",
+                    agent_id, input_count, output_count, feedback_count
+                );
+                
+                if input_count == 0 && output_count == 0 && feedback_count == 0 {
+                    warn!(
+                        "⚠️ [API] Exported device registrations for agent '{}' are empty - agent may not have synced device registrations yet",
+                        agent_id
+                    );
+                }
+                
+                registrations
+            }
+            Err(e) => {
+                warn!(
+                    "⚠️ [API] Failed to export device registrations for agent '{}': {}",
+                    agent_id, e
+                );
+                // @architecture:acceptable - emergency fallback on export failure
+                // Return empty structure on error to prevent API failure
+                serde_json::json!({
+                    "input_units_and_encoder_properties": {},
+                    "output_units_and_decoder_properties": {},
+                    "feedbacks": []
+                })
+            }
+        }
+    };
+
+    #[cfg(not(feature = "feagi-agent"))]
+    // @architecture:acceptable - fallback when feature is disabled
+    // Returns empty structure when feagi-agent feature is not compiled in
+    let device_registrations = serde_json::json!({
+        "input_units_and_encoder_properties": {},
+        "output_units_and_decoder_properties": {},
+        "feedbacks": []
+    });
+
+    info!(
+        "✅ [API] Device registration export succeeded for agent '{}'",
+        agent_id
+    );
+
+    Ok(Json(DeviceRegistrationExportResponse {
+        device_registrations,
+        agent_id,
+    }))
+}
+
+/// Import device registrations for an agent
+///
+/// Imports a device registration configuration, replacing all existing
+/// device registrations for the agent. The configuration must be in
+/// the format compatible with ConnectorAgent::import_device_registrations_as_config_json.
+///
+/// # Warning
+/// This operation **wipes all existing registered devices** before importing
+/// the new configuration.
+#[utoipa::path(
+    post,
+    path = "/v1/agent/{agent_id}/device_registrations",
+    params(
+        ("agent_id" = String, Path, description = "Agent ID")
+    ),
+    request_body = DeviceRegistrationImportRequest,
+    responses(
+        (status = 200, description = "Device registrations imported successfully", body = DeviceRegistrationImportResponse),
+        (status = 400, description = "Invalid device registration configuration"),
+        (status = 404, description = "Agent not found"),
+        (status = 500, description = "Failed to import device registrations")
+    ),
+    tag = "agent"
+)]
+pub async fn import_device_registrations(
+    State(state): State<ApiState>,
+    Path(agent_id): Path<String>,
+    Json(request): Json<DeviceRegistrationImportRequest>,
+) -> ApiResult<Json<DeviceRegistrationImportResponse>> {
+    info!(
+        "🦀 [API] Device registration import requested for agent '{}'",
+        agent_id
+    );
+
+    let agent_service = state
+        .agent_service
+        .as_ref()
+        .ok_or_else(|| ApiError::internal("Agent service not available"))?;
+
+    // Verify agent exists
+    let _properties = agent_service
+        .get_agent_properties(&agent_id)
+        .await
+        .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
+
+    // Validate the device registration JSON structure
+    // Check that it has the expected fields
+    if !request.device_registrations.is_object() {
+        return Err(ApiError::invalid_input(
+            "Device registrations must be a JSON object",
+        ));
+    }
+
+    // Validate required fields exist
+    let obj = request.device_registrations.as_object().unwrap();
+    if !obj.contains_key("input_units_and_encoder_properties")
+        || !obj.contains_key("output_units_and_decoder_properties")
+        || !obj.contains_key("feedbacks")
+    {
+        return Err(ApiError::invalid_input(
+            "Device registrations must contain: input_units_and_encoder_properties, output_units_and_decoder_properties, and feedbacks",
+        ));
+    }
+
+    // Import device registrations using ConnectorAgent
+    #[cfg(feature = "feagi-agent")]
+    {
+        let mut connectors = state.agent_connectors.write();
+        
+        // Get existing ConnectorAgent or create a new one
+        let connector = connectors
+            .entry(agent_id.clone())
+            .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new())))
+            .clone();
+
+        // Import device registrations using ConnectorAgent method
+        let mut connector_guard = connector.lock().unwrap();
+        
+        // Log what we're importing for debugging
+        let input_count = request.device_registrations
+            .get("input_units_and_encoder_properties")
+            .and_then(|v| v.as_object())
+            .map(|m| m.len())
+            .unwrap_or(0);
+        let output_count = request.device_registrations
+            .get("output_units_and_decoder_properties")
+            .and_then(|v| v.as_object())
+            .map(|m| m.len())
+            .unwrap_or(0);
+        let feedback_count = request.device_registrations
+            .get("feedbacks")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0);
+        
+        info!(
+            "📥 [API] Importing device registrations for agent '{}': {} input units, {} output units, {} feedbacks",
+            agent_id, input_count, output_count, feedback_count
+        );
+        
+        match connector_guard.import_device_registrations_as_config_json(request.device_registrations.clone()) {
+            Ok(()) => {
+                // Verify the import worked by exporting again
+                match connector_guard.export_device_registrations_as_config_json() {
+                    Ok(exported) => {
+                        let exported_input_count = exported
+                            .get("input_units_and_encoder_properties")
+                            .and_then(|v| v.as_object())
+                            .map(|m| m.len())
+                            .unwrap_or(0);
+                        let exported_output_count = exported
+                            .get("output_units_and_decoder_properties")
+                            .and_then(|v| v.as_object())
+                            .map(|m| m.len())
+                            .unwrap_or(0);
+                        
+                        info!(
+                            "✅ [API] Device registration import succeeded for agent '{}' (verified: {} input, {} output)",
+                            agent_id, exported_input_count, exported_output_count
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            "⚠️ [API] Import succeeded but verification export failed for agent '{}': {}",
+                            agent_id, e
+                        );
+                    }
+                }
+                
+                Ok(Json(DeviceRegistrationImportResponse {
+                    success: true,
+                    message: format!(
+                        "Device registrations imported successfully for agent '{}'",
+                        agent_id
+                    ),
+                    agent_id,
+                }))
+            }
+            Err(e) => {
+                error!(
+                    "❌ [API] Failed to import device registrations for agent '{}': {}",
+                    agent_id, e
+                );
+                Err(ApiError::invalid_input(format!(
+                    "Failed to import device registrations: {}",
+                    e
+                )))
+            }
+        }
+    }
+
+    #[cfg(not(feature = "feagi-agent"))]
+    {
+        info!(
+            "✅ [API] Device registration import succeeded for agent '{}' (feagi-agent feature not enabled)",
+            agent_id
+        );
+        Ok(Json(DeviceRegistrationImportResponse {
+            success: true,
+            message: format!(
+                "Device registrations imported successfully for agent '{}' (feature not enabled)",
+                agent_id
+            ),
+            agent_id,
+        }))
+    }
 }

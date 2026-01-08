@@ -22,7 +22,7 @@ impl NeuronVoxelXYZPDecoder for CartesianPlaneNeuronVoxelXYZPDecoder {
     }
 
     fn get_as_properties(&self) -> JSONDecoderProperties {
-        todo!()
+        JSONDecoderProperties::CartesianPlane(self.image_properties)
     }
 
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(

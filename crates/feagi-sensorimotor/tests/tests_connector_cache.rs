@@ -122,6 +122,35 @@ mod test_export_import {
     }
 
     #[test]
+    fn test_export_with_registered_motor_image_frame() {
+        let cache = ConnectorCache::new();
+
+        {
+            let mut motor_cache = cache.get_motor_cache();
+            let image_props = feagi_sensorimotor::data_types::descriptors::ImageFrameProperties::new(
+                feagi_sensorimotor::data_types::descriptors::ImageXYResolution::new(128, 128).unwrap(),
+                feagi_sensorimotor::data_types::descriptors::ColorSpace::Gamma,
+                feagi_sensorimotor::data_types::descriptors::ColorChannelLayout::RGB,
+            )
+            .unwrap();
+
+            motor_cache
+                .simple_vision_output_register(
+                    feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex::from(0u8),
+                    feagi_structures::genomic::cortical_area::descriptors::CorticalChannelCount::new(1).unwrap(),
+                    feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute,
+                    image_props,
+                )
+                .unwrap();
+        }
+
+        let json = cache.export_device_registrations_as_config_json().unwrap();
+        assert!(json.is_object());
+        let obj = json.as_object().unwrap();
+        assert!(obj.contains_key("output_units_and_decoder_properties"));
+    }
+
+    #[test]
     fn test_export_import_roundtrip_with_sensor() {
         let cache1 = ConnectorCache::new();
 

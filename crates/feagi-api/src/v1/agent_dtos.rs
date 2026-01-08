@@ -146,3 +146,36 @@ pub struct ManualStimulationResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
+
+/// Device registration export response
+/// 
+/// Contains the complete device registration configuration including
+/// sensor and motor device registrations, encoder/decoder properties,
+/// and feedback configurations.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DeviceRegistrationExportResponse {
+    /// Device registration configuration as JSON
+    /// This matches the format from ConnectorAgent::export_device_registrations_as_config_json
+    pub device_registrations: serde_json::Value,
+    /// Agent ID this configuration belongs to
+    pub agent_id: String,
+}
+
+/// Device registration import request
+/// 
+/// Contains the device registration configuration to import.
+/// This will replace all existing device registrations for the agent.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DeviceRegistrationImportRequest {
+    /// Device registration configuration as JSON
+    /// This matches the format expected by ConnectorAgent::import_device_registrations_as_config_json
+    pub device_registrations: serde_json::Value,
+}
+
+/// Device registration import response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DeviceRegistrationImportResponse {
+    pub success: bool,
+    pub message: String,
+    pub agent_id: String,
+}

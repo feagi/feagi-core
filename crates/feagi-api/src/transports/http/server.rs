@@ -48,6 +48,17 @@ pub struct ApiState {
     pub feagi_session_timestamp: i64,
     /// Memory area stats cache (updated by plasticity service, read by health check)
     pub memory_stats_cache: Option<feagi_npu_plasticity::MemoryStatsCache>,
+    /// Device registration connectors per agent (for export/import functionality)
+    #[cfg(feature = "feagi-agent")]
+    pub agent_connectors: Arc<parking_lot::RwLock<std::collections::HashMap<String, Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>>>>,
+}
+
+impl ApiState {
+    /// Initialize agent_connectors field (empty HashMap)
+    #[cfg(feature = "feagi-agent")]
+    pub fn init_agent_connectors() -> Arc<parking_lot::RwLock<std::collections::HashMap<String, Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>>>> {
+        Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()))
+    }
 }
 
 /// Create the main HTTP server application
@@ -145,7 +156,7 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::{agent, system};
 
     Router::new()
-        // ===== AGENT MODULE (12 endpoints) =====
+        // ===== AGENT MODULE (14 endpoints) =====
         .route("/agent/register", axum::routing::post(register_agent))
         .route("/agent/heartbeat", axum::routing::post(heartbeat))
         .route("/agent/list", get(list_agents))
@@ -169,6 +180,11 @@ fn create_v1_router() -> Router<ApiState> {
         .route(
             "/agent/configure",
             axum::routing::post(agent::post_configure),
+        )
+        .route(
+            "/agent/:agent_id/device_registrations",
+            get(agent::export_device_registrations)
+                .post(agent::import_device_registrations),
         )
         // ===== SYSTEM MODULE (21 endpoints) =====
         .route("/system/health_check", get(system::get_health_check))

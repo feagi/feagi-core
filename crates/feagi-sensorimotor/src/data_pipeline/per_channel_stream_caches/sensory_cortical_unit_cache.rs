@@ -87,7 +87,11 @@ impl SensoryCorticalUnitCache {
         for (index, device_group) in unit_definition.device_grouping.iter().enumerate() {
             let pipeline_runner = sensory_cortical_unit_cache.pipeline_runners.get_mut(index).unwrap();
 
-            pipeline_runner.try_update_all_stage_properties(device_group.pipeline_stages.clone())?;
+            // Use replace_all_stages when importing from JSON since we're setting up a new pipeline
+            // This works even when pipeline is empty (0 stages) unlike try_update_all_stage_properties
+            if !device_group.pipeline_stages.is_empty() {
+                pipeline_runner.try_replace_all_stages(device_group.pipeline_stages.clone())?;
+            }
             pipeline_runner.set_channel_friendly_name(device_group.friendly_name.clone());
             pipeline_runner.set_channel_index_override(device_group.channel_index_override.clone());
             pipeline_runner.set_json_device_properties(device_group.device_properties.clone());
