@@ -5,10 +5,10 @@ use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
-use crate::caching::FeedBackRegistration;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality, SegmentedImageFrameProperties};
 use crate::data_types::{GazeProperties, ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
+use crate::feedbacks::FeedbackRegistrar;
 use crate::neuron_voxel_coding::xyzp::decoders::{GazePropertiesNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder};
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::neuron_voxel_coding::xyzp::encoders::{BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder, MiscDataNeuronVoxelXYZPEncoder, PercentageNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder};
@@ -20,7 +20,7 @@ use crate::wrapped_io_data::WrappedIOData;
 pub struct JSONInputOutputDefinition {
     input_units_and_encoder_properties: HashMap<SensoryCorticalUnit, Vec<(JSONUnitDefinition, JSONEncoderProperties)>>,
     output_units_and_decoder_properties: HashMap<MotorCorticalUnit, Vec<(JSONUnitDefinition, JSONDecoderProperties)>>,
-    feedbacks: Vec<FeedBackRegistration>
+    feedbacks: FeedbackRegistrar
 }
 
 impl JSONInputOutputDefinition {
@@ -29,7 +29,7 @@ impl JSONInputOutputDefinition {
         JSONInputOutputDefinition {
             input_units_and_encoder_properties: HashMap::new(),
             output_units_and_decoder_properties: HashMap::new(),
-            feedbacks: Vec::new()
+            feedbacks: FeedbackRegistrar::new()
         }
     }
 
@@ -84,10 +84,10 @@ impl JSONInputOutputDefinition {
         vec.push((unit_definition, encoder_properties));
     }
 
-    pub fn get_feedbacks(&self) -> &Vec<FeedBackRegistration> {
+    pub fn get_feedbacks(&self) -> &FeedbackRegistrar {
         &self.feedbacks
     }
-    pub fn set_feedbacks(&mut self, feedbacks: Vec<FeedBackRegistration>) {
+    pub fn set_feedbacks(&mut self, feedbacks: FeedbackRegistrar) {
         self.feedbacks = feedbacks;
     }
 

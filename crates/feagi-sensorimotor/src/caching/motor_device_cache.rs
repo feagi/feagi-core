@@ -19,9 +19,7 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use crate::caching::{FeedBackRegistration, SensorDeviceCache};
 use crate::configuration::jsonable::JSONInputOutputDefinition;
 
 macro_rules! motor_unit_functions {
@@ -411,8 +409,6 @@ pub struct MotorDeviceCache {
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
-    sensor_ref: Arc<Mutex<SensorDeviceCache>>,
-    registered_feedbacks: Vec<FeedBackRegistration>
 }
 
 impl std::fmt::Debug for MotorDeviceCache {
@@ -427,14 +423,12 @@ impl std::fmt::Debug for MotorDeviceCache {
 }
 
 impl MotorDeviceCache {
-    pub fn new(sensor_ref: Arc<Mutex<SensorDeviceCache>>) -> Self {
+    pub fn new() -> Self {
         MotorDeviceCache {
             motor_cortical_unit_caches: HashMap::new(),
             neuron_data: CorticalMappedXYZPNeuronVoxels::new(),
             byte_data: FeagiByteContainer::new_empty(),
             previous_burst: Instant::now(),
-            sensor_ref,
-            registered_feedbacks: Vec::new()
         }
     }
 
@@ -444,7 +438,11 @@ impl MotorDeviceCache {
         self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
         self.byte_data = FeagiByteContainer::new_empty();
         self.previous_burst = Instant::now();
-        self.registered_feedbacks.clear();
+    }
+
+    pub fn verify_existence(&self, motor_cortical_unit: MotorCorticalUnit, unit_index: CorticalUnitIndex, cortical_channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+        let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_cortical_unit, unit_index)?;
+        motor_stream_caches.verify_channel_exists(cortical_channel_index)
     }
 
     motor_cortical_units!(motor_unit_functions);
@@ -486,48 +484,7 @@ impl MotorDeviceCache {
 
     //region Feedbacks
 
-    pub fn gaze_feedback_to_segmented_vision(&mut self, gaze_unit_index: CorticalUnitIndex, gaze_channel_index: CorticalChannelIndex, segmentation_unit_index: CorticalUnitIndex, segmentation_channel_index: CorticalChannelIndex) -> Result<FeagiSignalIndex, FeagiDataError> {
 
-        // Simple way to check if valid. // TODO we should probably have a proper method
-
-        _ = self.gaze_read_postprocessed_cache_value(gaze_unit_index, gaze_channel_index)?;
-        _ = self.sensor_ref.lock().unwrap().segmented_vision_read_postprocessed_cache_value(segmentation_unit_index, segmentation_channel_index)?;
-
-        let sensor_ref = self.sensor_ref.clone();
-
-        let closure = move |wrapped_data: &WrappedIOData| {
-            let gaze_properties: GazeProperties = wrapped_data.try_into().unwrap();
-
-            let mut sensors = sensor_ref.lock().unwrap();
-            let stage_properties = sensors.segmented_vision_get_single_stage_properties(segmentation_unit_index, segmentation_channel_index, 0.into()).unwrap();
-            let new_properties: PipelineStageProperties = match stage_properties {
-                PipelineStageProperties::ImageFrameSegmentator { input_image_properties, output_image_properties, segmentation_gaze: _ } => {
-                    PipelineStageProperties::ImageFrameSegmentator { input_image_properties: input_image_properties, output_image_properties: output_image_properties, segmentation_gaze: gaze_properties }
-                }
-                _ => {
-                    panic!("Invalid!")
-                }
-            };
-
-            let _ = sensors.segmented_vision_replace_single_stage(
-                segmentation_unit_index,
-                segmentation_channel_index,
-                0.into(),
-                new_properties,
-            );
-        };
-
-        let index =  self.gaze_try_register_motor_callback(gaze_unit_index, gaze_channel_index, closure)?;
-        self.registered_feedbacks.push(
-            FeedBackRegistration::SegmentedVisionWithGaze{
-                gaze_unit_index,
-                gaze_channel_index,
-                segmentation_unit_index,
-                segmentation_channel_index,
-            }
-        );
-        Ok(index)
-    }
 
 
     //endregion
@@ -557,7 +514,6 @@ impl MotorDeviceCache {
                 self.motor_cortical_unit_caches.insert((*motor_unit, unit_definition.cortical_unit_index), new_unit);
             }
         };
-        self.import_feedbacks(replacing_definition.get_feedbacks())?;
         Ok(())
     }
 
@@ -572,7 +528,6 @@ impl MotorDeviceCache {
                 unit_and_encoder.1
             );
         };
-        filling_definition.set_feedbacks(self.registered_feedbacks.clone());
         Ok(())
     }
 
@@ -786,27 +741,6 @@ impl MotorDeviceCache {
     }
 
     //endregion
-
-    fn import_feedbacks(&mut self, feedbacks: &Vec<FeedBackRegistration>) -> Result<(), FeagiDataError> {
-        for feedback in feedbacks {
-            match feedback {
-                FeedBackRegistration::SegmentedVisionWithGaze {
-                    gaze_unit_index,
-                    gaze_channel_index,
-                    segmentation_unit_index,
-                    segmentation_channel_index } => {
-
-                    self.gaze_feedback_to_segmented_vision(
-                        *gaze_unit_index,
-                        *gaze_channel_index,
-                        *segmentation_unit_index,
-                        *segmentation_channel_index
-                    )?;
-                }
-            }
-        }
-        Ok(())
-    }
 
     //endregion
 }

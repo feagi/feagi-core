@@ -480,6 +480,11 @@ impl SensorDeviceCache {
     }
     sensor_cortical_units!(sensor_unit_functions);
 
+    pub fn verify_existence(&self, sensory_cortical_unit: SensoryCorticalUnit, unit_index: CorticalUnitIndex, cortical_channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensory_cortical_unit, unit_index)?;
+        sensor_stream_caches.verify_channel_exists(cortical_channel_index)
+    }
+
     //region Data IO
 
     pub fn get_feagi_byte_container(&self) -> &FeagiByteContainer {

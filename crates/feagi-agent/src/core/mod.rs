@@ -18,7 +18,7 @@ pub mod error;
 pub mod heartbeat;
 pub mod reconnect;
 pub mod transport;
-mod aganet_id;
+mod agent_id;
 
 // Re-export core types
 pub use client::AgentClient;
