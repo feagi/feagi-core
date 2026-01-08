@@ -1858,6 +1858,7 @@ version = "0.0.1-beta.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.22.1",
  "criterion",
  "env_logger",
  "feagi-io",

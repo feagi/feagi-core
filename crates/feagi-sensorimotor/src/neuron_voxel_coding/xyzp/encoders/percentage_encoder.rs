@@ -8,17 +8,9 @@ use crate::data_types::{
     SignedPercentage3D, SignedPercentage4D,
 };
 use crate::data_types::descriptors::PercentageChannelDimensionality;
-use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
-    encode_signed_percentage_to_fractional_exponential_neuron_z_indexes,
-    encode_signed_percentage_to_linear_neuron_z_index,
-    encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes,
-    encode_unsigned_percentage_to_linear_neuron_z_index,
-};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelDimensions, NeuronDepth,
-};
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex, NeuronDepth};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
@@ -26,6 +18,7 @@ use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
 use crate::configuration::jsonable::JSONEncoderProperties;
+use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{encode_signed_percentage_to_fractional_exponential_neuron_z_indexes, encode_signed_percentage_to_linear_neuron_z_index, encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes, encode_unsigned_percentage_to_linear_neuron_z_index};
 
 /// Scratch space sized appropriately for dimension count
 #[derive(Debug)]
@@ -55,7 +48,6 @@ pub struct PercentageNeuronVoxelXYZPEncoder {
     interpolation: PercentageNeuronPositioning,
     is_signed: bool,
     number_percentages: PercentageChannelDimensionality,
-    _number_channels: u32,
     scratch_space: ScratchSpace,
     scratch_space_negative: ScratchSpace,
 }
@@ -86,7 +78,6 @@ impl PercentageNeuronVoxelXYZPEncoder {
             interpolation,
             is_signed,
             number_percentages,
-            _number_channels: *number_channels,
             scratch_space: ScratchSpace::new(number_percentages, num_channels),
             scratch_space_negative: ScratchSpace::new(number_percentages, num_channels),
         };
@@ -137,6 +128,8 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
         let is_signed = self.is_signed;
         let channel_width = self.channel_width();
 
+        // TODO make parallel
+
         // Process based on dimensionality
         match (&mut self.scratch_space, &mut self.scratch_space_negative) {
             (ScratchSpace::D1(scratch), ScratchSpace::D1(scratch_neg)) => {
@@ -160,8 +153,11 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                     })?;
 
                 // Write to neurons
-                for (c, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
-                    let c = c as u32;
+                for (current_channel_index, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
+                    let pipeline = pipelines.get(current_channel_index).unwrap();
+                    let channel_write_target = pipeline.get_channel_index_override()
+                        .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_index as u32)); // Get override if available
+                    let c = *channel_write_target;
                     const Y: u32 = 0;
                     for z in s { neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0); }
                     if is_signed {
@@ -192,8 +188,11 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         Ok(())
                     })?;
 
-                for (c, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
-                    let c = c as u32;
+                for (current_channel_index, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
+                    let pipeline = pipelines.get(current_channel_index).unwrap();
+                    let channel_write_target = pipeline.get_channel_index_override()
+                        .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_index as u32)); // Get override if available
+                    let c = *channel_write_target;
                     const Y: u32 = 0;
                     if is_signed {
                         for z in &s.0 { neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0); }
@@ -231,8 +230,11 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         Ok(())
                     })?;
 
-                for (c, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
-                    let c = c as u32;
+                for (current_channel_index, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
+                    let pipeline = pipelines.get(current_channel_index).unwrap();
+                    let channel_write_target = pipeline.get_channel_index_override()
+                        .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_index as u32)); // Get override if available
+                    let c = *channel_write_target;
                     const Y: u32 = 0;
                     if is_signed {
                         for z in &s.0 { neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0); }
@@ -275,8 +277,11 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         Ok(())
                     })?;
 
-                for (c, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
-                    let c = c as u32;
+                for (current_channel_index, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
+                    let pipeline = pipelines.get(current_channel_index).unwrap();
+                    let channel_write_target = pipeline.get_channel_index_override()
+                        .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_index as u32)); // Get override if available
+                    let c = *channel_write_target;
                     const Y: u32 = 0;
                     if is_signed {
                         for z in &s.0 { neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0); }
@@ -302,6 +307,8 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
         Ok(())
     }
 }
+
+//region Internal
 
 #[inline]
 fn encode_unsigned(
@@ -339,3 +346,4 @@ fn encode_signed(
         }
     }
 }
+//endregion

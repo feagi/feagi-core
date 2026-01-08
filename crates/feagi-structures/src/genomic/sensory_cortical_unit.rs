@@ -74,7 +74,7 @@ macro_rules! define_sensory_cortical_units_enum {
             pub const fn get_snake_case_name(&self) -> &'static str {
                 match self {
                     $(
-                        SensoryCorticalUnit::$variant_name => stringify!($variant_name:snake),
+                        SensoryCorticalUnit::$variant_name => paste::paste!{ stringify!([<$variant_name:snake>]) },
                     )*
                 }
             }
@@ -90,7 +90,7 @@ macro_rules! define_sensory_cortical_units_enum {
             pub fn from_snake_case_name(name: &str) -> Option<SensoryCorticalUnit> {
                 match name {
                     $(
-                        stringify!($variant_name:snake) => Some(SensoryCorticalUnit::$variant_name),
+                        paste::paste!{ stringify!([<$variant_name:snake>]) } => Some(SensoryCorticalUnit::$variant_name),
                     )*
                     _ => None,
                 }

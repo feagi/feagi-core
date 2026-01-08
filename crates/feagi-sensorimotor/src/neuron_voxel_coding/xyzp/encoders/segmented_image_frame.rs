@@ -5,7 +5,7 @@ use crate::data_types::descriptors::SegmentedImageFrameProperties;
 use crate::data_types::SegmentedImageFrame;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
@@ -47,18 +47,21 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
             .zip(self.neuron_scratch_spaces.par_iter_mut())
             .enumerate()
             .try_for_each(
-                |(channel_index, (pipeline, scratches))| -> Result<(), FeagiDataError> {
+                |(current_channel_index, (pipeline, scratches))| -> Result<(), FeagiDataError> {
                     let channel_updated = pipeline.get_last_processed_instant();
 
                     if channel_updated < time_of_previous_burst {
                         return Ok(()); // We haven't updated, do nothing
                     }
 
+                    let channel_write_target = pipeline.get_channel_index_override()
+                        .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_index as u32)); // Get override if available
+
                     let updated_data = pipeline.get_postprocessed_sensor_value();
                     let updated_segmented_image: &SegmentedImageFrame = updated_data.try_into()?;
 
                     updated_segmented_image
-                        .overwrite_neuron_data(scratches, (channel_index as u32).into())?;
+                        .overwrite_neuron_data(scratches, (*channel_write_target).into())?;
 
                     Ok(())
                 },
