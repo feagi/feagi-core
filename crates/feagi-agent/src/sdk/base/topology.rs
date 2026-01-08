@@ -66,6 +66,23 @@ impl TopologyCache {
         })
     }
 
+    /// Create a new topology cache using a pre-configured HTTP client.
+    ///
+    /// This is useful when you want to share a single `reqwest::Client` (with a consistent
+    /// timeout, headers, proxy settings, etc.) across multiple SDK components.
+    pub fn with_http_client(
+        feagi_host: impl Into<String>,
+        feagi_api_port: u16,
+        http_client: reqwest::Client,
+    ) -> Self {
+        Self {
+            cache: Arc::new(RwLock::new(HashMap::new())),
+            http_client,
+            feagi_host: feagi_host.into(),
+            feagi_api_port,
+        }
+    }
+
     /// Fetch topology for a single cortical area (with caching)
     ///
     /// This method checks the cache first. If not found, it fetches from FEAGI

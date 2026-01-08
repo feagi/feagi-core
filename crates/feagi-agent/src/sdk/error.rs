@@ -36,6 +36,10 @@ pub enum SdkError {
     #[error("FEAGI data structure error: {0}")]
     FeagiData(#[from] feagi_structures::FeagiDataError),
 
+    /// Device registration export/sync failed
+    #[error("Device registration sync failed: {0}")]
+    DeviceRegistrationSyncFailed(String),
+
     /// Generic error
     #[error("{0}")]
     Other(#[from] anyhow::Error),

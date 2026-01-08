@@ -3,5 +3,5 @@
 
 //! SDK utilities
 
-// Future: logging helpers, metrics, etc.
+pub mod device_registrations;
 

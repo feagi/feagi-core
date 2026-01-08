@@ -52,7 +52,12 @@ async = ["tokio", "async-trait", "futures"]
 
 # SDK features
 sdk = ["sdk-video", "sdk-text", "async", "anyhow"]
-sdk-video = ["feagi-sensorimotor", "image", "reqwest"]
+
+# Shared SDK support for ConnectorAgent + device registration sync.
+# This is not video-specific; it is used by multiple controller types.
+sdk-io = ["feagi-sensorimotor", "reqwest"]
+
+sdk-video = ["sdk-io", "image"]
 sdk-text = ["tokenizers", "reqwest"]
 sdk-audio = []  # Future
 

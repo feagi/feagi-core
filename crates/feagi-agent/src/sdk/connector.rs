@@ -6,13 +6,11 @@
 //! Provides a unified interface for managing sensor and motor device caches,
 //! with JSON-based configuration export/import capabilities.
 
-#[cfg(feature = "sdk-video")]
+#[cfg(feature = "sdk-io")]
 use feagi_sensorimotor::caching::{MotorDeviceCache, SensorDeviceCache};
-#[cfg(feature = "sdk-video")]
-use feagi_sensorimotor::configuration::jsonable::JSONInputOutputDefinition;
 use feagi_structures::FeagiDataError;
 use std::fmt;
-#[cfg(feature = "sdk-video")]
+#[cfg(feature = "sdk-io")]
 use std::sync::{Arc, Mutex, MutexGuard};
 use feagi_sensorimotor::ConnectorCache;
 
@@ -38,19 +36,19 @@ use feagi_sensorimotor::ConnectorCache;
 /// connector.import_device_registrations_as_config_json(config_json)?;
 /// ```
 #[derive(Debug)]
-#[cfg(feature = "sdk-video")]
+#[cfg(feature = "sdk-io")]
 pub struct ConnectorAgent {
     cache: ConnectorCache
 }
 
-#[cfg(feature = "sdk-video")]
+#[cfg(feature = "sdk-io")]
 impl Default for ConnectorAgent {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(feature = "sdk-video")]
+#[cfg(feature = "sdk-io")]
 impl ConnectorAgent {
     pub fn new() -> Self {
         ConnectorAgent {
@@ -102,7 +100,7 @@ impl ConnectorAgent {
     }
 }
 
-#[cfg(feature = "sdk-video")]
+#[cfg(feature = "sdk-io")]
 impl fmt::Display for ConnectorAgent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "ConnectorAgent")
