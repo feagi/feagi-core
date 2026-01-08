@@ -17,6 +17,9 @@ use crate::sdk::ConnectorAgent;
 #[cfg(feature = "sdk-io")]
 use serde_json::Value;
 
+#[cfg(feature = "sdk-io")]
+use tracing;
+
 /// Counts of exported device registration sections.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DeviceRegistrationCounts {
@@ -109,6 +112,36 @@ pub async fn export_and_sync_with_client(
         return Err(SdkError::DeviceRegistrationSyncFailed(format!(
             "http {status}: {body}"
         )));
+    }
+
+    // Verify the import worked by immediately calling the export endpoint
+    // This helps catch issues where import appears to succeed but data isn't stored
+    let export_url = format!(
+        "http://{}:{}/v1/agent/{}/device_registrations",
+        feagi_host, feagi_api_port, agent_id
+    );
+    
+    if let Ok(verify_resp) = http_client.get(&export_url).send().await {
+        if verify_resp.status().is_success() {
+            if let Ok(verify_json) = verify_resp.json::<serde_json::Value>().await {
+                if let Some(exported_regs) = verify_json.get("device_registrations") {
+                    let verify_counts = counts_from_exported_json(exported_regs);
+                    if verify_counts.output_units != counts.output_units 
+                        || verify_counts.input_units != counts.input_units {
+                        tracing::warn!(
+                            "⚠️ [SDK] Device registration sync verification mismatch: sent {} input/{} output, but server has {} input/{} output",
+                            counts.input_units, counts.output_units,
+                            verify_counts.input_units, verify_counts.output_units
+                        );
+                    } else {
+                        tracing::debug!(
+                            "✅ [SDK] Device registration sync verified: {} input, {} output, {} feedbacks",
+                            verify_counts.input_units, verify_counts.output_units, verify_counts.feedbacks
+                        );
+                    }
+                }
+            }
+        }
     }
 
     Ok(counts)

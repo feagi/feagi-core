@@ -1825,7 +1825,165 @@ impl RegistrationHandler {
                 use feagi_structures::genomic::cortical_area::CorticalID;
 
                 let mut cortical_ids: AHashSet<String> = AHashSet::new();
-                for area_input in &motor.source_cortical_areas {
+                // Option B: if semantic motor units were provided, derive the cortical IDs now.
+                // This ensures motor subscriptions are established even when the client doesn't
+                // know or send internal 3-letter unit identifiers.
+                let motor_source_inputs: Vec<String> = if let Some(source_units) = motor.source_units.as_ref() {
+                    let frame_change_handling = FrameChangeHandling::Absolute;
+                    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+                    let percentage_neuron_positioning = PercentageNeuronPositioning::Linear;
+
+                    let mut out: Vec<String> = Vec::new();
+                    for spec in source_units {
+                        let group: CorticalUnitIndex = spec.group.into();
+                        let motor_unit = match spec.unit {
+                            MotorUnit::RotaryMotor => MotorCorticalUnit::RotaryMotor,
+                            MotorUnit::PositionalServo => MotorCorticalUnit::PositionalServo,
+                            MotorUnit::Gaze => MotorCorticalUnit::Gaze,
+                            MotorUnit::MiscData => MotorCorticalUnit::MiscData,
+                            MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
+                            MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
+                            MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
+                        };
+
+                        let cortical_ids_for_unit: Vec<CorticalID> = match motor_unit {
+                            MotorCorticalUnit::RotaryMotor => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
+                                    frame_change_handling,
+                                    percentage_neuron_positioning,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::PositionalServo => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
+                                    frame_change_handling,
+                                    percentage_neuron_positioning,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::Gaze => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
+                                    frame_change_handling,
+                                    percentage_neuron_positioning,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::MiscData => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                                    frame_change_handling,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::TextEnglishOutput => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
+                                    frame_change_handling,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::ObjectSegmentation => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                                    frame_change_handling,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::SimpleVisionOutput => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+                                    frame_change_handling,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                        };
+
+                        out.extend(cortical_ids_for_unit.into_iter().map(|id| id.as_base_64()));
+                    }
+                    out
+                } else if let (Some(unit), Some(group_index)) = (motor.unit, motor.group) {
+                    let group: CorticalUnitIndex = group_index.into();
+                    let frame_change_handling = FrameChangeHandling::Absolute;
+                    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+                    let percentage_neuron_positioning = PercentageNeuronPositioning::Linear;
+
+                    let motor_unit = match unit {
+                        MotorUnit::RotaryMotor => MotorCorticalUnit::RotaryMotor,
+                        MotorUnit::PositionalServo => MotorCorticalUnit::PositionalServo,
+                        MotorUnit::Gaze => MotorCorticalUnit::Gaze,
+                        MotorUnit::MiscData => MotorCorticalUnit::MiscData,
+                        MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
+                        MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
+                        MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
+                    };
+
+                    let cortical_ids_for_unit: Vec<CorticalID> = match motor_unit {
+                        MotorCorticalUnit::RotaryMotor => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
+                                frame_change_handling,
+                                percentage_neuron_positioning,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::PositionalServo => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
+                                frame_change_handling,
+                                percentage_neuron_positioning,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::Gaze => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
+                                frame_change_handling,
+                                percentage_neuron_positioning,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::MiscData => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                                frame_change_handling,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::TextEnglishOutput => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
+                                frame_change_handling,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::ObjectSegmentation => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                                frame_change_handling,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::SimpleVisionOutput => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+                                frame_change_handling,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                    };
+
+                    cortical_ids_for_unit
+                        .into_iter()
+                        .map(|id| id.as_base_64())
+                        .collect()
+                } else {
+                    motor.source_cortical_areas.clone()
+                };
+
+                for area_input in &motor_source_inputs {
                     info!(
                         "🦀 [REGISTRATION] 🎮 Processing motor cortical area: '{}'",
                         area_input

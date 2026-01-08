@@ -701,26 +701,42 @@ pub async fn export_device_registrations(
         .await
         .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
 
-    // Get or create ConnectorAgent for this agent
+    // Get existing ConnectorAgent for this agent (don't create new one)
     #[cfg(feature = "feagi-agent")]
     let device_registrations = {
-        // Get existing ConnectorAgent or create a new one
+        // Get existing ConnectorAgent - don't create a new one
+        // If no ConnectorAgent exists, it means device registrations haven't been imported yet
         let connector = {
             let connectors = state.agent_connectors.read();
             connectors.get(&agent_id).cloned()
         };
 
-        let connector = connector.unwrap_or_else(|| {
-            warn!(
-                "⚠️ [API] No ConnectorAgent found for agent '{}', creating empty one",
-                agent_id
-            );
-            // Create new ConnectorAgent for this agent and store it
-            let new_connector = Arc::new(Mutex::new(ConnectorAgent::new()));
-            let mut connectors = state.agent_connectors.write();
-            connectors.insert(agent_id.clone(), new_connector.clone());
-            new_connector
-        });
+        let connector = match connector {
+            Some(c) => {
+                info!("🔍 [API] Found existing ConnectorAgent for agent '{}'", agent_id);
+                c
+            }
+            None => {
+                warn!(
+                    "⚠️ [API] No ConnectorAgent found for agent '{}' - device registrations may not have been imported yet. Total agents in registry: {}",
+                    agent_id,
+                    {
+                        let connectors = state.agent_connectors.read();
+                        connectors.len()
+                    }
+                );
+                // Return empty structure - don't create and store a new ConnectorAgent
+                // This prevents interference with future imports
+                return Ok(Json(DeviceRegistrationExportResponse {
+                    device_registrations: serde_json::json!({
+                        "input_units_and_encoder_properties": {},
+                        "output_units_and_decoder_properties": {},
+                        "feedbacks": []
+                    }),
+                    agent_id,
+                }));
+            }
+        };
 
         // Export device registrations using ConnectorAgent method
         let connector_guard = connector.lock().unwrap();
@@ -860,13 +876,22 @@ pub async fn import_device_registrations(
     // Import device registrations using ConnectorAgent
     #[cfg(feature = "feagi-agent")]
     {
-        let mut connectors = state.agent_connectors.write();
-        
-        // Get existing ConnectorAgent or create a new one
-        let connector = connectors
-            .entry(agent_id.clone())
-            .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new())))
-            .clone();
+        // Get or create ConnectorAgent for this agent
+        let connector = {
+            let mut connectors = state.agent_connectors.write();
+            let was_existing = connectors.contains_key(&agent_id);
+            let connector = connectors
+                .entry(agent_id.clone())
+                .or_insert_with(|| {
+                    info!("🔧 [API] Creating new ConnectorAgent for agent '{}'", agent_id);
+                    Arc::new(Mutex::new(ConnectorAgent::new()))
+                })
+                .clone();
+            if was_existing {
+                info!("🔧 [API] Using existing ConnectorAgent for agent '{}'", agent_id);
+            }
+            connector
+        };
 
         // Import device registrations using ConnectorAgent method
         let mut connector_guard = connector.lock().unwrap();
