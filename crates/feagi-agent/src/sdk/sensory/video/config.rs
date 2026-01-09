@@ -63,6 +63,7 @@ impl VideoEncodingStrategy {
 ///     feagi_api_port: 8080,
 ///     feagi_zmq_registration_port: 30001,
 ///     feagi_zmq_sensory_port: 5555,
+///     feagi_zmq_motor_port: 5564,
 ///     feagi_tick_hz: 60,
 ///     feagi_heartbeat_interval_s: 5.0,
 ///     feagi_connection_timeout_ms: 5000,
@@ -90,6 +91,7 @@ pub struct VideoEncoderConfig {
     pub feagi_api_port: u16,
     pub feagi_zmq_registration_port: u16,
     pub feagi_zmq_sensory_port: u16,
+    pub feagi_zmq_motor_port: u16,
     pub feagi_tick_hz: u32,
     pub feagi_heartbeat_interval_s: f64,
     pub feagi_connection_timeout_ms: u64,
@@ -143,6 +145,52 @@ impl VideoEncoderConfig {
         Ok(config)
     }
 
+    /// Convert to an AgentConfig that can receive motor outputs (Motor→Sensory feedback loops).
+    ///
+    /// This sets agent type to `Both` and configures the motor endpoint so callers can poll
+    /// motor packets (e.g. gaze) and feed them back into sensory processing pipelines.
+    pub fn to_agent_config_with_motor_feedback(&self) -> Result<AgentConfig> {
+        let group = u8::try_from(self.cortical_unit_id).map_err(|_| {
+            SdkError::InvalidConfiguration(format!(
+                "cortical_unit_id {} out of range for u8 group",
+                self.cortical_unit_id
+            ))
+        })?;
+
+        let mut config = AgentConfig::new(self.agent_id.clone(), AgentType::Both)
+            .with_registration_endpoint(format!(
+                "tcp://{}:{}",
+                self.feagi_host, self.feagi_zmq_registration_port
+            ))
+            .with_sensory_endpoint(format!(
+                "tcp://{}:{}",
+                self.feagi_host, self.feagi_zmq_sensory_port
+            ))
+            .with_motor_endpoint(format!(
+                "tcp://{}:{}",
+                self.feagi_host, self.feagi_zmq_motor_port
+            ))
+            .with_heartbeat_interval(self.feagi_heartbeat_interval_s)
+            .with_connection_timeout_ms(self.feagi_connection_timeout_ms)
+            .with_registration_retries(self.feagi_registration_retries)
+            .with_sensory_capability(self.feagi_tick_hz as f64, None)
+            .with_motor_unit("gaze", 1, feagi_io::MotorUnit::Gaze, group);
+
+        // Keep the existing segmented-vision semantic capability so the backend can
+        // auto-create IPU areas. This is independent of motor feedback handling.
+        if matches!(self.encoding_strategy, VideoEncodingStrategy::SegmentedVision) {
+            config = config.with_vision_unit(
+                "camera",
+                (self.source_width as usize, self.source_height as usize),
+                3, // RGB channels
+                feagi_io::SensoryUnit::SegmentedVision,
+                group,
+            );
+        }
+
+        Ok(config)
+    }
+
     /// Validate configuration
     pub fn validate(&self) -> Result<()> {
         if self.agent_id.is_empty() {
@@ -161,6 +209,12 @@ impl VideoEncoderConfig {
         if self.feagi_tick_hz == 0 {
             return Err(SdkError::InvalidConfiguration(
                 "feagi_tick_hz must be > 0".to_string(),
+            ));
+        }
+
+        if self.feagi_zmq_motor_port == 0 {
+            return Err(SdkError::InvalidConfiguration(
+                "feagi_zmq_motor_port must be > 0".to_string(),
             ));
         }
 

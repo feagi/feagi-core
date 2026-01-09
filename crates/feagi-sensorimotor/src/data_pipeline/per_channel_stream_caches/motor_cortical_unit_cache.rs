@@ -34,8 +34,12 @@ impl MotorCorticalUnitCache {
         .take(*number_channels as usize)
         .collect();
 
-        let callbacks: Vec<FeagiSignal<WrappedIOData>> =
-            Vec::with_capacity(*number_channels as usize);
+        // One signal per channel for "data processed" callbacks.
+        // IMPORTANT: this must be a fully-sized Vec, not just reserved capacity, otherwise
+        // callback registration will panic on indexing.
+        let callbacks: Vec<FeagiSignal<WrappedIOData>> = (0..*number_channels as usize)
+            .map(|_| FeagiSignal::new())
+            .collect();
 
         Ok(Self {
             neuron_decoder,
@@ -265,7 +269,21 @@ impl MotorCorticalUnitCache {
     {
         _ = self.try_get_pipeline_runner(cortical_channel_index)?;
         let idx = *cortical_channel_index as usize;
-        Ok(self.value_updated_callbacks[idx].connect(callback))
+        let callbacks_len = self.value_updated_callbacks.len();
+        let runners_len = self.pipeline_runners.len();
+        let signal = self
+            .value_updated_callbacks
+            .get_mut(idx)
+            .ok_or_else(|| {
+                FeagiDataError::BadParameters(format!(
+                    "Callback signal index {} is out of bounds (callbacks_len={}, runners_len={}). \
+                     This indicates an internal cache invariant violation.",
+                    idx,
+                    callbacks_len,
+                    runners_len
+                ))
+            })?;
+        Ok(signal.connect(callback))
     }
 
     #[allow(dead_code)]
@@ -276,7 +294,21 @@ impl MotorCorticalUnitCache {
     ) -> Result<(), FeagiDataError> {
         _ = self.try_get_pipeline_runner(cortical_channel_index)?;
         let idx = *cortical_channel_index as usize;
-        self.value_updated_callbacks[idx].disconnect(signal_index)
+        let callbacks_len = self.value_updated_callbacks.len();
+        let runners_len = self.pipeline_runners.len();
+        let signal = self
+            .value_updated_callbacks
+            .get_mut(idx)
+            .ok_or_else(|| {
+                FeagiDataError::BadParameters(format!(
+                    "Callback signal index {} is out of bounds (callbacks_len={}, runners_len={}). \
+                     This indicates an internal cache invariant violation.",
+                    idx,
+                    callbacks_len,
+                    runners_len
+                ))
+            })?;
+        signal.disconnect(signal_index)
     }
 
     /// To be called after all neurons have been decoded and processed in the caches,
@@ -289,9 +321,22 @@ impl MotorCorticalUnitCache {
             if !self.has_channel_been_updated[channel_index] {
                 continue;
             }
+            let callbacks_len = self.value_updated_callbacks.len();
+            let runners_len = self.pipeline_runners.len();
+            let signal = self
+                .value_updated_callbacks
+                .get_mut(channel_index)
+                .ok_or_else(|| {
+                    FeagiDataError::BadParameters(format!(
+                        "Callback signal index {} is out of bounds (callbacks_len={}, runners_len={}). \
+                         This indicates an internal cache invariant violation.",
+                        channel_index,
+                        callbacks_len,
+                        runners_len
+                    ))
+                })?;
             let data_ref = self.pipeline_runners.get(channel_index).unwrap();
-            self.value_updated_callbacks[channel_index]
-                .emit(data_ref.get_postprocessed_motor_value()); // no value
+            signal.emit(data_ref.get_postprocessed_motor_value()); // no value
         }
         Ok(())
     }

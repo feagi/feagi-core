@@ -56,11 +56,26 @@ impl FeedBackRegistration {
 
         let (sensory_cortical_unit, motor_cortical_unit) = self.get_sensor_motor_cortical_units();
 
-        let sensors = sensor_cache.lock().unwrap();
-        sensors.verify_existence(sensory_cortical_unit, target.get_sensor_unit_index(), target.get_sensor_channel_index())?;
-
-        let motors = motor_cache.lock().unwrap();
-        motors.verify_existence(motor_cortical_unit, target.get_motor_unit_index(), target.get_motor_channel_index())?;
+        // Verify required units/channels exist.
+        //
+        // IMPORTANT: do not hold these locks while registering callbacks, otherwise the callback
+        // registration path can deadlock by attempting to re-lock the same caches.
+        {
+            let sensors = sensor_cache.lock().unwrap();
+            sensors.verify_existence(
+                sensory_cortical_unit,
+                target.get_sensor_unit_index(),
+                target.get_sensor_channel_index(),
+            )?;
+        }
+        {
+            let motors = motor_cache.lock().unwrap();
+            motors.verify_existence(
+                motor_cortical_unit,
+                target.get_motor_unit_index(),
+                target.get_motor_channel_index(),
+            )?;
+        }
 
         match self {
             FeedBackRegistration::SegmentedVisionWithGaze { } => {

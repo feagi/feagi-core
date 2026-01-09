@@ -613,12 +613,12 @@ impl RegistrationHandler {
         if let Some(ref motor) = capabilities.motor {
             // Preferred Option B path: semantic unit + group, so agents don't need to know
             // internal 3-letter unit identifiers embedded in cortical IDs.
-            let source_areas: Vec<String> = if let Some(source_units) = motor.source_units.as_ref() {
+            let source_areas: Vec<(String, MotorCorticalUnit)> = if let Some(source_units) = motor.source_units.as_ref() {
                 let frame_change_handling = FrameChangeHandling::Absolute;
                 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
                 let percentage_neuron_positioning = PercentageNeuronPositioning::Linear; // Default
 
-                let mut all_ids: Vec<String> = Vec::new();
+                let mut all_ids: Vec<(String, MotorCorticalUnit)> = Vec::new();
                 for spec in source_units {
                     let group: CorticalUnitIndex = spec.group.into();
                     let motor_unit = match spec.unit {
@@ -670,9 +670,15 @@ impl RegistrationHandler {
                             group,
                         )
                         .to_vec(),
+                        MotorCorticalUnit::DynamicImageProcessing => MotorCorticalUnit::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec(),
                     };
 
-                    all_ids.extend(cortical_ids.into_iter().map(|id| id.as_base_64()));
+                    all_ids.extend(cortical_ids.into_iter().map(|id| (id.as_base_64(), motor_unit.clone())));
                 }
 
                 all_ids
@@ -731,9 +737,18 @@ impl RegistrationHandler {
                         group,
                     )
                     .to_vec(),
+                    MotorCorticalUnit::DynamicImageProcessing => MotorCorticalUnit::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )
+                    .to_vec(),
                 };
 
-                cortical_ids.into_iter().map(|id| id.as_base_64()).collect()
+                cortical_ids
+                    .into_iter()
+                    .map(|id| (id.as_base_64(), motor_unit.clone()))
+                    .collect()
             } else {
                 // Legacy motor.source_cortical_areas are no longer supported
                 return Err(FeagiDataError::BadParameters(
@@ -746,26 +761,14 @@ impl RegistrationHandler {
                 ));
             };
 
-            for area_name in &source_areas {
+            for (area_name, motor_unit) in &source_areas {
                 let cortical_id_base64 = self.area_name_to_cortical_id(area_name)?;
                 let _cortical_id = CorticalID::try_from_base_64(&cortical_id_base64)
                     .map_err(|e| FeagiDataError::BadParameters(format!("Failed to parse cortical ID: {}", e)))?;
 
-                // Motor unit type and dimensions should come from motor.unit/motor.group or device_registrations
-                // This code path should only be reached when motor.unit/motor.group are provided
-                let motor_unit = motor.unit.map(|u| match u {
-                    MotorUnit::RotaryMotor => MotorCorticalUnit::RotaryMotor,
-                    MotorUnit::PositionalServo => MotorCorticalUnit::PositionalServo,
-                    MotorUnit::Gaze => MotorCorticalUnit::Gaze,
-                    MotorUnit::MiscData => MotorCorticalUnit::MiscData,
-                    MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
-                    MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
-                    MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
-                });
-                
                 // Get dimensions from motor unit topology if available
-                let (dimensions, position) = if let Some(unit) = motor_unit {
-                    let topology = unit.get_unit_default_topology();
+                let (dimensions, position) = {
+                    let topology = motor_unit.get_unit_default_topology();
                     if let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(0u8)) {
                         let dims = unit_topology.channel_dimensions_default;
                         let pos = unit_topology.relative_position;
@@ -776,12 +779,6 @@ impl RegistrationHandler {
                     } else {
                         ((motor.output_count, 1, 1), (0, 0, 0))
                     }
-                } else {
-                    // This should not happen if validation above is correct
-                    return Err(FeagiDataError::InternalError(format!(
-                        "Motor unit type not available for area '{}'. This indicates a bug in registration logic.",
-                        area_name
-                    )));
                 };
 
                 // Check if area exists (blocking call)
@@ -815,9 +812,7 @@ impl RegistrationHandler {
                 );
 
                 if exists {
-                    let motor_unit_name = motor_unit.as_ref()
-                        .map(|u| u.get_snake_case_name())
-                        .unwrap_or_else(|| "unknown");
+                    let motor_unit_name = motor_unit.get_snake_case_name();
                     info!(
                         "🦀 [REGISTRATION] OPU area '{}' already exists (motor unit: {}, dimensions: {:?})",
                         area_name, motor_unit_name, dimensions
@@ -831,9 +826,7 @@ impl RegistrationHandler {
                     });
                 } else if self.auto_create_missing_areas {
                     // Create missing OPU area with dimensions from motor unit template
-                    let motor_unit_name = motor_unit.as_ref()
-                        .map(|u| u.get_snake_case_name())
-                        .unwrap_or_else(|| "generic");
+                    let motor_unit_name = motor_unit.get_snake_case_name();
                     info!(
                         "🦀 [REGISTRATION] Auto-creating missing OPU area '{}' (motor unit: {}, dimensions: {:?})",
                         area_name, motor_unit_name, dimensions
@@ -1257,6 +1250,14 @@ impl RegistrationHandler {
                                 )
                                 .to_vec()
                             }
+                            MotorCorticalUnit::DynamicImageProcessing => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                                    frame_change_handling,
+                                    percentage_neuron_positioning,
+                                    group,
+                                )
+                                .to_vec()
+                            }
                         };
 
                         out.extend(cortical_ids_for_unit.into_iter().map(|id| id.as_base_64()));
@@ -1327,6 +1328,14 @@ impl RegistrationHandler {
                         MotorCorticalUnit::SimpleVisionOutput => {
                             MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
                                 frame_change_handling,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::DynamicImageProcessing => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                                frame_change_handling,
+                                percentage_neuron_positioning,
                                 group,
                             )
                             .to_vec()

@@ -8,11 +8,15 @@
 
 #[cfg(feature = "sdk-io")]
 use feagi_sensorimotor::caching::{MotorDeviceCache, SensorDeviceCache};
+#[cfg(feature = "sdk-io")]
+use feagi_sensorimotor::feedbacks::{FeedBackRegistration, FeedbackRegistrationTargets};
 use feagi_structures::FeagiDataError;
 use std::fmt;
 #[cfg(feature = "sdk-io")]
 use std::sync::{Arc, Mutex, MutexGuard};
 use feagi_sensorimotor::ConnectorCache;
+#[cfg(feature = "sdk-io")]
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
 /// High-level connector agent for managing sensor and motor device registrations
 ///
@@ -97,6 +101,31 @@ impl ConnectorAgent {
     ) -> Result<(), FeagiDataError> {
         self.cache.import_device_registrations_as_config_json(json)?;
         Ok(())
+    }
+
+    /// Register a motor→sensory feedback link inside the connector cache.
+    ///
+    /// This allows FEAGI motor outputs (e.g. `Gaze`) to influence sensory processing
+    /// pipelines (e.g. `SegmentedVision` gaze modulation) deterministically.
+    pub fn register_feedback(
+        &mut self,
+        feedback: FeedBackRegistration,
+        target: FeedbackRegistrationTargets,
+    ) -> Result<(), FeagiDataError> {
+        self.cache.register_feedback(feedback, target)
+    }
+
+    /// Apply decoded motor neuron data to the connector's motor cache and run registered callbacks.
+    ///
+    /// This is the missing "runtime activation" step for feedback loops: once motor data is
+    /// ingested into the motor cache, feedback callbacks can update sensory pipeline properties.
+    pub fn ingest_motor_neuron_data_and_run_callbacks(
+        &self,
+        motor_data: CorticalMappedXYZPNeuronVoxels,
+        time_of_decode: std::time::Instant,
+    ) -> Result<(), FeagiDataError> {
+        let mut motor_cache = self.cache.get_motor_cache();
+        motor_cache.ingest_neuron_data_and_run_callbacks(motor_data, time_of_decode)
     }
 }
 

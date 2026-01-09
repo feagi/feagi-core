@@ -249,6 +249,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         feagi_api_port: 8080,
         feagi_zmq_registration_port: 30001,
         feagi_zmq_sensory_port: 5555,
+        feagi_zmq_motor_port: 5564,
         feagi_tick_hz: 60,
         feagi_heartbeat_interval_s: 5.0,
         feagi_connection_timeout_ms: 5000,

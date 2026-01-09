@@ -307,6 +307,28 @@ impl VideoEncoder {
     pub fn is_segmented_vision(&self) -> bool {
         matches!(self.mode, EncoderMode::Segmented { .. })
     }
+
+    /// Update gaze for segmented vision using a decoded `GazeProperties` value.
+    ///
+    /// This is the preferred API for motor→sensory feedback loops, because `GazeProperties`
+    /// does not expose its internal fields publicly and already encodes any invariants.
+    pub fn set_gaze_properties(&mut self, gaze_properties: &GazeProperties) -> Result<()> {
+        match &mut self.mode {
+            EncoderMode::Segmented {
+                ref mut segmentator,
+                ref mut gaze,
+                ..
+            } => {
+                *gaze = *gaze_properties;
+                segmentator.update_gaze(gaze_properties)?;
+                Ok(())
+            }
+            EncoderMode::Simple { .. } => Err(SdkError::InvalidConfiguration(
+                "Gaze properties only apply to SegmentedVision encoding".to_string(),
+            )),
+        }
+    }
+
 }
 
 impl SensoryEncoder for VideoEncoder {

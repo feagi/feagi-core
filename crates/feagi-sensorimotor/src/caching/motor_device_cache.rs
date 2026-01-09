@@ -446,7 +446,7 @@ macro_rules! motor_unit_functions {
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, ImageFrame);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, ImageFilteringSettings);
     };
 }
 
@@ -476,6 +476,24 @@ impl MotorDeviceCache {
             byte_data: FeagiByteContainer::new_empty(),
             previous_burst: Instant::now(),
         }
+    }
+
+    /// Ingest already-decoded motor neuron data and run callbacks.
+    ///
+    /// This is a zero-copy convenience for callers that already have a decoded
+    /// `CorticalMappedXYZPNeuronVoxels` (e.g. from `feagi-agent`'s motor receive path),
+    /// avoiding a re-serialization into `FeagiByteContainer`.
+    ///
+    /// # Arguments
+    /// - `neuron_data`: decoded motor neuron voxels as published by FEAGI
+    /// - `time_of_decode`: timestamp used for callback timing logic
+    pub fn ingest_neuron_data_and_run_callbacks(
+        &mut self,
+        neuron_data: CorticalMappedXYZPNeuronVoxels,
+        time_of_decode: Instant,
+    ) -> Result<(), FeagiDataError> {
+        self.neuron_data = neuron_data;
+        self.try_decode_neural_data_into_cache(time_of_decode)
     }
 
     // Clears all registered devices and cache, to allow setting up again

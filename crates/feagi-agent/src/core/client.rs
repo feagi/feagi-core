@@ -182,13 +182,18 @@ impl AgentClient {
             motor_socket.connect(&self.config.motor_endpoint)?;
             info!("[SDK-CONNECT] ✅ Motor socket connected");
 
-            // Subscribe to messages for this agent
-            info!(
-                "[SDK-CONNECT] 🎮 Subscribing to topic: '{}'",
-                String::from_utf8_lossy(self.config.agent_id.as_bytes())
-            );
-            motor_socket.set_subscribe(self.config.agent_id.as_bytes())?;
-            info!("[SDK-CONNECT] ✅ Motor subscription set");
+            // Subscribe to all motor messages.
+            //
+            // FEAGI motor PUB may publish either:
+            // - multipart [agent_id, data] (preferred), or
+            // - single-frame [data] (legacy).
+            //
+            // Subscribing only to agent_id would miss the legacy single-frame format entirely,
+            // and also breaks if the publisher uses an empty topic. We subscribe to all, then
+            // filter by topic in receive_motor_data().
+            info!("[SDK-CONNECT] 🎮 Subscribing to all motor topics");
+            motor_socket.set_subscribe(b"")?;
+            info!("[SDK-CONNECT] ✅ Motor subscription set (all topics)");
 
             self.motor_socket = Some(motor_socket);
             info!("[SDK-CONNECT] ✅ Motor socket initialized successfully");
@@ -763,42 +768,42 @@ impl AgentClient {
             SdkError::Other("Motor socket not initialized (not a motor agent?)".to_string())
         })?;
 
-        // Non-blocking receive (multipart: [topic/agent_id, data])
-        // First frame is the topic (agent_id), second frame is the motor data
+        // Non-blocking receive:
+        // - preferred multipart: [topic, data]
+        // - legacy single-part: [data]
         match socket.recv_bytes(zmq::DONTWAIT) {
-            Ok(topic) => {
+            Ok(first_frame) => {
                 trace!(
-                    "[CLIENT] Received first frame: {} bytes: '{}'",
-                    topic.len(),
-                    String::from_utf8_lossy(&topic)
+                    "[CLIENT] Received first motor frame: {} bytes",
+                    first_frame.len()
                 );
 
-                // Verify topic matches our agent_id (redundant due to SUB filter, but safe)
-                if topic != self.config.agent_id.as_bytes() {
-                    warn!(
-                        "[CLIENT] Received motor data for different agent: expected '{}', got '{}'",
-                        self.config.agent_id,
+                // Check if more frames are available (multipart)
+                let (topic_opt, data) = if socket.get_rcvmore().map_err(SdkError::Zmq)? {
+                    // First frame is the topic, second frame is the motor data
+                    let topic = first_frame;
+                    trace!(
+                        "[CLIENT] Motor multipart topic: '{}'",
                         String::from_utf8_lossy(&topic)
                     );
-                    return Ok(None);
-                }
-
-                // Check if more frames are available (should be for multipart)
-                let data = if socket.get_rcvmore().map_err(SdkError::Zmq)? {
                     trace!("[CLIENT] Receiving second frame (motor data)");
-                    // Receive second frame (actual motor data)
                     let data = socket.recv_bytes(0).map_err(|e| {
                         error!("[CLIENT] Failed to receive second frame: {}", e);
                         SdkError::Zmq(e)
                     })?;
                     trace!("[CLIENT] Received motor data frame: {} bytes", data.len());
-                    data
+                    (Some(topic), data)
                 } else {
-                    debug!("[CLIENT] No more frames; using single-part motor message");
-                    trace!("[CLIENT] Using first frame as motor data ({} bytes)", topic.len());
-                    // Fallback: treat first frame as data (backward compatibility with old FEAGI)
-                    topic
+                    // Legacy single-part format: treat first frame as data
+                    (None, first_frame)
                 };
+
+                // Do not filter by topic here.
+                //
+                // FEAGI publishers have historically used different topic conventions
+                // (agent_id, empty topic, or other routing keys). Since we subscribe to all topics,
+                // the safest approach is to accept the motor payload regardless of topic and let
+                // higher layers decide what to do with it.
 
                 // ARCHITECTURE COMPLIANCE: Deserialize binary XYZP motor data using FeagiByteContainer
                 let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();

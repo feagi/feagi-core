@@ -609,7 +609,10 @@ pub async fn get_cortical_template(
 
     let mut templates = HashMap::new();
 
-    // Helper to convert data type to human-readable format
+    // Helper to convert data type to human-readable format.
+    //
+    // NOTE: This endpoint is designed for tool/UIs (e.g. BV) and must be
+    // deterministic across platforms and runs. No fallbacks.
     let data_type_to_json = |dt: IOCorticalAreaConfigurationFlag| -> serde_json::Value {
         let (variant, frame, positioning) = match dt {
             IOCorticalAreaConfigurationFlag::Boolean => ("Boolean", FrameChangeHandling::Absolute, None),
@@ -650,55 +653,102 @@ pub async fn get_cortical_template(
         let num_areas = motor_unit.get_number_cortical_areas();
         let topology = motor_unit.get_unit_default_topology();
 
-        // Get supported data types for this motor unit based on its template definition
-        let mut data_types = vec![];
-        
-        // Determine which data type variant this motor unit accepts
-        // Check the template's accepted_wrapped_io_data_type
-        let accepted_type = motor_unit.get_accepted_wrapped_io_data_type();
-        
-        match accepted_type {
-            "MiscData" => {
-                // MiscData only supports Misc variant with frame handling (no positioning)
-                
-                // Get allowed frame change handling values from template metadata
-                // If None, all values are allowed. If Some, only those values are allowed.
-                let allowed_frames = motor_unit.get_allowed_frame_change_handling();
-                let frames: Vec<FrameChangeHandling> = match allowed_frames {
-                    Some(allowed) => allowed.to_vec(),
-                    None => vec![
-                        FrameChangeHandling::Absolute,
-                        FrameChangeHandling::Incremental,
-                    ],
-                };
-                
-                for frame in frames {
-                    let dt = IOCorticalAreaConfigurationFlag::Misc(frame);
-                    data_types.push(data_type_to_json(dt));
-                }
-            }
-            "ImageFrame" => {
-                // ImageFrame uses CartesianPlane with frame handling (no positioning)
-                for frame in [
-                    FrameChangeHandling::Absolute,
-                    FrameChangeHandling::Incremental,
-                ] {
-                    let dt = IOCorticalAreaConfigurationFlag::CartesianPlane(frame);
-                    data_types.push(data_type_to_json(dt));
-                }
-            }
-            _ => {
-                // Default: SignedPercentage for most motor outputs
-                for frame in [
-                    FrameChangeHandling::Absolute,
-                    FrameChangeHandling::Incremental,
-                ] {
-                    for positioning in [
-                        PercentageNeuronPositioning::Linear,
-                        PercentageNeuronPositioning::Fractional,
-                    ] {
-                        let dt = IOCorticalAreaConfigurationFlag::SignedPercentage(frame, positioning);
-                        data_types.push(data_type_to_json(dt));
+        // BREAKING CHANGE (unreleased API):
+        // - Remove unit-level `supported_data_types`.
+        // - Expose per-subunit metadata, because some units (e.g. Gaze) have heterogeneous subunits
+        //   with different IOCorticalAreaConfigurationFlag variants (Percentage2D vs Percentage).
+        //
+        // We derive supported types by:
+        // - generating canonical cortical IDs from the MotorCorticalUnit template for each
+        //   (frame_change_handling, percentage_neuron_positioning) combination
+        // - extracting the IO configuration flag from each cortical ID
+        // - grouping supported_data_types per subunit index
+        use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+        use serde_json::{Map, Value};
+        use std::collections::HashMap as StdHashMap;
+
+        let mut subunits: StdHashMap<String, serde_json::Value> = StdHashMap::new();
+
+        // Initialize subunits with topology-derived properties.
+        for (sub_idx, topo) in topology {
+            subunits.insert(
+                sub_idx.get().to_string(),
+                json!({
+                    "relative_position": topo.relative_position,
+                    "channel_dimensions_default": topo.channel_dimensions_default,
+                    "channel_dimensions_min": topo.channel_dimensions_min,
+                    "channel_dimensions_max": topo.channel_dimensions_max,
+                    "supported_data_types": Vec::<serde_json::Value>::new(),
+                }),
+            );
+        }
+
+        // Build per-subunit supported_data_types (deduped).
+        let allowed_frames = motor_unit.get_allowed_frame_change_handling();
+        let frames: Vec<FrameChangeHandling> = match allowed_frames {
+            Some(allowed) => allowed.to_vec(),
+            None => vec![FrameChangeHandling::Absolute, FrameChangeHandling::Incremental],
+        };
+
+        let positionings = [
+            PercentageNeuronPositioning::Linear,
+            PercentageNeuronPositioning::Fractional,
+        ];
+
+        let mut per_subunit_dedup: StdHashMap<String, std::collections::HashSet<String>> =
+            StdHashMap::new();
+
+        for frame in frames {
+            for positioning in positionings {
+                let mut map: Map<String, Value> = Map::new();
+                map.insert(
+                    "frame_change_handling".to_string(),
+                    serde_json::to_value(frame).unwrap_or(Value::Null),
+                );
+                map.insert(
+                    "percentage_neuron_positioning".to_string(),
+                    serde_json::to_value(positioning).unwrap_or(Value::Null),
+                );
+
+                // Use unit index 0 for template enumeration (index does not affect IO flags).
+                let cortical_ids = motor_unit
+                    .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+                        CorticalUnitIndex::from(0u8),
+                        map,
+                    );
+
+                if let Ok(ids) = cortical_ids {
+                    for (i, id) in ids.into_iter().enumerate() {
+                        if let Ok(flag) = id.extract_io_data_flag() {
+                            let dt_json = data_type_to_json(flag);
+                            let subunit_key = i.to_string();
+
+                            let dedup_key = format!(
+                                "{}|{}|{}",
+                                dt_json.get("variant").and_then(|v| v.as_str()).unwrap_or(""),
+                                dt_json
+                                    .get("frame_change_handling")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or(""),
+                                dt_json
+                                    .get("percentage_positioning")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                            );
+
+                            let seen = per_subunit_dedup
+                                .entry(subunit_key.clone())
+                                .or_insert_with(std::collections::HashSet::new);
+                            if !seen.insert(dedup_key) {
+                                continue;
+                            }
+
+                            if let Some(subunit_obj) = subunits.get_mut(&subunit_key) {
+                                if let Some(arr) = subunit_obj.get_mut("supported_data_types").and_then(|v| v.as_array_mut()) {
+                                    arr.push(dt_json);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -711,8 +761,7 @@ pub async fn get_cortical_template(
                 "friendly_name": friendly_name,
                 "cortical_id_prefix": String::from_utf8_lossy(&cortical_id_ref).to_string(),
                 "number_of_cortical_areas": num_areas,
-                "unit_default_topology": topology,
-                "supported_data_types": data_types,
+                "subunits": subunits,
                 "description": format!("Motor output: {}", friendly_name)
             }),
         );
@@ -725,50 +774,89 @@ pub async fn get_cortical_template(
         let num_areas = sensory_unit.get_number_cortical_areas();
         let topology = sensory_unit.get_unit_default_topology();
 
-        // Get supported data types for this sensory unit based on its template definition
-        let mut data_types = vec![];
-        
-        // Determine which data type variant this sensory unit accepts
-        let accepted_type = sensory_unit.get_accepted_wrapped_io_data_type();
-        
-        match accepted_type {
-            "MiscData" => {
-                // MiscData only supports Misc variant with frame handling (no positioning)
-                
-                // Get allowed frame change handling values from template metadata
-                // If None, all values are allowed. If Some, only those values are allowed.
-                let allowed_frames = sensory_unit.get_allowed_frame_change_handling();
-                let frames: Vec<FrameChangeHandling> = match allowed_frames {
-                    Some(allowed) => allowed.to_vec(),
-                    None => vec![
-                        FrameChangeHandling::Absolute,
-                        FrameChangeHandling::Incremental,
-                    ],
-                };
-                
-                for frame in frames {
-                    let dt = IOCorticalAreaConfigurationFlag::Misc(frame);
-                    data_types.push(data_type_to_json(dt));
-                }
-            }
-            _ => {
-                // Other types support Percentage variants with both frame and positioning
-                let allowed_frames = sensory_unit.get_allowed_frame_change_handling();
-                let frames: Vec<FrameChangeHandling> = match allowed_frames {
-                    Some(allowed) => allowed.to_vec(),
-                    None => vec![
-                        FrameChangeHandling::Absolute,
-                        FrameChangeHandling::Incremental,
-                    ],
-                };
-                
-                for frame in frames {
-                    for positioning in [
-                        PercentageNeuronPositioning::Linear,
-                        PercentageNeuronPositioning::Fractional,
-                    ] {
-                        let dt = IOCorticalAreaConfigurationFlag::Percentage(frame, positioning);
-                        data_types.push(data_type_to_json(dt));
+        use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+        use serde_json::{Map, Value};
+        use std::collections::HashMap as StdHashMap;
+
+        let mut subunits: StdHashMap<String, serde_json::Value> = StdHashMap::new();
+
+        for (sub_idx, topo) in topology {
+            subunits.insert(
+                sub_idx.get().to_string(),
+                json!({
+                    "relative_position": topo.relative_position,
+                    "channel_dimensions_default": topo.channel_dimensions_default,
+                    "channel_dimensions_min": topo.channel_dimensions_min,
+                    "channel_dimensions_max": topo.channel_dimensions_max,
+                    "supported_data_types": Vec::<serde_json::Value>::new(),
+                }),
+            );
+        }
+
+        let allowed_frames = sensory_unit.get_allowed_frame_change_handling();
+        let frames: Vec<FrameChangeHandling> = match allowed_frames {
+            Some(allowed) => allowed.to_vec(),
+            None => vec![FrameChangeHandling::Absolute, FrameChangeHandling::Incremental],
+        };
+
+        let positionings = [
+            PercentageNeuronPositioning::Linear,
+            PercentageNeuronPositioning::Fractional,
+        ];
+
+        let mut per_subunit_dedup: StdHashMap<String, std::collections::HashSet<String>> =
+            StdHashMap::new();
+
+        for frame in frames {
+            for positioning in positionings {
+                let mut map: Map<String, Value> = Map::new();
+                map.insert(
+                    "frame_change_handling".to_string(),
+                    serde_json::to_value(frame).unwrap_or(Value::Null),
+                );
+                map.insert(
+                    "percentage_neuron_positioning".to_string(),
+                    serde_json::to_value(positioning).unwrap_or(Value::Null),
+                );
+
+                let cortical_ids = sensory_unit
+                    .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+                        CorticalUnitIndex::from(0u8),
+                        map,
+                    );
+
+                if let Ok(ids) = cortical_ids {
+                    for (i, id) in ids.into_iter().enumerate() {
+                        if let Ok(flag) = id.extract_io_data_flag() {
+                            let dt_json = data_type_to_json(flag);
+                            let subunit_key = i.to_string();
+
+                            let dedup_key = format!(
+                                "{}|{}|{}",
+                                dt_json.get("variant").and_then(|v| v.as_str()).unwrap_or(""),
+                                dt_json
+                                    .get("frame_change_handling")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or(""),
+                                dt_json
+                                    .get("percentage_positioning")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                            );
+
+                            let seen = per_subunit_dedup
+                                .entry(subunit_key.clone())
+                                .or_insert_with(std::collections::HashSet::new);
+                            if !seen.insert(dedup_key) {
+                                continue;
+                            }
+
+                            if let Some(subunit_obj) = subunits.get_mut(&subunit_key) {
+                                if let Some(arr) = subunit_obj.get_mut("supported_data_types").and_then(|v| v.as_array_mut()) {
+                                    arr.push(dt_json);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -781,8 +869,7 @@ pub async fn get_cortical_template(
                 "friendly_name": friendly_name,
                 "cortical_id_prefix": String::from_utf8_lossy(&cortical_id_ref).to_string(),
                 "number_of_cortical_areas": num_areas,
-                "unit_default_topology": topology,
-                "supported_data_types": data_types,
+                "subunits": subunits,
                 "description": format!("Sensory input: {}", friendly_name)
             }),
         );

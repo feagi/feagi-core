@@ -516,57 +516,56 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_u64())
         .unwrap_or(1) as u32;
 
-    // Extract data_type_config from request (default to 0 for backward compatibility)
-    // Handle multiple number types: u64, i64, f64, and string representations
-    let raw_data_type_config = request.get("data_type_config");
-    if let Some(raw_val) = raw_data_type_config {
-        tracing::debug!(target: "feagi-api", "Raw data_type_config value: {:?} (type: {:?})", raw_val, raw_val);
-    }
-    let data_type_config = raw_data_type_config
-        .and_then(|v| {
-            // Try u64 first (most common case)
-            if let Some(u) = v.as_u64() {
-                return Some(u);
-            }
-            // Try i64 (signed integer)
-            if let Some(i) = v.as_i64() {
-                if i >= 0 {
-                    return Some(i as u64);
-                }
-            }
-            // Try f64 (float) - round to nearest integer
-            if let Some(f) = v.as_f64() {
-                if f >= 0.0 && f <= u16::MAX as f64 {
-                    return Some(f.round() as u64);
-                }
-            }
-            // Try string representation
-            if let Some(s) = v.as_str() {
-                if let Ok(parsed) = s.parse::<u64>() {
-                    return Some(parsed);
-                }
-            }
+    // BREAKING CHANGE (unreleased API):
+    // `data_type_config` is now per-subunit, because some cortical units have heterogeneous
+    // subunits (e.g. Gaze: Percentage2D + Percentage).
+    //
+    // Request must provide:
+    //   data_type_configs_by_subunit: { "0": <u16>, "1": <u16>, ... }
+    let raw_configs = request
+        .get("data_type_configs_by_subunit")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| ApiError::invalid_input("data_type_configs_by_subunit (object) required"))?;
+
+    let mut data_type_configs_by_subunit: HashMap<u8, u16> = HashMap::new();
+
+    for (k, v) in raw_configs {
+        let subunit_idx_u64 = k
+            .parse::<u64>()
+            .map_err(|_| ApiError::invalid_input("data_type_configs_by_subunit keys must be integers"))?;
+        let subunit_idx: u8 = subunit_idx_u64
+            .try_into()
+            .map_err(|_| ApiError::invalid_input("data_type_configs_by_subunit key out of range"))?;
+
+        let parsed_u64 = if let Some(u) = v.as_u64() {
+            Some(u)
+        } else if let Some(i) = v.as_i64() {
+            if i >= 0 { Some(i as u64) } else { None }
+        } else if let Some(f) = v.as_f64() {
+            if f >= 0.0 { Some(f.round() as u64) } else { None }
+        } else if let Some(s) = v.as_str() {
+            s.parse::<u64>().ok()
+        } else {
             None
-        })
-        .map(|v| {
-            if v > u16::MAX as u64 {
-                tracing::warn!(target: "feagi-api", "data_type_config value {} exceeds u16::MAX, clamping to {}", v, u16::MAX);
-                u16::MAX
-            } else {
-                v as u16
-            }
-        })
-        .unwrap_or_else(|| {
-            tracing::warn!(target: "feagi-api", "data_type_config missing or invalid in request, defaulting to 0 (backward compatibility)");
-            0
-        });
+        }
+        .ok_or_else(|| ApiError::invalid_input("data_type_configs_by_subunit values must be numeric"))?;
 
-    // Split data_type_config into two bytes for cortical ID
-    let config_byte_4 = (data_type_config & 0xFF) as u8; // Lower byte
-    let config_byte_5 = ((data_type_config >> 8) & 0xFF) as u8; // Upper byte
+        if parsed_u64 > u16::MAX as u64 {
+            return Err(ApiError::invalid_input(
+                "data_type_configs_by_subunit value exceeds u16::MAX",
+            ));
+        }
 
-    tracing::info!(target: "feagi-api", "Creating cortical areas for {} with neurons_per_voxel={}, data_type_config={} (bytes: {}, {})",
-        cortical_type_key, neurons_per_voxel, data_type_config, config_byte_4, config_byte_5);
+        data_type_configs_by_subunit.insert(subunit_idx, parsed_u64 as u16);
+    }
+
+    tracing::info!(
+        target: "feagi-api",
+        "Creating cortical areas for {} with neurons_per_voxel={}, data_type_configs_by_subunit={:?}",
+        cortical_type_key,
+        neurons_per_voxel,
+        data_type_configs_by_subunit
+    );
 
     // Determine number of units and get topology
     let (num_units, unit_topology) = if cortical_type_str == "IPU" {
@@ -616,6 +615,20 @@ pub async fn post_cortical_area(
     // Build creation parameters for all units
     let mut creation_params = Vec::new();
     for unit_idx in 0..num_units {
+        let data_type_config = data_type_configs_by_subunit
+            .get(&(unit_idx as u8))
+            .copied()
+            .ok_or_else(|| {
+                ApiError::invalid_input(format!(
+                    "data_type_configs_by_subunit missing entry for subunit {}",
+                    unit_idx
+                ))
+            })?;
+
+        // Split per-subunit data_type_config into two bytes for cortical ID
+        let config_byte_4 = (data_type_config & 0xFF) as u8; // Lower byte
+        let config_byte_5 = ((data_type_config >> 8) & 0xFF) as u8; // Upper byte
+
         // Get dimensions for this unit from topology
         let dimensions = if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
             let dims = topo.channel_dimensions_default;
@@ -651,7 +664,6 @@ pub async fn post_cortical_area(
         };
 
         // Construct the 8-byte cortical ID
-        // Use data_type_config from request for bytes 4-5
         let cortical_id_bytes = [
             if cortical_type_str == "IPU" {
                 b'i'

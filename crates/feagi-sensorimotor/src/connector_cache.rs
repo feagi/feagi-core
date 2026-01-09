@@ -75,6 +75,12 @@ impl ConnectorCache {
         self.get_motor_cache().import_from_output_definition(&definition)?;
         self.get_sensor_cache().import_from_input_definition(&definition)?;
         self.feedback_registrar = definition.get_feedbacks().clone();
+        // Re-activate imported feedback registrations by wiring callbacks against the newly
+        // imported motor/sensor caches.
+        self.feedback_registrar.reload_all_from_self(
+            self.get_sensor_cache_ref(),
+            self.get_motor_cache_ref(),
+        )?;
         Ok(())
     }
 
