@@ -7,7 +7,8 @@ use crate::caching::{MotorDeviceCache, SensorDeviceCache};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(PartialEq)]
-pub struct FeedbackRegistrationTargets {
+pub struct 
+FeedbackRegistrationTargets {
     sensor_unit_index: CorticalUnitIndex,
     sensor_channel_index: CorticalChannelIndex,
     motor_unit_index: CorticalUnitIndex,
