@@ -402,6 +402,52 @@ macro_rules! motor_unit_functions {
 
         motor_unit_functions!(@generate_similar_functions $motor_unit, ImageFrame);
     };
+
+    // Arm for WrappedIOType::ImageFilteringSettings
+    (@generate_functions
+        $motor_unit:ident,
+        ImageFilteringSettings
+    ) => {
+        ::paste::paste! {
+            pub fn [<$motor_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                z_neuron_resolution: NeuronDepth,
+                percentage_neuron_positioning: PercentageNeuronPositioning
+                ) -> Result<(), FeagiDataError>
+            {
+                let brightness_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let contrast_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[1];
+                let diff_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[2];
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = ImageFilteringSettingsNeuronVoxelXYZPDecoder::new_box(
+                    brightness_cortical_id,
+                    contrast_cortical_id,
+                    diff_cortical_id,
+                    z_neuron_resolution,
+                    z_neuron_resolution,
+                    z_neuron_resolution,
+                    number_channels,
+                    percentage_neuron_positioning)?;
+
+
+
+                let initial_val: WrappedIOData = WrappedIOData::ImageFilteringSettings(ImageFilteringSettings::default());
+
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        motor_unit_functions!(@generate_similar_functions $motor_unit, ImageFrame);
+    };
 }
 
 pub struct MotorDeviceCache {

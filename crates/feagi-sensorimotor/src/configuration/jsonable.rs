@@ -7,9 +7,9 @@ use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality, SegmentedImageFrameProperties};
-use crate::data_types::{GazeProperties, ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
+use crate::data_types::{GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
 use crate::feedbacks::FeedbackRegistrar;
-use crate::neuron_voxel_coding::xyzp::decoders::{GazePropertiesNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder};
+use crate::neuron_voxel_coding::xyzp::decoders::{GazePropertiesNeuronVoxelXYZPDecoder, ImageFilteringSettingsNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder};
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::neuron_voxel_coding::xyzp::encoders::{BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder, MiscDataNeuronVoxelXYZPEncoder, PercentageNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder};
 use crate::wrapped_io_data::WrappedIOData;
@@ -268,6 +268,7 @@ pub enum JSONDecoderProperties {
     MiscData(MiscDataDimensions),
     Percentage(NeuronDepth, PercentageNeuronPositioning, bool, PercentageChannelDimensionality),
     GazeProperties(NeuronDepth, NeuronDepth, PercentageNeuronPositioning), // eccentricity z depth, modularity z depth
+    ImageFilteringSettings(NeuronDepth, NeuronDepth, NeuronDepth, PercentageNeuronPositioning), // brightness z depth, contrast z depth, diff z depth
 }
 
 impl JSONDecoderProperties {
@@ -319,7 +320,21 @@ impl JSONDecoderProperties {
                     *percentage_neuron_positioning
                 )
             }
-
+            JSONDecoderProperties::ImageFilteringSettings(brightness_z_depth, contrast_z_depth, diff_z_depth, percentage_neuron_positioning) => {
+                if cortical_ids.len() != 3 {
+                    return Err(FeagiDataError::InternalError("Expected three cortical ids for ImageFilteringSettings!".to_string()));
+                }
+                ImageFilteringSettingsNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.get(0).unwrap(), // Brightness
+                    *cortical_ids.get(1).unwrap(), // Contrast
+                    *cortical_ids.get(2).unwrap(), // Diff threshold
+                    *brightness_z_depth,
+                    *contrast_z_depth,
+                    *diff_z_depth,
+                    number_channels,
+                    *percentage_neuron_positioning
+                )
+            }
         }
     }
 
@@ -365,8 +380,11 @@ impl JSONDecoderProperties {
                     }
                 }
             }
-            JSONDecoderProperties::GazeProperties(eccentricity, modularity, PercentageNeuronPositioning) => {
+            JSONDecoderProperties::GazeProperties(_eccentricity, _modularity, _percentage_neuron_positioning) => {
                 Ok(WrappedIOData::GazeProperties(GazeProperties::create_default_centered()))
+            }
+            JSONDecoderProperties::ImageFilteringSettings(_brightness, _contrast, _diff, _percentage_neuron_positioning) => {
+                Ok(WrappedIOData::ImageFilteringSettings(ImageFilteringSettings::default()))
             }
         }
     }

@@ -25,6 +25,7 @@ pub use gaze_properties::GazeProperties;
 pub use image_frame::ImageFrame;
 pub use misc_data::MiscData;
 pub use percentages::*;
+pub use image_filtering_settings::ImageFilteringSettings;
 pub use text_token::{
     decode_token_id_from_misc_data,
     decode_token_id_from_xyzp_bitplanes,

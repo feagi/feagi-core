@@ -110,6 +110,24 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "Image Processing configuration - dynamically control brightness, contrast, and per pixel diff thresholding"]
+                DynamicImageProcessing => {
+                    friendly_name: "Dynamic Image Processing Settings",
+                    accepted_wrapped_io_data_type: ImageFilteringSettings,
+                    cortical_id_unit_reference: *b"ifs",
+                    number_cortical_areas: 4,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]), // brightness
+                        1 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]), // contrast
+                        2 => (IOCorticalAreaConfigurationFlag::Percentage2D(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -30], channel_dimensions_default: [2, 1, 10], channel_dimensions_min: [2, 1, 1], channel_dimensions_max: [2, 1, 1024]), // per pixel diff
+                        3 => (IOCorticalAreaConfigurationFlag::Percentage2D(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -30], channel_dimensions_default: [2, 1, 10], channel_dimensions_min: [2, 1, 1], channel_dimensions_max: [2, 1, 1024]) // image diff
+                    }
+                },
+
             }
         }
     };
