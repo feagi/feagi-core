@@ -396,7 +396,14 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             }
 
             // Check consecutive_fire_limit (SIMD-friendly: u16::MAX = no limit, direct comparison)
-            let consecutive_fire_limit = batch_consecutive_fire_limits[i];
+            // Semantics: 0 disables the limiter (unlimited).
+            // Internally, most paths use u16::MAX as the unlimited encoding; support both.
+            let consecutive_fire_limit_raw = batch_consecutive_fire_limits[i];
+            let consecutive_fire_limit = if consecutive_fire_limit_raw == 0 {
+                u16::MAX
+            } else {
+                consecutive_fire_limit_raw
+            };
             let consecutive_fire_count = batch_consecutive_fire_counts[i];
             // SIMD-friendly: uniform comparison (no branching for "no limit" case)
             // If consecutive_fire_limit == u16::MAX, count will always be < MAX
@@ -463,7 +470,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
                 } else {
                     // Neuron didn't fire - reset consecutive fire count if needed
                     let consecutive_fire_limit = batch_consecutive_fire_limits[i];
-                    if consecutive_fire_limit != u16::MAX {
+                    if consecutive_fire_limit != 0 && consecutive_fire_limit != u16::MAX {
                         neuron_array.consecutive_fire_counts_mut()[*idx] = 0;
                     }
                 }
@@ -585,8 +592,14 @@ fn process_single_neuron<T: NeuralValue>(
 
         // Check if extended refractory just expired → reset consecutive fire count
         // This happens AFTER this burst is blocked, ready for next burst
-        let consecutive_fire_limit = neuron_array.consecutive_fire_limits()[idx];
+        let consecutive_fire_limit_raw = neuron_array.consecutive_fire_limits()[idx];
+        let consecutive_fire_limit = if consecutive_fire_limit_raw == 0 {
+            u16::MAX
+        } else {
+            consecutive_fire_limit_raw
+        };
         if new_countdown == 0
+            && consecutive_fire_limit_raw != 0
             && consecutive_fire_limit != u16::MAX
             && neuron_array.consecutive_fire_counts()[idx] >= consecutive_fire_limit
         {
@@ -642,7 +655,13 @@ fn process_single_neuron<T: NeuralValue>(
         }
         // 5. Check consecutive fire limit (matches Python SIMD implementation)
         // SIMD-friendly encoding: consecutive_fire_limit == u16::MAX means unlimited
-        let consecutive_fire_limit = neuron_array.consecutive_fire_limits()[idx];
+        // Semantics: 0 disables the limiter (unlimited). Support both 0 and u16::MAX as unlimited.
+        let consecutive_fire_limit_raw = neuron_array.consecutive_fire_limits()[idx];
+        let consecutive_fire_limit = if consecutive_fire_limit_raw == 0 {
+            u16::MAX
+        } else {
+            consecutive_fire_limit_raw
+        };
         let consecutive_fire_count = neuron_array.consecutive_fire_counts()[idx];
 
         // SIMD-friendly: uniform comparison (no branching for "no limit" case)
@@ -709,9 +728,14 @@ fn process_single_neuron<T: NeuralValue>(
             // e.g., refrac=1 → fire, skip 1, fire → pattern: 1_1_1_
             //       refrac=2 → fire, skip 2, fire → pattern: 1__1__
             let refractory_period = neuron_array.refractory_periods()[idx];
-            let consecutive_fire_limit = neuron_array.consecutive_fire_limits()[idx];
+            let consecutive_fire_limit_raw = neuron_array.consecutive_fire_limits()[idx];
+            let consecutive_fire_limit = if consecutive_fire_limit_raw == 0 {
+                u16::MAX
+            } else {
+                consecutive_fire_limit_raw
+            };
 
-            if consecutive_fire_limit != u16::MAX && new_count >= consecutive_fire_limit {
+            if consecutive_fire_limit_raw != 0 && consecutive_fire_limit != u16::MAX && new_count >= consecutive_fire_limit {
                 // Hit burst limit → ADDITIVE extended refractory
                 // countdown = refrac + snooze (total bursts to skip)
                 // e.g., refrac=1, snooze=2, cfc_limit=3 → 1_1_1___1_1_1___
@@ -758,7 +782,7 @@ fn process_single_neuron<T: NeuralValue>(
 
     // Reset consecutive fire count (matches Python SIMD implementation)
     let consecutive_fire_limit = neuron_array.consecutive_fire_limits()[idx];
-    if consecutive_fire_limit != u16::MAX {
+    if consecutive_fire_limit != 0 && consecutive_fire_limit != u16::MAX {
         neuron_array.consecutive_fire_counts_mut()[idx] = 0;
     }
 
@@ -830,6 +854,40 @@ mod tests {
         assert_eq!(result.fire_queue.total_neurons(), 1);
         assert_eq!(neurons.membrane_potentials[0].to_f32(), 0.0); // Reset after firing
         assert_eq!(neurons.refractory_countdowns[0], 5); // Refractory set
+    }
+
+    #[test]
+    fn test_consecutive_fire_limit_zero_does_not_block_firing() {
+        let mut neurons = StdNeuronArray::new(10);
+
+        // consecutive_fire_limit=0 should DISABLE the limiter (unlimited).
+        let id = neurons
+            .add_neuron(
+                1.0,      // threshold
+                f32::MAX, // threshold_limit (MAX = no limit)
+                0.0,      // leak_coefficient
+                0.0,      // resting_potential
+                0,        // neuron_type
+                0,        // refractory_period (so we can fire back-to-back)
+                1.0,      // excitability
+                0,        // consecutive_fire_limit (0 = disabled/unlimited)
+                0,        // snooze_period
+                true,     // mp_charge_accumulation
+                1,        // cortical_area
+                0, 0, 0,
+            )
+            .unwrap();
+
+        let mut fcl = FireCandidateList::new();
+        fcl.add_candidate(NeuronId(id as u32), 2.0);
+
+        // Burst 0: should fire
+        let result0 = process_neural_dynamics(&fcl, None, &mut neurons, 0).unwrap();
+        assert_eq!(result0.neurons_fired, 1);
+
+        // Burst 1: should ALSO fire (still unlimited)
+        let result1 = process_neural_dynamics(&fcl, None, &mut neurons, 1).unwrap();
+        assert_eq!(result1.neurons_fired, 1);
     }
 
     #[test]
@@ -910,7 +968,7 @@ mod tests {
 
         // Add 10 neurons
         let mut ids = Vec::new();
-        for i in 0..10 {
+        for _i in 0..10 {
             let id = neurons
                 .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1,0, 0, 0)
                 .unwrap();

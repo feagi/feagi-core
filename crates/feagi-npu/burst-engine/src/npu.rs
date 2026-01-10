@@ -2635,6 +2635,8 @@ impl<
         limit: u16,
     ) -> usize {
         let mut updated_count = 0;
+        // Semantics: 0 disables the limiter (unlimited). Internally we use MAX encoding.
+        let encoded_limit = if limit == 0 { u16::MAX } else { limit };
 
         // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
@@ -2644,7 +2646,7 @@ impl<
             if neuron_storage_write.valid_mask()[idx]
                 && neuron_storage_write.cortical_areas()[idx] == cortical_area
             {
-                neuron_storage_write.consecutive_fire_limits_mut()[idx] = limit;
+                neuron_storage_write.consecutive_fire_limits_mut()[idx] = encoded_limit;
                 updated_count += 1;
             }
         }
@@ -2789,6 +2791,8 @@ impl<
 
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
+            // Semantics: 0 disables the limiter (unlimited). Internally we use MAX encoding.
+            let encoded_limit = if *value == 0 { u16::MAX } else { *value };
             let idx = *neuron_id as usize;
             if idx < self.neuron_storage.read().unwrap().count()
                 && self.neuron_storage.read().unwrap().valid_mask()[idx]
@@ -2796,7 +2800,7 @@ impl<
                 self.neuron_storage
                     .write()
                     .unwrap()
-                    .consecutive_fire_limits_mut()[idx] = *value;
+                    .consecutive_fire_limits_mut()[idx] = encoded_limit;
                 updated_count += 1;
             }
         }

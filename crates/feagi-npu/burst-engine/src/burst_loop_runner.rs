@@ -2183,7 +2183,7 @@ mod tests {
             f32,
             crate::backend::CPUBackend,
         >>::new_cpu_only(1000, 10000, 20);
-        let npu = Arc::new(Mutex::new(DynamicNPU::F32(rust_npu)));
+        let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "TestNPU"));
         let mut runner = BurstLoopRunner::new::<NoViz, NoMotor>(npu, None, None, 10.0);
 
         assert!(!runner.is_running());
@@ -2261,7 +2261,7 @@ mod tests {
         // Stage a strong sensory injection so it survives Phase-1 FCL clear and fires on burst 1.
         rust_npu.inject_sensory_with_potentials(&[(neuron, 128.0)]);
 
-        let npu = Arc::new(Mutex::new(DynamicNPU::F32(rust_npu)));
+        let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "TestNPU"));
         let mut runner = BurstLoopRunner::new::<NoViz, NoMotor>(npu, None, None, 5.0);
 
         runner.start().unwrap();
