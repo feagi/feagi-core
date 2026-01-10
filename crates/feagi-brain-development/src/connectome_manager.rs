@@ -4216,6 +4216,13 @@ impl ConnectomeManager {
         if let Some(excit) = npu_lock.get_neuron_property_by_index(idx, "excitability") {
             properties.insert("excitability".to_string(), serde_json::json!(excit));
         }
+        if let Some(threshold_limit) = npu_lock.get_neuron_property_by_index(idx, "threshold_limit")
+        {
+            properties.insert(
+                "threshold_limit".to_string(),
+                serde_json::json!(threshold_limit),
+            );
+        }
 
         // Get u16 properties
         if let Some(refract_period) =

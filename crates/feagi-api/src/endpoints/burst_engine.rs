@@ -7,6 +7,8 @@
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use std::collections::HashMap;
+use serde::Deserialize;
+use utoipa::{IntoParams, ToSchema};
 
 /// Get the current simulation timestep in seconds.
 #[utoipa::path(
@@ -249,6 +251,94 @@ pub async fn get_fire_queue(
 
     debug!(target: "feagi-api", "GET /fire_queue - returned {} fired neurons", total_fired);
 
+    Ok(Json(response))
+}
+
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct FclNeuronQuery {
+    /// Neuron ID to look up in the current FCL snapshot
+    pub neuron_id: u64,
+}
+
+/// Get the current FCL candidate potential for a specific neuron.
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fcl/neuron",
+    tag = "burst_engine",
+    params(FclNeuronQuery)
+)]
+pub async fn get_fcl_neuron(
+    State(state): State<ApiState>,
+    Query(params): Query<FclNeuronQuery>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+
+    let fcl_data = runtime_service
+        .get_fcl_snapshot_with_cortical_idx()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get FCL snapshot: {}", e)))?;
+
+    let mut response = HashMap::new();
+    response.insert("neuron_id".to_string(), serde_json::json!(params.neuron_id));
+
+    match fcl_data.iter().find(|(id, _, _)| *id == params.neuron_id) {
+        Some((_id, cortical_idx, potential)) => {
+            response.insert("present".to_string(), serde_json::json!(true));
+            response.insert("cortical_idx".to_string(), serde_json::json!(*cortical_idx));
+            response.insert("candidate_potential".to_string(), serde_json::json!(*potential));
+        }
+        None => {
+            response.insert("present".to_string(), serde_json::json!(false));
+            response.insert("candidate_potential".to_string(), serde_json::json!(0.0));
+        }
+    }
+
+    Ok(Json(response))
+}
+
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct FireQueueNeuronQuery {
+    /// Neuron ID to check in the last Fire Queue sample
+    pub neuron_id: u64,
+}
+
+/// Check whether a specific neuron fired in the last burst (Fire Queue sample).
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fire_queue/neuron",
+    tag = "burst_engine",
+    params(FireQueueNeuronQuery)
+)]
+pub async fn get_fire_queue_neuron(
+    State(state): State<ApiState>,
+    Query(params): Query<FireQueueNeuronQuery>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+
+    let fq_sample = runtime_service
+        .get_fire_queue_sample()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get fire queue sample: {}", e)))?;
+
+    let mut response = HashMap::new();
+    response.insert("neuron_id".to_string(), serde_json::json!(params.neuron_id));
+
+    let needle = params.neuron_id as u32;
+    for (cortical_idx, (neuron_ids, _xs, _ys, _zs, mps)) in fq_sample {
+        if let Some(pos) = neuron_ids.iter().position(|&id| id == needle) {
+            response.insert("fired".to_string(), serde_json::json!(true));
+            response.insert("cortical_idx".to_string(), serde_json::json!(cortical_idx));
+            response.insert(
+                "membrane_potential_at_fire".to_string(),
+                serde_json::json!(mps.get(pos).copied().unwrap_or(0.0)),
+            );
+            return Ok(Json(response));
+        }
+    }
+
+    response.insert("fired".to_string(), serde_json::json!(false));
     Ok(Json(response))
 }
 

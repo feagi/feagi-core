@@ -300,7 +300,9 @@ pub async fn get_cortical_area_geometry(
                         },
                         // Neural parameters
                         "neuron_post_synaptic_potential": area.postsynaptic_current,
-                        "neuron_fire_threshold": area.firing_threshold_limit,
+                        // BV expects firing threshold and threshold limit as separate fields.
+                        "neuron_fire_threshold": area.firing_threshold,
+                        "neuron_firing_threshold_limit": area.firing_threshold_limit,
                         "plasticity_constant": area.plasticity_constant,
                         "degeneration": area.degeneration,
                         "leak_coefficient": area.leak_coefficient,
@@ -858,6 +860,23 @@ pub async fn post_custom_cortical_area(
     use feagi_services::types::CreateCorticalAreaParams;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    // Helper: check whether BV is requesting a MEMORY cortical area (still routed through this endpoint).
+    //
+    // Brain Visualizer sends:
+    //   sub_group_id: "MEMORY"
+    //   cortical_group: "CUSTOM"
+    //
+    // In feagi-core, the authoritative cortical type is derived from the CorticalID prefix byte:
+    // - b'c' => Custom
+    // - b'm' => Memory
+    //
+    // So if sub_group_id indicates MEMORY, we must generate an 'm' prefixed CorticalID.
+    let is_memory_area_requested = request
+        .get("sub_group_id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.eq_ignore_ascii_case("MEMORY"))
+        .unwrap_or(false);
+
     // Extract required fields from request
     let cortical_name = request
         .get("cortical_name")
@@ -908,7 +927,8 @@ pub async fn post_custom_cortical_area(
         .map(|s| s.to_string());
 
     tracing::info!(target: "feagi-api",
-        "Creating custom cortical area '{}' with dimensions: {}x{}x{}, position: ({}, {}, {})",
+        "Creating {} cortical area '{}' with dimensions: {}x{}x{}, position: ({}, {}, {})",
+        if is_memory_area_requested { "memory" } else { "custom" },
         cortical_name, cortical_dimensions[0], cortical_dimensions[1], cortical_dimensions[2],
         coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]
     );
@@ -921,12 +941,12 @@ pub async fn post_custom_cortical_area(
         .unwrap()
         .as_millis() as u64;
 
-    // Create 8-byte cortical ID for custom area
-    // Byte 0: 'c' for custom
+    // Create 8-byte cortical ID for custom/memory area
+    // Byte 0: 'c' for custom OR 'm' for memory (authoritative type discriminator)
     // Bytes 1-6: Derived from name (first 6 chars, padded with underscores)
     // Byte 7: Counter based on timestamp lower bits
     let mut cortical_id_bytes = [0u8; 8];
-    cortical_id_bytes[0] = b'c'; // Custom cortical area marker
+    cortical_id_bytes[0] = if is_memory_area_requested { b'm' } else { b'c' };
 
     // Use the cortical name for bytes 1-6 (truncate or pad as needed)
     let name_bytes = cortical_name.as_bytes();
@@ -974,7 +994,11 @@ pub async fn post_custom_cortical_area(
             cortical_dimensions[2] as usize,
         ),
         position: (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]),
-        area_type: "Custom".to_string(),
+        area_type: if is_memory_area_requested {
+            "Memory".to_string()
+        } else {
+            "Custom".to_string()
+        },
         visible: Some(true),
         sub_group: cortical_sub_group,
         neurons_per_voxel: Some(1),

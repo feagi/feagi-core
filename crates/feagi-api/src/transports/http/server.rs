@@ -595,6 +595,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_neuron_properties_query),
         )
         .route(
+            "/connectome/neuron_properties_at",
+            get(connectome::get_neuron_properties_at_query),
+        )
+        .route(
             "/connectome/area_neurons",
             get(connectome::get_area_neurons_query),
         )
@@ -629,9 +633,14 @@ fn create_v1_router() -> Router<ApiState> {
             get(burst_engine::get_simulation_timestep).post(burst_engine::post_simulation_timestep),
         )
         .route("/burst_engine/fcl", get(burst_engine::get_fcl))
+        .route("/burst_engine/fcl/neuron", get(burst_engine::get_fcl_neuron))
         .route(
             "/burst_engine/fire_queue",
             get(burst_engine::get_fire_queue),
+        )
+        .route(
+            "/burst_engine/fire_queue/neuron",
+            get(burst_engine::get_fire_queue_neuron),
         )
         .route(
             "/burst_engine/fcl_reset",

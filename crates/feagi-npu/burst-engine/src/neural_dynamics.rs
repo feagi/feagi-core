@@ -360,6 +360,10 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
 
         // Process: Use SIMD batch function for basic LIF operations
         let lif_start = std::time::Instant::now();
+        // IMPORTANT: `update_neurons_lif_batch` resets membrane potential to 0 for fired neurons
+        // (matching LIF behavior). For downstream features (e.g., mp_driven_psp) and visualization,
+        // we must preserve the *pre-reset* membrane potential at the moment of firing.
+        let batch_mp_before_update = batch_mp.clone();
         let mut fired_mask = vec![false; batch_size];
         update_neurons_lif_batch(
             &mut batch_mp,
@@ -444,9 +448,13 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
                     neuron_array.coordinates()[coord_idx + 2],
                 );
 
+                // Capture firing-time membrane potential BEFORE reset.
+                // LIF semantics: MP_fire = MP_old + candidate (no leak when firing).
+                let mp_at_fire = batch_mp_before_update[i].saturating_add(batch_candidates[i]);
+
                 results.push(FiringNeuron {
                     neuron_id: *neuron_id,
-                    membrane_potential: batch_mp[i].to_f32(),
+                    membrane_potential: mp_at_fire.to_f32(),
                     cortical_idx,
                     x,
                     y,

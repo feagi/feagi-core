@@ -1730,6 +1730,10 @@ impl<
         }
         match property {
             "threshold" => neuron_storage.thresholds().get(idx).map(|&v| v.to_f32()),
+            "threshold_limit" => neuron_storage
+                .threshold_limits()
+                .get(idx)
+                .map(|&v| v.to_f32()),
             "leak_coefficient" => neuron_storage.leak_coefficients().get(idx).copied(),
             "membrane_potential" => neuron_storage
                 .membrane_potentials()
@@ -2524,12 +2528,20 @@ impl<
     ) -> usize {
         let mut updated_count = 0;
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
+
+        // SIMD-friendly encoding: 0.0 means "no upper bound".
+        // Internally, "no upper bound" is represented as T::max_value().
+        let encoded_limit = if limit == 0.0 {
+            T::max_value()
+        } else {
+            T::from_f32(limit)
+        };
         
         for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx]
                 && neuron_storage_write.cortical_areas()[idx] == cortical_area
             {
-                neuron_storage_write.threshold_limits_mut()[idx] = T::from_f32(limit);
+                neuron_storage_write.threshold_limits_mut()[idx] = encoded_limit;
                 updated_count += 1;
             }
         }
@@ -3620,21 +3632,22 @@ fn phase1_injection_with_synapses<
         //
         // Conversion contract:
         // - Synaptic propagation expects a u8 conductance (0..=255).
-        // - Some pipelines use absolute-u8 MP (0..=255), while others may accumulate in u8×u8 space.
-        //   To stay deterministic and preserve dynamic range, we downscale only when values exceed
-        //   the representable u8 range.
+        //
+        // IMPORTANT:
+        // This conversion must be monotonic. A previous heuristic attempted to "downscale"
+        // values above 255 by dividing by 255, which introduced a discontinuity:
+        //   MP=255   -> 255
+        //   MP=256   -> ~1
+        // This can make downstream neurons appear to "stop responding" as upstream PSP increases.
+        //
+        // We therefore clamp deterministically into the representable u8 range.
         let mp_build_start = std::time::Instant::now();
         let mut neuron_mps: ahash::AHashMap<NeuronId, u8> = ahash::AHashMap::new();
         let u8_max_f32 = u8::MAX as f32;
         for neurons in previous_fire_queue.neurons_by_area.values() {
             for neuron in neurons {
                 let mp_f32 = neuron.membrane_potential;
-                let mp_scaled = if mp_f32 > u8_max_f32 {
-                    mp_f32 / u8_max_f32
-                } else {
-                    mp_f32
-                };
-                let mp_u8 = mp_scaled.clamp(0.0, u8_max_f32).round() as u8;
+                let mp_u8 = mp_f32.clamp(0.0, u8_max_f32).round() as u8;
                 neuron_mps.insert(neuron.neuron_id, mp_u8);
             }
         }
@@ -4891,6 +4904,31 @@ mod tests {
         npu.inject_sensory_with_potentials(&neurons);
 
         let _result = npu.process_burst().unwrap();
+    }
+
+    #[test]
+    fn test_update_threshold_limit_zero_means_unlimited() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+
+        // Register a non-power area.
+        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+
+        // Add a neuron with a bounded threshold limit first (so the update actually changes it).
+        let neuron_id = npu
+            .add_neuron(1.0, 10.0, 0.0, 0.0, 0, 0, 1.0, u16::MAX, 0, true, 2, 0, 0, 0)
+            .unwrap();
+
+        // Live-update: 0.0 must be encoded as "no upper bound".
+        let updated = npu.update_cortical_area_threshold_limit(2, 0.0);
+        assert_eq!(updated, 1);
+
+        // Verify internal encoding.
+        let neuron_storage = npu.neuron_storage.read().unwrap();
+        let limit = neuron_storage.threshold_limits()[neuron_id.0 as usize].to_f32();
+        assert_eq!(limit, f32::MAX);
     }
 }
 

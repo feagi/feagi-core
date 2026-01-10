@@ -12,6 +12,7 @@ Licensed under the Apache License, Version 2.0
 
 use crate::types::*;
 use async_trait::async_trait;
+use std::collections::HashMap;
 
 /// Connectome management service (transport-agnostic)
 #[async_trait]
@@ -154,6 +155,19 @@ pub trait ConnectomeService: Send + Sync {
     async fn get_all_cortical_area_properties(
         &self,
     ) -> ServiceResult<Vec<std::collections::HashMap<String, serde_json::Value>>>;
+
+    // ========================================================================
+    // NEURON INSPECTION (DEBUG/INTROSPECTION)
+    // ========================================================================
+
+    /// Get a neuron's live properties/state snapshot (for visualization/debugging).
+    ///
+    /// This surfaces runtime state like membrane potential, threshold, refractory countdown,
+    /// and consecutive fire tracking.
+    async fn get_neuron_properties(
+        &self,
+        neuron_id: u64,
+    ) -> ServiceResult<HashMap<String, serde_json::Value>>;
 
     // ========================================================================
     // BRAIN REGION OPERATIONS

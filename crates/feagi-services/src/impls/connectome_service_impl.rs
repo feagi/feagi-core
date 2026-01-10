@@ -404,6 +404,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         "IPU" => "sensory".to_string(),
                         "OPU" => "motor".to_string(),
                         "CORE" => "core".to_string(),
+                        "MEMORY" => "memory".to_string(),
                         _ => "custom".to_string(),
                     }
                 } else {
@@ -602,6 +603,19 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         let manager = self.connectome.read();
         Ok(manager.get_all_cortical_area_properties())
+    }
+
+    async fn get_neuron_properties(
+        &self,
+        neuron_id: u64,
+    ) -> ServiceResult<HashMap<String, serde_json::Value>> {
+        let manager = self.connectome.read();
+        manager
+            .get_neuron_properties(neuron_id)
+            .ok_or_else(|| ServiceError::NotFound {
+                resource: "Neuron".to_string(),
+                id: neuron_id.to_string(),
+            })
     }
 
     // ========================================================================

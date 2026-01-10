@@ -8,6 +8,8 @@ use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use std::collections::HashMap;
 use tracing::warn;
+use serde::Deserialize;
+use utoipa::{IntoParams, ToSchema};
 
 /// GET /v1/connectome/cortical_areas/list/detailed
 #[utoipa::path(
@@ -504,19 +506,111 @@ pub async fn get_stats_cortical_cumulative(
     tag = "connectome"
 )]
 pub async fn get_neuron_properties_by_id(
-    State(_state): State<ApiState>,
-    Path(_neuron_id): Path<u64>,
+    State(state): State<ApiState>,
+    Path(neuron_id): Path<u64>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    Ok(Json(HashMap::new()))
+    let connectome_service = state.connectome_service.as_ref();
+    let props = connectome_service
+        .get_neuron_properties(neuron_id)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(props))
 }
 
 /// GET /v1/connectome/neuron_properties
 #[utoipa::path(get, path = "/v1/connectome/neuron_properties", tag = "connectome")]
 pub async fn get_neuron_properties_query(
-    State(_state): State<ApiState>,
-    Query(_params): Query<HashMap<String, String>>,
+    State(state): State<ApiState>,
+    Query(params): Query<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    Ok(Json(HashMap::new()))
+    let neuron_id: u64 = params
+        .get("neuron_id")
+        .ok_or_else(|| ApiError::invalid_input("neuron_id required"))?
+        .parse()
+        .map_err(|_| ApiError::invalid_input("neuron_id must be an integer"))?;
+
+    let connectome_service = state.connectome_service.as_ref();
+    let props = connectome_service
+        .get_neuron_properties(neuron_id)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(props))
+}
+
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct NeuronPropertiesAtQuery {
+    /// Cortical area ID (base64 string)
+    pub cortical_id: String,
+    /// X coordinate within the cortical area
+    pub x: u32,
+    /// Y coordinate within the cortical area
+    pub y: u32,
+    /// Z coordinate within the cortical area
+    pub z: u32,
+}
+
+/// GET /v1/connectome/neuron_properties_at
+///
+/// Resolve a neuron by `(cortical_id, x, y, z)` and return its live properties/state.
+///
+/// This is intended for clients (e.g., Brain Visualizer) that do not have neuron IDs.
+#[utoipa::path(
+    get,
+    path = "/v1/connectome/neuron_properties_at",
+    tag = "connectome",
+    params(NeuronPropertiesAtQuery)
+)]
+pub async fn get_neuron_properties_at_query(
+    State(state): State<ApiState>,
+    Query(params): Query<NeuronPropertiesAtQuery>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let cortical_id = params.cortical_id;
+    let x = params.x;
+    let y = params.y;
+    let z = params.z;
+
+    // Resolve cortical_idx via service layer.
+    let connectome_service = state.connectome_service.as_ref();
+    let area = connectome_service
+        .get_cortical_area(&cortical_id)
+        .await
+        .map_err(|_| ApiError::not_found("CorticalArea", &cortical_id))?;
+
+    // Resolve neuron_id via NPU coordinate lookup (fast path).
+    //
+    // IMPORTANT (Axum): handler futures must be `Send`.
+    // Do NOT hold non-Send locks/guards across `.await`.
+    let neuron_id_u32: u32 = {
+        // Note: this uses the global ConnectomeManager singleton, consistent with existing connectome endpoints.
+        let manager = feagi_brain_development::ConnectomeManager::instance();
+        let manager_lock = manager.read();
+        let npu_arc = manager_lock
+            .get_npu()
+            .ok_or_else(|| ApiError::internal("NPU not initialized"))?;
+        let npu_lock = npu_arc.lock().unwrap();
+
+        npu_lock
+            .get_neuron_id_at_coordinate(area.cortical_idx, x, y, z)
+            .ok_or_else(|| {
+                ApiError::not_found(
+                    "Neuron",
+                    &format!("cortical_id={} x={} y={} z={}", cortical_id, x, y, z),
+                )
+            })?
+    };
+
+    let mut props = connectome_service
+        .get_neuron_properties(neuron_id_u32 as u64)
+        .await
+        .map_err(ApiError::from)?;
+
+    // Always include resolved identity fields for clients.
+    props.insert("neuron_id".to_string(), serde_json::json!(neuron_id_u32 as u64));
+    props.insert("cortical_id".to_string(), serde_json::json!(cortical_id));
+    props.insert("cortical_idx".to_string(), serde_json::json!(area.cortical_idx));
+
+    Ok(Json(props))
 }
 
 /// GET /v1/connectome/area_neurons
