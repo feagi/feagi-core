@@ -540,6 +540,16 @@ impl GenomeService for GenomeServiceImpl {
                 for area in &areas_to_add {
                     genome.cortical_areas.insert(area.cortical_id, area.clone());
                     info!(target: "feagi-services", "Added {} to runtime genome", area.cortical_id.as_base_64());
+                    if let Some(parent) = area.properties.get("parent_region_id").and_then(|v| v.as_str()) {
+                        let region = genome.brain_regions.get_mut(parent).ok_or_else(|| {
+                            ServiceError::InvalidInput(format!(
+                                "Unknown parent_region_id '{}' for new cortical area {}",
+                                parent,
+                                area.cortical_id.as_base_64()
+                            ))
+                        })?;
+                        region.cortical_areas.insert(area.cortical_id);
+                    }
                 }
             } else {
                 return Err(ServiceError::Backend("No genome loaded".to_string()));

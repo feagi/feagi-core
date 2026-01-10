@@ -810,18 +810,61 @@ impl ConnectomeService for ConnectomeServiceImpl {
         }
 
         // Update the cortical_mapping_dst property in ConnectomeManager
-        let mut manager = self.connectome.write();
-        manager
+        let region_io = {
+            let mut manager = self.connectome.write();
+            manager
             .update_cortical_mapping(&src_id, &dst_id, mapping_data.clone())
             .map_err(|e| ServiceError::Backend(format!("Failed to update mapping: {}", e)))?;
 
-        // Regenerate synapses for this mapping
-        let synapse_count = manager
+            // Regenerate synapses for this mapping
+            let synapse_count = manager
             .regenerate_synapses_for_mapping(&src_id, &dst_id)
             .map_err(|e| ServiceError::Backend(format!("Failed to regenerate synapses: {}", e)))?;
 
-        info!(target: "feagi-services", "Cortical mapping updated: {} synapses created", synapse_count);
-        Ok(synapse_count)
+            // Recompute region IO registries after mapping change (critical for BV region boundary behavior)
+            let region_io = manager
+                .recompute_brain_region_io_registry()
+                .map_err(|e| ServiceError::Backend(format!("Failed to recompute region IO registry: {}", e)))?;
+
+            info!(
+                target: "feagi-services",
+                "Cortical mapping updated: {} synapses created",
+                synapse_count
+            );
+
+            (synapse_count, region_io)
+        };
+
+        // Persist updated region IO into RuntimeGenome so genome save/export stays consistent.
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            for (region_id, (inputs, outputs)) in region_io.1 {
+                if let Some(region) = genome.brain_regions.get_mut(&region_id) {
+                    if inputs.is_empty() {
+                        region.properties.remove("inputs");
+                    } else {
+                        region
+                            .properties
+                            .insert("inputs".to_string(), serde_json::json!(inputs));
+                    }
+
+                    if outputs.is_empty() {
+                        region.properties.remove("outputs");
+                    } else {
+                        region
+                            .properties
+                            .insert("outputs".to_string(), serde_json::json!(outputs));
+                    }
+                } else {
+                    warn!(
+                        target: "feagi-services",
+                        "Region '{}' not found in RuntimeGenome while persisting IO registry",
+                        region_id
+                    );
+                }
+            }
+        }
+
+        Ok(region_io.0)
     }
 
     // Note: unit tests for mapping persistence behavior are below in this module.
