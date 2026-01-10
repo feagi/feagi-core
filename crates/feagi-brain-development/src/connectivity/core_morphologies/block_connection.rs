@@ -28,6 +28,7 @@ pub fn apply_block_connection_morphology_batched(
     weight: u8,
     conductance: u8,
     synapse_attractivity: u8,
+    synapse_type: SynapseType,
 ) -> BduResult<u32> {
     use crate::rng::get_rng;
     use rand::Rng;
@@ -123,7 +124,7 @@ pub fn apply_block_connection_morphology_batched(
                     NeuronId(dst_nid),
                     SynapticWeight(weight),
                     SynapticConductance(conductance),
-                    SynapseType::Excitatory,
+                    synapse_type,
                 )
                 .is_ok()
             {
@@ -164,6 +165,7 @@ pub fn apply_block_connection_morphology(
     weight: u8,
     conductance: u8,
     synapse_attractivity: u8,
+    synapse_type: SynapseType,
 ) -> BduResult<u32> {
     use crate::rng::get_rng;
     use rand::Rng;
@@ -390,7 +392,7 @@ pub fn apply_block_connection_morphology(
                         *dst_nid,
                         SynapticWeight(weight),
                         SynapticConductance(conductance),
-                        SynapseType::Excitatory,
+                        synapse_type,
                     )
                     .is_ok()
             {

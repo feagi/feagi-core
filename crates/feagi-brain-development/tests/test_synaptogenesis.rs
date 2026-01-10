@@ -19,7 +19,7 @@ path for more realistic integration tests.
 */
 
 use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID};
-use feagi_npu_burst_engine::{RustNPU, TracingMutex};
+use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
 use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
 use std::sync::Arc;
 use serde_json::json;
@@ -157,6 +157,73 @@ fn test_projector_morphology_basic() {
     assert!(synapse_count <= 150, "Should create reasonable number of synapses (allowing for projection variations)");
 
     println!("✅ Test 1: Projector morphology basic - PASSED");
+}
+
+// ============================================================================
+// TEST 1b: Inhibitory mapping produces inhibitory synapses (type=1) with abs(weight)
+// ============================================================================
+#[test]
+fn test_inhibitory_mapping_creates_inhibitory_synapses() {
+    let mut manager = create_test_manager();
+
+    // Create source + destination areas (small, deterministic)
+    let (src_area, src_id) = create_test_area("src_inh", 4, 4, 1, 0);
+    manager.add_cortical_area(src_area).expect("Failed to add source area");
+
+    let (dst_area, dst_id) = create_test_area("dst_inh", 4, 4, 1, 1);
+    manager.add_cortical_area(dst_area).expect("Failed to add destination area");
+
+    // Create neurons in both areas
+    let src_neurons = create_grid_neurons(&mut manager, &src_id, 4, 4, 1);
+    create_grid_neurons(&mut manager, &dst_id, 4, 4, 1);
+
+    // Negative multiplier should produce inhibitory synapses with weight = abs(multiplier)
+    let rule = json!({
+        "morphology_id": "projector",
+        "postSynapticCurrent_multiplier": -5,
+        "synapse_attractivity": 100
+    });
+
+    manager
+        .update_cortical_mapping(&src_id, &dst_id, vec![rule])
+        .expect("Failed to update cortical mapping");
+
+    let synapse_count = manager
+        .apply_cortical_mapping(&src_id)
+        .expect("Failed to apply cortical mapping");
+
+    assert!(synapse_count > 0, "Should have created synapses for inhibitory mapping");
+
+    // Inspect outgoing synapses from a sample source neuron
+    let Some(npu_arc) = manager.get_npu() else {
+        panic!("Test manager must have an attached NPU");
+    };
+
+    let sample_src = src_neurons[0] as u32;
+    let mut npu_guard = npu_arc.lock().unwrap();
+    match *npu_guard {
+        DynamicNPU::F32(ref mut npu) => {
+            // Propagation index is rebuilt during mapping application; outgoing list should be non-empty.
+            let outgoing = npu.get_outgoing_synapses(sample_src);
+            assert!(!outgoing.is_empty(), "Expected outgoing synapses from source neuron");
+
+            // Validate sign encoding: synapse_type=1 (inhibitory) and weight=5
+            for (_target, weight, _psp, syn_type) in outgoing {
+                assert_eq!(weight, 5, "Expected abs(multiplier) to be used as weight");
+                assert_eq!(syn_type, 1, "Expected inhibitory synapse_type=1 for negative multiplier");
+            }
+        }
+        DynamicNPU::INT8(ref mut npu) => {
+            let outgoing = npu.get_outgoing_synapses(sample_src);
+            assert!(!outgoing.is_empty(), "Expected outgoing synapses from source neuron");
+            for (_target, weight, _psp, syn_type) in outgoing {
+                assert_eq!(weight, 5, "Expected abs(multiplier) to be used as weight");
+                assert_eq!(syn_type, 1, "Expected inhibitory synapse_type=1 for negative multiplier");
+            }
+        }
+    }
+
+    println!("✅ Test 1b: Inhibitory mapping produces inhibitory synapses - PASSED");
 }
 
 // ============================================================================

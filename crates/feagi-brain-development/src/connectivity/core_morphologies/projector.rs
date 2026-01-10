@@ -37,6 +37,7 @@ pub fn apply_projector_morphology(
     weight: u8,
     conductance: u8,
     synapse_attractivity: u8,
+    synapse_type: SynapseType,
 ) -> BduResult<u32> {
     // Calculate dimensions by finding max coordinates in each area
     // NOTE: This is a fallback - callers should prefer passing dimensions directly
@@ -53,6 +54,7 @@ pub fn apply_projector_morphology(
         weight,
         conductance,
         synapse_attractivity,
+        synapse_type,
     )
 }
 
@@ -84,6 +86,7 @@ pub fn apply_projector_morphology_with_dimensions(
     weight: u8,
     conductance: u8,
     synapse_attractivity: u8,
+    synapse_type: SynapseType,
 ) -> BduResult<u32> {
     use crate::rng::get_rng;
     use rand::Rng;
@@ -135,7 +138,7 @@ pub fn apply_projector_morphology_with_dimensions(
                             NeuronId(dst_nid),
                             SynapticWeight(weight),
                             SynapticConductance(conductance),
-                            SynapseType::Excitatory,
+                            synapse_type,
                         )
                         .is_ok()
                     {

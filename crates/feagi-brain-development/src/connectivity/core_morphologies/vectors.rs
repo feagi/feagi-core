@@ -22,6 +22,7 @@ pub fn apply_vectors_morphology_with_dimensions(
     weight: u8,
     conductance: u8,
     synapse_attractivity: u8,
+    synapse_type: SynapseType,
 ) -> BduResult<u32> {
     use crate::rng::get_rng;
     use rand::Rng;
@@ -63,7 +64,7 @@ pub fn apply_vectors_morphology_with_dimensions(
                                 NeuronId(dst_nid),
                                 SynapticWeight(weight),
                                 SynapticConductance(conductance),
-                                SynapseType::Excitatory,
+                                synapse_type,
                             )
                             .is_ok()
                     {
@@ -90,6 +91,7 @@ pub fn apply_vectors_morphology(
     weight: u8,
     conductance: u8,
     synapse_attractivity: u8,
+    synapse_type: SynapseType,
 ) -> BduResult<u32> {
     use crate::connectivity::core_morphologies::common::calculate_area_dimensions;
     let dst_dimensions = calculate_area_dimensions(npu, dst_area_id);
@@ -102,6 +104,7 @@ pub fn apply_vectors_morphology(
         weight,
         conductance,
         synapse_attractivity,
+        synapse_type,
     )
 }
 

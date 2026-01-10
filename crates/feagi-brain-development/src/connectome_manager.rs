@@ -1464,6 +1464,7 @@ impl ConnectomeManager {
         weight: u8,
         conductance: u8,
         synapse_attractivity: u8,
+        synapse_type: feagi_npu_neural::SynapseType,
     ) -> BduResult<usize> {
         match morphology_id {
             "projector" => {
@@ -1495,6 +1496,7 @@ impl ConnectomeManager {
                     weight,
                     conductance,
                     synapse_attractivity,
+                    synapse_type,
                 )?;
                 // Ensure the propagation engine sees the newly created synapses immediately
                 npu.rebuild_synapse_index();
@@ -1569,6 +1571,7 @@ impl ConnectomeManager {
                         weight,
                         conductance,
                         synapse_attractivity,
+                        synapse_type,
                     )? as usize
                 } else {
                     // Small area: use regular version (faster for small counts)
@@ -1587,6 +1590,7 @@ impl ConnectomeManager {
                         weight,
                         conductance,
                         synapse_attractivity,
+                        synapse_type,
                     )? as usize;
                     tracing::warn!(
                         target: "feagi-bdu",
@@ -1676,19 +1680,49 @@ impl ConnectomeManager {
             // IMPORTANT:
             // - This value represents the synapse "weight" stored in the NPU (u8: 0..255).
             // - Do NOT scale by 255 here. A multiplier of 1.0 should remain weight=1 (not 255).
-            let weight = if let Some(obj) = rule.as_object() {
-                obj.get("postSynapticCurrent_multiplier")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(1.0) // @architecture:acceptable - rule-level default multiplier
-                    .clamp(0.0, 255.0) as u8
-            } else if let Some(arr) = rule.as_array() {
-                // Array format: [morphology_id, scalar, multiplier, ...]
-                arr.get(2)
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(1.0) // @architecture:acceptable - rule-level default multiplier
-                    .clamp(0.0, 255.0) as u8
-            } else {
-                128 // @architecture:acceptable - emergency fallback for malformed rule
+            let (weight, synapse_type) = {
+                // Accept either integer or whole-number float inputs for compatibility with older clients/tests.
+                let parse_i64 = |v: &serde_json::Value| -> Option<i64> {
+                    if let Some(i) = v.as_i64() {
+                        return Some(i);
+                    }
+                    let f = v.as_f64()?;
+                    if f.fract() == 0.0 {
+                        Some(f as i64)
+                    } else {
+                        None
+                    }
+                };
+
+                let multiplier_i64: i64 = if let Some(obj) = rule.as_object() {
+                    obj.get("postSynapticCurrent_multiplier")
+                        .and_then(parse_i64)
+                        .unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
+                } else if let Some(arr) = rule.as_array() {
+                    // Array format: [morphology_id, scalar, multiplier, ...]
+                    arr.get(2)
+                        .and_then(parse_i64)
+                        .unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
+                } else {
+                    128 // @architecture:acceptable - emergency fallback for malformed rule
+                };
+
+                if multiplier_i64 < 0 {
+                    let abs = if multiplier_i64 == i64::MIN {
+                        i64::MAX
+                    } else {
+                        multiplier_i64.abs()
+                    };
+                    (
+                        abs.clamp(0, 255) as u8,
+                        feagi_npu_neural::SynapseType::Inhibitory,
+                    )
+                } else {
+                    (
+                        multiplier_i64.clamp(0, 255) as u8,
+                        feagi_npu_neural::SynapseType::Excitatory,
+                    )
+                }
             };
 
             // Get PSP (conductance) from source cortical area.
@@ -1733,6 +1767,7 @@ impl ConnectomeManager {
                         weight,
                         conductance,
                         synapse_attractivity,
+                        synapse_type,
                     )
                 }
                 feagi_evolutionary::MorphologyType::Vectors => {
@@ -1765,6 +1800,7 @@ impl ConnectomeManager {
                             weight, // From rule, not hardcoded
                             conductance, // PSP from source area, NOT hardcoded!
                             synapse_attractivity, // From rule, not hardcoded
+                            synapse_type,
                         )?;
                         // Ensure the propagation engine sees the newly created synapses immediately,
                         // and avoid a second outer NPU mutex acquisition later in the mapping update path.
@@ -4818,7 +4854,8 @@ mod tests {
     #[test]
     fn test_synapse_operations() {
         use feagi_npu_burst_engine::npu::RustNPU;
-        use std::sync::{Arc, Mutex};
+        use feagi_npu_burst_engine::TracingMutex;
+        use std::sync::Arc;
 
         // Get ConnectomeManager singleton
         let manager_arc = ConnectomeManager::instance();
@@ -4832,7 +4869,7 @@ mod tests {
         let backend = CPUBackend::new();
         let npu_result =
             RustNPU::new(runtime, backend, 100, 1000, 10).expect("Failed to create NPU");
-        let npu = Arc::new(Mutex::new(DynamicNPU::F32(npu_result)));
+        let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu_result), "TestNPU"));
         {
             let mut manager = manager_arc.write();
             manager.set_npu(npu.clone());
@@ -4969,15 +5006,19 @@ mod tests {
     fn test_mapping_deletion_prunes_synapses_between_areas() {
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::RustNPU;
+        use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_runtime::StdRuntime;
         use feagi_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag};
-        use std::sync::{Arc, Mutex};
+        use std::sync::Arc;
 
         // Create NPU and manager (small capacities for a deterministic unit test)
         let runtime = StdRuntime;
         let backend = CPUBackend::new();
         let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("Failed to create NPU");
-        let dyn_npu = Arc::new(Mutex::new(feagi_npu_burst_engine::DynamicNPU::F32(npu)));
+        let dyn_npu = Arc::new(TracingMutex::new(
+            feagi_npu_burst_engine::DynamicNPU::F32(npu),
+            "TestNPU",
+        ));
         let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
 
         // Create two cortical areas
@@ -5049,17 +5090,21 @@ mod tests {
     fn test_mapping_update_prunes_synapses_between_areas() {
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::RustNPU;
+        use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_runtime::StdRuntime;
         use feagi_structures::genomic::cortical_area::{
             CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
-        use std::sync::{Arc, Mutex};
+        use std::sync::Arc;
 
         // Create NPU and manager (small capacities for a deterministic unit test)
         let runtime = StdRuntime;
         let backend = CPUBackend::new();
         let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("Failed to create NPU");
-        let dyn_npu = Arc::new(Mutex::new(feagi_npu_burst_engine::DynamicNPU::F32(npu)));
+        let dyn_npu = Arc::new(TracingMutex::new(
+            feagi_npu_burst_engine::DynamicNPU::F32(npu),
+            "TestNPU",
+        ));
         let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
 
         // Seed core morphologies so mapping regeneration can resolve function morphologies (e.g. "memory").
@@ -5155,6 +5200,7 @@ mod tests {
         use crate::models::cortical_area::CorticalArea;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
         use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_runtime::StdRuntime;
         use feagi_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalAreaType, CorticalID};
 
@@ -5162,7 +5208,7 @@ mod tests {
         let runtime = StdRuntime;
         let backend = CPUBackend::new();
         let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("Failed to create NPU");
-        let dyn_npu = Arc::new(Mutex::new(DynamicNPU::F32(npu)));
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
         let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
 
         // Seed the morphology registry with core morphologies so mapping regeneration can run.
