@@ -211,7 +211,7 @@ impl MotorDecoder for PerceptionDecoder {
                     // - voxels present but not at x=0,y=0 (decoder ignores them).
                     static OTEN_VOXEL_LOG_COUNT: AtomicU64 = AtomicU64::new(0);
                     let log_n = OTEN_VOXEL_LOG_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
-                    if log_n <= 10 || log_n % 100 == 0 {
+                    if log_n <= 10 || log_n.is_multiple_of(100) {
                         let (x, y, z, p) = voxels.borrow_xyzp_vectors();
                         let depth = topo.depth;
 
@@ -300,7 +300,7 @@ impl MotorDecoder for PerceptionDecoder {
             static DECODE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             let count = DECODE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
             
-            if count <= 5 || count % 100 == 0 {
+            if count <= 5 || count.is_multiple_of(100) {
                 match &decoded {
                     Some(text) if !text.is_empty() => {
                         tracing::info!(

@@ -269,7 +269,7 @@ impl PlasticityService {
         let memory_areas_snapshot = memory_areas.lock().unwrap().clone();
 
         // Log plasticity status every 100 bursts
-        if current_timestep % 100 == 0 {
+        if current_timestep.is_multiple_of(100) {
             if memory_areas_snapshot.is_empty() {
                 // This is normal if plasticity isn't being used - log at debug level instead of warn
                 tracing::debug!(target: "plasticity",
@@ -332,7 +332,7 @@ impl PlasticityService {
             }
 
             // Update memory utilization in state manager after deletions
-            Self::update_memory_utilization_in_state_manager(&array, &config);
+            Self::update_memory_utilization_in_state_manager(&array, config);
         }
 
         // Step 3: Detect patterns for all memory areas
@@ -590,7 +590,7 @@ impl PlasticityService {
                         });
 
                         // Update memory utilization in state manager after creation
-                        Self::update_memory_utilization_in_state_manager(&array, &config);
+                        Self::update_memory_utilization_in_state_manager(&array, config);
                     } else {
                         // Get diagnostic information to understand failure cause
                         let array_stats = array.get_stats();
@@ -742,15 +742,17 @@ mod tests {
     use crate::memory_stats_cache::create_memory_stats_cache;
     use feagi_npu_burst_engine::backend::CPUBackend;
     use feagi_npu_burst_engine::DynamicNPU;
+    use feagi_npu_burst_engine::TracingMutex;
     use feagi_npu_runtime::StdRuntime;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     #[test]
     fn test_plasticity_service_creation() {
         let config = PlasticityConfig::default();
         let cache = create_memory_stats_cache();
-        let npu = Arc::new(Mutex::new(
+        let npu = Arc::new(TracingMutex::new(
             DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+            "plasticity-test-npu",
         ));
         let service = PlasticityService::new(config, cache, npu);
 
@@ -762,8 +764,9 @@ mod tests {
     fn test_register_memory_area() {
         let config = PlasticityConfig::default();
         let cache = create_memory_stats_cache();
-        let npu = Arc::new(Mutex::new(
+        let npu = Arc::new(TracingMutex::new(
             DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+            "plasticity-test-npu",
         ));
         let service = PlasticityService::new(config, cache, npu);
 

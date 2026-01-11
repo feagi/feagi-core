@@ -116,8 +116,11 @@ pub struct BurstLoopRunner {
     last_cortical_id_refresh: Arc<Mutex<u64>>,
     /// Cached cortical_idx -> visualization_voxel_granularity mappings (from ConnectomeManager)
     /// Used to determine when to apply aggregated rendering for large areas
-    cached_visualization_granularities: Arc<Mutex<ahash::AHashMap<u32, (u32, u32, u32)>>>,
+    cached_visualization_granularities: Arc<Mutex<VisualizationGranularityCache>>,
 }
+
+type VisualizationGranularity = (u32, u32, u32);
+type VisualizationGranularityCache = ahash::AHashMap<u32, VisualizationGranularity>;
 
 impl BurstLoopRunner {
     /// Create a new burst loop runner
@@ -534,8 +537,7 @@ impl BurstLoopRunner {
                 thread_id,
                 lock_wait.as_secs_f64() * 1000.0
             );
-            let snapshot = npu_lock.get_last_fcl_snapshot();
-            snapshot
+            npu_lock.get_last_fcl_snapshot()
         };
         let lock_released = std::time::Instant::now();
         let total_duration = lock_released.duration_since(lock_start);
@@ -573,8 +575,7 @@ impl BurstLoopRunner {
                 thread_id,
                 lock_wait.as_secs_f64() * 1000.0
             );
-            let configs = npu_lock.get_all_fire_ledger_configs();
-            configs
+            npu_lock.get_all_fire_ledger_configs()
         };
         let lock_released = std::time::Instant::now();
         let total_duration = lock_released.duration_since(lock_start);
@@ -682,6 +683,8 @@ impl Drop for BurstLoopRunner {
 /// # Returns
 ///
 /// Aggregated data: (chunk_coords_x, chunk_coords_y, chunk_coords_z, chunk_potentials, chunk_counts)
+type AggregatedVisualizationChunks = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>, Vec<u32>);
+
 fn aggregate_into_visualization_chunks(
     neuron_ids: &[u32],
     coords_x: &[u32],
@@ -689,7 +692,7 @@ fn aggregate_into_visualization_chunks(
     coords_z: &[u32],
     potentials: &[f32],
     granularity: (u32, u32, u32),
-) -> (Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>, Vec<u32>) {
+) -> AggregatedVisualizationChunks {
     let (chunk_x, chunk_y, chunk_z) = granularity;
     
     // Use HashMap to aggregate chunks: chunk_coord -> (sum_potential, count)
@@ -910,7 +913,7 @@ fn burst_loop(
     plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Plasticity notification callback
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>, // Cached cortical_idx -> cortical_id
     _last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
-    cached_visualization_granularities: Arc<Mutex<ahash::AHashMap<u32, (u32, u32, u32)>>>, // Cached cortical_idx -> visualization_granularity
+    cached_visualization_granularities: Arc<Mutex<VisualizationGranularityCache>>, // Cached cortical_idx -> visualization_granularity
 ) {
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
@@ -1608,7 +1611,7 @@ fn burst_loop(
                         *area_id,
                         RawFireQueueData {
                             cortical_area_idx: *area_id,
-                            cortical_id: cortical_id,
+                            cortical_id,
                             neuron_ids: if is_memory_area {
                                 vec![final_neuron_ids[0]]
                             } else {
@@ -1846,7 +1849,7 @@ fn burst_loop(
                         *area_id,
                         RawFireQueueData {
                             cortical_area_idx: *area_id,
-                            cortical_id: cortical_id,
+                            cortical_id,
                             neuron_ids: neuron_ids.clone(),
                             coords_x: coords_x.clone(),
                             coords_y: coords_y.clone(),
@@ -2278,7 +2281,7 @@ mod tests {
 
         let fired_in_area = fq_sample
             .get(&2)
-            .map(|(neuron_ids, _, _, _, _)| neuron_ids.iter().any(|&id| id == neuron.0))
+            .map(|(neuron_ids, _, _, _, _)| neuron_ids.contains(&neuron.0))
             .unwrap_or(false);
 
         runner.stop();

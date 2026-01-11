@@ -15,6 +15,7 @@ use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 
 /// Apply pattern matching morphology directly on NPU
+#[allow(clippy::too_many_arguments)]
 pub fn apply_patterns_morphology(
     npu: &mut feagi_npu_burst_engine::DynamicNPU,
     src_area_id: u32,

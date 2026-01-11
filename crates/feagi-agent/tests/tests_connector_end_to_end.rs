@@ -5,7 +5,6 @@ use feagi_sensorimotor::data_types::descriptors::{
 };
 use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D};
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
-use feagi_agent::sdk::ConnectorAgent;
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
 };

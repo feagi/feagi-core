@@ -809,6 +809,12 @@ impl MotorDeviceCache {
     //endregion
 }
 
+impl Default for MotorDeviceCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Display for MotorDeviceCache {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Ok(writeln!(f, "Motor Device Cache:")?)

@@ -80,7 +80,7 @@ pub struct NeuronArray<T: NeuralValue> {
     /// This cache eliminates O(n) scans on every coordinate lookup
     /// Cache is invalidated when neurons are added/removed for an area
     /// Uses Mutex for thread-safe interior mutability
-    coord_map_cache: Mutex<AHashMap<u32, AHashMap<(u32, u32, u32), usize>>>,
+    coord_map_cache: Mutex<CoordMapCache>,
     
     /// Cached neuron index per cortical area
     /// Maps: cortical_area -> Vec<neuron_index>
@@ -89,6 +89,10 @@ pub struct NeuronArray<T: NeuralValue> {
     /// Uses Mutex for thread-safe interior mutability
     cortical_area_neuron_index: Mutex<AHashMap<u32, Vec<usize>>>,
 }
+
+type CoordKey = (u32, u32, u32);
+type CoordAreaMap = AHashMap<CoordKey, usize>;
+type CoordMapCache = AHashMap<u32, CoordAreaMap>;
 
 impl<T: NeuralValue> NeuronArray<T> {
     /// Create a new neuron array with initial capacity
@@ -280,7 +284,7 @@ impl<T: NeuralValue> NeuronArray<T> {
         for idx in 0..self.count {
             if self.valid_mask[idx] {
                 let area = self.cortical_areas[idx];
-                area_to_neurons.entry(area).or_insert_with(Vec::new).push(idx);
+                area_to_neurons.entry(area).or_default().push(idx);
             }
         }
         

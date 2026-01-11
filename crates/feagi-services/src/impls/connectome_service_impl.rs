@@ -925,11 +925,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 thread_id,
                 lock_wait.as_secs_f64() * 1000.0
             );
-            let result = match &*npu_lock {
+            match &*npu_lock {
                 feagi_npu_burst_engine::DynamicNPU::F32(npu_f32) => npu_f32.export_connectome(),
                 feagi_npu_burst_engine::DynamicNPU::INT8(npu_int8) => npu_int8.export_connectome(),
-            };
-            result
+            }
         };
         let lock_released = std::time::Instant::now();
         let total_duration = lock_released.duration_since(lock_start);

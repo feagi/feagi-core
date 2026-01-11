@@ -18,6 +18,7 @@ use std::sync::Arc;
 /// 
 /// This version is optimized for large neuron counts (>100k) and releases the NPU lock
 /// between batches to allow the burst loop to run, preventing 4-17 second blocking.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_block_connection_morphology_batched(
     npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
     src_area_id: u32,
@@ -91,14 +92,14 @@ pub fn apply_block_connection_morphology_batched(
         let mut batch_synapses = Vec::new();
         for &(src_coord_encoded, dst_coord_encoded) in batch {
             let src_pos = (
-                (src_coord_encoded >> 16) as u32,
-                ((src_coord_encoded >> 8) & 0xFF) as u32,
-                (src_coord_encoded & 0xFF) as u32,
+                src_coord_encoded >> 16,
+                (src_coord_encoded >> 8) & 0xFF,
+                src_coord_encoded & 0xFF,
             );
             let dst_pos = (
-                (dst_coord_encoded >> 16) as u32,
-                ((dst_coord_encoded >> 8) & 0xFF) as u32,
-                (dst_coord_encoded & 0xFF) as u32,
+                dst_coord_encoded >> 16,
+                (dst_coord_encoded >> 8) & 0xFF,
+                dst_coord_encoded & 0xFF,
             );
             
             // Look up neurons at coordinates
@@ -141,7 +142,7 @@ pub fn apply_block_connection_morphology_batched(
                 target: "feagi-bdu",
                 "Synapse creation progress: {}/{} batches, {} synapses created",
                 batch_idx + 1,
-                (total_synapses + BATCH_SIZE - 1) / BATCH_SIZE,
+                total_synapses.div_ceil(BATCH_SIZE),
                 synapse_count
             );
         }
@@ -155,6 +156,7 @@ pub fn apply_block_connection_morphology_batched(
 /// NOTE: This function holds the NPU lock for the entire duration.
 /// For large neuron counts (>100k), consider using the batched version
 /// that releases the lock between batches.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_block_connection_morphology(
     npu: &mut feagi_npu_burst_engine::DynamicNPU,
     src_area_id: u32,

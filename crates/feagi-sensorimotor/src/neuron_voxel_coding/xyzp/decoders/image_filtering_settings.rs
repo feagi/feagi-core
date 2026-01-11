@@ -57,6 +57,7 @@ impl ImageFilteringSettingsNeuronVoxelXYZPDecoder {
     /// * `number_channels` - Number of channels
     /// * `interpolation` - Percentage neuron positioning mode
     #[allow(dead_code)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new_box(
         brightness_cortical_id: CorticalID,
         contrast_cortical_id: CorticalID,

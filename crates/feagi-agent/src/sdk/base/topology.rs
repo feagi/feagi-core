@@ -226,7 +226,7 @@ impl TopologyCache {
             })? as u32;
 
             return Ok(CorticalTopology {
-                cortical_id: cortical_id.clone(),
+                cortical_id: *cortical_id,
                 width,
                 height,
                 depth,
@@ -272,7 +272,7 @@ impl TopologyCache {
             .unwrap_or(1) as u32;
 
         Ok(CorticalTopology {
-            cortical_id: cortical_id.clone(),
+            cortical_id: *cortical_id,
             width,
             height,
             depth,

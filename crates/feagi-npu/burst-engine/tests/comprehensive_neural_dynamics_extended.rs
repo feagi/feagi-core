@@ -6,10 +6,9 @@
 //! - Combined parameter stress tests
 
 use feagi_npu_burst_engine::{RustNPU, backend::CPUBackend};
-use feagi_npu_neural::{SynapticWeight, SynapticConductance, SynapseType, NeuronId};
+use feagi_npu_neural::NeuronId;
 use feagi_npu_runtime::StdRuntime;
-use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
-use ahash::AHashMap;
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
 /// Create a standard NPU for testing
 fn create_test_npu() -> RustNPU<StdRuntime, f32, CPUBackend> {
@@ -82,10 +81,10 @@ fn test_consecutive_fire_limit_blocks_after_limit() {
     }
     
     // Should fire for first 3 bursts, then be blocked
-    assert_eq!(fire_results[0], true, "Should fire on burst 1");
-    assert_eq!(fire_results[1], true, "Should fire on burst 2");
-    assert_eq!(fire_results[2], true, "Should fire on burst 3");
-    assert_eq!(fire_results[3], false, "Should be blocked on burst 4 (hit limit)");
+    assert!(fire_results[0], "Should fire on burst 1");
+    assert!(fire_results[1], "Should fire on burst 2");
+    assert!(fire_results[2], "Should fire on burst 3");
+    assert!(!fire_results[3], "Should be blocked on burst 4 (hit limit)");
     // Note: Burst 5 behavior depends on whether snooze/extended refractory is applied
 }
 
@@ -257,7 +256,7 @@ fn test_leak_and_refractory_interaction() {
     // Burst 5: Out of refractory, but MP should have leaked significantly
     // Need high injection to fire again
     npu.inject_sensory_with_potentials(&[(neuron, 50.0)]);
-    let result5 = npu.process_burst().unwrap();
+    let _result5 = npu.process_burst().unwrap();
     // May or may not fire depending on how much leaked during refractory
 }
 
@@ -291,7 +290,7 @@ fn test_consecutive_limit_and_refractory_interaction() {
     // Burst 5: Would be third fire, but should be blocked by consecutive fire limit (limit=2)
     // After hitting limit, neuron gets extended refractory (snooze period)
     npu.inject_sensory_with_potentials(&[(neuron, 10.0)]);
-    let result5 = npu.process_burst().unwrap();
+    let _result5 = npu.process_burst().unwrap();
     // Consecutive fire limit triggers extended refractory, so it won't fire
     // This test documents the interaction - may fire or not depending on snooze period
 }

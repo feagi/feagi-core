@@ -335,7 +335,7 @@ fn convert_properties_to_flat(
             .get(*prop_key)
             .cloned()
             .or_else(|| required_defaults.get(prop_key).cloned())
-            .unwrap_or_else(|| json!(null));
+            .unwrap_or(Value::Null);
 
         // Debug logging for key properties
         let debug_props = ["mp_driven_psp", "snooze_length", "consecutive_fire_cnt_max", 
@@ -375,9 +375,7 @@ fn convert_properties_to_flat(
                     flat_blueprint.insert(format!("{}-cx-2dcory-i", prefix), coords[1].clone());
                 }
             }
-        } else if key == "block_boundaries" {
-            // Skip - already handled in convert_area_to_flat
-        } else if key == "relative_coordinate" {
+        } else if key == "block_boundaries" || key == "relative_coordinate" {
             // Skip - already handled in convert_area_to_flat
         } else if key == "cortical_group" {
             // Map cortical_group to _group-t (overrides group_id default)
@@ -515,7 +513,7 @@ mod tests {
         // Create test areas with different cortical types
         let opu_id = CorticalID::try_from_base_64("b2ltZwkAAAA=").unwrap();
         let opu_area = CorticalArea::new(
-            opu_id.clone(),
+            opu_id,
             0,
             "Test OPU".to_string(),
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
@@ -527,7 +525,7 @@ mod tests {
 
         let ipu_id = CorticalID::try_from_base_64("aXN2aQkABAA=").unwrap();
         let ipu_area = CorticalArea::new(
-            ipu_id.clone(),
+            ipu_id,
             1,
             "Test IPU".to_string(),
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
@@ -537,8 +535,8 @@ mod tests {
             )),
         ).unwrap();
 
-        genome.cortical_areas.insert(opu_id.clone(), opu_area);
-        genome.cortical_areas.insert(ipu_id.clone(), ipu_area);
+        genome.cortical_areas.insert(opu_id, opu_area);
+        genome.cortical_areas.insert(ipu_id, ipu_area);
 
         // Convert to flat format
         let flat = convert_hierarchical_to_flat(&genome).unwrap();

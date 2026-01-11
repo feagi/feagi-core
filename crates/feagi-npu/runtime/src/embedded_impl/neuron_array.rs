@@ -520,6 +520,7 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
     }
 
     /// Optimized version that accepts separate slices to avoid tuple allocation
+    #[cfg(any(feature = "std", feature = "alloc"))]
     fn batch_coordinate_lookup_from_slices(
         &self,
         cortical_area: u32,

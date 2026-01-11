@@ -17,7 +17,7 @@ mod test_cortical_area {
     use super::*;
 
     /// Tests for cortical_area/cortical_area.rs
-    mod test_cortical_area {
+    mod cortical_area_tests {
         use super::*;
         use feagi_structures::genomic::cortical_area::CorticalArea;
         use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
@@ -1446,7 +1446,6 @@ mod test_cortical_area {
 
 #[cfg(test)]
 mod test_descriptors {
-    use super::*;
     use feagi_structures::genomic::descriptors::GenomeCoordinate;
 
     #[test]

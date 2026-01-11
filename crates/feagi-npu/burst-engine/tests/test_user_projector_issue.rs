@@ -1,9 +1,9 @@
-/// Test to reproduce user's projector issue:
-/// - Area A: 1x1x1 (1 neuron) with PSP=1, psp_uniform=false
-/// - Area B: 1x10x1 (10 neurons) with threshold=10, mp_acc=false
-/// - 1 neuron in A connected to ALL 10 neurons in B (projector behavior)
-/// - Expected: PSP divided 1/10 = 0, NO neurons fire
-/// - Actual (reported): ALL neurons fire!
+//! Test to reproduce user's projector issue:
+//! - Area A: 1x1x1 (1 neuron) with PSP=1, psp_uniform=false
+//! - Area B: 1x10x1 (10 neurons) with threshold=10, mp_acc=false
+//! - 1 neuron in A connected to ALL 10 neurons in B (projector behavior)
+//! - Expected: PSP divided 1/10 = 0, NO neurons fire
+//! - Actual (reported): ALL neurons fire!
 
 use feagi_npu_burst_engine::npu::RustNPU;
 use feagi_npu_burst_engine::backend::CPUBackend;

@@ -706,11 +706,9 @@ impl GenomeServiceImpl {
             // Get base threshold for spatial gradient updates
             let base_threshold = {
                 let manager = self.connectome.read();
-                if let Some(area) = manager.get_cortical_area(&cortical_id_typed) {
-                    Some(area.firing_threshold())
-                } else {
-                    None
-                }
+                manager
+                    .get_cortical_area(&cortical_id_typed)
+                    .map(|area| area.firing_threshold())
             };
 
             for (param_name, value) in &changes {
@@ -2283,7 +2281,7 @@ impl GenomeServiceImpl {
                     let mut layer_created = 0u32;
                     let neurons_per_row = (width * neurons_per_voxel) as usize;
                     let rows_per_batch = (BATCH_SIZE / neurons_per_row).max(1);
-                    let total_row_batches = (height as usize + rows_per_batch - 1) / rows_per_batch;
+                    let total_row_batches = (height as usize).div_ceil(rows_per_batch);
                     
                     if z_layer == 0 {
                         info!(

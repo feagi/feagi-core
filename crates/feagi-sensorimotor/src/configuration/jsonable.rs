@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use serde::{Deserialize, Serialize};
 use feagi_structures::FeagiDataError;
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth};
@@ -67,30 +68,40 @@ impl JSONInputOutputDefinition {
     }
     
     pub fn insert_motor(&mut self, motor: MotorCorticalUnit, unit_definition: JSONUnitDefinition, decoder_properties: JSONDecoderProperties) {
-        if !self.output_units_and_decoder_properties.contains_key(&motor) {
-            self.output_units_and_decoder_properties.insert(motor.clone(), vec![(unit_definition, decoder_properties)]);
-            return;
+        match self.output_units_and_decoder_properties.entry(motor) {
+            Entry::Vacant(e) => {
+                e.insert(vec![(unit_definition, decoder_properties)]);
+            }
+            Entry::Occupied(mut e) => {
+                e.get_mut().push((unit_definition, decoder_properties));
+            }
         }
-        let vec = self.output_units_and_decoder_properties.get_mut(&motor).unwrap();
-        vec.push((unit_definition, decoder_properties));
     }
     
     pub fn insert_sensor(&mut self, sensor: SensoryCorticalUnit, unit_definition: JSONUnitDefinition, encoder_properties: JSONEncoderProperties) {
-        if !self.input_units_and_encoder_properties.contains_key(&sensor) {
-            self.input_units_and_encoder_properties.insert(sensor.clone(), vec![(unit_definition, encoder_properties)]);
-            return;
+        match self.input_units_and_encoder_properties.entry(sensor) {
+            Entry::Vacant(e) => {
+                e.insert(vec![(unit_definition, encoder_properties)]);
+            }
+            Entry::Occupied(mut e) => {
+                e.get_mut().push((unit_definition, encoder_properties));
+            }
         }
-        let vec = self.input_units_and_encoder_properties.get_mut(&sensor).unwrap();
-        vec.push((unit_definition, encoder_properties));
     }
 
-    pub fn get_feedbacks(&self) -> &FeedbackRegistrar {
+    pub(crate) fn get_feedbacks(&self) -> &FeedbackRegistrar {
         &self.feedbacks
     }
-    pub fn set_feedbacks(&mut self, feedbacks: FeedbackRegistrar) {
+    pub(crate) fn set_feedbacks(&mut self, feedbacks: FeedbackRegistrar) {
         self.feedbacks = feedbacks;
     }
 
+}
+
+impl Default for JSONInputOutputDefinition {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 
@@ -158,7 +169,7 @@ impl JSONEncoderProperties {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
                 BooleanNeuronVoxelXYZPEncoder::new_box(
-                    *cortical_ids.get(0).unwrap(),
+                    *cortical_ids.first().unwrap(),
                     number_channels,
                 )
             }
@@ -167,7 +178,7 @@ impl JSONEncoderProperties {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
                 CartesianPlaneNeuronVoxelXYZPEncoder::new_box(
-                    *cortical_ids.get(0).unwrap(),
+                    *cortical_ids.first().unwrap(),
                     image_frame,
                     number_channels
                 )
@@ -177,7 +188,7 @@ impl JSONEncoderProperties {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
                 MiscDataNeuronVoxelXYZPEncoder::new_box(
-                    *cortical_ids.get(0).unwrap(),
+                    *cortical_ids.first().unwrap(),
                     *misc_data_dimensions,
                     number_channels
                 )
@@ -187,7 +198,7 @@ impl JSONEncoderProperties {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
                 PercentageNeuronVoxelXYZPEncoder::new_box(
-                    *cortical_ids.get(0).unwrap(),
+                    *cortical_ids.first().unwrap(),
                     *neuron_depth,
                     number_channels,
                     *percentage,
@@ -279,7 +290,7 @@ impl JSONDecoderProperties {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
                 crate::neuron_voxel_coding::xyzp::decoders::CartesianPlaneNeuronVoxelXYZPDecoder::new_box(
-                    *cortical_ids.get(0).unwrap(),
+                    *cortical_ids.first().unwrap(),
                     image_frame_properties,
                     number_channels,
                 )
@@ -289,7 +300,7 @@ impl JSONDecoderProperties {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
                 MiscDataNeuronVoxelXYZPDecoder::new_box(
-                    *cortical_ids.get(0).unwrap(), // Eccentricity
+                    *cortical_ids.first().unwrap(), // Eccentricity
                     *misc_data_dimensions,
                     number_channels
                 )
@@ -299,7 +310,7 @@ impl JSONDecoderProperties {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
                 PercentageNeuronVoxelXYZPDecoder::new_box(
-                    *cortical_ids.get(0).unwrap(), // Eccentricity
+                    *cortical_ids.first().unwrap(), // Eccentricity
                     *neuron_depth,
                     number_channels,
                     *percentage_neuron_positioning,
@@ -312,7 +323,7 @@ impl JSONDecoderProperties {
                     return Err(FeagiDataError::InternalError("Expected two cortical ids!".to_string()));
                 }
                 GazePropertiesNeuronVoxelXYZPDecoder::new_box(
-                    *cortical_ids.get(0).unwrap(), // Eccentricity
+                    *cortical_ids.first().unwrap(), // Eccentricity
                     *cortical_ids.get(1).unwrap(),  // Modularity
                     *eccentricity_neuron_depth,
                     *modularity_neuron_depth,
@@ -325,7 +336,7 @@ impl JSONDecoderProperties {
                     return Err(FeagiDataError::InternalError("Expected three cortical ids for ImageFilteringSettings!".to_string()));
                 }
                 ImageFilteringSettingsNeuronVoxelXYZPDecoder::new_box(
-                    *cortical_ids.get(0).unwrap(), // Brightness
+                    *cortical_ids.first().unwrap(), // Brightness
                     *cortical_ids.get(1).unwrap(), // Contrast
                     *cortical_ids.get(2).unwrap(), // Diff threshold
                     *brightness_z_depth,
@@ -396,7 +407,6 @@ impl JSONDecoderProperties {
 //region Device Properties
 /// A Dictionary structure that allows developers to tag custom information to
 /// device groupings (channels).
-
 pub type JSONDeviceProperties = HashMap<String, JSONDevicePropertyValue>;
 
 /// User defined key for custom properties per channel, which can be useful in describing hardware

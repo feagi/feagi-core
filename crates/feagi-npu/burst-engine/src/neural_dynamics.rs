@@ -40,7 +40,7 @@ use feagi_npu_neural::{apply_leak, excitability_random, update_neurons_lif_batch
 /// Runtime-gated tracing config for neural dynamics.
 /// Enable with:
 /// - FEAGI_NPU_TRACE_DYNAMICS=1
-/// Optional filters:
+///   Optional filters:
 /// - FEAGI_NPU_TRACE_NEURON=<u32 neuron_id> (single neuron)
 struct DynamicsTraceCfg {
     enabled: bool,

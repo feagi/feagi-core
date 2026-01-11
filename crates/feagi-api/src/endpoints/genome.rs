@@ -738,7 +738,7 @@ pub async fn get_cortical_template(
 
                             let seen = per_subunit_dedup
                                 .entry(subunit_key.clone())
-                                .or_insert_with(std::collections::HashSet::new);
+                                .or_default();
                             if !seen.insert(dedup_key) {
                                 continue;
                             }
@@ -846,7 +846,7 @@ pub async fn get_cortical_template(
 
                             let seen = per_subunit_dedup
                                 .entry(subunit_key.clone())
-                                .or_insert_with(std::collections::HashSet::new);
+                                .or_default();
                             if !seen.insert(dedup_key) {
                                 continue;
                             }

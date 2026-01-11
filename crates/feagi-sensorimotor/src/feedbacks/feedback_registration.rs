@@ -2,7 +2,6 @@ use std::fmt::{Display, Formatter};
 use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use feagi_structures::{FeagiDataError, FeagiSignalIndex};
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelIndex, CorticalUnitIndex};
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use crate::caching::{MotorDeviceCache, SensorDeviceCache};
 use crate::data_pipeline::PipelineStageProperties;
@@ -126,7 +125,7 @@ fn feedback_segmented_vision_with_gaze(target: &FeedbackRegistrationTargets, sen
         let stage_properties = sensors.segmented_vision_get_single_stage_properties(sensor_unit, sensor_channel, 0.into()).unwrap();
         let new_properties: PipelineStageProperties = match stage_properties {
             PipelineStageProperties::ImageFrameSegmentator { input_image_properties, output_image_properties, segmentation_gaze: _ } => {
-                PipelineStageProperties::ImageFrameSegmentator { input_image_properties: input_image_properties, output_image_properties: output_image_properties, segmentation_gaze: gaze_properties }
+                PipelineStageProperties::ImageFrameSegmentator { input_image_properties, output_image_properties, segmentation_gaze: gaze_properties }
             }
             _ => {
                 panic!("Invalid pipeline stage properties for segmented gaze vision feedback!")
@@ -157,7 +156,7 @@ fn feedback_segmented_vision_with_image_filtering(target: &FeedbackRegistrationT
         let mut sensors = sensor_ref.lock().unwrap();
         let stage_properties = sensors.segmented_vision_get_single_stage_properties(sensor_unit, sensor_channel, 0.into()).unwrap();
         let new_properties: PipelineStageProperties = match stage_properties {
-            PipelineStageProperties::ImageQuickDiff { per_pixel_allowed_range, acceptable_amount_of_activity_in_image, image_properties } => {
+            PipelineStageProperties::ImageQuickDiff { image_properties, .. } => {
                 let pixel_range = image_filtering_settings.per_pixel_diff_threshold.a.get_as_u8()..=image_filtering_settings.per_pixel_diff_threshold.b.get_as_u8();
                 let image_range = image_filtering_settings.image_diff_threshold.a ..= image_filtering_settings.image_diff_threshold.b;
 
@@ -196,7 +195,7 @@ fn feedback_simple_vision_with_image_filtering(target: &FeedbackRegistrationTarg
         let mut sensors = sensor_ref.lock().unwrap();
         let stage_properties = sensors.vision_get_single_stage_properties(sensor_unit, sensor_channel, 0.into()).unwrap();
         let new_properties: PipelineStageProperties = match stage_properties {
-            PipelineStageProperties::ImageQuickDiff { per_pixel_allowed_range, acceptable_amount_of_activity_in_image, image_properties } => {
+            PipelineStageProperties::ImageQuickDiff { image_properties, .. } => {
                 let pixel_range = image_filtering_settings.per_pixel_diff_threshold.a.get_as_u8()..=image_filtering_settings.per_pixel_diff_threshold.b.get_as_u8();
                 let image_range = image_filtering_settings.image_diff_threshold.a ..= image_filtering_settings.image_diff_threshold.b;
 

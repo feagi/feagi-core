@@ -73,12 +73,7 @@ impl PerceptionDecoderConfig {
         let cortical_ids = self.cortical_ids();
         let output_count = cortical_ids.len();
 
-        let group = u8::try_from(self.cortical_unit_id).map_err(|_| {
-            SdkError::InvalidConfiguration(format!(
-                "cortical_unit_id {} out of range for u8 group",
-                self.cortical_unit_id
-            ))
-        })?;
+        let group = self.cortical_unit_id;
 
         let config = AgentConfig::new(self.agent_id.clone(), AgentType::Motor)
             .with_registration_endpoint(format!(

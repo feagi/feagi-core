@@ -951,18 +951,18 @@ impl Neuroembryogenesis {
             use feagi_npu_plasticity::{PlasticityExecutor, MemoryNeuronLifecycleConfig};
             
             let manager = self.connectome_manager.read();
-            if let Some(ref executor) = manager.get_plasticity_executor() {
+            if let Some(executor) = manager.get_plasticity_executor() {
                 let mut registered_count = 0;
                 
                 // Iterate through all cortical areas and register memory areas
                 for area_id in manager.get_cortical_area_ids() {
                     if let Some(area) = manager.get_cortical_area(area_id) {
                         if let Some(mem_props) = extract_memory_properties(&area.properties) {
-                            let upstream_areas = manager.get_upstream_cortical_areas(&area_id);
+                            let upstream_areas = manager.get_upstream_cortical_areas(area_id);
 
                             // Ensure FireLedger tracks upstream areas with at least the required temporal depth.
                             // Dense, burst-aligned tracking is required for correct memory pattern hashing.
-                            if let Some(ref npu_arc) = manager.get_npu() {
+                            if let Some(npu_arc) = manager.get_npu() {
                                 if let Ok(mut npu) = npu_arc.lock() {
                                     let existing_configs = npu.get_all_fire_ledger_configs();
                                     for &upstream_idx in &upstream_areas {

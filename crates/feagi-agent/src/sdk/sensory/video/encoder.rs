@@ -45,6 +45,7 @@ pub struct VideoEncoder {
     mode: EncoderMode,
 }
 
+#[allow(clippy::large_enum_variant)]
 enum EncoderMode {
     Simple {
         processor: ImageFrameProcessor,

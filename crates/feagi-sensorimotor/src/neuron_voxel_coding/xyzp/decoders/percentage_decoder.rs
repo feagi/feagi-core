@@ -71,7 +71,7 @@ impl PercentageNeuronVoxelXYZPDecoder {
             cortical_read_target,
             interpolation,
             is_signed,
-            number_percentages: number_percentages,
+            number_percentages,
             z_depth_scratch_space: vec![Vec::new(); scratch_size],
             z_depth_scratch_space_negative,
         };

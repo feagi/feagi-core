@@ -299,7 +299,7 @@ impl AgentClient {
                 std::thread::sleep(std::time::Duration::from_millis(100)); // Brief delay
                 
                 // Recursive retry (only once - avoid infinite loop)
-                return self.register_with_retry_once();
+                self.register_with_retry_once()
             } else {
                 error!("[CLIENT] ✗ Registration failed: {}", message);
                 Err(SdkError::RegistrationFailed(message.to_string()))
@@ -779,7 +779,7 @@ impl AgentClient {
                 );
 
                 // Check if more frames are available (multipart)
-                let (topic_opt, data) = if socket.get_rcvmore().map_err(SdkError::Zmq)? {
+                let (_topic_opt, data) = if socket.get_rcvmore().map_err(SdkError::Zmq)? {
                     // First frame is the topic, second frame is the motor data
                     let topic = first_frame;
                     trace!(

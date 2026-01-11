@@ -107,6 +107,7 @@ impl AgentID {
     }
 
     /// Serialize to a fixed-size byte array
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_bytes(&self) -> [u8; Self::SIZE_BYTES] {
         let mut bytes = [0u8; Self::SIZE_BYTES];
         let mut offset = 0;
@@ -183,6 +184,7 @@ impl AgentID {
     }
 
     /// Encode the AgentID to a base64 string
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_base64(&self) -> String {
         general_purpose::STANDARD.encode(self.to_bytes())
     }

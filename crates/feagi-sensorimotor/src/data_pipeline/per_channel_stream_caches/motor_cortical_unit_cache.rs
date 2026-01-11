@@ -87,7 +87,7 @@ impl MotorCorticalUnitCache {
 
             pipeline_runner.try_update_all_stage_properties(device_group.pipeline_stages.clone())?;
             pipeline_runner.set_channel_friendly_name(device_group.friendly_name.clone());
-            pipeline_runner.set_channel_index_override(device_group.channel_index_override.clone());
+            pipeline_runner.set_channel_index_override(device_group.channel_index_override);
             pipeline_runner.set_json_device_properties(device_group.device_properties.clone());
         }
 

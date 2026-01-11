@@ -81,7 +81,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
         JSONDecoderProperties::GazeProperties(
             NeuronDepth::new(self.channel_eccentricity_dimensions.depth).unwrap(),
             NeuronDepth::new(self.channel_modularity_dimensions.depth).unwrap(),
-            self.interpolation.into(),
+            self.interpolation,
         )
     }
 

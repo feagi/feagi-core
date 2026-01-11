@@ -16,6 +16,7 @@ use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
+use feagi_npu_burst_engine::TracingMutex;
 use feagi_npu_runtime::StdRuntime;
 use feagi_services::impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
@@ -23,7 +24,7 @@ use feagi_services::impls::{
 };
 use parking_lot::RwLock;
 use serde_json::{json, Value};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 // tower::util::ServiceExt requires the "util" feature which may not be enabled
 // Using axum's test utilities instead
 
@@ -34,7 +35,10 @@ async fn create_test_server() -> axum::Router {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let npu_result = RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).unwrap();
-    let npu = Arc::new(Mutex::new(DynamicNPU::F32(npu_result)));
+    let npu = Arc::new(TracingMutex::new(
+        DynamicNPU::F32(npu_result),
+        "api-contract-test-npu",
+    ));
 
     // Create isolated ConnectomeManager for testing (bypasses singleton)
     let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
@@ -200,6 +204,7 @@ async fn create_test_server() -> axum::Router {
         system_service,
         snapshot_service: None,
         feagi_session_timestamp,
+        memory_stats_cache: None,
         #[cfg(feature = "feagi-agent")]
         agent_connectors: ApiState::init_agent_connectors(),
     };

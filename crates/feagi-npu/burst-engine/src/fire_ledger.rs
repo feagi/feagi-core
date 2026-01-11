@@ -186,7 +186,7 @@ impl FireLedger {
         for (&cortical_idx, hist) in self.tracked.iter_mut() {
             let bitmap = fired_bitmaps
                 .remove(&cortical_idx)
-                .unwrap_or_else(RoaringBitmap::new);
+                .unwrap_or_default();
             hist.push_frame(timestep, bitmap);
         }
 

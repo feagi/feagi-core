@@ -11,12 +11,14 @@
 use feagi_npu_burst_engine::backend;
 #[allow(unused_imports)]
 use feagi_npu_neural::types::FireCandidateList;
+#[cfg(feature = "gpu")]
 use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
 #[cfg(feature = "gpu")]
 use std::time::Instant;
 
 /// Create test genome with specified size
+#[cfg(feature = "gpu")]
 fn create_test_genome(
     neuron_count: usize,
     synapses_per_neuron: usize,
@@ -67,6 +69,7 @@ fn create_test_genome(
 }
 
 /// Simulate firing neurons (1% firing rate)
+#[cfg(feature = "gpu")]
 fn create_fired_neurons(neuron_count: usize) -> Vec<u32> {
     let fire_count = (neuron_count as f32 * 0.01).max(10.0) as usize;
     (0..fire_count)

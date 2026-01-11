@@ -63,7 +63,7 @@ fn create_test_area(name: &str, width: u32, height: u32, depth: u32, idx: u32) -
     let cortical_type = CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire);
     
     let area = CorticalArea::new(
-        cortical_id.clone(),
+        cortical_id,
         idx,
         format!("Test Area {}", name),
         CorticalAreaDimensions::new(width, height, depth).unwrap(),
@@ -436,7 +436,7 @@ fn test_multiple_morphology_rules() {
     println!("Created {} synapses via multiple morphology rules", synapse_count);
     
     // Verify synapses were created (should be more than 0, but exact count depends on randomness)
-    assert!(synapse_count >= 0, "Should create non-negative number of synapses");
+    // synapse_count is unsigned; non-negative is guaranteed.
 
     println!("✅ Test 6: Multiple morphology rules - PASSED");
 }

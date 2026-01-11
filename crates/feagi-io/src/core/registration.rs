@@ -678,7 +678,7 @@ impl RegistrationHandler {
                         .to_vec(),
                     };
 
-                    all_ids.extend(cortical_ids.into_iter().map(|id| (id.as_base_64(), motor_unit.clone())));
+                    all_ids.extend(cortical_ids.into_iter().map(|id| (id.as_base_64(), motor_unit)));
                 }
 
                 all_ids
@@ -747,7 +747,7 @@ impl RegistrationHandler {
 
                 cortical_ids
                     .into_iter()
-                    .map(|id| (id.as_base_64(), motor_unit.clone()))
+                    .map(|id| (id.as_base_64(), motor_unit))
                     .collect()
             } else {
                 // Legacy motor.source_cortical_areas are no longer supported

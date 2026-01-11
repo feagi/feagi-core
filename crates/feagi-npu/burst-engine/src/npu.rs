@@ -670,6 +670,7 @@ impl<
     /// z_offset: Starting z-coordinate (allows creating neurons at specific depth layers)
     /// y_offset: Starting y-coordinate (allows creating neurons at specific row ranges)
     /// This enables batched neuron creation that releases the NPU lock between batches
+    #[allow(clippy::too_many_arguments)]
     pub fn create_cortical_area_neurons_with_z_offset(
         &mut self,
         cortical_idx: u32,
@@ -721,6 +722,7 @@ impl<
     /// y_offset: Starting y-coordinate (allows creating neurons at specific row ranges)
     /// z_offset: Starting z-coordinate (allows creating neurons at specific depth layers)
     /// This enables fine-grained batched neuron creation that releases the NPU lock frequently
+    #[allow(clippy::too_many_arguments)]
     pub fn create_cortical_area_neurons_with_offsets(
         &mut self,
         cortical_idx: u32,
@@ -1087,10 +1089,10 @@ impl<
                     continue;
                 }
                 let target = synapse_storage.target_neurons()[syn_idx];
-                if target_set.contains(&target) {
-                    if synapse_storage.remove_synapse(syn_idx).is_ok() {
-                        removed += 1;
-                    }
+                if target_set.contains(&target)
+                    && synapse_storage.remove_synapse(syn_idx).is_ok()
+                {
+                    removed += 1;
                 }
             }
         }
@@ -1537,7 +1539,7 @@ impl<
         // Log timing info: WARN if slow (>20ms), INFO every 100 bursts, DEBUG for all bursts
         // Lowered threshold from 50ms to 20ms to catch more performance issues
         let is_slow = total_duration.as_millis() > 20;
-        let should_log = is_slow || (burst_count % 100 == 0);
+        let should_log = is_slow || burst_count.is_multiple_of(100);
         
         if should_log {
             let neuron_count = neuron_storage.count();
@@ -3139,7 +3141,7 @@ impl<
     /// This eliminates expensive O(n) scans on first access to get_neurons_in_cortical_area.
     /// NOTE: Currently cache is built lazily on first access. To optimize, add prepopulate
     /// method to NeuronStorage trait and call it here after neurons are loaded.
-
+    ///
     /// Get number of neurons in a specific cortical area
     pub fn get_cortical_area_neuron_count(&self, cortical_area: u32) -> usize {
         self.neuron_storage
@@ -3431,6 +3433,7 @@ struct InjectionResult {
 ///
 /// 🔋 Power neurons are identified by cortical_idx = 1 (_power area)
 /// No separate list - scans neuron array directly!
+#[allow(clippy::too_many_arguments)]
 fn phase1_injection_with_synapses<
     T: NeuralValue,
     N: NeuronStorage<Value = T>,

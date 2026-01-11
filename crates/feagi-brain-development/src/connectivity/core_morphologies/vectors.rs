@@ -13,6 +13,7 @@ use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 
 /// Apply vector offset morphology directly on NPU with explicit dimensions
+#[allow(clippy::too_many_arguments)]
 pub fn apply_vectors_morphology_with_dimensions(
     npu: &mut feagi_npu_burst_engine::DynamicNPU,
     src_area_id: u32,
@@ -83,6 +84,7 @@ pub fn apply_vectors_morphology_with_dimensions(
 /// NOTE: This function calculates dimensions by scanning neurons (expensive).
 /// For better performance, use `apply_vectors_morphology_with_dimensions` with
 /// dimensions from ConnectomeManager.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_vectors_morphology(
     npu: &mut feagi_npu_burst_engine::DynamicNPU,
     src_area_id: u32,

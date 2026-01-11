@@ -36,6 +36,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, error, info, trace, warn};
 
+type BrainRegionIoRegistry = HashMap<String, (Vec<String>, Vec<String>)>;
+
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use crate::types::{BduError, BduResult};
 use feagi_npu_neural::types::NeuronId;
@@ -216,7 +218,7 @@ impl ConnectomeManager {
     ///
     /// Tuple of (chunk_x, chunk_y, chunk_z) that divides evenly into dimensions
     ///
-
+    ///
     /// Create a new isolated instance for testing
     ///
     /// This bypasses the singleton pattern and creates a fresh instance.
@@ -553,7 +555,7 @@ impl ConnectomeManager {
     /// for downstream persistence into `RuntimeGenome`.
     pub fn recompute_brain_region_io_registry(
         &mut self,
-    ) -> BduResult<HashMap<String, (Vec<String>, Vec<String>)>> {
+    ) -> BduResult<BrainRegionIoRegistry> {
         use std::collections::HashSet;
 
         let region_ids: Vec<String> = self
@@ -1451,6 +1453,7 @@ impl ConnectomeManager {
     /// * `src_area_id`, `dst_area_id` - Source and destination area IDs
     /// * `src_idx`, `dst_idx` - Source and destination area indices
     /// * `weight`, `conductance`, `synapse_attractivity` - Synapse parameters
+    #[allow(clippy::too_many_arguments)]
     fn apply_function_morphology(
         &self,
         morphology_id: &str,
@@ -1543,7 +1546,7 @@ impl ConnectomeManager {
                     // Object format: get from morphology_scalar array
                     if let Some(scalar_arr) = obj.get("morphology_scalar").and_then(|v| v.as_array()) {
                         // Use first element as scalar (or default to 1)
-                        scalar_arr.get(0).and_then(|v| v.as_i64()).unwrap_or(1) as u32
+                        scalar_arr.first().and_then(|v| v.as_i64()).unwrap_or(1) as u32
                     } else {
                         1 // @architecture:acceptable - default scalar
                     }
@@ -2475,7 +2478,7 @@ impl ConnectomeManager {
         if total_synapses > 0 {
             if let Some(state_manager) = StateManager::instance().try_read() {
                 let core_state = state_manager.get_core_state();
-                core_state.add_synapse_count(total_synapses as u32);
+                core_state.add_synapse_count(total_synapses);
             }
         }
 
@@ -3087,7 +3090,7 @@ impl ConnectomeManager {
                 death_id,
                 0, // Will be overridden by add_cortical_area to 0
                 "_death".to_string(),
-                core_dimensions.clone(),
+                core_dimensions,
                 core_position,
                 CorticalAreaType::Core(CoreCorticalType::Death),
             )
@@ -3113,7 +3116,7 @@ impl ConnectomeManager {
                 power_id,
                 1, // Will be overridden by add_cortical_area to 1
                 "_power".to_string(),
-                core_dimensions.clone(),
+                core_dimensions,
                 core_position,
                 CorticalAreaType::Core(CoreCorticalType::Power),
             )
@@ -3209,21 +3212,21 @@ impl ConnectomeManager {
         )?)
     }
 
-    /// Load genome from file and develop brain
-    ///
-    /// This is a high-level convenience method that:
-    /// 1. Loads genome from JSON file
-    /// 2. Prepares for new genome (clears existing state)
-    /// 3. Runs neuroembryogenesis to develop the brain
-    ///
-    /// # Arguments
-    ///
-    /// * `genome_path` - Path to genome JSON file
-    ///
-    /// # Returns
-    ///
-    /// Development progress information
-    ///
+    // Load genome from file and develop brain
+    //
+    // This was a high-level convenience method that:
+    // 1. Loads genome from JSON file
+    // 2. Prepares for new genome (clears existing state)
+    // 3. Runs neuroembryogenesis to develop the brain
+    //
+    // # Arguments
+    //
+    // * `genome_path` - Path to genome JSON file
+    //
+    // # Returns
+    //
+    // Development progress information
+    //
     // NOTE: load_from_genome_file() and load_from_genome() have been REMOVED.
     // All genome loading must now go through GenomeService::load_genome() which:
     // - Stores RuntimeGenome for persistence
@@ -3681,7 +3684,7 @@ impl ConnectomeManager {
         // CRITICAL: Update StateManager neuron count (for health_check endpoint)
         if let Some(state_manager) = StateManager::instance().try_read() {
             let core_state = state_manager.get_core_state();
-            core_state.add_neuron_count(neurons_created as u32);
+            core_state.add_neuron_count(neurons_created);
         }
 
         Ok(neuron_ids)

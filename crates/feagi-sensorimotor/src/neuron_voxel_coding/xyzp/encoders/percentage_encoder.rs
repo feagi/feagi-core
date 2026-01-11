@@ -26,8 +26,10 @@ enum ScratchSpace {
     D1(Vec<Vec<u32>>),
     D2(Vec<(Vec<u32>, Vec<u32>)>),
     D3(Vec<(Vec<u32>, Vec<u32>, Vec<u32>)>),
-    D4(Vec<(Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>)>),
+    D4(Vec<ScratchSpaceD4>),
 }
+
+type ScratchSpaceD4 = (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>);
 
 impl ScratchSpace {
     fn new(dims: PercentageChannelDimensionality, num_channels: usize) -> Self {

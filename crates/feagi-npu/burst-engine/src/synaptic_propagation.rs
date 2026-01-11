@@ -52,7 +52,7 @@ use tracing::trace;
 /// Runtime-gated tracing config for synaptic propagation.
 /// Enable with:
 /// - FEAGI_NPU_TRACE_SYNAPSE=1
-/// Optional filters:
+///   Optional filters:
 /// - FEAGI_NPU_TRACE_SRC=<u32 neuron_id>
 /// - FEAGI_NPU_TRACE_DST=<u32 neuron_id>
 struct SynapseTraceCfg {
@@ -284,7 +284,7 @@ impl SynapticPropagationEngine {
             .par_iter()
             .map(|&syn_idx| NeuronId(synapse_storage.source_neurons()[syn_idx]))
             .fold(
-                || AHashMap::<NeuronId, (Option<CorticalID>, usize)>::new(),
+                AHashMap::<NeuronId, (Option<CorticalID>, usize)>::new,
                 |mut acc, source_id| {
                     let entry = acc.entry(source_id).or_insert_with(|| {
                         let area = self.neuron_to_area.get(&source_id).copied();
@@ -295,7 +295,7 @@ impl SynapticPropagationEngine {
                 },
             )
             .reduce(
-                || AHashMap::new(),
+                AHashMap::new,
                 |mut a, b| {
                     for (id, (area, count)) in b {
                         let entry = a.entry(id).or_insert_with(|| (area, 0));
@@ -309,7 +309,7 @@ impl SynapticPropagationEngine {
             )
             .into_iter()
             .filter_map(|(source_id, (area_opt, synapse_count))| {
-                let area = area_opt?.clone();
+                let area = area_opt?;
                 let mp_driven = self.area_mp_driven_psp.get(&area).copied().unwrap_or(false);
                 let uniform = self.area_psp_uniform_distribution.get(&area).copied().unwrap_or(false);
                 Some((
@@ -341,7 +341,7 @@ impl SynapticPropagationEngine {
                 let target_neuron = NeuronId(synapse_storage.target_neurons()[syn_idx]);
 
                 // Get target cortical area (single lookup, can't optimize further - each synapse has unique target)
-                let cortical_area = self.neuron_to_area.get(&target_neuron)?.clone();
+                let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
 
                 // Get source neuron
                 let source_neuron = NeuronId(synapse_storage.source_neurons()[syn_idx]);

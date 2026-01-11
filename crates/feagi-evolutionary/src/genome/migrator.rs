@@ -452,22 +452,22 @@ mod tests {
         // IPU migrations - should return base64 IDs with Absolute frame handling
         let group_index: CorticalUnitIndex = 0.into();
         let frame_handling = FrameChangeHandling::Absolute;
-        let expected_svi0 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
+        let expected_svi0 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
             frame_handling,
             group_index,
         )[0]
         .as_base_64();
-        let expected_svi1 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
+        let expected_svi1 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
             frame_handling,
             group_index,
         )[1]
         .as_base_64();
-        let expected_svi4 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
+        let expected_svi4 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
             frame_handling,
             group_index,
         )[4]
         .as_base_64();
-        let expected_svi8 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
+        let expected_svi8 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
             frame_handling,
             group_index,
         )[8]
@@ -480,13 +480,13 @@ mod tests {
 
         // OPU migrations - should return base64 IDs with Absolute + Linear
         let positioning = PercentageNeuronPositioning::Linear;
-        let expected_mot0 = MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor(
+        let expected_mot0 = MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
             frame_handling,
             positioning,
             group_index,
         )[0]
         .as_base_64();
-        let expected_gaz0 = MotorCorticalUnit::get_cortical_ids_array_for_gaze_control(
+        let expected_gaz0 = MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
             frame_handling,
             positioning,
             group_index,

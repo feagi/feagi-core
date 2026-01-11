@@ -232,14 +232,16 @@ fn test_stdp_with_pattern_detection() {
 fn test_plasticity_service_basic_workflow() {
     use feagi_npu_burst_engine::backend::CPUBackend;
     use feagi_npu_burst_engine::DynamicNPU;
+    use feagi_npu_burst_engine::TracingMutex;
     use feagi_npu_runtime::StdRuntime;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use feagi_npu_plasticity::create_memory_stats_cache;
 
     let config = PlasticityConfig::default();
     let cache = create_memory_stats_cache();
-    let npu = Arc::new(Mutex::new(
+    let npu = Arc::new(TracingMutex::new(
         DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+        "plasticity-test-npu",
     ));
     let service = PlasticityService::new(config, cache, npu);
 

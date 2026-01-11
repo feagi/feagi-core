@@ -126,12 +126,7 @@ impl VideoEncoderConfig {
         // The sensory mappings are still used to register with burst engine; this is purely
         // to let the backend create the right IPU areas without requiring string/byte IDs.
         if matches!(self.encoding_strategy, VideoEncodingStrategy::SegmentedVision) {
-            let group = u8::try_from(self.cortical_unit_id).map_err(|_| {
-                SdkError::InvalidConfiguration(format!(
-                    "cortical_unit_id {} out of range for u8 group",
-                    self.cortical_unit_id
-                ))
-            })?;
+            let group = self.cortical_unit_id;
 
             config = config.with_vision_unit(
                 "camera",
@@ -150,12 +145,7 @@ impl VideoEncoderConfig {
     /// This sets agent type to `Both` and configures the motor endpoint so callers can poll
     /// motor packets (e.g. gaze) and feed them back into sensory processing pipelines.
     pub fn to_agent_config_with_motor_feedback(&self) -> Result<AgentConfig> {
-        let group = u8::try_from(self.cortical_unit_id).map_err(|_| {
-            SdkError::InvalidConfiguration(format!(
-                "cortical_unit_id {} out of range for u8 group",
-                self.cortical_unit_id
-            ))
-        })?;
+        let group = self.cortical_unit_id;
 
         let mut config = AgentConfig::new(self.agent_id.clone(), AgentType::Both)
             .with_registration_endpoint(format!(
