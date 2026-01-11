@@ -1,6 +1,6 @@
 [package]
 name = "feagi-brain-development"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -15,7 +15,7 @@ name = "feagi_brain_development"
 [dependencies]
 # Core types from existing FEAGI crates
 feagi-npu-neural = { version = "0.0.1-beta.1", path = "../feagi-npu/neural" }  # For types (CorticalArea, Dimensions, etc.)
-feagi-evolutionary = { version = "0.0.1-beta.1", path = "../feagi-evolutionary" }
+feagi-evolutionary = { version = "0.0.1-beta.2", path = "../feagi-evolutionary" }
 feagi-npu-plasticity = { version = "0.0.1-beta.1", path = "../feagi-npu/plasticity", optional = true }
 # feagi-burst-engine configured per-platform below
 feagi-structures = { workspace = true }

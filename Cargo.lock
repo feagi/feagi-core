@@ -1854,7 +1854,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-agent"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1881,7 +1881,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-api"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "argon2",
  "assert-json-diff",
@@ -1930,7 +1930,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-brain-development"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "ahash",
  "chrono",
@@ -1970,7 +1970,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-evolutionary"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "chrono",
  "env_logger",
@@ -1992,7 +1992,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-hal"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "anyhow",
  "cortex-m",
@@ -2013,7 +2013,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-io"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2156,7 +2156,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-services"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "async-trait",
  "chrono",
