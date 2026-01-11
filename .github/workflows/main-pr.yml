@@ -256,18 +256,23 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
 
+    - name: Build FEAGI HTTP API server (example)
+      run: |
+        set -euo pipefail
+        cargo build -p feagi-api --example http_api_server
+
     - name: Start FEAGI HTTP API server (example) in background
       run: |
         set -euo pipefail
         echo "Starting feagi-api example server..."
-        nohup cargo run -p feagi-api --example http_api_server > feagi-api-server.log 2>&1 &
+        nohup ./target/debug/examples/http_api_server > feagi-api-server.log 2>&1 &
         echo $! > feagi-api-server.pid
         echo "PID: $(cat feagi-api-server.pid)"
 
     - name: Wait for FEAGI HTTP API server to be ready
       run: |
         set -euo pipefail
-        for i in $(seq 1 60); do
+        for i in $(seq 1 180); do
           if curl -sf "http://127.0.0.1:8000/swagger-ui/" >/dev/null; then
             echo "Server is ready"
             exit 0
