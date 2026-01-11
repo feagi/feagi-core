@@ -65,6 +65,15 @@ pub struct AgentClient {
 
     /// Registration state
     registered: bool,
+
+    /// Last successful registration response body (JSON) returned by FEAGI.
+    ///
+    /// FEAGI registration is performed via "REST over ZMQ" and returns a wrapper:
+    /// `{ "status": 200, "body": { ... } }`. This field stores the `body` object.
+    ///
+    /// @cursor:ffi-safe - this is used by language bindings (Java JNI) to avoid
+    /// re-implementing FEAGI-specific response parsing in non-Rust SDKs.
+    last_registration_body: Option<serde_json::Value>,
 }
 
 impl AgentClient {
@@ -88,7 +97,15 @@ impl AgentClient {
             control_socket: None,
             heartbeat: None,
             registered: false,
+            last_registration_body: None,
         })
+    }
+
+    /// Get the last successful registration response body (JSON), if available.
+    ///
+    /// This is only set after a successful `connect()` / registration step.
+    pub fn registration_body_json(&self) -> Option<&serde_json::Value> {
+        self.last_registration_body.as_ref()
     }
 
     /// Connect to FEAGI and register the agent
@@ -279,6 +296,10 @@ impl AgentClient {
             .unwrap_or(500);
         if status_code == 200 {
             self.registered = true;
+            // Capture the `body` for downstream consumers (FFI bindings).
+            let empty_body = serde_json::json!({});
+            let body = response.get("body").unwrap_or(&empty_body);
+            self.last_registration_body = Some(body.clone());
             info!("[CLIENT] ✓ Registration successful: {:?}", response);
             Ok(())
         } else {
@@ -288,6 +309,8 @@ impl AgentClient {
                 .get("error")
                 .and_then(|m| m.as_str())
                 .unwrap_or("Unknown error");
+            // Clear any previously cached registration body on failure.
+            self.last_registration_body = None;
 
             // Check if already registered - try deregistration and retry
             if message.contains("already registered") {
@@ -354,6 +377,10 @@ impl AgentClient {
             .unwrap_or(500);
         if status_code == 200 {
             self.registered = true;
+            // Capture the `body` for downstream consumers (FFI bindings).
+            let empty_body = serde_json::json!({});
+            let body = response.get("body").unwrap_or(&empty_body);
+            self.last_registration_body = Some(body.clone());
             info!("[CLIENT] ✓ Registration successful (after retry): {:?}", response);
             Ok(())
         } else {
@@ -363,6 +390,7 @@ impl AgentClient {
                 .get("error")
                 .and_then(|m| m.as_str())
                 .unwrap_or("Unknown error");
+            self.last_registration_body = None;
             error!("[CLIENT] ✗ Registration retry failed: {}", message);
             Err(SdkError::RegistrationFailed(message.to_string()))
         }

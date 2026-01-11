@@ -8,7 +8,7 @@
 
 [package]
 name = "feagi"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
@@ -118,7 +118,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 edition = "2021"
 rust-version = "1.75"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
