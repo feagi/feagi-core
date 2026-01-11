@@ -28,7 +28,8 @@ fn test_firing_threshold_spatial_gradient_3d() {
     // X increment = 1.0 (threshold increases by 1.0 for each X position)
     // Y increment = 2.0 (threshold increases by 2.0 for each Y position)
     // Z increment = 5.0 (threshold increases by 5.0 for each Z position)
-    let cortical_idx = 1;
+    // Use a non-core cortical_idx to avoid implicit core neuron creation (0..=2).
+    let cortical_idx = 3;
     let width = 3;
     let height = 3;
     let depth = 2;
@@ -54,7 +55,7 @@ fn test_firing_threshold_spatial_gradient_3d() {
         increment_x,
         increment_y,
         increment_z,
-        0.0, // threshold_limit (no upper bound)
+        f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
         0.0, // leak_coefficient
         0.0, // resting_potential
         0,   // neuron_type
@@ -113,10 +114,10 @@ fn test_firing_threshold_spatial_gradient_3d() {
 fn test_firing_threshold_no_gradient() {
     // Test that when all increments are 0.0, all neurons get the base threshold
     let mut npu = RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1).unwrap();
-    npu.register_cortical_area(1, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
     
     let neuron_count = npu.create_cortical_area_neurons(
-        1,      // cortical_idx
+        3,      // cortical_idx
         2, 2, 2, // 2x2x2 = 8 neurons
         1,      // neurons_per_voxel
         50.0,   // base_threshold
@@ -144,16 +145,16 @@ fn test_firing_threshold_no_gradient() {
 fn test_firing_threshold_single_axis_gradient() {
     // Test gradient on X axis only
     let mut npu = RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1).unwrap();
-    npu.register_cortical_area(1, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
     
     let neuron_count = npu.create_cortical_area_neurons(
-        1,
+        3,
         5, 1, 1, // 5x1x1 = 5 neurons in a line along X
         1,
         100.0,   // base
         10.0,    // X increment
         0.0, 0.0, // Y and Z increments = 0
-        0.0,
+        f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
         0.0, 0.0, 0, 0, 1.0, 0, 0, false,
     ).expect("Neuron creation failed");
     
@@ -177,16 +178,16 @@ fn test_firing_threshold_single_axis_gradient() {
 fn test_firing_threshold_multiple_neurons_per_voxel() {
     // Test that all neurons in the same voxel get the same threshold
     let mut npu = RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1).unwrap();
-    npu.register_cortical_area(1, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
     
     let neuron_count = npu.create_cortical_area_neurons(
-        1,
+        3,
         2, 1, 1, // 2x1x1 = 2 voxels
         3,       // 3 neurons per voxel = 6 total
         20.0,    // base
         5.0,     // X increment
         0.0, 0.0,
-        0.0,
+        f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
         0.0, 0.0, 0, 0, 1.0, 0, 0, false,
     ).expect("Neuron creation failed");
     
@@ -213,16 +214,16 @@ fn test_firing_threshold_multiple_neurons_per_voxel() {
 fn test_firing_threshold_negative_gradient() {
     // Test that negative increments work (threshold decreases with position)
     let mut npu = RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1).unwrap();
-    npu.register_cortical_area(1, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
     
     let neuron_count = npu.create_cortical_area_neurons(
-        1,
+        3,
         3, 1, 1, // 3 neurons along X
         1,
         100.0,   // base
         -10.0,   // negative X increment (decreasing)
         0.0, 0.0,
-        0.0,
+        f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
         0.0, 0.0, 0, 0, 1.0, 0, 0, false,
     ).expect("Neuron creation failed");
     
