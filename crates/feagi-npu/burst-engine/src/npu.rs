@@ -4015,13 +4015,15 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 1000, 10000, 20,
             );
-        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        // Use a non-core cortical_idx to avoid auto-creating core neurons (0=_death, 1=_power, 2=_fatigue)
+        // which would shift neuron IDs and counts in this test.
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let id1 = npu
-            .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 3, 0, 0, 0)
             .unwrap();
         let id2 = npu
-            .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, 1, 0, 0)
+            .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 3, 1, 0, 0)
             .unwrap();
 
         assert_eq!(id1.0, 0);
@@ -4035,11 +4037,11 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         for i in 0..10 {
             let id = npu
-                .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, i, 0, 0)
+                .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 3, i, 0, 0)
                 .unwrap();
             assert_eq!(id.0, i);
         }
@@ -4053,26 +4055,26 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         // High threshold
         let _n1 = npu
-            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, u16::MAX, 0, true, 1, 0, 0, 0)
+            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, u16::MAX, 0, true, 3, 0, 0, 0)
             .unwrap();
 
         // High leak
         let _n2 = npu
-            .add_neuron(1.0, 0.0, 0.9, 0.0, 0, 0, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .add_neuron(1.0, 0.0, 0.9, 0.0, 0, 0, 1.0, 0, 0, true, 3, 1, 0, 0)
             .unwrap();
 
         // Long refractory period
         let _n3 = npu
-            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 100, 1.0, 0, 0, true, 1, 2, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 100, 1.0, 0, 0, true, 3, 2, 0, 0)
             .unwrap();
 
         // Low excitability
         let _n4 = npu
-            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 0.1, 0, 0, true, 1, 3, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 0.1, 0, 0, true, 3, 3, 0, 0)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 4);
@@ -4084,18 +4086,19 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
-        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
-        npu.register_cortical_area(3, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        // Use non-core area IDs to avoid implicit core neuron creation (0..=2).
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(4, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(5, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let _power = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 3, 0, 0, 0)
             .unwrap();
         let _area2 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 4, 0, 0, 0)
             .unwrap();
         let _area3 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 3, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 5, 0, 0, 0)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 3);
@@ -4107,10 +4110,10 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let _n1 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 5, 10, 15)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 3, 5, 10, 15)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 1);
@@ -4277,12 +4280,11 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 1000, 10000, 20,
             );
+        // Register core areas in order so the deterministic core neurons land at IDs 0/1/2.
+        npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
-
-        // Add a power neuron
-        let _power_neuron = npu
-            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
-            .unwrap();
+        // Ensure power injection exceeds threshold (>= vs > comparisons can differ by backend/encoding).
+        npu.set_power_amount(2.0);
 
         // Process burst with power injection
         let result = npu.process_burst().unwrap();
@@ -4313,6 +4315,8 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
+        // Register core areas in order so neuron ID 1 is the deterministic power neuron.
+        npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
@@ -4330,8 +4334,8 @@ mod tests {
 
         let result = npu.process_burst().unwrap();
 
-        // Should inject only cortical_area=1 neurons
-        assert_eq!(result.power_injections, 5);
+        // Power injection is an O(1) deterministic injection into neuron ID 1 (the core _power neuron).
+        assert_eq!(result.power_injections, 1);
     }
 
     #[test]
@@ -4340,11 +4344,8 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
+        npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
-
-        // Add power neuron with high threshold
-        npu.add_neuron(5.0, f32::MAX, 0.0, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, 0, 0, 0)
-            .unwrap();
 
         // Set high power amount
         npu.set_power_amount(10.0);
@@ -4365,15 +4366,15 @@ mod tests {
                 100, 1000, 10,
             );
         
-        // Use simple area IDs  - Power and Death are standard areas
-        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
-        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        // Use non-core area IDs to avoid implicit core neuron creation (0..=2).
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(4, CoreCorticalType::Death.to_cortical_id().as_base_64());
         
         // Area A: 1x1x1 with threshold 1.0, mp_acc=false
         let neuron_a = npu
             .add_neuron(
                 1.0,   // threshold
-                0.0,   // threshold_limit (0 = no limit)
+                f32::MAX,   // threshold_limit (MAX = no limit, SIMD-friendly encoding)
                 0.0,   // leak_coefficient (no leak)
                 0.0,   // resting_potential
                 0,     // neuron_type
@@ -4382,7 +4383,7 @@ mod tests {
                 0,     // consecutive_fire_limit (unlimited)
                 0,     // snooze_period
                 false, // mp_charge_accumulation=FALSE (reset each burst)
-                1,     // cortical_area (Power area)
+                3,     // cortical_area
                 0, 0, 0,
             )
             .unwrap();
@@ -4391,7 +4392,7 @@ mod tests {
         let neuron_b = npu
             .add_neuron(
                 1.1,   // threshold (HIGHER than PSP)
-                0.0,   // threshold_limit (0 = no limit)
+                f32::MAX,   // threshold_limit (MAX = no limit, SIMD-friendly encoding)
                 0.0,   // leak_coefficient (no leak)
                 0.0,   // resting_potential
                 0,     // neuron_type
@@ -4400,7 +4401,7 @@ mod tests {
                 0,     // consecutive_fire_limit
                 0,     // snooze_period
                 false, // mp_charge_accumulation=FALSE (reset each burst)
-                2,     // cortical_area (Death area - just a test area)
+                4,     // cortical_area
                 0, 0, 0,
             )
             .unwrap();
@@ -4498,17 +4499,16 @@ mod tests {
                 100, 1000, 10,
             );
 
-        // Avoid power auto-injection by NOT using cortical_area index 1.
-        // We still use a valid CorticalID string for propagation-engine mapping.
+        // Avoid core areas (0..=2) so the test doesn't rely on implicit deterministic core neurons.
         let cortical_id = CoreCorticalType::Death.to_cortical_id();
-        npu.register_cortical_area(2, cortical_id.as_base_64());
         npu.register_cortical_area(3, cortical_id.as_base_64());
+        npu.register_cortical_area(4, cortical_id.as_base_64());
 
-        // Source neuron in cortical_area=2 (will be the mp_driven_psp source area).
+        // Source neuron in cortical_area=3 (will be the mp_driven_psp source area).
         let neuron_src = npu
             .add_neuron(
                 1.0, // threshold
-                0.0, // threshold_limit (0 = no limit)
+                f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
                 0.0, // leak_coefficient
                 0.0, // resting_potential
                 0,   // neuron_type
@@ -4517,19 +4517,19 @@ mod tests {
                 0,   // consecutive_fire_limit
                 0,   // snooze_period
                 true, // mp_charge_accumulation
-                2,   // cortical_area
+                3,   // cortical_area
                 0,
                 0,
                 0,
             )
             .unwrap();
 
-        // Target neuron in cortical_area=3. Threshold=100 so it will fire only if it receives
+        // Target neuron in cortical_area=4. Threshold=100 so it will fire only if it receives
         // a conductance roughly >= 100 from mp_driven_psp propagation.
         let neuron_dst = npu
             .add_neuron(
                 100.0, // threshold
-                0.0,   // threshold_limit (0 = no limit)
+                f32::MAX,   // threshold_limit (MAX = no limit, SIMD-friendly encoding)
                 0.0,   // leak_coefficient
                 0.0,   // resting_potential
                 0,     // neuron_type
@@ -4538,7 +4538,7 @@ mod tests {
                 0,     // consecutive_fire_limit
                 0,     // snooze_period
                 true,  // mp_charge_accumulation
-                3,     // cortical_area
+                4,     // cortical_area
                 0,
                 0,
                 0,
@@ -4611,14 +4611,16 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
+        // Register core areas in order so neuron ID 1 is the deterministic power neuron.
+        npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.set_power_amount(0.5);
 
-        // Burst 1: No power neurons yet (pre-embryogenesis)
+        // Burst 1: Core power neuron exists immediately (deterministic neuron ID 1)
         let result1 = npu.process_burst().unwrap();
         assert_eq!(
-            result1.power_injections, 0,
-            "No power neurons before embryogenesis"
+            result1.power_injections, 1,
+            "Core power neuron should be injected deterministically"
         );
 
         // Simulate genome load: Add power neurons
@@ -4627,18 +4629,18 @@ mod tests {
                 .unwrap();
         }
 
-        // Burst 2: Power neurons now present (0→N transition) - should log and inject!
+        // Burst 2: Additional power neurons do not change the deterministic injection count.
         let result2 = npu.process_burst().unwrap();
         assert_eq!(
-            result2.power_injections, 10,
-            "Should inject all 10 power neurons after genome load"
+            result2.power_injections, 1,
+            "Power injection should remain deterministic (neuron ID 1)"
         );
 
         // Burst 3: Should still inject power neurons consistently
         let result3 = npu.process_burst().unwrap();
         assert_eq!(
-            result3.power_injections, 10,
-            "Should continue injecting power neurons on every burst"
+            result3.power_injections, 1,
+            "Power injection should remain deterministic (neuron ID 1)"
         );
     }
 
@@ -4920,16 +4922,16 @@ mod tests {
                 100, 1000, 10,
             );
 
-        // Register a non-power area.
-        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        // Use a non-core, non-power area to avoid implicit core neuron creation (0..=2).
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         // Add a neuron with a bounded threshold limit first (so the update actually changes it).
         let neuron_id = npu
-            .add_neuron(1.0, 10.0, 0.0, 0.0, 0, 0, 1.0, u16::MAX, 0, true, 2, 0, 0, 0)
+            .add_neuron(1.0, 10.0, 0.0, 0.0, 0, 0, 1.0, u16::MAX, 0, true, 3, 0, 0, 0)
             .unwrap();
 
         // Live-update: 0.0 must be encoded as "no upper bound".
-        let updated = npu.update_cortical_area_threshold_limit(2, 0.0);
+        let updated = npu.update_cortical_area_threshold_limit(3, 0.0);
         assert_eq!(updated, 1);
 
         // Verify internal encoding.

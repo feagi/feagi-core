@@ -2236,16 +2236,15 @@ mod tests {
         let mut rust_npu =
             <crate::RustNPU<StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
 
-        // Avoid power auto-injection by NOT using cortical_area index 1.
-        rust_npu.register_cortical_area(
-            2,
-            CoreCorticalType::Death.to_cortical_id().as_base_64(),
-        );
+        // Use a non-core cortical_idx to avoid implicit core neuron creation (0..=2).
+        rust_npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        // Ensure process_burst() produces a fire queue sample (sampling is typically gated by subscriber flags).
+        rust_npu.set_visualization_subscribers(true);
 
         let neuron = rust_npu
             .add_neuron(
                 1.0,  // threshold
-                0.0,  // threshold_limit
+                f32::MAX,  // threshold_limit (MAX = no limit, SIMD-friendly encoding)
                 0.0,  // leak_coefficient
                 0.0,  // resting_potential
                 0,    // neuron_type
@@ -2254,7 +2253,7 @@ mod tests {
                 0,    // consecutive_fire_limit
                 0,    // snooze_period
                 true, // mp_charge_accumulation
-                2,    // cortical_area
+                3,    // cortical_area
                 0,
                 0,
                 0,
@@ -2280,7 +2279,7 @@ mod tests {
             .expect("Expected cached fire queue sample after first burst");
 
         let fired_in_area = fq_sample
-            .get(&2)
+            .get(&3)
             .map(|(neuron_ids, _, _, _, _)| neuron_ids.contains(&neuron.0))
             .unwrap_or(false);
 
@@ -2288,7 +2287,7 @@ mod tests {
 
         assert!(
             fired_in_area,
-            "Expected neuron {} to appear in cached fire queue for cortical_idx=2",
+            "Expected neuron {} to appear in cached fire queue for cortical_idx=3",
             neuron.0
         );
     }
