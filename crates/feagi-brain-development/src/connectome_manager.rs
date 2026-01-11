@@ -1011,78 +1011,80 @@ impl ConnectomeManager {
         // Prune all existing synapses from src_area→dst_area before (re)creating based on current rules.
         // This prevents stale synapses when rules are removed/edited.
         let mut pruned_synapse_count: usize = 0;
-        if self.get_neuron_count_in_area(src_area_id) > 0 && self.get_neuron_count_in_area(dst_area_id) > 0 {
-            use std::time::Instant;
-            let start = Instant::now();
+        use std::time::Instant;
+        let start = Instant::now();
 
-            // Get neuron lists (may be slow; see note above)
-            let (sources, targets) = {
-                let npu = npu_arc.lock().unwrap();
-                let sources: Vec<NeuronId> = npu
-                    .get_neurons_in_cortical_area(src_idx)
-                    .into_iter()
-                    .map(NeuronId)
-                    .collect();
-                let targets: Vec<NeuronId> = npu
-                    .get_neurons_in_cortical_area(dst_idx)
-                    .into_iter()
-                    .map(NeuronId)
-                    .collect();
-                (sources, targets)
+        // Get neuron lists (may be slow; see note above).
+        //
+        // IMPORTANT: Do not rely on per-area cached neuron counts here. Pruning must be correct even if
+        // caches are stale (e.g., in tests or during partial initialization). If either side is empty,
+        // pruning is a no-op anyway.
+        let (sources, targets) = {
+            let npu = npu_arc.lock().unwrap();
+            let sources: Vec<NeuronId> = npu
+                .get_neurons_in_cortical_area(src_idx)
+                .into_iter()
+                .map(NeuronId)
+                .collect();
+            let targets: Vec<NeuronId> = npu
+                .get_neurons_in_cortical_area(dst_idx)
+                .into_iter()
+                .map(NeuronId)
+                .collect();
+            (sources, targets)
+        };
+
+        if !sources.is_empty() && !targets.is_empty() {
+            let remove_start = Instant::now();
+            pruned_synapse_count = {
+                let mut npu = npu_arc.lock().unwrap();
+                npu.remove_synapses_from_sources_to_targets(sources, targets)
             };
+            let remove_time = remove_start.elapsed();
+            let total_time = start.elapsed();
 
-            if !sources.is_empty() && !targets.is_empty() {
-                let remove_start = Instant::now();
-                pruned_synapse_count = {
-                    let mut npu = npu_arc.lock().unwrap();
-                    npu.remove_synapses_from_sources_to_targets(sources, targets)
-                };
-                let remove_time = remove_start.elapsed();
-                let total_time = start.elapsed();
+            info!(
+                target: "feagi-bdu",
+                "Pruned {} existing synapses for mapping {} -> {} (total={}ms, remove={}ms)",
+                pruned_synapse_count,
+                src_area_id,
+                dst_area_id,
+                total_time.as_millis(),
+                remove_time.as_millis()
+            );
 
-                info!(
-                    target: "feagi-bdu",
-                    "Pruned {} existing synapses for mapping {} -> {} (total={}ms, remove={}ms)",
-                    pruned_synapse_count,
-                    src_area_id,
-                    dst_area_id,
-                    total_time.as_millis(),
-                    remove_time.as_millis()
-                );
+            // Update StateManager synapse count (health_check endpoint)
+            if pruned_synapse_count > 0 {
+                let pruned_u32 = u32::try_from(pruned_synapse_count).map_err(|_| {
+                    BduError::Internal(format!(
+                        "Pruned synapse count overflow (usize -> u32): {}",
+                        pruned_synapse_count
+                    ))
+                })?;
+                if let Some(state_manager) = StateManager::instance().try_read() {
+                    let core_state = state_manager.get_core_state();
+                    core_state.subtract_synapse_count(pruned_u32);
+                }
 
-                // Update StateManager synapse count (health_check endpoint)
-                if pruned_synapse_count > 0 {
-                    let pruned_u32 = u32::try_from(pruned_synapse_count).map_err(|_| {
-                        BduError::Internal(format!(
-                            "Pruned synapse count overflow (usize -> u32): {}",
-                            pruned_synapse_count
-                        ))
-                    })?;
-                    if let Some(state_manager) = StateManager::instance().try_read() {
-                        let core_state = state_manager.get_core_state();
-                        core_state.subtract_synapse_count(pruned_u32);
-                    }
-
-                    // Best-effort: adjust per-area outgoing synapse count cache for the source area.
-                    // (Cache is used for lock-free health-check reads; correctness is eventually
-                    // consistent via periodic refresh of global count from NPU.)
-                    {
-                        let mut cache = self.cached_synapse_counts_per_area.write();
-                        let entry = cache
-                            .entry(*src_area_id)
-                            .or_insert_with(|| AtomicUsize::new(0));
-                        let mut current = entry.load(Ordering::Relaxed);
-                        loop {
-                            let next = current.saturating_sub(pruned_synapse_count);
-                            match entry.compare_exchange(
-                                current,
-                                next,
-                                Ordering::Relaxed,
-                                Ordering::Relaxed,
-                            ) {
-                                Ok(_) => break,
-                                Err(v) => current = v,
-                            }
+                // Best-effort: adjust per-area outgoing synapse count cache for the source area.
+                // (Cache is used for lock-free health-check reads; correctness is eventually
+                // consistent via periodic refresh of global count from NPU.)
+                {
+                    let mut cache = self.cached_synapse_counts_per_area.write();
+                    let entry = cache
+                        .entry(*src_area_id)
+                        .or_insert_with(|| AtomicUsize::new(0));
+                    let mut current = entry.load(Ordering::Relaxed);
+                    loop {
+                        let next = current.saturating_sub(pruned_synapse_count);
+                        match entry.compare_exchange(
+                            current,
+                            next,
+                            Ordering::Relaxed,
+                            Ordering::Relaxed,
+                        ) {
+                            Ok(_) => break,
+                            Err(v) => current = v,
                         }
                     }
                 }
@@ -4821,7 +4823,13 @@ mod tests {
         manager.load_genome_from_json(&genome_json).unwrap();
 
         // Verify cortical areas loaded
-        assert_eq!(manager.get_cortical_area_count(), 2);
+        // ConnectomeManager may inject additional built-in cortical areas (core templates/morphologies)
+        // in addition to the blueprint areas supplied by the genome. This test only needs to assert
+        // that the requested blueprint areas were created and are queryable.
+        assert!(
+            manager.get_cortical_area_count() >= 2,
+            "Expected at least the 2 blueprint cortical areas to be loaded"
+        );
 
         assert!(manager.has_cortical_area(&test01_id));
         assert!(manager.has_cortical_area(&test02_id));
@@ -4980,7 +4988,7 @@ mod tests {
 
         let dst_area = CorticalArea::new(
             dst_id,
-            0,
+            1,
             "dst".to_string(),
             CorticalAreaDimensions::new(2, 2, 1).unwrap(),
             (0, 0, 0).into(),
@@ -5039,7 +5047,7 @@ mod tests {
         .unwrap();
         let dst_area = CorticalArea::new(
             dst_id,
-            0,
+            1,
             "dst".to_string(),
             CorticalAreaDimensions::new(2, 2, 1).unwrap(),
             (0, 0, 0).into(),
@@ -5082,7 +5090,9 @@ mod tests {
 
         // Verify synapses are gone (invalidated) and no outgoing synapses remain from the sources
         {
-            let npu = dyn_npu.lock().unwrap();
+            let mut npu = dyn_npu.lock().unwrap();
+            // Pruning invalidates synapses; rebuild the index so counts/outgoing queries reflect the current state.
+            npu.rebuild_synapse_index();
             assert_eq!(npu.get_synapse_count(), 0);
             assert!(npu.get_outgoing_synapses(s0 as u32).is_empty());
             assert!(npu.get_outgoing_synapses(s1 as u32).is_empty());
@@ -5114,8 +5124,9 @@ mod tests {
         feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
 
         // Create two cortical areas
-        let src_id = CorticalID::try_from_bytes(b"upd_src_").unwrap();
-        let dst_id = CorticalID::try_from_bytes(b"upd_dst_").unwrap();
+        // Use valid custom cortical IDs (the `cst...` namespace).
+        let src_id = CorticalID::try_from_bytes(b"cstupds1").unwrap();
+        let dst_id = CorticalID::try_from_bytes(b"cstupdt1").unwrap();
 
         let src_area = CorticalArea::new(
             src_id,
@@ -5190,7 +5201,9 @@ mod tests {
 
         // Verify synapses are gone and no outgoing synapses remain from the sources
         {
-            let npu = dyn_npu.lock().unwrap();
+            let mut npu = dyn_npu.lock().unwrap();
+            // Pruning invalidates synapses; rebuild the index so counts/outgoing queries reflect the current state.
+            npu.rebuild_synapse_index();
             assert_eq!(npu.get_synapse_count(), 0);
             assert!(npu.get_outgoing_synapses(s0 as u32).is_empty());
             assert!(npu.get_outgoing_synapses(s1 as u32).is_empty());
