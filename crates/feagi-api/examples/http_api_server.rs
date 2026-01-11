@@ -12,10 +12,15 @@ use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::{BurstLoopRunner, RustNPU};
 use feagi_observability::{init_logging, parse_debug_flags};
-use feagi_services::SystemServiceImpl;
-use feagi_services::*;
-use parking_lot::{Mutex as ParkingLotMutex, RwLock};
-use std::sync::{Arc, Mutex as StdMutex};
+use feagi_services::impls::{
+    AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
+    RuntimeServiceImpl, SystemServiceImpl,
+};
+use feagi_services::traits::{
+    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService, SystemService,
+};
+use parking_lot::RwLock;
+use std::sync::Arc;
 
 #[derive(Debug, Default)]
 struct NpuTraceArgs {
@@ -134,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🔧 Creating service layer...");
 
-    let genome_service = Arc::new(GenomeServiceImpl::new(connectome.clone()))
+    let _genome_service = Arc::new(GenomeServiceImpl::new(connectome.clone()))
         as Arc<dyn GenomeService + Send + Sync>;
 
     // Cast to GenomeServiceImpl to access get_current_genome_arc()
@@ -159,7 +164,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Dummy publishers for testing
     struct DummyViz;
     impl feagi_npu_burst_engine::VisualizationPublisher for DummyViz {
-        fn publish_visualization(&self, _data: &[u8]) -> Result<(), String> {
+        fn publish_raw_fire_queue(
+            &self,
+            _fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
+        ) -> Result<(), String> {
             Ok(())
         }
     }
@@ -181,9 +189,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let npu_for_runtime = Arc::new(TracingMutex::new(DynamicNPU::F32(npu_result), "NPU")); // Minimal NPU
     let burst_loop =
         BurstLoopRunner::new::<DummyViz, DummyMotor>(npu_for_runtime, None, None, 30.0); // No publishers
-    let burst_runner_for_runtime = Arc::new(ParkingLotMutex::new(burst_loop));
+    let burst_runner_for_runtime = Arc::new(RwLock::new(burst_loop));
 
-    let runtime_service = Arc::new(RuntimeServiceImpl::new(burst_runner_for_runtime))
+    let runtime_service = Arc::new(RuntimeServiceImpl::new(burst_runner_for_runtime.clone()))
         as Arc<dyn RuntimeService + Send + Sync>;
 
     // For examples, create basic version info
@@ -230,6 +238,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         system_service,
         snapshot_service: None,
         feagi_session_timestamp,
+        memory_stats_cache: None,
         #[cfg(feature = "feagi-agent")]
         agent_connectors: ApiState::init_agent_connectors(),
     };
