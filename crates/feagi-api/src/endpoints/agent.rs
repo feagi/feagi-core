@@ -690,16 +690,22 @@ pub async fn export_device_registrations(
         agent_id
     );
 
-    let agent_service = state
-        .agent_service
-        .as_ref()
-        .ok_or_else(|| ApiError::internal("Agent service not available"))?;
-
-    // Verify agent exists
-    let _properties = agent_service
-        .get_agent_properties(&agent_id)
-        .await
-        .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
+    // Verify agent exists only if AgentService is available.
+    //
+    // Rationale: live contract tests and minimal deployments can run without an AgentService.
+    // In that case, device registration import/export should still work as a pure per-agent
+    // configuration store (ConnectorAgent-backed).
+    if let Some(agent_service) = state.agent_service.as_ref() {
+        let _properties = agent_service
+            .get_agent_properties(&agent_id)
+            .await
+            .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
+    } else {
+        info!(
+            "ℹ️ [API] Agent service not available; skipping agent existence check for export (agent '{}')",
+            agent_id
+        );
+    }
 
     // Get existing ConnectorAgent for this agent (don't create new one)
     #[cfg(feature = "feagi-agent")]
@@ -843,16 +849,18 @@ pub async fn import_device_registrations(
         agent_id
     );
 
-    let agent_service = state
-        .agent_service
-        .as_ref()
-        .ok_or_else(|| ApiError::internal("Agent service not available"))?;
-
-    // Verify agent exists
-    let _properties = agent_service
-        .get_agent_properties(&agent_id)
-        .await
-        .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
+    // Verify agent exists only if AgentService is available (see export_device_registrations).
+    if let Some(agent_service) = state.agent_service.as_ref() {
+        let _properties = agent_service
+            .get_agent_properties(&agent_id)
+            .await
+            .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
+    } else {
+        info!(
+            "ℹ️ [API] Agent service not available; skipping agent existence check for import (agent '{}')",
+            agent_id
+        );
+    }
 
     // Validate the device registration JSON structure
     // Check that it has the expected fields
