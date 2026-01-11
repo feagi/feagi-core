@@ -152,8 +152,11 @@ pub struct MemoryMappedState {
     pub synapse_util: AtomicU8,         // 0-100
     pub _reserved_fatigue: AtomicU8,     // Reserved for future use
 
-    // Padding to 128 bytes (66 bytes) - reduced by 16 bytes for capacity and neuron count fields
-    pub _padding: [u8; 66],
+    // Padding to 128 bytes.
+    //
+    // NOTE: `atomic_polyfill::AtomicU8` occupies 4 bytes (u32-backed) on some targets,
+    // so this padding must be computed against the actual atomic field sizes, not `u8`.
+    pub _padding: [u8; 8],
 }
 
 impl MemoryMappedState {
@@ -192,7 +195,7 @@ impl MemoryMappedState {
             synapse_util: AtomicU8::new(0),
             _reserved_fatigue: AtomicU8::new(0),
 
-            _padding: [0; 66],
+            _padding: [0; 8],
         }
     }
 
