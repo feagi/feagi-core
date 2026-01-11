@@ -1694,10 +1694,18 @@ mod tests {
 
         let request = RegistrationRequest {
             agent_id: "test-agent".to_string(),
-            agent_type: "both".to_string(),
+            // Keep this unit test focused on the registration plumbing without requiring both
+            // input+output capability validation (which would also require motor cortical area setup).
+            agent_type: "sensory".to_string(),
             capabilities: serde_json::json!({
-                "input": ["aXN2aQkAAAA="],  // feagi-sensorimotor format
-                "output": ["b21vdDAwAAA="]  // feagi-sensorimotor format
+                // FEAGI 2.0 Rust SDK AgentCapabilities format
+                //
+                // Provide a sensory capability with a shm_path so the handler allocates/returns SHM paths
+                // (this unit test asserts shm_paths is present in the response).
+                "sensory": {
+                    "rate_hz": 60.0,
+                    "shm_path": "feagi-shm-test-agent-sensory.bin"
+                }
             }),
             chosen_transport: None,
         };
