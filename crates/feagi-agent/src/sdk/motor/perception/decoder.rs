@@ -337,15 +337,17 @@ impl MotorDecoder for PerceptionDecoder {
             decoded.filter(|s| !s.is_empty())
         } else {
             // Log why tokenizer isn't being used
-            if oten_token_id.is_some() && self.tokenizer.is_none() {
-                static WARNED_NO_TOKENIZER: std::sync::atomic::AtomicBool =
-                    std::sync::atomic::AtomicBool::new(false);
-                if !WARNED_NO_TOKENIZER.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                    tracing::warn!(
-                        "[PERCEPTION-DECODER] Token ID {} received but tokenizer is not loaded! \
-                        oten_text will always be empty. Check tokenizer_path in controller initialization.",
-                        oten_token_id.unwrap()
-                    );
+            if self.tokenizer.is_none() {
+                if let Some(token_id) = oten_token_id {
+                    static WARNED_NO_TOKENIZER: std::sync::atomic::AtomicBool =
+                        std::sync::atomic::AtomicBool::new(false);
+                    if !WARNED_NO_TOKENIZER.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                        tracing::warn!(
+                            "[PERCEPTION-DECODER] Token ID {} received but tokenizer is not loaded! \
+                            oten_text will always be empty. Check tokenizer_path in controller initialization.",
+                            token_id
+                        );
+                    }
                 }
             }
             None
