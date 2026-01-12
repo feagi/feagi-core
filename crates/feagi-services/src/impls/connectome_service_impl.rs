@@ -792,6 +792,107 @@ impl ConnectomeService for ConnectomeServiceImpl {
         Ok(result)
     }
 
+    async fn create_morphology(
+        &self,
+        morphology_id: String,
+        morphology: feagi_evolutionary::Morphology,
+    ) -> ServiceResult<()> {
+        if morphology_id.trim().is_empty() {
+            return Err(ServiceError::InvalidInput(
+                "morphology_id must be non-empty".to_string(),
+            ));
+        }
+
+        // Require a loaded RuntimeGenome for persistence (source of truth).
+        let mut genome_guard = self.current_genome.write();
+        let Some(genome) = genome_guard.as_mut() else {
+            return Err(ServiceError::InvalidState(
+                "No RuntimeGenome loaded - cannot create morphology".to_string(),
+            ));
+        };
+
+        if genome.morphologies.contains(&morphology_id) {
+            return Err(ServiceError::AlreadyExists {
+                resource: "morphology".to_string(),
+                id: morphology_id,
+            });
+        }
+
+        genome
+            .morphologies
+            .add_morphology(morphology_id.clone(), morphology.clone());
+
+        // Keep ConnectomeManager registry in sync (used by mapping/synapse generation).
+        self.connectome
+            .write()
+            .upsert_morphology(morphology_id, morphology);
+
+        Ok(())
+    }
+
+    async fn update_morphology(
+        &self,
+        morphology_id: String,
+        morphology: feagi_evolutionary::Morphology,
+    ) -> ServiceResult<()> {
+        if morphology_id.trim().is_empty() {
+            return Err(ServiceError::InvalidInput(
+                "morphology_id must be non-empty".to_string(),
+            ));
+        }
+
+        let mut genome_guard = self.current_genome.write();
+        let Some(genome) = genome_guard.as_mut() else {
+            return Err(ServiceError::InvalidState(
+                "No RuntimeGenome loaded - cannot update morphology".to_string(),
+            ));
+        };
+
+        if !genome.morphologies.contains(&morphology_id) {
+            return Err(ServiceError::NotFound {
+                resource: "morphology".to_string(),
+                id: morphology_id,
+            });
+        }
+
+        genome
+            .morphologies
+            .add_morphology(morphology_id.clone(), morphology.clone());
+
+        self.connectome
+            .write()
+            .upsert_morphology(morphology_id, morphology);
+
+        Ok(())
+    }
+
+    async fn delete_morphology(&self, morphology_id: &str) -> ServiceResult<()> {
+        if morphology_id.trim().is_empty() {
+            return Err(ServiceError::InvalidInput(
+                "morphology_id must be non-empty".to_string(),
+            ));
+        }
+
+        let mut genome_guard = self.current_genome.write();
+        let Some(genome) = genome_guard.as_mut() else {
+            return Err(ServiceError::InvalidState(
+                "No RuntimeGenome loaded - cannot delete morphology".to_string(),
+            ));
+        };
+
+        if !genome.morphologies.remove_morphology(morphology_id) {
+            return Err(ServiceError::NotFound {
+                resource: "morphology".to_string(),
+                id: morphology_id.to_string(),
+            });
+        }
+
+        // Mirror deletion into the ConnectomeManager registry.
+        self.connectome.write().remove_morphology(morphology_id);
+
+        Ok(())
+    }
+
     async fn update_cortical_mapping(
         &self,
         src_area_id: String,
@@ -1034,6 +1135,103 @@ mod tests {
             .and_then(|v| v.as_array())
             .expect("dstX should be an array");
         assert_eq!(arr.len(), 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn morphology_create_update_delete_roundtrip() -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+
+        // Isolated connectome manager instance for this test.
+        let connectome =
+            Arc::new(RwLock::new(feagi_brain_development::ConnectomeManager::new_for_testing()));
+
+        // Minimal RuntimeGenome (source of truth) for persistence.
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: "".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+        let current_genome = Arc::new(RwLock::new(Some(genome)));
+
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+
+        // Create
+        let morph_id = "m_test_vectors".to_string();
+        let morph = feagi_evolutionary::Morphology {
+            morphology_type: feagi_evolutionary::MorphologyType::Vectors,
+            parameters: feagi_evolutionary::MorphologyParameters::Vectors {
+                vectors: vec![[1, 2, 3]],
+            },
+            class: "custom".to_string(),
+        };
+        svc.create_morphology(morph_id.clone(), morph).await?;
+
+        // Verify both source-of-truth and connectome registry were updated
+        {
+            let genome_guard = current_genome.read();
+            let genome = genome_guard.as_ref().expect("genome must exist");
+            assert!(genome.morphologies.contains(&morph_id));
+        }
+        {
+            let mgr = connectome.read();
+            assert!(mgr.get_morphologies().contains(&morph_id));
+        }
+
+        // Update (overwrite vectors)
+        let morph2 = feagi_evolutionary::Morphology {
+            morphology_type: feagi_evolutionary::MorphologyType::Vectors,
+            parameters: feagi_evolutionary::MorphologyParameters::Vectors {
+                vectors: vec![[9, 9, 9]],
+            },
+            class: "custom".to_string(),
+        };
+        svc.update_morphology(morph_id.clone(), morph2).await?;
+        {
+            let mgr = connectome.read();
+            let stored = mgr
+                .get_morphologies()
+                .get(&morph_id)
+                .expect("morphology must exist");
+            match &stored.parameters {
+                feagi_evolutionary::MorphologyParameters::Vectors { vectors } => {
+                    assert_eq!(vectors.as_slice(), &[[9, 9, 9]]);
+                }
+                other => panic!("unexpected parameters: {:?}", other),
+            }
+        }
+
+        // Delete
+        svc.delete_morphology(&morph_id).await?;
+        {
+            let genome_guard = current_genome.read();
+            let genome = genome_guard.as_ref().expect("genome must exist");
+            assert!(!genome.morphologies.contains(&morph_id));
+        }
+        {
+            let mgr = connectome.read();
+            assert!(!mgr.get_morphologies().contains(&morph_id));
+        }
+
         Ok(())
     }
 }

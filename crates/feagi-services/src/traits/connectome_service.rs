@@ -270,6 +270,46 @@ pub trait ConnectomeService: Send + Sync {
         &self,
     ) -> ServiceResult<std::collections::HashMap<String, MorphologyInfo>>;
 
+    /// Create a new morphology definition.
+    ///
+    /// This mutates the currently loaded RuntimeGenome (source of truth) and the in-memory
+    /// morphology registry used by ConnectomeManager.
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidState` - No genome loaded
+    /// * `ServiceError::AlreadyExists` - Morphology already exists
+    /// * `ServiceError::InvalidInput` - Invalid morphology payload
+    async fn create_morphology(
+        &self,
+        morphology_id: String,
+        morphology: feagi_evolutionary::Morphology,
+    ) -> ServiceResult<()>;
+
+    /// Update an existing morphology definition.
+    ///
+    /// This mutates the currently loaded RuntimeGenome (source of truth) and the in-memory
+    /// morphology registry used by ConnectomeManager.
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidState` - No genome loaded
+    /// * `ServiceError::NotFound` - Morphology does not exist
+    /// * `ServiceError::InvalidInput` - Invalid morphology payload
+    async fn update_morphology(
+        &self,
+        morphology_id: String,
+        morphology: feagi_evolutionary::Morphology,
+    ) -> ServiceResult<()>;
+
+    /// Delete a morphology definition by ID.
+    ///
+    /// This mutates the currently loaded RuntimeGenome (source of truth) and the in-memory
+    /// morphology registry used by ConnectomeManager.
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidState` - No genome loaded
+    /// * `ServiceError::NotFound` - Morphology does not exist
+    async fn delete_morphology(&self, morphology_id: &str) -> ServiceResult<()>;
+
     // ========================================================================
     // CORTICAL MAPPING OPERATIONS
     // ========================================================================

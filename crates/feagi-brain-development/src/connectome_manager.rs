@@ -916,6 +916,27 @@ impl ConnectomeManager {
         self.morphology_registry.count()
     }
 
+    /// Insert or overwrite a morphology definition in the in-memory registry.
+    ///
+    /// NOTE: This updates the runtime registry used by mapping/synapse generation.
+    /// Callers that also maintain a RuntimeGenome (source of truth) MUST update it too.
+    pub fn upsert_morphology(
+        &mut self,
+        morphology_id: String,
+        morphology: feagi_evolutionary::Morphology,
+    ) {
+        self.morphology_registry.add_morphology(morphology_id, morphology);
+    }
+
+    /// Remove a morphology definition from the in-memory registry.
+    ///
+    /// Returns true if the morphology existed and was removed.
+    ///
+    /// NOTE: Callers that also maintain a RuntimeGenome (source of truth) MUST update it too.
+    pub fn remove_morphology(&mut self, morphology_id: &str) -> bool {
+        self.morphology_registry.remove_morphology(morphology_id)
+    }
+
     // ========================================================================
     // CORTICAL MAPPING UPDATES
     // ========================================================================
