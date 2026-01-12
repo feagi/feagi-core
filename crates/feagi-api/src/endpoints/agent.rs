@@ -171,6 +171,54 @@ async fn auto_create_cortical_areas_from_device_registrations(
                 };
 
                 if exists {
+                    // If the area already exists but still has a placeholder name (often equal to the cortical_id),
+                    // update it to a deterministic friendly name so UIs (e.g., Brain Visualizer) show readable labels.
+                    //
+                    // IMPORTANT: We only auto-rename if the current name is clearly a placeholder (== cortical_id),
+                    // to avoid overwriting user-custom names.
+                    if matches!(motor_unit, MotorCorticalUnit::Gaze) {
+                        let desired_name = {
+                            let subunit_name = match i {
+                                0 => "Eccentricity",
+                                1 => "Modulation",
+                                _ => "Subunit",
+                            };
+                            format!(
+                                "{} ({}) Unit {}",
+                                motor_unit.get_friendly_name(),
+                                subunit_name,
+                                group_u8
+                            )
+                        };
+
+                        match connectome_service.get_cortical_area(&cortical_id_b64).await {
+                            Ok(existing_area) => {
+                                if existing_area.name.is_empty()
+                                    || existing_area.name == existing_area.cortical_id
+                                {
+                                    let mut changes = std::collections::HashMap::new();
+                                    changes.insert(
+                                        "cortical_name".to_string(),
+                                        serde_json::json!(desired_name),
+                                    );
+                                    if let Err(e) =
+                                        genome_service.update_cortical_area(&cortical_id_b64, changes).await
+                                    {
+                                        warn!(
+                                            "⚠️ [API] Failed to auto-rename existing gaze cortical area '{}': {}",
+                                            cortical_id_b64, e
+                                        );
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "⚠️ [API] Failed to fetch existing cortical area '{}' for potential rename: {}",
+                                    cortical_id_b64, e
+                                );
+                            }
+                        }
+                    }
                     continue;
                 }
 
@@ -189,9 +237,24 @@ async fn auto_create_cortical_areas_from_device_registrations(
                 let dimensions = (total_x, dims[1] as usize, dims[2] as usize);
                 let position = (pos[0], pos[1], pos[2]);
 
+                // IMPORTANT:
+                // Motor units like Gaze have multiple cortical subunits (eccentricity + modulation).
+                // These must get distinct names; otherwise a uniqueness constraint (or UI mapping)
+                // can cause only one of the subunits to appear.
+                let name = if matches!(motor_unit, MotorCorticalUnit::Gaze) {
+                    let subunit_name = match i {
+                        0 => "Eccentricity",
+                        1 => "Modulation",
+                        _ => "Subunit",
+                    };
+                    format!("{} ({}) Unit {}", motor_unit.get_friendly_name(), subunit_name, group_u8)
+                } else {
+                    format!("{} Unit {}", motor_unit.get_snake_case_name(), group_u8)
+                };
+
                 to_create.push(CreateCorticalAreaParams {
                     cortical_id: cortical_id_b64.clone(),
-                    name: format!("{} Unit {}", motor_unit.get_snake_case_name(), group_u8),
+                    name,
                     dimensions,
                     position,
                     area_type: "Motor".to_string(),

@@ -313,10 +313,55 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
-        self.connectome
-            .write()
-            .remove_cortical_area(&cortical_id_typed)
-            .map_err(ServiceError::from)?;
+        // Remove from the live connectome, and also scrub from brain-region membership
+        // so UI + region-based operations don't keep referencing a deleted area.
+        //
+        // Note: ConnectomeManager::remove_cortical_area currently does NOT remove the
+        // ID from brain regions, so we do it explicitly here.
+        {
+            let mut manager = self.connectome.write();
+            let region_ids: Vec<String> = manager
+                .get_brain_region_ids()
+                .into_iter()
+                .cloned()
+                .collect();
+            for region_id in region_ids {
+                if let Some(region) = manager.get_brain_region_mut(&region_id) {
+                    region.remove_area(&cortical_id_typed);
+                }
+            }
+
+            manager
+                .remove_cortical_area(&cortical_id_typed)
+                .map_err(ServiceError::from)?;
+        }
+
+        // CRITICAL: Persist deletion into RuntimeGenome (source of truth for save/export).
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            let removed = genome.cortical_areas.remove(&cortical_id_typed).is_some();
+            for region in genome.brain_regions.values_mut() {
+                region.remove_area(&cortical_id_typed);
+            }
+
+            if removed {
+                info!(
+                    target: "feagi-services",
+                    "[GENOME-UPDATE] Removed cortical area {} from RuntimeGenome",
+                    cortical_id
+                );
+            } else {
+                warn!(
+                    target: "feagi-services",
+                    "[GENOME-UPDATE] Cortical area {} not found in RuntimeGenome - deletion will not persist to saved genome",
+                    cortical_id
+                );
+            }
+        } else {
+            warn!(
+                target: "feagi-services",
+                "[GENOME-UPDATE] No RuntimeGenome loaded - deletion will not persist to saved genome"
+            );
+        }
 
         // Refresh burst runner cache after deleting area
         self.refresh_burst_runner_cache();
@@ -1230,6 +1275,103 @@ mod tests {
         {
             let mgr = connectome.read();
             assert!(!mgr.get_morphologies().contains(&morph_id));
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn delete_cortical_area_persists_to_runtime_genome() -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CoreCorticalType, CorticalArea, CorticalAreaDimensions,
+        };
+        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        // Isolated connectome manager instance for this test.
+        let connectome =
+            Arc::new(RwLock::new(feagi_brain_development::ConnectomeManager::new_for_testing()));
+
+        // Use a known-valid cortical ID/type pair to avoid ID encoding intricacies in this unit test.
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+
+        let dims = CorticalAreaDimensions::new(1, 1, 1).expect("dimensions must be valid");
+        let pos = GenomeCoordinate3D::new(0, 0, 0);
+        let cortical_type = cortical_id
+            .as_cortical_type()
+            .expect("cortical type must be derivable from id");
+
+        let area = CorticalArea::new(
+            cortical_id,
+            0, // Let ConnectomeManager assign a proper idx
+            "test_area".to_string(),
+            dims,
+            pos,
+            cortical_type,
+        )
+        .expect("area must be valid");
+
+        // Create a region that contains the test area.
+        let region_id = RegionID::new();
+        let region_key = region_id.to_string();
+        let region = BrainRegion::new(region_id, "root".to_string(), RegionType::Undefined)
+            .expect("region must be valid")
+            .with_areas([cortical_id]);
+
+        // Seed RuntimeGenome with the area + region membership (this is what genome save/export uses).
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: Some(region_key.clone()),
+            },
+            cortical_areas: HashMap::from([(cortical_id, area.clone())]),
+            brain_regions: HashMap::from([(region_key.clone(), region.clone())]),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+        let current_genome = Arc::new(RwLock::new(Some(genome)));
+
+        // Seed ConnectomeManager with the same region + area (this is what BV and runtime uses).
+        {
+            let mut mgr = connectome.write();
+            mgr.add_brain_region(region, None)
+                .expect("brain region should be addable");
+            mgr.add_cortical_area(area)
+                .expect("cortical area should be addable");
+        }
+
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+
+        // Act: delete by base64 string.
+        let cortical_id_base64 = cortical_id.as_base_64();
+        svc.delete_cortical_area(&cortical_id_base64).await?;
+
+        // Assert: RuntimeGenome no longer contains the area nor region membership.
+        {
+            let genome_guard = current_genome.read();
+            let genome = genome_guard.as_ref().expect("genome must exist");
+            assert!(!genome.cortical_areas.contains_key(&cortical_id));
+            let region = genome
+                .brain_regions
+                .get(&region_key)
+                .expect("region must exist in genome");
+            assert!(!region.contains_area(&cortical_id));
         }
 
         Ok(())
