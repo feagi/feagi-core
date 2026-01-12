@@ -1,7 +1,7 @@
 name: Performance Microbench (CI Gate)
 
 on:
-  push:
+  pull_request:
     branches: [staging]
   workflow_dispatch: {}
 
@@ -13,7 +13,8 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: feagi-core
+        # Repo root in CI is the feagi-core workspace. Avoid nesting `feagi-core/feagi-core`.
+        working-directory: .
 
     steps:
       - name: Checkout
@@ -44,8 +45,8 @@ jobs:
         with:
           name: criterion-estimates
           path: |
-            feagi-core/target/criterion/**/new/estimates.json
-            feagi-core/target/criterion/**/new/sample.json
+            target/criterion/**/new/estimates.json
+            target/criterion/**/new/sample.json
           if-no-files-found: warn
 
 

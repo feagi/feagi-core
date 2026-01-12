@@ -56,6 +56,104 @@ jobs:
     
     - name: Check formatting
       run: cargo fmt --all -- --check
+
+    - name: Guard: verify local path dependency versions are consistent
+      run: |
+        set -euo pipefail
+
+        echo "🔎 Verifying workspace path dependency version consistency..."
+
+        # Extract workspace version (used by crates with `version.workspace = true`)
+        WORKSPACE_VERSION="$(
+          awk '
+            BEGIN { in_ws=0 }
+            /^\[workspace\.package\]/ { in_ws=1; next }
+            /^\[/ { if (in_ws==1) exit }
+            in_ws==1 && /^version = / {
+              gsub(/version = /, "", $0);
+              gsub(/"/, "", $0);
+              print $0;
+              exit
+            }
+          ' Cargo.toml
+        )"
+
+        if [ -z "${WORKSPACE_VERSION}" ]; then
+          echo "❌ Failed to detect [workspace.package] version from Cargo.toml"
+          exit 1
+        fi
+
+        declare -A CRATE_VERSIONS
+
+        # Collect all crate versions (workspace + crates/* + crates/feagi-npu/*)
+        for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+          [ -f "$manifest" ] || continue
+          name="$(grep -E '^name = ' "$manifest" | head -1 | sed 's/name = \"\\(.*\\)\"/\\1/')"
+          if [ -z "$name" ]; then
+            continue
+          fi
+
+          if grep -qE '^version\\.workspace = true' "$manifest"; then
+            ver="$WORKSPACE_VERSION"
+          else
+            ver="$(grep -E '^version = ' "$manifest" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+          fi
+
+          if [ -n "$ver" ]; then
+            CRATE_VERSIONS["$name"]="$ver"
+          fi
+        done
+
+        mismatches=0
+
+        # Scan manifests for inline deps of the form:
+        #   dep = { version = "X", path = "../dep-path" }
+        for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+          [ -f "$manifest" ] || continue
+
+          while IFS= read -r line; do
+            dep="$(echo "$line" | sed -n 's/^\\s*\\([A-Za-z0-9_-][A-Za-z0-9_-]*\\)\\s*=.*/\\1/p')"
+            req="$(echo "$line" | sed -n 's/.*version\\s*=\\s*\"\\([^\"]\\+\\)\".*/\\1/p')"
+            path="$(echo "$line" | sed -n 's/.*path\\s*=\\s*\"\\([^\"]\\+\\)\".*/\\1/p')"
+
+            [ -n "$dep" ] || continue
+            [ -n "$req" ] || continue
+            [ -n "$path" ] || continue
+
+            case "$path" in
+              ../*) ;;
+              *) continue ;;
+            esac
+
+            # Normalize requirement (strip Cargo's exact pin prefix and caret)
+            req="${req#=}"
+            req="${req#^}"
+
+            actual="${CRATE_VERSIONS[$dep]:-}"
+            if [ -z "$actual" ]; then
+              # Not a workspace crate (or renamed dependency); ignore.
+              continue
+            fi
+
+            if [ "$req" != "$actual" ]; then
+              echo "❌ Version mismatch in $manifest:"
+              echo "   - dependency: $dep"
+              echo "   - required:   $req"
+              echo "   - actual:     $actual"
+              echo "   - path:       $path"
+              mismatches=$((mismatches + 1))
+            fi
+          done < <(grep -E 'path\\s*=\\s*\"\\.\\./[^\\\"]+\"' "$manifest" || true)
+        done
+
+        if [ "$mismatches" -gt 0 ]; then
+          echo ""
+          echo "❌ Found $mismatches workspace path dependency version mismatch(es)."
+          echo "   This would cause cargo/clippy to fail with 'failed to select a version'."
+          exit 1
+        fi
+
+        echo "✅ Workspace path dependency versions are consistent."
     
     - name: Run Clippy (lib and tests only)
       run: cargo clippy --workspace --lib --tests -- -D warnings
