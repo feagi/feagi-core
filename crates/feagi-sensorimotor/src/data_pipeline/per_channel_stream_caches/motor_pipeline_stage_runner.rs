@@ -1,20 +1,22 @@
+use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner};
+use crate::configuration::jsonable::JSONDeviceProperties;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_pipeline::PipelineStagePropertyIndex;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
-use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner};
-
 #[derive(Debug)]
-pub(crate) struct MotorPipelineStageRunner {
+pub struct MotorPipelineStageRunner {
     expected_decoded_motor_type: WrappedIOType,
     last_instant_data_processed: Instant,
     pipeline_stages: Vec<Box<dyn PipelineStage>>,
     preprocessed_cached_value: WrappedIOData,
-    channel_friendly_name: String,
-    channel_index_override: Option<usize>,
+    channel_friendly_name: Option<String>,
+    channel_index_override: Option<CorticalChannelIndex>,
+    json_device_properties: JSONDeviceProperties,
 }
 
 impl PipelineStageRunner for MotorPipelineStageRunner {
@@ -42,20 +44,28 @@ impl PipelineStageRunner for MotorPipelineStageRunner {
         self.last_instant_data_processed
     }
 
-    fn get_channel_friendly_name(&self) -> &str {
+    fn get_channel_friendly_name(&self) -> &Option<String> {
         &self.channel_friendly_name
     }
 
-    fn set_channel_friendly_name(&mut self, channel_friendly_name: String) {
+    fn set_channel_friendly_name(&mut self, channel_friendly_name: Option<String>) {
         self.channel_friendly_name = channel_friendly_name;
     }
 
-    fn get_channel_index_override(&self) -> Option<usize> {
+    fn get_channel_index_override(&self) -> Option<CorticalChannelIndex> {
         self.channel_index_override
     }
 
-    fn set_channel_index_override(&mut self, channel_index_override: Option<usize>) {
+    fn set_channel_index_override(&mut self, channel_index_override: Option<CorticalChannelIndex>) {
         self.channel_index_override = channel_index_override;
+    }
+
+    fn get_json_device_properties(&self) -> &JSONDeviceProperties {
+        &self.json_device_properties
+    }
+
+    fn set_json_device_properties(&mut self, json_device_properties: JSONDeviceProperties) {
+        self.json_device_properties = json_device_properties;
     }
 }
 
@@ -69,8 +79,9 @@ impl MotorPipelineStageRunner {
             last_instant_data_processed: Instant::now(),
             pipeline_stages: Vec::new(),
             preprocessed_cached_value: initial_motor_cached_value,
-            channel_friendly_name: String::new(),
+            channel_friendly_name: None,
             channel_index_override: None,
+            json_device_properties: JSONDeviceProperties::default(),
         })
     }
 
@@ -111,6 +122,9 @@ impl MotorPipelineStageRunner {
         time_of_update: Instant,
     ) -> Result<&WrappedIOData, FeagiDataError> {
         if self.pipeline_stages.is_empty() {
+            // Critical: even with no pipeline stages, this channel has been updated and must be
+            // treated as "recently processed" so downstream consumers can detect change.
+            self.last_instant_data_processed = time_of_update;
             return Ok(&self.preprocessed_cached_value);
         }
 

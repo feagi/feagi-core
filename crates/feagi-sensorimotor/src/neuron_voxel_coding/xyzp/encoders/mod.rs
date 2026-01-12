@@ -1,35 +1,10 @@
-/*
-mod image_frame;
-mod signed_percentage_split_sign_divided;
-mod signed_percentage_psp_bidirectional;
-mod percentage_linear;
-mod segmented_image_frame;
-mod percentage_fractional_exponential;
-mod signed_percentage_fractional_exponential;
-*/
 // TODO there is a bug on all encoders in that they will send all channel data even if not updated since scratch is cleared only if channel is active!
 mod boolean;
 mod cartesian_plane;
 mod misc_data;
-mod percentage_1d_exponential;
-mod percentage_1d_linear;
-mod percentage_2d_exponential;
-mod percentage_2d_linear;
-mod percentage_3d_exponential;
-mod percentage_3d_linear;
-mod percentage_4d_exponential;
-mod percentage_4d_linear;
+mod percentage_encoder;
 mod segmented_image_frame;
-mod signed_percentage_1d_exponential;
-mod signed_percentage_1d_linear;
-mod signed_percentage_2d_exponential;
-mod signed_percentage_2d_linear;
-mod signed_percentage_3d_exponential;
-mod signed_percentage_3d_linear;
-mod signed_percentage_4d_exponential;
-mod signed_percentage_4d_linear;
 
-// Note: Many encoders are not currently used but kept for future use
 #[allow(unused_imports)]
 pub(crate) use boolean::BooleanNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]
@@ -37,37 +12,8 @@ pub(crate) use cartesian_plane::CartesianPlaneNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]
-pub(crate) use percentage_1d_exponential::PercentageExponentialNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use percentage_1d_linear::PercentageLinearNeuronVoxelXYZPEncoder;
-// Note: 2D and 4D encoders are not currently used but kept for future use
-#[allow(unused_imports)]
-pub(crate) use percentage_2d_exponential::Percentage2DExponentialNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use percentage_2d_linear::Percentage2DLinearNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use percentage_3d_exponential::Percentage3DExponentialNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use percentage_3d_linear::Percentage3DLinearNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use percentage_4d_exponential::Percentage4DExponentialNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use percentage_4d_linear::Percentage4DLinearNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
 pub(crate) use segmented_image_frame::SegmentedImageFrameNeuronVoxelXYZPEncoder;
+
+// Percentage encoder (uses PercentageNeuronPositioning and PercentageChannelDimensionality from other modules)
 #[allow(unused_imports)]
-pub(crate) use signed_percentage_1d_exponential::SignedPercentage1DExponentialNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use signed_percentage_1d_linear::SignedPercentage1DLinearNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use signed_percentage_2d_exponential::SignedPercentage2DExponentialNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use signed_percentage_2d_linear::SignedPercentage2DLinearNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use signed_percentage_3d_exponential::SignedPercentage3DExponentialNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use signed_percentage_3d_linear::SignedPercentage3DLinearNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use signed_percentage_4d_exponential::SignedPercentage4DExponentialNeuronVoxelXYZPEncoder;
-#[allow(unused_imports)]
-pub(crate) use signed_percentage_4d_linear::SignedPercentage4DLinearNeuronVoxelXYZPEncoder;
+pub(crate) use percentage_encoder::PercentageNeuronVoxelXYZPEncoder;

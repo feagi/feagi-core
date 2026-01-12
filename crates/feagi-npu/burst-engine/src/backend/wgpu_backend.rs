@@ -239,6 +239,7 @@ impl WGPUBackend {
     }
 
     /// Upload neuron array data to GPU
+    #[allow(dead_code)]
     fn upload_neuron_arrays(&mut self, neuron_array: &StdNeuronArray<f32>) -> Result<()> {
         let neuron_count = neuron_array.count;
         self.current_neuron_count = neuron_count;
@@ -373,6 +374,7 @@ impl WGPUBackend {
     }
 
     /// Upload synapse array data to GPU
+    #[allow(dead_code)]
     fn upload_synapse_arrays(&mut self, synapse_array: &StdSynapseArray) -> Result<()> {
         let synapse_count = synapse_array.count;
 
@@ -1225,6 +1227,7 @@ impl WGPUBackend {
     /// Download neuron state updates from GPU back to CPU StdNeuronArray
     ///
     /// Updates refractory countdowns and consecutive fire counts for FCL neurons
+    #[allow(dead_code)]
     fn download_neuron_state_updates(
         &mut self,
         neuron_array: &mut StdNeuronArray<f32>,
@@ -1367,7 +1370,7 @@ impl<N: feagi_npu_runtime::NeuronStorage<Value = f32>, S: feagi_npu_runtime::Syn
         // Wait for GPU to complete
         self.device.poll(wgpu::Maintain::Wait);
 
-        info!("✅ GPU synaptic propagation complete");
+        info!("GPU synaptic propagation complete");
 
         // Read back FCL results from GPU atomic buffer to CPU-side FCL
         self.download_fcl_from_gpu(fcl)?;
@@ -1386,7 +1389,7 @@ impl<N: feagi_npu_runtime::NeuronStorage<Value = f32>, S: feagi_npu_runtime::Syn
     fn process_neural_dynamics(
         &mut self,
         fcl: &FireCandidateList,
-        neuron_array: &mut N,
+        _neuron_array: &mut N,
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)> {
         // **FCL-AWARE**: Upload only FCL candidates to GPU (sparse array)
@@ -1398,7 +1401,7 @@ impl<N: feagi_npu_runtime::NeuronStorage<Value = f32>, S: feagi_npu_runtime::Syn
         }
 
         info!(
-            "🎯 GPU processing {} FCL candidates (out of {} total neurons)",
+            "GPU processing {} FCL candidates (out of {} total neurons)",
             fcl_count, self.current_neuron_count
         );
 

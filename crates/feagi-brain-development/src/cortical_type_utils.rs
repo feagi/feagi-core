@@ -17,11 +17,11 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 #[cfg(test)]
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
 use feagi_structures::genomic::cortical_area::{
-    CorticalArea, CorticalAreaType, IOCorticalAreaDataFlag,
+    CorticalArea, CorticalAreaType, IOCorticalAreaConfigurationFlag,
 };
 
 /// Extract detailed IOCorticalAreaDataFlag from a cortical area
@@ -29,7 +29,7 @@ use feagi_structures::genomic::cortical_area::{
 /// Returns None if:
 /// - cortical_type_new is not populated
 /// - Area is not an IPU or OPU
-pub fn get_io_data_type(_area: &CorticalArea) -> Option<IOCorticalAreaDataFlag> {
+pub fn get_io_data_type(_area: &CorticalArea) -> Option<IOCorticalAreaConfigurationFlag> {
     // For now, return None since we can't easily extract from CorticalID
     // This would require storing IO flags in area properties
     None
@@ -43,16 +43,28 @@ pub fn uses_absolute_frames(area: &CorticalArea) -> bool {
     if let Some(io_type) = get_io_data_type(area) {
         matches!(
             io_type,
-            IOCorticalAreaDataFlag::Percentage(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaDataFlag::Percentage2D(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaDataFlag::Percentage3D(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaDataFlag::Percentage4D(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaDataFlag::SignedPercentage(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaDataFlag::SignedPercentage2D(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaDataFlag::SignedPercentage3D(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaDataFlag::SignedPercentage4D(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute)
-                | IOCorticalAreaDataFlag::Misc(FrameChangeHandling::Absolute)
+            IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaConfigurationFlag::Percentage2D(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaConfigurationFlag::Percentage3D(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaConfigurationFlag::Percentage4D(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaConfigurationFlag::SignedPercentage(
+                    FrameChangeHandling::Absolute,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage2D(
+                    FrameChangeHandling::Absolute,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage3D(
+                    FrameChangeHandling::Absolute,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage4D(
+                    FrameChangeHandling::Absolute,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Absolute)
+                | IOCorticalAreaConfigurationFlag::Misc(FrameChangeHandling::Absolute)
         )
     } else {
         false
@@ -64,16 +76,37 @@ pub fn uses_incremental_frames(area: &CorticalArea) -> bool {
     if let Some(io_type) = get_io_data_type(area) {
         matches!(
             io_type,
-            IOCorticalAreaDataFlag::Percentage(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaDataFlag::Percentage2D(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaDataFlag::Percentage3D(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaDataFlag::Percentage4D(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaDataFlag::SignedPercentage(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaDataFlag::SignedPercentage2D(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaDataFlag::SignedPercentage3D(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaDataFlag::SignedPercentage4D(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Incremental)
-                | IOCorticalAreaDataFlag::Misc(FrameChangeHandling::Incremental)
+            IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Incremental, _)
+                | IOCorticalAreaConfigurationFlag::Percentage2D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::Percentage3D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::Percentage4D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage2D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage3D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage4D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Incremental)
+                | IOCorticalAreaConfigurationFlag::Misc(FrameChangeHandling::Incremental)
         )
     } else {
         false
@@ -85,14 +118,14 @@ pub fn uses_percentage_encoding(area: &CorticalArea) -> bool {
     if let Some(io_type) = get_io_data_type(area) {
         matches!(
             io_type,
-            IOCorticalAreaDataFlag::Percentage(_, _)
-                | IOCorticalAreaDataFlag::Percentage2D(_, _)
-                | IOCorticalAreaDataFlag::Percentage3D(_, _)
-                | IOCorticalAreaDataFlag::Percentage4D(_, _)
-                | IOCorticalAreaDataFlag::SignedPercentage(_, _)
-                | IOCorticalAreaDataFlag::SignedPercentage2D(_, _)
-                | IOCorticalAreaDataFlag::SignedPercentage3D(_, _)
-                | IOCorticalAreaDataFlag::SignedPercentage4D(_, _)
+            IOCorticalAreaConfigurationFlag::Percentage(_, _)
+                | IOCorticalAreaConfigurationFlag::Percentage2D(_, _)
+                | IOCorticalAreaConfigurationFlag::Percentage3D(_, _)
+                | IOCorticalAreaConfigurationFlag::Percentage4D(_, _)
+                | IOCorticalAreaConfigurationFlag::SignedPercentage(_, _)
+                | IOCorticalAreaConfigurationFlag::SignedPercentage2D(_, _)
+                | IOCorticalAreaConfigurationFlag::SignedPercentage3D(_, _)
+                | IOCorticalAreaConfigurationFlag::SignedPercentage4D(_, _)
         )
     } else {
         false
@@ -102,7 +135,7 @@ pub fn uses_percentage_encoding(area: &CorticalArea) -> bool {
 /// Check if an area uses cartesian plane encoding (e.g., vision)
 pub fn uses_cartesian_encoding(area: &CorticalArea) -> bool {
     if let Some(io_type) = get_io_data_type(area) {
-        matches!(io_type, IOCorticalAreaDataFlag::CartesianPlane(_))
+        matches!(io_type, IOCorticalAreaConfigurationFlag::CartesianPlane(_))
     } else {
         false
     }
@@ -185,10 +218,10 @@ mod tests {
     fn test_get_io_data_type() {
         // Create area with BrainInput type using Boolean data
         use feagi_structures::genomic::cortical_area::{
-            CoreCorticalType, CorticalAreaType, IOCorticalAreaDataFlag,
+            CoreCorticalType, CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
-        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area = CorticalArea::new(
             cortical_id,
             0,

@@ -1,6 +1,6 @@
 [package]
 name = "feagi-services"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -15,9 +15,11 @@ name = "feagi_services"
 [dependencies]
 # Core FEAGI crates (backend)
 feagi-npu-neural = { version = "0.0.1-beta.1", path = "../feagi-npu/neural" }  # For types
-feagi-evolutionary = { version = "0.0.1-beta.1", path = "../feagi-evolutionary" }
-feagi-brain-development = { version = "0.0.1-beta.1", path = "../feagi-brain-development", default-features = false }
+feagi-evolutionary = { version = "0.0.1-beta.2", path = "../feagi-evolutionary" }
+feagi-brain-development = { version = "0.0.1-beta.2", path = "../feagi-brain-development", default-features = false }
 feagi-npu-burst-engine = { version = "0.0.1-beta.1", path = "../feagi-npu/burst-engine", default-features = false, optional = true }
+feagi-npu-plasticity = { version = "0.0.1-beta.1", path = "../feagi-npu/plasticity", optional = true }
+feagi-state-manager = { version = "0.0.1-beta.2", path = "../feagi-state-manager", default-features = false }
 # feagi-io dependency removed to break circular dependency
 # AgentRegistry and types moved to feagi-services
 feagi-structures = { workspace = true }
@@ -53,7 +55,9 @@ std = ["tokio", "feagi-brain-development/async-tokio", "feagi-npu-burst-engine/a
 no_std = []      # Disable async for embedded/RTOS
 wasm = ["feagi-brain-development/wasm", "feagi-npu-burst-engine/wasm"]  # WASM builds without tokio
 connectome-io = ["feagi-npu-burst-engine/connectome-io"]  # Connectome export/import functionality (types in feagi-npu-neural)
+plasticity = ["feagi-brain-development/plasticity", "dep:feagi-npu-plasticity"]  # Enable plasticity features (memory neurons, STDP)
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
+feagi-npu-runtime = { path = "../feagi-npu/runtime" }
 

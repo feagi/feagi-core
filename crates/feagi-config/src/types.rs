@@ -128,7 +128,7 @@ impl Default for AgentConfig {
         Self {
             registration_port: 30001,
             sensory_port: 5555, // NOTE: This is agent config (different from ports.zmq_sensory_port)
-            motor_port: 30005,
+            motor_port: 5564,
             host: "0.0.0.0".to_string(),
             auto_create_missing_cortical_areas: true,
         }
@@ -489,6 +489,7 @@ pub struct MemoryConfig {
     pub min_activation_count: usize,
     pub default_temporal_depth: usize,
     pub pattern_cache_size: usize,
+    pub array_capacity: usize,
     pub initial_lifespan: u32,
     pub lifespan_growth_rate: f32,
     pub longterm_threshold: u32,
@@ -505,6 +506,7 @@ impl Default for MemoryConfig {
             min_activation_count: 3,
             default_temporal_depth: 3,
             pattern_cache_size: 10000,
+            array_capacity: 50000,
             initial_lifespan: 20,
             lifespan_growth_rate: 3.0,
             longterm_threshold: 100,

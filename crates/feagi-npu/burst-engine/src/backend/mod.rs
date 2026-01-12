@@ -390,7 +390,7 @@ pub fn select_backend(
                 estimated_speedup: estimate_cuda_speedup(neuron_count, synapse_count),
             };
         } else {
-            info!("⚠️  CUDA forced but not available, falling back to CPU");
+            info!("CUDA forced but not available, falling back to CPU");
             return BackendDecision {
                 backend_type: BackendType::CPU,
                 reason: "CUDA forced but not available, falling back to CPU".to_string(),
@@ -408,7 +408,7 @@ pub fn select_backend(
                 estimated_speedup: estimate_gpu_speedup(neuron_count, synapse_count),
             };
         } else {
-            info!("⚠️  WGPU forced but not available, falling back to CPU");
+            info!("WGPU forced but not available, falling back to CPU");
             return BackendDecision {
                 backend_type: BackendType::CPU,
                 reason: "WGPU forced but not available, falling back to CPU".to_string(),

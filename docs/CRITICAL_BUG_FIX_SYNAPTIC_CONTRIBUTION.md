@@ -71,6 +71,20 @@ let c = conductance as f32;
 
 ---
 
+## Canonical Contract (Determinism Across Backends)
+
+To keep FEAGI deterministic across CPU, WGPU, and CUDA backends, synaptic math must follow one canonical contract:
+
+- **weight**: stored as `u8` (0..255), treated as **absolute units**
+- **postsynaptic potential (PSP / conductance)**: stored as `u8` (0..255), treated as **absolute units**
+- **contribution**:
+  - \(contribution = sign \times weight \times psp\)
+  - Range per synapse: \([-65{,}025, +65{,}025]\)
+- **No implicit normalization** (`/255.0`) or scaling (`*255.0`) inside synaptic compute loops.
+  - Conversions are allowed only at **IO boundaries** (genome/API/UI) and must be explicit.
+
+---
+
 ## Verification
 
 ### Test Results

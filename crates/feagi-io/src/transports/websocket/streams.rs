@@ -7,8 +7,11 @@ use crate::blocking::compression;
 use crate::core::{IOConfig, IOError, Result};
 use crate::transports::core::common::ServerConfig;
 use crate::transports::core::prelude::*;
+use feagi_structures::FeagiDataError;
 use parking_lot::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::runtime::Runtime;
 use tracing::{error, info};
 
@@ -230,12 +233,34 @@ impl WebSocketStreams {
         &self,
         fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
     ) -> Result<()> {
+        // Diagnostics: time serialize + compress to detect a publish-path slowdown that
+        // can cause client-side drift if messages queue up downstream.
+        static PUBLISH_COUNT: AtomicU64 = AtomicU64::new(0);
+        let publish_idx = PUBLISH_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+
+        let t0 = Instant::now();
+
         // Serialize the fire queue data to FeagiByteContainer format (same as ZMQ)
-        let serialized = Self::serialize_fire_queue(&fire_data)
+        // CRITICAL PERFORMANCE: Take ownership to avoid cloning vectors (moves them instead)
+        let serialized = Self::serialize_fire_queue(fire_data)
             .map_err(|e| IOError::Transport(format!("Failed to serialize fire queue: {}", e)))?;
+        let serialize_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
         // ✅ Compress with LZ4 (BV expects LZ4-compressed msgpack, same as ZMQ)
+        let t1 = Instant::now();
         let compressed = compression::compress_lz4(&serialized)?;
+        let compress_ms = t1.elapsed().as_secs_f64() * 1000.0;
+
+        if publish_idx == 1 || publish_idx % 300 == 0 {
+            info!(
+                "[WS-VIZ] publish_idx={} serialize_ms={:.2} compress_ms={:.2} bytes_raw={} bytes_lz4={}",
+                publish_idx,
+                serialize_ms,
+                compress_ms,
+                serialized.len(),
+                compressed.len()
+            );
+        }
 
         // Publish compressed data to WebSocket clients
         self.publish_visualization(&compressed)
@@ -243,9 +268,11 @@ impl WebSocketStreams {
 
     /// Serialize raw fire queue data to FeagiByteContainer format
     /// Same logic as ZMQ visualization stream
+    ///
+    /// CRITICAL PERFORMANCE: Takes ownership of fire_data to move vectors instead of cloning
     fn serialize_fire_queue(
-        fire_data: &feagi_npu_burst_engine::RawFireQueueSnapshot,
-    ) -> std::result::Result<Vec<u8>, String> {
+        fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
+    ) -> std::result::Result<Vec<u8>, feagi_structures::FeagiDataError> {
         use feagi_serialization::FeagiByteContainer;
         use feagi_structures::genomic::cortical_area::CorticalID;
         use feagi_structures::neuron_voxels::xyzp::{
@@ -259,32 +286,30 @@ impl WebSocketStreams {
                 continue;
             }
 
-            // Create CorticalID from area name
+            // Create CorticalID from cortical_id (base64 encoded)
             let cortical_id =
-                CorticalID::try_from_base_64(&area_data.cortical_area_name).map_err(|e| {
-                    format!(
+                CorticalID::try_from_base_64(&area_data.cortical_id).map_err(|e| {
+                    FeagiDataError::BadParameters(format!(
                         "Failed to decode CorticalID from base64 '{}': {:?}",
-                        area_data.cortical_area_name, e
-                    )
+                        area_data.cortical_id, e
+                    ))
                 })?;
 
-            // Create neuron voxel arrays
+            // Create neuron voxel arrays - MOVE vectors instead of cloning (takes ownership)
+            // This eliminates expensive cloning for large areas
             let neuron_arrays = NeuronVoxelXYZPArrays::new_from_vectors(
-                area_data.coords_x.clone(),
-                area_data.coords_y.clone(),
-                area_data.coords_z.clone(),
-                area_data.potentials.clone(),
-            )
-            .map_err(|e| format!("Failed to create neuron arrays: {:?}", e))?;
+                area_data.coords_x,   // Move instead of clone
+                area_data.coords_y,   // Move instead of clone
+                area_data.coords_z,   // Move instead of clone
+                area_data.potentials, // Move instead of clone
+            )?;
 
             cortical_mapped.insert(cortical_id, neuron_arrays);
         }
 
         // Serialize to FeagiByteContainer
         let mut byte_container = FeagiByteContainer::new_empty();
-        byte_container
-            .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)
-            .map_err(|e| format!("Failed to encode into FeagiByteContainer: {:?}", e))?;
+        byte_container.overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)?;
 
         Ok(byte_container.get_byte_ref().to_vec())
     }
@@ -293,14 +318,18 @@ impl WebSocketStreams {
     pub fn publish_visualization(&self, data: &[u8]) -> Result<()> {
         let viz_pub = self.viz_pub.lock();
         if let Some(pub_server) = viz_pub.as_ref() {
-            pub_server
-                .publish_simple(data)
-                .map_err(|e| IOError::Transport(format!("WebSocket viz publish failed: {}", e)))?;
+            // CRITICAL: publish_simple is non-blocking (uses broadcast channel)
+            // If it fails, it's likely because the server isn't running, not because of blocking
+            pub_server.publish_simple(data).map_err(|e| {
+                let error_msg = format!("WebSocket viz publish failed: {}", e);
+                error!("[WS-VIZ] {}", error_msg);
+                IOError::Transport(error_msg)
+            })?;
             Ok(())
         } else {
-            Err(IOError::Transport(
-                "Visualization publisher not started".to_string(),
-            ))
+            let error_msg = "Visualization publisher not started".to_string();
+            error!("[WS-VIZ] {}", error_msg);
+            Err(IOError::Transport(error_msg))
         }
     }
 

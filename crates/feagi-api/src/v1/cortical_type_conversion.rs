@@ -12,9 +12,9 @@ Licensed under the Apache License, Version 2.0
 
 use super::cortical_area_dtos::CorticalTypeInfo;
 use feagi_brain_development::models::CorticalAreaExt;
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalArea;
-use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
 // Note: CorticalTypeAdapter removed - use feagi_structures::CorticalID directly
 
 /// Convert internal CorticalArea to API CorticalTypeInfo
@@ -44,9 +44,9 @@ pub fn to_cortical_type_info(area: &CorticalArea) -> Option<CorticalTypeInfo> {
 
 /// Extract detailed information from IOCorticalAreaDataFlag
 fn extract_io_type_details(
-    io_type: &IOCorticalAreaDataFlag,
+    io_type: &IOCorticalAreaConfigurationFlag,
 ) -> (Option<String>, Option<String>, Option<serde_json::Value>) {
-    use IOCorticalAreaDataFlag::*;
+    use IOCorticalAreaConfigurationFlag::*;
 
     match io_type {
         Boolean => (Some("Boolean".to_string()), None, None),
@@ -143,9 +143,9 @@ fn frame_handling_to_string(frame_handling: &FrameChangeHandling) -> String {
 
 /// Convert PercentageNeuronPositioning enum to string
 fn positioning_to_string(
-    positioning: &feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning,
+    positioning: &feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning,
 ) -> String {
-    use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 
     match positioning {
         PercentageNeuronPositioning::Linear => "Linear".to_string(),
@@ -157,7 +157,9 @@ fn positioning_to_string(
 mod tests {
     use super::*;
     use feagi_brain_development::{CorticalArea, CorticalID, Dimensions};
-    use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+    use feagi_structures::genomic::cortical_area::{
+        CorticalAreaType, IOCorticalAreaConfigurationFlag,
+    };
 
     #[test]
     fn test_to_cortical_type_info_cartesian_plane() {
@@ -172,7 +174,7 @@ mod tests {
             "Vision Input".to_string(),
             Dimensions::new(128, 128, 3).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
 
@@ -212,7 +214,7 @@ mod tests {
             "Motor Output".to_string(),
             Dimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Boolean),
+            CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
 
@@ -250,7 +252,7 @@ mod tests {
             "Motor Area".to_string(),
             Dimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Boolean),
+            CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
 

@@ -143,6 +143,43 @@ jobs:
     - name: Run all tests (lib only, examples have known API migration issues)
       run: cargo test --workspace --lib --verbose
     
+    - name: Run Comprehensive Neural Dynamics Tests (CRITICAL)
+      working-directory: crates/feagi-npu/burst-engine
+      run: |
+        echo "::group::Running Comprehensive Neural Dynamics Test Suite"
+        echo "⚠️  CRITICAL: These tests gate merges to main"
+        cargo test --test comprehensive_neural_dynamics --no-fail-fast -- --test-threads=1 --nocapture
+        echo "::endgroup::"
+      
+    - name: Run NPU Integration Tests
+      working-directory: crates/feagi-npu/burst-engine
+      run: |
+        echo "::group::Running NPU Integration Tests"
+        cargo test --tests --no-fail-fast
+        echo "::endgroup::"
+    
+    - name: Generate Neural Dynamics Test Report
+      if: always()
+      working-directory: crates/feagi-npu/burst-engine
+      run: |
+        echo "# Neural Dynamics Test Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        cargo test --test comprehensive_neural_dynamics -- --list | grep "test_" | wc -l | xargs -I {} echo "Total Tests: {}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Categories" >> $GITHUB_STEP_SUMMARY
+        echo "- Threshold scenarios (PSP <, =, > threshold)" >> $GITHUB_STEP_SUMMARY
+        echo "- MP accumulation (true/false)" >> $GITHUB_STEP_SUMMARY
+        echo "- Leak coefficients (0.0, 0.5, 1.0)" >> $GITHUB_STEP_SUMMARY
+        echo "- PSP uniformity (divide vs full)" >> $GITHUB_STEP_SUMMARY
+        echo "- Multiple synapses" >> $GITHUB_STEP_SUMMARY
+        echo "- Synapse types (excitatory, inhibitory, mixed)" >> $GITHUB_STEP_SUMMARY
+        echo "- Refractory periods" >> $GITHUB_STEP_SUMMARY
+        echo "- Complex network scenarios" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📋 See detailed findings: [TEST_FINDINGS.md](feagi-core/crates/feagi-npu/burst-engine/tests/TEST_FINDINGS.md)" >> $GITHUB_STEP_SUMMARY
+    
     - name: Run tests in release mode (lib only)
       run: cargo test --workspace --lib --release --verbose
     
@@ -195,3 +232,77 @@ jobs:
         
         echo "✅ All crates can be packaged successfully"
 
+  agent-sdk-live-contracts:
+    name: Agent SDK Live HTTP Contract Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - name: Checkout PR code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Build FEAGI HTTP API server (example)
+      run: |
+        set -euo pipefail
+        cargo build -p feagi-api --example http_api_server
+
+    - name: Start FEAGI HTTP API server (example) in background
+      run: |
+        set -euo pipefail
+        echo "Starting feagi-api example server..."
+        nohup ./target/debug/examples/http_api_server > feagi-api-server.log 2>&1 &
+        echo $! > feagi-api-server.pid
+        echo "PID: $(cat feagi-api-server.pid)"
+
+    - name: Wait for FEAGI HTTP API server to be ready
+      run: |
+        set -euo pipefail
+        for i in $(seq 1 180); do
+          if curl -sf "http://127.0.0.1:8000/swagger-ui/" >/dev/null; then
+            echo "Server is ready"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "Server did not become ready in time"
+        echo "Last 200 lines of server log:"
+        tail -200 feagi-api-server.log || true
+        exit 1
+
+    - name: Run live HTTP contract tests (feagi-agent)
+      env:
+        FEAGI_API_HOST: 127.0.0.1
+        FEAGI_API_PORT: "8000"
+      run: |
+        cargo test -p feagi-agent --test live_http_contract_tests --features sdk -- --nocapture
+
+    - name: Upload server log (artifact)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: feagi-api-server-log
+        path: feagi-api-server.log
+        if-no-files-found: warn
+
+    - name: Stop FEAGI HTTP API server
+      if: always()
+      run: |
+        set +e
+        if [ -f feagi-api-server.pid ]; then
+          kill "$(cat feagi-api-server.pid)" 2>/dev/null || true
+        fi

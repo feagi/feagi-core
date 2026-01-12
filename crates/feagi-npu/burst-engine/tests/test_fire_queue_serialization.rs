@@ -37,7 +37,7 @@ fn test_fire_queue_core_area_serialization() {
     // Create fire queue data
     let fire_data = RawFireQueueData {
         cortical_area_idx: 1,
-        cortical_area_name: base64_name.clone(),
+        cortical_id: base64_name.clone(),
         neuron_ids: vec![0, 1, 2],
         coords_x: vec![0, 1, 2],
         coords_y: vec![0, 1, 2],
@@ -46,7 +46,7 @@ fn test_fire_queue_core_area_serialization() {
     };
 
     // Verify we can decode the cortical ID from the name
-    let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_area_name).unwrap();
+    let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_id).unwrap();
     assert_eq!(decoded_id, cortical_id);
 }
 
@@ -68,7 +68,7 @@ fn test_fire_queue_ipu_area_serialization() {
     // Create fire queue data
     let fire_data = RawFireQueueData {
         cortical_area_idx: 2,
-        cortical_area_name: base64_name.clone(),
+        cortical_id: base64_name.clone(),
         neuron_ids: vec![10, 11],
         coords_x: vec![5, 6],
         coords_y: vec![5, 6],
@@ -77,7 +77,7 @@ fn test_fire_queue_ipu_area_serialization() {
     };
 
     // Verify we can decode the cortical ID from the name
-    let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_area_name).unwrap();
+    let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_id).unwrap();
     assert_eq!(decoded_id, cortical_id);
 }
 
@@ -99,7 +99,7 @@ fn test_fire_queue_opu_area_serialization() {
     // Create fire queue data
     let fire_data = RawFireQueueData {
         cortical_area_idx: 3,
-        cortical_area_name: base64_name.clone(),
+        cortical_id: base64_name.clone(),
         neuron_ids: vec![20, 21, 22, 23],
         coords_x: vec![10, 11, 12, 13],
         coords_y: vec![10, 11, 12, 13],
@@ -108,7 +108,7 @@ fn test_fire_queue_opu_area_serialization() {
     };
 
     // Verify we can decode the cortical ID from the name
-    let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_area_name).unwrap();
+    let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_id).unwrap();
     assert_eq!(decoded_id, cortical_id);
 }
 
@@ -130,7 +130,7 @@ fn test_fire_queue_custom_area_serialization() {
     // Create fire queue data
     let fire_data = RawFireQueueData {
         cortical_area_idx: 4,
-        cortical_area_name: base64_name.clone(),
+        cortical_id: base64_name.clone(),
         neuron_ids: vec![30],
         coords_x: vec![15],
         coords_y: vec![15],
@@ -139,7 +139,7 @@ fn test_fire_queue_custom_area_serialization() {
     };
 
     // Verify we can decode the cortical ID from the name
-    let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_area_name).unwrap();
+    let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_id).unwrap();
     assert_eq!(decoded_id, cortical_id);
 }
 
@@ -161,7 +161,7 @@ fn test_fire_queue_memory_area_serialization() {
     // Create fire queue data
     let fire_data = RawFireQueueData {
         cortical_area_idx: 5,
-        cortical_area_name: base64_name.clone(),
+        cortical_id: base64_name.clone(),
         neuron_ids: vec![40, 41, 42],
         coords_x: vec![20, 21, 22],
         coords_y: vec![20, 21, 22],
@@ -170,7 +170,7 @@ fn test_fire_queue_memory_area_serialization() {
     };
 
     // Verify we can decode the cortical ID from the name
-    let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_area_name).unwrap();
+    let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_id).unwrap();
     assert_eq!(decoded_id, cortical_id);
 }
 
@@ -204,7 +204,7 @@ fn test_fire_queue_multiple_areas() {
 
         let fire_data = RawFireQueueData {
             cortical_area_idx: *idx as u32,
-            cortical_area_name: base64_name.clone(),
+            cortical_id: base64_name.clone(),
             neuron_ids: vec![*idx as u32 * 10],
             coords_x: vec![*idx as u32 * 5],
             coords_y: vec![*idx as u32 * 5],
@@ -219,7 +219,7 @@ fn test_fire_queue_multiple_areas() {
     for (idx, bytes) in &areas {
         let expected_id = CorticalID::try_from_bytes(bytes).unwrap();
         let fire_data = fire_queue_snapshot.get(idx).unwrap();
-        let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_area_name).unwrap();
+        let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_id).unwrap();
 
         assert_eq!(
             decoded_id, expected_id,
@@ -245,7 +245,7 @@ fn test_fire_queue_incorrect_conversion_fails() {
     // Create fire queue data
     let fire_data = RawFireQueueData {
         cortical_area_idx: 1,
-        cortical_area_name: base64_name.clone(),
+        cortical_id: base64_name.clone(),
         neuron_ids: vec![0],
         coords_x: vec![0],
         coords_y: vec![0],
@@ -254,7 +254,7 @@ fn test_fire_queue_incorrect_conversion_fails() {
     };
 
     // Attempting to convert base64 string as raw bytes should fail
-    let name_bytes = fire_data.cortical_area_name.as_bytes();
+    let name_bytes = fire_data.cortical_id.as_bytes();
     let mut bytes = [b' '; 8];
     let copy_len = name_bytes.len().min(8);
     bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
@@ -267,7 +267,7 @@ fn test_fire_queue_incorrect_conversion_fails() {
     );
 
     // But decoding from base64 should succeed
-    let decoded = CorticalID::try_from_base_64(&fire_data.cortical_area_name);
+    let decoded = CorticalID::try_from_base_64(&fire_data.cortical_id);
     assert!(decoded.is_ok(), "Decoding from base64 should succeed");
     assert_eq!(decoded.unwrap(), cortical_id);
 }

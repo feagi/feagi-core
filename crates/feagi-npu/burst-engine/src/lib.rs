@@ -46,6 +46,8 @@ pub mod fire_structures;
 pub mod fq_sampler;
 pub mod motor_shm_writer;
 pub mod neural_dynamics;
+#[cfg(feature = "std")]
+pub mod tracing_mutex;
 // Neuron models moved to feagi-neural::models (Phase 2b)
 pub mod dynamic_npu;
 pub mod npu;
@@ -61,6 +63,11 @@ pub use backend::*;
 pub use burst_loop_runner::*;
 #[cfg(feature = "std")]
 pub use dynamic_npu::DynamicNPU;
+/// Conditional NPU mutex: TracingMutex if feature enabled, else wrapper around std::sync::Mutex
+/// This allows zero-overhead when lock tracing is disabled
+#[cfg(feature = "std")]
+pub use tracing_mutex::TracingMutex;
+
 pub use dynamic_npu::DynamicNPUGeneric;
 pub use fire_ledger::*;
 pub use fire_structures::*;

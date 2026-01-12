@@ -8,6 +8,7 @@
 //! Connectome format utilities and helpers
 
 use crate::connectome::ConnectomeSnapshot;
+use feagi_structures::FeagiDataError;
 
 impl ConnectomeSnapshot {
     /// Get human-readable summary of the connectome
@@ -23,23 +24,23 @@ impl ConnectomeSnapshot {
     }
 
     /// Validate the connectome structure
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), FeagiDataError> {
         // Check neuron array consistency
         if self.neurons.membrane_potentials.len() != self.neurons.capacity {
-            return Err(format!(
+            return Err(FeagiDataError::BadParameters(format!(
                 "Neuron array size mismatch: membrane_potentials.len()={}, capacity={}",
                 self.neurons.membrane_potentials.len(),
                 self.neurons.capacity
-            ));
+            )));
         }
 
         // Check synapse array consistency
         if self.synapses.source_neurons.len() != self.synapses.capacity {
-            return Err(format!(
+            return Err(FeagiDataError::BadParameters(format!(
                 "Synapse array size mismatch: source_neurons.len()={}, capacity={}",
                 self.synapses.source_neurons.len(),
                 self.synapses.capacity
-            ));
+            )));
         }
 
         // Check synapse references are valid
@@ -52,17 +53,17 @@ impl ConnectomeSnapshot {
             let target = self.synapses.target_neurons[i] as usize;
 
             if source >= self.neurons.count {
-                return Err(format!(
+                return Err(FeagiDataError::BadParameters(format!(
                     "Synapse {} has invalid source neuron: {}",
                     i, source
-                ));
+                )));
             }
 
             if target >= self.neurons.count {
-                return Err(format!(
+                return Err(FeagiDataError::BadParameters(format!(
                     "Synapse {} has invalid target neuron: {}",
                     i, target
-                ));
+                )));
             }
         }
 

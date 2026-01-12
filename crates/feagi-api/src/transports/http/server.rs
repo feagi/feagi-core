@@ -46,6 +46,33 @@ pub struct ApiState {
     /// FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
     /// This is a unique identifier for each FEAGI instance/session
     pub feagi_session_timestamp: i64,
+    /// Memory area stats cache (updated by plasticity service, read by health check)
+    pub memory_stats_cache: Option<feagi_npu_plasticity::MemoryStatsCache>,
+    /// Device registration connectors per agent (for export/import functionality)
+    #[cfg(feature = "feagi-agent")]
+    pub agent_connectors: Arc<
+        parking_lot::RwLock<
+            std::collections::HashMap<
+                String,
+                Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
+            >,
+        >,
+    >,
+}
+
+impl ApiState {
+    /// Initialize agent_connectors field (empty HashMap)
+    #[cfg(feature = "feagi-agent")]
+    pub fn init_agent_connectors() -> Arc<
+        parking_lot::RwLock<
+            std::collections::HashMap<
+                String,
+                Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
+            >,
+        >,
+    > {
+        Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()))
+    }
 }
 
 /// Create the main HTTP server application
@@ -108,8 +135,12 @@ pub fn create_http_server(state: ApiState) -> Router {
                 .on_eos(|_trailers: Option<&axum::http::HeaderMap>, stream_duration: std::time::Duration, _span: &tracing::Span| {
                     tracing::trace!(target: "feagi-api", "Stream ended, duration={:?}", stream_duration);
                 })
-                .on_failure(|_error: tower_http::classify::ServerErrorsFailureClass, latency: std::time::Duration, _span: &tracing::Span| {
-                    tracing::error!(target: "feagi-api", "Request failed, latency={:?}", latency);
+                .on_failure(|error: tower_http::classify::ServerErrorsFailureClass, latency: std::time::Duration, _span: &tracing::Span| {
+                    tracing::error!(
+                        target: "feagi-api", 
+                        "Request failed: error_class={:?}, latency={:?}", 
+                        error, latency
+                    );
                 })
         )
 }
@@ -139,7 +170,7 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::{agent, system};
 
     Router::new()
-        // ===== AGENT MODULE (12 endpoints) =====
+        // ===== AGENT MODULE (14 endpoints) =====
         .route("/agent/register", axum::routing::post(register_agent))
         .route("/agent/heartbeat", axum::routing::post(heartbeat))
         .route("/agent/list", get(list_agents))
@@ -163,6 +194,10 @@ fn create_v1_router() -> Router<ApiState> {
         .route(
             "/agent/configure",
             axum::routing::post(agent::post_configure),
+        )
+        .route(
+            "/agent/:agent_id/device_registrations",
+            get(agent::export_device_registrations).post(agent::import_device_registrations),
         )
         // ===== SYSTEM MODULE (21 endpoints) =====
         .route("/system/health_check", get(system::get_health_check))
@@ -573,6 +608,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_neuron_properties_query),
         )
         .route(
+            "/connectome/neuron_properties_at",
+            get(connectome::get_neuron_properties_at_query),
+        )
+        .route(
             "/connectome/area_neurons",
             get(connectome::get_area_neurons_query),
         )
@@ -608,8 +647,16 @@ fn create_v1_router() -> Router<ApiState> {
         )
         .route("/burst_engine/fcl", get(burst_engine::get_fcl))
         .route(
+            "/burst_engine/fcl/neuron",
+            get(burst_engine::get_fcl_neuron),
+        )
+        .route(
             "/burst_engine/fire_queue",
             get(burst_engine::get_fire_queue),
+        )
+        .route(
+            "/burst_engine/fire_queue/neuron",
+            get(burst_engine::get_fire_queue_neuron),
         )
         .route(
             "/burst_engine/fcl_reset",
@@ -991,8 +1038,8 @@ async fn log_request_response_bodies(
 ) -> Result<Response, StatusCode> {
     let (parts, body) = request.into_parts();
 
-    // Only log bodies for POST/PUT/PATCH requests
-    let should_log_request = matches!(parts.method.as_str(), "POST" | "PUT" | "PATCH");
+    // Only log bodies for POST/PUT/PATCH/DELETE requests
+    let should_log_request = matches!(parts.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE");
 
     let body_bytes = if should_log_request {
         // Collect body bytes

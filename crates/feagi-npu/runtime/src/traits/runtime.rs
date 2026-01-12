@@ -105,8 +105,11 @@ pub trait NeuronStorage: Send + Sync {
     /// Membrane potentials slice
     fn membrane_potentials(&self) -> &[Self::Value];
 
-    /// Firing thresholds slice
+    /// Firing thresholds slice (minimum MP to fire)
     fn thresholds(&self) -> &[Self::Value];
+
+    /// Firing threshold limits slice (maximum MP to fire, 0 = no limit)
+    fn threshold_limits(&self) -> &[Self::Value];
 
     /// Leak coefficients slice (0.0-1.0)
     fn leak_coefficients(&self) -> &[f32];
@@ -154,6 +157,9 @@ pub trait NeuronStorage: Send + Sync {
 
     /// Mutable firing thresholds slice
     fn thresholds_mut(&mut self) -> &mut [Self::Value];
+
+    /// Mutable firing threshold limits slice
+    fn threshold_limits_mut(&mut self) -> &mut [Self::Value];
 
     /// Mutable leak coefficients slice
     fn leak_coefficients_mut(&mut self) -> &mut [f32];
@@ -203,6 +209,7 @@ pub trait NeuronStorage: Send + Sync {
     fn add_neuron(
         &mut self,
         threshold: Self::Value,
+        threshold_limit: Self::Value,
         leak: f32,
         resting: Self::Value,
         neuron_type: i32,
@@ -225,6 +232,7 @@ pub trait NeuronStorage: Send + Sync {
     fn add_neurons_batch(
         &mut self,
         thresholds: &[Self::Value],
+        threshold_limits: &[Self::Value],
         leak_coefficients: &[f32],
         resting_potentials: &[Self::Value],
         neuron_types: &[i32],
@@ -265,6 +273,28 @@ pub trait NeuronStorage: Send + Sync {
         cortical_area: u32,
         coords: &[(u32, u32, u32)],
     ) -> Vec<Option<usize>>;
+
+    /// Optimized batch lookup neurons by coordinates from separate slices
+    /// This avoids allocating a Vec of tuples when coordinates are already in separate arrays
+    /// Performance: Eliminates one Vec allocation per frame (significant for high-frequency sensory streams)
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    fn batch_coordinate_lookup_from_slices(
+        &self,
+        cortical_area: u32,
+        x_coords: &[u32],
+        y_coords: &[u32],
+        z_coords: &[u32],
+    ) -> Vec<Option<usize>> {
+        // Default implementation: build tuples and call the standard method
+        // Implementations should override this for better performance
+        let coords: Vec<(u32, u32, u32)> = x_coords
+            .iter()
+            .zip(y_coords.iter())
+            .zip(z_coords.iter())
+            .map(|((&x, &y), &z)| (x, y, z))
+            .collect();
+        self.batch_coordinate_lookup(cortical_area, &coords)
+    }
 }
 
 /// Synapse storage trait: Abstracts System-of-Arrays (SoA) for synapses

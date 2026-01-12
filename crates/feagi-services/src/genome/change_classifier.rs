@@ -90,6 +90,8 @@ impl CorticalChangeClassifier {
             "coordinate_3d",
             "coordinates",
             "position",
+            // Visualization-only aggregation control (BV/UI-driven)
+            "visualization_voxel_granularity",
         ]
         .iter()
         .copied()
@@ -107,6 +109,12 @@ impl CorticalChangeClassifier {
             "neuron_fire_threshold",
             "firing_threshold_limit",
             "neuron_firing_threshold_limit",
+            // Spatial gradient increments - can be updated in-place without rebuild
+            "firing_threshold_increment",
+            "neuron_fire_threshold_increment",
+            "firing_threshold_increment_x",
+            "firing_threshold_increment_y",
+            "firing_threshold_increment_z",
             // Refractory period
             "refractory_period",
             "neuron_refractory_period",
@@ -115,6 +123,7 @@ impl CorticalChangeClassifier {
             "leak_coefficient",
             "neuron_leak_coefficient",
             "leak",
+            // NOTE: leak_variability is in special_parameters() - requires rebuild
             // Consecutive fire parameters
             "consecutive_fire_cnt_max",
             "neuron_consecutive_fire_count",
@@ -130,7 +139,9 @@ impl CorticalChangeClassifier {
             "neuron_degeneracy_coefficient",
             // Postsynaptic current
             "postsynaptic_current",
+            "neuron_post_synaptic_potential",
             "postsynaptic_current_max",
+            "neuron_post_synaptic_potential_max",
             // Memory parameters
             "longterm_mem_threshold",
             "neuron_longterm_mem_threshold",
@@ -144,6 +155,10 @@ impl CorticalChangeClassifier {
             "neuron_mp_charge_accumulation",
             "mp_driven_psp",
             "neuron_mp_driven_psp",
+            // Postsynaptic current distribution mode
+            // NOTE: This is a runtime propagation flag, not a structural/topology change.
+            "psp_uniform_distribution",
+            "neuron_psp_uniform_distribution",
             // Plasticity
             "plasticity_constant",
             // Burst engine
@@ -155,17 +170,13 @@ impl CorticalChangeClassifier {
     }
 
     /// Parameters that need special handling (may require rebuild)
+    ///
+    /// NOTE: Spatial gradient increments were moved to parameter_changes()
+    /// because they can now be updated in-place using position reconstruction.
     pub fn special_parameters() -> HashSet<&'static str> {
         [
-            "firing_threshold_increment",
-            "neuron_fire_threshold_increment",
-            "firing_threshold_increment_x",
-            "firing_threshold_increment_y",
-            "firing_threshold_increment_z",
             "leak_variability",
             "neuron_leak_variability",
-            "psp_uniform_distribution",
-            "neuron_psp_uniform_distribution",
             "is_mem_type",
             "dev_count",
             "synapse_attractivity",

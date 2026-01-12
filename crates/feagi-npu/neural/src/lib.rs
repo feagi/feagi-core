@@ -61,7 +61,6 @@ pub use types::{
     // Dimensions moved to feagi_structures::genomic::cortical_area::CorticalAreaDimensions
     FeagiError,
     FireCandidateList,
-    FireLedger,
     // CorticalArea, BrainRegion, RegionType, BrainRegionHierarchy moved to feagi_data_structures
     FireQueue,
     INT8LeakCoefficient,

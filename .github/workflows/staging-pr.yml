@@ -42,6 +42,23 @@ jobs:
     - name: Run tests (lib only)
       run: cargo test --workspace --lib --verbose
     
+    - name: Run Comprehensive Neural Dynamics Tests
+      working-directory: crates/feagi-npu/burst-engine
+      run: |
+        echo "::group::Running Comprehensive Neural Dynamics Test Suite"
+        cargo test --test comprehensive_neural_dynamics --no-fail-fast -- --test-threads=1 --nocapture
+        echo "::endgroup::"
+        echo "::group::Running Extended Neural Dynamics Tests (Consecutive Limits, Threshold Dynamics)"
+        cargo test --test comprehensive_neural_dynamics_extended --no-fail-fast -- --test-threads=1 --nocapture
+        echo "::endgroup::"
+      
+    - name: Run NPU Integration Tests
+      working-directory: crates/feagi-npu/burst-engine
+      run: |
+        echo "::group::Running NPU Integration Tests"
+        cargo test --tests --no-fail-fast
+        echo "::endgroup::"
+    
     - name: Check if builds
       run: cargo build --workspace --lib --verbose
     
@@ -51,3 +68,77 @@ jobs:
     - name: Run Clippy (lib and tests only)
       run: cargo clippy --workspace --lib --tests -- -D warnings
 
+  agent-sdk-live-contracts:
+    name: Agent SDK Live HTTP Contract Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - name: Checkout PR code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Build FEAGI HTTP API server (example)
+      run: |
+        set -euo pipefail
+        cargo build -p feagi-api --example http_api_server
+
+    - name: Start FEAGI HTTP API server (example) in background
+      run: |
+        set -euo pipefail
+        echo "Starting feagi-api example server..."
+        nohup ./target/debug/examples/http_api_server > feagi-api-server.log 2>&1 &
+        echo $! > feagi-api-server.pid
+        echo "PID: $(cat feagi-api-server.pid)"
+
+    - name: Wait for FEAGI HTTP API server to be ready
+      run: |
+        set -euo pipefail
+        for i in $(seq 1 180); do
+          if curl -sf "http://127.0.0.1:8000/swagger-ui/" >/dev/null; then
+            echo "Server is ready"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "Server did not become ready in time"
+        echo "Last 200 lines of server log:"
+        tail -200 feagi-api-server.log || true
+        exit 1
+
+    - name: Run live HTTP contract tests (feagi-agent)
+      env:
+        FEAGI_API_HOST: 127.0.0.1
+        FEAGI_API_PORT: "8000"
+      run: |
+        cargo test -p feagi-agent --test live_http_contract_tests --features sdk -- --nocapture
+
+    - name: Upload server log (artifact)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: feagi-api-server-log
+        path: feagi-api-server.log
+        if-no-files-found: warn
+
+    - name: Stop FEAGI HTTP API server
+      if: always()
+      run: |
+        set +e
+        if [ -f feagi-api-server.pid ]; then
+          kill "$(cat feagi-api-server.pid)" 2>/dev/null || true
+        fi

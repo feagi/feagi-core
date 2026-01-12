@@ -591,7 +591,11 @@ impl ImageFrame {
                     x_vec.push(col as u32 + x_offset); // col is width (x coordinate)
                     y_vec.push(height - 1 - (row as u32)); // Flip Y: image top-left (0,0) -> FEAGI bottom-left (0,0)
                     c_vec.push(c as u32);
-                    p_vec.push(*color_val as f32 / 255.0);
+                    // Canonical image encoding (absolute intensity):
+                    // - Emit raw pixel intensity in 0..255 as the neuron "potential" (p).
+                    // - This allows iimg/isig inputs to reflect exact RGB values without relying on
+                    //   implicit scaling in FEAGI injection.
+                    p_vec.push(*color_val as f32);
                 }
             }
             Ok(())

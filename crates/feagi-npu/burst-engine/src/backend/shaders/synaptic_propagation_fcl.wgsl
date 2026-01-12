@@ -132,15 +132,14 @@ fn synaptic_propagation_fcl_main(@builtin(global_invocation_id) global_id: vec3<
         let psp_u8 = (packed_params >> 8u) & 0xFFu;
         let synapse_type = (packed_params >> 16u) & 0xFFu;
         
-        // Calculate synaptic contribution (standardized LIF formula)
-        // Result range: -1.0 to +1.0 (both weight and psp normalized [0,1])
-        let weight_f32 = f32(weight_u8) / 255.0;
-        let psp_f32 = f32(psp_u8) / 255.0;
-        let sign = select(-1.0, 1.0, synapse_type == 0u);  // 0=excitatory, 1=inhibitory
-        let contribution = sign * weight_f32 * psp_f32;
-        
-        // Convert to fixed-point i32 (multiply by 1000 for precision)
-        let contribution_i32 = i32(contribution * 1000.0);
+        // Canonical synaptic contribution:
+        // - weight and psp are stored as u8 (0..255) and treated as ABSOLUTE units.
+        // - contribution = sign × weight × psp  (range: -65,025..+65,025)
+        // - we store fixed-point i32 scaled by 1000 for consistency with the WGPU backend buffer format.
+        let w_i32 = i32(weight_u8);
+        let p_i32 = i32(psp_u8);
+        let sign_i32 = select(-1, 1, synapse_type == 0u); // 0=excitatory, 1=inhibitory
+        let contribution_i32 = sign_i32 * w_i32 * p_i32 * 1000;
         
         // Atomically accumulate to FCL potential buffer
         atomicAdd(&fcl_potentials_atomic[target_id], contribution_i32);

@@ -183,8 +183,8 @@ fn needs_migration(id: &str) -> bool {
 /// NOTE: Old format doesn't encode frame handling, so we default to Absolute.
 /// This function is public so it can be used by string_to_cortical_id for individual ID conversions.
 pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
-    use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
-    use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, PercentageNeuronPositioning,
     };
     use feagi_structures::genomic::SensoryCorticalUnit;
@@ -199,9 +199,9 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                     // Generate proper 8-byte ID using SensoryCorticalUnit
                     // Priority: Absolute over Incremental (segmented vision doesn't use positioning)
                     let frame_handling = FrameChangeHandling::Absolute;
-                    let group_index: CorticalGroupIndex = 0.into();
+                    let group_index: CorticalUnitIndex = 0.into();
                     let cortical_ids =
-                        SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
+                        SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                             frame_handling,
                             group_index,
                         );
@@ -224,12 +224,13 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                 // Priority: Absolute over Incremental, Linear over Fractional
                 let frame_handling = FrameChangeHandling::Absolute;
                 let positioning = PercentageNeuronPositioning::Linear;
-                let group_index: CorticalGroupIndex = 0.into();
-                let cortical_ids = MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor(
-                    frame_handling,
-                    positioning,
-                    group_index,
-                );
+                let group_index: CorticalUnitIndex = 0.into();
+                let cortical_ids =
+                    MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
+                        frame_handling,
+                        positioning,
+                        group_index,
+                    );
 
                 if unit_index == 0 && !cortical_ids.is_empty() {
                     let new_id = cortical_ids[0].as_base_64();
@@ -251,12 +252,13 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                 // Priority: Absolute over Incremental, Linear over Fractional
                 let frame_handling = FrameChangeHandling::Absolute;
                 let positioning = PercentageNeuronPositioning::Linear;
-                let group_index: CorticalGroupIndex = 0.into();
-                let cortical_ids = MotorCorticalUnit::get_cortical_ids_array_for_gaze_control(
-                    frame_handling,
-                    positioning,
-                    group_index,
-                );
+                let group_index: CorticalUnitIndex = 0.into();
+                let cortical_ids =
+                    MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
+                        frame_handling,
+                        positioning,
+                        group_index,
+                    );
 
                 if (unit_index as usize) < cortical_ids.len() {
                     let new_id = cortical_ids[unit_index as usize].as_base_64();
@@ -442,36 +444,40 @@ mod tests {
 
     #[test]
     fn test_map_old_id_to_new() {
-        use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
-        use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-        use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
+        use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+        use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
+        use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
         use feagi_structures::genomic::MotorCorticalUnit;
         use feagi_structures::genomic::SensoryCorticalUnit;
 
         // IPU migrations - should return base64 IDs with Absolute frame handling
-        let group_index: CorticalGroupIndex = 0.into();
+        let group_index: CorticalUnitIndex = 0.into();
         let frame_handling = FrameChangeHandling::Absolute;
-        let expected_svi0 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
-            frame_handling,
-            group_index,
-        )[0]
-        .as_base_64();
-        let expected_svi1 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
-            frame_handling,
-            group_index,
-        )[1]
-        .as_base_64();
-        let expected_svi4 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
-            frame_handling,
-            group_index,
-        )[4]
-        .as_base_64();
-        let expected_svi8 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
-            frame_handling,
-            group_index,
-        )[8]
-        .as_base_64();
+        let expected_svi0 =
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                frame_handling,
+                group_index,
+            )[0]
+            .as_base_64();
+        let expected_svi1 =
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                frame_handling,
+                group_index,
+            )[1]
+            .as_base_64();
+        let expected_svi4 =
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                frame_handling,
+                group_index,
+            )[4]
+            .as_base_64();
+        let expected_svi8 =
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                frame_handling,
+                group_index,
+            )[8]
+            .as_base_64();
 
         assert_eq!(map_old_id_to_new("iic000"), Some(expected_svi0));
         assert_eq!(map_old_id_to_new("iic100"), Some(expected_svi1));
@@ -480,13 +486,14 @@ mod tests {
 
         // OPU migrations - should return base64 IDs with Absolute + Linear
         let positioning = PercentageNeuronPositioning::Linear;
-        let expected_mot0 = MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor(
-            frame_handling,
-            positioning,
-            group_index,
-        )[0]
-        .as_base_64();
-        let expected_gaz0 = MotorCorticalUnit::get_cortical_ids_array_for_gaze_control(
+        let expected_mot0 =
+            MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
+                frame_handling,
+                positioning,
+                group_index,
+            )[0]
+            .as_base_64();
+        let expected_gaz0 = MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
             frame_handling,
             positioning,
             group_index,

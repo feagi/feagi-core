@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
+use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 
 // ============================================================================
@@ -278,6 +279,7 @@ pub async fn get_cortical_area_geometry(
                         "cortical_id": area.cortical_id,
                         "cortical_name": area.name,
                         "cortical_group": area.cortical_group,
+                        "cortical_type": area.cortical_type,  // NEW: Explicitly include cortical_type for BV
                         "cortical_sub_group": area.sub_group.as_ref().unwrap_or(&String::new()),  // Return empty string instead of null
                         "coordinates_3d": [area.position.0, area.position.1, area.position.2],
                         "coordinates_2d": [0, 0],  // TODO: Extract from properties when available
@@ -298,7 +300,9 @@ pub async fn get_cortical_area_geometry(
                         },
                         // Neural parameters
                         "neuron_post_synaptic_potential": area.postsynaptic_current,
-                        "neuron_fire_threshold": area.firing_threshold_limit,
+                        // BV expects firing threshold and threshold limit as separate fields.
+                        "neuron_fire_threshold": area.firing_threshold,
+                        "neuron_firing_threshold_limit": area.firing_threshold_limit,
                         "plasticity_constant": area.plasticity_constant,
                         "degeneration": area.degeneration,
                         "leak_coefficient": area.leak_coefficient,
@@ -306,6 +310,8 @@ pub async fn get_cortical_area_geometry(
                         "snooze_period": area.snooze_period,
                         // Parent region ID (required by Brain Visualizer)
                         "parent_region_id": area.parent_region_id,
+                        // Visualization voxel granularity for large-area rendering (optional)
+                        "visualization_voxel_granularity": area.visualization_voxel_granularity.map(|(x, y, z)| serde_json::json!([x, y, z])),
                     });
                     (area.cortical_id.clone(), data)
                 })
@@ -384,9 +390,12 @@ pub async fn post_cortical_area_properties(
 
     match connectome_service.get_cortical_area(cortical_id).await {
         Ok(area_info) => {
-            tracing::debug!(target: "feagi-api", "Cortical area properties for {}: cortical_group={}, area_type={}", cortical_id, area_info.cortical_group, area_info.area_type);
+            tracing::debug!(target: "feagi-api", "Cortical area properties for {}: cortical_group={}, area_type={}, cortical_type={}", 
+                cortical_id, area_info.cortical_group, area_info.area_type, area_info.cortical_type);
+            tracing::info!(target: "feagi-api", "[API-RESPONSE] Returning mp_driven_psp={} for area {}", area_info.mp_driven_psp, cortical_id);
             let json_value = serde_json::to_value(&area_info).unwrap_or_default();
             tracing::debug!(target: "feagi-api", "Serialized JSON keys: {:?}", json_value.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+            tracing::debug!(target: "feagi-api", "Serialized cortical_type value: {:?}", json_value.get("cortical_type"));
             Ok(Json(json_value))
         }
         Err(e) => Err(ApiError::internal(format!(
@@ -436,10 +445,17 @@ pub async fn post_multi_cortical_area_properties(
 
     for cortical_id in cortical_ids {
         if let Ok(area_info) = connectome_service.get_cortical_area(&cortical_id).await {
-            result.insert(
-                cortical_id,
-                serde_json::to_value(area_info).unwrap_or_default(),
+            tracing::debug!(target: "feagi-api",
+                "[MULTI] Area {}: cortical_type={}, cortical_group={}, is_mem_type={:?}",
+                cortical_id, area_info.cortical_type, area_info.cortical_group,
+                area_info.properties.get("is_mem_type")
             );
+            let json_value = serde_json::to_value(&area_info).unwrap_or_default();
+            tracing::debug!(target: "feagi-api",
+                "[MULTI] Serialized has cortical_type: {}",
+                json_value.get("cortical_type").is_some()
+            );
+            result.insert(cortical_id, json_value);
         }
     }
     Ok(Json(result))
@@ -502,57 +518,66 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_u64())
         .unwrap_or(1) as u32;
 
-    // Extract data_type_config from request (default to 0 for backward compatibility)
-    // Handle multiple number types: u64, i64, f64, and string representations
-    let raw_data_type_config = request.get("data_type_config");
-    if let Some(raw_val) = raw_data_type_config {
-        tracing::debug!(target: "feagi-api", "Raw data_type_config value: {:?} (type: {:?})", raw_val, raw_val);
-    }
-    let data_type_config = raw_data_type_config
-        .and_then(|v| {
-            // Try u64 first (most common case)
-            if let Some(u) = v.as_u64() {
-                return Some(u);
-            }
-            // Try i64 (signed integer)
-            if let Some(i) = v.as_i64() {
-                if i >= 0 {
-                    return Some(i as u64);
-                }
-            }
-            // Try f64 (float) - round to nearest integer
-            if let Some(f) = v.as_f64() {
-                if f >= 0.0 && f <= u16::MAX as f64 {
-                    return Some(f.round() as u64);
-                }
-            }
-            // Try string representation
-            if let Some(s) = v.as_str() {
-                if let Ok(parsed) = s.parse::<u64>() {
-                    return Some(parsed);
-                }
-            }
-            None
-        })
-        .map(|v| {
-            if v > u16::MAX as u64 {
-                tracing::warn!(target: "feagi-api", "data_type_config value {} exceeds u16::MAX, clamping to {}", v, u16::MAX);
-                u16::MAX
+    // BREAKING CHANGE (unreleased API):
+    // `data_type_config` is now per-subunit, because some cortical units have heterogeneous
+    // subunits (e.g. Gaze: Percentage2D + Percentage).
+    //
+    // Request must provide:
+    //   data_type_configs_by_subunit: { "0": <u16>, "1": <u16>, ... }
+    let raw_configs = request
+        .get("data_type_configs_by_subunit")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| ApiError::invalid_input("data_type_configs_by_subunit (object) required"))?;
+
+    let mut data_type_configs_by_subunit: HashMap<u8, u16> = HashMap::new();
+
+    for (k, v) in raw_configs {
+        let subunit_idx_u64 = k.parse::<u64>().map_err(|_| {
+            ApiError::invalid_input("data_type_configs_by_subunit keys must be integers")
+        })?;
+        let subunit_idx: u8 = subunit_idx_u64.try_into().map_err(|_| {
+            ApiError::invalid_input("data_type_configs_by_subunit key out of range")
+        })?;
+
+        let parsed_u64 = if let Some(u) = v.as_u64() {
+            Some(u)
+        } else if let Some(i) = v.as_i64() {
+            if i >= 0 {
+                Some(i as u64)
             } else {
-                v as u16
+                None
             }
-        })
-        .unwrap_or_else(|| {
-            tracing::warn!(target: "feagi-api", "data_type_config missing or invalid in request, defaulting to 0 (backward compatibility)");
-            0
-        });
+        } else if let Some(f) = v.as_f64() {
+            if f >= 0.0 {
+                Some(f.round() as u64)
+            } else {
+                None
+            }
+        } else if let Some(s) = v.as_str() {
+            s.parse::<u64>().ok()
+        } else {
+            None
+        }
+        .ok_or_else(|| {
+            ApiError::invalid_input("data_type_configs_by_subunit values must be numeric")
+        })?;
 
-    // Split data_type_config into two bytes for cortical ID
-    let config_byte_4 = (data_type_config & 0xFF) as u8; // Lower byte
-    let config_byte_5 = ((data_type_config >> 8) & 0xFF) as u8; // Upper byte
+        if parsed_u64 > u16::MAX as u64 {
+            return Err(ApiError::invalid_input(
+                "data_type_configs_by_subunit value exceeds u16::MAX",
+            ));
+        }
 
-    tracing::info!(target: "feagi-api", "Creating cortical areas for {} with neurons_per_voxel={}, data_type_config={} (bytes: {}, {})",
-        cortical_type_key, neurons_per_voxel, data_type_config, config_byte_4, config_byte_5);
+        data_type_configs_by_subunit.insert(subunit_idx, parsed_u64 as u16);
+    }
+
+    tracing::info!(
+        target: "feagi-api",
+        "Creating cortical areas for {} with neurons_per_voxel={}, data_type_configs_by_subunit={:?}",
+        cortical_type_key,
+        neurons_per_voxel,
+        data_type_configs_by_subunit
+    );
 
     // Determine number of units and get topology
     let (num_units, unit_topology) = if cortical_type_str == "IPU" {
@@ -602,25 +627,41 @@ pub async fn post_cortical_area(
     // Build creation parameters for all units
     let mut creation_params = Vec::new();
     for unit_idx in 0..num_units {
+        let data_type_config = data_type_configs_by_subunit
+            .get(&(unit_idx as u8))
+            .copied()
+            .ok_or_else(|| {
+                ApiError::invalid_input(format!(
+                    "data_type_configs_by_subunit missing entry for subunit {}",
+                    unit_idx
+                ))
+            })?;
+
+        // Split per-subunit data_type_config into two bytes for cortical ID
+        let config_byte_4 = (data_type_config & 0xFF) as u8; // Lower byte
+        let config_byte_5 = ((data_type_config >> 8) & 0xFF) as u8; // Upper byte
+
         // Get dimensions for this unit from topology
-        let dimensions = if let Some(topo) = unit_topology.get(&unit_idx) {
-            let dims = topo.channel_dimensions_default;
-            (dims[0] as usize, dims[1] as usize, dims[2] as usize)
-        } else {
-            (1, 1, 1) // Fallback
-        };
+        let dimensions =
+            if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
+                let dims = topo.channel_dimensions_default;
+                (dims[0] as usize, dims[1] as usize, dims[2] as usize)
+            } else {
+                (1, 1, 1) // Fallback
+            };
 
         // Calculate position for this unit
-        let position = if let Some(topo) = unit_topology.get(&unit_idx) {
-            let rel_pos = topo.relative_position;
-            (
-                coordinates_3d[0] + rel_pos[0],
-                coordinates_3d[1] + rel_pos[1],
-                coordinates_3d[2] + rel_pos[2],
-            )
-        } else {
-            (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2])
-        };
+        let position =
+            if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
+                let rel_pos = topo.relative_position;
+                (
+                    coordinates_3d[0] + rel_pos[0],
+                    coordinates_3d[1] + rel_pos[1],
+                    coordinates_3d[2] + rel_pos[2],
+                )
+            } else {
+                (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2])
+            };
 
         // Construct proper 8-byte cortical ID
         // Byte structure: [type(i/o), subtype[0], subtype[1], subtype[2], encoding_type, encoding_format, unit_idx, group_id]
@@ -637,7 +678,6 @@ pub async fn post_cortical_area(
         };
 
         // Construct the 8-byte cortical ID
-        // Use data_type_config from request for bytes 4-5
         let cortical_id_bytes = [
             if cortical_type_str == "IPU" {
                 b'i'
@@ -662,6 +702,17 @@ pub async fn post_cortical_area(
             dimensions.0 * dimensions.1 * dimensions.2 * neurons_per_voxel as usize
         );
 
+        // Store device_count and per-device dimensions in properties for BV compatibility
+        let mut properties = HashMap::new();
+        properties.insert(
+            "dev_count".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(device_count)),
+        );
+        properties.insert(
+            "cortical_dimensions_per_device".to_string(),
+            serde_json::json!([dimensions.0, dimensions.1, dimensions.2]),
+        );
+
         let params = CreateCorticalAreaParams {
             cortical_id: cortical_id.clone(),
             name: format!("{} Unit {}", cortical_type_key, unit_idx),
@@ -683,7 +734,7 @@ pub async fn post_cortical_area(
             leak_coefficient: Some(0.0),
             leak_variability: Some(0.0),
             burst_engine_active: Some(true),
-            properties: Some(HashMap::new()),
+            properties: Some(properties),
         };
 
         creation_params.push(params);
@@ -754,6 +805,13 @@ pub async fn put_cortical_area(
         .ok_or_else(|| ApiError::invalid_input("cortical_id required"))?
         .to_string();
 
+    tracing::debug!(
+        target: "feagi-api",
+        "PUT /v1/cortical_area/cortical_area - received update for area: {} (keys: {:?})",
+        cortical_id,
+        request.keys().collect::<Vec<_>>()
+    );
+
     // Remove cortical_id from changes (it's not a property to update)
     request.remove("cortical_id");
 
@@ -762,11 +820,17 @@ pub async fn put_cortical_area(
         .update_cortical_area(&cortical_id, request)
         .await
     {
-        Ok(_) => Ok(Json(HashMap::from([
-            ("message".to_string(), "Cortical area updated".to_string()),
-            ("cortical_id".to_string(), cortical_id),
-        ]))),
-        Err(e) => Err(ApiError::internal(format!("Failed to update: {}", e))),
+        Ok(_) => {
+            tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/cortical_area - success for {}", cortical_id);
+            Ok(Json(HashMap::from([
+                ("message".to_string(), "Cortical area updated".to_string()),
+                ("cortical_id".to_string(), cortical_id),
+            ])))
+        }
+        Err(e) => {
+            tracing::error!(target: "feagi-api", "PUT /v1/cortical_area/cortical_area - failed for {}: {}", cortical_id, e);
+            Err(ApiError::internal(format!("Failed to update: {}", e)))
+        }
     }
 }
 
@@ -807,6 +871,23 @@ pub async fn post_custom_cortical_area(
 ) -> ApiResult<Json<HashMap<String, String>>> {
     use feagi_services::types::CreateCorticalAreaParams;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    // Helper: check whether BV is requesting a MEMORY cortical area (still routed through this endpoint).
+    //
+    // Brain Visualizer sends:
+    //   sub_group_id: "MEMORY"
+    //   cortical_group: "CUSTOM"
+    //
+    // In feagi-core, the authoritative cortical type is derived from the CorticalID prefix byte:
+    // - b'c' => Custom
+    // - b'm' => Memory
+    //
+    // So if sub_group_id indicates MEMORY, we must generate an 'm' prefixed CorticalID.
+    let is_memory_area_requested = request
+        .get("sub_group_id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.eq_ignore_ascii_case("MEMORY"))
+        .unwrap_or(false);
 
     // Extract required fields from request
     let cortical_name = request
@@ -858,7 +939,8 @@ pub async fn post_custom_cortical_area(
         .map(|s| s.to_string());
 
     tracing::info!(target: "feagi-api",
-        "Creating custom cortical area '{}' with dimensions: {}x{}x{}, position: ({}, {}, {})",
+        "Creating {} cortical area '{}' with dimensions: {}x{}x{}, position: ({}, {}, {})",
+        if is_memory_area_requested { "memory" } else { "custom" },
         cortical_name, cortical_dimensions[0], cortical_dimensions[1], cortical_dimensions[2],
         coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]
     );
@@ -871,12 +953,12 @@ pub async fn post_custom_cortical_area(
         .unwrap()
         .as_millis() as u64;
 
-    // Create 8-byte cortical ID for custom area
-    // Byte 0: 'c' for custom
+    // Create 8-byte cortical ID for custom/memory area
+    // Byte 0: 'c' for custom OR 'm' for memory (authoritative type discriminator)
     // Bytes 1-6: Derived from name (first 6 chars, padded with underscores)
     // Byte 7: Counter based on timestamp lower bits
     let mut cortical_id_bytes = [0u8; 8];
-    cortical_id_bytes[0] = b'c'; // Custom cortical area marker
+    cortical_id_bytes[0] = if is_memory_area_requested { b'm' } else { b'c' };
 
     // Use the cortical name for bytes 1-6 (truncate or pad as needed)
     let name_bytes = cortical_name.as_bytes();
@@ -924,7 +1006,11 @@ pub async fn post_custom_cortical_area(
             cortical_dimensions[2] as usize,
         ),
         position: (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]),
-        area_type: "Custom".to_string(),
+        area_type: if is_memory_area_requested {
+            "Memory".to_string()
+        } else {
+            "Custom".to_string()
+        },
         visible: Some(true),
         sub_group: cortical_sub_group,
         neurons_per_voxel: Some(1),
@@ -991,13 +1077,62 @@ pub async fn post_clone(
     path = "/v1/cortical_area/multi/cortical_area",
     tag = "cortical_area"
 )]
-#[allow(unused_variables)] // In development
 pub async fn put_multi_cortical_area(
     State(state): State<ApiState>,
-    Json(request): Json<HashMap<String, serde_json::Value>>,
+    Json(mut request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Update multiple cortical areas
-    Err(ApiError::internal("Not yet implemented"))
+    let genome_service = state.genome_service.as_ref();
+
+    // Extract cortical_id_list
+    let cortical_ids: Vec<String> = request
+        .get("cortical_id_list")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| ApiError::invalid_input("cortical_id_list required"))?
+        .iter()
+        .filter_map(|v| v.as_str().map(String::from))
+        .collect();
+
+    if cortical_ids.is_empty() {
+        return Err(ApiError::invalid_input("cortical_id_list cannot be empty"));
+    }
+
+    tracing::debug!(
+        target: "feagi-api",
+        "PUT /v1/cortical_area/multi/cortical_area - received update for {} areas (keys: {:?})",
+        cortical_ids.len(),
+        request.keys().collect::<Vec<_>>()
+    );
+
+    // Remove cortical_id_list from changes (it's not a property to update)
+    request.remove("cortical_id_list");
+
+    // Update each cortical area with the same properties
+    for cortical_id in &cortical_ids {
+        tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - updating area: {}", cortical_id);
+        match genome_service
+            .update_cortical_area(cortical_id, request.clone())
+            .await
+        {
+            Ok(_) => {
+                tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - success for {}", cortical_id);
+            }
+            Err(e) => {
+                tracing::error!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - failed for {}: {}", cortical_id, e);
+                return Err(ApiError::internal(format!(
+                    "Failed to update cortical area {}: {}",
+                    cortical_id, e
+                )));
+            }
+        }
+    }
+
+    Ok(Json(HashMap::from([
+        (
+            "message".to_string(),
+            format!("Updated {} cortical areas", cortical_ids.len()),
+        ),
+        ("cortical_ids".to_string(), cortical_ids.join(", ")),
+    ])))
 }
 
 /// Delete multiple cortical areas by their IDs. (Not yet implemented)
@@ -1202,7 +1337,7 @@ pub async fn get_ipu_types(
             .into_iter()
             .map(|(idx, topo)| {
                 (
-                    idx,
+                    *idx as usize,
                     UnitTopologyData {
                         relative_position: topo.relative_position,
                         dimensions: topo.channel_dimensions_default,
@@ -1273,7 +1408,7 @@ pub async fn get_opu_types(
             .into_iter()
             .map(|(idx, topo)| {
                 (
-                    idx,
+                    *idx as usize,
                     UnitTopologyData {
                         relative_position: topo.relative_position,
                         dimensions: topo.channel_dimensions_default,

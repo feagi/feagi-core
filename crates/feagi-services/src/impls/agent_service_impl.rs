@@ -115,7 +115,6 @@ impl AgentService for AgentServiceImpl {
                 capabilities.sensory = Some(SensoryCapability {
                     rate_hz: 30.0,
                     shm_path: None,
-                    cortical_mappings: std::collections::HashMap::new(),
                 });
             }
             AgentType::Motor => {
@@ -124,6 +123,9 @@ impl AgentService for AgentServiceImpl {
                     modality: "generic".to_string(),
                     output_count: 0,
                     source_cortical_areas: vec![],
+                    unit: None,
+                    group: None,
+                    source_units: None,
                 });
             }
             AgentType::Both => {
@@ -131,12 +133,14 @@ impl AgentService for AgentServiceImpl {
                 capabilities.sensory = Some(SensoryCapability {
                     rate_hz: 30.0,
                     shm_path: None,
-                    cortical_mappings: std::collections::HashMap::new(),
                 });
                 capabilities.motor = Some(MotorCapability {
                     modality: "generic".to_string(),
                     output_count: 0,
                     source_cortical_areas: vec![],
+                    unit: None,
+                    group: None,
+                    source_units: None,
                 });
             }
             AgentType::Infrastructure => {
@@ -284,10 +288,46 @@ impl AgentService for AgentServiceImpl {
     }
 
     async fn heartbeat(&self, request: HeartbeatRequest) -> AgentResult<()> {
+        // Check if agent exists before attempting heartbeat
+        let agent_exists = {
+            let registry = self.agent_registry.read();
+            registry.get(&request.agent_id).is_some()
+        };
+
+        if !agent_exists {
+            // Log diagnostic information when agent not found
+            let all_agents: Vec<String> = {
+                let registry = self.agent_registry.read();
+                registry
+                    .get_all()
+                    .iter()
+                    .map(|a| a.agent_id.clone())
+                    .collect()
+            };
+            warn!(
+                "⚠️ [HEARTBEAT] Agent '{}' not found in registry. Registered agents ({}): {:?}",
+                request.agent_id,
+                all_agents.len(),
+                all_agents
+            );
+            return Err(AgentError::NotFound(format!(
+                "Agent {} not found in registry (total registered: {})",
+                request.agent_id,
+                all_agents.len()
+            )));
+        }
+
+        // Agent exists - update heartbeat
         self.agent_registry
             .write()
             .heartbeat(&request.agent_id)
-            .map_err(AgentError::NotFound)?;
+            .map_err(|e| {
+                error!(
+                    "❌ [HEARTBEAT] Failed to update heartbeat for '{}': {}",
+                    request.agent_id, e
+                );
+                AgentError::NotFound(e)
+            })?;
         Ok(())
     }
 
@@ -378,12 +418,13 @@ impl AgentService for AgentServiceImpl {
         }
 
         // Add input capability (feagi-sensorimotor format)
-        if let Some(ref sensory) = agent.capabilities.sensory {
-            // Convert sensory capability to "input" format: array of cortical IDs
-            let input_areas: Vec<String> = sensory.cortical_mappings.keys().cloned().collect();
+        // Note: cortical_mappings removed - device registrations are handled separately
+        if let Some(ref _sensory) = agent.capabilities.sensory {
+            // Return empty array since cortical_mappings no longer exist
+            // Device registrations should be accessed via device_registrations endpoint
             capabilities.insert(
                 "input".to_string(),
-                serde_json::to_value(input_areas).unwrap_or(serde_json::Value::Null),
+                serde_json::to_value(Vec::<String>::new()).unwrap_or(serde_json::Value::Null),
             );
         }
 

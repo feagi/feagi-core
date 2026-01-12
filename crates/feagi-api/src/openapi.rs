@@ -83,7 +83,7 @@ use crate::{
         (url = "http://localhost:8080", description = "Alternative port")
     ),
     paths(
-        // Agent endpoints (12 total)
+        // Agent endpoints (14 total)
         crate::endpoints::agent::register_agent,
         crate::endpoints::agent::heartbeat,
         crate::endpoints::agent::list_agents,
@@ -96,6 +96,8 @@ use crate::{
         crate::endpoints::agent::get_capabilities,
         crate::endpoints::agent::get_agent_info,
         crate::endpoints::agent::post_configure,
+        crate::endpoints::agent::export_device_registrations,
+        crate::endpoints::agent::import_device_registrations,
 
         // System endpoints (21 total)
         crate::endpoints::system::get_health_check,
@@ -281,6 +283,7 @@ use crate::{
         crate::endpoints::connectome::get_stats_cortical_cumulative,
         crate::endpoints::connectome::get_neuron_properties_by_id,
         crate::endpoints::connectome::get_neuron_properties_query,
+        crate::endpoints::connectome::get_neuron_properties_at_query,
         crate::endpoints::connectome::get_area_neurons_query,
         crate::endpoints::connectome::get_fire_queue_area,
         crate::endpoints::connectome::get_plasticity_info,
@@ -294,7 +297,9 @@ use crate::{
         crate::endpoints::burst_engine::get_simulation_timestep,
         crate::endpoints::burst_engine::post_simulation_timestep,
         crate::endpoints::burst_engine::get_fcl,
+        crate::endpoints::burst_engine::get_fcl_neuron,
         crate::endpoints::burst_engine::get_fire_queue,
+        crate::endpoints::burst_engine::get_fire_queue_neuron,
         crate::endpoints::burst_engine::post_fcl_reset,
         crate::endpoints::burst_engine::get_fcl_status,
         crate::endpoints::burst_engine::get_fcl_sampler_config,
@@ -502,6 +507,9 @@ use crate::{
             crate::v1::SuccessResponse,
             crate::v1::ManualStimulationRequest,
             crate::v1::ManualStimulationResponse,
+            crate::v1::DeviceRegistrationExportResponse,
+            crate::v1::DeviceRegistrationImportRequest,
+            crate::v1::DeviceRegistrationImportResponse,
 
             // System
             crate::endpoints::system::HealthCheckResponse,

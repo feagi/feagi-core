@@ -32,6 +32,7 @@ struct TransportOption {
 struct RegistrationInfo {
     status: String,
     message: Option<String>,
+    #[allow(dead_code)]
     zmq_ports: Option<HashMap<String, u16>>,
     transports: Vec<TransportOption>,
     recommended_transport: Option<String>,

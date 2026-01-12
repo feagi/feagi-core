@@ -11,9 +11,14 @@
 use feagi_npu_burst_engine::backend;
 #[allow(unused_imports)]
 use feagi_npu_neural::types::FireCandidateList;
+#[cfg(feature = "gpu")]
 use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
+#[cfg(feature = "gpu")]
+use std::time::Instant;
+
 /// Create test genome with specified size
+#[cfg(feature = "gpu")]
 fn create_test_genome(
     neuron_count: usize,
     synapses_per_neuron: usize,
@@ -39,12 +44,12 @@ fn create_test_genome(
         for i in 0..synapses_per_neuron {
             let target = (source + i + 1) % neuron_count;
             if synapse_idx < synapse_count {
-                synapse_array.source_neurons[synapse_idx] = source as u32;
-                synapse_array.target_neurons[synapse_idx] = target as u32;
-                synapse_array.weights[synapse_idx] = 128; // Mid-range weight
-                synapse_array.postsynaptic_potentials[synapse_idx] = 200;
-                synapse_array.types[synapse_idx] = if i % 4 == 0 { 1 } else { 0 }; // 75% excitatory
-                synapse_array.valid_mask[synapse_idx] = true;
+                synapse_array.source_neurons.push(source as u32);
+                synapse_array.target_neurons.push(target as u32);
+                synapse_array.weights.push(128); // Mid-range weight
+                synapse_array.postsynaptic_potentials.push(200);
+                synapse_array.types.push(if i % 4 == 0 { 1 } else { 0 }); // 75% excitatory
+                synapse_array.valid_mask.push(true);
 
                 synapse_array
                     .source_index
@@ -62,6 +67,7 @@ fn create_test_genome(
 }
 
 /// Simulate firing neurons (1% firing rate)
+#[cfg(feature = "gpu")]
 fn create_fired_neurons(neuron_count: usize) -> Vec<u32> {
     let fire_count = (neuron_count as f32 * 0.01).max(10.0) as usize;
     (0..fire_count)
@@ -70,21 +76,20 @@ fn create_fired_neurons(neuron_count: usize) -> Vec<u32> {
 }
 
 #[test]
+#[cfg(feature = "gpu")]
 fn test_gpu_full_pipeline_speedup() {
     // Test parameters
     let neuron_count = 10_000;
     let synapses_per_neuron = 100;
     let burst_iterations = 10;
+    let synapse_count = neuron_count * synapses_per_neuron;
 
     println!("\n🎯 GPU Full Pipeline Performance Test");
     println!(
         "   Neurons: {}, Synapses/neuron: {}, Iterations: {}",
         neuron_count, synapses_per_neuron, burst_iterations
     );
-    println!(
-        "   Total synapses: {}\n",
-        neuron_count * synapses_per_neuron
-    );
+    println!("   Total synapses: {}\n", synapse_count);
 
     // Create test genome
     #[allow(unused_variables)]
@@ -104,8 +109,8 @@ fn test_gpu_full_pipeline_speedup() {
     #[cfg(feature = "gpu")]
     {
         println!("🎮 Testing GPU backend...");
-        let mut gpu_backend = backend::WGPUBackend::new(neuron_count * 2, synapse_array.capacity)
-            .expect("GPU init failed");
+        let mut gpu_backend =
+            backend::WGPUBackend::new(neuron_count * 2, synapse_count).expect("GPU init failed");
         gpu_backend
             .initialize_persistent_data(&neuron_array, &synapse_array)
             .expect("GPU data upload failed");
@@ -163,10 +168,5 @@ fn test_gpu_full_pipeline_speedup() {
             println!("   Note: Small genomes may not benefit from GPU");
             println!("   Try larger genomes (100K+ neurons) for better speedup\n");
         }
-    }
-
-    #[cfg(not(feature = "gpu"))]
-    {
-        println!("⚠️  GPU feature not enabled. Run with --features gpu");
     }
 }

@@ -12,7 +12,9 @@ use futures_util::{SinkExt, StreamExt};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
@@ -61,7 +63,14 @@ impl WsPub {
 
         info!("🦀 [WS-PUB] Listening on {}", addr);
 
-        let (broadcast_tx, _) = broadcast::channel(1000);
+        // REAL-TIME SEMANTICS:
+        // Visualization (and motor) streams must not buffer historical frames/commands.
+        // Keep the channel capacity minimal so slow clients "lag" and skip to newest,
+        // rather than drifting farther behind real-time.
+        //
+        // Note: Tokio broadcast is a ring buffer; if a receiver falls behind, it
+        // gets `Lagged(skipped)` and only sees the most recent messages.
+        let (broadcast_tx, _) = broadcast::channel(1);
         *self.broadcast_tx.write() = Some(broadcast_tx.clone());
         *self.running.write() = true;
 
@@ -81,7 +90,8 @@ impl WsPub {
                             if let Err(e) =
                                 handle_client(stream, peer_addr, broadcast_rx, clients_clone).await
                             {
-                                warn!("[WS-PUB] Client {} error: {}", peer_addr, e);
+                                // Log detailed error information for debugging
+                                warn!("[WS-PUB] Client {} connection error: {}", peer_addr, e);
                             }
                         });
                     }
@@ -141,6 +151,9 @@ impl Publisher for WsPub {
         // This is normal - messages are dropped if no one is listening
         let _ = tx.send(message);
 
+        // Diagnostics: publish rate and payload size (rate-limited)
+        ws_pub_record_publish_stats("ws_viz_topic", topic.len() as u64 + data.len() as u64 + 1);
+
         Ok(())
     }
 
@@ -151,8 +164,59 @@ impl Publisher for WsPub {
         // Ignore SendError if no receivers (no clients connected yet)
         let _ = tx.send(data.to_vec());
 
+        // Diagnostics: publish rate and payload size (rate-limited)
+        ws_pub_record_publish_stats("ws_viz_simple", data.len() as u64);
+
         Ok(())
     }
+}
+
+/// Record server-side publish stats in a low-overhead, rate-limited way.
+///
+/// This is logging-only instrumentation to detect whether WebSocket PUB is
+/// producing messages faster than clients can consume them.
+fn ws_pub_record_publish_stats(stream: &'static str, bytes: u64) {
+    static PUBLISHED_TOTAL: AtomicU64 = AtomicU64::new(0);
+    static BYTES_TOTAL: AtomicU64 = AtomicU64::new(0);
+    static LAST_LOG_MS: AtomicU64 = AtomicU64::new(0);
+    static LAST_PUBLISHED_TOTAL: AtomicU64 = AtomicU64::new(0);
+    static LAST_BYTES_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+    let published_now = PUBLISHED_TOTAL.fetch_add(1, Ordering::Relaxed) + 1;
+    let bytes_now = BYTES_TOTAL.fetch_add(bytes, Ordering::Relaxed) + bytes;
+
+    let now_ms = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+
+    let last_ms = LAST_LOG_MS.load(Ordering::Relaxed);
+    // Log every 5 seconds max, across all WsPub instances.
+    if now_ms.saturating_sub(last_ms) < 5_000 {
+        return;
+    }
+
+    if LAST_LOG_MS
+        .compare_exchange(last_ms, now_ms, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+
+    let prev_published = LAST_PUBLISHED_TOTAL.swap(published_now, Ordering::Relaxed);
+    let prev_bytes = LAST_BYTES_TOTAL.swap(bytes_now, Ordering::Relaxed);
+
+    let delta_published = published_now.saturating_sub(prev_published);
+    let delta_bytes = bytes_now.saturating_sub(prev_bytes);
+    let delta_ms = now_ms.saturating_sub(last_ms).max(1);
+
+    let hz = (delta_published as f64) * 1000.0 / (delta_ms as f64);
+    let kbps = (delta_bytes as f64) / (delta_ms as f64); // kB/s-ish (bytes/ms)
+
+    info!(
+        "[WS-PUB][{}] publish_rate_hz={:.2} bytes_per_ms={:.2} totals: messages={} bytes={}",
+        stream, hz, kbps, published_now, bytes_now
+    );
 }
 
 /// Handle a single WebSocket client connection
@@ -162,16 +226,132 @@ async fn handle_client(
     mut broadcast_rx: broadcast::Receiver<Vec<u8>>,
     clients: Arc<RwLock<HashMap<SocketAddr, broadcast::Sender<Vec<u8>>>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let ws_stream = accept_async(stream).await?;
-    let (mut write, _read) = ws_stream.split();
+    // Perform WebSocket handshake with timeout protection
+    let handshake_start = std::time::Instant::now();
+    let ws_stream = match accept_async(stream).await {
+        Ok(ws) => ws,
+        Err(e) => {
+            warn!(
+                "[WS-PUB] Client {} handshake failed after {:.2}ms: {}",
+                peer_addr,
+                handshake_start.elapsed().as_secs_f64() * 1000.0,
+                e
+            );
+            return Err(Box::new(e));
+        }
+    };
+    let handshake_duration = handshake_start.elapsed();
+    if handshake_duration.as_millis() > 100 {
+        warn!(
+            "[WS-PUB] Client {} slow handshake: {:.2}ms",
+            peer_addr,
+            handshake_duration.as_secs_f64() * 1000.0
+        );
+    }
 
-    info!("[WS-PUB] Client {} connected", peer_addr);
+    let (mut write, mut read) = ws_stream.split();
 
-    while let Ok(data) = broadcast_rx.recv().await {
-        if write.send(Message::Binary(data)).await.is_err() {
+    info!(
+        "[WS-PUB] Client {} connected (handshake: {:.2}ms)",
+        peer_addr,
+        handshake_duration.as_secs_f64() * 1000.0
+    );
+
+    static LAGGED_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+    // Spawn a task to monitor the read side for connection closure
+    let peer_addr_monitor = peer_addr;
+    let read_task = tokio::spawn(async move {
+        loop {
+            match read.next().await {
+                Some(Ok(msg)) => {
+                    // Client sent a message (ping, pong, close, etc.)
+                    match msg {
+                        Message::Close(_) => {
+                            debug!("[WS-PUB] Client {} sent close frame", peer_addr_monitor);
+                            break;
+                        }
+                        Message::Ping(_data) => {
+                            debug!("[WS-PUB] Client {} sent ping", peer_addr_monitor);
+                            // Could respond with pong, but we're only using write side
+                        }
+                        Message::Pong(_) => {
+                            debug!("[WS-PUB] Client {} sent pong", peer_addr_monitor);
+                        }
+                        _ => {
+                            debug!(
+                                "[WS-PUB] Client {} sent unexpected message type",
+                                peer_addr_monitor
+                            );
+                        }
+                    }
+                }
+                Some(Err(e)) => {
+                    warn!(
+                        "[WS-PUB] Client {} read error (connection may be closed): {}",
+                        peer_addr_monitor, e
+                    );
+                    break;
+                }
+                None => {
+                    debug!(
+                        "[WS-PUB] Client {} read stream ended (connection closed)",
+                        peer_addr_monitor
+                    );
+                    break;
+                }
+            }
+        }
+    });
+
+    loop {
+        match broadcast_rx.recv().await {
+            Ok(data) => {
+                let data_len = data.len();
+                match write.send(Message::Binary(data)).await {
+                    Ok(_) => {
+                        // Successfully sent
+                    }
+                    Err(e) => {
+                        // Log the error to understand why the connection is closing
+                        warn!(
+                            "[WS-PUB] Client {} send error (disconnecting): {} (message_size={} bytes)",
+                            peer_addr, e, data_len
+                        );
+                        break;
+                    }
+                }
+            }
+            Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                // Critical real-time diagnostic: client is falling behind and the server
+                // dropped `skipped` messages for this receiver.
+                let n = LAGGED_TOTAL.fetch_add(1, Ordering::Relaxed) + 1;
+                if n == 1 || n % 10 == 0 {
+                    warn!(
+                        "[WS-PUB] Client {} lagged: skipped_messages={} lag_events_total={}",
+                        peer_addr, skipped, n
+                    );
+                }
+                continue;
+            }
+            Err(broadcast::error::RecvError::Closed) => {
+                warn!("[WS-PUB] Client {} broadcast channel closed", peer_addr);
+                break;
+            }
+        }
+
+        // Check if read task detected connection closure
+        if read_task.is_finished() {
+            debug!(
+                "[WS-PUB] Client {} read task finished (connection closed)",
+                peer_addr
+            );
             break;
         }
     }
+
+    // Abort the read task if we're breaking out of the loop
+    read_task.abort();
 
     clients.write().remove(&peer_addr);
     info!("[WS-PUB] Client {} disconnected", peer_addr);

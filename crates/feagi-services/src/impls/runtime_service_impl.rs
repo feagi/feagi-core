@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::traits::RuntimeService;
 use crate::types::{RuntimeStatus, ServiceError, ServiceResult};
@@ -196,17 +196,50 @@ impl RuntimeService for RuntimeServiceImpl {
 
     async fn get_fcl_snapshot_with_cortical_idx(&self) -> ServiceResult<Vec<(u64, u32, f32)>> {
         let runner = self.burst_runner.read();
-        let fcl_data = runner.get_fcl_snapshot();
         let npu = runner.get_npu();
 
-        // Query cortical_area for each neuron from NPU (single source of truth)
-        let result: Vec<(u64, u32, f32)> = fcl_data
-            .iter()
-            .map(|(neuron_id, potential)| {
-                let cortical_idx = npu.lock().unwrap().get_neuron_cortical_area(neuron_id.0);
-                (neuron_id.0 as u64, cortical_idx, *potential)
-            })
-            .collect();
+        // CRITICAL: Acquire lock ONCE and do BOTH operations (FCL snapshot + cortical_idx lookup)
+        // Previous code acquired lock twice: once for get_fcl_snapshot(), once for cortical_idx
+        let lock_start = std::time::Instant::now();
+        let thread_id = std::thread::current().id();
+        debug!("[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} attempting NPU lock for get_fcl_snapshot_with_cortical_idx at {:?}", thread_id, lock_start);
+        let result: Vec<(u64, u32, f32)> = {
+            // Acquire lock ONCE for both FCL snapshot and cortical_idx lookup
+            let npu_lock = npu.lock().unwrap();
+            let lock_acquired = std::time::Instant::now();
+            let lock_wait = lock_acquired.duration_since(lock_start);
+            debug!(
+                "[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} acquired lock after {:.2}ms wait for get_fcl_snapshot_with_cortical_idx",
+                thread_id,
+                lock_wait.as_secs_f64() * 1000.0
+            );
+
+            // STRICT: Resolve cortical_idx without fallbacks (memory neurons are handled explicitly).
+            let fcl_data = npu_lock
+                .get_last_fcl_snapshot_with_cortical_idx()
+                .map_err(|e| {
+                    ServiceError::Internal(format!("Failed to resolve FCL cortical_idx: {e}"))
+                })?;
+            debug!(
+                "[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} got FCL snapshot ({} neurons) with cortical_idx",
+                thread_id,
+                fcl_data.len()
+            );
+
+            fcl_data
+                .into_iter()
+                .map(|(neuron_id, cortical_idx, potential)| {
+                    (neuron_id.0 as u64, cortical_idx, potential)
+                })
+                .collect()
+        }; // Lock released here
+        let lock_released = std::time::Instant::now();
+        let _lock_hold_duration = lock_released.duration_since(lock_start);
+        debug!("[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} RELEASED NPU lock after get_fcl_snapshot_with_cortical_idx (total: {:.2}ms wait + {:.2}ms hold, {} neurons)", 
+            thread_id,
+            lock_released.duration_since(lock_start).as_secs_f64() * 1000.0,
+            lock_released.duration_since(lock_start).as_secs_f64() * 1000.0,
+            result.len());
 
         Ok(result)
     }
@@ -229,8 +262,10 @@ impl RuntimeService for RuntimeServiceImpl {
     }
 
     async fn get_fire_ledger_configs(&self) -> ServiceResult<Vec<(u32, usize)>> {
+        debug!("[NPU-LOCK] RUNTIME-SERVICE: get_fire_ledger_configs() called - this acquires NPU lock!");
         let runner = self.burst_runner.read();
-        Ok(runner.get_fire_ledger_configs())
+        let configs = runner.get_fire_ledger_configs();
+        Ok(configs)
     }
 
     async fn configure_fire_ledger_window(
@@ -239,7 +274,11 @@ impl RuntimeService for RuntimeServiceImpl {
         window_size: usize,
     ) -> ServiceResult<()> {
         let mut runner = self.burst_runner.write();
-        runner.configure_fire_ledger_window(cortical_idx, window_size);
+        runner
+            .configure_fire_ledger_window(cortical_idx, window_size)
+            .map_err(|e| {
+                ServiceError::Internal(format!("Failed to configure fire ledger window: {e}"))
+            })?;
 
         info!(target: "feagi-services", "Configured Fire Ledger window for area {}: {} bursts",
             cortical_idx, window_size);
@@ -296,12 +335,27 @@ impl RuntimeService for RuntimeServiceImpl {
         let npu = runner.get_npu();
 
         // Inject using NPU's service layer method
+        let lock_start = std::time::Instant::now();
+        debug!(
+            "[NPU-LOCK] RUNTIME-SERVICE: Acquiring lock for manual stimulation ({} coordinates) - THIS CAN BLOCK BURST LOOP!",
+            xyzp_data.len()
+        );
         let injected_count = {
             let mut npu_lock = npu
                 .lock()
                 .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
-
-            npu_lock.inject_sensory_xyzp_by_id(&cortical_id_typed, xyzp_data)
+            let lock_wait = lock_start.elapsed();
+            debug!(
+                "[NPU-LOCK] RUNTIME-SERVICE: Lock acquired for manual stimulation (waited {:.2}ms)",
+                lock_wait.as_secs_f64() * 1000.0
+            );
+            let result = npu_lock.inject_sensory_xyzp_by_id(&cortical_id_typed, xyzp_data);
+            let lock_hold_duration = lock_start.elapsed();
+            debug!(
+                "[NPU-LOCK] RUNTIME-SERVICE: Releasing lock after manual stimulation (held for {:.2}ms)",
+                lock_hold_duration.as_secs_f64() * 1000.0
+            );
+            result
         };
 
         if injected_count == 0 && !xyzp_data.is_empty() {

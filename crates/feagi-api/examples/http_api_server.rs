@@ -11,17 +11,108 @@
 use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::{BurstLoopRunner, RustNPU};
-use feagi_services::SystemServiceImpl;
-use feagi_services::*;
-use parking_lot::{Mutex as ParkingLotMutex, RwLock};
-use std::sync::{Arc, Mutex as StdMutex};
+use feagi_observability::{init_logging, parse_debug_flags};
+use feagi_services::impls::{
+    AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
+    RuntimeServiceImpl, SystemServiceImpl,
+};
+use feagi_services::traits::{
+    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
+    SystemService,
+};
+use parking_lot::RwLock;
+use std::sync::Arc;
+
+#[derive(Debug, Default)]
+struct NpuTraceArgs {
+    enabled: bool,
+    synapse: bool,
+    dynamics: bool,
+    src: Option<String>,
+    dst: Option<String>,
+    neuron: Option<String>,
+}
+
+fn parse_npu_trace_args() -> NpuTraceArgs {
+    let mut out = NpuTraceArgs::default();
+    for arg in std::env::args() {
+        if arg == "--npu-trace" {
+            out.enabled = true;
+            out.synapse = true;
+            out.dynamics = true;
+            continue;
+        }
+        if arg == "--npu-trace-synapse" {
+            out.enabled = true;
+            out.synapse = true;
+            continue;
+        }
+        if arg == "--npu-trace-dynamics" {
+            out.enabled = true;
+            out.dynamics = true;
+            continue;
+        }
+        if let Some(v) = arg.strip_prefix("--npu-trace-src=") {
+            out.enabled = true;
+            out.src = Some(v.to_string());
+            continue;
+        }
+        if let Some(v) = arg.strip_prefix("--npu-trace-dst=") {
+            out.enabled = true;
+            out.dst = Some(v.to_string());
+            continue;
+        }
+        if let Some(v) = arg.strip_prefix("--npu-trace-neuron=") {
+            out.enabled = true;
+            out.neuron = Some(v.to_string());
+            continue;
+        }
+    }
+    out
+}
+
+fn apply_npu_trace_env(args: &NpuTraceArgs) {
+    if !args.enabled {
+        return;
+    }
+
+    // Gate the trace emitters (read once at runtime via OnceLock in burst-engine).
+    if args.synapse {
+        std::env::set_var("FEAGI_NPU_TRACE_SYNAPSE", "1");
+    }
+    if args.dynamics {
+        std::env::set_var("FEAGI_NPU_TRACE_DYNAMICS", "1");
+    }
+    if let Some(v) = &args.src {
+        std::env::set_var("FEAGI_NPU_TRACE_SRC", v);
+    }
+    if let Some(v) = &args.dst {
+        std::env::set_var("FEAGI_NPU_TRACE_DST", v);
+    }
+    if let Some(v) = &args.neuron {
+        std::env::set_var("FEAGI_NPU_TRACE_NEURON", v);
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize logging
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .init();
+    // Optional NPU trace gating + filters (single-switch debugging)
+    let npu_trace = parse_npu_trace_args();
+    apply_npu_trace_env(&npu_trace);
+
+    // Initialize logging via FEAGI observability (supports --debug-* and FEAGI_DEBUG)
+    let mut debug_flags = parse_debug_flags();
+
+    // If NPU trace was requested, ensure the feagi-npu-trace target is enabled at debug level.
+    // This works with the existing debug flag system even though it’s a tracing target, not a crate.
+    if npu_trace.enabled {
+        debug_flags
+            .enabled_crates
+            .insert("feagi-npu-trace".to_string(), true);
+    }
+
+    // Keep guard alive for duration of process.
+    let _logging_guard = init_logging(&debug_flags, None, None, None)?;
 
     println!("🚀 FEAGI HTTP API Server - Starting...\n");
 
@@ -49,11 +140,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🔧 Creating service layer...");
 
-    let genome_service = Arc::new(GenomeServiceImpl::new(connectome.clone()))
+    let _genome_service = Arc::new(GenomeServiceImpl::new(connectome.clone()))
         as Arc<dyn GenomeService + Send + Sync>;
 
-    let connectome_service = Arc::new(ConnectomeServiceImpl::new(connectome.clone()))
-        as Arc<dyn ConnectomeService + Send + Sync>;
+    // Cast to GenomeServiceImpl to access get_current_genome_arc()
+    let genome_service_impl = Arc::new(GenomeServiceImpl::new(connectome.clone()));
+    let current_genome = genome_service_impl.get_current_genome_arc();
+    let genome_service = genome_service_impl as Arc<dyn GenomeService + Send + Sync>;
+
+    let connectome_service = Arc::new(ConnectomeServiceImpl::new(
+        connectome.clone(),
+        current_genome.clone(),
+    )) as Arc<dyn ConnectomeService + Send + Sync>;
 
     let neuron_service = Arc::new(NeuronServiceImpl::new(connectome.clone()))
         as Arc<dyn NeuronService + Send + Sync>;
@@ -69,7 +167,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Dummy publishers for testing
     struct DummyViz;
     impl feagi_npu_burst_engine::VisualizationPublisher for DummyViz {
-        fn publish_visualization(&self, _data: &[u8]) -> Result<(), String> {
+        fn publish_raw_fire_queue(
+            &self,
+            _fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
+        ) -> Result<(), String> {
             Ok(())
         }
     }
@@ -81,18 +182,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     use feagi_npu_burst_engine::backend::CPUBackend;
-    use feagi_npu_burst_engine::DynamicNPU;
+    use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
     use feagi_npu_runtime::StdRuntime;
 
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let npu_result = RustNPU::new(runtime, backend, 10, 10, 10).expect("Failed to create NPU");
-    let npu_for_runtime = Arc::new(StdMutex::new(DynamicNPU::F32(npu_result))); // Minimal NPU
+    // Wrap NPU in TracingMutex to automatically log all lock acquisitions
+    let npu_for_runtime = Arc::new(TracingMutex::new(DynamicNPU::F32(npu_result), "NPU")); // Minimal NPU
     let burst_loop =
         BurstLoopRunner::new::<DummyViz, DummyMotor>(npu_for_runtime, None, None, 30.0); // No publishers
-    let burst_runner_for_runtime = Arc::new(ParkingLotMutex::new(burst_loop));
+    let burst_runner_for_runtime = Arc::new(RwLock::new(burst_loop));
 
-    let runtime_service = Arc::new(RuntimeServiceImpl::new(burst_runner_for_runtime))
+    let runtime_service = Arc::new(RuntimeServiceImpl::new(burst_runner_for_runtime.clone()))
         as Arc<dyn RuntimeService + Send + Sync>;
 
     // For examples, create basic version info
@@ -139,6 +241,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         system_service,
         snapshot_service: None,
         feagi_session_timestamp,
+        memory_stats_cache: None,
+        #[cfg(feature = "feagi-agent")]
+        agent_connectors: ApiState::init_agent_connectors(),
     };
 
     println!(

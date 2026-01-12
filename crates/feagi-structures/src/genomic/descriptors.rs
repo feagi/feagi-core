@@ -1,4 +1,4 @@
-use crate::{define_index, define_xy_coordinates, define_xyz_coordinates};
+use crate::{define_xy_coordinates, define_xyz_coordinates};
 
 define_xy_coordinates!(
     GenomeCoordinate2D,
@@ -32,7 +32,3 @@ and for calculating spatial relationships between different brain regions."
 
 // Alias for backward compatibility
 pub type GenomeCoordinate = GenomeCoordinate3D;
-
-define_index!(AgentDeviceIndex, u32,
-"An index for a specific channel on a specific cortical group (or multiple). An alternate way to refer to channels"
-);

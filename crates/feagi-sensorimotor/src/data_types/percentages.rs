@@ -417,6 +417,16 @@ impl Percentage2D {
         }
     }
 
+    /// Get a mutable reference to the first percentage value
+    pub fn a_mut(&mut self) -> &mut Percentage {
+        &mut self.a
+    }
+
+    /// Get a mutable reference to the second percentage value
+    pub fn b_mut(&mut self) -> &mut Percentage {
+        &mut self.b
+    }
+
     #[allow(dead_code)]
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);

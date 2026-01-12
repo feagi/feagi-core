@@ -11,9 +11,9 @@ Licensed under the Apache License, Version 2.0
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::BurstLoopRunner;
+use feagi_state_manager::StateManager;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
 use tracing::trace;
@@ -208,14 +208,28 @@ impl AnalyticsService for AnalyticsServiceImpl {
     async fn get_total_neuron_count(&self) -> ServiceResult<usize> {
         trace!(target: "feagi-services", "Getting total neuron count");
 
-        let count = self.connectome.read().get_neuron_count();
+        // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
+        let state_manager_instance = StateManager::instance();
+        let state_manager = state_manager_instance
+            .try_read()
+            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
+        let core_state = state_manager.get_core_state();
+        let count = core_state.get_neuron_count() as usize;
+
         Ok(count)
     }
 
     async fn get_total_synapse_count(&self) -> ServiceResult<usize> {
         trace!(target: "feagi-services", "Getting total synapse count");
 
-        let count = self.connectome.read().get_synapse_count();
+        // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
+        let state_manager_instance = StateManager::instance();
+        let state_manager = state_manager_instance
+            .try_read()
+            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
+        let core_state = state_manager.get_core_state();
+        let count = core_state.get_synapse_count() as usize;
+
         Ok(count)
     }
 
@@ -257,38 +271,28 @@ impl AnalyticsService for AnalyticsServiceImpl {
     async fn get_regular_neuron_count(&self) -> ServiceResult<usize> {
         trace!(target: "feagi-services", "Getting regular (non-memory) neuron count");
 
-        let manager = self.connectome.read();
-        let mut regular_count = 0;
+        // CRITICAL: Read from StateManager's atomic cache - NO iteration, NO locks, NO NPU access
+        let state_manager_instance = StateManager::instance();
+        let state_manager = state_manager_instance
+            .try_read()
+            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
+        let core_state = state_manager.get_core_state();
+        let count = core_state.get_regular_neuron_count() as usize;
 
-        // Iterate through all cortical areas and sum neurons from non-memory areas
-        for cortical_id in manager.get_cortical_area_ids() {
-            if let Some(area) = manager.get_cortical_area(cortical_id) {
-                let cortical_group = area.get_cortical_group();
-                if cortical_group.as_deref() != Some("MEMORY") {
-                    regular_count += manager.get_neuron_count_in_area(cortical_id);
-                }
-            }
-        }
-
-        Ok(regular_count)
+        Ok(count)
     }
 
     async fn get_memory_neuron_count(&self) -> ServiceResult<usize> {
         trace!(target: "feagi-services", "Getting memory neuron count");
 
-        let manager = self.connectome.read();
-        let mut memory_count = 0;
+        // CRITICAL: Read from StateManager's atomic cache - NO iteration, NO locks, NO NPU access
+        let state_manager_instance = StateManager::instance();
+        let state_manager = state_manager_instance
+            .try_read()
+            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
+        let core_state = state_manager.get_core_state();
+        let count = core_state.get_memory_neuron_count() as usize;
 
-        // Iterate through all cortical areas and sum neurons from memory areas
-        for cortical_id in manager.get_cortical_area_ids() {
-            if let Some(area) = manager.get_cortical_area(cortical_id) {
-                let cortical_group = area.get_cortical_group();
-                if cortical_group.as_deref() == Some("MEMORY") {
-                    memory_count += manager.get_neuron_count_in_area(cortical_id);
-                }
-            }
-        }
-
-        Ok(memory_count)
+        Ok(count)
     }
 }

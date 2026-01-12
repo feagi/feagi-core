@@ -165,6 +165,11 @@ impl AgentRegistry {
             .map(|agent| agent.update_last_seen())
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))
     }
+
+    /// Alias for update_heartbeat for compatibility
+    pub fn heartbeat(&self, agent_id: &str) -> Result<()> {
+        self.update_heartbeat(agent_id)
+    }
 }
 
 /// Agent registry for no_std platforms (spin::RwLock)
@@ -219,6 +224,11 @@ impl AgentRegistry {
             .get_mut(agent_id)
             .map(|agent| agent.update_last_seen())
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))
+    }
+
+    /// Alias for update_heartbeat for compatibility
+    pub fn heartbeat(&self, agent_id: &str) -> Result<()> {
+        self.update_heartbeat(agent_id)
     }
 }
 
@@ -275,6 +285,11 @@ impl AgentRegistry {
             .map(|agent| agent.update_last_seen())
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))
     }
+
+    /// Alias for update_heartbeat for compatibility
+    pub fn heartbeat(&self, agent_id: &str) -> Result<()> {
+        self.update_heartbeat(agent_id)
+    }
 }
 
 /// Agent registry for multi-threaded WASM (wasm_sync::Mutex)
@@ -329,6 +344,11 @@ impl AgentRegistry {
             .get_mut(agent_id)
             .map(|agent| agent.update_last_seen())
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))
+    }
+
+    /// Alias for update_heartbeat for compatibility
+    pub fn heartbeat(&self, agent_id: &str) -> Result<()> {
+        self.update_heartbeat(agent_id)
     }
 }
 

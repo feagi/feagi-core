@@ -15,11 +15,13 @@ use std::fs;
 
 #[test]
 fn test_load_barebones_flat_genome() {
-    let genome_path = "../../../feagi-py/feagi/evo/defaults/genome/barebones_genome.json";
+    let genome_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("genomes")
+        .join("barebones_genome.json");
 
     // Read flat genome
-    let flat_json = fs::read_to_string(genome_path)
-        .unwrap_or_else(|_| panic!("Failed to read genome file: {}", genome_path));
+    let flat_json = fs::read_to_string(&genome_path)
+        .unwrap_or_else(|_| panic!("Failed to read genome file: {}", genome_path.display()));
 
     let flat_genome: serde_json::Value =
         serde_json::from_str(&flat_json).expect("Failed to parse flat genome JSON");
@@ -61,17 +63,20 @@ fn test_load_barebones_flat_genome() {
 
 #[test]
 fn test_load_all_flat_genomes() {
-    let genome_files = vec![
-        "../../../feagi-py/feagi/evo/defaults/genome/barebones_genome.json",
-        "../../../feagi-py/feagi/evo/defaults/genome/essential_genome.json",
-        "../../../feagi-py/feagi/evo/defaults/genome/test_genome.json",
-        "../../../feagi-py/feagi/evo/defaults/genome/vision_genome.json",
+    let genome_files = [
+        "barebones_genome.json",
+        "essential_genome.json",
+        "test_genome.json",
+        "vision_genome.json",
     ];
 
     for genome_path in genome_files {
-        println!("\n📂 Testing: {}", genome_path);
+        let genome_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("genomes")
+            .join(genome_path);
+        println!("\n📂 Testing: {}", genome_path.display());
 
-        match fs::read_to_string(genome_path) {
+        match fs::read_to_string(&genome_path) {
             Ok(flat_json) => match serde_json::from_str::<serde_json::Value>(&flat_json) {
                 Ok(flat_genome) => match convert_flat_to_hierarchical_full(&flat_genome) {
                     Ok(hierarchical) => {
@@ -84,12 +89,12 @@ fn test_load_all_flat_genomes() {
                     }
                     Err(e) => {
                         println!("  ❌ Conversion failed: {}", e);
-                        panic!("Conversion failed for {}: {}", genome_path, e);
+                        panic!("Conversion failed for {}: {}", genome_path.display(), e);
                     }
                 },
                 Err(e) => {
                     println!("  ❌ JSON parse failed: {}", e);
-                    panic!("JSON parse failed for {}: {}", genome_path, e);
+                    panic!("JSON parse failed for {}: {}", genome_path.display(), e);
                 }
             },
             Err(e) => {

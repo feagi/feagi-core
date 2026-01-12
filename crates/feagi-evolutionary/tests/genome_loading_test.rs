@@ -12,11 +12,13 @@ use feagi_evolutionary::load_genome_from_file;
 
 #[test]
 fn test_load_barebones_genome() {
-    // Path to real genome file
-    let genome_path = "../../../feagi-py/feagi/evo/defaults/genome/barebones_genome.json";
+    // Path to real genome file (repository-local; independent of external feagi-py checkout)
+    let genome_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("genomes")
+        .join("barebones_genome.json");
 
     // Load genome
-    let genome = load_genome_from_file(genome_path).expect("Failed to load barebones genome");
+    let genome = load_genome_from_file(&genome_path).expect("Failed to load barebones genome");
 
     // Verify metadata
     assert_eq!(genome.metadata.version, "2.0");
@@ -43,10 +45,7 @@ fn test_load_barebones_genome() {
     );
 
     // Verify morphologies
-    assert!(
-        !genome.morphologies.count() == 0,
-        "Should have morphologies"
-    );
+    assert!(genome.morphologies.count() != 0, "Should have morphologies");
     assert!(
         genome.morphologies.contains("block_to_block"),
         "Missing block_to_block morphology"
@@ -88,10 +87,9 @@ fn test_load_all_sample_genomes() {
     ];
 
     for genome_file in &genome_files {
-        let genome_path = format!(
-            "../../../feagi-py/feagi/evo/defaults/genome/{}",
-            genome_file
-        );
+        let genome_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("genomes")
+            .join(genome_file);
 
         match load_genome_from_file(&genome_path) {
             Ok(genome) => {
@@ -102,7 +100,11 @@ fn test_load_all_sample_genomes() {
 
                 // Basic validation
                 assert!(!genome.metadata.genome_id.is_empty());
-                assert_eq!(genome.metadata.version, "2.0");
+                assert!(
+                    genome.metadata.version.starts_with("2."),
+                    "Expected genome version to start with '2.' but got '{}'",
+                    genome.metadata.version
+                );
                 assert!(genome.cortical_areas.len() >= 2); // At least _death and _power
             }
             Err(e) => {

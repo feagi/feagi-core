@@ -11,7 +11,7 @@ use super::ids::NeuronId;
 extern crate std;
 
 #[cfg(feature = "std")]
-use std::{collections::VecDeque, vec::Vec};
+use std::vec::Vec;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -41,6 +41,31 @@ impl FireCandidateList {
     #[inline]
     pub fn add_candidate(&mut self, neuron_id: NeuronId, potential: f32) {
         *self.candidates.entry(neuron_id.0).or_insert(0.0) += potential;
+    }
+
+    /// Add multiple candidates in batch (more efficient for large batches)
+    /// Pre-aggregates contributions and reserves capacity to reduce reallocations
+    pub fn add_candidates_batch(&mut self, candidates: &[(NeuronId, f32)]) {
+        if candidates.is_empty() {
+            return;
+        }
+
+        // Pre-allocate if needed (huge performance improvement for large batches)
+        let estimated_unique = candidates.len() / 10; // Heuristic: ~10% unique neurons
+        if estimated_unique > self.candidates.capacity() {
+            self.candidates.reserve(estimated_unique);
+        }
+
+        // Direct insertion is actually fastest - batch method helps mainly with pre-allocation
+        // Pre-aggregation doesn't help much because we still need to merge into main HashMap
+        for &(neuron_id, potential) in candidates {
+            *self.candidates.entry(neuron_id.0).or_insert(0.0) += potential;
+        }
+    }
+
+    /// Reserve capacity for expected number of candidates (call before batch insertion)
+    pub fn reserve(&mut self, capacity: usize) {
+        self.candidates.reserve(capacity);
     }
 
     pub fn clear(&mut self) {
@@ -113,50 +138,9 @@ impl FireQueue {
     }
 }
 
-/// Fire Ledger - historical record of firing activity
-#[cfg(feature = "std")]
-#[derive(Debug, Clone)]
-pub struct FireLedger {
-    history: VecDeque<Vec<NeuronId>>,
-    window_size: usize,
-}
-
-#[cfg(feature = "std")]
-impl FireLedger {
-    pub fn new(window_size: usize) -> Self {
-        Self {
-            history: VecDeque::with_capacity(window_size),
-            window_size,
-        }
-    }
-
-    pub fn record(&mut self, fired_neurons: Vec<NeuronId>) {
-        if self.history.len() >= self.window_size {
-            self.history.pop_front();
-        }
-        self.history.push_back(fired_neurons);
-    }
-
-    pub fn get_recent(&self, bursts_ago: usize) -> Option<&[NeuronId]> {
-        let len = self.history.len();
-        if bursts_ago < len {
-            self.history.get(len - 1 - bursts_ago).map(|v| v.as_slice())
-        } else {
-            None
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.history.clear();
-    }
-}
-
 // Placeholder types for no_std (will be implemented with heapless or similar)
 #[cfg(not(feature = "std"))]
 pub struct FireCandidateList;
 
 #[cfg(not(feature = "std"))]
 pub struct FireQueue;
-
-#[cfg(not(feature = "std"))]
-pub struct FireLedger;

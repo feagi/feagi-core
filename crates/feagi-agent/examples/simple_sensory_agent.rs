@@ -17,14 +17,13 @@ use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Info)
-        .init();
+    env_logger::Builder::from_default_env().init();
 
     println!("🤖 FEAGI Simple Sensory Agent Example");
     println!("=====================================\n");
 
     // Create agent configuration
+    #[allow(deprecated)]
     let config = AgentConfig::new("simple_sensory_agent", AgentType::Sensory)
         .with_feagi_host("localhost")
         .with_vision_capability("camera", (10, 10), 1, "i_vision")

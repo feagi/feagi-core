@@ -1,8 +1,10 @@
+use crate::configuration::jsonable::{JSONDeviceGrouping, JSONDeviceProperties};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::{
     stage_properties_to_stages, PipelineStageProperties, PipelineStagePropertyIndex,
 };
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
 use feagi_structures::FeagiDataError;
 use std::cmp::PartialEq;
 use std::time::Instant;
@@ -42,15 +44,28 @@ pub(crate) trait PipelineStageRunner {
     /// Returns the last instant when data was processed
     fn get_last_processed_instant(&self) -> Instant;
 
+    fn get_channel_friendly_name(&self) -> &Option<String>;
+
+    fn set_channel_friendly_name(&mut self, channel_friendly_name: Option<String>);
+
+    fn get_channel_index_override(&self) -> Option<CorticalChannelIndex>;
+
+    fn set_channel_index_override(&mut self, channel_index_override: Option<CorticalChannelIndex>);
+
+    fn get_json_device_properties(&self) -> &JSONDeviceProperties;
+
+    fn set_json_device_properties(&mut self, json_device_properties: JSONDeviceProperties);
+
     //region Defaults Implementations
 
-    fn get_channel_friendly_name(&self) -> &str;
-
-    fn set_channel_friendly_name(&mut self, channel_friendly_name: String);
-
-    fn get_channel_index_override(&self) -> Option<usize>;
-
-    fn set_channel_index_override(&mut self, channel_index_override: Option<usize>);
+    fn export_as_json_device_grouping(&self) -> JSONDeviceGrouping {
+        JSONDeviceGrouping {
+            friendly_name: self.get_channel_friendly_name().clone(),
+            device_properties: self.get_json_device_properties().clone(),
+            channel_index_override: self.get_channel_index_override(),
+            pipeline_stages: self.get_all_stage_properties(),
+        }
+    }
 
     fn does_contain_stages(&self) -> bool {
         !self.get_stages().is_empty()
@@ -233,70 +248,6 @@ pub(crate) trait PipelineStageRunner {
         }
         Ok(())
     }
-
-    fn export_as_json(&self) -> Result<serde_json::Value, FeagiDataError> {
-        let mut output = serde_json::Map::new();
-        output.insert(
-            "friendly_name".to_string(),
-            serde_json::Value::String(self.get_channel_friendly_name().to_string()),
-        );
-        output.insert(
-            "channel_index_override".to_string(),
-            serde_json::to_value(self.get_channel_index_override()).unwrap(),
-        );
-
-        let mut json_stages: Vec<serde_json::Value> = Vec::new();
-        let stages = self.get_stages();
-        for stage in stages {
-            let stage_properties = stage.create_properties();
-            json_stages.push(
-                serde_json::to_value(&stage_properties)
-                    .map_err(|err| FeagiDataError::InternalError(err.to_string()))?,
-            );
-        }
-        output.insert(
-            "pipeline_stages".to_string(),
-            serde_json::Value::Array(json_stages),
-        );
-        serde_json::to_value(output).map_err(|err| FeagiDataError::InternalError(err.to_string()))
-    }
-
-    fn import_from_json(
-        &mut self,
-        json: &serde_json::Map<String, serde_json::Value>,
-    ) -> Result<(), FeagiDataError> {
-        let friendly_name = json
-            .get("friendly_name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let channel_index_override = json
-            .get("channel_index_override")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize);
-
-        let pipeline_stages_json = json
-            .get("pipeline_stages")
-            .and_then(|v| v.as_array())
-            .cloned()
-            .unwrap_or_default();
-
-        // Deserialize and validate stage properties
-        let incoming_stage_properties: Vec<PipelineStageProperties> = pipeline_stages_json
-            .into_iter()
-            .map(|stage_json| {
-                serde_json::from_value(stage_json)
-                    .map_err(|err| FeagiDataError::DeserializationError(err.to_string()))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        self.try_replace_all_stages(incoming_stage_properties)?;
-        self.set_channel_friendly_name(friendly_name);
-        self.set_channel_index_override(channel_index_override);
-        Ok(())
-    }
-
     //endregion
 }
 

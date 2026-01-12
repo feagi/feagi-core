@@ -1,9 +1,12 @@
+use crate::configuration::jsonable::JSONEncoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
 };
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex,
+};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
@@ -30,6 +33,10 @@ pub struct BooleanNeuronVoxelXYZPEncoder {
 impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
     fn get_encodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::Boolean
+    }
+
+    fn get_as_properties(&self) -> JSONEncoderProperties {
+        JSONEncoderProperties::Boolean
     }
 
     fn write_neuron_data_multi_channel_from_processed_cache(
@@ -65,10 +72,15 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
             )?;
 
         // Cannot parallelize due to data writing of various lengths
-        for _c in 0..self.scratch_space.len() as u32 {
+        for channel_index in 0..self.scratch_space.len() {
             const Y: u32 = 0;
             const Z: u32 = 0;
-            for (channel_x, changed) in self.scratch_space.iter().enumerate() {
+            for (current_channel_x, changed) in self.scratch_space.iter().enumerate() {
+                let channel_stage_runner = pipelines.get(channel_index).unwrap(); // Should always be the right length
+                let channel_to_write = channel_stage_runner
+                    .get_channel_index_override()
+                    .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_x as u32)); // Get override if available
+
                 match changed {
                     BoolState::Unchanged => {
                         // Not possible
@@ -77,10 +89,10 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
                         ));
                     }
                     BoolState::True => {
-                        neuron_array_target.push_raw(channel_x as u32, Y, Z, NEURON_TRUE_VAL)
+                        neuron_array_target.push_raw(*channel_to_write, Y, Z, NEURON_TRUE_VAL)
                     }
                     BoolState::False => {
-                        neuron_array_target.push_raw(channel_x as u32, Y, Z, NEURON_FALSE_VAL)
+                        neuron_array_target.push_raw(*channel_to_write, Y, Z, NEURON_FALSE_VAL)
                     }
                 }
             }

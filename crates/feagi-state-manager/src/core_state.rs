@@ -108,7 +108,7 @@ impl From<u8> for ServiceState {
     }
 }
 
-/// Memory-mapped core state (64 bytes, cache-line aligned)
+/// Memory-mapped core state (128 bytes, cache-line aligned)
 #[repr(C, align(64))]
 pub struct MemoryMappedState {
     // Service states (8 bytes)
@@ -125,11 +125,17 @@ pub struct MemoryMappedState {
     pub agent_count: AtomicU32,
     pub burst_frequency: AtomicU32, // f32 as u32 bits
 
-    // Statistics (16 bytes)
+    // Statistics (24 bytes)
     pub neuron_count: AtomicU32,
     pub synapse_count: AtomicU32,
     pub cortical_area_count: AtomicU32,
     pub memory_usage: AtomicU32,
+    pub regular_neuron_count: AtomicU32,
+    pub memory_neuron_count: AtomicU32,
+
+    // Capacity (static values set at initialization, never change)
+    pub neuron_capacity: AtomicU32,
+    pub synapse_capacity: AtomicU32,
 
     // Versioning & timestamps (16 bytes)
     pub version: AtomicU64,
@@ -138,7 +144,18 @@ pub struct MemoryMappedState {
     // Genome tracking (8 bytes)
     pub genome_timestamp: AtomicU64,
 
-    // Padding to 64 bytes (8 bytes)
+    // Fatigue state (6 bytes)
+    pub fatigue_index: AtomicU8,       // 0-100
+    pub fatigue_active: AtomicU8,      // 0=false, 1=true
+    pub regular_neuron_util: AtomicU8, // 0-100
+    pub memory_neuron_util: AtomicU8,  // 0-100
+    pub synapse_util: AtomicU8,        // 0-100
+    pub _reserved_fatigue: AtomicU8,   // Reserved for future use
+
+    // Padding to 128 bytes.
+    //
+    // NOTE: `atomic_polyfill::AtomicU8` occupies 4 bytes (u32-backed) on some targets,
+    // so this padding must be computed against the actual atomic field sizes, not `u8`.
     pub _padding: [u8; 8],
 }
 
@@ -162,10 +179,21 @@ impl MemoryMappedState {
             synapse_count: AtomicU32::new(0),
             cortical_area_count: AtomicU32::new(0),
             memory_usage: AtomicU32::new(0),
+            regular_neuron_count: AtomicU32::new(0),
+            memory_neuron_count: AtomicU32::new(0),
+            neuron_capacity: AtomicU32::new(0),
+            synapse_capacity: AtomicU32::new(0),
 
             version: AtomicU64::new(0),
             last_modified: AtomicU64::new(0),
             genome_timestamp: AtomicU64::new(0),
+
+            fatigue_index: AtomicU8::new(0),
+            fatigue_active: AtomicU8::new(0),
+            regular_neuron_util: AtomicU8::new(0),
+            memory_neuron_util: AtomicU8::new(0),
+            synapse_util: AtomicU8::new(0),
+            _reserved_fatigue: AtomicU8::new(0),
 
             _padding: [0; 8],
         }
@@ -294,6 +322,23 @@ impl MemoryMappedState {
         self.increment_version();
     }
 
+    /// Add to neuron count (atomic increment)
+    pub fn add_neuron_count(&self, delta: u32) -> u32 {
+        let new_count = self.neuron_count.fetch_add(delta, Ordering::AcqRel) + delta;
+        self.increment_version();
+        new_count
+    }
+
+    /// Subtract from neuron count (atomic decrement)
+    pub fn subtract_neuron_count(&self, delta: u32) -> u32 {
+        let new_count = self
+            .neuron_count
+            .fetch_sub(delta, Ordering::AcqRel)
+            .saturating_sub(delta);
+        self.increment_version();
+        new_count
+    }
+
     /// Get synapse count (atomic read)
     pub fn get_synapse_count(&self) -> u32 {
         self.synapse_count.load(Ordering::Acquire)
@@ -305,6 +350,23 @@ impl MemoryMappedState {
         self.increment_version();
     }
 
+    /// Add to synapse count (atomic increment)
+    pub fn add_synapse_count(&self, delta: u32) -> u32 {
+        let new_count = self.synapse_count.fetch_add(delta, Ordering::AcqRel) + delta;
+        self.increment_version();
+        new_count
+    }
+
+    /// Subtract from synapse count (atomic decrement)
+    pub fn subtract_synapse_count(&self, delta: u32) -> u32 {
+        let new_count = self
+            .synapse_count
+            .fetch_sub(delta, Ordering::AcqRel)
+            .saturating_sub(delta);
+        self.increment_version();
+        new_count
+    }
+
     /// Get cortical area count (atomic read)
     pub fn get_cortical_area_count(&self) -> u32 {
         self.cortical_area_count.load(Ordering::Acquire)
@@ -313,6 +375,122 @@ impl MemoryMappedState {
     /// Set cortical area count (atomic write)
     pub fn set_cortical_area_count(&self, count: u32) {
         self.cortical_area_count.store(count, Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get neuron capacity (atomic read)
+    /// Capacity is set at NPU initialization and never changes
+    pub fn get_neuron_capacity(&self) -> u32 {
+        self.neuron_capacity.load(Ordering::Acquire)
+    }
+
+    /// Set neuron capacity (atomic write)
+    /// Should be called once when NPU is initialized
+    pub fn set_neuron_capacity(&self, capacity: u32) {
+        self.neuron_capacity.store(capacity, Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get synapse capacity (atomic read)
+    /// Capacity is set at NPU initialization and never changes
+    pub fn get_synapse_capacity(&self) -> u32 {
+        self.synapse_capacity.load(Ordering::Acquire)
+    }
+
+    /// Set synapse capacity (atomic write)
+    /// Should be called once when NPU is initialized
+    pub fn set_synapse_capacity(&self, capacity: u32) {
+        self.synapse_capacity.store(capacity, Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get regular neuron count (atomic read)
+    pub fn get_regular_neuron_count(&self) -> u32 {
+        self.regular_neuron_count.load(Ordering::Acquire)
+    }
+
+    /// Set regular neuron count (atomic write)
+    pub fn set_regular_neuron_count(&self, count: u32) {
+        self.regular_neuron_count.store(count, Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get memory neuron count (atomic read)
+    pub fn get_memory_neuron_count(&self) -> u32 {
+        self.memory_neuron_count.load(Ordering::Acquire)
+    }
+
+    /// Set memory neuron count (atomic write)
+    pub fn set_memory_neuron_count(&self, count: u32) {
+        self.memory_neuron_count.store(count, Ordering::Release);
+        self.increment_version();
+    }
+
+    // ===== Fatigue State Accessors =====
+
+    /// Get fatigue index (atomic read)
+    /// Returns value 0-100 representing maximum utilization across all fatigue criteria
+    pub fn get_fatigue_index(&self) -> u8 {
+        self.fatigue_index.load(Ordering::Acquire)
+    }
+
+    /// Set fatigue index (atomic write)
+    /// Value should be 0-100
+    pub fn set_fatigue_index(&self, index: u8) {
+        self.fatigue_index.store(index.min(100), Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Check if fatigue is active (atomic read)
+    pub fn is_fatigue_active(&self) -> bool {
+        self.fatigue_active.load(Ordering::Acquire) != 0
+    }
+
+    /// Set fatigue active state (atomic write)
+    pub fn set_fatigue_active(&self, active: bool) {
+        self.fatigue_active
+            .store(if active { 1 } else { 0 }, Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get regular neuron utilization percentage (atomic read)
+    /// Returns value 0-100
+    pub fn get_regular_neuron_util(&self) -> u8 {
+        self.regular_neuron_util.load(Ordering::Acquire)
+    }
+
+    /// Set regular neuron utilization percentage (atomic write)
+    /// Value should be 0-100
+    pub fn set_regular_neuron_util(&self, util: u8) {
+        self.regular_neuron_util
+            .store(util.min(100), Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get memory neuron utilization percentage (atomic read)
+    /// Returns value 0-100
+    pub fn get_memory_neuron_util(&self) -> u8 {
+        self.memory_neuron_util.load(Ordering::Acquire)
+    }
+
+    /// Set memory neuron utilization percentage (atomic write)
+    /// Value should be 0-100
+    pub fn set_memory_neuron_util(&self, util: u8) {
+        self.memory_neuron_util
+            .store(util.min(100), Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get synapse utilization percentage (atomic read)
+    /// Returns value 0-100
+    pub fn get_synapse_util(&self) -> u8 {
+        self.synapse_util.load(Ordering::Acquire)
+    }
+
+    /// Set synapse utilization percentage (atomic write)
+    /// Value should be 0-100
+    pub fn set_synapse_util(&self, util: u8) {
+        self.synapse_util.store(util.min(100), Ordering::Release);
         self.increment_version();
     }
 
@@ -365,7 +543,7 @@ mod tests {
 
     #[test]
     fn test_state_size() {
-        assert_eq!(std::mem::size_of::<MemoryMappedState>(), 64);
+        assert_eq!(std::mem::size_of::<MemoryMappedState>(), 128);
     }
 
     #[test]
@@ -455,5 +633,46 @@ mod tests {
         assert_eq!(state.get_neuron_count(), 1_000_000);
         assert_eq!(state.get_synapse_count(), 50_000_000);
         assert_eq!(state.get_cortical_area_count(), 100);
+    }
+
+    #[test]
+    fn test_fatigue_state() {
+        let state = MemoryMappedState::new();
+        assert_eq!(state.get_fatigue_index(), 0);
+        assert!(!state.is_fatigue_active());
+
+        state.set_fatigue_index(85);
+        assert_eq!(state.get_fatigue_index(), 85);
+
+        state.set_fatigue_active(true);
+        assert!(state.is_fatigue_active());
+
+        state.set_fatigue_active(false);
+        assert!(!state.is_fatigue_active());
+    }
+
+    #[test]
+    fn test_fatigue_utilization() {
+        let state = MemoryMappedState::new();
+
+        state.set_regular_neuron_util(75);
+        state.set_memory_neuron_util(80);
+        state.set_synapse_util(90);
+
+        assert_eq!(state.get_regular_neuron_util(), 75);
+        assert_eq!(state.get_memory_neuron_util(), 80);
+        assert_eq!(state.get_synapse_util(), 90);
+    }
+
+    #[test]
+    fn test_fatigue_index_clamping() {
+        let state = MemoryMappedState::new();
+
+        // Test clamping to 100
+        state.set_fatigue_index(150);
+        assert_eq!(state.get_fatigue_index(), 100);
+
+        state.set_regular_neuron_util(200);
+        assert_eq!(state.get_regular_neuron_util(), 100);
     }
 }

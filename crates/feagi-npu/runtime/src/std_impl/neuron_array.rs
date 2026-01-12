@@ -17,6 +17,7 @@ use ahash::AHashMap;
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_neural::{is_refractory, update_neuron_lif};
 use rayon::prelude::*; // Faster hash map (already a dependency)
+use std::sync::Mutex;
 use std::vec::Vec;
 
 /// Dynamic neuron array for desktop/server environments
@@ -29,8 +30,11 @@ pub struct NeuronArray<T: NeuralValue> {
     /// Membrane potentials (quantized to T)
     pub membrane_potentials: Vec<T>,
 
-    /// Firing thresholds (quantized to T)
+    /// Firing thresholds (quantized to T) - minimum MP to fire
     pub thresholds: Vec<T>,
+
+    /// Firing threshold limits (quantized to T) - maximum MP to fire (0 = no limit)
+    pub threshold_limits: Vec<T>,
 
     /// Leak coefficients (kept as f32 for precision)
     pub leak_coefficients: Vec<f32>,
@@ -70,7 +74,25 @@ pub struct NeuronArray<T: NeuralValue> {
 
     /// Valid mask
     pub valid_mask: Vec<bool>,
+
+    /// Cached coordinate maps per cortical area
+    /// Maps: cortical_area -> (x, y, z) -> neuron_index
+    /// This cache eliminates O(n) scans on every coordinate lookup
+    /// Cache is invalidated when neurons are added/removed for an area
+    /// Uses Mutex for thread-safe interior mutability
+    coord_map_cache: Mutex<CoordMapCache>,
+
+    /// Cached neuron index per cortical area
+    /// Maps: cortical_area -> Vec<neuron_index>
+    /// This cache eliminates O(n) scans on every get_neurons_in_cortical_area call
+    /// Cache is invalidated when neurons are added/removed for an area
+    /// Uses Mutex for thread-safe interior mutability
+    cortical_area_neuron_index: Mutex<AHashMap<u32, Vec<usize>>>,
 }
+
+type CoordKey = (u32, u32, u32);
+type CoordAreaMap = AHashMap<CoordKey, usize>;
+type CoordMapCache = AHashMap<u32, CoordAreaMap>;
 
 impl<T: NeuralValue> NeuronArray<T> {
     /// Create a new neuron array with initial capacity
@@ -79,6 +101,7 @@ impl<T: NeuralValue> NeuronArray<T> {
             count: 0,
             membrane_potentials: Vec::with_capacity(capacity),
             thresholds: Vec::with_capacity(capacity),
+            threshold_limits: Vec::with_capacity(capacity),
             leak_coefficients: Vec::with_capacity(capacity),
             resting_potentials: Vec::with_capacity(capacity),
             neuron_types: Vec::with_capacity(capacity),
@@ -92,10 +115,13 @@ impl<T: NeuralValue> NeuronArray<T> {
             cortical_areas: Vec::with_capacity(capacity),
             coordinates: Vec::with_capacity(capacity * 3), // x,y,z per neuron
             valid_mask: Vec::with_capacity(capacity),
+            coord_map_cache: Mutex::new(AHashMap::new()),
+            cortical_area_neuron_index: Mutex::new(AHashMap::new()),
         };
         // Resize to capacity with default values
         result.membrane_potentials.resize(capacity, T::zero());
         result.thresholds.resize(capacity, T::from_f32(1.0));
+        result.threshold_limits.resize(capacity, T::max_value()); // MAX = no limit (SIMD-friendly encoding)
         result.leak_coefficients.resize(capacity, 0.1);
         result.resting_potentials.resize(capacity, T::zero());
         result.neuron_types.resize(capacity, 0);
@@ -103,7 +129,7 @@ impl<T: NeuralValue> NeuronArray<T> {
         result.refractory_countdowns.resize(capacity, 0);
         result.excitabilities.resize(capacity, 1.0);
         result.consecutive_fire_counts.resize(capacity, 0);
-        result.consecutive_fire_limits.resize(capacity, 0);
+        result.consecutive_fire_limits.resize(capacity, u16::MAX); // MAX = no limit (SIMD-friendly encoding)
         result.snooze_periods.resize(capacity, 0);
         result.mp_charge_accumulation.resize(capacity, true);
         result.cortical_areas.resize(capacity, 0);
@@ -120,19 +146,20 @@ impl<T: NeuralValue> NeuronArray<T> {
         refractory_period: u16,
         excitability: f32,
     ) -> usize {
-        // Call the full version with defaults
+        // Call the full version with defaults (MAX encoding for no limits)
         NeuronStorage::add_neuron(
             self,
             threshold,
+            T::max_value(), // threshold_limit (MAX = no limit, SIMD-friendly encoding)
             leak,
             T::zero(), // resting potential
             0,         // neuron type (excitatory)
             refractory_period,
             excitability,
-            0,    // consecutive fire limit (unlimited)
-            0,    // snooze period
-            true, // mp_charge_accumulation
-            0,    // cortical area
+            u16::MAX, // consecutive fire limit (MAX = unlimited, SIMD-friendly encoding)
+            0,        // snooze period
+            true,     // mp_charge_accumulation
+            0,        // cortical area
             0,
             0,
             0, // x, y, z coords
@@ -235,6 +262,35 @@ impl<T: NeuralValue> NeuronArray<T> {
 
         fired_indices
     }
+
+    /// Pre-populate the cortical area neuron index cache for all areas
+    ///
+    /// This eliminates the expensive O(n) scan on first access to get_neurons_in_cortical_area.
+    /// Should be called after neurons are loaded (e.g., after genome load).
+    pub fn prepopulate_cortical_area_cache(&self) {
+        let mut index = match self.cortical_area_neuron_index.lock() {
+            Ok(idx) => idx,
+            Err(_) => return, // Lock poisoned, skip
+        };
+
+        // If cache is already populated, skip
+        if !index.is_empty() {
+            return;
+        }
+
+        // Build cache for all cortical areas in a single pass
+        let mut area_to_neurons: ahash::AHashMap<u32, Vec<usize>> = ahash::AHashMap::new();
+
+        for idx in 0..self.count {
+            if self.valid_mask[idx] {
+                let area = self.cortical_areas[idx];
+                area_to_neurons.entry(area).or_default().push(idx);
+            }
+        }
+
+        // Update cache
+        *index = area_to_neurons;
+    }
 }
 
 // Implement NeuronStorage trait for runtime abstraction
@@ -248,6 +304,10 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
 
     fn thresholds(&self) -> &[Self::Value] {
         &self.thresholds[..self.count]
+    }
+
+    fn threshold_limits(&self) -> &[Self::Value] {
+        &self.threshold_limits[..self.count]
     }
 
     fn leak_coefficients(&self) -> &[f32] {
@@ -311,6 +371,11 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
     fn thresholds_mut(&mut self) -> &mut [Self::Value] {
         let count = self.count;
         &mut self.thresholds[..count]
+    }
+
+    fn threshold_limits_mut(&mut self) -> &mut [Self::Value] {
+        let count = self.count;
+        &mut self.threshold_limits[..count]
     }
 
     fn leak_coefficients_mut(&mut self) -> &mut [f32] {
@@ -381,6 +446,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
     fn add_neuron(
         &mut self,
         threshold: Self::Value,
+        threshold_limit: Self::Value,
         leak: f32,
         resting: Self::Value,
         neuron_type: i32,
@@ -400,6 +466,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         if idx >= self.membrane_potentials.len() {
             self.membrane_potentials.push(T::zero());
             self.thresholds.push(threshold);
+            self.threshold_limits.push(threshold_limit);
             self.leak_coefficients.push(leak);
             self.resting_potentials.push(resting);
             self.neuron_types.push(neuron_type);
@@ -417,6 +484,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             self.valid_mask.push(true);
         } else {
             self.thresholds[idx] = threshold;
+            self.threshold_limits[idx] = threshold_limit;
             self.leak_coefficients[idx] = leak;
             self.resting_potentials[idx] = resting;
             self.neuron_types[idx] = neuron_type;
@@ -433,12 +501,20 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         }
 
         self.count += 1;
+
+        // Note: Cache invalidation is handled in add_neurons_batch for efficiency
+        // For single neuron adds, we invalidate here (less common path)
+        if let Ok(mut cache) = self.coord_map_cache.lock() {
+            cache.remove(&cortical_area);
+        }
+
         Ok(idx)
     }
 
     fn add_neurons_batch(
         &mut self,
         thresholds: &[Self::Value],
+        threshold_limits: &[Self::Value],
         leak_coefficients: &[f32],
         resting_potentials: &[Self::Value],
         neuron_types: &[i32],
@@ -455,7 +531,8 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         let n = thresholds.len();
 
         // Validate all slices are same length
-        if leak_coefficients.len() != n
+        if threshold_limits.len() != n
+            || leak_coefficients.len() != n
             || resting_potentials.len() != n
             || neuron_types.len() != n
             || refractory_periods.len() != n
@@ -473,9 +550,14 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             ));
         }
 
+        // Collect all affected cortical areas for cache invalidation
+        let mut affected_areas = std::collections::HashSet::new();
+
         for i in 0..n {
+            affected_areas.insert(cortical_areas[i]);
             self.add_neuron(
                 thresholds[i],
+                threshold_limits[i],
                 leak_coefficients[i],
                 resting_potentials[i],
                 neuron_types[i],
@@ -489,6 +571,18 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
                 y_coords[i],
                 z_coords[i],
             )?;
+        }
+
+        // Invalidate caches for all affected areas (more efficient than per-neuron invalidation)
+        if let Ok(mut cache) = self.coord_map_cache.lock() {
+            for area in &affected_areas {
+                cache.remove(area);
+            }
+        }
+        if let Ok(mut index) = self.cortical_area_neuron_index.lock() {
+            for area in &affected_areas {
+                index.remove(area);
+            }
         }
 
         Ok(())
@@ -512,9 +606,29 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
     }
 
     fn get_neurons_in_cortical_area(&self, cortical_area: u32) -> Vec<usize> {
-        (0..self.count)
+        // Try to get from cache first
+        {
+            if let Ok(index) = self.cortical_area_neuron_index.lock() {
+                if let Some(neurons) = index.get(&cortical_area) {
+                    return neurons.clone(); // Fast path: cached index
+                }
+            }
+        }
+
+        // Cache miss: build index for this cortical area
+        // PERFORMANCE: This is O(n) where n = total neuron count (8M neurons)
+        // For large genomes, this can take 4-5 seconds per area on first access.
+        // TODO: Pre-populate cache during genome load or neuron initialization
+        let neurons: Vec<usize> = (0..self.count)
             .filter(|&idx| self.valid_mask[idx] && self.cortical_areas[idx] == cortical_area)
-            .collect()
+            .collect();
+
+        // Store in cache for future lookups (fast path)
+        if let Ok(mut index) = self.cortical_area_neuron_index.lock() {
+            index.insert(cortical_area, neurons.clone());
+        }
+
+        neurons
     }
 
     fn get_neuron_count(&self, cortical_area: u32) -> usize {
@@ -553,10 +667,13 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         // Sequential iteration has better cache locality than parallel for this workload
         // AHashMap provides 2-3x faster hashing than default SipHash
 
-        // Pre-allocate hash map with capacity hint (reduces reallocations)
-        // Estimate: typically 10-50% of coords match, but use coords.len() as safe upper bound
+        // OPTIMIZATION: Use better capacity estimate to reduce hash map reallocations
+        // Estimate: typically all or most neurons in area will be in the map, so use max of
+        // coordinate count and a reasonable estimate based on total neurons
+        // This avoids counting pass while still providing good capacity hint
+        let capacity_estimate = coords.len().max(self.count / 4); // Assume area has at least 25% of neurons
         let mut coord_map: AHashMap<(u32, u32, u32), usize> =
-            AHashMap::with_capacity(coords.len().min(self.count));
+            AHashMap::with_capacity(capacity_estimate);
 
         // Sequential iteration: better cache locality, compiler can auto-vectorize
         // Access patterns: valid_mask[idx], cortical_areas[idx], coordinates[idx*3..idx*3+3]
@@ -578,6 +695,59 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         coords
             .iter()
             .map(|&coord| coord_map.get(&coord).copied())
+            .collect()
+    }
+
+    /// Optimized version that accepts separate slices to avoid tuple allocation
+    fn batch_coordinate_lookup_from_slices(
+        &self,
+        cortical_area: u32,
+        x_coords: &[u32],
+        y_coords: &[u32],
+        z_coords: &[u32],
+    ) -> Vec<Option<usize>> {
+        // Validate input lengths match
+        if x_coords.len() != y_coords.len() || x_coords.len() != z_coords.len() {
+            return vec![None; x_coords.len().max(y_coords.len()).max(z_coords.len())];
+        }
+
+        // CRITICAL PERFORMANCE: Use cached coordinate map if available
+        // This eliminates O(n) scan through all neurons on every lookup
+        let mut cache = self.coord_map_cache.lock().unwrap();
+
+        // Check if cache exists for this cortical area
+        if !cache.contains_key(&cortical_area) {
+            // Cache miss - build the map and store it
+            let capacity_estimate = self.count / 4; // Estimate based on total neurons
+            let mut coord_map: AHashMap<(u32, u32, u32), usize> =
+                AHashMap::with_capacity(capacity_estimate);
+
+            // Build coordinate map from neuron storage (O(n) operation, but only once per area)
+            for idx in 0..self.count {
+                if !self.valid_mask[idx] || self.cortical_areas[idx] != cortical_area {
+                    continue;
+                }
+                let coord_base = idx * 3;
+                let x = self.coordinates[coord_base];
+                let y = self.coordinates[coord_base + 1];
+                let z = self.coordinates[coord_base + 2];
+                coord_map.insert((x, y, z), idx);
+            }
+
+            // Store in cache for future lookups
+            cache.insert(cortical_area, coord_map);
+        }
+
+        // Get reference to cached map and perform lookups while holding the lock
+        // This is safe because we're already in a read lock context (single-threaded)
+        let coord_map = cache.get(&cortical_area).unwrap();
+
+        // Fast O(1) lookups using cached map
+        x_coords
+            .iter()
+            .zip(y_coords.iter())
+            .zip(z_coords.iter())
+            .map(|((&x, &y), &z)| coord_map.get(&(x, y, z)).copied())
             .collect()
     }
 }

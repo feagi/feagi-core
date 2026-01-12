@@ -117,6 +117,21 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
     // Extract cortical areas
     let cortical_areas = extract_cortical_areas(flat_blueprint)?;
 
+    // Load visualization_voxel_granularity overrides (if present)
+    let visualization_overrides: HashMap<String, Value> =
+        if let Some(overrides_obj) = flat_genome.get("visualization_voxel_granularity_overrides") {
+            if let Some(overrides_map) = overrides_obj.as_object() {
+                overrides_map
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect()
+            } else {
+                HashMap::new()
+            }
+        } else {
+            HashMap::new()
+        };
+
     // Build hierarchical blueprint
     let mut hierarchical_blueprint = serde_json::Map::new();
 
@@ -125,6 +140,18 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
 
         // Process all flat keys for this cortical area
         process_area_properties(cortical_id, flat_blueprint, &property_map, &mut area_data)?;
+
+        // Apply visualization_voxel_granularity override if present
+        if let Some(override_value) = visualization_overrides.get(cortical_id) {
+            if let Some(properties) = area_data.get_mut("properties") {
+                if let Some(properties_obj) = properties.as_object_mut() {
+                    properties_obj.insert(
+                        "visualization_voxel_granularity".to_string(),
+                        override_value.clone(),
+                    );
+                }
+            }
+        }
 
         hierarchical_blueprint.insert(cortical_id.clone(), Value::Object(area_data));
     }
@@ -367,6 +394,52 @@ fn process_dstmap(
         let mut converted_rules = Vec::new();
 
         for rule in rules_array {
+            // Support BOTH representations:
+            // - Array format (legacy flat): ["projector", 1, 1.0, false, ...]
+            // - Object format (already hierarchical-like): {"morphology_id": "...", ...}
+            if let Some(rule_obj) = rule.as_object() {
+                // Minimal validation to avoid silently accepting garbage.
+                if !rule_obj.contains_key("morphology_id")
+                    || !rule_obj.contains_key("postSynapticCurrent_multiplier")
+                    || !rule_obj.contains_key("plasticity_flag")
+                {
+                    warn!(
+                        target: "feagi-evo",
+                        "Invalid dstmap rule object for destination {}: missing required keys",
+                        destination_area
+                    );
+                    continue;
+                }
+
+                // Strict plasticity validation (no backward compatibility):
+                // If plasticity_flag=true, the full plasticity parameter set must be present.
+                if rule_obj.get("plasticity_flag").and_then(|v| v.as_bool()) == Some(true) {
+                    let required = [
+                        "plasticity_constant",
+                        "ltp_multiplier",
+                        "ltd_multiplier",
+                        "plasticity_window",
+                    ];
+                    let missing: Vec<&str> = required
+                        .iter()
+                        .copied()
+                        .filter(|k| !rule_obj.contains_key(*k))
+                        .collect();
+                    if !missing.is_empty() {
+                        warn!(
+                            target: "feagi-evo",
+                            "Invalid plastic dstmap rule object for destination {}: missing keys {:?}",
+                            destination_area,
+                            missing
+                        );
+                        continue;
+                    }
+                }
+
+                converted_rules.push(Value::Object(rule_obj.clone()));
+                continue;
+            }
+
             let rule_array = match rule.as_array() {
                 Some(arr) => arr,
                 None => continue,
@@ -374,14 +447,29 @@ fn process_dstmap(
 
             // Validate minimum required elements
             if rule_array.len() < 4 {
-                warn!(target: "feagi-evo",
+                warn!(
+                    target: "feagi-evo",
                     "Invalid mapping recipe format (need at least 4 elements): {:?}",
                     rule_array
                 );
                 continue;
             }
 
-            // Parse rule: [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag, ...]
+            // Parse rule (flat array format):
+            // [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag,
+            //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window]
+            //
+            // NOTE: We do not maintain backward compatibility here. If a genome uses the array
+            // representation it must include the full parameter set (including plasticity_window).
+            if rule_array.len() < 8 {
+                warn!(
+                    target: "feagi-evo",
+                    "Invalid mapping recipe format (need 8 elements, including plasticity_window): {:?}",
+                    rule_array
+                );
+                continue;
+            }
+
             let mut rule_dict = serde_json::Map::new();
 
             rule_dict.insert("morphology_id".to_string(), rule_array[0].clone());
@@ -392,24 +480,21 @@ fn process_dstmap(
             );
             rule_dict.insert("plasticity_flag".to_string(), rule_array[3].clone());
 
-            // Optional plasticity parameters with defaults
-            rule_dict.insert(
-                "plasticity_constant".to_string(),
-                rule_array.get(4).cloned().unwrap_or(json!(1)),
-            );
-            rule_dict.insert(
-                "ltp_multiplier".to_string(),
-                rule_array.get(5).cloned().unwrap_or(json!(1)),
-            );
-            rule_dict.insert(
-                "ltd_multiplier".to_string(),
-                rule_array.get(6).cloned().unwrap_or(json!(1)),
-            );
+            // Plasticity parameters (required in new design)
+            rule_dict.insert("plasticity_constant".to_string(), rule_array[4].clone());
+            rule_dict.insert("ltp_multiplier".to_string(), rule_array[5].clone());
+            rule_dict.insert("ltd_multiplier".to_string(), rule_array[6].clone());
+            rule_dict.insert("plasticity_window".to_string(), rule_array[7].clone());
 
             converted_rules.push(Value::Object(rule_dict));
         }
 
-        hierarchical_dstmap.insert(destination_area.clone(), Value::Array(converted_rules));
+        // Avoid populating cortical_mapping_dst with empty per-destination arrays:
+        // an empty array is semantically "no mapping rules", and downstream code
+        // treats presence of the destination key as "has mappings".
+        if !converted_rules.is_empty() {
+            hierarchical_dstmap.insert(destination_area.clone(), Value::Array(converted_rules));
+        }
     }
 
     area_data.insert(
@@ -437,8 +522,8 @@ mod tests {
     fn test_dstmap_parsing() {
         let dstmap_flat = json!({
             "dest_area": [
-                ["block_to_block", 1, 1.0, true, 1, 1, 1],
-                ["projector", 2, 0.5, false]
+                ["block_to_block", 1, 1.0, true, 1, 1, 1, 4],
+                ["projector", 2, 0.5, false, 1, 1, 1, 1]
             ]
         });
 
@@ -451,7 +536,34 @@ mod tests {
         assert_eq!(dest_rules.len(), 2);
         assert_eq!(dest_rules[0]["morphology_id"], "block_to_block");
         assert_eq!(dest_rules[0]["plasticity_constant"], 1);
+        assert_eq!(dest_rules[0]["plasticity_window"], 4);
         assert_eq!(dest_rules[1]["morphology_id"], "projector");
-        assert_eq!(dest_rules[1]["plasticity_constant"], 1); // Default
+        assert_eq!(dest_rules[1]["plasticity_constant"], 1);
+        assert_eq!(dest_rules[1]["plasticity_window"], 1);
+    }
+
+    #[test]
+    fn test_dstmap_parsing_object_rules_passthrough() {
+        let dstmap_flat = json!({
+            "dest_area": [
+                {
+                    "morphology_id": "projector",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": false
+                }
+            ]
+        });
+
+        let mut area_data = serde_json::Map::new();
+        process_dstmap(&dstmap_flat, &mut area_data).unwrap();
+
+        let dstmap = area_data.get("cortical_mapping_dst").unwrap();
+        let dest_rules = dstmap.get("dest_area").unwrap().as_array().unwrap();
+
+        assert_eq!(dest_rules.len(), 1);
+        assert_eq!(dest_rules[0]["morphology_id"], "projector");
+        assert_eq!(dest_rules[0]["postSynapticCurrent_multiplier"], 1);
+        assert_eq!(dest_rules[0]["plasticity_flag"], false);
     }
 }

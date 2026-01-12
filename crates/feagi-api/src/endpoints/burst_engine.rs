@@ -6,7 +6,9 @@
 // Removed - using crate::common::State instead
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
+use serde::Deserialize;
 use std::collections::HashMap;
+use utoipa::{IntoParams, ToSchema};
 
 /// Get the current simulation timestep in seconds.
 #[utoipa::path(
@@ -76,17 +78,26 @@ pub async fn get_fcl(
     State(state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use std::collections::BTreeMap;
-    use tracing::debug;
+    use tracing::{debug, warn};
+
+    warn!("[API] /v1/burst_engine/fcl endpoint called - this acquires NPU lock!");
 
     let runtime_service = state.runtime_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
 
     // CRITICAL FIX: Get FCL snapshot WITH cortical_idx from NPU (not extracted from neuron_id bits!)
     // Old code was doing (neuron_id >> 32) which is WRONG - neuron_id is u32, not packed!
+    let call_start = std::time::Instant::now();
     let fcl_data = runtime_service
         .get_fcl_snapshot_with_cortical_idx()
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get FCL snapshot: {}", e)))?;
+    let call_duration = call_start.elapsed();
+    warn!(
+        "[API] /v1/burst_engine/fcl completed in {:.2}ms (returned {} neurons)",
+        call_duration.as_secs_f64() * 1000.0,
+        fcl_data.len()
+    );
 
     // Get burst count for timestep
     let timestep = runtime_service
@@ -112,10 +123,12 @@ pub async fn get_fcl(
 
     for (neuron_id, cortical_idx, _potential) in &fcl_data {
         // Map cortical_idx to cortical_id using actual stored values
-        let cortical_id = idx_to_id
-            .get(cortical_idx)
-            .cloned()
-            .unwrap_or_else(|| format!("area_{}", cortical_idx));
+        let cortical_id = idx_to_id.get(cortical_idx).cloned().ok_or_else(|| {
+            ApiError::internal(format!(
+                "Unmapped cortical_idx in FCL snapshot: idx={}. Refusing fallback (would corrupt determinism).",
+                cortical_idx
+            ))
+        })?;
 
         cortical_areas
             .entry(cortical_id)
@@ -167,7 +180,7 @@ pub async fn get_fcl(
 pub async fn get_fire_queue(
     State(state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    use tracing::debug;
+    use tracing::{debug, info};
 
     let runtime_service = state.runtime_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
@@ -177,6 +190,20 @@ pub async fn get_fire_queue(
         .get_fire_queue_sample()
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get fire queue: {}", e)))?;
+
+    if fq_sample.is_empty() {
+        debug!("[FIRE-QUEUE-API] ⚠️ Fire queue sample is EMPTY - no areas");
+    } else {
+        let total_neurons: usize = fq_sample
+            .values()
+            .map(|(x, y, z, _, _)| x.len() + y.len() + z.len())
+            .sum();
+        info!(
+            "[FIRE-QUEUE-API] ✓ Received fire queue sample: {} areas, {} total neurons",
+            fq_sample.len(),
+            total_neurons
+        );
+    }
 
     // Get burst count for timestep
     let timestep = runtime_service
@@ -196,21 +223,30 @@ pub async fn get_fire_queue(
         .map(|a| (a.cortical_idx, a.cortical_id.clone()))
         .collect();
 
-    // Convert cortical_idx to cortical_id
-    let mut cortical_areas: HashMap<String, Vec<u64>> = HashMap::new();
-    let mut total_fired = 0;
+    // Convert cortical_idx to cortical_id and report only per-area fired neuron COUNT.
+    // Caller explicitly does not need individual neuron IDs.
+    let mut cortical_areas: HashMap<String, u64> = HashMap::new();
+    let mut total_fired: u64 = 0;
 
     for (cortical_idx, (neuron_ids, _, _, _, _)) in fq_sample {
-        // Use actual cortical_id from mapping, fallback to area_{idx} if not found
-        let cortical_id = idx_to_id
-            .get(&cortical_idx)
-            .cloned()
-            .unwrap_or_else(|| format!("area_{}", cortical_idx));
+        let cortical_id = idx_to_id.get(&cortical_idx).cloned().ok_or_else(|| {
+            ApiError::internal(format!(
+                "Unmapped cortical_idx in Fire Queue sample: idx={}. Refusing fallback (would corrupt determinism).",
+                cortical_idx
+            ))
+        })?;
 
-        let ids_u64: Vec<u64> = neuron_ids.iter().map(|&id| id as u64).collect();
-        total_fired += ids_u64.len();
-        cortical_areas.insert(cortical_id, ids_u64);
+        let fired_count = neuron_ids.len() as u64;
+        info!(
+            "[FIRE-QUEUE-API] Area {} (idx={}): {} neurons fired",
+            cortical_id, cortical_idx, fired_count
+        );
+
+        total_fired += fired_count;
+        cortical_areas.insert(cortical_id, fired_count);
     }
+
+    info!("[FIRE-QUEUE-API] Total fired neurons: {}", total_fired);
 
     let mut response = HashMap::new();
     response.insert("timestep".to_string(), serde_json::json!(timestep));
@@ -222,6 +258,97 @@ pub async fn get_fire_queue(
 
     debug!(target: "feagi-api", "GET /fire_queue - returned {} fired neurons", total_fired);
 
+    Ok(Json(response))
+}
+
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct FclNeuronQuery {
+    /// Neuron ID to look up in the current FCL snapshot
+    pub neuron_id: u64,
+}
+
+/// Get the current FCL candidate potential for a specific neuron.
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fcl/neuron",
+    tag = "burst_engine",
+    params(FclNeuronQuery)
+)]
+pub async fn get_fcl_neuron(
+    State(state): State<ApiState>,
+    Query(params): Query<FclNeuronQuery>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+
+    let fcl_data = runtime_service
+        .get_fcl_snapshot_with_cortical_idx()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get FCL snapshot: {}", e)))?;
+
+    let mut response = HashMap::new();
+    response.insert("neuron_id".to_string(), serde_json::json!(params.neuron_id));
+
+    match fcl_data.iter().find(|(id, _, _)| *id == params.neuron_id) {
+        Some((_id, cortical_idx, potential)) => {
+            response.insert("present".to_string(), serde_json::json!(true));
+            response.insert("cortical_idx".to_string(), serde_json::json!(*cortical_idx));
+            response.insert(
+                "candidate_potential".to_string(),
+                serde_json::json!(*potential),
+            );
+        }
+        None => {
+            response.insert("present".to_string(), serde_json::json!(false));
+            response.insert("candidate_potential".to_string(), serde_json::json!(0.0));
+        }
+    }
+
+    Ok(Json(response))
+}
+
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct FireQueueNeuronQuery {
+    /// Neuron ID to check in the last Fire Queue sample
+    pub neuron_id: u64,
+}
+
+/// Check whether a specific neuron fired in the last burst (Fire Queue sample).
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fire_queue/neuron",
+    tag = "burst_engine",
+    params(FireQueueNeuronQuery)
+)]
+pub async fn get_fire_queue_neuron(
+    State(state): State<ApiState>,
+    Query(params): Query<FireQueueNeuronQuery>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+
+    let fq_sample = runtime_service
+        .get_fire_queue_sample()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get fire queue sample: {}", e)))?;
+
+    let mut response = HashMap::new();
+    response.insert("neuron_id".to_string(), serde_json::json!(params.neuron_id));
+
+    let needle = params.neuron_id as u32;
+    for (cortical_idx, (neuron_ids, _xs, _ys, _zs, mps)) in fq_sample {
+        if let Some(pos) = neuron_ids.iter().position(|&id| id == needle) {
+            response.insert("fired".to_string(), serde_json::json!(true));
+            response.insert("cortical_idx".to_string(), serde_json::json!(cortical_idx));
+            response.insert(
+                "membrane_potential_at_fire".to_string(),
+                serde_json::json!(mps.get(pos).copied().unwrap_or(0.0)),
+            );
+            return Ok(Json(response));
+        }
+    }
+
+    response.insert("fired".to_string(), serde_json::json!(false));
     Ok(Json(response))
 }
 
@@ -347,6 +474,7 @@ pub async fn put_fire_ledger_default_window_size(
 pub async fn get_fire_ledger_areas_window_config(
     State(state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    tracing::debug!("[NPU-LOCK] API: GET /v1/burst_engine/fire_ledger/areas_window_config called - this acquires NPU lock!");
     let runtime_service = state.runtime_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
 
@@ -371,11 +499,12 @@ pub async fn get_fire_ledger_areas_window_config(
     // Convert to area_id -> window_size HashMap using actual cortical_id
     let mut areas: HashMap<String, usize> = HashMap::new();
     for (cortical_idx, window_size) in configs {
-        // Use actual cortical_id from mapping, fallback to area_{idx} if not found
-        let cortical_id = idx_to_id
-            .get(&cortical_idx)
-            .cloned()
-            .unwrap_or_else(|| format!("area_{}", cortical_idx));
+        let cortical_id = idx_to_id.get(&cortical_idx).cloned().ok_or_else(|| {
+            ApiError::internal(format!(
+                "Unmapped cortical_idx in Fire Ledger window config: idx={}. Refusing fallback (would corrupt determinism).",
+                cortical_idx
+            ))
+        })?;
         areas.insert(cortical_id, window_size);
     }
 
@@ -896,8 +1025,10 @@ pub async fn get_fire_ledger_area_window_size(
         }
     }
 
-    // Return default if not found
-    Ok(Json(20))
+    Err(ApiError::not_found(
+        "FireLedgerArea",
+        &format!("cortical_idx={}", area_id),
+    ))
 }
 
 /// Set fire ledger window size for a specific cortical area.
@@ -972,20 +1103,10 @@ pub async fn get_fire_ledger_history(
         .get("lookback_steps")
         .and_then(|s| s.parse::<i32>().ok());
 
-    // TODO: Implement fire ledger history retrieval from NPU
-    // For now, return placeholder
-    let mut response = HashMap::new();
-    response.insert("success".to_string(), serde_json::json!(true));
-    response.insert("area_id".to_string(), serde_json::json!(area_id));
-    response.insert("cortical_idx".to_string(), serde_json::json!(cortical_idx));
-    response.insert("history".to_string(), serde_json::json!([]));
-    response.insert("window_size".to_string(), serde_json::json!(20));
-    response.insert(
-        "note".to_string(),
-        serde_json::json!("Fire ledger history not yet implemented"),
-    );
-
-    Ok(Json(response))
+    Err(ApiError::internal(format!(
+        "Fire ledger history retrieval is not yet implemented (requested cortical_idx={})",
+        cortical_idx
+    )))
 }
 
 // ============================================================================

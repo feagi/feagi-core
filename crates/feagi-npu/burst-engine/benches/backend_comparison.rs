@@ -34,7 +34,7 @@ fn create_test_genome(
         neuron_array.excitabilities[i] = 1.0;
         neuron_array.refractory_periods[i] = 0;
         neuron_array.refractory_countdowns[i] = 0;
-        neuron_array.consecutive_fire_limits[i] = 0;
+        neuron_array.consecutive_fire_limits[i] = u16::MAX; // MAX = no limit (SIMD-friendly encoding)
         neuron_array.consecutive_fire_counts[i] = 0;
         neuron_array.valid_mask[i] = true;
     }
@@ -88,6 +88,9 @@ fn bench_cpu_backend(c: &mut Criterion) {
         (50_000, "50K"),
         (100_000, "100K"),
         (500_000, "500K"),
+        (1_000_000, "1M"),
+        (5_000_000, "5M"),
+        (8_000_000, "8M"), // Match user's actual scale
     ];
 
     for (neuron_count, label) in test_sizes {

@@ -22,7 +22,8 @@ pub mod types;
 // Re-export commonly used types (all from feagi-services now)
 pub use agent_registry::{
     AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
-    SensoryCapability, VisionCapability, VisualizationCapability,
+    MotorUnit, MotorUnitSpec, SensoryCapability, SensoryUnit, VisionCapability,
+    VisualizationCapability,
 };
 pub use config::{IOConfig, TransportMode, WebSocketConfig};
 pub use events::{

@@ -1,9 +1,10 @@
+use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, NeuronDepth};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
@@ -16,8 +17,12 @@ pub struct MiscDataNeuronVoxelXYZPDecoder {
 }
 
 impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
-    fn get_decoded_data_type(&self) -> WrappedIOType {
+    fn get_decodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::MiscData(Some(self.misc_dimensions))
+    }
+
+    fn get_as_properties(&self) -> JSONDecoderProperties {
+        JSONDecoderProperties::MiscData(self.misc_dimensions)
     }
 
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(

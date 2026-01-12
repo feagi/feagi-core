@@ -29,8 +29,8 @@ Cortical IDs are identifiers for a specific cortical area within a genome, essen
 
 There are certain types of numbers to be aware of as well.
 
-#### Cortical Groups
-Since you can have multiple cortical areas of the same sensor / motor cortical type, the Cortical Group is an u8 number defining which specific instance of a given cortical type is being referenced.
+#### Cortical Units
+Since you can have multiple cortical areas of the same sensor / motor cortical type, the Cortical Unit Index is an u8 number defining which specific instance of a given cortical type is being referenced.
 
 #### Cortical Channels
 A single cortical sensor / motor cortical area can be divided into multiple channels, to represent multiple inputs / outputs of a given type of data.

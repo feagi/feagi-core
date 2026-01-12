@@ -1,92 +1,78 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! FEAGI Agent SDK - Rust client library for building FEAGI agents
+//! # FEAGI Agent Library
 //!
-//! This SDK provides a production-ready client for building agents that connect to FEAGI.
+//! Complete toolkit for building FEAGI agents, from low-level protocol to high-level controllers.
 //!
-//! # Features
-//! - Automatic registration with retry/backoff
-//! - Background heartbeat for keepalive
-//! - Reconnection logic
-//! - Sensory data sending (ZMQ PUSH)
-//! - Motor data receiving (ZMQ SUB)
-//! - Thread-safe operations
-//! - Graceful shutdown with deregistration
+//! ## Core Module
 //!
-//! # Quick Start
+//! Low-level agent protocol implementation (always available):
+//! - [`core::AgentClient`] - Connect to FEAGI, manage lifecycle
+//! - [`core::AgentConfig`] - Configuration builder
+//! - [`core::AgentType`] - Agent type (Sensory, Motor, Both)
+//!
+//! ## SDK Module (Optional)
+//!
+//! High-level tools for building controllers (enabled with `sdk` feature):
+//! - [`sdk::base::Controller`] - Controller trait
+//! - [`sdk::base::TopologyCache`] - Topology fetching and caching
+//! - [`sdk::sensory::SensoryEncoder`] - Trait for encoding sensory data
+//! - [`sdk::motor::MotorDecoder`] - Trait for decoding motor data
+//!
+//! ## Examples
+//!
+//! ### Using Core Only (Minimal Agent)
 //!
 //! ```ignore
-//! use feagi_agent::{AgentClient, AgentConfig, AgentType};
+//! use feagi_agent::core::{AgentClient, AgentConfig, AgentType};
 //!
-//! // Create configuration
-//! let config = AgentConfig::new("my_camera", AgentType::Sensory)
-//!     .with_feagi_host("localhost")
-//!     .with_vision_capability("camera", (640, 480), 3, "i_vision")
-//!     .with_heartbeat_interval(5.0);
+//! let config = AgentConfig::new("my-agent", AgentType::Sensory)
+//!     .with_registration_endpoint("tcp://localhost:30001")
+//!     .with_sensory_endpoint("tcp://localhost:5555");
 //!
-//! // Create and connect client
 //! let mut client = AgentClient::new(config)?;
 //! client.connect()?;
-//!
-//! // Send sensory data
-//! client.send_sensory_data(vec![
-//!     (0, 50.0),   // neuron_id, potential
-//!     (1, 75.0),
-//!     (2, 30.0),
-//! ])?;
-//!
-//! // For motor agents - receive motor commands
-//! if let Some(motor_data) = client.receive_motor_data()? {
-//!     println!("Motor command: {:?}", motor_data);
-//! }
-//!
-//! // Client automatically deregisters on drop
+//! client.send_sensory_bytes(data)?;
 //! ```
 //!
-//! # Architecture
+//! ### Building a Controller with SDK
 //!
-//! The SDK uses ZMQ for communication with FEAGI:
-//! - **Registration**: ZMQ REQ/REP socket (also used for heartbeat)
-//! - **Sensory Data**: ZMQ PUSH socket (agent → FEAGI)
-//! - **Motor Data**: ZMQ SUB socket (FEAGI → agent)
+//! ```ignore
+//! use feagi_agent::sdk::sensory::video::{VideoEncoder, VideoEncoderConfig};
+//! use feagi_agent::sdk::base::TopologyCache;
+//! use feagi_agent::core::{AgentClient, AgentConfig};
 //!
-//! Heartbeat runs in a background thread and automatically keeps the agent alive.
+//! // Create topology cache (shared across encoders)
+//! let topology_cache = TopologyCache::new("localhost", 8080, 5.0)?;
 //!
-//! # Error Handling
+//! // Create video encoder
+//! let encoder = VideoEncoder::new(config, &topology_cache).await?;
 //!
-//! All operations return `Result<T, SdkError>`. The SDK distinguishes between:
-//! - **Retryable errors**: Network issues, timeouts (handled by retry logic)
-//! - **Non-retryable errors**: Configuration errors, invalid data
+//! // Create agent client
+//! let mut client = AgentClient::new(agent_config)?;
+//! client.connect()?;
 //!
-//! # Thread Safety
-//!
-//! `AgentClient` uses `Arc<Mutex<>>` internally for socket sharing between
-//! the main thread and heartbeat thread. All public methods are safe to call
-//! from multiple threads.
+//! // Encode and send frames
+//! let encoded = encoder.encode(&frame)?;
+//! client.send_sensory_bytes(encoded)?;
+//! ```
 
-pub mod client;
-pub mod config;
-pub mod error;
-pub mod heartbeat;
-pub mod reconnect;
-pub mod transport;
+pub mod core;
 
-// Re-export main types for convenience
-pub use client::AgentClient;
-pub use config::AgentConfig;
-pub use error::{Result, SdkError};
-pub use transport::{RegistrationResponse, TransportConfig as TransportInfo};
+// Re-export core types at top level for convenience
+pub use core::{AgentClient, AgentConfig, AgentType, Result, SdkError};
 
-// Re-export types from feagi-io
-pub use feagi_io::{AgentCapabilities, AgentType, MotorCapability, VisionCapability};
+// SDK module (behind feature flag)
+#[cfg(feature = "sdk")]
+pub mod sdk;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_sdk_imports() {
+    fn test_core_imports() {
         // Verify all main types are accessible
         let _config = AgentConfig::new("test", AgentType::Sensory);
     }

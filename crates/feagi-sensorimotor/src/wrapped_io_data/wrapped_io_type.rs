@@ -2,12 +2,13 @@ use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
 };
 use crate::data_types::{
-    GazeProperties, ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D,
-    SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D,
-    SignedPercentage4D,
+    GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
+    Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
+    SignedPercentage3D, SignedPercentage4D,
 };
 use crate::wrapped_io_data::WrappedIOData;
 use feagi_structures::FeagiDataError;
+use serde::{Deserialize, Serialize};
 use std::mem::discriminant;
 
 /// Type descriptor for wrapped I/O data.
@@ -26,7 +27,7 @@ use std::mem::discriminant;
 /// let io_type = WrappedIOType::Percentage;
 /// let blank_data = io_type.create_blank_data_of_type().unwrap();
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[allow(non_camel_case_types)]
 pub enum WrappedIOType {
     Boolean,
@@ -42,6 +43,7 @@ pub enum WrappedIOType {
     SegmentedImageFrame(Option<SegmentedImageFrameProperties>),
     MiscData(Option<MiscDataDimensions>),
     GazeProperties,
+    ImageFilteringSettings,
 }
 
 // NOTE: Due to some variations in some of the types, this isn't practical to turn into a macro.
@@ -140,6 +142,9 @@ impl WrappedIOType {
             WrappedIOType::GazeProperties => Ok(WrappedIOData::GazeProperties(
                 GazeProperties::create_default_centered(),
             )),
+            WrappedIOType::ImageFilteringSettings => Ok(WrappedIOData::ImageFilteringSettings(
+                ImageFilteringSettings::default(),
+            )),
         }
     }
 }
@@ -178,6 +183,9 @@ impl std::fmt::Display for WrappedIOType {
                 write!(f, "Misc({})", s)
             }
             WrappedIOType::GazeProperties => write!(f, "IOTypeVariant(GazeProperties)"),
+            WrappedIOType::ImageFilteringSettings => {
+                write!(f, "IOTypeVariant(ImageFilteringSettings)")
+            }
         }
     }
 }
@@ -204,6 +212,7 @@ impl From<WrappedIOData> for WrappedIOType {
                 WrappedIOType::MiscData(Some(dimensions.get_dimensions()))
             }
             WrappedIOData::GazeProperties(_) => WrappedIOType::GazeProperties,
+            WrappedIOData::ImageFilteringSettings(_) => WrappedIOType::ImageFilteringSettings,
         }
     }
 }
@@ -230,6 +239,7 @@ impl From<&WrappedIOData> for WrappedIOType {
                 WrappedIOType::MiscData(Some(dimensions.get_dimensions()))
             }
             WrappedIOData::GazeProperties(_) => WrappedIOType::GazeProperties,
+            WrappedIOData::ImageFilteringSettings(_) => WrappedIOType::ImageFilteringSettings,
         }
     }
 }

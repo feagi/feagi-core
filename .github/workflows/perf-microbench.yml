@@ -1,0 +1,52 @@
+name: Performance Microbench (CI Gate)
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch: {}
+
+jobs:
+  microbench:
+    name: Microbench (criterion) + regression gate
+    runs-on: macos-14
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: feagi-core
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rust toolchain (1.75)
+        uses: dtolnay/rust-toolchain@1.75.0
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            feagi-core -> target
+
+      - name: Run CI microbench pack
+        run: |
+          cargo bench -p feagi-npu-burst-engine --bench ci_microbench
+
+      - name: Compare vs baseline (gate)
+        run: |
+          cargo run --bin perf_compare -- \
+            --baseline perf/ci_microbench_baseline.json \
+            --criterion-dir target/criterion
+
+      - name: Upload Criterion estimates (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-estimates
+          path: |
+            feagi-core/target/criterion/**/new/estimates.json
+            feagi-core/target/criterion/**/new/sample.json
+          if-no-files-found: warn
+
+
+

@@ -49,6 +49,7 @@ pub mod converter_flat_full;
 pub mod converter_hierarchical_to_flat;
 pub mod cortical_type_parser;
 pub mod genome;
+pub mod plasticity_detector;
 pub mod random;
 pub mod runtime;
 pub mod storage;
@@ -66,6 +67,9 @@ pub use genome::{
     load_genome_from_file, load_genome_from_json, migrate_genome, peek_quantization_precision,
     save_genome_to_file, save_genome_to_json, GenomeParser, GenomeSaver, MigrationResult,
     ParsedGenome,
+};
+pub use plasticity_detector::{
+    extract_memory_properties, genome_has_plasticity, MemoryAreaProperties,
 };
 pub use runtime::{
     GenomeMetadata, GenomeSignatures, GenomeStats, Morphology, MorphologyParameters,

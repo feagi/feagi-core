@@ -50,6 +50,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+use once_cell::sync::Lazy;
+#[cfg(feature = "std")]
+use parking_lot::RwLock;
+#[cfg(feature = "std")]
+use std::sync::Arc;
+
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -249,6 +256,11 @@ impl StateManager {
         self.fcl_cache.set(cortical_area, window_size)
     }
 
+    /// Get reference to core state (for direct access to atomic operations)
+    pub fn get_core_state(&self) -> &MemoryMappedState {
+        &self.core_state
+    }
+
     // ===== Persistence =====
 
     /// Create a snapshot of current state
@@ -276,6 +288,51 @@ impl StateManager {
     /// Load state from file (returns snapshot)
     pub fn load_from_file(path: &std::path::Path) -> Result<StateSnapshot> {
         StateSnapshot::load_from_file(path)
+    }
+}
+
+// ===== Singleton Pattern =====
+
+/// Global singleton instance of StateManager
+///
+/// This is initialized lazily on first access. The initialization is thread-safe
+/// and non-blocking. If initialization fails, it will panic (which should never happen).
+#[cfg(feature = "std")]
+static INSTANCE: Lazy<Arc<RwLock<StateManager>>> = Lazy::new(|| {
+    // Initialize StateManager - this should never fail in normal operation
+    // StateManager::new() just creates structs, so it's fast and non-blocking
+    let state_manager = StateManager::new()
+        .or_else(|_| StateManager::with_default_fcl_window(20))
+        .expect("Failed to initialize StateManager - this should never happen");
+    Arc::new(RwLock::new(state_manager))
+});
+
+#[cfg(feature = "std")]
+impl StateManager {
+    /// Get the global singleton instance of StateManager
+    ///
+    /// This provides thread-safe access to the shared state manager.
+    /// The instance is lazily initialized on first access.
+    ///
+    /// # Safety
+    ///
+    /// This method is safe to call from any thread. The singleton is initialized
+    /// on first access using `once_cell::sync::Lazy`, which is thread-safe.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use feagi_state_manager::StateManager;
+    ///
+    /// let state = StateManager::instance();
+    /// let manager = state.read();
+    /// manager.set_fatigue_index(85);
+    /// ```
+    pub fn instance() -> Arc<RwLock<StateManager>> {
+        // Force initialization by accessing the Lazy value
+        // This is safe because Lazy::new() is thread-safe and only executes once
+        let _ = &*INSTANCE;
+        Arc::clone(&INSTANCE)
     }
 }
 

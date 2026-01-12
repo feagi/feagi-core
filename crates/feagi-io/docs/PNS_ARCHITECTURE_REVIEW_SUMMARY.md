@@ -1289,7 +1289,7 @@ engine.visualization_ready.lock().unwrap().emit(&fbc);
 # Old API (still works, uses ZMQ)
 pns = feagi_rust.create_pns(
     zmq_rest="tcp://0.0.0.0:30001",
-    zmq_motor="tcp://0.0.0.0:30005",
+    zmq_motor="tcp://0.0.0.0:5564",
     zmq_viz="tcp://0.0.0.0:5562",
     zmq_sensory="tcp://0.0.0.0:5555"
 )

@@ -15,6 +15,7 @@ feagi-npu-neural = { version = "0.0.1-beta.1", path = "../neural" }
 # Runtime trait abstraction (generic over any runtime implementation)
 # Standard runtime implementation available via "std" feature
 feagi-npu-runtime = { version = "0.0.1-beta.1", path = "../runtime", optional = true }
+
 feagi-state-manager = { version = "0.0.1-beta.1", path = "../../feagi-state-manager" }  # For BurstEngineState enum
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
@@ -24,6 +25,7 @@ thiserror.workspace = true
 rayon.workspace = true
 ndarray.workspace = true
 ahash.workspace = true
+roaring = "0.10"  # Compressed bitmaps for efficient neuron set operations
 serde_json = "1.0"  # For parameter update queue values
 memmap2 = "0.9"  # Memory-mapped file I/O for SHM
 chrono = "0.4"   # Timestamp formatting
@@ -32,6 +34,9 @@ parking_lot = "0.12"  # For motor subscriptions RwLock
 # Observability
 feagi-observability = { workspace = true }
 tracing = { workspace = true }
+
+# Note: Using LLVM auto-vectorization for SIMD (architecture-agnostic)
+# No explicit SIMD crate needed - LLVM handles it automatically
 
 # GPU acceleration (optional features)
 wgpu = { workspace = true, optional = true }
@@ -57,12 +62,21 @@ gpu = ["wgpu", "pollster", "bytemuck"]
 cuda = ["cudarc", "half"]
 # Enable all GPU backends
 all-gpu = ["gpu", "cuda"]
-# Enable plasticity integration (trait-based, no direct dependency)
-with-plasticity = []
+# Enable NPU lock tracing (adds overhead - disable for production)
+# When disabled, uses regular Mutex instead of TracingMutex
+npu-lock-tracing = []
 
 [[bench]]
 name = "backend_comparison"
 harness = false
+
+[[bench]]
+name = "ci_microbench"
+harness = false
+
+#[[bench]]
+#name = "largescale_perf_test"
+#harness = false
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

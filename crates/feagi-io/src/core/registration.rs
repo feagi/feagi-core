@@ -16,14 +16,16 @@ pub use feagi_services::types::registration::{
     AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest,
     RegistrationResponse, TransportConfig,
 };
-use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalSubUnitIndex, CorticalUnitIndex,
+};
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::SensoryCorticalUnit;
+use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_structures::FeagiDataError;
 
 use super::agent_registry::{
-    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
-    SensoryCapability, VisionCapability, VisualizationCapability,
+    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorUnit, SensoryUnit,
 };
 
 /// Type alias for registration callbacks
@@ -61,6 +63,7 @@ pub struct RegistrationHandler {
     /// Configuration for auto-creating missing cortical areas
     auto_create_missing_areas: bool,
     /// Actual ZMQ port numbers (from config, NOT hardcoded)
+    registration_port: u16,
     sensory_port: u16,
     motor_port: u16,
     viz_port: u16,
@@ -82,6 +85,7 @@ pub struct RegistrationHandler {
 impl RegistrationHandler {
     pub fn new(
         agent_registry: Arc<RwLock<AgentRegistry>>,
+        registration_port: u16,
         sensory_port: u16,
         motor_port: u16,
         viz_port: u16,
@@ -94,6 +98,7 @@ impl RegistrationHandler {
             genome_service: Arc::new(parking_lot::Mutex::new(None)),
             connectome_service: Arc::new(parking_lot::Mutex::new(None)),
             auto_create_missing_areas: true, // Default enabled
+            registration_port,
             sensory_port,
             motor_port,
             viz_port,
@@ -215,13 +220,9 @@ impl RegistrationHandler {
 
     /// Convert area name to CorticalID base64 string
     ///
-    /// For IPU/OPU areas, the name might be a short prefix (e.g., "svi").
-    /// We try multiple approaches to create a valid CorticalID:
-    /// 1. Try direct padding with null bytes (standard approach)
-    /// 2. If that fails, try padding with spaces (legacy compatibility)
-    /// 3. If both fail, try using try_from_base_64 if the name looks like base64
-    /// 4. If all fail, return an error with helpful message
-    fn area_name_to_cortical_id(&self, area_name: &str) -> Result<String, String> {
+    /// For IPU/OPU areas, the name should be a valid prefix (e.g., "isvi") or a base64-encoded CorticalID.
+    /// Uses null-byte padding for short prefixes (standard approach).
+    fn area_name_to_cortical_id(&self, area_name: &str) -> Result<String, FeagiDataError> {
         // First, check if it's already a base64-encoded CorticalID
         if let Ok(cortical_id) = CorticalID::try_from_base_64(area_name) {
             return Ok(cortical_id.as_base_64());
@@ -237,55 +238,17 @@ impl RegistrationHandler {
             return Ok(cortical_id.as_base_64());
         }
 
-        // If null padding fails, try space padding (for legacy compatibility)
-        let mut bytes = [b' '; 8];
-        bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
-
-        if let Ok(cortical_id) = CorticalID::try_from_bytes(&bytes) {
-            return Ok(cortical_id.as_base_64());
-        }
-
-        // Both approaches failed - return detailed error
-        Err(format!(
+        // Failed - return error with guidance
+        Err(FeagiDataError::BadParameters(format!(
             "Failed to create CorticalID from area name '{}' (length: {}). \
-            Tried null-byte and space padding. \
-            The area name may be too short or in an invalid format. \
-            For IPU/OPU areas, use a valid 4-character prefix like 'isvi', 'imot', etc., \
+            The area name must be either:\n\
+            1. A valid prefix (1-8 characters) that can be padded to 8 bytes, or\n\
+            2. A base64-encoded CorticalID.\n\
+            For IPU/OPU areas, use valid prefixes like 'isvi', 'imot', 'oseg', etc., \
             or provide a base64-encoded CorticalID.",
             area_name,
             area_name.len()
-        ))
-    }
-
-    /// Find SensoryCorticalUnit by unit identifier bytes
-    fn find_sensory_unit_by_identifier(
-        &self,
-        identifier: [u8; 3],
-    ) -> Result<SensoryCorticalUnit, String> {
-        // Iterate through all SensoryCorticalUnit variants to find matching identifier
-        use SensoryCorticalUnit::*;
-        for unit in [
-            Infrared,
-            Proximity,
-            Shock,
-            Battery,
-            Servo,
-            AnalogGPIO,
-            DigitalGPIO,
-            MiscData,
-            Vision,
-            SegmentedVision,
-            Accelerometer,
-            Gyroscope,
-        ] {
-            if unit.get_cortical_id_unit_reference() == identifier {
-                return Ok(unit);
-            }
-        }
-        Err(format!(
-            "No SensoryCorticalUnit found for identifier: {:?}",
-            identifier
-        ))
+        )))
     }
 
     /// Get all cortical IDs for a given SensoryCorticalUnit using generic method dispatch
@@ -293,9 +256,9 @@ impl RegistrationHandler {
         &self,
         unit: SensoryCorticalUnit,
         frame_change_handling: FrameChangeHandling,
-        percentage_neuron_positioning: feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning,
-        group: CorticalGroupIndex,
-    ) -> Result<Vec<CorticalID>, String> {
+        percentage_neuron_positioning: feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning,
+        group: CorticalUnitIndex,
+    ) -> Result<Vec<CorticalID>, FeagiDataError> {
         // Dispatch to the appropriate get_cortical_ids_array_for method based on unit type
         // This is systematic (covers all types) not hardcoded for one specific type
         // Note: Method signatures vary based on cortical_type_parameters in the template:
@@ -304,67 +267,85 @@ impl RegistrationHandler {
         // - Units with Boolean type need: (group) only
         use SensoryCorticalUnit::*;
         let cortical_ids_array: Vec<CorticalID> = match unit {
-            Infrared => SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+            Infrared => SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
-            Proximity => SensoryCorticalUnit::get_cortical_ids_array_for_proximity(
+            Proximity => SensoryCorticalUnit::get_cortical_ids_array_for_proximity_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
-            Shock => SensoryCorticalUnit::get_cortical_ids_array_for_shock(
+            Shock => SensoryCorticalUnit::get_cortical_ids_array_for_shock_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
-            Battery => SensoryCorticalUnit::get_cortical_ids_array_for_battery(
+            Battery => SensoryCorticalUnit::get_cortical_ids_array_for_battery_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
-            Servo => SensoryCorticalUnit::get_cortical_ids_array_for_servo(
+            Servo => SensoryCorticalUnit::get_cortical_ids_array_for_servo_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
-            AnalogGPIO => SensoryCorticalUnit::get_cortical_ids_array_for_analog_gpio(
-                frame_change_handling,
-                percentage_neuron_positioning,
-                group,
-            )
-            .to_vec(),
-            DigitalGPIO => {
-                SensoryCorticalUnit::get_cortical_ids_array_for_digital_gpio(group).to_vec()
+            AnalogGPIO => {
+                SensoryCorticalUnit::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec()
             }
-            MiscData => SensoryCorticalUnit::get_cortical_ids_array_for_miscellaneous(
+            DigitalGPIO => {
+                SensoryCorticalUnit::get_cortical_ids_array_for_digital_g_p_i_o_with_parameters(
+                    group,
+                )
+                .to_vec()
+            }
+            MiscData => SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
                 frame_change_handling,
                 group,
             )
             .to_vec(),
-            Vision => SensoryCorticalUnit::get_cortical_ids_array_for_simple_vision(
-                frame_change_handling,
-                group,
-            )
-            .to_vec(),
-            SegmentedVision => SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
-                frame_change_handling,
-                group,
-            )
-            .to_vec(),
-            Accelerometer => SensoryCorticalUnit::get_cortical_ids_array_for_accelerometer(
-                frame_change_handling,
-                percentage_neuron_positioning,
-                group,
-            )
-            .to_vec(),
-            Gyroscope => SensoryCorticalUnit::get_cortical_ids_array_for_gyroscope(
+            TextEnglishInput => {
+                SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
+                    frame_change_handling,
+                    group,
+                )
+                .to_vec()
+            }
+            Vision => {
+                SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                    frame_change_handling,
+                    group,
+                )
+                .to_vec()
+            }
+            SegmentedVision => {
+                SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                    frame_change_handling,
+                    group,
+                )
+                .to_vec()
+            }
+            Accelerometer => {
+                SensoryCorticalUnit::get_cortical_ids_array_for_accelerometer_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec()
+            }
+            Gyroscope => SensoryCorticalUnit::get_cortical_ids_array_for_gyroscope_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
@@ -377,7 +358,7 @@ impl RegistrationHandler {
 
     /// Helper function to safely call async code from sync context
     /// Always uses a separate thread to avoid blocking the current runtime
-    fn block_on_async_service<F>(&self, future_factory: F) -> Result<bool, String>
+    fn block_on_async_service<F>(&self, future_factory: F) -> Result<bool, FeagiDataError>
     where
         F: FnOnce() -> std::pin::Pin<
                 Box<
@@ -394,14 +375,15 @@ impl RegistrationHandler {
         let (tx, rx) = std::sync::mpsc::channel();
 
         std::thread::spawn(move || {
-            let result = (|| -> Result<bool, String> {
+            let result = (|| -> Result<bool, FeagiDataError> {
                 debug!("🦀 [REGISTRATION] Creating new tokio runtime in thread");
-                let rt = tokio::runtime::Runtime::new()
-                    .map_err(|e| format!("Failed to create runtime: {}", e))?;
+                let rt = tokio::runtime::Runtime::new().map_err(|e| {
+                    FeagiDataError::InternalError(format!("Failed to create runtime: {}", e))
+                })?;
                 debug!("🦀 [REGISTRATION] Blocking on async future");
                 let result = rt
                     .block_on(future)
-                    .map_err(|e| format!("Service error: {}", e))?;
+                    .map_err(|e| FeagiDataError::InternalError(format!("Service error: {}", e)))?;
                 debug!("🦀 [REGISTRATION] Async future completed successfully");
                 Ok(result)
             })();
@@ -417,13 +399,17 @@ impl RegistrationHandler {
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 error!("🦀 [REGISTRATION] Timeout waiting for cortical area existence check (5s)");
-                Err("Timeout waiting for cortical area existence check (5s)".to_string())
+                Err(FeagiDataError::InternalError(
+                    "Timeout waiting for cortical area existence check (5s)".to_string(),
+                ))
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 error!(
                     "🦀 [REGISTRATION] Thread disconnected while checking cortical area existence"
                 );
-                Err("Thread disconnected while checking cortical area existence".to_string())
+                Err(FeagiDataError::InternalError(
+                    "Thread disconnected while checking cortical area existence".to_string(),
+                ))
             }
         }
     }
@@ -433,7 +419,7 @@ impl RegistrationHandler {
     fn ensure_cortical_areas_exist(
         &self,
         capabilities: &AgentCapabilities,
-    ) -> Result<CorticalAreaAvailability, String> {
+    ) -> Result<CorticalAreaAvailability, FeagiDataError> {
         let mut ipu_statuses = Vec::new();
         let mut opu_statuses = Vec::new();
 
@@ -457,7 +443,10 @@ impl RegistrationHandler {
             .lock()
             .as_ref()
             .ok_or_else(|| {
-                "GenomeService not available - required for cortical area management".to_string()
+                FeagiDataError::InternalError(
+                    "GenomeService not available - required for cortical area management"
+                        .to_string(),
+                )
             })?
             .clone();
         let connectome_service = self
@@ -465,83 +454,40 @@ impl RegistrationHandler {
             .lock()
             .as_ref()
             .ok_or_else(|| {
-                "ConnectomeService not available - required for cortical area checking".to_string()
+                FeagiDataError::InternalError(
+                    "ConnectomeService not available - required for cortical area checking"
+                        .to_string(),
+                )
             })?
             .clone();
 
         // Handle IPU areas (from vision capabilities)
         if let Some(ref vision) = capabilities.vision {
-            // For IPU areas, ensure 'i' prefix is present (e.g., "svi" -> "isvi")
-            let area_name = if vision.target_cortical_area.starts_with('i') {
-                vision.target_cortical_area.clone()
-            } else {
-                format!("i{}", vision.target_cortical_area)
-            };
-
-            // Convert area name to CorticalID to extract unit information
-            let base_cortical_id = match self.area_name_to_cortical_id(&area_name) {
-                Ok(id) => CorticalID::try_from_base_64(&id)
-                    .map_err(|e| format!("Failed to parse cortical ID: {}", e))?,
-                Err(e) => {
-                    error!(
-                        "🦀 [REGISTRATION] ❌ Failed to convert area name '{}' to CorticalID: {}",
-                        area_name, e
-                    );
-                    return Err(format!(
-                        "Invalid cortical area name '{}': {}. \
-                        For IPU areas, use a valid 4-character prefix like 'isvi', 'imot', etc.",
-                        vision.target_cortical_area, e
-                    ));
-                }
-            };
-
-            // Extract unit identifier from cortical ID (bytes 1-3 after 'i' prefix)
-            let cortical_id_bytes = base_cortical_id.as_bytes();
-            if cortical_id_bytes.len() < 4 || cortical_id_bytes[0] != b'i' {
-                return Err(format!(
-                    "Invalid IPU cortical ID format for '{}'",
-                    area_name
-                ));
-            }
-            let unit_identifier = [
-                cortical_id_bytes[1],
-                cortical_id_bytes[2],
-                cortical_id_bytes[3],
-            ];
-
-            // Extract group index from cortical ID (byte 4, or default to 0)
-            let group_index = if cortical_id_bytes.len() >= 5 {
-                cortical_id_bytes[4] as u8
-            } else {
-                0
-            };
-            let group: CorticalGroupIndex = group_index.into();
-
-            // Find matching SensoryCorticalUnit by unit identifier
-            let sensory_unit = self.find_sensory_unit_by_identifier(unit_identifier)?;
-            let number_areas = sensory_unit.get_number_cortical_areas();
-
-            info!(
-                "🦀 [REGISTRATION] Detected cortical unit type: {} ({} areas)",
-                sensory_unit.get_snake_case_name(),
-                number_areas
-            );
-
-            if number_areas > 1 && self.auto_create_missing_areas {
-                // This cortical type requires multiple areas - create all of them
-                info!(
-                    "🦀 [REGISTRATION] Creating all {} cortical areas for {}",
-                    number_areas,
-                    sensory_unit.get_snake_case_name()
-                );
-
-                // Use default frame_change_handling (Absolute) - this should match what the encoder uses
-                // TODO: Get frame_change_handling from registration request if available
+            // Preferred Option B path: semantic unit + group, so agents don't need to know
+            // internal 3-letter unit identifiers embedded in cortical IDs.
+            if let (Some(unit), Some(group_index)) = (vision.unit, vision.group) {
+                let group: CorticalUnitIndex = group_index.into();
                 let frame_change_handling = FrameChangeHandling::Absolute;
-                use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
+                use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
                 let percentage_neuron_positioning = PercentageNeuronPositioning::Linear; // Default
 
-                // Get all cortical IDs for this unit type using generic method dispatch
+                let sensory_unit = match unit {
+                    SensoryUnit::Infrared => SensoryCorticalUnit::Infrared,
+                    SensoryUnit::Proximity => SensoryCorticalUnit::Proximity,
+                    SensoryUnit::Shock => SensoryCorticalUnit::Shock,
+                    SensoryUnit::Battery => SensoryCorticalUnit::Battery,
+                    SensoryUnit::Servo => SensoryCorticalUnit::Servo,
+                    SensoryUnit::AnalogGpio => SensoryCorticalUnit::AnalogGPIO,
+                    SensoryUnit::DigitalGpio => SensoryCorticalUnit::DigitalGPIO,
+                    SensoryUnit::MiscData => SensoryCorticalUnit::MiscData,
+                    SensoryUnit::TextEnglishInput => SensoryCorticalUnit::TextEnglishInput,
+                    SensoryUnit::Vision => SensoryCorticalUnit::Vision,
+                    SensoryUnit::SegmentedVision => SensoryCorticalUnit::SegmentedVision,
+                    SensoryUnit::Accelerometer => SensoryCorticalUnit::Accelerometer,
+                    SensoryUnit::Gyroscope => SensoryCorticalUnit::Gyroscope,
+                };
+
+                // Generate the complete set of cortical IDs for this unit type.
                 let cortical_ids = self.get_all_cortical_ids_for_unit(
                     sensory_unit,
                     frame_change_handling,
@@ -549,171 +495,16 @@ impl RegistrationHandler {
                     group,
                 )?;
 
-                // Get topology (dimensions and positions) for all areas from the unit definition
                 let topology = sensory_unit.get_unit_default_topology();
 
-                info!(
-                    "🦀 [REGISTRATION] Generated {} cortical IDs for {} (group={})",
-                    cortical_ids.len(),
-                    sensory_unit.get_snake_case_name(),
-                    group_index
-                );
-
-                // Create all cortical areas using topology information
-                let mut create_params_list = Vec::new();
                 for (i, cortical_id) in cortical_ids.iter().enumerate() {
                     let cortical_id_base64 = cortical_id.as_base_64();
+                    let area_key = cortical_id_base64.clone(); // stable identifier for status reporting
 
-                    // Get dimensions and position from topology
-                    let (width, height, channels, x, y, z) =
-                        if let Some(unit_topology) = topology.get(&i) {
-                            let dims = unit_topology.channel_dimensions_default;
-                            let pos = unit_topology.relative_position;
-                            (
-                                dims[0] as usize,
-                                dims[1] as usize,
-                                dims[2] as usize,
-                                pos[0],
-                                pos[1],
-                                pos[2],
-                            )
-                        } else {
-                            // Fallback to default dimensions from vision capability if topology not available
-                            (
-                                vision.dimensions.0,
-                                vision.dimensions.1,
-                                vision.channels,
-                                0,
-                                0,
-                                0,
-                            )
-                        };
-
-                    // Check if this area already exists
-                    let exists = {
-                        let cortical_id_clone = cortical_id_base64.clone();
-                        let connectome_service_clone = connectome_service.clone();
-                        self.block_on_async_service(move || {
-                            let service = connectome_service_clone.clone();
-                            let id = cortical_id_clone.clone();
-                            Box::pin(async move { service.cortical_area_exists(&id).await })
-                        })
-                    }
-                    .map_err(|e| {
-                        error!(
-                            "🦀 [REGISTRATION] Failed to check existence for area {}: {}",
-                            i, e
-                        );
-                        format!("Failed to check cortical area existence: {}", e)
-                    })?;
-
-                    if exists {
-                        info!(
-                            "🦀 [REGISTRATION] Cortical area {} already exists (cortical_id: {})",
-                            i, cortical_id_base64
-                        );
-                        ipu_statuses.push(CorticalAreaStatus {
-                            area_name: format!("{}_area{}", area_name, i),
-                            cortical_id: cortical_id_base64,
-                            status: AreaStatus::Existing,
-                            dimensions: Some((width, height, channels)),
-                            message: None,
-                        });
-                    } else {
-                        let area_name_suffix = if number_areas > 1 {
-                            format!("{}_area{}", area_name, i)
-                        } else {
-                            area_name.clone()
-                        };
-                        create_params_list.push(feagi_services::types::CreateCorticalAreaParams {
-                            cortical_id: cortical_id_base64.clone(),
-                            name: area_name_suffix.clone(),
-                            dimensions: (width, height, channels),
-                            position: (x, y, z),
-                            area_type: "Sensory".to_string(),
-                            visible: Some(true),
-                            sub_group: None,
-                            neurons_per_voxel: Some(1),
-                            postsynaptic_current: None,
-                            plasticity_constant: None,
-                            degeneration: None,
-                            psp_uniform_distribution: None,
-                            firing_threshold_increment: None,
-                            firing_threshold_limit: None,
-                            consecutive_fire_count: None,
-                            snooze_period: None,
-                            refractory_period: None,
-                            leak_coefficient: None,
-                            leak_variability: None,
-                            burst_engine_active: None,
-                            properties: None,
-                        });
-
-                        info!("🦀 [REGISTRATION] Will create cortical area {}: {} ({}x{}x{}) at ({},{},{})",
-                              i, cortical_id_base64, width, height, channels, x, y, z);
-                    }
-                }
-
-                // Create all missing areas in one batch
-                if !create_params_list.is_empty() {
-                    info!(
-                        "🦀 [REGISTRATION] Creating {} cortical areas for {}...",
-                        create_params_list.len(),
-                        sensory_unit.get_snake_case_name()
-                    );
-
-                    let result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        handle.block_on(
-                            genome_service.create_cortical_areas(create_params_list.clone()),
-                        )
-                    } else {
-                        let rt = tokio::runtime::Runtime::new()
-                            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
-                        rt.block_on(
-                            genome_service.create_cortical_areas(create_params_list.clone()),
-                        )
-                    };
-
-                    match result {
-                        Ok(_) => {
-                            info!("🦀 [REGISTRATION] ✅ Successfully created {} cortical areas for {}", create_params_list.len(), sensory_unit.get_snake_case_name());
-                            for params in create_params_list {
-                                ipu_statuses.push(CorticalAreaStatus {
-                                    area_name: params.name.clone(),
-                                    cortical_id: params.cortical_id.clone(),
-                                    status: AreaStatus::Created,
-                                    dimensions: Some(params.dimensions),
-                                    message: Some("Auto-created during registration".to_string()),
-                                });
-                            }
-                        }
-                        Err(e) => {
-                            error!(
-                                "🦀 [REGISTRATION] ❌ Failed to create cortical areas for {}: {}",
-                                sensory_unit.get_snake_case_name(),
-                                e
-                            );
-                            return Err(format!(
-                                "Failed to create cortical areas for {}: {}",
-                                sensory_unit.get_snake_case_name(),
-                                e
-                            ));
-                        }
-                    }
-                } else {
-                    info!(
-                        "🦀 [REGISTRATION] All {} cortical areas already exist",
-                        sensory_unit.get_snake_case_name()
-                    );
-                }
-            } else if number_areas == 1 {
-                // Handle single cortical area - use the same generic approach
-                let cortical_id_base64 = base_cortical_id.as_base_64();
-
-                // Get topology for single area (index 0)
-                let topology = sensory_unit.get_unit_default_topology();
-                let (width, height, channels, x, y, z) =
-                    if let Some(unit_topology) = topology.get(&0) {
+                    // Determine dimensions/position from topology, else fall back to capability hints.
+                    let (width, height, channels, x, y, z) = if let Some(unit_topology) =
+                        topology.get(&CorticalSubUnitIndex::from(i as u8))
+                    {
                         let dims = unit_topology.channel_dimensions_default;
                         let pos = unit_topology.relative_position;
                         (
@@ -725,7 +516,6 @@ impl RegistrationHandler {
                             pos[2],
                         )
                     } else {
-                        // Fallback to dimensions from vision capability
                         (
                             vision.dimensions.0,
                             vision.dimensions.1,
@@ -736,54 +526,50 @@ impl RegistrationHandler {
                         )
                     };
 
-                // Check if area exists
-                debug!(
-                    "🦀 [REGISTRATION] Checking IPU area existence for '{}' (cortical_id: {})",
-                    area_name, cortical_id_base64
-                );
-                let cortical_id_clone = cortical_id_base64.clone();
-                let connectome_service_clone = connectome_service.clone();
-                let exists = {
-                    let cortical_id = cortical_id_clone.clone();
-                    self.block_on_async_service(move || {
-                        let service = connectome_service_clone.clone();
-                        let id = cortical_id.clone();
-                        Box::pin(async move {
-                            debug!("🦀 [REGISTRATION] Calling cortical_area_exists for IPU area '{}'", id);
-                            let result = service.cortical_area_exists(&id).await;
-                            debug!("🦀 [REGISTRATION] cortical_area_exists result for IPU area '{}': {:?}", id, result);
-                            result
+                    // Check existence (blocking call via helper thread).
+                    let id_for_check = cortical_id_base64.clone();
+                    let connectome_service_clone = connectome_service.clone();
+                    let exists = self
+                        .block_on_async_service(move || {
+                            let service = connectome_service_clone.clone();
+                            let id = id_for_check.clone();
+                            Box::pin(async move { service.cortical_area_exists(&id).await })
                         })
-                    })
-                }
-                .map_err(|e| {
-                    error!("🦀 [REGISTRATION] Failed to check IPU area existence for '{}' (cortical_id: {}): {}", area_name, cortical_id_base64, e);
-                    format!("Failed to check cortical area existence for IPU area '{}': {}", area_name, e)
-                })?;
-                debug!(
-                    "🦀 [REGISTRATION] IPU area '{}' exists: {}",
-                    area_name, exists
-                );
+                        .map_err(|e| {
+                            FeagiDataError::InternalError(format!(
+                                "Failed to check cortical area existence for IPU area '{}': {}",
+                                area_key, e
+                            ))
+                        })?;
 
-                if exists {
-                    info!("🦀 [REGISTRATION] IPU area '{}' already exists", area_name);
-                    ipu_statuses.push(CorticalAreaStatus {
-                        area_name: area_name.clone(),
-                        cortical_id: cortical_id_base64,
-                        status: AreaStatus::Existing,
-                        dimensions: Some((width, height, channels)),
-                        message: None,
-                    });
-                } else if self.auto_create_missing_areas {
-                    // Create missing IPU area
-                    info!(
-                        "🦀 [REGISTRATION] Auto-creating missing IPU area '{}'",
-                        area_name
-                    );
+                    if exists {
+                        ipu_statuses.push(CorticalAreaStatus {
+                            area_name: area_key.clone(),
+                            cortical_id: cortical_id_base64,
+                            status: AreaStatus::Existing,
+                            dimensions: Some((width, height, channels)),
+                            message: None,
+                        });
+                        continue;
+                    }
+
+                    if !self.auto_create_missing_areas {
+                        ipu_statuses.push(CorticalAreaStatus {
+                            area_name: area_key.clone(),
+                            cortical_id: cortical_id_base64,
+                            status: AreaStatus::Missing,
+                            dimensions: None,
+                            message: Some("Area missing and auto-create disabled".to_string()),
+                        });
+                        return Err(FeagiDataError::BadParameters(format!(
+                            "Required IPU area '{}' is missing. Enable auto_create_missing_cortical_areas in config to auto-create.",
+                            area_key
+                        )));
+                    }
 
                     let create_params = feagi_services::types::CreateCorticalAreaParams {
                         cortical_id: cortical_id_base64.clone(),
-                        name: area_name.clone(),
+                        name: area_key.clone(),
                         dimensions: (width, height, channels),
                         position: (x, y, z),
                         area_type: "Sensory".to_string(),
@@ -805,25 +591,22 @@ impl RegistrationHandler {
                         properties: None,
                     };
 
-                    // Try to use current runtime handle first, fallback to creating new runtime
                     let result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        // We're in an async context - use block_on on the handle
                         handle.block_on(genome_service.create_cortical_areas(vec![create_params]))
                     } else {
-                        // Not in async context - create a new runtime
-                        let rt = tokio::runtime::Runtime::new()
-                            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+                        let rt = tokio::runtime::Runtime::new().map_err(|e| {
+                            FeagiDataError::InternalError(format!(
+                                "Failed to create tokio runtime: {}",
+                                e
+                            ))
+                        })?;
                         rt.block_on(genome_service.create_cortical_areas(vec![create_params]))
                     };
 
                     match result {
                         Ok(_) => {
-                            info!(
-                                "🦀 [REGISTRATION] ✅ Successfully created IPU area '{}'",
-                                area_name
-                            );
                             ipu_statuses.push(CorticalAreaStatus {
-                                area_name: area_name.clone(),
+                                area_name: area_key.clone(),
                                 cortical_id: cortical_id_base64,
                                 status: AreaStatus::Created,
                                 dimensions: Some((width, height, channels)),
@@ -831,48 +614,217 @@ impl RegistrationHandler {
                             });
                         }
                         Err(e) => {
-                            error!(
-                                "🦀 [REGISTRATION] ❌ Failed to create IPU area '{}': {}",
-                                area_name, e
-                            );
                             ipu_statuses.push(CorticalAreaStatus {
-                                area_name: area_name.clone(),
+                                area_name: area_key.clone(),
                                 cortical_id: cortical_id_base64,
                                 status: AreaStatus::Error,
                                 dimensions: None,
                                 message: Some(format!("Creation failed: {}", e)),
                             });
-                            return Err(format!(
+                            return Err(FeagiDataError::InternalError(format!(
                                 "Failed to create IPU area '{}': {}",
-                                area_name, e
-                            ));
+                                area_key, e
+                            )));
                         }
                     }
-                } else {
-                    warn!(
-                        "🦀 [REGISTRATION] ⚠️ IPU area '{}' is missing and auto-create is disabled",
-                        area_name
-                    );
-                    ipu_statuses.push(CorticalAreaStatus {
-                        area_name: area_name.clone(),
-                        cortical_id: cortical_id_base64,
-                        status: AreaStatus::Missing,
-                        dimensions: None,
-                        message: Some("Area missing and auto-create disabled".to_string()),
-                    });
-                    return Err(format!("Required IPU area '{}' is missing. Enable auto_create_missing_cortical_areas in config to auto-create.", area_name));
                 }
             } else {
-                // number_areas == 0 or auto-create disabled - skip
-                warn!("🦀 [REGISTRATION] ⚠️ Cortical unit {} has {} areas but auto-create is disabled or invalid",
-                      sensory_unit.get_snake_case_name(), number_areas);
+                // Legacy vision.target_cortical_area is no longer supported
+                return Err(FeagiDataError::BadParameters(
+                    "Legacy vision.target_cortical_area is no longer supported in FEAGI 2.0 Rust SDK. \
+                    Please provide either:\n\
+                    1. device_registrations in capabilities, or\n\
+                    2. vision.unit and vision.group in the vision capability."
+                        .to_string(),
+                ));
             }
         }
 
+        // Handle sensory IPU areas
+        // Sensory capabilities are now used only for rate_hz and shm_path.
+        // Device registrations are handled separately via device_registrations in capabilities.
+        // Sensory.unit/sensory.group processing is handled above in the main IPU area creation logic
+        // (see lines ~600-1000 where sensory units with unit/group are processed)
+
         // Handle OPU areas (from motor capabilities)
         if let Some(ref motor) = capabilities.motor {
-            for area_name in &motor.source_cortical_areas {
+            // Preferred Option B path: semantic unit + group, so agents don't need to know
+            // internal 3-letter unit identifiers embedded in cortical IDs.
+            let source_areas: Vec<(String, MotorCorticalUnit)> = if let Some(source_units) =
+                motor.source_units.as_ref()
+            {
+                let frame_change_handling = FrameChangeHandling::Absolute;
+                use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+                let percentage_neuron_positioning = PercentageNeuronPositioning::Linear; // Default
+
+                let mut all_ids: Vec<(String, MotorCorticalUnit)> = Vec::new();
+                for spec in source_units {
+                    let group: CorticalUnitIndex = spec.group.into();
+                    let motor_unit = match spec.unit {
+                        MotorUnit::RotaryMotor => MotorCorticalUnit::RotaryMotor,
+                        MotorUnit::PositionalServo => MotorCorticalUnit::PositionalServo,
+                        MotorUnit::Gaze => MotorCorticalUnit::Gaze,
+                        MotorUnit::MiscData => MotorCorticalUnit::MiscData,
+                        MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
+                        MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
+                        MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
+                    };
+
+                    let cortical_ids: Vec<CorticalID> = match motor_unit {
+                        MotorCorticalUnit::RotaryMotor => MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec(),
+                        MotorCorticalUnit::PositionalServo => MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec(),
+                        MotorCorticalUnit::Gaze => MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec(),
+                        MotorCorticalUnit::MiscData => MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec(),
+                        MotorCorticalUnit::TextEnglishOutput => MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec(),
+                        MotorCorticalUnit::ObjectSegmentation => MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec(),
+                        MotorCorticalUnit::SimpleVisionOutput => MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec(),
+                        MotorCorticalUnit::DynamicImageProcessing => MotorCorticalUnit::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec(),
+                    };
+
+                    all_ids.extend(
+                        cortical_ids
+                            .into_iter()
+                            .map(|id| (id.as_base_64(), motor_unit)),
+                    );
+                }
+
+                all_ids
+            } else if let (Some(unit), Some(group_index)) = (motor.unit, motor.group) {
+                let group: CorticalUnitIndex = group_index.into();
+                let frame_change_handling = FrameChangeHandling::Absolute;
+                use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+                let percentage_neuron_positioning = PercentageNeuronPositioning::Linear; // Default
+
+                let motor_unit = match unit {
+                    MotorUnit::RotaryMotor => MotorCorticalUnit::RotaryMotor,
+                    MotorUnit::PositionalServo => MotorCorticalUnit::PositionalServo,
+                    MotorUnit::Gaze => MotorCorticalUnit::Gaze,
+                    MotorUnit::MiscData => MotorCorticalUnit::MiscData,
+                    MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
+                    MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
+                    MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
+                };
+
+                let cortical_ids: Vec<CorticalID> = match motor_unit {
+                    MotorCorticalUnit::RotaryMotor => MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )
+                    .to_vec(),
+                    MotorCorticalUnit::PositionalServo => MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )
+                    .to_vec(),
+                    MotorCorticalUnit::Gaze => MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )
+                    .to_vec(),
+                    MotorCorticalUnit::MiscData => MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                        frame_change_handling,
+                        group,
+                    )
+                    .to_vec(),
+                    MotorCorticalUnit::TextEnglishOutput => MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
+                        frame_change_handling,
+                        group,
+                    )
+                    .to_vec(),
+                    MotorCorticalUnit::ObjectSegmentation => MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                        frame_change_handling,
+                        group,
+                    )
+                    .to_vec(),
+                    MotorCorticalUnit::SimpleVisionOutput => MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+                        frame_change_handling,
+                        group,
+                    )
+                    .to_vec(),
+                    MotorCorticalUnit::DynamicImageProcessing => MotorCorticalUnit::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        group,
+                    )
+                    .to_vec(),
+                };
+
+                cortical_ids
+                    .into_iter()
+                    .map(|id| (id.as_base_64(), motor_unit))
+                    .collect()
+            } else {
+                // Legacy motor.source_cortical_areas are no longer supported
+                return Err(FeagiDataError::BadParameters(
+                    "Legacy motor.source_cortical_areas are no longer supported in FEAGI 2.0 Rust SDK. \
+                    Please provide either:\n\
+                    1. device_registrations in capabilities, or\n\
+                    2. motor.unit and motor.group in the motor capability, or\n\
+                    3. motor.source_units array with unit+group specifications."
+                        .to_string(),
+                ));
+            };
+
+            for (area_name, motor_unit) in &source_areas {
                 let cortical_id_base64 = self.area_name_to_cortical_id(area_name)?;
+                let _cortical_id =
+                    CorticalID::try_from_base_64(&cortical_id_base64).map_err(|e| {
+                        FeagiDataError::BadParameters(format!("Failed to parse cortical ID: {}", e))
+                    })?;
+
+                // Get dimensions from motor unit topology if available
+                let (dimensions, position) = {
+                    let topology = motor_unit.get_unit_default_topology();
+                    if let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(0u8)) {
+                        let dims = unit_topology.channel_dimensions_default;
+                        let pos = unit_topology.relative_position;
+                        (
+                            (dims[0] as usize, dims[1] as usize, dims[2] as usize),
+                            (pos[0], pos[1], pos[2]),
+                        )
+                    } else {
+                        ((motor.output_count, 1, 1), (0, 0, 0))
+                    }
+                };
 
                 // Check if area exists (blocking call)
                 // Use helper function to safely call async code from sync context
@@ -897,7 +849,7 @@ impl RegistrationHandler {
                 }
                 .map_err(|e| {
                     error!("🦀 [REGISTRATION] Failed to check OPU area existence for '{}' (cortical_id: {}): {}", area_name, cortical_id_base64, e);
-                    format!("Failed to check cortical area existence for OPU area '{}': {}", area_name, e)
+                    FeagiDataError::InternalError(format!("Failed to check cortical area existence for OPU area '{}': {}", area_name, e))
                 })?;
                 debug!(
                     "🦀 [REGISTRATION] OPU area '{}' exists: {}",
@@ -905,26 +857,31 @@ impl RegistrationHandler {
                 );
 
                 if exists {
-                    info!("🦀 [REGISTRATION] OPU area '{}' already exists", area_name);
+                    let motor_unit_name = motor_unit.get_snake_case_name();
+                    info!(
+                        "🦀 [REGISTRATION] OPU area '{}' already exists (motor unit: {}, dimensions: {:?})",
+                        area_name, motor_unit_name, dimensions
+                    );
                     opu_statuses.push(CorticalAreaStatus {
                         area_name: area_name.clone(),
                         cortical_id: cortical_id_base64,
                         status: AreaStatus::Existing,
-                        dimensions: Some((motor.output_count, 1, 1)), // Default OPU dimensions
+                        dimensions: Some(dimensions),
                         message: None,
                     });
                 } else if self.auto_create_missing_areas {
-                    // Create missing OPU area
+                    // Create missing OPU area with dimensions from motor unit template
+                    let motor_unit_name = motor_unit.get_snake_case_name();
                     info!(
-                        "🦀 [REGISTRATION] Auto-creating missing OPU area '{}'",
-                        area_name
+                        "🦀 [REGISTRATION] Auto-creating missing OPU area '{}' (motor unit: {}, dimensions: {:?})",
+                        area_name, motor_unit_name, dimensions
                     );
 
                     let create_params = feagi_services::types::CreateCorticalAreaParams {
                         cortical_id: cortical_id_base64.clone(),
                         name: area_name.clone(),
-                        dimensions: (motor.output_count, 1, 1), // OPU: output_count x 1 x 1
-                        position: (0, 0, 0),                    // Default position in root region
+                        dimensions,
+                        position,
                         area_type: "Motor".to_string(),
                         visible: Some(true),
                         sub_group: None,
@@ -950,8 +907,12 @@ impl RegistrationHandler {
                         handle.block_on(genome_service.create_cortical_areas(vec![create_params]))
                     } else {
                         // Not in async context - create a new runtime
-                        let rt = tokio::runtime::Runtime::new()
-                            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+                        let rt = tokio::runtime::Runtime::new().map_err(|e| {
+                            FeagiDataError::InternalError(format!(
+                                "Failed to create tokio runtime: {}",
+                                e
+                            ))
+                        })?;
                         rt.block_on(genome_service.create_cortical_areas(vec![create_params]))
                     };
 
@@ -965,7 +926,7 @@ impl RegistrationHandler {
                                 area_name: area_name.clone(),
                                 cortical_id: cortical_id_base64,
                                 status: AreaStatus::Created,
-                                dimensions: Some((motor.output_count, 1, 1)),
+                                dimensions: Some(dimensions),
                                 message: Some("Auto-created during registration".to_string()),
                             });
                         }
@@ -981,10 +942,10 @@ impl RegistrationHandler {
                                 dimensions: None,
                                 message: Some(format!("Creation failed: {}", e)),
                             });
-                            return Err(format!(
+                            return Err(FeagiDataError::InternalError(format!(
                                 "Failed to create OPU area '{}': {}",
                                 area_name, e
-                            ));
+                            )));
                         }
                     }
                 } else {
@@ -999,7 +960,7 @@ impl RegistrationHandler {
                         dimensions: None,
                         message: Some("Area missing and auto-create disabled".to_string()),
                     });
-                    return Err(format!("Required OPU area '{}' is missing. Enable auto_create_missing_cortical_areas in config to auto-create.", area_name));
+                    return Err(FeagiDataError::BadParameters(format!("Required OPU area '{}' is missing. Enable auto_create_missing_cortical_areas in config to auto-create.", area_name)));
                 }
             }
         }
@@ -1016,13 +977,14 @@ impl RegistrationHandler {
         request: RegistrationRequest,
     ) -> Result<RegistrationResponse, String> {
         self.process_registration_impl(request)
+            .map_err(|e| e.to_string())
     }
 
     /// Internal implementation
     fn process_registration_impl(
         &self,
         request: RegistrationRequest,
-    ) -> Result<RegistrationResponse, String> {
+    ) -> Result<RegistrationResponse, FeagiDataError> {
         let total_start = std::time::Instant::now();
         info!(
             "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] Processing registration for agent: {} (type: {})",
@@ -1039,20 +1001,20 @@ impl RegistrationHandler {
             match requested_transport.as_str() {
                 "websocket" => {
                     if !self.ws_enabled {
-                        return Err(format!(
+                        return Err(FeagiDataError::BadParameters(format!(
                             "Transport '{}' not supported: WebSocket is disabled in FEAGI configuration",
                             requested_transport
-                        ));
+                        )));
                     }
                 }
                 "zmq" | "shm" | "hybrid" => {
                     // ZMQ/SHM always available (for now)
                 }
                 other => {
-                    return Err(format!(
+                    return Err(FeagiDataError::BadParameters(format!(
                         "Transport '{}' not supported: Available transports are: zmq, websocket (if enabled), shm",
                         other
-                    ));
+                    )));
                 }
             }
             info!(
@@ -1068,23 +1030,43 @@ impl RegistrationHandler {
         let cortical_areas_availability = self.ensure_cortical_areas_exist(&capabilities)?;
 
         // Allocate SHM paths ONLY if agent didn't explicitly choose a non-SHM transport
+        // AND the agent didn't explicitly set shm_path to None (which indicates ZMQ-only)
         let mut shm_paths = HashMap::new();
         let mut allocated_capabilities = capabilities.clone();
 
-        let should_provide_shm = match request.chosen_transport.as_deref() {
+        // Check if agent explicitly wants SHM (either via chosen_transport or by providing shm_path)
+        let agent_wants_shm = match request.chosen_transport.as_deref() {
             Some("websocket") | Some("zmq") => false, // Agent explicitly chose non-SHM transport
-            Some("shm") | Some("hybrid") | None => true, // Agent wants SHM or didn't specify
-            Some(_) => false,                         // Unknown transport, don't offer SHM
+            Some("shm") | Some("hybrid") => true,     // Agent explicitly wants SHM
+            None => {
+                // If agent didn't specify transport, check if they provided shm_path
+                // If shm_path is None, agent is using ZMQ-only (don't auto-allocate SHM)
+                // If shm_path is Some, agent wants SHM (or already has a path)
+                capabilities
+                    .sensory
+                    .as_ref()
+                    .and_then(|s| s.shm_path.as_ref())
+                    .is_some()
+            }
+            Some(_) => false, // Unknown transport, don't offer SHM
         };
 
-        if should_provide_shm {
+        if agent_wants_shm {
             if let Some(ref mut sensory) = allocated_capabilities.sensory {
-                let shm_path = format!(
-                    "{}/feagi-shm-{}-sensory.bin",
-                    self.shm_base_path, request.agent_id
-                );
-                sensory.shm_path = Some(shm_path.clone());
-                shm_paths.insert("sensory".to_string(), shm_path);
+                // Only auto-allocate if agent didn't already provide a path
+                if sensory.shm_path.is_none() {
+                    let shm_path = format!(
+                        "{}/feagi-shm-{}-sensory.bin",
+                        self.shm_base_path, request.agent_id
+                    );
+                    sensory.shm_path = Some(shm_path.clone());
+                    shm_paths.insert("sensory".to_string(), shm_path);
+                } else {
+                    // Agent provided a path, use it
+                    if let Some(ref path) = sensory.shm_path {
+                        shm_paths.insert("sensory".to_string(), path.clone());
+                    }
+                }
             }
 
             if allocated_capabilities.motor.is_some() {
@@ -1123,7 +1105,12 @@ impl RegistrationHandler {
             "both" => AgentType::Both,
             "visualization" => AgentType::Visualization,
             "infrastructure" => AgentType::Infrastructure,
-            _ => return Err(format!("Invalid agent type: {}", request.agent_type)),
+            _ => {
+                return Err(FeagiDataError::BadParameters(format!(
+                    "Invalid agent type: {}",
+                    request.agent_type
+                )))
+            }
         };
 
         // Create agent info using the new constructor
@@ -1151,7 +1138,9 @@ impl RegistrationHandler {
         self.agent_registry
             .write()
             .register(agent_info.clone())
-            .map_err(|e| format!("Failed to register agent: {}", e))?;
+            .map_err(|e| {
+                FeagiDataError::InternalError(format!("Failed to register agent: {}", e))
+            })?;
 
         // Verify registration
         let registry_count = self.agent_registry.read().get_all().len();
@@ -1172,9 +1161,12 @@ impl RegistrationHandler {
             &*self.agent_registry as *const _
         );
 
-        // Register with burst engine's sensory agent manager (if sensory capability exists)
+        // Register with burst engine's sensory agent manager (if sensory capability exists AND using SHM)
+        // NOTE: ZMQ-only agents are handled by the ZMQ sensory receiver, not the burst engine's SHM manager
         if let Some(ref sensory) = agent_info.capabilities.sensory {
             if let Some(sensory_mgr_lock) = self.sensory_agent_manager.lock().as_ref() {
+                // Only register with burst engine if agent is using SHM (shm_path is Some)
+                // ZMQ-only agents (shm_path is None) are handled by the ZMQ sensory receiver
                 if let Some(shm_path) = &sensory.shm_path {
                     info!(
                         "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] Registering {} with burst engine: {} @ {}Hz",
@@ -1189,26 +1181,13 @@ impl RegistrationHandler {
                         burst_lock_duration
                     );
 
-                    // Convert String keys to CorticalID for zero-copy hot path optimization
-                    let area_mapping: HashMap<CorticalID, u32> = sensory
-                        .cortical_mappings
-                        .iter()
-                        .filter_map(|(name, &idx)| {
-                            match CorticalID::try_from_bytes(&{
-                                let mut bytes = [b'\0'; 8]; // Use null bytes, not spaces
-                                let name_bytes = name.as_bytes();
-                                let copy_len = name_bytes.len().min(8);
-                                bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
-                                bytes
-                            }) {
-                                Ok(id) => Some((id, idx)),
-                                Err(e) => {
-                                    warn!("[REGISTRATION] Invalid cortical ID '{}': {:?}", name, e);
-                                    None
-                                }
-                            }
-                        })
-                        .collect();
+                    // Build area_mapping for burst engine registration
+                    // NOTE: cortical_mappings field removed from SensoryCapability.
+                    // For new SDK agents using device_registrations, area_mapping will be empty.
+                    // The burst engine should handle empty mappings gracefully or derive
+                    // cortical IDs from device_registrations separately.
+                    // TODO: Extract cortical IDs from device_registrations if available in capabilities
+                    let area_mapping: HashMap<CorticalID, u32> = HashMap::new();
 
                     let config = feagi_npu_burst_engine::AgentConfig {
                         agent_id: request.agent_id.clone(),
@@ -1218,9 +1197,12 @@ impl RegistrationHandler {
                     };
 
                     let register_start = std::time::Instant::now();
-                    sensory_mgr
-                        .register_agent(config)
-                        .map_err(|e| format!("Failed to register with burst engine: {}", e))?;
+                    sensory_mgr.register_agent(config).map_err(|e| {
+                        FeagiDataError::InternalError(format!(
+                            "Failed to register with burst engine: {}",
+                            e
+                        ))
+                    })?;
                     let register_duration = register_start.elapsed();
 
                     info!(
@@ -1228,7 +1210,8 @@ impl RegistrationHandler {
                         request.agent_id, register_duration
                     );
                 } else {
-                    warn!("🦀 [REGISTRATION] ⚠️  Sensory capability exists but no SHM path");
+                    // This is expected for ZMQ-only agents - they're handled by the ZMQ sensory receiver, not the burst engine's SHM manager
+                    debug!("🦀 [REGISTRATION] Agent {} using ZMQ-only transport (handled by ZMQ sensory receiver, not burst engine SHM manager)", request.agent_id);
                 }
             } else {
                 warn!("🦀 [REGISTRATION] ⚠️  Sensory agent manager not connected - skipping burst engine registration");
@@ -1255,7 +1238,183 @@ impl RegistrationHandler {
                 use feagi_structures::genomic::cortical_area::CorticalID;
 
                 let mut cortical_ids: AHashSet<String> = AHashSet::new();
-                for area_input in &motor.source_cortical_areas {
+                // Option B: if semantic motor units were provided, derive the cortical IDs now.
+                // This ensures motor subscriptions are established even when the client doesn't
+                // know or send internal 3-letter unit identifiers.
+                let motor_source_inputs: Vec<String> = if let Some(source_units) =
+                    motor.source_units.as_ref()
+                {
+                    let frame_change_handling = FrameChangeHandling::Absolute;
+                    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+                    let percentage_neuron_positioning = PercentageNeuronPositioning::Linear;
+
+                    let mut out: Vec<String> = Vec::new();
+                    for spec in source_units {
+                        let group: CorticalUnitIndex = spec.group.into();
+                        let motor_unit = match spec.unit {
+                            MotorUnit::RotaryMotor => MotorCorticalUnit::RotaryMotor,
+                            MotorUnit::PositionalServo => MotorCorticalUnit::PositionalServo,
+                            MotorUnit::Gaze => MotorCorticalUnit::Gaze,
+                            MotorUnit::MiscData => MotorCorticalUnit::MiscData,
+                            MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
+                            MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
+                            MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
+                        };
+
+                        let cortical_ids_for_unit: Vec<CorticalID> = match motor_unit {
+                            MotorCorticalUnit::RotaryMotor => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
+                                    frame_change_handling,
+                                    percentage_neuron_positioning,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::PositionalServo => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
+                                    frame_change_handling,
+                                    percentage_neuron_positioning,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::Gaze => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
+                                    frame_change_handling,
+                                    percentage_neuron_positioning,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::MiscData => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                                    frame_change_handling,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::TextEnglishOutput => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
+                                    frame_change_handling,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::ObjectSegmentation => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                                    frame_change_handling,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::SimpleVisionOutput => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+                                    frame_change_handling,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                            MotorCorticalUnit::DynamicImageProcessing => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                                    frame_change_handling,
+                                    percentage_neuron_positioning,
+                                    group,
+                                )
+                                .to_vec()
+                            }
+                        };
+
+                        out.extend(cortical_ids_for_unit.into_iter().map(|id| id.as_base_64()));
+                    }
+                    out
+                } else if let (Some(unit), Some(group_index)) = (motor.unit, motor.group) {
+                    let group: CorticalUnitIndex = group_index.into();
+                    let frame_change_handling = FrameChangeHandling::Absolute;
+                    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+                    let percentage_neuron_positioning = PercentageNeuronPositioning::Linear;
+
+                    let motor_unit = match unit {
+                        MotorUnit::RotaryMotor => MotorCorticalUnit::RotaryMotor,
+                        MotorUnit::PositionalServo => MotorCorticalUnit::PositionalServo,
+                        MotorUnit::Gaze => MotorCorticalUnit::Gaze,
+                        MotorUnit::MiscData => MotorCorticalUnit::MiscData,
+                        MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
+                        MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
+                        MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
+                    };
+
+                    let cortical_ids_for_unit: Vec<CorticalID> = match motor_unit {
+                        MotorCorticalUnit::RotaryMotor => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
+                                frame_change_handling,
+                                percentage_neuron_positioning,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::PositionalServo => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
+                                frame_change_handling,
+                                percentage_neuron_positioning,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::Gaze => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
+                                frame_change_handling,
+                                percentage_neuron_positioning,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::MiscData => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                                frame_change_handling,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::TextEnglishOutput => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
+                                frame_change_handling,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::ObjectSegmentation => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                                frame_change_handling,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::SimpleVisionOutput => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+                                frame_change_handling,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::DynamicImageProcessing => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                                frame_change_handling,
+                                percentage_neuron_positioning,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                    };
+
+                    cortical_ids_for_unit
+                        .into_iter()
+                        .map(|id| id.as_base_64())
+                        .collect()
+                } else {
+                    motor.source_cortical_areas.clone()
+                };
+
+                for area_input in &motor_source_inputs {
                     info!(
                         "🦀 [REGISTRATION] 🎮 Processing motor cortical area: '{}'",
                         area_input
@@ -1388,6 +1547,7 @@ impl RegistrationHandler {
             transport_type: "zmq".to_string(),
             enabled: true,
             ports: HashMap::from([
+                ("registration".to_string(), self.registration_port),
                 ("sensory".to_string(), self.sensory_port),
                 ("motor".to_string(), self.motor_port),
                 ("visualization".to_string(), self.viz_port),
@@ -1438,6 +1598,7 @@ impl RegistrationHandler {
                 Some(shm_paths)
             },
             zmq_ports: Some(HashMap::from([
+                ("registration".to_string(), self.registration_port),
                 ("sensory".to_string(), self.sensory_port),
                 ("motor".to_string(), self.motor_port),
                 ("visualization".to_string(), self.viz_port),
@@ -1449,27 +1610,22 @@ impl RegistrationHandler {
     }
 
     /// Parse capabilities from JSON
+    ///
+    /// Only supports the new FEAGI 2.0 Rust SDK format (AgentCapabilities struct).
+    /// Legacy feagi-sensorimotor format with "input"/"output" keys is no longer supported.
     fn parse_capabilities(
         &self,
         caps_json: &serde_json::Value,
-    ) -> Result<AgentCapabilities, String> {
-        // Check if this is feagi-sensorimotor format (has "input"/"output" keys)
-        // This must be checked BEFORE attempting direct deserialization because
-        // AgentCapabilities has #[serde(flatten)] which will absorb these keys
-        // into the custom map, resulting in empty capabilities.
-        let has_legacy_format =
-            caps_json.get("input").is_some() || caps_json.get("output").is_some();
-
-        // Try to deserialize directly from JSON first (handles new agent SDK format)
-        // But skip this if we detected the legacy format
-        if !has_legacy_format {
-            if let Ok(capabilities) = serde_json::from_value::<AgentCapabilities>(caps_json.clone())
-            {
-                return Ok(capabilities);
-            }
+    ) -> Result<AgentCapabilities, FeagiDataError> {
+        // Check for legacy format and reject it
+        if caps_json.get("input").is_some() || caps_json.get("output").is_some() {
+            return Err(FeagiDataError::BadParameters(
+                "Legacy feagi-sensorimotor format with 'input'/'output' keys is no longer supported in FEAGI 2.0 Rust SDK. \
+                Please use the new AgentCapabilities format with device_registrations, sensory.unit/sensory.group, \
+                or motor.unit/motor.group.".to_string()
+            ));
         }
 
-        // Support feagi-sensorimotor format: {"capabilities": {"input": {...}, "output": {...}}}
         // Unwrap if wrapped in "capabilities" key
         let caps_json = if let Some(caps_wrapper) = caps_json.get("capabilities") {
             caps_wrapper
@@ -1477,117 +1633,14 @@ impl RegistrationHandler {
             caps_json
         };
 
-        // Fall back to manual parsing for legacy format
-        let mut capabilities = AgentCapabilities::default();
-
-        // Parse vision capability (FEAGI 2.0)
-        if let Some(vision) = caps_json.get("vision") {
-            let modality = vision
-                .get("modality")
-                .and_then(|v| v.as_str())
-                .unwrap_or("camera")
-                .to_string();
-
-            // Parse dimensions - can be array [width, height] or tuple
-            let dimensions = if let Some(dims) = vision.get("dimensions") {
-                if let Some(arr) = dims.as_array() {
-                    if arr.len() >= 2 {
-                        (
-                            arr[0].as_u64().unwrap_or(0) as usize,
-                            arr[1].as_u64().unwrap_or(0) as usize,
-                        )
-                    } else {
-                        (0, 0)
-                    }
-                } else {
-                    (0, 0)
-                }
-            } else {
-                (0, 0)
-            };
-
-            let channels = vision.get("channels").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
-
-            let target_cortical_area = vision
-                .get("target_cortical_area")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-
-            if !target_cortical_area.is_empty() {
-                capabilities.vision = Some(VisionCapability {
-                    modality,
-                    dimensions,
-                    channels,
-                    target_cortical_area,
-                });
-            }
-        }
-
-        // Parse input capability (feagi-sensorimotor format: ONLY "input"/"output" keys)
-        // Format: {"input": ["cortical_id1", "cortical_id2", ...]}
-        if let Some(input) = caps_json.get("input") {
-            if let Some(cortical_areas) = input.as_array() {
-                let mut cortical_mappings = HashMap::new();
-                for area_id in cortical_areas.iter().filter_map(|v| v.as_str()) {
-                    cortical_mappings.insert(area_id.to_string(), 0);
-                }
-
-                if !cortical_mappings.is_empty() {
-                    capabilities.sensory = Some(SensoryCapability {
-                        rate_hz: 30.0, // Default rate
-                        shm_path: None,
-                        cortical_mappings,
-                    });
-                }
-            }
-        }
-
-        // Parse output capability (feagi-sensorimotor format: ONLY "input"/"output" keys)
-        // Format: {"output": ["cortical_id1", "cortical_id2", ...]}
-        if let Some(output) = caps_json.get("output") {
-            if let Some(cortical_areas) = output.as_array() {
-                let source_cortical_areas: Vec<String> = cortical_areas
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect();
-
-                // Only create motor capability if source_cortical_areas is non-empty
-                // ARCHITECTURAL PRINCIPLE: Don't invent capabilities that weren't requested
-                if !source_cortical_areas.is_empty() {
-                    capabilities.motor = Some(MotorCapability {
-                        modality: "generic".to_string(),
-                        output_count: source_cortical_areas.len(),
-                        source_cortical_areas,
-                    });
-                }
-            }
-        }
-
-        // Parse visualization capability
-        if let Some(viz) = caps_json.get("visualization") {
-            if viz
-                .get("enabled")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-            {
-                capabilities.visualization = Some(VisualizationCapability {
-                    visualization_type: viz
-                        .get("type")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("generic")
-                        .to_string(),
-                    resolution: None,
-                    refresh_rate: viz.get("rate_hz").and_then(|v| v.as_f64()),
-                    bridge_proxy: viz
-                        .get("bridge_proxy")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false),
-                });
-            }
-        }
-
-        Ok(capabilities)
+        // Deserialize directly from JSON (new agent SDK format only)
+        serde_json::from_value::<AgentCapabilities>(caps_json.clone()).map_err(|e| {
+            FeagiDataError::DeserializationError(format!(
+                "Failed to parse capabilities as AgentCapabilities format: {}. \
+                Please ensure capabilities use the new FEAGI 2.0 Rust SDK format.",
+                e
+            ))
+        })
     }
 
     /// Process deregistration request
@@ -1642,10 +1695,41 @@ impl RegistrationHandler {
 
     /// Process heartbeat
     pub fn process_heartbeat(&self, agent_id: &str) -> Result<String, String> {
-        use tracing::debug;
+        use tracing::{debug, warn};
 
         debug!("💓 [REGISTRATION] Processing heartbeat for '{}'", agent_id);
 
+        // Check if agent exists before attempting heartbeat
+        let agent_exists = {
+            let registry = self.agent_registry.read();
+            registry.get(agent_id).is_some()
+        };
+
+        if !agent_exists {
+            // Log diagnostic information when agent not found
+            let all_agents: Vec<String> = {
+                let registry = self.agent_registry.read();
+                registry
+                    .get_all()
+                    .iter()
+                    .map(|a| a.agent_id.clone())
+                    .collect()
+            };
+            warn!(
+                "⚠️ [REGISTRATION] Heartbeat failed for '{}': Agent not found in registry. Registered agents ({}): {:?}",
+                agent_id,
+                all_agents.len(),
+                all_agents
+            );
+            return Err(FeagiDataError::BadParameters(format!(
+                "Agent {} not found in registry (total registered: {})",
+                agent_id,
+                all_agents.len()
+            ))
+            .to_string());
+        }
+
+        // Agent exists - update heartbeat
         self.agent_registry
             .write()
             .heartbeat(agent_id)
@@ -1657,9 +1741,8 @@ impl RegistrationHandler {
                 format!("Heartbeat recorded for {}", agent_id)
             })
             .map_err(|e| {
-                use tracing::warn;
                 warn!(
-                    "⚠️ [REGISTRATION] Heartbeat failed for '{}': {}",
+                    "⚠️ [REGISTRATION] Heartbeat update failed for '{}': {}",
                     agent_id, e
                 );
                 e
@@ -1674,17 +1757,25 @@ mod tests {
     #[test]
     fn test_registration_handler() {
         let registry = Arc::new(RwLock::new(AgentRegistry::with_defaults()));
-        let mut handler = RegistrationHandler::new(registry.clone(), 8000, 8001, 8002);
+        let mut handler = RegistrationHandler::new(registry.clone(), 8003, 8000, 8001, 8002);
 
         // Disable auto-create to avoid needing GenomeService in this unit test
         handler.set_auto_create_missing_areas(false);
 
         let request = RegistrationRequest {
             agent_id: "test-agent".to_string(),
-            agent_type: "both".to_string(),
+            // Keep this unit test focused on the registration plumbing without requiring both
+            // input+output capability validation (which would also require motor cortical area setup).
+            agent_type: "sensory".to_string(),
             capabilities: serde_json::json!({
-                "input": ["aXN2aQkAAAA="],  // feagi-sensorimotor format
-                "output": ["b21vdDAwAAA="]  // feagi-sensorimotor format
+                // FEAGI 2.0 Rust SDK AgentCapabilities format
+                //
+                // Provide a sensory capability with a shm_path so the handler allocates/returns SHM paths
+                // (this unit test asserts shm_paths is present in the response).
+                "sensory": {
+                    "rate_hz": 60.0,
+                    "shm_path": "feagi-shm-test-agent-sensory.bin"
+                }
             }),
             chosen_transport: None,
         };
@@ -1705,5 +1796,6 @@ impl RegistrationHandlerTrait for RegistrationHandler {
         request: RegistrationRequest,
     ) -> Result<RegistrationResponse, String> {
         self.process_registration_impl(request)
+            .map_err(|e| e.to_string())
     }
 }

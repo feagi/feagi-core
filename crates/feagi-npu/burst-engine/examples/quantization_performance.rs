@@ -13,8 +13,10 @@
 //! - Burst processing speed
 //! - Dispatch overhead
 
+use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
-use feagi_npu_neural::types::{INT8Value, NeuronId};
+use feagi_npu_neural::types::INT8Value;
+use feagi_npu_runtime::StdRuntime;
 use std::time::Instant;
 
 fn main() {
@@ -140,23 +142,27 @@ fn create_test_npu_f32(
     neurons: usize,
     synapses: usize,
 ) -> RustNPU<feagi_npu_runtime::StdRuntime, f32, feagi_npu_burst_engine::backend::CPUBackend> {
-    let mut npu = RustNPU::<f32>::new_cpu_only(neurons, synapses, 10);
+    let mut npu = RustNPU::new(StdRuntime, CPUBackend::new(), neurons, synapses, 10).unwrap();
 
     let _ = npu.create_cortical_area_neurons(
-        1,
-        10,
-        10,
-        (neurons / 100) as u32,
-        1,
-        1.0,
-        0.97,
-        0.0,
-        0,
-        3,
-        0.5,
-        5,
-        10,
-        false,
+        1,                      // cortical_idx
+        10,                     // width
+        10,                     // height
+        (neurons / 100) as u32, // depth (10*10*depth = neurons)
+        1,                      // neurons_per_voxel
+        1.0,                    // default_threshold
+        0.0,                    // threshold_increment_x
+        0.0,                    // threshold_increment_y
+        0.0,                    // threshold_increment_z
+        0.0,                    // default_threshold_limit
+        0.97,                   // default_leak_coefficient
+        0.0,                    // default_resting_potential
+        0,                      // default_neuron_type
+        3,                      // default_refractory_period
+        0.5,                    // default_excitability
+        5,                      // default_consecutive_fire_limit
+        10,                     // default_snooze_period
+        false,                  // default_mp_charge_accumulation
     );
 
     npu
@@ -168,30 +174,34 @@ fn create_test_npu_int8(
     synapses: usize,
 ) -> RustNPU<feagi_npu_runtime::StdRuntime, INT8Value, feagi_npu_burst_engine::backend::CPUBackend>
 {
-    let mut npu = RustNPU::<INT8Value>::new_cpu_only(neurons, synapses, 10);
+    let mut npu = RustNPU::new(StdRuntime, CPUBackend::new(), neurons, synapses, 10).unwrap();
 
     let _ = npu.create_cortical_area_neurons(
-        1,
-        10,
-        10,
-        (neurons / 100) as u32,
-        1,
-        1.0,
-        0.97,
-        0.0,
-        0,
-        3,
-        0.5,
-        5,
-        10,
-        false,
+        1,                      // cortical_idx
+        10,                     // width
+        10,                     // height
+        (neurons / 100) as u32, // depth (10*10*depth = neurons)
+        1,                      // neurons_per_voxel
+        1.0,                    // default_threshold
+        0.0,                    // threshold_increment_x
+        0.0,                    // threshold_increment_y
+        0.0,                    // threshold_increment_z
+        0.0,                    // default_threshold_limit
+        0.97,                   // default_leak_coefficient
+        0.0,                    // default_resting_potential
+        0,                      // default_neuron_type
+        3,                      // default_refractory_period
+        0.5,                    // default_excitability
+        5,                      // default_consecutive_fire_limit
+        10,                     // default_snooze_period
+        false,                  // default_mp_charge_accumulation
     );
 
     npu
 }
 
 /// Estimate FP32 NPU memory usage
-fn estimate_memory_f32(npu: &RustNPU<f32>) -> usize {
+fn estimate_memory_f32(npu: &RustNPU<StdRuntime, f32, CPUBackend>) -> usize {
     // Neuron array per-neuron data:
     // - membrane_potentials: f32 (4 bytes)
     // - thresholds: f32 (4 bytes)
@@ -213,7 +223,7 @@ fn estimate_memory_f32(npu: &RustNPU<f32>) -> usize {
 }
 
 /// Estimate INT8 NPU memory usage
-fn estimate_memory_int8(npu: &RustNPU<INT8Value>) -> usize {
+fn estimate_memory_int8(npu: &RustNPU<StdRuntime, INT8Value, CPUBackend>) -> usize {
     // Neuron array per-neuron data:
     // - membrane_potentials: INT8Value (1 byte)  ← 75% reduction
     // - thresholds: INT8Value (1 byte)           ← 75% reduction

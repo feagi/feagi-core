@@ -98,26 +98,96 @@ pub async fn post_mapping_properties(
     let mut formatted = Vec::new();
     for conn in connections.unwrap() {
         if let Some(arr) = conn.as_array() {
-            // Array format: [morphology_id, scalar, multiplier, plasticity_flag, constant, ltp, ltd]
+            // Array format:
+            // [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag,
+            //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window]
+            if arr.len() < 8 {
+                return Err(ApiError::invalid_input(format!(
+                    "Invalid dstmap rule array (expected 8 elements including plasticity_window), got {}: {:?}",
+                    arr.len(),
+                    arr
+                )));
+            }
+            // Strict parsing (no implicit defaults).
+            let morphology_id = arr[0]
+                .as_str()
+                .ok_or_else(|| ApiError::invalid_input("morphology_id must be a string"))?;
+            let morphology_scalar = arr[1].clone();
+            let psc_multiplier = arr[2].as_i64().ok_or_else(|| {
+                ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer")
+            })?;
+            let plasticity_flag = arr[3]
+                .as_bool()
+                .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
+            let plasticity_constant = arr[4]
+                .as_i64()
+                .ok_or_else(|| ApiError::invalid_input("plasticity_constant must be an integer"))?;
+            let ltp_multiplier = arr[5]
+                .as_i64()
+                .ok_or_else(|| ApiError::invalid_input("ltp_multiplier must be an integer"))?;
+            let ltd_multiplier = arr[6]
+                .as_i64()
+                .ok_or_else(|| ApiError::invalid_input("ltd_multiplier must be an integer"))?;
+            let plasticity_window = arr[7]
+                .as_i64()
+                .ok_or_else(|| ApiError::invalid_input("plasticity_window must be an integer"))?;
+
             formatted.push(serde_json::json!({
-                "morphology_id": arr.first().and_then(|v| v.as_str()).unwrap_or(""),
-                "morphology_scalar": arr.get(1).cloned().unwrap_or(serde_json::json!([1, 1, 1])),
-                "postSynapticCurrent_multiplier": arr.get(2).and_then(|v| v.as_i64()).unwrap_or(1),
-                "plasticity_flag": arr.get(3).and_then(|v| v.as_bool()).unwrap_or(false),
-                "plasticity_constant": arr.get(4).and_then(|v| v.as_i64()).unwrap_or(1),
-                "ltp_multiplier": arr.get(5).and_then(|v| v.as_i64()).unwrap_or(1),
-                "ltd_multiplier": arr.get(6).and_then(|v| v.as_i64()).unwrap_or(1),
+                "morphology_id": morphology_id,
+                "morphology_scalar": morphology_scalar,
+                "postSynapticCurrent_multiplier": psc_multiplier,
+                "plasticity_flag": plasticity_flag,
+                "plasticity_constant": plasticity_constant,
+                "ltp_multiplier": ltp_multiplier,
+                "ltd_multiplier": ltd_multiplier,
+                "plasticity_window": plasticity_window,
             }));
         } else if let Some(obj) = conn.as_object() {
-            // Dict format - already in expected schema
+            // Dict format - strict schema (no implicit defaults)
+            let morphology_id = obj
+                .get("morphology_id")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| ApiError::invalid_input("morphology_id must be a string"))?;
+            let morphology_scalar = obj
+                .get("morphology_scalar")
+                .cloned()
+                .ok_or_else(|| ApiError::invalid_input("morphology_scalar missing"))?;
+            let psc_multiplier = obj
+                .get("postSynapticCurrent_multiplier")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| {
+                    ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer")
+                })?;
+            let plasticity_flag = obj
+                .get("plasticity_flag")
+                .and_then(|v| v.as_bool())
+                .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
+            let plasticity_constant = obj
+                .get("plasticity_constant")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| ApiError::invalid_input("plasticity_constant must be an integer"))?;
+            let ltp_multiplier = obj
+                .get("ltp_multiplier")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| ApiError::invalid_input("ltp_multiplier must be an integer"))?;
+            let ltd_multiplier = obj
+                .get("ltd_multiplier")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| ApiError::invalid_input("ltd_multiplier must be an integer"))?;
+            let plasticity_window = obj
+                .get("plasticity_window")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| ApiError::invalid_input("plasticity_window must be an integer"))?;
+
             formatted.push(serde_json::json!({
-                "morphology_id": obj.get("morphology_id").and_then(|v| v.as_str()).unwrap_or(""),
-                "morphology_scalar": obj.get("morphology_scalar").cloned().unwrap_or(serde_json::json!([1, 1, 1])),
-                "postSynapticCurrent_multiplier": obj.get("postSynapticCurrent_multiplier").and_then(|v| v.as_i64()).unwrap_or(1),
-                "plasticity_flag": obj.get("plasticity_flag").and_then(|v| v.as_bool()).unwrap_or(false),
-                "plasticity_constant": obj.get("plasticity_constant").and_then(|v| v.as_i64()).unwrap_or(1),
-                "ltp_multiplier": obj.get("ltp_multiplier").and_then(|v| v.as_i64()).unwrap_or(1),
-                "ltd_multiplier": obj.get("ltd_multiplier").and_then(|v| v.as_i64()).unwrap_or(1),
+                "morphology_id": morphology_id,
+                "morphology_scalar": morphology_scalar,
+                "postSynapticCurrent_multiplier": psc_multiplier,
+                "plasticity_flag": plasticity_flag,
+                "plasticity_constant": plasticity_constant,
+                "ltp_multiplier": ltp_multiplier,
+                "ltd_multiplier": ltd_multiplier,
+                "plasticity_window": plasticity_window,
             }));
         }
     }

@@ -4,7 +4,6 @@
 //! Agent registry types - shared between feagi-services and feagi-io
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Type of agent based on I/O direction and purpose
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,6 +59,18 @@ pub struct VisionCapability {
     pub channels: usize,
     /// Target cortical area ID
     pub target_cortical_area: String,
+    /// Semantic unit identifier (preferred).
+    ///
+    /// When set, the backend can derive cortical IDs without requiring agents to know
+    /// internal 3-letter unit designators (e.g., "svi"/"seg").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit: Option<SensoryUnit>,
+    /// Cortical unit index (group) for the selected unit (preferred).
+    ///
+    /// FEAGI encodes the group in the cortical ID. This keeps the wire contract
+    /// language-agnostic and avoids leaking internal byte layouts to SDK users.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<u8>,
 }
 
 /// Motor output capability
@@ -71,6 +82,60 @@ pub struct MotorCapability {
     pub output_count: usize,
     /// Source cortical area IDs
     pub source_cortical_areas: Vec<String>,
+    /// Semantic unit identifier (preferred).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit: Option<MotorUnit>,
+    /// Cortical unit index (group) for the selected unit (preferred).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group: Option<u8>,
+    /// Multiple semantic motor unit sources (preferred for multi-OPU agents).
+    ///
+    /// This supports agents that subscribe to multiple motor cortical unit types
+    /// (e.g., object_segmentation + simple_vision_output + text_english_output).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_units: Option<Vec<MotorUnitSpec>>,
+}
+
+/// Motor unit + group pair for registration contracts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MotorUnitSpec {
+    pub unit: MotorUnit,
+    pub group: u8,
+}
+
+/// Language-agnostic sensory unit identifiers for registration contracts.
+///
+/// These are **not** the same as the internal 3-letter unit designators. They are intended
+/// to be stable, human-readable, and suitable for auto-generated SDKs in other languages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SensoryUnit {
+    Infrared,
+    Proximity,
+    Shock,
+    Battery,
+    Servo,
+    AnalogGpio,
+    DigitalGpio,
+    MiscData,
+    TextEnglishInput,
+    Vision,
+    SegmentedVision,
+    Accelerometer,
+    Gyroscope,
+}
+
+/// Language-agnostic motor unit identifiers for registration contracts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MotorUnit {
+    RotaryMotor,
+    PositionalServo,
+    Gaze,
+    MiscData,
+    TextEnglishOutput,
+    ObjectSegmentation,
+    SimpleVisionOutput,
 }
 
 /// Visualization capability for agents that consume neural activity stream
@@ -89,12 +154,11 @@ pub struct VisualizationCapability {
     pub bridge_proxy: bool,
 }
 
-/// Legacy sensory capability (for backward compatibility with existing code)
+/// Sensory capability for non-vision sensory modalities (text, audio, etc.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SensoryCapability {
     pub rate_hz: f64,
     pub shm_path: Option<String>,
-    pub cortical_mappings: HashMap<String, u32>, // cortical_id -> cortical_idx
 }
 
 /// Agent capabilities describing what data it can provide/consume

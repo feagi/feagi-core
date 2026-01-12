@@ -135,3 +135,9 @@ impl From<&str> for TransportError {
         Self::Other(msg.to_string())
     }
 }
+
+impl From<feagi_structures::FeagiDataError> for TransportError {
+    fn from(err: feagi_structures::FeagiDataError) -> Self {
+        Self::InvalidConfig(err.to_string())
+    }
+}

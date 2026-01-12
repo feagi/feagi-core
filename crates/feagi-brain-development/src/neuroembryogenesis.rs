@@ -20,7 +20,7 @@ Licensed under the Apache License, Version 2.0
 
 use crate::connectome_manager::ConnectomeManager;
 use crate::models::{CorticalArea, CorticalID};
-use crate::types::BduResult;
+use crate::types::{BduError, BduResult};
 use feagi_evolutionary::RuntimeGenome;
 use feagi_npu_neural::types::{Precision, QuantizationSpec};
 use parking_lot::RwLock;
@@ -138,7 +138,56 @@ impl Neuroembryogenesis {
         }
 
         // Stage 2: Create neurons for each area (Neurogenesis)
+        // CRITICAL: Create core area neurons FIRST to ensure deterministic IDs
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        let death_id = CoreCorticalType::Death.to_cortical_id();
+        let power_id = CoreCorticalType::Power.to_cortical_id();
+        let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
+
+        let mut core_areas = Vec::new();
+        let mut other_areas = Vec::new();
+
+        // Separate core areas from other areas
         for area in &areas {
+            if area.cortical_id == death_id {
+                core_areas.push((0, area)); // Area 0 = _death
+            } else if area.cortical_id == power_id {
+                core_areas.push((1, area)); // Area 1 = _power
+            } else if area.cortical_id == fatigue_id {
+                core_areas.push((2, area)); // Area 2 = _fatigue
+            } else {
+                other_areas.push(area);
+            }
+        }
+
+        // Sort core areas by their deterministic index (0, 1, 2)
+        core_areas.sort_by_key(|(idx, _)| *idx);
+
+        // STEP 1: Create core area neurons FIRST
+        if !core_areas.is_empty() {
+            info!(target: "feagi-bdu", "  🎯 Creating core area neurons FIRST ({} areas) for deterministic IDs", core_areas.len());
+            for (core_idx, area) in &core_areas {
+                let neurons_created = {
+                    let mut manager = self.connectome_manager.write();
+                    manager.create_neurons_for_area(&area.cortical_id)
+                };
+
+                match neurons_created {
+                    Ok(count) => {
+                        total_neurons += count as usize;
+                        info!(target: "feagi-bdu", "  ✅ Created {} neurons for core area {} (deterministic ID: neuron {})",
+                            count, area.cortical_id.as_base_64(), core_idx);
+                    }
+                    Err(e) => {
+                        error!(target: "feagi-bdu", "  ❌ FATAL: Failed to create neurons for core area {}: {}", area.cortical_id.as_base_64(), e);
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        // STEP 2: Create neurons for other areas
+        for area in &other_areas {
             let neurons_created = {
                 let mut manager = self.connectome_manager.write();
                 manager.create_neurons_for_area(&area.cortical_id)
@@ -644,6 +693,9 @@ impl Neuroembryogenesis {
     /// This uses ConnectomeManager which delegates to NPU's SIMD-optimized batch operations.
     /// Each cortical area is processed with `create_cortical_area_neurons()` which creates
     /// ALL neurons for that area in one vectorized operation (not a loop).
+    ///
+    /// CRITICAL: Core areas (0=_death, 1=_power, 2=_fatigue) are created FIRST to ensure
+    /// deterministic neuron IDs (neuron 0 for area 0, neuron 1 for area 1, neuron 2 for area 2).
     fn neurogenesis(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
         self.update_stage(DevelopmentStage::Neurogenesis, 0);
         info!(target: "feagi-bdu","🔬 Stage 3: Neurogenesis - Generating neurons (SIMD-optimized batches)");
@@ -651,31 +703,98 @@ impl Neuroembryogenesis {
         let expected_neurons = genome.stats.innate_neuron_count;
         info!(target: "feagi-bdu","  Expected innate neurons from genome: {}", expected_neurons);
 
+        // CRITICAL: Identify core areas first to ensure deterministic neuron IDs
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        let death_id = CoreCorticalType::Death.to_cortical_id();
+        let power_id = CoreCorticalType::Power.to_cortical_id();
+        let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
+
+        let mut core_areas = Vec::new();
+        let mut other_areas = Vec::new();
+
+        // Separate core areas from other areas
+        for (cortical_id, area) in genome.cortical_areas.iter() {
+            if *cortical_id == death_id {
+                core_areas.push((0, *cortical_id, area)); // Area 0 = _death
+            } else if *cortical_id == power_id {
+                core_areas.push((1, *cortical_id, area)); // Area 1 = _power
+            } else if *cortical_id == fatigue_id {
+                core_areas.push((2, *cortical_id, area)); // Area 2 = _fatigue
+            } else {
+                other_areas.push((*cortical_id, area));
+            }
+        }
+
+        // Sort core areas by their deterministic index (0, 1, 2)
+        core_areas.sort_by_key(|(idx, _, _)| *idx);
+
+        info!(target: "feagi-bdu","  🎯 Creating core area neurons FIRST ({} areas) for deterministic IDs", core_areas.len());
+
         let mut total_neurons_created = 0;
+        let mut processed_count = 0;
         let total_areas = genome.cortical_areas.len();
 
-        // Process each cortical area via ConnectomeManager (each area = one SIMD batch)
-        // NOTE: Loop is over AREAS, not neurons. Each area creates all its neurons in ONE batch call.
-        for (idx, (_cortical_id, area)) in genome.cortical_areas.iter().enumerate() {
-            // Get neurons_per_voxel from typed field (single source of truth)
+        // STEP 1: Create core area neurons FIRST (in order: 0, 1, 2)
+        for (core_idx, cortical_id, area) in &core_areas {
             let per_voxel_count = area
                 .properties
                 .get("neurons_per_voxel")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(1) as i64;
 
-            // 🔍 DIAGNOSTIC: Use area.cortical_id (the actual ID stored in ConnectomeManager)
-            // This MUST match what was registered during corticogenesis!
-            let cortical_id_str = area.cortical_id.to_string();
-            // Note: Core IDs are 8-byte padded: "___power" and "___death" or "_power__" and "_death__"
-            if cortical_id_str == "___power"
-                || cortical_id_str == "___death"
-                || cortical_id_str == "_power__"
-                || cortical_id_str == "_death__"
-            {
-                info!(target: "feagi-bdu","  🔍 [CORE-AREA] {} - dimensions: {:?}, per_voxel: {}",
-                    cortical_id_str, area.dimensions, per_voxel_count);
+            let cortical_id_str = cortical_id.to_string();
+            info!(target: "feagi-bdu","  🔋 [CORE-AREA {}] {} - dimensions: {:?}, per_voxel: {}",
+                core_idx, cortical_id_str, area.dimensions, per_voxel_count);
+
+            if per_voxel_count == 0 {
+                warn!(target: "feagi-bdu","  ⚠️ Skipping core area {} - per_voxel_neuron_cnt is 0", cortical_id_str);
+                continue;
             }
+
+            // Create neurons for core area (ensures deterministic ID: area 0→neuron 0, area 1→neuron 1, area 2→neuron 2)
+            let neurons_created = {
+                let manager_arc = self.connectome_manager.clone();
+                let mut manager = manager_arc.write();
+                manager.create_neurons_for_area(cortical_id)
+            };
+
+            match neurons_created {
+                Ok(count) => {
+                    total_neurons_created += count as usize;
+                    info!(target: "feagi-bdu","  ✅ Created {} neurons for core area {} (deterministic ID: neuron {})",
+                        count, cortical_id_str, core_idx);
+                }
+                Err(e) => {
+                    error!(target: "feagi-bdu","  ❌ FATAL: Failed to create neurons for core area {}: {}", cortical_id_str, e);
+                    return Err(e);
+                }
+            }
+
+            processed_count += 1;
+            let progress_pct = (processed_count * 100 / total_areas.max(1)) as u8;
+            self.update_progress(|p| {
+                p.neurons_created = total_neurons_created;
+                p.progress = progress_pct;
+            });
+        }
+
+        // STEP 2: Create neurons for all other areas
+        info!(target: "feagi-bdu","  📦 Creating neurons for {} other areas", other_areas.len());
+        for (cortical_id, area) in &other_areas {
+            // Get neurons_per_voxel from typed field (single source of truth)
+            let _per_voxel_count = area
+                .properties
+                .get("neurons_per_voxel")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1) as i64;
+
+            let per_voxel_count = area
+                .properties
+                .get("neurons_per_voxel")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1) as i64;
+
+            let cortical_id_str = cortical_id.to_string();
 
             if per_voxel_count == 0 {
                 warn!(target: "feagi-bdu","  ⚠️ Skipping area {} - per_voxel_neuron_cnt is 0 (will have NO neurons!)", cortical_id_str);
@@ -687,7 +806,7 @@ impl Neuroembryogenesis {
             let neurons_created = {
                 let manager_arc = self.connectome_manager.clone();
                 let mut manager = manager_arc.write();
-                manager.create_neurons_for_area(&area.cortical_id)
+                manager.create_neurons_for_area(cortical_id)
             }; // Lock released immediately
 
             match neurons_created {
@@ -712,8 +831,9 @@ impl Neuroembryogenesis {
                 }
             }
 
+            processed_count += 1;
             // Update progress
-            let progress_pct = ((idx + 1) * 100 / total_areas.max(1)) as u8;
+            let progress_pct = (processed_count * 100 / total_areas.max(1)) as u8;
             self.update_progress(|p| {
                 p.neurons_created = total_neurons_created;
                 p.progress = progress_pct;
@@ -802,6 +922,101 @@ impl Neuroembryogenesis {
                 p.synapses_created = total_synapses_created;
                 p.progress = progress_pct;
             });
+        }
+
+        // CRITICAL: Rebuild the NPU synapse index so newly created synapses are visible to
+        // queries (e.g. get_outgoing_synapses / synapse counts) and propagation.
+        //
+        // Note: We do this once at the end for performance.
+        let npu_arc = {
+            let manager = self.connectome_manager.read();
+            manager.get_npu().cloned()
+        };
+        if let Some(npu_arc) = npu_arc {
+            let mut npu_lock = npu_arc
+                .lock()
+                .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+            npu_lock.rebuild_synapse_index();
+
+            // Refresh cached counts after index rebuild.
+            let manager = self.connectome_manager.read();
+            manager.update_cached_synapse_count();
+        }
+
+        // CRITICAL: Register memory areas with PlasticityExecutor after all mappings are created
+        // This ensures memory areas have their complete upstream_cortical_areas lists populated.
+        #[cfg(feature = "plasticity")]
+        {
+            use feagi_evolutionary::extract_memory_properties;
+            use feagi_npu_plasticity::{MemoryNeuronLifecycleConfig, PlasticityExecutor};
+
+            let manager = self.connectome_manager.read();
+            if let Some(executor) = manager.get_plasticity_executor() {
+                let mut registered_count = 0;
+
+                // Iterate through all cortical areas and register memory areas
+                for area_id in manager.get_cortical_area_ids() {
+                    if let Some(area) = manager.get_cortical_area(area_id) {
+                        if let Some(mem_props) = extract_memory_properties(&area.properties) {
+                            let upstream_areas = manager.get_upstream_cortical_areas(area_id);
+
+                            // Ensure FireLedger tracks upstream areas with at least the required temporal depth.
+                            // Dense, burst-aligned tracking is required for correct memory pattern hashing.
+                            if let Some(npu_arc) = manager.get_npu() {
+                                if let Ok(mut npu) = npu_arc.lock() {
+                                    let existing_configs = npu.get_all_fire_ledger_configs();
+                                    for &upstream_idx in &upstream_areas {
+                                        let existing = existing_configs
+                                            .iter()
+                                            .find(|(idx, _)| *idx == upstream_idx)
+                                            .map(|(_, w)| *w)
+                                            .unwrap_or(0);
+
+                                        let desired = mem_props.temporal_depth as usize;
+                                        let resolved = existing.max(desired);
+                                        if resolved != existing {
+                                            if let Err(e) = npu.configure_fire_ledger_window(
+                                                upstream_idx,
+                                                resolved,
+                                            ) {
+                                                warn!(
+                                                    target: "feagi-bdu",
+                                                    "Failed to configure FireLedger window for upstream area idx={} (requested={}): {}",
+                                                    upstream_idx,
+                                                    resolved,
+                                                    e
+                                                );
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    warn!(target: "feagi-bdu", "Failed to lock NPU for FireLedger configuration");
+                                }
+                            }
+
+                            if let Ok(exec) = executor.lock() {
+                                let lifecycle_config = MemoryNeuronLifecycleConfig {
+                                    initial_lifespan: mem_props.init_lifespan,
+                                    lifespan_growth_rate: mem_props.lifespan_growth_rate,
+                                    longterm_threshold: mem_props.longterm_threshold,
+                                    max_reactivations: 1000,
+                                };
+
+                                exec.register_memory_area(
+                                    area.cortical_idx,
+                                    area_id.as_base_64(),
+                                    mem_props.temporal_depth,
+                                    upstream_areas.clone(),
+                                    Some(lifecycle_config),
+                                );
+
+                                registered_count += 1;
+                            }
+                        }
+                    }
+                }
+                let _ = registered_count; // count retained for future metrics if needed
+            }
         }
 
         // Verify against genome stats
