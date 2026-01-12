@@ -142,11 +142,6 @@ pub fn process_neural_dynamics<T: NeuralValue>(
             // Batch size chosen to fit in L1 cache (~32KB) - assuming ~100 bytes per candidate
             const SEQUENTIAL_BATCH_SIZE: usize = 200; // Process 200 candidates at a time
 
-            let mut total_process_time = std::time::Duration::ZERO;
-            let mut total_convert_time = std::time::Duration::ZERO;
-            let mut total_count_time = std::time::Duration::ZERO;
-            let mut process_count = 0;
-
             for batch in candidates.chunks(SEQUENTIAL_BATCH_SIZE) {
                 for &(neuron_id, candidate_potential) in batch {
                     // Memory neurons are force-fired and do not use the regular neuron storage array.
@@ -170,12 +165,9 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                     }
 
                     // Convert f32 from FCL to T
-                    let convert_start = std::time::Instant::now();
                     let candidate_potential_t = T::from_f32(candidate_potential);
-                    total_convert_time += convert_start.elapsed();
 
                     // Process neuron
-                    let process_start = std::time::Instant::now();
                     if let Some(neuron) = process_single_neuron(
                         neuron_id,
                         candidate_potential_t,
@@ -184,18 +176,14 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                     ) {
                         results.push(neuron);
                     }
-                    total_process_time += process_start.elapsed();
-                    process_count += 1;
 
                     // Count refractory neurons (neuron_id == array index)
-                    let count_start = std::time::Instant::now();
                     let idx = neuron_id.0 as usize;
                     if idx < neuron_array.count()
                         && neuron_array.refractory_countdowns_mut()[idx] > 0
                     {
                         refractory += 1;
                     }
-                    total_count_time += count_start.elapsed();
                 }
             }
 
@@ -204,15 +192,11 @@ pub fn process_neural_dynamics<T: NeuralValue>(
             // Log profiling for sequential path if slow
             if sequential_duration.as_millis() > 5 || candidates.len() > 5_000 {
                 tracing::debug!(
-                    "[PHASE2-PROFILE] Sequential processing: total={:.2}ms | candidates={} | fired={} | refractory={} | convert={:.2}ms | process={:.2}ms | count={:.2}ms | avg_per_candidate={:.3}μs",
+                    "[PHASE2-PROFILE] Sequential processing: total={:.2}ms | candidates={} | fired={} | refractory={}",
                     sequential_duration.as_secs_f64() * 1000.0,
                     candidates.len(),
                     results.len(),
-                    refractory,
-                    total_convert_time.as_secs_f64() * 1000.0,
-                    total_process_time.as_secs_f64() * 1000.0,
-                    total_count_time.as_secs_f64() * 1000.0,
-                    if process_count > 0 { total_process_time.as_secs_f64() * 1_000_000.0 / process_count as f64 } else { 0.0 }
+                    refractory
                 );
             }
 

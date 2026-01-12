@@ -8,7 +8,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_evolutionary::load_genome_from_file;
+use feagi_evolutionary::{ensure_core_components, load_genome_from_file};
 
 #[test]
 fn test_load_barebones_genome() {
@@ -18,16 +18,17 @@ fn test_load_barebones_genome() {
         .join("barebones_genome.json");
 
     // Load genome
-    let genome = load_genome_from_file(&genome_path).expect("Failed to load barebones genome");
+    let mut genome = load_genome_from_file(&genome_path).expect("Failed to load barebones genome");
+    ensure_core_components(&mut genome);
 
     // Verify metadata
     assert_eq!(genome.metadata.version, "2.0");
     assert!(!genome.metadata.genome_id.is_empty());
 
-    // Verify cortical areas (should have _death and _power)
+    // Verify cortical areas (should have _death, _power, and _fatigue)
     assert!(
-        genome.cortical_areas.len() >= 2,
-        "Expected at least 2 cortical areas, got {}",
+        genome.cortical_areas.len() >= 3,
+        "Expected at least 3 cortical areas, got {}",
         genome.cortical_areas.len()
     );
 
@@ -35,6 +36,8 @@ fn test_load_barebones_genome() {
         feagi_evolutionary::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
     let power_id =
         feagi_evolutionary::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+    let fatigue_id =
+        feagi_evolutionary::genome::parser::string_to_cortical_id("_fatigue").expect("Valid ID");
     assert!(
         genome.cortical_areas.contains_key(&death_id),
         "Missing _death cortical area"
@@ -42,6 +45,10 @@ fn test_load_barebones_genome() {
     assert!(
         genome.cortical_areas.contains_key(&power_id),
         "Missing _power cortical area"
+    );
+    assert!(
+        genome.cortical_areas.contains_key(&fatigue_id),
+        "Missing _fatigue cortical area"
     );
 
     // Verify morphologies
@@ -92,7 +99,8 @@ fn test_load_all_sample_genomes() {
             .join(genome_file);
 
         match load_genome_from_file(&genome_path) {
-            Ok(genome) => {
+            Ok(mut genome) => {
+                ensure_core_components(&mut genome);
                 println!("✅ Loaded {} successfully:", genome_file);
                 println!("   - Genome ID: {}", genome.metadata.genome_id);
                 println!("   - Cortical areas: {}", genome.cortical_areas.len());
@@ -105,7 +113,7 @@ fn test_load_all_sample_genomes() {
                     "Expected genome version to start with '2.' but got '{}'",
                     genome.metadata.version
                 );
-                assert!(genome.cortical_areas.len() >= 2); // At least _death and _power
+                assert!(genome.cortical_areas.len() >= 3); // At least _death, _power, and _fatigue
             }
             Err(e) => {
                 println!(

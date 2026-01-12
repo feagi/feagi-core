@@ -641,13 +641,16 @@ pub async fn post_cortical_area(
         let config_byte_4 = (data_type_config & 0xFF) as u8; // Lower byte
         let config_byte_5 = ((data_type_config >> 8) & 0xFF) as u8; // Upper byte
 
-        // Get dimensions for this unit from topology
-        let dimensions =
+        // Get per-device dimensions from topology, then scale X by device_count:
+        // total_x = device_count * per_device_x
+        let (per_device_dimensions, dimensions) =
             if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
                 let dims = topo.channel_dimensions_default;
-                (dims[0] as usize, dims[1] as usize, dims[2] as usize)
+                let per_device = (dims[0] as usize, dims[1] as usize, dims[2] as usize);
+                let total_x = per_device.0.saturating_mul(device_count);
+                (per_device, (total_x, per_device.1, per_device.2))
             } else {
-                (1, 1, 1) // Fallback
+                ((1, 1, 1), (device_count.max(1), 1, 1)) // Fallback
             };
 
         // Calculate position for this unit
@@ -710,7 +713,11 @@ pub async fn post_cortical_area(
         );
         properties.insert(
             "cortical_dimensions_per_device".to_string(),
-            serde_json::json!([dimensions.0, dimensions.1, dimensions.2]),
+            serde_json::json!([
+                per_device_dimensions.0,
+                per_device_dimensions.1,
+                per_device_dimensions.2
+            ]),
         );
 
         let params = CreateCorticalAreaParams {
