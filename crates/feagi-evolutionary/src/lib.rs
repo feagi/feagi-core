@@ -79,11 +79,11 @@ pub use runtime::{
 pub use storage::fs_storage::FileSystemStorage;
 pub use storage::{GenomeStorage, StorageError};
 pub use templates::{
-    add_core_morphologies, create_death_area, create_genome_with_core_areas,
-    create_fatigue_area, create_genome_with_core_morphologies, create_minimal_genome,
-    create_power_area, ensure_core_components, get_default_neural_properties,
-    load_barebones_genome, load_essential_genome, load_test_genome, load_vision_genome,
-    BAREBONES_GENOME_JSON, ESSENTIAL_GENOME_JSON, TEST_GENOME_JSON, VISION_GENOME_JSON,
+    add_core_morphologies, create_death_area, create_fatigue_area, create_genome_with_core_areas,
+    create_genome_with_core_morphologies, create_minimal_genome, create_power_area,
+    ensure_core_components, get_default_neural_properties, load_barebones_genome,
+    load_essential_genome, load_test_genome, load_vision_genome, BAREBONES_GENOME_JSON,
+    ESSENTIAL_GENOME_JSON, TEST_GENOME_JSON, VISION_GENOME_JSON,
 };
 pub use types::{EvoError, EvoResult};
 pub use validator::{validate_genome, ValidationResult};

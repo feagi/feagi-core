@@ -240,9 +240,7 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         tracing::info!("Added missing core area: _power (cortical_idx=1)");
     }
 
-    if let std::collections::hash_map::Entry::Vacant(e) =
-        genome.cortical_areas.entry(fatigue_id)
-    {
+    if let std::collections::hash_map::Entry::Vacant(e) = genome.cortical_areas.entry(fatigue_id) {
         let fatigue_area = create_fatigue_area();
         e.insert(fatigue_area);
         areas_added += 1;
