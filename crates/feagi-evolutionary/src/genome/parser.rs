@@ -209,6 +209,9 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
     if id_str == "_death" {
         return Ok(CoreCorticalType::Death.to_cortical_id());
     }
+    if id_str == "_fatigue" {
+        return Ok(CoreCorticalType::Fatigue.to_cortical_id());
+    }
 
     // For non-core areas, handle 6-char and 8-char ASCII formats
     if id_str.len() == 6 {

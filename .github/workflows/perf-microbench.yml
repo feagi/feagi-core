@@ -20,8 +20,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rust toolchain (1.75)
-        uses: dtolnay/rust-toolchain@1.75.0
+      - name: Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Print Rust/Cargo versions
+        run: |
+          rustc --version
+          cargo --version
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2

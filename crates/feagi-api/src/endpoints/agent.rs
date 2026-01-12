@@ -19,17 +19,19 @@ use tracing::{error, info, warn};
 #[cfg(feature = "feagi-agent")]
 use feagi_agent::sdk::ConnectorAgent;
 #[cfg(feature = "feagi-agent")]
-use std::sync::{Arc, Mutex};
-#[cfg(feature = "feagi-agent")]
 use feagi_services::types::CreateCorticalAreaParams;
 #[cfg(feature = "feagi-agent")]
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalSubUnitIndex, CorticalUnitIndex};
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalSubUnitIndex, CorticalUnitIndex,
+};
 #[cfg(feature = "feagi-agent")]
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 #[cfg(feature = "feagi-agent")]
 use feagi_structures::genomic::MotorCorticalUnit;
+#[cfg(feature = "feagi-agent")]
+use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "feagi-agent")]
 async fn auto_create_cortical_areas_from_device_registrations(
@@ -154,7 +156,9 @@ async fn auto_create_cortical_areas_from_device_registrations(
 
             for (i, cortical_id) in cortical_ids.iter().enumerate() {
                 let cortical_id_b64 = cortical_id.as_base_64();
-                let exists = match connectome_service.cortical_area_exists(&cortical_id_b64).await
+                let exists = match connectome_service
+                    .cortical_area_exists(&cortical_id_b64)
+                    .await
                 {
                     Ok(v) => v,
                     Err(e) => {
@@ -170,8 +174,7 @@ async fn auto_create_cortical_areas_from_device_registrations(
                     continue;
                 }
 
-                let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(i as u8))
-                else {
+                let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(i as u8)) else {
                     warn!(
                         "⚠️ [API] Missing unit topology for motor unit '{}' subunit {} (agent device_registrations); cannot auto-create '{}'",
                         motor_unit.get_snake_case_name(),

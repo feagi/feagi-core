@@ -74,7 +74,7 @@ pub fn create_death_area() -> CorticalArea {
         0, // cortical_idx = 0 (reserved)
         "Death".to_string(),
         CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
-        GenomeCoordinate3D::new(0, 0, -10),
+        GenomeCoordinate3D::new(0, 0, -20),
         cortical_type,
     )
     .expect("Failed to create _death area");
@@ -109,6 +109,30 @@ pub fn create_power_area() -> CorticalArea {
     props.insert("firing_threshold".to_string(), Value::from(0.1));
     props.insert("postsynaptic_current".to_string(), Value::from(500.0));
     props.insert("neuron_excitability".to_string(), Value::from(100.0));
+    area.properties = props;
+    area
+}
+
+/// Create _fatigue cortical area (cortical_idx = 2) from template
+pub fn create_fatigue_area() -> CorticalArea {
+    let cortical_id = CoreCorticalType::Fatigue.to_cortical_id();
+    let cortical_type = cortical_id
+        .as_cortical_type()
+        .expect("Fatigue cortical ID should map to Core type");
+
+    let mut area = CorticalArea::new(
+        cortical_id,
+        2, // cortical_idx = 2 (reserved)
+        "Fatigue".to_string(),
+        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
+        GenomeCoordinate3D::new(0, 0, -30),
+        cortical_type,
+    )
+    .expect("Failed to create _fatigue area");
+
+    let mut props = get_default_neural_properties();
+    props.insert("cortical_group".to_string(), Value::from("CORE"));
+    props.insert("2d_coordinate".to_string(), Value::from(vec![-10, 0]));
     area.properties = props;
     area
 }
@@ -150,9 +174,14 @@ pub fn create_genome_with_core_areas(genome_id: String, genome_title: String) ->
         crate::genome::parser::string_to_cortical_id("_death").expect("Valid cortical ID");
     let power_id =
         crate::genome::parser::string_to_cortical_id("_power").expect("Valid cortical ID");
+    let fatigue_id =
+        crate::genome::parser::string_to_cortical_id("_fatigue").expect("Valid cortical ID");
 
     genome.cortical_areas.insert(death_id, create_death_area());
     genome.cortical_areas.insert(power_id, create_power_area());
+    genome
+        .cortical_areas
+        .insert(fatigue_id, create_fatigue_area());
 
     genome
 }
@@ -193,6 +222,8 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         crate::genome::parser::string_to_cortical_id("_death").expect("Valid cortical ID");
     let power_id =
         crate::genome::parser::string_to_cortical_id("_power").expect("Valid cortical ID");
+    let fatigue_id =
+        crate::genome::parser::string_to_cortical_id("_fatigue").expect("Valid cortical ID");
 
     // 1. Ensure core cortical areas exist
     if let std::collections::hash_map::Entry::Vacant(e) = genome.cortical_areas.entry(death_id) {
@@ -207,6 +238,15 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         e.insert(power_area);
         areas_added += 1;
         tracing::info!("Added missing core area: _power (cortical_idx=1)");
+    }
+
+    if let std::collections::hash_map::Entry::Vacant(e) =
+        genome.cortical_areas.entry(fatigue_id)
+    {
+        let fatigue_area = create_fatigue_area();
+        e.insert(fatigue_area);
+        areas_added += 1;
+        tracing::info!("Added missing core area: _fatigue (cortical_idx=2)");
     }
 
     // 2. Ensure core morphologies exist
@@ -482,12 +522,15 @@ mod tests {
             create_genome_with_core_areas("test_genome".to_string(), "Test Genome".to_string());
 
         assert_eq!(genome.metadata.genome_id, "test_genome");
-        assert_eq!(genome.cortical_areas.len(), 2);
+        assert_eq!(genome.cortical_areas.len(), 3);
 
         let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
         let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+        let fatigue_id =
+            crate::genome::parser::string_to_cortical_id("_fatigue").expect("Valid ID");
         assert!(genome.cortical_areas.contains_key(&death_id));
         assert!(genome.cortical_areas.contains_key(&power_id));
+        assert!(genome.cortical_areas.contains_key(&fatigue_id));
 
         // Verify _power has correct properties
         let power = genome.cortical_areas.get(&power_id).unwrap();
@@ -559,13 +602,16 @@ mod tests {
         // Ensure core components
         let (areas_added, _) = ensure_core_components(&mut genome);
 
-        // Should have added _death and _power
-        assert_eq!(areas_added, 2);
+        // Should have added _death, _power, and _fatigue
+        assert_eq!(areas_added, 3);
 
         let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
         let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+        let fatigue_id =
+            crate::genome::parser::string_to_cortical_id("_fatigue").expect("Valid ID");
         assert!(genome.cortical_areas.contains_key(&death_id));
         assert!(genome.cortical_areas.contains_key(&power_id));
+        assert!(genome.cortical_areas.contains_key(&fatigue_id));
 
         // Verify cortical_idx assignments
         assert_eq!(
@@ -575,6 +621,10 @@ mod tests {
         assert_eq!(
             genome.cortical_areas.get(&power_id).unwrap().cortical_idx,
             1
+        );
+        assert_eq!(
+            genome.cortical_areas.get(&fatigue_id).unwrap().cortical_idx,
+            2
         );
     }
 
