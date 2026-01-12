@@ -20,6 +20,215 @@ use tracing::{error, info, warn};
 use feagi_agent::sdk::ConnectorAgent;
 #[cfg(feature = "feagi-agent")]
 use std::sync::{Arc, Mutex};
+#[cfg(feature = "feagi-agent")]
+use feagi_services::types::CreateCorticalAreaParams;
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalSubUnitIndex, CorticalUnitIndex};
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    FrameChangeHandling, PercentageNeuronPositioning,
+};
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::MotorCorticalUnit;
+
+#[cfg(feature = "feagi-agent")]
+async fn auto_create_cortical_areas_from_device_registrations(
+    state: &ApiState,
+    device_registrations: &serde_json::Value,
+) {
+    let connectome_service = state.connectome_service.as_ref();
+    let genome_service = state.genome_service.as_ref();
+
+    let Some(output_units) = device_registrations
+        .get("output_units_and_decoder_properties")
+        .and_then(|v| v.as_object())
+    else {
+        return;
+    };
+
+    // Build creation params for missing OPU areas based on default topologies.
+    let mut to_create: Vec<CreateCorticalAreaParams> = Vec::new();
+
+    for (motor_unit_key, unit_defs) in output_units {
+        // MotorCorticalUnit is serde-deserializable from its string representation.
+        let motor_unit: MotorCorticalUnit = match serde_json::from_value::<MotorCorticalUnit>(
+            serde_json::Value::String(motor_unit_key.clone()),
+        ) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!(
+                    "⚠️ [API] Unable to parse MotorCorticalUnit key '{}' from device_registrations: {}",
+                    motor_unit_key, e
+                );
+                continue;
+            }
+        };
+
+        let Some(unit_defs_arr) = unit_defs.as_array() else {
+            continue;
+        };
+
+        for entry in unit_defs_arr {
+            // Expected shape: [<unit_definition>, <decoder_properties>]
+            let Some(pair) = entry.as_array() else {
+                continue;
+            };
+            let Some(unit_def) = pair.first() else {
+                continue;
+            };
+            let Some(group_u64) = unit_def.get("cortical_unit_index").and_then(|v| v.as_u64())
+            else {
+                continue;
+            };
+            let group_u8: u8 = match group_u64.try_into() {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let group: CorticalUnitIndex = group_u8.into();
+
+            let device_count = unit_def
+                .get("device_grouping")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            if device_count == 0 {
+                warn!(
+                    "⚠️ [API] device_grouping is empty for motor unit '{}' group {}; skipping auto-create",
+                    motor_unit_key, group_u8
+                );
+                continue;
+            }
+
+            // Use defaults consistent with FEAGI registration handler.
+            let frame_change_handling = FrameChangeHandling::Absolute;
+            let percentage_neuron_positioning = PercentageNeuronPositioning::Linear;
+
+            let cortical_ids = match motor_unit {
+                MotorCorticalUnit::RotaryMotor => MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::PositionalServo => MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::Gaze => MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::MiscData => MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                    frame_change_handling,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::TextEnglishOutput => MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
+                    frame_change_handling,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::ObjectSegmentation => MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                    frame_change_handling,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::SimpleVisionOutput => MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+                    frame_change_handling,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::DynamicImageProcessing => MotorCorticalUnit::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec(),
+            };
+
+            let topology = motor_unit.get_unit_default_topology();
+
+            for (i, cortical_id) in cortical_ids.iter().enumerate() {
+                let cortical_id_b64 = cortical_id.as_base_64();
+                let exists = match connectome_service.cortical_area_exists(&cortical_id_b64).await
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        warn!(
+                            "⚠️ [API] Failed to check cortical area existence for '{}': {}",
+                            cortical_id_b64, e
+                        );
+                        continue;
+                    }
+                };
+
+                if exists {
+                    continue;
+                }
+
+                let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(i as u8))
+                else {
+                    warn!(
+                        "⚠️ [API] Missing unit topology for motor unit '{}' subunit {} (agent device_registrations); cannot auto-create '{}'",
+                        motor_unit.get_snake_case_name(),
+                        i,
+                        cortical_id_b64
+                    );
+                    continue;
+                };
+                let dims = unit_topology.channel_dimensions_default;
+                let pos = unit_topology.relative_position;
+                let total_x = (dims[0] as usize).saturating_mul(device_count);
+                let dimensions = (total_x, dims[1] as usize, dims[2] as usize);
+                let position = (pos[0], pos[1], pos[2]);
+
+                to_create.push(CreateCorticalAreaParams {
+                    cortical_id: cortical_id_b64.clone(),
+                    name: format!("{} Unit {}", motor_unit.get_snake_case_name(), group_u8),
+                    dimensions,
+                    position,
+                    area_type: "Motor".to_string(),
+                    visible: Some(true),
+                    sub_group: None,
+                    neurons_per_voxel: Some(1),
+                    postsynaptic_current: None,
+                    plasticity_constant: None,
+                    degeneration: None,
+                    psp_uniform_distribution: None,
+                    firing_threshold_increment: None,
+                    firing_threshold_limit: None,
+                    consecutive_fire_count: None,
+                    snooze_period: None,
+                    refractory_period: None,
+                    leak_coefficient: None,
+                    leak_variability: None,
+                    burst_engine_active: None,
+                    properties: None,
+                });
+            }
+        }
+    }
+
+    if to_create.is_empty() {
+        return;
+    }
+
+    info!(
+        "🦀 [API] Auto-creating {} missing cortical areas from device registrations",
+        to_create.len()
+    );
+
+    if let Err(e) = genome_service.create_cortical_areas(to_create).await {
+        warn!(
+            "⚠️ [API] Failed to auto-create cortical areas from device registrations: {}",
+            e
+        );
+    }
+}
 
 /// Register a new agent with FEAGI and receive connection details including transport configuration and ports.
 #[utoipa::path(
@@ -90,25 +299,41 @@ pub async fn register_agent(
             // If capabilities contained device_registrations, import them
             #[cfg(feature = "feagi-agent")]
             if let Some(device_registrations_value) = device_registrations_opt {
-                let mut connectors = state.agent_connectors.write();
-                let connector = connectors
-                    .entry(request.agent_id.clone())
-                    .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new())))
-                    .clone();
+                let device_registrations_for_autocreate = device_registrations_value.clone();
+                // IMPORTANT: do not hold a non-Send lock guard across an await.
+                let connector = {
+                    let mut connectors = state.agent_connectors.write();
+                    connectors
+                        .entry(request.agent_id.clone())
+                        .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new())))
+                        .clone()
+                };
 
-                let mut connector_guard = connector.lock().unwrap();
-                if let Err(e) = connector_guard
-                    .import_device_registrations_as_config_json(device_registrations_value)
-                {
-                    warn!(
-                        "⚠️ [API] Failed to import device registrations from capabilities for agent '{}': {}",
-                        request.agent_id, e
-                    );
-                } else {
-                    info!(
-                        "✅ [API] Imported device registrations from capabilities for agent '{}'",
-                        request.agent_id
-                    );
+                // IMPORTANT: do not hold a non-Send MutexGuard across an await.
+                let import_result = {
+                    let mut connector_guard = connector.lock().unwrap();
+                    connector_guard
+                        .import_device_registrations_as_config_json(device_registrations_value)
+                };
+
+                match import_result {
+                    Err(e) => {
+                        warn!(
+                            "⚠️ [API] Failed to import device registrations from capabilities for agent '{}': {}",
+                            request.agent_id, e
+                        );
+                    }
+                    Ok(()) => {
+                        info!(
+                            "✅ [API] Imported device registrations from capabilities for agent '{}'",
+                            request.agent_id
+                        );
+                        auto_create_cortical_areas_from_device_registrations(
+                            &state,
+                            &device_registrations_for_autocreate,
+                        )
+                        .await;
+                    }
                 }
             } else {
                 // Initialize empty ConnectorAgent even if no device_registrations
@@ -913,9 +1138,6 @@ pub async fn import_device_registrations(
             connector
         };
 
-        // Import device registrations using ConnectorAgent method
-        let mut connector_guard = connector.lock().unwrap();
-
         // Log what we're importing for debugging
         let input_count = request
             .device_registrations
@@ -941,57 +1163,67 @@ pub async fn import_device_registrations(
             agent_id, input_count, output_count, feedback_count
         );
 
-        match connector_guard
-            .import_device_registrations_as_config_json(request.device_registrations.clone())
-        {
-            Ok(()) => {
-                // Verify the import worked by exporting again
-                match connector_guard.export_device_registrations_as_config_json() {
-                    Ok(exported) => {
-                        let exported_input_count = exported
-                            .get("input_units_and_encoder_properties")
-                            .and_then(|v| v.as_object())
-                            .map(|m| m.len())
-                            .unwrap_or(0);
-                        let exported_output_count = exported
-                            .get("output_units_and_decoder_properties")
-                            .and_then(|v| v.as_object())
-                            .map(|m| m.len())
-                            .unwrap_or(0);
+        // IMPORTANT: do not hold a non-Send MutexGuard across an await.
+        let import_result: Result<(), String> = (|| {
+            let mut connector_guard = connector
+                .lock()
+                .map_err(|e| format!("ConnectorAgent lock poisoned: {e}"))?;
 
-                        info!(
-                            "✅ [API] Device registration import succeeded for agent '{}' (verified: {} input, {} output)",
-                            agent_id, exported_input_count, exported_output_count
-                        );
-                    }
-                    Err(e) => {
-                        warn!(
-                            "⚠️ [API] Import succeeded but verification export failed for agent '{}': {}",
-                            agent_id, e
-                        );
-                    }
+            connector_guard
+                .import_device_registrations_as_config_json(request.device_registrations.clone())
+                .map_err(|e| format!("import failed: {e}"))?;
+
+            // Verify the import worked by exporting again (no await here).
+            match connector_guard.export_device_registrations_as_config_json() {
+                Ok(exported) => {
+                    let exported_input_count = exported
+                        .get("input_units_and_encoder_properties")
+                        .and_then(|v| v.as_object())
+                        .map(|m| m.len())
+                        .unwrap_or(0);
+                    let exported_output_count = exported
+                        .get("output_units_and_decoder_properties")
+                        .and_then(|v| v.as_object())
+                        .map(|m| m.len())
+                        .unwrap_or(0);
+
+                    info!(
+                        "✅ [API] Device registration import succeeded for agent '{}' (verified: {} input, {} output)",
+                        agent_id, exported_input_count, exported_output_count
+                    );
                 }
+                Err(e) => {
+                    warn!(
+                        "⚠️ [API] Import succeeded but verification export failed for agent '{}': {}",
+                        agent_id, e
+                    );
+                }
+            }
 
-                Ok(Json(DeviceRegistrationImportResponse {
-                    success: true,
-                    message: format!(
-                        "Device registrations imported successfully for agent '{}'",
-                        agent_id
-                    ),
-                    agent_id,
-                }))
-            }
-            Err(e) => {
-                error!(
-                    "❌ [API] Failed to import device registrations for agent '{}': {}",
-                    agent_id, e
-                );
-                Err(ApiError::invalid_input(format!(
-                    "Failed to import device registrations: {}",
-                    e
-                )))
-            }
+            Ok(())
+        })();
+
+        if let Err(msg) = import_result {
+            error!(
+                "❌ [API] Failed to import device registrations for agent '{}': {}",
+                agent_id, msg
+            );
+            return Err(ApiError::invalid_input(format!(
+                "Failed to import device registrations: {msg}"
+            )));
         }
+
+        auto_create_cortical_areas_from_device_registrations(&state, &request.device_registrations)
+            .await;
+
+        Ok(Json(DeviceRegistrationImportResponse {
+            success: true,
+            message: format!(
+                "Device registrations imported successfully for agent '{}'",
+                agent_id
+            ),
+            agent_id,
+        }))
     }
 
     #[cfg(not(feature = "feagi-agent"))]

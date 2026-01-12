@@ -24,7 +24,7 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
-const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1;
+const WIDTH_PER_UNSIGNED_PERCENTAGE: u32 = 1;
 
 /// Decoder for all percentage types.
 #[derive(Debug)]
@@ -53,7 +53,14 @@ impl PercentageNeuronVoxelXYZPDecoder {
     ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
         let number_pairs_per_channel = number_percentages.as_u32();
-        let channel_width = WIDTH_GIVEN_POSITIVE_Z_ROW * number_pairs_per_channel;
+        // For signed percentages, X is split into positive/negative columns:
+        // even X = positive, odd X = negative (see decode loop).
+        let per_channel_width = if is_signed {
+            WIDTH_PER_UNSIGNED_PERCENTAGE * number_pairs_per_channel * 2
+        } else {
+            WIDTH_PER_UNSIGNED_PERCENTAGE * number_pairs_per_channel
+        };
+        let total_width = *number_channels * per_channel_width;
         let scratch_size = *number_channels as usize * number_pairs_per_channel as usize;
 
         let z_depth_scratch_space_negative = if is_signed {
@@ -64,7 +71,7 @@ impl PercentageNeuronVoxelXYZPDecoder {
 
         let decoder = PercentageNeuronVoxelXYZPDecoder {
             channel_dimensions: CorticalChannelDimensions::new(
-                channel_width,
+                total_width,
                 CHANNEL_Y_HEIGHT,
                 *z_resolution,
             )?,

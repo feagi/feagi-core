@@ -811,14 +811,16 @@ impl RegistrationHandler {
                         FeagiDataError::BadParameters(format!("Failed to parse cortical ID: {}", e))
                     })?;
 
-                // Get dimensions from motor unit topology if available
+                // Get per-device dimensions from motor unit topology, then scale X by device_count.
+                // total_x = device_count * per_device_x
                 let (dimensions, position) = {
                     let topology = motor_unit.get_unit_default_topology();
                     if let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(0u8)) {
                         let dims = unit_topology.channel_dimensions_default;
                         let pos = unit_topology.relative_position;
+                        let total_x = (dims[0] as usize).saturating_mul(motor.output_count);
                         (
-                            (dims[0] as usize, dims[1] as usize, dims[2] as usize),
+                            (total_x, dims[1] as usize, dims[2] as usize),
                             (pos[0], pos[1], pos[2]),
                         )
                     } else {
