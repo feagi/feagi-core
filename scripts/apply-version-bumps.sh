@@ -136,6 +136,135 @@ for crate_name in "${!CRATE_PATHS[@]}"; do
 done
 
 # ============================================================================
+# Synchronize workspace path dependency versions (prevents version mismatches)
+# ============================================================================
+#
+# Why this exists:
+# - In this workspace, many dependencies are declared as inline tables with BOTH `version = "..."`
+#   and `path = "../some-crate"`.
+# - During automated pre-release bumps, it is possible to end up with a transient mismatch where:
+#     - a dependent crate requires `feagi-structures = "0.0.1-beta.X"`
+#     - but the local path crate `feagi-structures` still has a different `[package].version`
+#   which causes Cargo/Clippy to fail with:
+#     "failed to select a version for the requirement ..."
+#
+# Deterministic rule:
+# - For any inline-table dependency that has a `path = "../..."` pointing to a workspace crate
+#   AND a `version = "..."`, we rewrite the version to match the *actual local crate version*
+#   after bumps are applied.
+#
+echo -e "${BLUE}Synchronizing workspace path dependency versions...${NC}"
+if [ "$DRY_RUN" = "true" ]; then
+    echo -e "  ${CYAN}[DRY RUN]${NC} Would synchronize path dependency versions across manifests"
+else
+    python3 - <<'PY'
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+
+def read_workspace_version(root: Path) -> str:
+    cargo = (root / "Cargo.toml").read_text(encoding="utf-8")
+    m = re.search(r"(?ms)^\[workspace\.package\].*?^version\s*=\s*\"([^\"]+)\"", cargo)
+    if not m:
+        raise SystemExit("Failed to parse [workspace.package] version from Cargo.toml")
+    return m.group(1)
+
+
+def read_crate_name_and_version(manifest: Path, workspace_version: str) -> tuple[str | None, str | None]:
+    text = manifest.read_text(encoding="utf-8")
+    name_m = re.search(r"(?m)^name\s*=\s*\"([^\"]+)\"", text)
+    name = name_m.group(1) if name_m else None
+
+    if re.search(r"(?m)^version\.workspace\s*=\s*true\s*$", text):
+        return name, workspace_version
+
+    ver_m = re.search(r"(?m)^version\s*=\s*\"([^\"]+)\"", text)
+    ver = ver_m.group(1) if ver_m else None
+    return name, ver
+
+
+def main() -> None:
+    root = Path.cwd()
+    workspace_version = read_workspace_version(root)
+
+    # Collect all workspace crate versions by crate name.
+    crate_versions: dict[str, str] = {}
+    manifests: list[Path] = [root / "Cargo.toml"]
+    manifests += sorted((root / "crates").glob("*/Cargo.toml"))
+    manifests += sorted((root / "crates" / "feagi-npu").glob("*/Cargo.toml"))
+
+    for mf in manifests:
+        if not mf.exists():
+            continue
+        name, ver = read_crate_name_and_version(mf, workspace_version)
+        if name and ver:
+            crate_versions[name] = ver
+
+    # Rewrite inline-table deps with path="../..." and version="...".
+    dep_re = re.compile(
+        r'^(?P<indent>\s*)(?P<dep>[A-Za-z0-9_-]+)\s*=\s*\{\s*(?P<body>[^}]*)\}\s*$'
+    )
+    version_re = re.compile(r'version\s*=\s*"(?P<ver>[^"]+)"')
+    path_re = re.compile(r'path\s*=\s*"(?P<path>\.\./[^"]+)"')
+
+    changed_files = 0
+    changed_deps = 0
+
+    for mf in manifests:
+        text = mf.read_text(encoding="utf-8").splitlines(True)
+        out: list[str] = []
+        file_changed = False
+
+        for line in text:
+            m = dep_re.match(line.rstrip("\n"))
+            if not m:
+                out.append(line)
+                continue
+
+            dep = m.group("dep")
+            body = m.group("body")
+            if dep not in crate_versions:
+                out.append(line)
+                continue
+
+            vm = version_re.search(body)
+            pm = path_re.search(body)
+            if not vm or not pm:
+                out.append(line)
+                continue
+
+            current_req = vm.group("ver")
+            actual = crate_versions[dep]
+
+            # Normalize cargo req strings we might have written (e.g. "=0.0.1-beta.2")
+            norm_req = current_req.lstrip("=").lstrip("^")
+            if norm_req == actual:
+                out.append(line)
+                continue
+
+            new_body = version_re.sub(f'version = "{actual}"', body, count=1)
+            new_line = f'{m.group("indent")}{dep} = {{ {new_body.strip()} }}\n'
+            out.append(new_line)
+            file_changed = True
+            changed_deps += 1
+
+        if file_changed:
+            mf.write_text("".join(out), encoding="utf-8")
+            changed_files += 1
+
+    print(f"Synchronized {changed_deps} dependency entries across {changed_files} file(s).")
+
+
+if __name__ == "__main__":
+    main()
+PY
+    echo -e "  ${GREEN}✓${NC} Synchronized workspace path dependency versions"
+fi
+echo ""
+
+# ============================================================================
 # Update workspace.package version if root crate changed
 # ============================================================================
 
