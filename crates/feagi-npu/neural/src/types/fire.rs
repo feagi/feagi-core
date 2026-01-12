@@ -49,20 +49,20 @@ impl FireCandidateList {
         if candidates.is_empty() {
             return;
         }
-        
+
         // Pre-allocate if needed (huge performance improvement for large batches)
         let estimated_unique = candidates.len() / 10; // Heuristic: ~10% unique neurons
         if estimated_unique > self.candidates.capacity() {
             self.candidates.reserve(estimated_unique);
         }
-        
+
         // Direct insertion is actually fastest - batch method helps mainly with pre-allocation
         // Pre-aggregation doesn't help much because we still need to merge into main HashMap
         for &(neuron_id, potential) in candidates {
             *self.candidates.entry(neuron_id.0).or_insert(0.0) += potential;
         }
     }
-    
+
     /// Reserve capacity for expected number of candidates (call before batch insertion)
     pub fn reserve(&mut self, capacity: usize) {
         self.candidates.reserve(capacity);

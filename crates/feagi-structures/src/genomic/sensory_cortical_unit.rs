@@ -1,14 +1,16 @@
+use crate::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
 use crate::genomic::cortical_area::descriptors::CorticalUnitIndex;
-use crate::genomic::cortical_area::descriptors::{CorticalSubUnitIndex};
 use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use crate::genomic::cortical_area::{CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag};
+use crate::genomic::cortical_area::{
+    CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
+};
 use crate::sensor_cortical_units;
 use paste;
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use serde_json::{Map, Value};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)] // TODO move me!
 pub struct UnitTopology {
@@ -164,7 +166,7 @@ macro_rules! define_sensory_cortical_units_enum {
                     )*
                 }
             }
-            
+
 
             /// Returns the allowed frame change handling modes from the template, if restricted.
             /// If None is returned, all frame change handling modes are allowed.

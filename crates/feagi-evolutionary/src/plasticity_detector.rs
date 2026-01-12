@@ -22,13 +22,13 @@ use tracing::debug;
 pub fn genome_has_plasticity(genome_json: &Value) -> bool {
     let has_memory = has_memory_areas(genome_json);
     let has_stdp = has_stdp_connections(genome_json);
-    
+
     debug!(
         target: "feagi-evolutionary",
         "Plasticity detection: memory_areas={}, stdp_connections={}",
         has_memory, has_stdp
     );
-    
+
     has_memory || has_stdp
 }
 
@@ -175,7 +175,7 @@ mod tests {
                 }
             }
         });
-        
+
         assert!(!genome_has_plasticity(&genome));
     }
 
@@ -188,7 +188,7 @@ mod tests {
                 "_____10c-Y21fX19fXxg=-cx-mem__t-i": 100
             }
         });
-        
+
         assert!(genome_has_plasticity(&genome));
         assert!(has_memory_areas(&genome));
         assert!(!has_stdp_connections(&genome));
@@ -209,7 +209,7 @@ mod tests {
                 }
             }
         });
-        
+
         assert!(genome_has_plasticity(&genome));
         assert!(!has_memory_areas(&genome));
         assert!(has_stdp_connections(&genome));
@@ -228,7 +228,7 @@ mod tests {
                 }
             }
         });
-        
+
         assert!(genome_has_plasticity(&genome));
         assert!(has_memory_areas(&genome));
         assert!(has_stdp_connections(&genome));
@@ -270,4 +270,3 @@ mod tests {
         assert!(extract_memory_properties(&properties).is_none());
     }
 }
-

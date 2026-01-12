@@ -23,25 +23,23 @@
 
 // Sensorimotor public types used by controllers
 pub use feagi_sensorimotor::caching::{MotorDeviceCache, SensorDeviceCache};
-pub use feagi_sensorimotor::data_types::{
-    encode_token_id_to_misc_data, ImageFrame,
-};
 pub use feagi_sensorimotor::data_types::descriptors::{
     ColorChannelLayout, ColorSpace, ImageFrameProperties, ImageXYResolution, MiscDataDimensions,
     SegmentedImageFrameProperties,
 };
 pub use feagi_sensorimotor::data_types::GazeProperties;
+pub use feagi_sensorimotor::data_types::{encode_token_id_to_misc_data, ImageFrame};
 pub use feagi_sensorimotor::feedbacks::{FeedBackRegistration, FeedbackRegistrationTargets};
 pub use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
 
 // Core FEAGI structures (IDs, flags, and voxel containers)
-pub use feagi_structures::genomic::cortical_area::CorticalID;
-pub use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 pub use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalSubUnitIndex, CorticalUnitIndex, NeuronDepth,
+    CorticalChannelCount, CorticalChannelIndex, CorticalSubUnitIndex, CorticalUnitIndex,
+    NeuronDepth,
 };
 pub use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
 };
+pub use feagi_structures::genomic::cortical_area::CorticalID;
+pub use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 pub use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-

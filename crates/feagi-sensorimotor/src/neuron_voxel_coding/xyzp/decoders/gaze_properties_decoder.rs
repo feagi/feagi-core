@@ -1,5 +1,6 @@
 //! Unified decoder for GazeProperties (linear or exponential).
 
+use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::GazeProperties;
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
@@ -8,7 +9,6 @@ use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
 };
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::WrappedIOType;
-use crate::configuration::jsonable::JSONDecoderProperties;
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelDimensions, NeuronDepth,
 };
@@ -61,11 +61,13 @@ impl GazePropertiesNeuronVoxelXYZPDecoder {
             interpolation,
             z_depth_eccentricity_scratch_space: vec![
                 Vec::new();
-                *number_channels as usize * ECCENTRICITY_CHANNEL_WIDTH as usize
+                *number_channels as usize
+                    * ECCENTRICITY_CHANNEL_WIDTH as usize
             ],
             z_depth_modularity_scratch_space: vec![
                 Vec::new();
-                *number_channels as usize * MODULARITY_CHANNEL_WIDTH as usize
+                *number_channels as usize
+                    * MODULARITY_CHANNEL_WIDTH as usize
             ],
         };
         Ok(Box::new(decoder))
@@ -244,4 +246,3 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
         Ok(())
     }
 }
-

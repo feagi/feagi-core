@@ -40,4 +40,3 @@ pub trait MotorDecoder: Send + Sync {
     /// Get cortical IDs this decoder consumes
     fn cortical_ids(&self) -> &[CorticalID];
 }
-

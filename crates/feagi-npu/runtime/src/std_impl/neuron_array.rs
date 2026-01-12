@@ -81,7 +81,7 @@ pub struct NeuronArray<T: NeuralValue> {
     /// Cache is invalidated when neurons are added/removed for an area
     /// Uses Mutex for thread-safe interior mutability
     coord_map_cache: Mutex<CoordMapCache>,
-    
+
     /// Cached neuron index per cortical area
     /// Maps: cortical_area -> Vec<neuron_index>
     /// This cache eliminates O(n) scans on every get_neurons_in_cortical_area call
@@ -152,14 +152,14 @@ impl<T: NeuralValue> NeuronArray<T> {
             threshold,
             T::max_value(), // threshold_limit (MAX = no limit, SIMD-friendly encoding)
             leak,
-            T::zero(),      // resting potential
-            0,              // neuron type (excitatory)
+            T::zero(), // resting potential
+            0,         // neuron type (excitatory)
             refractory_period,
             excitability,
-            u16::MAX,       // consecutive fire limit (MAX = unlimited, SIMD-friendly encoding)
-            0,              // snooze period
-            true,           // mp_charge_accumulation
-            0,              // cortical area
+            u16::MAX, // consecutive fire limit (MAX = unlimited, SIMD-friendly encoding)
+            0,        // snooze period
+            true,     // mp_charge_accumulation
+            0,        // cortical area
             0,
             0,
             0, // x, y, z coords
@@ -264,7 +264,7 @@ impl<T: NeuralValue> NeuronArray<T> {
     }
 
     /// Pre-populate the cortical area neuron index cache for all areas
-    /// 
+    ///
     /// This eliminates the expensive O(n) scan on first access to get_neurons_in_cortical_area.
     /// Should be called after neurons are loaded (e.g., after genome load).
     pub fn prepopulate_cortical_area_cache(&self) {
@@ -272,22 +272,22 @@ impl<T: NeuralValue> NeuronArray<T> {
             Ok(idx) => idx,
             Err(_) => return, // Lock poisoned, skip
         };
-        
+
         // If cache is already populated, skip
         if !index.is_empty() {
             return;
         }
-        
+
         // Build cache for all cortical areas in a single pass
         let mut area_to_neurons: ahash::AHashMap<u32, Vec<usize>> = ahash::AHashMap::new();
-        
+
         for idx in 0..self.count {
             if self.valid_mask[idx] {
                 let area = self.cortical_areas[idx];
                 area_to_neurons.entry(area).or_default().push(idx);
             }
         }
-        
+
         // Update cache
         *index = area_to_neurons;
     }
@@ -501,13 +501,13 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         }
 
         self.count += 1;
-        
+
         // Note: Cache invalidation is handled in add_neurons_batch for efficiency
         // For single neuron adds, we invalidate here (less common path)
         if let Ok(mut cache) = self.coord_map_cache.lock() {
             cache.remove(&cortical_area);
         }
-        
+
         Ok(idx)
     }
 
@@ -552,7 +552,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
 
         // Collect all affected cortical areas for cache invalidation
         let mut affected_areas = std::collections::HashSet::new();
-        
+
         for i in 0..n {
             affected_areas.insert(cortical_areas[i]);
             self.add_neuron(
@@ -614,7 +614,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
                 }
             }
         }
-        
+
         // Cache miss: build index for this cortical area
         // PERFORMANCE: This is O(n) where n = total neuron count (8M neurons)
         // For large genomes, this can take 4-5 seconds per area on first access.
@@ -622,12 +622,12 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         let neurons: Vec<usize> = (0..self.count)
             .filter(|&idx| self.valid_mask[idx] && self.cortical_areas[idx] == cortical_area)
             .collect();
-        
+
         // Store in cache for future lookups (fast path)
         if let Ok(mut index) = self.cortical_area_neuron_index.lock() {
             index.insert(cortical_area, neurons.clone());
         }
-        
+
         neurons
     }
 
@@ -714,7 +714,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         // CRITICAL PERFORMANCE: Use cached coordinate map if available
         // This eliminates O(n) scan through all neurons on every lookup
         let mut cache = self.coord_map_cache.lock().unwrap();
-        
+
         // Check if cache exists for this cortical area
         if !cache.contains_key(&cortical_area) {
             // Cache miss - build the map and store it
@@ -733,15 +733,15 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
                 let z = self.coordinates[coord_base + 2];
                 coord_map.insert((x, y, z), idx);
             }
-            
+
             // Store in cache for future lookups
             cache.insert(cortical_area, coord_map);
         }
-        
+
         // Get reference to cached map and perform lookups while holding the lock
         // This is safe because we're already in a read lock context (single-threaded)
         let coord_map = cache.get(&cortical_area).unwrap();
-        
+
         // Fast O(1) lookups using cached map
         x_coords
             .iter()

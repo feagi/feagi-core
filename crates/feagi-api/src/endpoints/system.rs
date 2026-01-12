@@ -162,7 +162,7 @@ pub async fn get_health_check(
 
     // Fields requiring future service implementations
     let fitness = None; // TODO: Get from evolution service
-    
+
     // Get memory area stats from plasticity service cache (event-driven updates).
     //
     // IMPORTANT: BV expects both:
@@ -181,10 +181,22 @@ pub async fn get_health_check(
                 .into_iter()
                 .map(|(name, stats)| {
                     let mut inner_map = HashMap::new();
-                    inner_map.insert("neuron_count".to_string(), serde_json::json!(stats.neuron_count));
-                    inner_map.insert("created_total".to_string(), serde_json::json!(stats.created_total));
-                    inner_map.insert("deleted_total".to_string(), serde_json::json!(stats.deleted_total));
-                    inner_map.insert("last_updated".to_string(), serde_json::json!(stats.last_updated));
+                    inner_map.insert(
+                        "neuron_count".to_string(),
+                        serde_json::json!(stats.neuron_count),
+                    );
+                    inner_map.insert(
+                        "created_total".to_string(),
+                        serde_json::json!(stats.created_total),
+                    );
+                    inner_map.insert(
+                        "deleted_total".to_string(),
+                        serde_json::json!(stats.deleted_total),
+                    );
+                    inner_map.insert(
+                        "last_updated".to_string(),
+                        serde_json::json!(stats.last_updated),
+                    );
                     (name, inner_map)
                 })
                 .collect::<HashMap<String, HashMap<String, serde_json::Value>>>();
@@ -194,7 +206,7 @@ pub async fn get_health_check(
 
     // Prefer the plasticity cache-derived total to avoid discrepancies.
     let memory_neuron_count = memory_neuron_count_from_cache.or(memory_neuron_count);
-    
+
     let amalgamation_pending = None; // TODO: Get from evolution/genome merging service
 
     // Get root region ID from ConnectomeManager (only available when services feature is enabled)

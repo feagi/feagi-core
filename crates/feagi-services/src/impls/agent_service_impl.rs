@@ -293,12 +293,16 @@ impl AgentService for AgentServiceImpl {
             let registry = self.agent_registry.read();
             registry.get(&request.agent_id).is_some()
         };
-        
+
         if !agent_exists {
             // Log diagnostic information when agent not found
             let all_agents: Vec<String> = {
                 let registry = self.agent_registry.read();
-                registry.get_all().iter().map(|a| a.agent_id.clone()).collect()
+                registry
+                    .get_all()
+                    .iter()
+                    .map(|a| a.agent_id.clone())
+                    .collect()
             };
             warn!(
                 "⚠️ [HEARTBEAT] Agent '{}' not found in registry. Registered agents ({}): {:?}",
@@ -312,13 +316,16 @@ impl AgentService for AgentServiceImpl {
                 all_agents.len()
             )));
         }
-        
+
         // Agent exists - update heartbeat
         self.agent_registry
             .write()
             .heartbeat(&request.agent_id)
             .map_err(|e| {
-                error!("❌ [HEARTBEAT] Failed to update heartbeat for '{}': {}", request.agent_id, e);
+                error!(
+                    "❌ [HEARTBEAT] Failed to update heartbeat for '{}': {}",
+                    request.agent_id, e
+                );
                 AgentError::NotFound(e)
             })?;
         Ok(())

@@ -34,7 +34,7 @@ use feagi_structures::genomic::MotorCorticalUnit;
 pub struct PerceptionDecoderConfig {
     // Identity
     pub agent_id: String,
-    pub cortical_unit_id: u8,  // Cortical unit index (which unit of this type)
+    pub cortical_unit_id: u8, // Cortical unit index (which unit of this type)
 
     // FEAGI network configuration
     pub feagi_host: String,
@@ -124,4 +124,3 @@ impl PerceptionDecoderConfig {
         Ok(())
     }
 }
-

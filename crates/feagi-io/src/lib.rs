@@ -59,7 +59,11 @@ enum StreamState {
 /// Minimal PNS clone for callbacks (only the Arc fields needed for dynamic gating)
 #[derive(Clone)]
 struct IOSystemForCallbacks {
-    npu_ref: Arc<Mutex<Option<Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
+    npu_ref: Arc<
+        Mutex<
+            Option<Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>,
+        >,
+    >,
     agent_registry: Arc<RwLock<AgentRegistry>>,
     #[cfg(feature = "zmq-transport")]
     zmq_streams: Arc<Mutex<Option<ZmqStreams>>>,
@@ -487,12 +491,10 @@ pub mod connectome;
 pub use core::{
     AgentCapabilities, AgentDisconnectedEvent, AgentInfo, AgentRegisteredEvent, AgentRegistry,
     AgentTransport, AgentType, HeartbeatTracker, IOConfig, IOError, MotorCapability,
-    MotorUnit,
-    MotorUnitSpec,
-    MotorCommandEvent, RegistrationHandler, RegistrationRequest, RegistrationResponse, Result,
-    SensoryUnit,
-    SensoryCapability, SensoryDataEvent, SharedFBC, StreamType, TransportConfig, TransportMode,
-    VisionCapability, VisualizationCapability, VisualizationReadyEvent, WebSocketConfig,
+    MotorCommandEvent, MotorUnit, MotorUnitSpec, RegistrationHandler, RegistrationRequest,
+    RegistrationResponse, Result, SensoryCapability, SensoryDataEvent, SensoryUnit, SharedFBC,
+    StreamType, TransportConfig, TransportMode, VisionCapability, VisualizationCapability,
+    VisualizationReadyEvent, WebSocketConfig,
 };
 
 // Re-export transport-specific types
@@ -574,7 +576,11 @@ pub struct IOSystem {
 
     // === Dynamic Stream Gating ===
     /// NPU reference for genome state checking (dynamic gating)
-    npu_ref: Arc<Mutex<Option<Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
+    npu_ref: Arc<
+        Mutex<
+            Option<Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>,
+        >,
+    >,
     /// Sensory stream state
     sensory_stream_state: Arc<Mutex<StreamState>>,
     /// Motor stream state

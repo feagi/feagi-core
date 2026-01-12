@@ -1,20 +1,20 @@
-use std::fmt::{Display, Formatter};
-use std::sync::{Arc, Mutex};
-use serde::{Deserialize, Serialize};
-use feagi_structures::{FeagiDataError, FeagiSignalIndex};
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use crate::caching::{MotorDeviceCache, SensorDeviceCache};
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::{GazeProperties, ImageFilteringSettings};
 use crate::feedbacks::feedback_registrar::FeedbackRegistrar;
 use crate::feedbacks::feedback_registration_targets::FeedbackRegistrationTargets;
 use crate::wrapped_io_data::WrappedIOData;
+use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_structures::{FeagiDataError, FeagiSignalIndex};
+use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FeedBackRegistration {
     SegmentedVisionWithGaze {},
     SegmentedVisionWithImageFiltering {},
-    VisionWithImageFiltering {}
+    VisionWithImageFiltering {},
 }
 
 impl Display for FeedBackRegistration {
@@ -34,25 +34,24 @@ impl Display for FeedBackRegistration {
 }
 
 impl FeedBackRegistration {
-
-    pub(crate) fn try_registering_feedback_and_save(&self,
-                                           feedback_registrar: &mut FeedbackRegistrar,
-                                           sensor_cache: Arc<Mutex<SensorDeviceCache>>,
-                                           motor_cache: Arc<Mutex<MotorDeviceCache>>,
-                                           target: FeedbackRegistrationTargets)
-        -> Result<(), FeagiDataError> {
-
+    pub(crate) fn try_registering_feedback_and_save(
+        &self,
+        feedback_registrar: &mut FeedbackRegistrar,
+        sensor_cache: Arc<Mutex<SensorDeviceCache>>,
+        motor_cache: Arc<Mutex<MotorDeviceCache>>,
+        target: FeedbackRegistrationTargets,
+    ) -> Result<(), FeagiDataError> {
         self.try_registering_feedbacks(sensor_cache, motor_cache, target.clone())?;
         feedback_registrar.push_verified_feedback(target, self.clone());
         Ok(())
     }
 
-    pub(crate) fn try_registering_feedbacks(&self,
-                                           sensor_cache: Arc<Mutex<SensorDeviceCache>>,
-                                           motor_cache: Arc<Mutex<MotorDeviceCache>>,
-                                           target: FeedbackRegistrationTargets)
-                                           -> Result<(), FeagiDataError> {
-
+    pub(crate) fn try_registering_feedbacks(
+        &self,
+        sensor_cache: Arc<Mutex<SensorDeviceCache>>,
+        motor_cache: Arc<Mutex<MotorDeviceCache>>,
+        target: FeedbackRegistrationTargets,
+    ) -> Result<(), FeagiDataError> {
         let (sensory_cortical_unit, motor_cortical_unit) = self.get_sensor_motor_cortical_units();
 
         // Verify required units/channels exist.
@@ -77,41 +76,54 @@ impl FeedBackRegistration {
         }
 
         match self {
-            FeedBackRegistration::SegmentedVisionWithGaze { } => {
-                feedback_segmented_vision_with_gaze(&target, sensor_cache.clone(), motor_cache.clone())?;
+            FeedBackRegistration::SegmentedVisionWithGaze {} => {
+                feedback_segmented_vision_with_gaze(
+                    &target,
+                    sensor_cache.clone(),
+                    motor_cache.clone(),
+                )?;
             }
-            FeedBackRegistration::SegmentedVisionWithImageFiltering { } => {
-                feedback_segmented_vision_with_image_filtering(&target, sensor_cache.clone(), motor_cache.clone())?;
+            FeedBackRegistration::SegmentedVisionWithImageFiltering {} => {
+                feedback_segmented_vision_with_image_filtering(
+                    &target,
+                    sensor_cache.clone(),
+                    motor_cache.clone(),
+                )?;
             }
-            FeedBackRegistration::VisionWithImageFiltering { } => {
-                feedback_simple_vision_with_image_filtering(&target, sensor_cache.clone(), motor_cache.clone())?;
+            FeedBackRegistration::VisionWithImageFiltering {} => {
+                feedback_simple_vision_with_image_filtering(
+                    &target,
+                    sensor_cache.clone(),
+                    motor_cache.clone(),
+                )?;
             }
         }
         Ok(())
     }
 
-
-
-
-
     fn get_sensor_motor_cortical_units(&self) -> (SensoryCorticalUnit, MotorCorticalUnit) {
         match &self {
-            FeedBackRegistration::SegmentedVisionWithGaze {} => {
-                (SensoryCorticalUnit::SegmentedVision, MotorCorticalUnit::Gaze)
-            }
-            FeedBackRegistration::SegmentedVisionWithImageFiltering {} => {
-                (SensoryCorticalUnit::SegmentedVision, MotorCorticalUnit::DynamicImageProcessing)
-            }
-            FeedBackRegistration::VisionWithImageFiltering {} => {
-                (SensoryCorticalUnit::Vision, MotorCorticalUnit::DynamicImageProcessing)
-            }
+            FeedBackRegistration::SegmentedVisionWithGaze {} => (
+                SensoryCorticalUnit::SegmentedVision,
+                MotorCorticalUnit::Gaze,
+            ),
+            FeedBackRegistration::SegmentedVisionWithImageFiltering {} => (
+                SensoryCorticalUnit::SegmentedVision,
+                MotorCorticalUnit::DynamicImageProcessing,
+            ),
+            FeedBackRegistration::VisionWithImageFiltering {} => (
+                SensoryCorticalUnit::Vision,
+                MotorCorticalUnit::DynamicImageProcessing,
+            ),
         }
     }
 }
 
-
-fn feedback_segmented_vision_with_gaze(target: &FeedbackRegistrationTargets, sensors: Arc<Mutex<SensorDeviceCache>>, motors: Arc<Mutex<MotorDeviceCache>>) -> Result<FeagiSignalIndex, FeagiDataError> {
-
+fn feedback_segmented_vision_with_gaze(
+    target: &FeedbackRegistrationTargets,
+    sensors: Arc<Mutex<SensorDeviceCache>>,
+    motors: Arc<Mutex<MotorDeviceCache>>,
+) -> Result<FeagiSignalIndex, FeagiDataError> {
     let sensor_unit = target.get_sensor_unit_index();
     let sensor_channel = target.get_sensor_channel_index();
 
@@ -120,30 +132,49 @@ fn feedback_segmented_vision_with_gaze(target: &FeedbackRegistrationTargets, sen
     let closure = move |wrapped_data: &WrappedIOData| {
         let gaze_properties: GazeProperties = wrapped_data.try_into().unwrap();
 
-
         let mut sensors = sensor_ref.lock().unwrap();
-        let stage_properties = sensors.segmented_vision_get_single_stage_properties(sensor_unit, sensor_channel, 0.into()).unwrap();
+        let stage_properties = sensors
+            .segmented_vision_get_single_stage_properties(sensor_unit, sensor_channel, 0.into())
+            .unwrap();
         let new_properties: PipelineStageProperties = match stage_properties {
-            PipelineStageProperties::ImageFrameSegmentator { input_image_properties, output_image_properties, segmentation_gaze: _ } => {
-                PipelineStageProperties::ImageFrameSegmentator { input_image_properties, output_image_properties, segmentation_gaze: gaze_properties }
-            }
+            PipelineStageProperties::ImageFrameSegmentator {
+                input_image_properties,
+                output_image_properties,
+                segmentation_gaze: _,
+            } => PipelineStageProperties::ImageFrameSegmentator {
+                input_image_properties,
+                output_image_properties,
+                segmentation_gaze: gaze_properties,
+            },
             _ => {
                 panic!("Invalid pipeline stage properties for segmented gaze vision feedback!")
             }
         };
 
-        _ = sensors.segmented_vision_replace_single_stage(sensor_unit, sensor_channel, 0.into(), new_properties);
+        _ = sensors.segmented_vision_replace_single_stage(
+            sensor_unit,
+            sensor_channel,
+            0.into(),
+            new_properties,
+        );
     };
 
     let motor_ref = motors.clone();
     let mut motors = motor_ref.lock().unwrap();
 
-    let index =  motors.gaze_try_register_motor_callback(target.get_motor_unit_index(), target.get_motor_channel_index(), closure)?;
+    let index = motors.gaze_try_register_motor_callback(
+        target.get_motor_unit_index(),
+        target.get_motor_channel_index(),
+        closure,
+    )?;
     Ok(index)
 }
 
-fn feedback_segmented_vision_with_image_filtering(target: &FeedbackRegistrationTargets, sensors: Arc<Mutex<SensorDeviceCache>>, motors: Arc<Mutex<MotorDeviceCache>>) -> Result<FeagiSignalIndex, FeagiDataError> {
-
+fn feedback_segmented_vision_with_image_filtering(
+    target: &FeedbackRegistrationTargets,
+    sensors: Arc<Mutex<SensorDeviceCache>>,
+    motors: Arc<Mutex<MotorDeviceCache>>,
+) -> Result<FeagiSignalIndex, FeagiDataError> {
     let sensor_unit = target.get_sensor_unit_index();
     let sensor_channel = target.get_sensor_channel_index();
 
@@ -152,13 +183,24 @@ fn feedback_segmented_vision_with_image_filtering(target: &FeedbackRegistrationT
     let closure = move |wrapped_data: &WrappedIOData| {
         let image_filtering_settings: ImageFilteringSettings = wrapped_data.try_into().unwrap();
 
-
         let mut sensors = sensor_ref.lock().unwrap();
-        let stage_properties = sensors.segmented_vision_get_single_stage_properties(sensor_unit, sensor_channel, 0.into()).unwrap();
+        let stage_properties = sensors
+            .segmented_vision_get_single_stage_properties(sensor_unit, sensor_channel, 0.into())
+            .unwrap();
         let new_properties: PipelineStageProperties = match stage_properties {
-            PipelineStageProperties::ImageQuickDiff { image_properties, .. } => {
-                let pixel_range = image_filtering_settings.per_pixel_diff_threshold.a.get_as_u8()..=image_filtering_settings.per_pixel_diff_threshold.b.get_as_u8();
-                let image_range = image_filtering_settings.image_diff_threshold.a ..= image_filtering_settings.image_diff_threshold.b;
+            PipelineStageProperties::ImageQuickDiff {
+                image_properties, ..
+            } => {
+                let pixel_range = image_filtering_settings
+                    .per_pixel_diff_threshold
+                    .a
+                    .get_as_u8()
+                    ..=image_filtering_settings
+                        .per_pixel_diff_threshold
+                        .b
+                        .get_as_u8();
+                let image_range = image_filtering_settings.image_diff_threshold.a
+                    ..=image_filtering_settings.image_diff_threshold.b;
 
                 PipelineStageProperties::ImageQuickDiff {
                     per_pixel_allowed_range: pixel_range,
@@ -171,18 +213,30 @@ fn feedback_segmented_vision_with_image_filtering(target: &FeedbackRegistrationT
             }
         };
 
-        _ = sensors.segmented_vision_replace_single_stage(sensor_unit, sensor_channel, 0.into(), new_properties);
+        _ = sensors.segmented_vision_replace_single_stage(
+            sensor_unit,
+            sensor_channel,
+            0.into(),
+            new_properties,
+        );
     };
 
     let motor_ref = motors.clone();
     let mut motors = motor_ref.lock().unwrap();
 
-    let index =  motors.dynamic_image_processing_try_register_motor_callback(target.get_motor_unit_index(), target.get_motor_channel_index(), closure)?;
+    let index = motors.dynamic_image_processing_try_register_motor_callback(
+        target.get_motor_unit_index(),
+        target.get_motor_channel_index(),
+        closure,
+    )?;
     Ok(index)
 }
 
-fn feedback_simple_vision_with_image_filtering(target: &FeedbackRegistrationTargets, sensors: Arc<Mutex<SensorDeviceCache>>, motors: Arc<Mutex<MotorDeviceCache>>) -> Result<FeagiSignalIndex, FeagiDataError> {
-
+fn feedback_simple_vision_with_image_filtering(
+    target: &FeedbackRegistrationTargets,
+    sensors: Arc<Mutex<SensorDeviceCache>>,
+    motors: Arc<Mutex<MotorDeviceCache>>,
+) -> Result<FeagiSignalIndex, FeagiDataError> {
     let sensor_unit = target.get_sensor_unit_index();
     let sensor_channel = target.get_sensor_channel_index();
 
@@ -191,13 +245,24 @@ fn feedback_simple_vision_with_image_filtering(target: &FeedbackRegistrationTarg
     let closure = move |wrapped_data: &WrappedIOData| {
         let image_filtering_settings: ImageFilteringSettings = wrapped_data.try_into().unwrap();
 
-
         let mut sensors = sensor_ref.lock().unwrap();
-        let stage_properties = sensors.vision_get_single_stage_properties(sensor_unit, sensor_channel, 0.into()).unwrap();
+        let stage_properties = sensors
+            .vision_get_single_stage_properties(sensor_unit, sensor_channel, 0.into())
+            .unwrap();
         let new_properties: PipelineStageProperties = match stage_properties {
-            PipelineStageProperties::ImageQuickDiff { image_properties, .. } => {
-                let pixel_range = image_filtering_settings.per_pixel_diff_threshold.a.get_as_u8()..=image_filtering_settings.per_pixel_diff_threshold.b.get_as_u8();
-                let image_range = image_filtering_settings.image_diff_threshold.a ..= image_filtering_settings.image_diff_threshold.b;
+            PipelineStageProperties::ImageQuickDiff {
+                image_properties, ..
+            } => {
+                let pixel_range = image_filtering_settings
+                    .per_pixel_diff_threshold
+                    .a
+                    .get_as_u8()
+                    ..=image_filtering_settings
+                        .per_pixel_diff_threshold
+                        .b
+                        .get_as_u8();
+                let image_range = image_filtering_settings.image_diff_threshold.a
+                    ..=image_filtering_settings.image_diff_threshold.b;
 
                 PipelineStageProperties::ImageQuickDiff {
                     per_pixel_allowed_range: pixel_range,
@@ -210,12 +275,21 @@ fn feedback_simple_vision_with_image_filtering(target: &FeedbackRegistrationTarg
             }
         };
 
-        _ = sensors.vision_replace_single_stage(sensor_unit, sensor_channel, 0.into(), new_properties);
+        _ = sensors.vision_replace_single_stage(
+            sensor_unit,
+            sensor_channel,
+            0.into(),
+            new_properties,
+        );
     };
 
     let motor_ref = motors.clone();
     let mut motors = motor_ref.lock().unwrap();
 
-    let index =  motors.dynamic_image_processing_try_register_motor_callback(target.get_motor_unit_index(), target.get_motor_channel_index(), closure)?;
+    let index = motors.dynamic_image_processing_try_register_motor_callback(
+        target.get_motor_unit_index(),
+        target.get_motor_channel_index(),
+        closure,
+    )?;
     Ok(index)
 }

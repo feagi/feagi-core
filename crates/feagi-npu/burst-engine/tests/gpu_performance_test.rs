@@ -48,9 +48,7 @@ fn create_test_genome(
                 synapse_array.target_neurons.push(target as u32);
                 synapse_array.weights.push(128); // Mid-range weight
                 synapse_array.postsynaptic_potentials.push(200);
-                synapse_array
-                    .types
-                    .push(if i % 4 == 0 { 1 } else { 0 }); // 75% excitatory
+                synapse_array.types.push(if i % 4 == 0 { 1 } else { 0 }); // 75% excitatory
                 synapse_array.valid_mask.push(true);
 
                 synapse_array
@@ -91,10 +89,7 @@ fn test_gpu_full_pipeline_speedup() {
         "   Neurons: {}, Synapses/neuron: {}, Iterations: {}",
         neuron_count, synapses_per_neuron, burst_iterations
     );
-    println!(
-        "   Total synapses: {}\n",
-        synapse_count
-    );
+    println!("   Total synapses: {}\n", synapse_count);
 
     // Create test genome
     #[allow(unused_variables)]
@@ -114,8 +109,8 @@ fn test_gpu_full_pipeline_speedup() {
     #[cfg(feature = "gpu")]
     {
         println!("🎮 Testing GPU backend...");
-        let mut gpu_backend = backend::WGPUBackend::new(neuron_count * 2, synapse_count)
-            .expect("GPU init failed");
+        let mut gpu_backend =
+            backend::WGPUBackend::new(neuron_count * 2, synapse_count).expect("GPU init failed");
         gpu_backend
             .initialize_persistent_data(&neuron_array, &synapse_array)
             .expect("GPU data upload failed");
@@ -174,5 +169,4 @@ fn test_gpu_full_pipeline_speedup() {
             println!("   Try larger genomes (100K+ neurons) for better speedup\n");
         }
     }
-
 }

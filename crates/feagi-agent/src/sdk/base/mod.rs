@@ -8,4 +8,3 @@ pub mod topology;
 
 pub use controller::Controller;
 pub use topology::{CorticalTopology, TopologyCache};
-

@@ -17,7 +17,7 @@ pub fn calculate_area_dimensions(
 }
 
 /// Calculate dimensions without scanning all neurons
-/// 
+///
 /// CRITICAL: This MUST NOT call get_neurons_in_cortical_area.
 /// Dimensions should be stored in ConnectomeManager when areas are created.
 /// This is a temporary fallback that will error if dimensions aren't available.
@@ -33,4 +33,3 @@ pub fn calculate_area_dimensions_without_scanning(
         format!("Area dimensions not available for area {}. Dimensions must be stored in ConnectomeManager when areas are created.", area_id)
     ))
 }
-

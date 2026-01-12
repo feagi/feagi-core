@@ -22,18 +22,20 @@ fn sdk_types_surface_compiles() {
 
     // Ensure common descriptor types exist.
     let res = ImageXYResolution::new(128, 128).unwrap();
-    let _props = ImageFrameProperties::new(res, ColorSpace::Gamma, ColorChannelLayout::RGB).unwrap();
+    let _props =
+        ImageFrameProperties::new(res, ColorSpace::Gamma, ColorChannelLayout::RGB).unwrap();
 }
 
 #[test]
 fn topology_parser_accepts_modern_schema() {
     // Example cortical id (iten group 0, absolute misc) just to generate a stable key.
-    let id = IOCorticalAreaConfigurationFlag::Misc(FrameChangeHandling::Absolute).as_io_cortical_id(
-        true,
-        [b't', b'e', b'n'],
-        CorticalUnitIndex::from(0u8),
-        CorticalSubUnitIndex::from(0u8),
-    );
+    let id = IOCorticalAreaConfigurationFlag::Misc(FrameChangeHandling::Absolute)
+        .as_io_cortical_id(
+            true,
+            [b't', b'e', b'n'],
+            CorticalUnitIndex::from(0u8),
+            CorticalSubUnitIndex::from(0u8),
+        );
     let key = id.as_base_64();
 
     let payload = serde_json::json!({
@@ -52,12 +54,13 @@ fn topology_parser_accepts_modern_schema() {
 
 #[test]
 fn topology_parser_accepts_legacy_schema() {
-    let id = IOCorticalAreaConfigurationFlag::Misc(FrameChangeHandling::Absolute).as_io_cortical_id(
-        true,
-        [b't', b'e', b'n'],
-        CorticalUnitIndex::from(0u8),
-        CorticalSubUnitIndex::from(0u8),
-    );
+    let id = IOCorticalAreaConfigurationFlag::Misc(FrameChangeHandling::Absolute)
+        .as_io_cortical_id(
+            true,
+            [b't', b'e', b'n'],
+            CorticalUnitIndex::from(0u8),
+            CorticalSubUnitIndex::from(0u8),
+        );
     let key = id.as_base_64();
 
     let payload = serde_json::json!({
@@ -73,4 +76,3 @@ fn topology_parser_accepts_legacy_schema() {
     assert_eq!(topo.depth, 16);
     assert_eq!(topo.channels, 1);
 }
-

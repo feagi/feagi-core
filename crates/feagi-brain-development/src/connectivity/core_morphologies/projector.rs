@@ -151,4 +151,3 @@ pub fn apply_projector_morphology_with_dimensions(
 
     Ok(synapse_count)
 }
-

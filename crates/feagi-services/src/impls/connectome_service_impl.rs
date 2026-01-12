@@ -262,13 +262,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 serde_json::json!(burst_engine_active),
             );
         }
-        
+
         // Extract parent_region_id before moving properties
-        let parent_region_id = params.properties.as_ref()
+        let parent_region_id = params
+            .properties
+            .as_ref()
             .and_then(|props| props.get("parent_region_id"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-        
+
         if let Some(properties) = params.properties {
             area.properties = properties;
         }
@@ -288,13 +290,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
             let mut manager = self.connectome.write();
             if let Some(region) = manager.get_brain_region_mut(&region_id) {
                 region.add_area(cortical_id_typed);
-                info!(target: "feagi-services", 
-                    "Added cortical area {} to parent region {}", 
+                info!(target: "feagi-services",
+                    "Added cortical area {} to parent region {}",
                     params.cortical_id, region_id
                 );
             } else {
-                warn!(target: "feagi-services", 
-                    "Parent region {} not found for cortical area {}", 
+                warn!(target: "feagi-services",
+                    "Parent region {} not found for cortical area {}",
                     region_id, params.cortical_id
                 );
             }
@@ -394,7 +396,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
             area_type: cortical_group
                 .clone()
                 .unwrap_or_else(|| "CUSTOM".to_string()),
-            cortical_group: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
+            cortical_group: cortical_group
+                .clone()
+                .unwrap_or_else(|| "CUSTOM".to_string()),
             // Determine cortical_type based on properties
             cortical_type: {
                 if memory_props.is_some() {
@@ -472,7 +476,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                             None
                         }
                     });
-                
+
                 // If not in properties, compute from dimensions and dev_count for IPU/OPU areas
                 if from_properties.is_none() {
                     if let Some(dev_count) = area
@@ -498,15 +502,20 @@ impl ConnectomeService for ConnectomeServiceImpl {
             visualization_voxel_granularity: {
                 // Default is 1x1x1 if not in properties (user-driven, not stored)
                 // Handle both integer and float JSON values
-                area
-                    .properties
+                area.properties
                     .get("visualization_voxel_granularity")
                     .and_then(|v| v.as_array())
                     .and_then(|arr| {
                         if arr.len() == 3 {
-                            let x_opt = arr[0].as_u64().or_else(|| arr[0].as_f64().map(|f| f as u64));
-                            let y_opt = arr[1].as_u64().or_else(|| arr[1].as_f64().map(|f| f as u64));
-                            let z_opt = arr[2].as_u64().or_else(|| arr[2].as_f64().map(|f| f as u64));
+                            let x_opt = arr[0]
+                                .as_u64()
+                                .or_else(|| arr[0].as_f64().map(|f| f as u64));
+                            let y_opt = arr[1]
+                                .as_u64()
+                                .or_else(|| arr[1].as_f64().map(|f| f as u64));
+                            let z_opt = arr[2]
+                                .as_u64()
+                                .or_else(|| arr[2].as_f64().map(|f| f as u64));
                             if let (Some(x), Some(y), Some(z)) = (x_opt, y_opt, z_opt) {
                                 Some((x as u32, y as u32, z as u32))
                             } else {
@@ -827,18 +836,20 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let region_io = {
             let mut manager = self.connectome.write();
             manager
-            .update_cortical_mapping(&src_id, &dst_id, mapping_data.clone())
-            .map_err(|e| ServiceError::Backend(format!("Failed to update mapping: {}", e)))?;
+                .update_cortical_mapping(&src_id, &dst_id, mapping_data.clone())
+                .map_err(|e| ServiceError::Backend(format!("Failed to update mapping: {}", e)))?;
 
             // Regenerate synapses for this mapping
             let synapse_count = manager
-            .regenerate_synapses_for_mapping(&src_id, &dst_id)
-            .map_err(|e| ServiceError::Backend(format!("Failed to regenerate synapses: {}", e)))?;
+                .regenerate_synapses_for_mapping(&src_id, &dst_id)
+                .map_err(|e| {
+                    ServiceError::Backend(format!("Failed to regenerate synapses: {}", e))
+                })?;
 
             // Recompute region IO registries after mapping change (critical for BV region boundary behavior)
-            let region_io = manager
-                .recompute_brain_region_io_registry()
-                .map_err(|e| ServiceError::Backend(format!("Failed to recompute region IO registry: {}", e)))?;
+            let region_io = manager.recompute_brain_region_io_registry().map_err(|e| {
+                ServiceError::Backend(format!("Failed to recompute region IO registry: {}", e))
+            })?;
 
             info!(
                 target: "feagi-services",

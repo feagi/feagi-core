@@ -80,7 +80,7 @@ pub fn apply_vectors_morphology_with_dimensions(
 }
 
 /// Apply vector offset morphology directly on NPU
-/// 
+///
 /// NOTE: This function calculates dimensions by scanning neurons (expensive).
 /// For better performance, use `apply_vectors_morphology_with_dimensions` with
 /// dimensions from ConnectomeManager.
@@ -109,4 +109,3 @@ pub fn apply_vectors_morphology(
         synapse_type,
     )
 }
-

@@ -1,13 +1,13 @@
+use crate::configuration::jsonable::{JSONDeviceGrouping, JSONDeviceProperties};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::{
     stage_properties_to_stages, PipelineStageProperties, PipelineStagePropertyIndex,
 };
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
 use feagi_structures::FeagiDataError;
 use std::cmp::PartialEq;
 use std::time::Instant;
-use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
-use crate::configuration::jsonable::{JSONDeviceGrouping, JSONDeviceProperties};
 
 /// Represents the direction of data flow in the pipeline, which affects validation logic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,7 +63,7 @@ pub(crate) trait PipelineStageRunner {
             friendly_name: self.get_channel_friendly_name().clone(),
             device_properties: self.get_json_device_properties().clone(),
             channel_index_override: self.get_channel_index_override(),
-            pipeline_stages: self.get_all_stage_properties()
+            pipeline_stages: self.get_all_stage_properties(),
         }
     }
 

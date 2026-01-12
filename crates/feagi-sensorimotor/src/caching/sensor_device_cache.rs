@@ -1,7 +1,7 @@
-use serde_json::json;
-use crate::data_types::descriptors::PercentageChannelDimensionality;
+use crate::configuration::jsonable::JSONInputOutputDefinition;
 use crate::data_pipeline::per_channel_stream_caches::SensoryCorticalUnitCache;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_types::descriptors::PercentageChannelDimensionality;
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
 };
@@ -23,10 +23,10 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::SensoryCorticalUnit;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
+use serde_json::json;
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Instant;
-use crate::configuration::jsonable::JSONInputOutputDefinition;
 // InputOutputDefinition is used in commented-out code (lines 622, 645)
 // Uncomment when implementing set_from_input_definition and export_to_input_definition
 // use crate::configuration::jsonable::InputOutputDefinition;
@@ -429,9 +429,9 @@ macro_rules! sensor_unit_functions {
     };
 }
 
-
 pub struct SensorDeviceCache {
-    sensor_cortical_unit_caches: HashMap<(SensoryCorticalUnit, CorticalUnitIndex), SensoryCorticalUnitCache>,
+    sensor_cortical_unit_caches:
+        HashMap<(SensoryCorticalUnit, CorticalUnitIndex), SensoryCorticalUnitCache>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
@@ -442,7 +442,10 @@ pub struct SensorDeviceCache {
 impl fmt::Debug for SensorDeviceCache {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SensorDeviceCache")
-            .field("stream_caches_count", &self.sensor_cortical_unit_caches.len())
+            .field(
+                "stream_caches_count",
+                &self.sensor_cortical_unit_caches.len(),
+            )
             .field("neuron_data", &self.neuron_data)
             .field("byte_data", &self.byte_data)
             .field("previous_burst", &self.previous_burst)
@@ -475,13 +478,19 @@ impl SensorDeviceCache {
         self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
         self.byte_data = FeagiByteContainer::new_empty();
         self.previous_burst = Instant::now();
-        self.neurons_encoded_signal  = FeagiSignal::new();
+        self.neurons_encoded_signal = FeagiSignal::new();
         self.bytes_encoded_signal = FeagiSignal::new();
     }
     sensor_cortical_units!(sensor_unit_functions);
 
-    pub fn verify_existence(&self, sensory_cortical_unit: SensoryCorticalUnit, unit_index: CorticalUnitIndex, cortical_channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensory_cortical_unit, unit_index)?;
+    pub fn verify_existence(
+        &self,
+        sensory_cortical_unit: SensoryCorticalUnit,
+        unit_index: CorticalUnitIndex,
+        cortical_channel_index: CorticalChannelIndex,
+    ) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches =
+            self.try_get_sensory_channel_stream_caches(sensory_cortical_unit, unit_index)?;
         sensor_stream_caches.verify_channel_exists(cortical_channel_index)
     }
 
@@ -523,7 +532,9 @@ impl SensorDeviceCache {
         // TODO see if we can parallelize this to work on multiple cortical areas at once
         // Iterate over all registered sensor stream caches and encode them
         // CRITICAL: Pass previous_burst (not time_of_burst) so encoder can check if channels were updated since last encoding
-        for ((_sensor_type, _unit_index), stream_cache) in self.sensor_cortical_unit_caches.iter_mut() {
+        for ((_sensor_type, _unit_index), stream_cache) in
+            self.sensor_cortical_unit_caches.iter_mut()
+        {
             stream_cache.update_neuron_data_with_recently_updated_cached_sensor_data(
                 &mut self.neuron_data,
                 previous_burst,
@@ -558,18 +569,24 @@ impl SensorDeviceCache {
 
     //endregion
 
-
     //region  JSON import / export
 
-    pub fn import_from_input_definition(&mut self, replacing_definition: &JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
+    pub fn import_from_input_definition(
+        &mut self,
+        replacing_definition: &JSONInputOutputDefinition,
+    ) -> Result<(), FeagiDataError> {
         self.reset();
-        let input_units_and_encoder_properties = replacing_definition.get_input_units_and_encoder_properties();
+        let input_units_and_encoder_properties =
+            replacing_definition.get_input_units_and_encoder_properties();
         for (sensory_unit, unit_and_encoder_definitions) in input_units_and_encoder_properties {
             for unit_and_encoder_definition in unit_and_encoder_definitions {
                 let unit_definition = &unit_and_encoder_definition.0;
                 let encoder_definition = &unit_and_encoder_definition.1;
 
-                if self.sensor_cortical_unit_caches.contains_key(&(*sensory_unit, unit_definition.cortical_unit_index)) {
+                if self
+                    .sensor_cortical_unit_caches
+                    .contains_key(&(*sensory_unit, unit_definition.cortical_unit_index))
+                {
                     return Err(FeagiDataError::DeserializationError(format!(
                         "Already registered sensor {} of unit index {}!",
                         *sensory_unit, unit_definition.cortical_unit_index
@@ -579,25 +596,32 @@ impl SensorDeviceCache {
                 let new_unit = SensoryCorticalUnitCache::new_from_json(
                     sensory_unit,
                     unit_definition,
-                    encoder_definition
+                    encoder_definition,
                 )?;
-                self.sensor_cortical_unit_caches.insert((*sensory_unit, unit_definition.cortical_unit_index), new_unit);
+                self.sensor_cortical_unit_caches.insert(
+                    (*sensory_unit, unit_definition.cortical_unit_index),
+                    new_unit,
+                );
             }
-        };
+        }
         Ok(())
     }
 
-
-    pub fn export_to_input_definition(&self, filling_definition: &mut JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
-
-        for ((sensory_cortical_unit, cortical_unit_index), sensory_channel_stream_caches) in self.sensor_cortical_unit_caches.iter() {
-            let unit_and_encoder = sensory_channel_stream_caches.export_as_jsons(*cortical_unit_index);
+    pub fn export_to_input_definition(
+        &self,
+        filling_definition: &mut JSONInputOutputDefinition,
+    ) -> Result<(), FeagiDataError> {
+        for ((sensory_cortical_unit, cortical_unit_index), sensory_channel_stream_caches) in
+            self.sensor_cortical_unit_caches.iter()
+        {
+            let unit_and_encoder =
+                sensory_channel_stream_caches.export_as_jsons(*cortical_unit_index);
             filling_definition.insert_sensor(
                 *sensory_cortical_unit,
                 unit_and_encoder.0,
-                unit_and_encoder.1
+                unit_and_encoder.1,
             );
-        };
+        }
         Ok(())
     }
 
@@ -616,7 +640,10 @@ impl SensorDeviceCache {
         number_channels: CorticalChannelCount,
         initial_cached_value: WrappedIOData,
     ) -> Result<(), FeagiDataError> {
-        if self.sensor_cortical_unit_caches.contains_key(&(sensor_type, unit_index)) {
+        if self
+            .sensor_cortical_unit_caches
+            .contains_key(&(sensor_type, unit_index))
+        {
             return Err(FeagiDataError::BadParameters(format!(
                 "Already registered sensor {} of unit index {}!",
                 sensor_type, unit_index
@@ -629,13 +656,12 @@ impl SensorDeviceCache {
                 neuron_encoder,
                 io_configuration_flags,
                 number_channels,
-                initial_cached_value)?,
+                initial_cached_value,
+            )?,
         );
 
         Ok(())
     }
-
-
 
     //region Data
 
@@ -657,7 +683,6 @@ impl SensorDeviceCache {
         Ok(())
     }
 
-    
     #[allow(dead_code)]
     fn try_read_preprocessed_cached_value(
         &self,
@@ -689,19 +714,23 @@ impl SensorDeviceCache {
     //region Metadata
 
     #[allow(dead_code)]
-    fn get_unit_friendly_name(&self,
-                              sensor_type: SensoryCorticalUnit,
-                              unit_index: CorticalUnitIndex) -> Result<&Option<String>, FeagiDataError> {
+    fn get_unit_friendly_name(
+        &self,
+        sensor_type: SensoryCorticalUnit,
+        unit_index: CorticalUnitIndex,
+    ) -> Result<&Option<String>, FeagiDataError> {
         let sensor_stream_caches =
             self.try_get_sensory_channel_stream_caches(sensor_type, unit_index)?;
         Ok(sensor_stream_caches.get_friendly_name())
     }
 
     #[allow(dead_code)]
-    fn set_unit_friendly_name(&mut self,
-                              sensor_type: SensoryCorticalUnit,
-                              unit_index: CorticalUnitIndex,
-                              friendly_name: Option<String>) -> Result<(), FeagiDataError> {
+    fn set_unit_friendly_name(
+        &mut self,
+        sensor_type: SensoryCorticalUnit,
+        unit_index: CorticalUnitIndex,
+        friendly_name: Option<String>,
+    ) -> Result<(), FeagiDataError> {
         let sensor_stream_caches =
             self.try_get_sensory_channel_stream_caches_mut(sensor_type, unit_index)?;
         sensor_stream_caches.set_friendly_name(friendly_name);
@@ -712,7 +741,6 @@ impl SensorDeviceCache {
 
     //region Stages
 
-    
     fn try_get_single_stage_properties(
         &self,
         sensor_type: SensoryCorticalUnit,
@@ -726,7 +754,6 @@ impl SensorDeviceCache {
             .try_get_single_stage_properties(channel_index, pipeline_stage_property_index)
     }
 
-    
     fn try_get_all_stage_properties(
         &self,
         sensor_type: SensoryCorticalUnit,
@@ -738,7 +765,6 @@ impl SensorDeviceCache {
         sensor_stream_caches.get_all_stage_properties(channel_index)
     }
 
-    
     fn try_update_single_stage_properties(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -756,7 +782,6 @@ impl SensorDeviceCache {
         )
     }
 
-    
     fn try_update_all_stage_properties(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -770,7 +795,6 @@ impl SensorDeviceCache {
             .try_update_all_stage_properties(channel_index, new_pipeline_stage_properties)
     }
 
-    
     fn try_replace_single_stage(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -788,7 +812,6 @@ impl SensorDeviceCache {
         )
     }
 
-    
     fn try_replace_all_stages(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -801,7 +824,6 @@ impl SensorDeviceCache {
         sensor_stream_caches.try_replace_all_stages(channel_index, new_pipeline_stage_properties)
     }
 
-    
     fn try_removing_all_stages(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -825,7 +847,9 @@ impl SensorDeviceCache {
         sensor_type: SensoryCorticalUnit,
         unit_index: CorticalUnitIndex,
     ) -> Result<&SensoryCorticalUnitCache, FeagiDataError> {
-        let check = self.sensor_cortical_unit_caches.get(&(sensor_type, unit_index));
+        let check = self
+            .sensor_cortical_unit_caches
+            .get(&(sensor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
                 "Unable to find {} of cortical unit index {} in registered sensor's list!",
@@ -841,7 +865,9 @@ impl SensorDeviceCache {
         sensor_type: SensoryCorticalUnit,
         unit_index: CorticalUnitIndex,
     ) -> Result<&mut SensoryCorticalUnitCache, FeagiDataError> {
-        let check = self.sensor_cortical_unit_caches.get_mut(&(sensor_type, unit_index));
+        let check = self
+            .sensor_cortical_unit_caches
+            .get_mut(&(sensor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
                 "Unable to find {} of cortical unit index {} in registered sensor's list!",

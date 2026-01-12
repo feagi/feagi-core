@@ -10,13 +10,13 @@
 use feagi_sensorimotor::caching::{MotorDeviceCache, SensorDeviceCache};
 #[cfg(feature = "sdk-io")]
 use feagi_sensorimotor::feedbacks::{FeedBackRegistration, FeedbackRegistrationTargets};
+use feagi_sensorimotor::ConnectorCache;
+#[cfg(feature = "sdk-io")]
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::fmt;
 #[cfg(feature = "sdk-io")]
 use std::sync::{Arc, Mutex, MutexGuard};
-use feagi_sensorimotor::ConnectorCache;
-#[cfg(feature = "sdk-io")]
-use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
 /// High-level connector agent for managing sensor and motor device registrations
 ///
@@ -42,7 +42,7 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 #[derive(Debug)]
 #[cfg(feature = "sdk-io")]
 pub struct ConnectorAgent {
-    cache: ConnectorCache
+    cache: ConnectorCache,
 }
 
 #[cfg(feature = "sdk-io")]
@@ -56,7 +56,7 @@ impl Default for ConnectorAgent {
 impl ConnectorAgent {
     pub fn new() -> Self {
         ConnectorAgent {
-            cache: ConnectorCache::new()
+            cache: ConnectorCache::new(),
         }
     }
 
@@ -99,7 +99,8 @@ impl ConnectorAgent {
         &mut self,
         json: serde_json::Value,
     ) -> Result<(), FeagiDataError> {
-        self.cache.import_device_registrations_as_config_json(json)?;
+        self.cache
+            .import_device_registrations_as_config_json(json)?;
         Ok(())
     }
 
@@ -135,4 +136,3 @@ impl fmt::Display for ConnectorAgent {
         write!(f, "ConnectorAgent")
     }
 }
-

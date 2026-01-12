@@ -392,16 +392,22 @@ impl GenomeParser {
                     .insert("firing_threshold_limit".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.firing_threshold_increment_x {
-                area.properties
-                    .insert("firing_threshold_increment_x".to_string(), serde_json::json!(v));
+                area.properties.insert(
+                    "firing_threshold_increment_x".to_string(),
+                    serde_json::json!(v),
+                );
             }
             if let Some(v) = raw_area.firing_threshold_increment_y {
-                area.properties
-                    .insert("firing_threshold_increment_y".to_string(), serde_json::json!(v));
+                area.properties.insert(
+                    "firing_threshold_increment_y".to_string(),
+                    serde_json::json!(v),
+                );
             }
             if let Some(v) = raw_area.firing_threshold_increment_z {
-                area.properties
-                    .insert("firing_threshold_increment_z".to_string(), serde_json::json!(v));
+                area.properties.insert(
+                    "firing_threshold_increment_z".to_string(),
+                    serde_json::json!(v),
+                );
             }
             if let Some(v) = raw_area.leak_coefficient {
                 area.properties

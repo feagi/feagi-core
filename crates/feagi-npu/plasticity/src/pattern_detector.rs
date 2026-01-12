@@ -19,9 +19,9 @@
 //! - Cross-platform determinism (x86, ARM, RISC-V)
 //! - Collision resistance suitable for FEAGI's scale (2^64 hash space)
 
-use xxhash_rust::xxh64::xxh64;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use xxhash_rust::xxh64::xxh64;
 
 /// Configuration for pattern detection
 #[derive(Debug, Clone)]

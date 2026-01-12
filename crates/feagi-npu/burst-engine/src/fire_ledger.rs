@@ -53,7 +53,9 @@ pub enum FireLedgerError {
         have_end: u64,
     },
 
-    #[error("requested depth {depth} exceeds tracked window size {window_size} for area {cortical_idx}")]
+    #[error(
+        "requested depth {depth} exceeds tracked window size {window_size} for area {cortical_idx}"
+    )]
     DepthExceedsWindow {
         cortical_idx: u32,
         depth: usize,
@@ -95,7 +97,11 @@ impl FireLedger {
     ///
     /// This is an exact setting (not max/merge). If multiple subsystems depend on the same area,
     /// the caller must pass the final resolved requirement.
-    pub fn track_area(&mut self, cortical_idx: u32, window_size: usize) -> Result<(), FireLedgerError> {
+    pub fn track_area(
+        &mut self,
+        cortical_idx: u32,
+        window_size: usize,
+    ) -> Result<(), FireLedgerError> {
         if window_size == 0 {
             return Err(FireLedgerError::InvalidWindowSize);
         }
@@ -150,7 +156,11 @@ impl FireLedger {
     /// Dense semantics:
     /// - For each tracked area, a frame is written for every timestep.
     /// - Gaps in timesteps are filled with empty frames.
-    pub fn archive_burst(&mut self, timestep: u64, fire_queue: &FireQueue) -> Result<(), FireLedgerError> {
+    pub fn archive_burst(
+        &mut self,
+        timestep: u64,
+        fire_queue: &FireQueue,
+    ) -> Result<(), FireLedgerError> {
         if self.current_timestep != 0 && timestep <= self.current_timestep {
             return Err(FireLedgerError::NonMonotonicTimestep {
                 current: self.current_timestep,
@@ -184,9 +194,7 @@ impl FireLedger {
 
         // Write this timestep.
         for (&cortical_idx, hist) in self.tracked.iter_mut() {
-            let bitmap = fired_bitmaps
-                .remove(&cortical_idx)
-                .unwrap_or_default();
+            let bitmap = fired_bitmaps.remove(&cortical_idx).unwrap_or_default();
             hist.push_frame(timestep, bitmap);
         }
 
@@ -227,13 +235,15 @@ impl FireLedger {
         }
 
         let start = end_timestep.saturating_sub(depth as u64).saturating_add(1);
-        let (have_start, have_end) = hist.range_bounds().ok_or(FireLedgerError::InsufficientHistory {
-            cortical_idx,
-            start,
-            end: end_timestep,
-            have_start: 0,
-            have_end: 0,
-        })?;
+        let (have_start, have_end) =
+            hist.range_bounds()
+                .ok_or(FireLedgerError::InsufficientHistory {
+                    cortical_idx,
+                    start,
+                    end: end_timestep,
+                    have_start: 0,
+                    have_end: 0,
+                })?;
 
         if start < have_start || end_timestep > have_end {
             return Err(FireLedgerError::InsufficientHistory {

@@ -23,11 +23,13 @@ impl VideoEncodingStrategy {
     /// Get cortical IDs for this encoding strategy
     pub fn cortical_ids(&self, unit: CorticalUnitIndex) -> Vec<CorticalID> {
         match self {
-            Self::SimpleVision => SensoryCorticalUnit::get_cortical_ids_array_for_vision_with_parameters(
-                FrameChangeHandling::Absolute,
-                unit,
-            )
-            .to_vec(),
+            Self::SimpleVision => {
+                SensoryCorticalUnit::get_cortical_ids_array_for_vision_with_parameters(
+                    FrameChangeHandling::Absolute,
+                    unit,
+                )
+                .to_vec()
+            }
             Self::SegmentedVision => {
                 SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                     FrameChangeHandling::Absolute,
@@ -77,7 +79,7 @@ impl VideoEncodingStrategy {
 pub struct VideoEncoderConfig {
     // Identity
     pub agent_id: String,
-    pub cortical_unit_id: u8,  // Cortical unit index (which unit of this type)
+    pub cortical_unit_id: u8, // Cortical unit index (which unit of this type)
 
     // Encoding strategy
     pub encoding_strategy: VideoEncodingStrategy,
@@ -125,7 +127,10 @@ impl VideoEncoderConfig {
         // For segmented vision (9 areas), add semantic vision capability to auto-create areas.
         // The sensory mappings are still used to register with burst engine; this is purely
         // to let the backend create the right IPU areas without requiring string/byte IDs.
-        if matches!(self.encoding_strategy, VideoEncodingStrategy::SegmentedVision) {
+        if matches!(
+            self.encoding_strategy,
+            VideoEncodingStrategy::SegmentedVision
+        ) {
             let group = self.cortical_unit_id;
 
             config = config.with_vision_unit(
@@ -168,7 +173,10 @@ impl VideoEncoderConfig {
 
         // Keep the existing segmented-vision semantic capability so the backend can
         // auto-create IPU areas. This is independent of motor feedback handling.
-        if matches!(self.encoding_strategy, VideoEncodingStrategy::SegmentedVision) {
+        if matches!(
+            self.encoding_strategy,
+            VideoEncodingStrategy::SegmentedVision
+        ) {
             config = config.with_vision_unit(
                 "camera",
                 (self.source_width as usize, self.source_height as usize),
@@ -211,4 +219,3 @@ impl VideoEncoderConfig {
         Ok(())
     }
 }
-

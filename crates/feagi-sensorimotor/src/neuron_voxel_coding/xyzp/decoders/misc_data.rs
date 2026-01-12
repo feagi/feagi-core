@@ -1,3 +1,4 @@
+use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
@@ -8,7 +9,6 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
-use crate::configuration::jsonable::JSONDecoderProperties;
 
 #[derive(Debug)]
 pub struct MiscDataNeuronVoxelXYZPDecoder {
@@ -22,9 +22,7 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
     }
 
     fn get_as_properties(&self) -> JSONDecoderProperties {
-        JSONDecoderProperties::MiscData(
-            self.misc_dimensions
-        )
+        JSONDecoderProperties::MiscData(self.misc_dimensions)
     }
 
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(

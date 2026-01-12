@@ -12,13 +12,13 @@
 //!
 //! This is the foundational layer used by the SDK and custom agent implementations.
 
+mod agent_id;
 pub mod client;
 pub mod config;
 pub mod error;
 pub mod heartbeat;
 pub mod reconnect;
 pub mod transport;
-mod agent_id;
 
 // Re-export core types
 pub use client::AgentClient;
@@ -27,5 +27,6 @@ pub use error::{Result, SdkError};
 pub use transport::{RegistrationResponse, TransportConfig as TransportInfo};
 
 // Re-export types from feagi-io
-pub use feagi_io::{AgentCapabilities, AgentType, MotorCapability, SensoryCapability, VisionCapability};
-
+pub use feagi_io::{
+    AgentCapabilities, AgentType, MotorCapability, SensoryCapability, VisionCapability,
+};

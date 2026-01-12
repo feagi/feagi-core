@@ -5,8 +5,8 @@
 
 use crate::sdk::base::CorticalTopology;
 use crate::sdk::error::{Result, SdkError};
-use crate::sdk::sensory::traits::SensoryEncoder;
 use crate::sdk::sensory::text::config::TextEncoderConfig;
+use crate::sdk::sensory::traits::SensoryEncoder;
 use feagi_sensorimotor::data_types::encode_token_id_to_xyzp_bitplanes;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
@@ -104,4 +104,3 @@ impl SensoryEncoder for TextEncoder {
         std::slice::from_ref(&self.cortical_id)
     }
 }
-

@@ -165,12 +165,13 @@ mod tests {
     #[test]
     fn test_validate_ipu_type() {
         use feagi_structures::genomic::cortical_area::{
-            io_cortical_area_configuration_flag::FrameChangeHandling, IOCorticalAreaConfigurationFlag,
+            io_cortical_area_configuration_flag::FrameChangeHandling,
+            IOCorticalAreaConfigurationFlag,
         };
 
-        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::CartesianPlane(
-            FrameChangeHandling::Absolute,
-        ));
+        let cortical_type = CorticalAreaType::BrainInput(
+            IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Absolute),
+        );
         let properties = HashMap::new();
 
         assert!(validate_cortical_type(&cortical_type, &properties).is_ok());

@@ -57,7 +57,9 @@ async fn device_registrations_import_then_export_roundtrip() {
             .unwrap();
     }
 
-    let exported = connector.export_device_registrations_as_config_json().unwrap();
+    let exported = connector
+        .export_device_registrations_as_config_json()
+        .unwrap();
 
     // POST import
     let client = reqwest::Client::builder()
@@ -100,13 +102,16 @@ async fn device_registrations_import_then_export_roundtrip() {
 
     // Minimal shape checks: the sections we rely on must exist and be objects/arrays.
     assert!(
-        device_regs.get("input_units_and_encoder_properties").is_some(),
+        device_regs
+            .get("input_units_and_encoder_properties")
+            .is_some(),
         "missing input_units_and_encoder_properties"
     );
     assert!(
-        device_regs.get("output_units_and_decoder_properties").is_some(),
+        device_regs
+            .get("output_units_and_decoder_properties")
+            .is_some(),
         "missing output_units_and_decoder_properties"
     );
     assert!(device_regs.get("feedbacks").is_some(), "missing feedbacks");
 }
-

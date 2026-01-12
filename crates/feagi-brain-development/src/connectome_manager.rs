@@ -129,7 +129,8 @@ pub struct ConnectomeManager {
 
     /// Plasticity executor reference (optional, only when plasticity feature is enabled)
     #[cfg(feature = "plasticity")]
-    plasticity_executor: Option<Arc<std::sync::Mutex<feagi_npu_plasticity::AsyncPlasticityExecutor>>>,
+    plasticity_executor:
+        Option<Arc<std::sync::Mutex<feagi_npu_plasticity::AsyncPlasticityExecutor>>>,
 
     /// Cached neuron count (lock-free read) - updated by burst engine
     /// This prevents health checks from blocking on NPU lock
@@ -155,7 +156,21 @@ pub struct ConnectomeManager {
 }
 
 /// Type alias for neuron batch data: (x, y, z, threshold, threshold_limit, leak, resting, neuron_type, refractory_period, excitability, consecutive_fire_limit, snooze_period, mp_charge_accumulation)
-type NeuronData = (u32, u32, u32, f32, f32, f32, f32, i32, u16, f32, u16, u16, bool);
+type NeuronData = (
+    u32,
+    u32,
+    u32,
+    f32,
+    f32,
+    f32,
+    f32,
+    i32,
+    u16,
+    f32,
+    u16,
+    u16,
+    bool,
+);
 
 impl ConnectomeManager {
     /// Create a new ConnectomeManager (private - use `instance()`)
@@ -177,7 +192,9 @@ impl ConnectomeManager {
             cached_neuron_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
             cached_synapse_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
             initialized: false,
-            last_fatigue_calculation: Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10))), // Initialize to allow first calculation
+            last_fatigue_calculation: Arc::new(Mutex::new(
+                std::time::Instant::now() - std::time::Duration::from_secs(10),
+            )), // Initialize to allow first calculation
         }
     }
 
@@ -247,7 +264,9 @@ impl ConnectomeManager {
             cached_neuron_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
             cached_synapse_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
             initialized: false,
-            last_fatigue_calculation: Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10))),
+            last_fatigue_calculation: Arc::new(Mutex::new(
+                std::time::Instant::now() - std::time::Duration::from_secs(10),
+            )),
         }
     }
 
@@ -266,7 +285,9 @@ impl ConnectomeManager {
     /// let npu = Arc::new(TracingMutex::new(RustNPU::new(1_000_000, 10_000_000, 10), "NPU"));
     /// let manager = ConnectomeManager::new_for_testing_with_npu(npu);
     /// ```
-    pub fn new_for_testing_with_npu(npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>) -> Self {
+    pub fn new_for_testing_with_npu(
+        npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) -> Self {
         Self {
             cortical_areas: HashMap::new(),
             cortical_id_to_idx: HashMap::new(),
@@ -283,7 +304,9 @@ impl ConnectomeManager {
             cached_neuron_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
             cached_synapse_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
             initialized: false,
-            last_fatigue_calculation: Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10))),
+            last_fatigue_calculation: Arc::new(Mutex::new(
+                std::time::Instant::now() - std::time::Duration::from_secs(10),
+            )),
         }
     }
 
@@ -421,10 +444,8 @@ impl ConnectomeManager {
         self.cortical_idx_to_id.insert(cortical_idx, cortical_id);
 
         // Initialize upstream_cortical_areas property (empty array for O(1) lookup)
-        area.properties.insert(
-            "upstream_cortical_areas".to_string(),
-            serde_json::json!([])
-        );
+        area.properties
+            .insert("upstream_cortical_areas".to_string(), serde_json::json!([]));
 
         // Default visualization voxel granularity is 1x1x1 (assumed, not stored)
         // User overrides are stored in properties["visualization_voxel_granularity"] only if != 1x1x1
@@ -445,13 +466,16 @@ impl ConnectomeManager {
 
         // Update region membership (source of truth for region->areas listing)
         if let Some(region_id) = parent_region_id {
-            let region = self.brain_regions.get_region_mut(&region_id).ok_or_else(|| {
-                BduError::InvalidArea(format!(
-                    "Unknown parent_region_id '{}' for cortical area {}",
-                    region_id,
-                    cortical_id.as_base_64()
-                ))
-            })?;
+            let region = self
+                .brain_regions
+                .get_region_mut(&region_id)
+                .ok_or_else(|| {
+                    BduError::InvalidArea(format!(
+                        "Unknown parent_region_id '{}' for cortical area {}",
+                        region_id,
+                        cortical_id.as_base_64()
+                    ))
+                })?;
             region.add_area(cortical_id);
         }
 
@@ -553,9 +577,7 @@ impl ConnectomeManager {
     ///
     /// This function updates the hierarchy in-place and returns the computed base64 ID lists
     /// for downstream persistence into `RuntimeGenome`.
-    pub fn recompute_brain_region_io_registry(
-        &mut self,
-    ) -> BduResult<BrainRegionIoRegistry> {
+    pub fn recompute_brain_region_io_registry(&mut self) -> BduResult<BrainRegionIoRegistry> {
         use std::collections::HashSet;
 
         let region_ids: Vec<String> = self
@@ -657,10 +679,9 @@ impl ConnectomeManager {
             if outputs.is_empty() {
                 region.properties.remove("outputs");
             } else {
-                region.properties.insert(
-                    "outputs".to_string(),
-                    serde_json::json!(outputs.clone()),
-                );
+                region
+                    .properties
+                    .insert("outputs".to_string(), serde_json::json!(outputs.clone()));
             }
 
             computed.insert(rid, (inputs, outputs));
@@ -704,7 +725,7 @@ impl ConnectomeManager {
                 .get(cortical_id)
                 .copied()
                 .unwrap_or(0);
-            
+
             // Extract visualization granularity overrides from properties.
             // Default is 1x1x1 (assumed, not stored) so we only include non-default overrides.
             if let Some(granularity_json) = area.properties.get("visualization_voxel_granularity") {
@@ -767,14 +788,14 @@ impl ConnectomeManager {
                         .collect();
                 }
             }
-            
+
             // Property missing - data integrity issue
             warn!(target: "feagi-bdu",
                 "Cortical area '{}' missing 'upstream_cortical_areas' property - treating as empty",
                 target_cortical_id.as_base_64()
             );
         }
-        
+
         Vec::new()
     }
 
@@ -793,7 +814,7 @@ impl ConnectomeManager {
                 .properties
                 .entry("upstream_cortical_areas".to_string())
                 .or_insert_with(|| serde_json::json!([]));
-            
+
             if let Some(arr) = upstream_array.as_array_mut() {
                 let src_value = serde_json::json!(src_cortical_idx);
                 if !arr.contains(&src_value) {
@@ -1005,7 +1026,10 @@ impl ConnectomeManager {
             BduError::InvalidArea(format!("No cortical idx for source area {}", src_area_id))
         })?;
         let dst_idx = *self.cortical_id_to_idx.get(dst_area_id).ok_or_else(|| {
-            BduError::InvalidArea(format!("No cortical idx for destination area {}", dst_area_id))
+            BduError::InvalidArea(format!(
+                "No cortical idx for destination area {}",
+                dst_area_id
+            ))
         })?;
 
         // Prune all existing synapses from src_area→dst_area before (re)creating based on current rules.
@@ -1128,14 +1152,16 @@ impl ConnectomeManager {
         // Update upstream area tracking based on MAPPING existence, not synapse count
         // Memory areas have 0 synapses but still need upstream tracking for pattern detection
         let src_idx_for_upstream = src_idx;
-        
+
         // Check if mapping exists by looking at cortical_mapping_dst property (after update)
-        let has_mapping = self.cortical_areas.get(src_area_id)
+        let has_mapping = self
+            .cortical_areas
+            .get(src_area_id)
             .and_then(|area| area.properties.get("cortical_mapping_dst"))
             .and_then(|v| v.as_object())
             .and_then(|map| map.get(&dst_area_id.as_base_64()))
             .is_some();
-        
+
         info!(target: "feagi-bdu",
             "Mapping result: {} synapses, {} -> {} (mapping_exists={}, will {}update upstream)",
             synapse_count,
@@ -1144,16 +1170,16 @@ impl ConnectomeManager {
             has_mapping,
             if has_mapping { "" } else { "NOT " }
         );
-        
+
         if has_mapping {
             // Mapping exists - add to upstream tracking (for both memory and regular areas)
             self.add_upstream_area(dst_area_id, src_idx_for_upstream);
-            
+
             // If destination is a memory area, register it with PlasticityExecutor (automatic)
             #[cfg(feature = "plasticity")]
             if let Some(ref executor) = self.plasticity_executor {
                 use feagi_evolutionary::extract_memory_properties;
-                
+
                 if let Some(dst_area) = self.cortical_areas.get(dst_area_id) {
                     if let Some(mem_props) = extract_memory_properties(&dst_area.properties) {
                         let upstream_areas = self.get_upstream_cortical_areas(dst_area_id);
@@ -1173,7 +1199,9 @@ impl ConnectomeManager {
                                     let desired = mem_props.temporal_depth as usize;
                                     let resolved = existing.max(desired);
                                     if resolved != existing {
-                                        if let Err(e) = npu.configure_fire_ledger_window(upstream_idx, resolved) {
+                                        if let Err(e) =
+                                            npu.configure_fire_ledger_window(upstream_idx, resolved)
+                                        {
                                             warn!(
                                                 target: "feagi-bdu",
                                                 "Failed to configure FireLedger window for upstream area idx={} (requested={}): {}",
@@ -1188,17 +1216,19 @@ impl ConnectomeManager {
                                 warn!(target: "feagi-bdu", "Failed to lock NPU for FireLedger configuration");
                             }
                         }
-                        
+
                         if let Ok(exec) = executor.lock() {
-                            use feagi_npu_plasticity::{PlasticityExecutor, MemoryNeuronLifecycleConfig};
-                            
+                            use feagi_npu_plasticity::{
+                                MemoryNeuronLifecycleConfig, PlasticityExecutor,
+                            };
+
                             let lifecycle_config = MemoryNeuronLifecycleConfig {
                                 initial_lifespan: mem_props.init_lifespan,
                                 lifespan_growth_rate: mem_props.lifespan_growth_rate,
                                 longterm_threshold: mem_props.longterm_threshold,
                                 max_reactivations: 1000,
                             };
-                            
+
                             exec.register_memory_area(
                                 dst_area.cortical_idx,
                                 dst_area_id.as_base_64(),
@@ -1216,7 +1246,7 @@ impl ConnectomeManager {
             } else {
                 info!(target: "feagi-bdu", "PlasticityExecutor not available (feature disabled or not initialized)");
             }
-            
+
             #[cfg(not(feature = "plasticity"))]
             {
                 info!(target: "feagi-bdu", "Plasticity feature disabled at compile time");
@@ -1265,7 +1295,8 @@ impl ConnectomeManager {
         {
             let npu = npu_arc.lock().unwrap();
             let fresh_count = npu.get_synapse_count();
-            self.cached_synapse_count.store(fresh_count, Ordering::Relaxed);
+            self.cached_synapse_count
+                .store(fresh_count, Ordering::Relaxed);
         }
 
         Ok(synapse_count)
@@ -1374,7 +1405,10 @@ impl ConnectomeManager {
         // "deleted mapping" as success (and BV can update its cache/UI).
         let rules = {
             let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
-                crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+                crate::types::BduError::InvalidArea(format!(
+                    "Source area not found: {}",
+                    src_area_id
+                ))
             })?;
 
             let Some(mapping_dst) = src_area
@@ -1408,9 +1442,11 @@ impl ConnectomeManager {
         })?;
 
         // Clone NPU Arc for STDP handling (Arc::clone is cheap - just increments ref count)
-        let npu_arc = self.npu.as_ref().ok_or_else(|| {
-            crate::types::BduError::Internal("NPU not connected".to_string())
-        })?.clone();
+        let npu_arc = self
+            .npu
+            .as_ref()
+            .ok_or_else(|| crate::types::BduError::Internal("NPU not connected".to_string()))?
+            .clone();
 
         // Apply each morphology rule
         let mut total_synapses = 0;
@@ -1421,7 +1457,10 @@ impl ConnectomeManager {
             };
 
             // Handle STDP/plasticity configuration if needed
-            let plasticity_flag = rule_obj.get("plasticity_flag").and_then(|v| v.as_bool()).unwrap_or(false);
+            let plasticity_flag = rule_obj
+                .get("plasticity_flag")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             if plasticity_flag {
                 Self::register_stdp_mapping_for_rule(
                     &npu_arc,
@@ -1475,12 +1514,18 @@ impl ConnectomeManager {
             "projector" => {
                 // Get dimensions from cortical areas (no neuron scanning!)
                 let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
-                    crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+                    crate::types::BduError::InvalidArea(format!(
+                        "Source area not found: {}",
+                        src_area_id
+                    ))
                 })?;
                 let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
-                    crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_area_id))
+                    crate::types::BduError::InvalidArea(format!(
+                        "Destination area not found: {}",
+                        dst_area_id
+                    ))
                 })?;
-                
+
                 let src_dimensions = (
                     src_area.dimensions.width as usize,
                     src_area.dimensions.height as usize,
@@ -1491,11 +1536,14 @@ impl ConnectomeManager {
                     dst_area.dimensions.height as usize,
                     dst_area.dimensions.depth as usize,
                 );
-                
+
                 use crate::connectivity::core_morphologies::apply_projector_morphology_with_dimensions;
                 let count = apply_projector_morphology_with_dimensions(
-                    npu, src_idx, dst_idx,
-                    src_dimensions, dst_dimensions,
+                    npu,
+                    src_idx,
+                    dst_idx,
+                    src_dimensions,
+                    dst_dimensions,
                     None, // transpose
                     None, // project_last_layer_of
                     weight,
@@ -1526,12 +1574,18 @@ impl ConnectomeManager {
                 );
                 // Get dimensions from cortical areas (no neuron scanning!)
                 let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
-                    crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+                    crate::types::BduError::InvalidArea(format!(
+                        "Source area not found: {}",
+                        src_area_id
+                    ))
                 })?;
                 let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
-                    crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_area_id))
+                    crate::types::BduError::InvalidArea(format!(
+                        "Destination area not found: {}",
+                        dst_area_id
+                    ))
                 })?;
-                
+
                 let src_dimensions = (
                     src_area.dimensions.width as usize,
                     src_area.dimensions.height as usize,
@@ -1542,11 +1596,13 @@ impl ConnectomeManager {
                     dst_area.dimensions.height as usize,
                     dst_area.dimensions.depth as usize,
                 );
-                
+
                 // Extract scalar from rule (morphology_scalar)
                 let scalar = if let Some(obj) = rule.as_object() {
                     // Object format: get from morphology_scalar array
-                    if let Some(scalar_arr) = obj.get("morphology_scalar").and_then(|v| v.as_array()) {
+                    if let Some(scalar_arr) =
+                        obj.get("morphology_scalar").and_then(|v| v.as_array())
+                    {
                         // Use first element as scalar (or default to 1)
                         scalar_arr.first().and_then(|v| v.as_i64()).unwrap_or(1) as u32
                     } else {
@@ -1558,14 +1614,14 @@ impl ConnectomeManager {
                 } else {
                     1 // @architecture:acceptable - default scalar
                 };
-                
+
                 // CRITICAL: Do NOT call get_neurons_in_cortical_area to check neuron count!
                 // Use dimensions to estimate: if area is large, use batched version
                 let estimated_neurons = src_dimensions.0 * src_dimensions.1 * src_dimensions.2;
                 let count = if estimated_neurons > 100_000 {
                     // Release lock and use batched version
                     let _ = npu;
-                    
+
                     crate::connectivity::synaptogenesis::apply_block_connection_morphology_batched(
                         npu_arc,
                         src_idx,
@@ -1585,18 +1641,19 @@ impl ConnectomeManager {
                         "🔍 DEBUG connectome_manager: Calling apply_block_connection_morphology with src_idx={}, dst_idx={}, src_dim={:?}, dst_dim={:?}",
                         src_idx, dst_idx, src_dimensions, dst_dimensions
                     );
-                    let count = crate::connectivity::synaptogenesis::apply_block_connection_morphology(
-                        npu,
-                        src_idx,
-                        dst_idx,
-                        src_dimensions,
-                        dst_dimensions,
-                        scalar, // scaling_factor
-                        weight,
-                        conductance,
-                        synapse_attractivity,
-                        synapse_type,
-                    )? as usize;
+                    let count =
+                        crate::connectivity::synaptogenesis::apply_block_connection_morphology(
+                            npu,
+                            src_idx,
+                            dst_idx,
+                            src_dimensions,
+                            dst_dimensions,
+                            scalar, // scaling_factor
+                            weight,
+                            conductance,
+                            synapse_attractivity,
+                            synapse_type,
+                        )? as usize;
                     tracing::warn!(
                         target: "feagi-bdu",
                         "🔍 DEBUG connectome_manager: apply_block_connection_morphology returned count={}",
@@ -1608,13 +1665,13 @@ impl ConnectomeManager {
                     }
                     count
                 };
-                
+
                 // Ensure the propagation engine sees the newly created synapses immediately (batched version only)
                 if count > 0 && estimated_neurons > 100_000 {
                     let mut npu_lock = npu_arc.lock().unwrap();
                     npu_lock.rebuild_synapse_index();
                 }
-                
+
                 Ok(count)
             }
             _ => {
@@ -1677,7 +1734,10 @@ impl ConnectomeManager {
 
             // Get source area to access PSP property
             let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
-                crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+                crate::types::BduError::InvalidArea(format!(
+                    "Source area not found: {}",
+                    src_area_id
+                ))
             })?;
 
             // Extract weight from rule (postSynapticCurrent_multiplier)
@@ -1705,9 +1765,7 @@ impl ConnectomeManager {
                         .unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
                 } else if let Some(arr) = rule.as_array() {
                     // Array format: [morphology_id, scalar, multiplier, ...]
-                    arr.get(2)
-                        .and_then(parse_i64)
-                        .unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
+                    arr.get(2).and_then(parse_i64).unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
                 } else {
                     128 // @architecture:acceptable - emergency fallback for malformed rule
                 };
@@ -1777,18 +1835,21 @@ impl ConnectomeManager {
                 }
                 feagi_evolutionary::MorphologyType::Vectors => {
                     use crate::connectivity::synaptogenesis::apply_vectors_morphology_with_dimensions;
-                    
+
                     // Get dimensions from cortical areas (no neuron scanning!)
                     let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
-                        crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_area_id))
+                        crate::types::BduError::InvalidArea(format!(
+                            "Destination area not found: {}",
+                            dst_area_id
+                        ))
                     })?;
-                    
+
                     let dst_dimensions = (
                         dst_area.dimensions.width as usize,
                         dst_area.dimensions.height as usize,
                         dst_area.dimensions.depth as usize,
                     );
-                    
+
                     if let feagi_evolutionary::MorphologyParameters::Vectors { ref vectors } =
                         morphology.parameters
                     {
@@ -1802,8 +1863,8 @@ impl ConnectomeManager {
                             *dst_idx,
                             vectors_tuples,
                             dst_dimensions,
-                            weight, // From rule, not hardcoded
-                            conductance, // PSP from source area, NOT hardcoded!
+                            weight,               // From rule, not hardcoded
+                            conductance,          // PSP from source area, NOT hardcoded!
                             synapse_attractivity, // From rule, not hardcoded
                             synapse_type,
                         )?;
@@ -1844,7 +1905,10 @@ impl ConnectomeManager {
     ///
     /// * `npu` - Arc to the Rust NPU (wrapped in TracingMutex for automatic lock tracing)
     ///
-    pub fn set_npu(&mut self, npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>) {
+    pub fn set_npu(
+        &mut self,
+        npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) {
         self.npu = Some(Arc::clone(&npu));
         info!(target: "feagi-bdu","🔗 ConnectomeManager: NPU reference set");
 
@@ -1912,21 +1976,29 @@ impl ConnectomeManager {
     ///
     /// * `Option<&Arc<Mutex<RustNPU>>>` - Reference to NPU if connected
     ///
-    pub fn get_npu(&self) -> Option<&Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>> {
+    pub fn get_npu(
+        &self,
+    ) -> Option<&Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>
+    {
         self.npu.as_ref()
     }
 
     /// Set the PlasticityExecutor reference (optional, only if plasticity feature enabled)
     /// The executor is passed as Arc<Mutex<dyn Any>> for feature-gating compatibility
     #[cfg(feature = "plasticity")]
-    pub fn set_plasticity_executor(&mut self, executor: Arc<std::sync::Mutex<feagi_npu_plasticity::AsyncPlasticityExecutor>>) {
+    pub fn set_plasticity_executor(
+        &mut self,
+        executor: Arc<std::sync::Mutex<feagi_npu_plasticity::AsyncPlasticityExecutor>>,
+    ) {
         self.plasticity_executor = Some(executor);
         info!(target: "feagi-bdu", "🔗 ConnectomeManager: PlasticityExecutor reference set");
     }
-    
+
     /// Get the PlasticityExecutor reference (if plasticity feature enabled)
     #[cfg(feature = "plasticity")]
-    pub fn get_plasticity_executor(&self) -> Option<&Arc<std::sync::Mutex<feagi_npu_plasticity::AsyncPlasticityExecutor>>> {
+    pub fn get_plasticity_executor(
+        &self,
+    ) -> Option<&Arc<std::sync::Mutex<feagi_npu_plasticity::AsyncPlasticityExecutor>>> {
         self.plasticity_executor.as_ref()
     }
 
@@ -2003,9 +2075,7 @@ impl ConnectomeManager {
         // Use try_read() to avoid blocking during neurogenesis
         // If StateManager singleton initialization fails or is locked, skip calculation entirely
         let memory_neuron_util = match StateManager::instance().try_read() {
-            Some(state_manager) => {
-                state_manager.get_core_state().get_memory_neuron_util()
-            }
+            Some(state_manager) => state_manager.get_core_state().get_memory_neuron_util(),
             None => {
                 // StateManager is locked or not ready - skip fatigue calculation
                 return None;
@@ -2022,12 +2092,15 @@ impl ConnectomeManager {
         };
 
         // Calculate fatigue index as max of all utilizations
-        let fatigue_index = regular_neuron_util.max(memory_neuron_util).max(synapse_util);
+        let fatigue_index = regular_neuron_util
+            .max(memory_neuron_util)
+            .max(synapse_util);
 
         // Apply hysteresis: trigger at 85%, clear at 80%
         let current_fatigue_active = {
             // Try to read current state - if unavailable, assume false
-            StateManager::instance().try_read()
+            StateManager::instance()
+                .try_read()
                 .map(|m| m.get_core_state().is_fatigue_active())
                 .unwrap_or(false)
         };
@@ -2123,9 +2196,12 @@ impl ConnectomeManager {
         } else {
             firing_threshold_limit_raw
         };
-        
+
         // DEBUG: Log the increment values
-        if firing_threshold_increment_x != 0.0 || firing_threshold_increment_y != 0.0 || firing_threshold_increment_z != 0.0 {
+        if firing_threshold_increment_x != 0.0
+            || firing_threshold_increment_y != 0.0
+            || firing_threshold_increment_z != 0.0
+        {
             info!(
                 target: "feagi-bdu",
                 "🔍 [DEBUG] Area {}: firing_threshold_increment = [{}, {}, {}]",
@@ -2136,9 +2212,10 @@ impl ConnectomeManager {
             );
         } else {
             // Check if properties exist but are just 0
-            if area.properties.contains_key("firing_threshold_increment_x") ||
-               area.properties.contains_key("firing_threshold_increment_y") ||
-               area.properties.contains_key("firing_threshold_increment_z") {
+            if area.properties.contains_key("firing_threshold_increment_x")
+                || area.properties.contains_key("firing_threshold_increment_y")
+                || area.properties.contains_key("firing_threshold_increment_z")
+            {
                 info!(
                     target: "feagi-bdu",
                     "🔍 [DEBUG] Area {}: INCREMENT PROPERTIES FOUND: x={:?}, y={:?}, z={:?}",
@@ -2149,7 +2226,7 @@ impl ConnectomeManager {
                 );
             }
         }
-        
+
         let leak_coefficient = area.leak_coefficient();
         let excitability = area.neuron_excitability();
         let refractory_period = area.refractory_period();
@@ -2227,7 +2304,8 @@ impl ConnectomeManager {
         }
 
         // Update total neuron count cache
-        self.cached_neuron_count.fetch_add(neuron_count as usize, Ordering::Relaxed);
+        self.cached_neuron_count
+            .fetch_add(neuron_count as usize, Ordering::Relaxed);
 
         // CRITICAL: Update StateManager neuron count (for health_check endpoint)
         if let Some(state_manager) = StateManager::instance().try_read() {
@@ -2438,14 +2516,15 @@ impl ConnectomeManager {
 
             // Verify destination area exists
             if !self.cortical_id_to_idx.contains_key(&dst_cortical_id) {
-                    warn!(target: "feagi-bdu","Destination area {} not found, skipping", dst_cortical_id);
-                    continue;
-                }
+                warn!(target: "feagi-bdu","Destination area {} not found, skipping", dst_cortical_id);
+                continue;
+            }
 
             // Apply cortical mapping for this pair (handles STDP and all morphology rules)
-            let synapse_count = self.apply_cortical_mapping_for_pair(src_cortical_id, &dst_cortical_id)?;
+            let synapse_count =
+                self.apply_cortical_mapping_for_pair(src_cortical_id, &dst_cortical_id)?;
             total_synapses += synapse_count as u32;
-            
+
             // Queue upstream area update for ANY mapping (even if no synapses created)
             // This is critical for memory areas which have mappings but no physical synapses
             upstream_updates.push((dst_cortical_id, src_cortical_idx));
@@ -2474,7 +2553,8 @@ impl ConnectomeManager {
         }
 
         // Update total synapse count cache
-        self.cached_synapse_count.fetch_add(total_synapses as usize, Ordering::Relaxed);
+        self.cached_synapse_count
+            .fetch_add(total_synapses as usize, Ordering::Relaxed);
 
         // CRITICAL: Update StateManager synapse count (for health_check endpoint)
         if total_synapses > 0 {
@@ -3072,14 +3152,15 @@ impl ConnectomeManager {
     /// * `Err(BduError)` if creation fails
     pub fn ensure_core_cortical_areas(&mut self) -> BduResult<()> {
         info!(target: "feagi-bdu", "🔧 [CORE-AREA] Ensuring core cortical areas exist...");
-        
+
         use feagi_structures::genomic::cortical_area::{
             CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalAreaType,
         };
 
         // Core areas are always 1x1x1 as per requirements
-        let core_dimensions = CorticalAreaDimensions::new(1, 1, 1)
-            .map_err(|e| BduError::Internal(format!("Failed to create core area dimensions: {}", e)))?;
+        let core_dimensions = CorticalAreaDimensions::new(1, 1, 1).map_err(|e| {
+            BduError::Internal(format!("Failed to create core area dimensions: {}", e))
+        })?;
 
         // Default position for core areas (origin)
         let core_position = (0, 0, 0).into();
@@ -4625,7 +4706,9 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
         let cortical_id = CorticalID::try_from_bytes(b"cst_add_").unwrap(); // Use unique custom ID
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area = CorticalArea::new(
@@ -4653,7 +4736,9 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
         let cortical_id = CorticalID::try_from_bytes(b"cst_look").unwrap(); // Use unique custom ID
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area = CorticalArea::new(
@@ -4686,7 +4771,9 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
 
         // Remove area if it already exists from previous tests
@@ -4721,7 +4808,9 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
         let cortical_id1 = CoreCorticalType::Power.to_cortical_id();
         let cortical_type1 = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area1 = CorticalArea::new(
@@ -4889,7 +4978,9 @@ mod tests {
         let mut manager = manager_arc.write();
 
         // First create a cortical area to add neurons to
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
         let cortical_id = CorticalID::try_from_bytes(b"cst_syn_").unwrap(); // Use unique custom ID
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area = CorticalArea::new(
@@ -4971,7 +5062,9 @@ mod tests {
         // synapse regeneration treats "no mapping rules" as an error.
         let mut manager = ConnectomeManager::new_for_testing();
 
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
 
         let src_id = CorticalID::try_from_bytes(b"map_src_").unwrap();
         let dst_id = CorticalID::try_from_bytes(b"map_dst_").unwrap();
@@ -5000,16 +5093,26 @@ mod tests {
         manager.add_cortical_area(dst_area).unwrap();
 
         // No cortical_mapping_dst property set -> should be Ok(0), not an error
-        let count = manager.apply_cortical_mapping_for_pair(&src_id, &dst_id).unwrap();
+        let count = manager
+            .apply_cortical_mapping_for_pair(&src_id, &dst_id)
+            .unwrap();
         assert_eq!(count, 0);
 
         // Now create then delete mapping; missing destination rules should still be Ok(0)
         manager
-            .update_cortical_mapping(&src_id, &dst_id, vec![serde_json::json!({"morphology_id":"m1"})])
+            .update_cortical_mapping(
+                &src_id,
+                &dst_id,
+                vec![serde_json::json!({"morphology_id":"m1"})],
+            )
             .unwrap();
-        manager.update_cortical_mapping(&src_id, &dst_id, vec![]).unwrap();
+        manager
+            .update_cortical_mapping(&src_id, &dst_id, vec![])
+            .unwrap();
 
-        let count2 = manager.apply_cortical_mapping_for_pair(&src_id, &dst_id).unwrap();
+        let count2 = manager
+            .apply_cortical_mapping_for_pair(&src_id, &dst_id)
+            .unwrap();
         assert_eq!(count2, 0);
     }
 
@@ -5019,7 +5122,9 @@ mod tests {
         use feagi_npu_burst_engine::RustNPU;
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
         use std::sync::Arc;
 
         // Create NPU and manager (small capacities for a deterministic unit test)
@@ -5084,8 +5189,12 @@ mod tests {
         }
 
         // Simulate mapping deletion and regeneration: should prune synapses and not re-add any
-        manager.update_cortical_mapping(&src_id, &dst_id, vec![]).unwrap();
-        let created = manager.regenerate_synapses_for_mapping(&src_id, &dst_id).unwrap();
+        manager
+            .update_cortical_mapping(&src_id, &dst_id, vec![])
+            .unwrap();
+        let created = manager
+            .regenerate_synapses_for_mapping(&src_id, &dst_id)
+            .unwrap();
         assert_eq!(created, 0);
 
         // Verify synapses are gone (invalidated) and no outgoing synapses remain from the sources
@@ -5196,7 +5305,9 @@ mod tests {
                 })],
             )
             .unwrap();
-        let created = manager.regenerate_synapses_for_mapping(&src_id, &dst_id).unwrap();
+        let created = manager
+            .regenerate_synapses_for_mapping(&src_id, &dst_id)
+            .unwrap();
         assert_eq!(created, 0);
 
         // Verify synapses are gone and no outgoing synapses remain from the sources
@@ -5214,11 +5325,13 @@ mod tests {
     fn test_upstream_area_tracking() {
         // Test that upstream_cortical_areas property is maintained correctly
         use crate::models::cortical_area::CorticalArea;
-        use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalAreaType, CorticalID};
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, CorticalID,
+        };
 
         // Create test manager with NPU
         let runtime = StdRuntime;
@@ -5239,8 +5352,11 @@ mod tests {
             "Source Area".to_string(),
             CorticalAreaDimensions::new(2, 2, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::Custom(feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire),
-        ).unwrap();
+            CorticalAreaType::Custom(
+                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+            ),
+        )
+        .unwrap();
         let src_idx = manager.add_cortical_area(src_area).unwrap();
 
         // Create destination area (memory area)
@@ -5251,15 +5367,21 @@ mod tests {
             "Dest Area".to_string(),
             CorticalAreaDimensions::new(2, 2, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::Custom(feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire),
-        ).unwrap();
+            CorticalAreaType::Custom(
+                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+            ),
+        )
+        .unwrap();
         manager.add_cortical_area(dst_area).unwrap();
 
         // Verify upstream_cortical_areas property was initialized to empty array
         {
             let dst_area = manager.get_cortical_area(&dst_id).unwrap();
             let upstream = dst_area.properties.get("upstream_cortical_areas").unwrap();
-            assert!(upstream.as_array().unwrap().is_empty(), "Upstream areas should be empty initially");
+            assert!(
+                upstream.as_array().unwrap().is_empty(),
+                "Upstream areas should be empty initially"
+            );
         }
 
         // Create a mapping from src to dst
@@ -5268,24 +5390,39 @@ mod tests {
             "morphology_scalar": 1,
             "postSynapticCurrent_multiplier": 1.0,
         })];
-        manager.update_cortical_mapping(&src_id, &dst_id, mapping_data).unwrap();
-        manager.regenerate_synapses_for_mapping(&src_id, &dst_id).unwrap();
+        manager
+            .update_cortical_mapping(&src_id, &dst_id, mapping_data)
+            .unwrap();
+        manager
+            .regenerate_synapses_for_mapping(&src_id, &dst_id)
+            .unwrap();
 
         // Verify src_idx was added to dst's upstream_cortical_areas
         {
             let upstream_areas = manager.get_upstream_cortical_areas(&dst_id);
             assert_eq!(upstream_areas.len(), 1, "Should have 1 upstream area");
-            assert_eq!(upstream_areas[0], src_idx, "Upstream area should be src_idx");
+            assert_eq!(
+                upstream_areas[0], src_idx,
+                "Upstream area should be src_idx"
+            );
         }
 
         // Delete the mapping
-        manager.update_cortical_mapping(&src_id, &dst_id, vec![]).unwrap();
-        manager.regenerate_synapses_for_mapping(&src_id, &dst_id).unwrap();
+        manager
+            .update_cortical_mapping(&src_id, &dst_id, vec![])
+            .unwrap();
+        manager
+            .regenerate_synapses_for_mapping(&src_id, &dst_id)
+            .unwrap();
 
         // Verify src_idx was removed from dst's upstream_cortical_areas
         {
             let upstream_areas = manager.get_upstream_cortical_areas(&dst_id);
-            assert_eq!(upstream_areas.len(), 0, "Should have 0 upstream areas after deletion");
+            assert_eq!(
+                upstream_areas.len(),
+                0,
+                "Should have 0 upstream areas after deletion"
+            );
         }
     }
 }

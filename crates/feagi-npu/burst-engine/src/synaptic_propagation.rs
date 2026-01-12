@@ -70,8 +70,12 @@ fn synapse_trace_cfg() -> &'static SynapseTraceCfg {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
 
-        let src_filter = std::env::var("FEAGI_NPU_TRACE_SRC").ok().and_then(|v| v.parse().ok());
-        let dst_filter = std::env::var("FEAGI_NPU_TRACE_DST").ok().and_then(|v| v.parse().ok());
+        let src_filter = std::env::var("FEAGI_NPU_TRACE_SRC")
+            .ok()
+            .and_then(|v| v.parse().ok());
+        let dst_filter = std::env::var("FEAGI_NPU_TRACE_DST")
+            .ok()
+            .and_then(|v| v.parse().ok());
 
         SynapseTraceCfg {
             enabled,
@@ -198,7 +202,8 @@ impl SynapticPropagationEngine {
     ///
     /// This avoids rebuilding/replacing the entire flags map when toggling one area.
     pub fn set_psp_uniform_distribution_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
-        self.area_psp_uniform_distribution.insert(cortical_id, enabled);
+        self.area_psp_uniform_distribution
+            .insert(cortical_id, enabled);
     }
 
     /// Compute synaptic propagation for a set of fired neurons
@@ -278,7 +283,7 @@ impl SynapticPropagationEngine {
             uniform: bool,
             synapse_count: usize,
         }
-        
+
         let metadata_start = std::time::Instant::now();
         let source_metadata: AHashMap<NeuronId, SourceNeuronMetadata> = synapse_indices
             .par_iter()
@@ -294,24 +299,25 @@ impl SynapticPropagationEngine {
                     acc
                 },
             )
-            .reduce(
-                AHashMap::new,
-                |mut a, b| {
-                    for (id, (area, count)) in b {
-                        let entry = a.entry(id).or_insert_with(|| (area, 0));
-                        entry.1 += count;
-                        if entry.0.is_none() {
-                            entry.0 = area;
-                        }
+            .reduce(AHashMap::new, |mut a, b| {
+                for (id, (area, count)) in b {
+                    let entry = a.entry(id).or_insert_with(|| (area, 0));
+                    entry.1 += count;
+                    if entry.0.is_none() {
+                        entry.0 = area;
                     }
-                    a
-                },
-            )
+                }
+                a
+            })
             .into_iter()
             .filter_map(|(source_id, (area_opt, synapse_count))| {
                 let area = area_opt?;
                 let mp_driven = self.area_mp_driven_psp.get(&area).copied().unwrap_or(false);
-                let uniform = self.area_psp_uniform_distribution.get(&area).copied().unwrap_or(false);
+                let uniform = self
+                    .area_psp_uniform_distribution
+                    .get(&area)
+                    .copied()
+                    .unwrap_or(false);
                 Some((
                     source_id,
                     SourceNeuronMetadata {

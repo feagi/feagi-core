@@ -199,8 +199,10 @@ where
             DynamicNPUGeneric::INT8(npu) => {
                 let thresholds_int8: Vec<INT8Value> =
                     thresholds.into_iter().map(INT8Value::from_f32).collect();
-                let threshold_limits_int8: Vec<INT8Value> =
-                    threshold_limits.into_iter().map(INT8Value::from_f32).collect();
+                let threshold_limits_int8: Vec<INT8Value> = threshold_limits
+                    .into_iter()
+                    .map(INT8Value::from_f32)
+                    .collect();
                 let resting_int8: Vec<INT8Value> = resting_potentials
                     .into_iter()
                     .map(INT8Value::from_f32)
@@ -578,7 +580,10 @@ where
         sources: Vec<NeuronId>,
         targets: Vec<NeuronId>,
     ) -> usize {
-        dispatch_mut!(self, remove_synapses_from_sources_to_targets(sources, targets))
+        dispatch_mut!(
+            self,
+            remove_synapses_from_sources_to_targets(sources, targets)
+        )
     }
 
     pub fn update_synapse_weight(
@@ -605,11 +610,21 @@ where
         dst_cortical_idx: u32,
         params: crate::npu::StdpMappingParams,
     ) -> Result<()> {
-        dispatch_mut!(self, register_stdp_mapping(src_cortical_idx, dst_cortical_idx, params))
+        dispatch_mut!(
+            self,
+            register_stdp_mapping(src_cortical_idx, dst_cortical_idx, params)
+        )
     }
 
-    pub fn unregister_stdp_mapping(&mut self, src_cortical_idx: u32, dst_cortical_idx: u32) -> bool {
-        dispatch_mut!(self, unregister_stdp_mapping(src_cortical_idx, dst_cortical_idx))
+    pub fn unregister_stdp_mapping(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+    ) -> bool {
+        dispatch_mut!(
+            self,
+            unregister_stdp_mapping(src_cortical_idx, dst_cortical_idx)
+        )
     }
 
     pub fn get_neuron_capacity(&self) -> usize {
@@ -667,7 +682,11 @@ where
         )
     }
 
-    pub fn update_cortical_area_threshold_limit(&mut self, cortical_area: u32, limit: f32) -> usize {
+    pub fn update_cortical_area_threshold_limit(
+        &mut self,
+        cortical_area: u32,
+        limit: f32,
+    ) -> usize {
         dispatch_mut!(
             self,
             update_cortical_area_threshold_limit(cortical_area, limit)
@@ -781,10 +800,19 @@ where
     }
 
     /// Stage a memory neuron injection (50_000_000+ IDs) to the next burst’s FCL.
-    pub fn inject_memory_neuron_to_fcl(&mut self, neuron_id: u32, cortical_idx: u32, potential: f32) {
+    pub fn inject_memory_neuron_to_fcl(
+        &mut self,
+        neuron_id: u32,
+        cortical_idx: u32,
+        potential: f32,
+    ) {
         match self {
-            DynamicNPUGeneric::F32(npu) => npu.inject_memory_neuron_to_fcl(neuron_id, cortical_idx, potential),
-            DynamicNPUGeneric::INT8(npu) => npu.inject_memory_neuron_to_fcl(neuron_id, cortical_idx, potential),
+            DynamicNPUGeneric::F32(npu) => {
+                npu.inject_memory_neuron_to_fcl(neuron_id, cortical_idx, potential)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.inject_memory_neuron_to_fcl(neuron_id, cortical_idx, potential)
+            }
         }
     }
 
@@ -795,12 +823,20 @@ where
         cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
     ) {
         match self {
-            DynamicNPUGeneric::F32(npu) => npu.register_dynamic_neuron_mapping(neuron_id, cortical_id),
-            DynamicNPUGeneric::INT8(npu) => npu.register_dynamic_neuron_mapping(neuron_id, cortical_id),
+            DynamicNPUGeneric::F32(npu) => {
+                npu.register_dynamic_neuron_mapping(neuron_id, cortical_id)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.register_dynamic_neuron_mapping(neuron_id, cortical_id)
+            }
         }
     }
 
-    pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) -> Result<()> {
+    pub fn configure_fire_ledger_window(
+        &mut self,
+        cortical_idx: u32,
+        window_size: usize,
+    ) -> Result<()> {
         match self {
             DynamicNPUGeneric::F32(npu) => {
                 npu.configure_fire_ledger_window(cortical_idx, window_size)
@@ -850,7 +886,10 @@ where
         area_id: u32,
         coords: &[(u32, u32, u32)],
     ) -> Vec<Option<feagi_npu_neural::types::NeuronId>> {
-        dispatch!(self, batch_get_neuron_ids_from_coordinates_with_none(area_id, coords))
+        dispatch!(
+            self,
+            batch_get_neuron_ids_from_coordinates_with_none(area_id, coords)
+        )
     }
 
     pub fn get_registered_cortical_area_count(&self) -> usize {
@@ -881,7 +920,10 @@ where
         cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
         enabled: bool,
     ) {
-        dispatch_mut!(self, set_psp_uniform_distribution_flag(cortical_id, enabled))
+        dispatch_mut!(
+            self,
+            set_psp_uniform_distribution_flag(cortical_id, enabled)
+        )
     }
 
     pub fn set_mp_driven_psp_flags(

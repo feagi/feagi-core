@@ -61,7 +61,7 @@
 pub mod core;
 
 // Re-export core types at top level for convenience
-pub use core::{AgentClient, AgentConfig, AgentType, SdkError, Result};
+pub use core::{AgentClient, AgentConfig, AgentType, Result, SdkError};
 
 // SDK module (behind feature flag)
 #[cfg(feature = "sdk")]

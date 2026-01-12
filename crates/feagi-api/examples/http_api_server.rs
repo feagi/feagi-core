@@ -17,7 +17,8 @@ use feagi_services::impls::{
     RuntimeServiceImpl, SystemServiceImpl,
 };
 use feagi_services::traits::{
-    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService, SystemService,
+    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
+    SystemService,
 };
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -147,8 +148,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let current_genome = genome_service_impl.get_current_genome_arc();
     let genome_service = genome_service_impl as Arc<dyn GenomeService + Send + Sync>;
 
-    let connectome_service = Arc::new(ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone()))
-        as Arc<dyn ConnectomeService + Send + Sync>;
+    let connectome_service = Arc::new(ConnectomeServiceImpl::new(
+        connectome.clone(),
+        current_genome.clone(),
+    )) as Arc<dyn ConnectomeService + Send + Sync>;
 
     let neuron_service = Arc::new(NeuronServiceImpl::new(connectome.clone()))
         as Arc<dyn NeuronService + Send + Sync>;

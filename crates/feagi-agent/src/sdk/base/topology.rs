@@ -186,7 +186,10 @@ impl TopologyCache {
     ///
     /// Exposed primarily for contract tests to ensure SDK parsing stays compatible with
     /// FEAGI backend API changes.
-    pub fn parse_topology_payload(cortical_id: &CorticalID, payload: &Value) -> Result<CorticalTopology> {
+    pub fn parse_topology_payload(
+        cortical_id: &CorticalID,
+        payload: &Value,
+    ) -> Result<CorticalTopology> {
         let cortical_b64 = cortical_id.as_base_64();
         let info = payload
             .get(&cortical_b64)
@@ -197,13 +200,11 @@ impl TopologyCache {
             info.get("cortical_dimensions_per_device"),
             info.get("dev_count"),
         ) {
-            let dims = per_device_dims
-                .as_array()
-                .ok_or_else(|| {
-                    SdkError::InvalidConfiguration(
-                        "cortical_dimensions_per_device is not an array".to_string(),
-                    )
-                })?;
+            let dims = per_device_dims.as_array().ok_or_else(|| {
+                SdkError::InvalidConfiguration(
+                    "cortical_dimensions_per_device is not an array".to_string(),
+                )
+            })?;
 
             if dims.len() != 3 {
                 return Err(SdkError::InvalidConfiguration(format!(
@@ -266,10 +267,7 @@ impl TopologyCache {
             as u32;
 
         // Default to 1 channel if dev_count is missing (backward compatibility)
-        let channels = info
-            .get("dev_count")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1) as u32;
+        let channels = info.get("dev_count").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
 
         Ok(CorticalTopology {
             cortical_id: *cortical_id,
@@ -299,4 +297,3 @@ mod tests {
         assert_eq!(cache.cache_size(), 0);
     }
 }
-

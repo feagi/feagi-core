@@ -1,9 +1,8 @@
-use crate::genomic::cortical_area::descriptors::{CorticalUnitIndex, CorticalSubUnitIndex};
+use crate::genomic::cortical_area::descriptors::{CorticalSubUnitIndex, CorticalUnitIndex};
 use crate::genomic::cortical_area::CorticalID;
 use crate::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
 
 pub type IOCorticalAreaConfigurationFlagBitmask = u16; // 16 Total bits
 
@@ -89,7 +88,9 @@ impl IOCorticalAreaConfigurationFlag {
                         "CartesianPlane variant does not support positioning parameter",
                     ));
                 }
-                Ok(IOCorticalAreaConfigurationFlag::CartesianPlane(frame_handling_enum))
+                Ok(IOCorticalAreaConfigurationFlag::CartesianPlane(
+                    frame_handling_enum,
+                ))
             }
             10 => {
                 // Misc doesn't use positioning, but we'll accept it if set to 0
@@ -211,7 +212,9 @@ impl fmt::Display for IOCorticalAreaConfigurationFlag {
             IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame, percentage) => {
                 write!(f, "SignedPercentage4D({}, {})", frame, percentage)
             }
-            IOCorticalAreaConfigurationFlag::CartesianPlane(frame) => write!(f, "CartesianPlane({})", frame),
+            IOCorticalAreaConfigurationFlag::CartesianPlane(frame) => {
+                write!(f, "CartesianPlane({})", frame)
+            }
             IOCorticalAreaConfigurationFlag::Misc(frame) => write!(f, "Misc({})", frame),
         }
     }
@@ -226,9 +229,20 @@ pub enum PercentageNeuronPositioning {
 }
 
 impl PercentageNeuronPositioning {
-    pub fn try_from_serde_map(map: &serde_json::Map<String, serde_json::Value>) -> Result<PercentageNeuronPositioning,FeagiDataError> {
-        let val = map.get("percentage_neuron_positioning").ok_or(FeagiDataError::DeserializationError("Unable to extreact percentage_neuron_positioning!".to_string()))?;
-        let output: PercentageNeuronPositioning = serde_json::from_value(val.clone()).map_err(|_err| FeagiDataError::DeserializationError("Unable to extreact percentage_neuron_positioning!".to_string()))?;
+    pub fn try_from_serde_map(
+        map: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<PercentageNeuronPositioning, FeagiDataError> {
+        let val = map.get("percentage_neuron_positioning").ok_or(
+            FeagiDataError::DeserializationError(
+                "Unable to extreact percentage_neuron_positioning!".to_string(),
+            ),
+        )?;
+        let output: PercentageNeuronPositioning =
+            serde_json::from_value(val.clone()).map_err(|_err| {
+                FeagiDataError::DeserializationError(
+                    "Unable to extreact percentage_neuron_positioning!".to_string(),
+                )
+            })?;
         Ok(output)
     }
 }
@@ -250,9 +264,19 @@ pub enum FrameChangeHandling {
 }
 
 impl FrameChangeHandling {
-    pub fn try_from_serde_map(map: &serde_json::Map<String, serde_json::Value>) -> Result<FrameChangeHandling,FeagiDataError> {
-        let val = map.get("frame_change_handling").ok_or(FeagiDataError::DeserializationError("Unable to extreact frame_change_handling!".to_string()))?;
-        let output: FrameChangeHandling = serde_json::from_value(val.clone()).map_err(|_err| FeagiDataError::DeserializationError("Unable to extreact frame_change_handling!".to_string()))?;
+    pub fn try_from_serde_map(
+        map: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<FrameChangeHandling, FeagiDataError> {
+        let val = map
+            .get("frame_change_handling")
+            .ok_or(FeagiDataError::DeserializationError(
+                "Unable to extreact frame_change_handling!".to_string(),
+            ))?;
+        let output: FrameChangeHandling = serde_json::from_value(val.clone()).map_err(|_err| {
+            FeagiDataError::DeserializationError(
+                "Unable to extreact frame_change_handling!".to_string(),
+            )
+        })?;
         Ok(output)
     }
 }

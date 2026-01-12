@@ -50,13 +50,27 @@ pub struct ApiState {
     pub memory_stats_cache: Option<feagi_npu_plasticity::MemoryStatsCache>,
     /// Device registration connectors per agent (for export/import functionality)
     #[cfg(feature = "feagi-agent")]
-    pub agent_connectors: Arc<parking_lot::RwLock<std::collections::HashMap<String, Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>>>>,
+    pub agent_connectors: Arc<
+        parking_lot::RwLock<
+            std::collections::HashMap<
+                String,
+                Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
+            >,
+        >,
+    >,
 }
 
 impl ApiState {
     /// Initialize agent_connectors field (empty HashMap)
     #[cfg(feature = "feagi-agent")]
-    pub fn init_agent_connectors() -> Arc<parking_lot::RwLock<std::collections::HashMap<String, Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>>>> {
+    pub fn init_agent_connectors() -> Arc<
+        parking_lot::RwLock<
+            std::collections::HashMap<
+                String,
+                Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
+            >,
+        >,
+    > {
         Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()))
     }
 }
@@ -183,8 +197,7 @@ fn create_v1_router() -> Router<ApiState> {
         )
         .route(
             "/agent/:agent_id/device_registrations",
-            get(agent::export_device_registrations)
-                .post(agent::import_device_registrations),
+            get(agent::export_device_registrations).post(agent::import_device_registrations),
         )
         // ===== SYSTEM MODULE (21 endpoints) =====
         .route("/system/health_check", get(system::get_health_check))
@@ -633,7 +646,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(burst_engine::get_simulation_timestep).post(burst_engine::post_simulation_timestep),
         )
         .route("/burst_engine/fcl", get(burst_engine::get_fcl))
-        .route("/burst_engine/fcl/neuron", get(burst_engine::get_fcl_neuron))
+        .route(
+            "/burst_engine/fcl/neuron",
+            get(burst_engine::get_fcl_neuron),
+        )
         .route(
             "/burst_engine/fire_queue",
             get(burst_engine::get_fire_queue),

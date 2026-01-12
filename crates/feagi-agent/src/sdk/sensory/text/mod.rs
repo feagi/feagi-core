@@ -8,4 +8,3 @@ pub mod encoder;
 
 pub use config::TextEncoderConfig;
 pub use encoder::TextEncoder;
-

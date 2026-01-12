@@ -8,8 +8,8 @@ use crate::core::error::{Result, SdkError};
 use crate::core::heartbeat::HeartbeatService;
 use crate::core::reconnect::{retry_with_backoff, ReconnectionStrategy};
 use feagi_io::AgentType;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use tracing::{debug, error, info, trace, warn};
 
@@ -316,11 +316,11 @@ impl AgentClient {
             if message.contains("already registered") {
                 warn!("[CLIENT] ⚠ Agent already registered - attempting deregistration and retry");
                 self.deregister()?;
-                
+
                 // Retry registration after deregistration
                 info!("[CLIENT] Retrying registration after deregistration...");
                 std::thread::sleep(std::time::Duration::from_millis(100)); // Brief delay
-                
+
                 // Recursive retry (only once - avoid infinite loop)
                 self.register_with_retry_once()
             } else {
@@ -381,7 +381,10 @@ impl AgentClient {
             let empty_body = serde_json::json!({});
             let body = response.get("body").unwrap_or(&empty_body);
             self.last_registration_body = Some(body.clone());
-            info!("[CLIENT] ✓ Registration successful (after retry): {:?}", response);
+            info!(
+                "[CLIENT] ✓ Registration successful (after retry): {:?}",
+                response
+            );
             Ok(())
         } else {
             let empty_body = serde_json::json!({});
@@ -531,7 +534,9 @@ impl AgentClient {
         let (width, _height) = vision_cap.dimensions;
 
         // Derive cortical ID in a language-agnostic way if semantic unit+group is provided.
-        let cortical_id = if let (Some(unit), Some(group_index)) = (vision_cap.unit, vision_cap.group) {
+        let cortical_id = if let (Some(unit), Some(group_index)) =
+            (vision_cap.unit, vision_cap.group)
+        {
             use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
             use feagi_structures::genomic::SensoryCorticalUnit;
 

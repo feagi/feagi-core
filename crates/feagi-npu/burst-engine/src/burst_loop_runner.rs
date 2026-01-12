@@ -22,7 +22,7 @@
 use crate::parameter_update_queue::ParameterUpdateQueue;
 use crate::sensory::AgentManager;
 #[cfg(feature = "std")]
-use crate::{DynamicNPU, tracing_mutex::TracingMutex};
+use crate::{tracing_mutex::TracingMutex, DynamicNPU};
 use feagi_npu_neural::types::NeuronId;
 use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -527,7 +527,10 @@ impl BurstLoopRunner {
     pub fn get_fcl_snapshot(&self) -> Vec<(NeuronId, f32)> {
         let lock_start = std::time::Instant::now();
         let thread_id = std::thread::current().id();
-        debug!("[NPU-LOCK] BURST-RUNNER: Thread {:?} attempting NPU lock for get_fcl_snapshot at {:?}", thread_id, lock_start);
+        debug!(
+            "[NPU-LOCK] BURST-RUNNER: Thread {:?} attempting NPU lock for get_fcl_snapshot at {:?}",
+            thread_id, lock_start
+        );
         let result = {
             let npu_lock = self.npu.lock().unwrap();
             let lock_acquired = std::time::Instant::now();
@@ -553,7 +556,10 @@ impl BurstLoopRunner {
     pub fn get_fire_queue_sample(&mut self) -> Option<FireQueueSample> {
         let cached = self.cached_fire_queue.lock().unwrap().clone();
         if let Some(ref sample_arc) = cached {
-            debug!("[BURST-LOOP-RUNNER] Returning cached fire queue: {} areas", sample_arc.len());
+            debug!(
+                "[BURST-LOOP-RUNNER] Returning cached fire queue: {} areas",
+                sample_arc.len()
+            );
         } else {
             debug!("[BURST-LOOP-RUNNER] Cached fire queue is None");
         }
@@ -641,7 +647,9 @@ impl BurstLoopRunner {
     /// CRITICAL: This eliminates NPU lock acquisitions that were causing 1-3s delays!
     pub fn refresh_cortical_id_mappings(&self, mappings: ahash::AHashMap<u32, String>) {
         *self.cached_cortical_id_mappings.lock().unwrap() = mappings;
-        let current_burst = self.cached_burst_count.load(std::sync::atomic::Ordering::Relaxed);
+        let current_burst = self
+            .cached_burst_count
+            .load(std::sync::atomic::Ordering::Relaxed);
         *self.last_cortical_id_refresh.lock().unwrap() = current_burst;
         debug!(
             "[BURST-LOOP] Refreshed cortical_id mappings: {} areas (burst {})",
@@ -652,11 +660,17 @@ impl BurstLoopRunner {
 
     /// Refresh cortical_idx -> visualization_voxel_granularity mappings from ConnectomeManager
     /// This should be called when cortical areas are created/updated
-    pub fn refresh_visualization_granularities(&self, granularities: ahash::AHashMap<u32, (u32, u32, u32)>) {
+    pub fn refresh_visualization_granularities(
+        &self,
+        granularities: ahash::AHashMap<u32, (u32, u32, u32)>,
+    ) {
         *self.cached_visualization_granularities.lock().unwrap() = granularities;
         debug!(
             "[BURST-LOOP] Refreshed chunk sizes: {} areas",
-            self.cached_visualization_granularities.lock().unwrap().len()
+            self.cached_visualization_granularities
+                .lock()
+                .unwrap()
+                .len()
         );
     }
 }
@@ -694,48 +708,54 @@ fn aggregate_into_visualization_chunks(
     granularity: (u32, u32, u32),
 ) -> AggregatedVisualizationChunks {
     let (chunk_x, chunk_y, chunk_z) = granularity;
-    
+
     // Use HashMap to aggregate chunks: chunk_coord -> (sum_potential, count)
     let mut chunk_map: ahash::AHashMap<(u32, u32, u32), (f32, u32)> = ahash::AHashMap::new();
-    
+
     for i in 0..neuron_ids.len() {
         let x = coords_x[i];
         let y = coords_y[i];
         let z = coords_z[i];
         let p = potentials[i];
-        
+
         // Calculate chunk coordinates
         let chunk_x_coord = x / chunk_x;
         let chunk_y_coord = y / chunk_y;
         let chunk_z_coord = z / chunk_z;
-        
+
         let chunk_key = (chunk_x_coord, chunk_y_coord, chunk_z_coord);
-        
+
         // Aggregate: sum potentials and count neurons
         let entry = chunk_map.entry(chunk_key).or_insert((0.0, 0));
         entry.0 += p;
         entry.1 += 1;
     }
-    
+
     // Convert aggregated chunks to vectors
     let mut chunk_coords_x = Vec::with_capacity(chunk_map.len());
     let mut chunk_coords_y = Vec::with_capacity(chunk_map.len());
     let mut chunk_coords_z = Vec::with_capacity(chunk_map.len());
     let mut chunk_potentials = Vec::with_capacity(chunk_map.len());
     let mut chunk_counts = Vec::with_capacity(chunk_map.len());
-    
+
     for ((cx, cy, cz), (sum_p, count)) in chunk_map {
         // Store chunk center coordinates (middle of chunk)
         chunk_coords_x.push(cx * chunk_x + chunk_x / 2);
         chunk_coords_y.push(cy * chunk_y + chunk_y / 2);
         chunk_coords_z.push(cz * chunk_z + chunk_z / 2);
-        
+
         // Average potential (sum / count)
         chunk_potentials.push(sum_p / count as f32);
         chunk_counts.push(count);
     }
-    
-    (chunk_coords_x, chunk_coords_y, chunk_coords_z, chunk_potentials, chunk_counts)
+
+    (
+        chunk_coords_x,
+        chunk_coords_y,
+        chunk_coords_z,
+        chunk_potentials,
+        chunk_counts,
+    )
 }
 
 /// Helper function to encode fire queue data to XYZP format
@@ -909,7 +929,7 @@ fn burst_loop(
     motor_subscriptions: Arc<ParkingLotRwLock<ahash::AHashMap<String, ahash::AHashSet<String>>>>,
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>, // For lock-free burst count reads
     cached_fire_queue: Arc<Mutex<Option<Arc<FireQueueSample>>>>, // For caching fire queue data (Arc-wrapped to avoid cloning)
-    parameter_queue: ParameterUpdateQueue,                 // Asynchronous parameter update queue
+    parameter_queue: ParameterUpdateQueue, // Asynchronous parameter update queue
     plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Plasticity notification callback
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>, // Cached cortical_idx -> cortical_id
     _last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
@@ -941,7 +961,7 @@ fn burst_loop(
         if burst_num.is_multiple_of(100) {
             trace!("[BURST-LOOP] Burst {} starting (loop is alive)", burst_num);
         }
-        
+
         // Track time since last burst (to detect blocking)
         static LAST_ITERATION_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
         {
@@ -986,7 +1006,7 @@ fn burst_loop(
         static LAST_LOCK_RELEASE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
         #[allow(dead_code)]
         static LAST_BURST_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
-        
+
         let lock_start = Instant::now();
         if let Ok(last_release) = LAST_LOCK_RELEASE.lock() {
             if let Some(last) = *last_release {
@@ -1002,7 +1022,7 @@ fn burst_loop(
                 }
             }
         }
-        
+
         if burst_num < 5 || burst_num.is_multiple_of(100) {
             trace!(
                 "[BURST-LOOP-DIAGNOSTIC] Burst {}: Attempting NPU lock...",
@@ -1014,16 +1034,19 @@ fn burst_loop(
         let lock_acquired = {
             // Log lock attempt with timestamp for correlation
             if lock_start.elapsed().as_millis() == 0 {
-                debug!("[NPU-LOCK] Burst {}: Attempting lock acquisition at {:?}", burst_num, lock_start);
+                debug!(
+                    "[NPU-LOCK] Burst {}: Attempting lock acquisition at {:?}",
+                    burst_num, lock_start
+                );
             }
-            
+
             // Check if something else is holding the lock
             let acquisition_start = lock_start;
             let current_thread_id = std::thread::current().id();
             let mut npu_lock = npu.lock().unwrap();
             let acquired = Instant::now();
             let lock_wait_duration = acquired.duration_since(lock_start);
-            
+
             // Log if lock acquisition took significant time (could indicate contention)
             if lock_wait_duration.as_millis() > 10 {
                 // Check if we can see what might have been holding it
@@ -1047,7 +1070,11 @@ fn burst_loop(
                         );
                     }
                 }
-                debug!("[NPU-LOCK] Lock acquired by burst loop thread {:?} after {}ms wait", current_thread_id, lock_wait_duration.as_millis());
+                debug!(
+                    "[NPU-LOCK] Lock acquired by burst loop thread {:?} after {}ms wait",
+                    current_thread_id,
+                    lock_wait_duration.as_millis()
+                );
             }
             if burst_num < 5 || burst_num.is_multiple_of(100) {
                 trace!(
@@ -1075,9 +1102,7 @@ fn burst_loop(
 
                     for update in pending_updates {
                         let count = match update.parameter_name.as_str() {
-                            "neuron_fire_threshold"
-                            | "firing_threshold"
-                            => {
+                            "neuron_fire_threshold" | "firing_threshold" => {
                                 if let Some(threshold) = update.value.as_f64() {
                                     npu_lock.update_cortical_area_threshold(
                                         update.cortical_idx,
@@ -1092,20 +1117,19 @@ fn burst_loop(
                                 // This is sent as array [x, y, z] from BV
                                 if let Some(arr) = update.value.as_array() {
                                     if arr.len() == 3 {
-                                        if let (Some(inc_x), Some(inc_y), Some(inc_z)) = (
-                                            arr[0].as_f64(),
-                                            arr[1].as_f64(),
-                                            arr[2].as_f64(),
-                                        ) {
+                                        if let (Some(inc_x), Some(inc_y), Some(inc_z)) =
+                                            (arr[0].as_f64(), arr[1].as_f64(), arr[2].as_f64())
+                                        {
                                             // Get base threshold from update metadata
                                             if let Some(base_threshold) = update.base_threshold {
-                                                npu_lock.update_cortical_area_threshold_with_gradient(
-                                                    update.cortical_idx,
-                                                    base_threshold,
-                                                    inc_x as f32,
-                                                    inc_y as f32,
-                                                    inc_z as f32,
-                                                )
+                                                npu_lock
+                                                    .update_cortical_area_threshold_with_gradient(
+                                                        update.cortical_idx,
+                                                        base_threshold,
+                                                        inc_x as f32,
+                                                        inc_y as f32,
+                                                        inc_z as f32,
+                                                    )
                                             } else {
                                                 warn!(
                                                     "[PARAM-QUEUE] Spatial gradient update missing base_threshold - skipping"
@@ -1301,19 +1325,20 @@ fn burst_loop(
                         total_neurons_fired += result.neuron_count;
                         // Update cached burst count for lock-free reads
                         let current_burst = npu_lock.get_burst_count();
-                        cached_burst_count.store(
-                            current_burst,
-                            std::sync::atomic::Ordering::Relaxed,
-                        );
-                        
+                        cached_burst_count
+                            .store(current_burst, std::sync::atomic::Ordering::Relaxed);
+
                         // Notify plasticity service of completed burst (while NPU lock still held)
                         // This allows plasticity service to immediately query FireLedger data
                         // Callback is pre-cloned Arc, so this is just a function call (no allocation)
                         if let Some(ref notify_fn) = plasticity_notify {
-                            trace!("[BURST-LOOP] 🧠 Notifying plasticity service of burst {}", current_burst);
+                            trace!(
+                                "[BURST-LOOP] 🧠 Notifying plasticity service of burst {}",
+                                current_burst
+                            );
                             notify_fn(current_burst);
                         }
-                        
+
                         // CRITICAL PERFORMANCE FIX: Cache fire queue sample from process_burst() result
                         // This avoids needing to acquire NPU lock again (was causing 2-5 second delays!)
                         // The sample is built inside process_burst() while the lock is already held
@@ -1334,7 +1359,7 @@ fn burst_loop(
                                 burst_num
                             );
                         }
-                        
+
                         false // Continue processing
                     }
                     Err(e) => {
@@ -1347,7 +1372,7 @@ fn burst_loop(
                     }
                 }
             };
-            
+
             // Return both should_exit and lock_acquired time
             (should_exit, acquired)
         };
@@ -1355,12 +1380,12 @@ fn burst_loop(
         let (should_exit, lock_acquired) = lock_acquired;
         let npu_lock_release_time = Instant::now();
         let release_thread_id = std::thread::current().id();
-        
+
         // Update last lock release time
         if let Ok(mut last_release) = LAST_LOCK_RELEASE.lock() {
             *last_release = Some(npu_lock_release_time);
         }
-        
+
         // Log lock release timing for diagnostics
         let lock_hold_duration = npu_lock_release_time.duration_since(lock_acquired);
         if lock_hold_duration.as_millis() > 5 || burst_num < 5 || burst_num.is_multiple_of(100) {
@@ -1382,7 +1407,8 @@ fn burst_loop(
         // Note: NPU.process_burst() already incremented its internal burst_count
 
         let post_burst_start = Instant::now();
-        let time_between_npu_release_and_post_burst = post_burst_start.duration_since(npu_lock_release_time);
+        let time_between_npu_release_and_post_burst =
+            post_burst_start.duration_since(npu_lock_release_time);
         if time_between_npu_release_and_post_burst.as_millis() > 10 {
             warn!(
                 "[BURST-LOOP] ⚠️ Slow gap between NPU release and post-burst: {:.2}ms (burst {})",
@@ -1491,11 +1517,11 @@ fn burst_loop(
                 // CRITICAL PERFORMANCE FIX: Use cached cortical_id mappings from ConnectomeManager
                 // This eliminates NPU lock acquisitions that were causing 1-3s delays!
                 // Area names are stored in ConnectomeManager, not NPU - we cache them here
-                // 
+                //
                 // NOTE: Cache is refreshed externally via refresh_cortical_id_mappings() when areas are created/updated
                 // For now, if cache is empty, we'll use fallback (area_{idx}) - this is acceptable as visualization
                 // only needs cortical_id once, and it will be refreshed on next area creation/update
-                
+
                 // CRITICAL PERFORMANCE: Clone both maps to release locks immediately
                 // This prevents holding locks during expensive visualization aggregation and vector cloning
                 let granularities_clone = {
@@ -1506,7 +1532,7 @@ fn burst_loop(
                         Some(granularities.clone())
                     }
                 };
-                
+
                 // CRITICAL PERFORMANCE: Clone cortical_id mappings to release lock immediately
                 // This prevents lock contention when ConnectomeManager tries to refresh the cache
                 let cortical_id_mappings_clone = {
@@ -1537,8 +1563,11 @@ fn burst_loop(
                                 _ => {
                                     // Skip areas not in cache (cache should be populated from ConnectomeManager)
                                     // Log warning only once per area to avoid spam
-                                    static WARNED_AREAS: std::sync::LazyLock<std::sync::Mutex<ahash::AHashSet<u32>>> = 
-                                        std::sync::LazyLock::new(|| std::sync::Mutex::new(ahash::AHashSet::new()));
+                                    static WARNED_AREAS: std::sync::LazyLock<
+                                        std::sync::Mutex<ahash::AHashSet<u32>>,
+                                    > = std::sync::LazyLock::new(|| {
+                                        std::sync::Mutex::new(ahash::AHashSet::new())
+                                    });
                                     let mut warned = WARNED_AREAS.lock().unwrap();
                                     if !warned.contains(area_id) {
                                         warn!(
@@ -1558,35 +1587,52 @@ fn burst_loop(
                     // For areas without aggregated rendering, we must clone because we're reading from Arc (can't move)
                     // OPTIMIZATION: For small numbers of fired neurons, cloning is fast. For large numbers,
                     // aggregated rendering should be used to reduce data size.
-                    let (final_coords_x, final_coords_y, final_coords_z, final_potentials, final_neuron_ids) = 
-                        if let Some(ref granularities) = granularities_clone {
-                            if let Some(&granularity) = granularities.get(area_id) {
-                                // Apply aggregated rendering for large areas (creates new aggregated vectors)
-                                // This reduces data size significantly for areas with many fired neurons
-                                let (chunk_x, chunk_y, chunk_z, chunk_p, _chunk_counts) = 
-                                    aggregate_into_visualization_chunks(
-                                        neuron_ids,
-                                        coords_x,
-                                        coords_y,
-                                        coords_z,
-                                        potentials,
-                                        granularity,
-                                    );
-                                // For aggregated rendering, use chunk indices as neuron IDs (or sequential IDs)
-                                let chunk_ids: Vec<u32> = (0..chunk_x.len() as u32).collect();
-                                (chunk_x, chunk_y, chunk_z, chunk_p, chunk_ids)
-                            } else {
-                                // No aggregated rendering for this area - must clone because we're reading from Arc (can't move)
-                                // NOTE: This is only expensive if many neurons fired. If only a few neurons fired,
-                                // the vectors are small and cloning is fast.
-                                (coords_x.clone(), coords_y.clone(), coords_z.clone(), potentials.clone(), neuron_ids.clone())
-                            }
+                    let (
+                        final_coords_x,
+                        final_coords_y,
+                        final_coords_z,
+                        final_potentials,
+                        final_neuron_ids,
+                    ) = if let Some(ref granularities) = granularities_clone {
+                        if let Some(&granularity) = granularities.get(area_id) {
+                            // Apply aggregated rendering for large areas (creates new aggregated vectors)
+                            // This reduces data size significantly for areas with many fired neurons
+                            let (chunk_x, chunk_y, chunk_z, chunk_p, _chunk_counts) =
+                                aggregate_into_visualization_chunks(
+                                    neuron_ids,
+                                    coords_x,
+                                    coords_y,
+                                    coords_z,
+                                    potentials,
+                                    granularity,
+                                );
+                            // For aggregated rendering, use chunk indices as neuron IDs (or sequential IDs)
+                            let chunk_ids: Vec<u32> = (0..chunk_x.len() as u32).collect();
+                            (chunk_x, chunk_y, chunk_z, chunk_p, chunk_ids)
                         } else {
-                            // No aggregated rendering configured at all - must clone because we're reading from Arc (can't move)
+                            // No aggregated rendering for this area - must clone because we're reading from Arc (can't move)
                             // NOTE: This is only expensive if many neurons fired. If only a few neurons fired,
                             // the vectors are small and cloning is fast.
-                            (coords_x.clone(), coords_y.clone(), coords_z.clone(), potentials.clone(), neuron_ids.clone())
-                        };
+                            (
+                                coords_x.clone(),
+                                coords_y.clone(),
+                                coords_z.clone(),
+                                potentials.clone(),
+                                neuron_ids.clone(),
+                            )
+                        }
+                    } else {
+                        // No aggregated rendering configured at all - must clone because we're reading from Arc (can't move)
+                        // NOTE: This is only expensive if many neurons fired. If only a few neurons fired,
+                        // the vectors are small and cloning is fast.
+                        (
+                            coords_x.clone(),
+                            coords_y.clone(),
+                            coords_z.clone(),
+                            potentials.clone(),
+                            neuron_ids.clone(),
+                        )
+                    };
 
                     total_neurons += final_neuron_ids.len();
 
@@ -1596,9 +1642,14 @@ fn burst_loop(
                     // can trigger its jelly animation without requiring actual per-neuron coordinates.
                     // Detect memory areas by decoding cortical ID bytes (deterministic; no hardcoded IDs).
                     // Memory areas may be encoded as custom IDs prefixed by `cmem...`.
-                    let is_memory_area = feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(&cortical_id)
+                    let is_memory_area =
+                        feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                            &cortical_id,
+                        )
                         .ok()
-                        .is_some_and(|id| id.as_bytes().starts_with(b"cmem") || id.as_bytes()[0] == b'm');
+                        .is_some_and(|id| {
+                            id.as_bytes().starts_with(b"cmem") || id.as_bytes()[0] == b'm'
+                        });
 
                     // FEAGI-side diagnostics (must be easy to spot in logs):
                     // - If `cortical_id` falls back to "area_{idx}", Type11 serialization may drop the area.
@@ -1725,7 +1776,9 @@ fn burst_loop(
                                     match area_id {
                                         0 => CoreCorticalType::Death.to_cortical_id().as_base_64(),
                                         1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
-                                        2 => CoreCorticalType::Fatigue.to_cortical_id().as_base_64(),
+                                        2 => {
+                                            CoreCorticalType::Fatigue.to_cortical_id().as_base_64()
+                                        }
                                         _ => continue,
                                     }
                                 }
@@ -1789,14 +1842,14 @@ fn burst_loop(
                     "[BURST-LOOP] 🎮 MOTOR: Processing fire data with {} cortical areas",
                     (**fire_data_arc).len()
                 );
-                
+
                 // CRITICAL PERFORMANCE FIX: Clone mappings to release lock immediately
                 // This prevents lock contention when ConnectomeManager tries to refresh the cache
                 let cortical_id_mappings_motor = {
                     let mappings = cached_cortical_id_mappings.lock().unwrap();
                     mappings.clone()
                 };
-                
+
                 // Convert to RawFireQueueSnapshot (clone data for motor processing)
                 let mut motor_snapshot = RawFireQueueSnapshot::new();
                 for (area_id, (neuron_ids, coords_x, coords_y, coords_z, potentials)) in
@@ -1822,8 +1875,11 @@ fn burst_loop(
                                 _ => {
                                     // Skip areas not in cache (cache should be populated from ConnectomeManager)
                                     // Log warning only once per area to avoid spam
-                                    static WARNED_AREAS_MOTOR: std::sync::LazyLock<std::sync::Mutex<ahash::AHashSet<u32>>> = 
-                                        std::sync::LazyLock::new(|| std::sync::Mutex::new(ahash::AHashSet::new()));
+                                    static WARNED_AREAS_MOTOR: std::sync::LazyLock<
+                                        std::sync::Mutex<ahash::AHashSet<u32>>,
+                                    > = std::sync::LazyLock::new(|| {
+                                        std::sync::Mutex::new(ahash::AHashSet::new())
+                                    });
                                     let mut warned = WARNED_AREAS_MOTOR.lock().unwrap();
                                     if !warned.contains(area_id) {
                                         warn!(
@@ -2064,7 +2120,7 @@ fn burst_loop(
                 iteration_duration.as_secs_f64() * 1000.0 - time_between_npu_release_and_post_burst.as_secs_f64() * 1000.0 - post_burst_duration.as_secs_f64() * 1000.0 - stats_duration.as_secs_f64() * 1000.0
             );
         }
-        
+
         // Update last iteration end time
         {
             let mut last_end = LAST_ITERATION_END.lock().unwrap();
@@ -2081,7 +2137,7 @@ fn burst_loop(
         let interval_sec = 1.0 / current_frequency_hz;
         let target_time = burst_start + Duration::from_secs_f64(interval_sec);
         let now = Instant::now();
-        
+
         // Log if we're already past target (iteration took too long)
         if now > target_time {
             let overshoot = now.duration_since(target_time);
@@ -2217,7 +2273,10 @@ mod tests {
 
         struct NoViz;
         impl VisualizationPublisher for NoViz {
-            fn publish_raw_fire_queue(&self, _fire_data: RawFireQueueSnapshot) -> Result<(), String> {
+            fn publish_raw_fire_queue(
+                &self,
+                _fire_data: RawFireQueueSnapshot,
+            ) -> Result<(), String> {
                 Ok(())
             }
         }
@@ -2234,7 +2293,9 @@ mod tests {
 
         // Build an NPU with one neuron we can deterministically force to fire.
         let mut rust_npu =
-            <crate::RustNPU<StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+            <crate::RustNPU<StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
 
         // Use a non-core cortical_idx to avoid implicit core neuron creation (0..=2).
         rust_npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
@@ -2243,17 +2304,17 @@ mod tests {
 
         let neuron = rust_npu
             .add_neuron(
-                1.0,  // threshold
-                f32::MAX,  // threshold_limit (MAX = no limit, SIMD-friendly encoding)
-                0.0,  // leak_coefficient
-                0.0,  // resting_potential
-                0,    // neuron_type
-                0,    // refractory_period
-                1.0,  // excitability
-                0,    // consecutive_fire_limit
-                0,    // snooze_period
-                true, // mp_charge_accumulation
-                3,    // cortical_area
+                1.0,      // threshold
+                f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
+                0.0,      // leak_coefficient
+                0.0,      // resting_potential
+                0,        // neuron_type
+                0,        // refractory_period
+                1.0,      // excitability
+                0,        // consecutive_fire_limit
+                0,        // snooze_period
+                true,     // mp_charge_accumulation
+                3,        // cortical_area
                 0,
                 0,
                 0,

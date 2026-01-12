@@ -5,13 +5,13 @@
 // Uses PUB socket pattern for one-to-many distribution with an asynchronous sender to avoid frame loss.
 
 use crossbeam::queue::ArrayQueue;
+use feagi_structures::FeagiDataError;
 use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
-use feagi_structures::FeagiDataError;
 
 /// Overflow handling strategy when the visualization queue is saturated.
 #[derive(Clone, Copy, Debug, Default)]
@@ -51,10 +51,14 @@ impl Default for VisualizationSendConfig {
 impl VisualizationSendConfig {
     pub fn validate(&self) -> Result<(), FeagiDataError> {
         if self.queue_capacity == 0 {
-            return Err(FeagiDataError::BadParameters("Visualization queue capacity must be greater than zero".to_string()));
+            return Err(FeagiDataError::BadParameters(
+                "Visualization queue capacity must be greater than zero".to_string(),
+            ));
         }
         if self.backpressure_sleep_ms == 0 {
-            return Err(FeagiDataError::BadParameters("backpressure_sleep_ms must be at least 1".to_string()));
+            return Err(FeagiDataError::BadParameters(
+                "backpressure_sleep_ms must be at least 1".to_string(),
+            ));
         }
         Ok(())
     }
@@ -152,29 +156,38 @@ impl VisualizationStream {
     /// Start the visualization stream
     pub fn start(&self) -> Result<(), FeagiDataError> {
         if *self.running.lock() {
-            return Err(FeagiDataError::BadParameters("Visualization stream already running".to_string()));
+            return Err(FeagiDataError::BadParameters(
+                "Visualization stream already running".to_string(),
+            ));
         }
 
         while self.queue.pop().is_some() {}
 
-        let socket = self.context.socket(zmq::PUB)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to create ZMQ PUB socket: {}", e)))?;
+        let socket = self.context.socket(zmq::PUB).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to create ZMQ PUB socket: {}", e))
+        })?;
 
-        socket.set_linger(0)
+        socket
+            .set_linger(0)
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to set linger: {}", e)))?;
         // REAL-TIME: HWM=1 ensures only latest visualization is kept
         // Brain Visualizer should show current activity, not buffered history
-        socket.set_sndhwm(1)
+        socket
+            .set_sndhwm(1)
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to set send HWM: {}", e)))?;
         // REAL-TIME: conflate=true enables "last value caching" - keeps only newest message
         // This is critical for PUB/SUB pattern to drop intermediate frames
-        socket.set_conflate(true)
+        socket
+            .set_conflate(true)
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to set conflate: {}", e)))?;
         socket
             .set_sndtimeo(self.send_config.send_timeout_ms)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set send timeout: {}", e)))?;
+            .map_err(|e| {
+                FeagiDataError::InternalError(format!("Failed to set send timeout: {}", e))
+            })?;
 
-        socket.bind(&self.bind_address)
+        socket
+            .bind(&self.bind_address)
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
@@ -340,11 +353,12 @@ impl VisualizationStream {
 
             // Create CorticalID from cortical_id (base64 encoded)
             let cortical_id =
-                CorticalID::try_from_base_64(&area_data.cortical_id)
-                    .map_err(|e| FeagiDataError::BadParameters(format!(
+                CorticalID::try_from_base_64(&area_data.cortical_id).map_err(|e| {
+                    FeagiDataError::BadParameters(format!(
                         "Failed to decode CorticalID from base64 '{}': {:?}",
                         area_data.cortical_id, e
-                    )))?;
+                    ))
+                })?;
 
             // Create neuron voxel arrays - MOVE vectors instead of cloning (takes ownership)
             // CRITICAL PERFORMANCE: This eliminates expensive cloning for large areas
@@ -365,8 +379,7 @@ impl VisualizationStream {
         // - Only resizes if current capacity is insufficient
         // - Reuses existing allocation when possible
         let mut byte_container = FeagiByteContainer::new_empty();
-        byte_container
-            .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)?;
+        byte_container.overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)?;
 
         Ok(byte_container.get_byte_ref().to_vec())
     }

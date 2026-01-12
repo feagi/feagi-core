@@ -61,4 +61,3 @@ pub trait SensoryEncoder: Send + Sync {
         mappings
     }
 }
-

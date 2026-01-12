@@ -38,7 +38,7 @@ mod test_cortical_area {
                 position,
                 cortical_type,
             )
-                .unwrap();
+            .unwrap();
 
             assert_eq!(area.cortical_id, cortical_id);
             assert_eq!(area.name, "Power Area");
@@ -62,7 +62,7 @@ mod test_cortical_area {
                 position,
                 cortical_type,
             )
-                .unwrap();
+            .unwrap();
 
             area.properties
                 .insert("neurons_per_voxel".to_string(), serde_json::json!(1));
@@ -136,7 +136,7 @@ mod test_cortical_area {
                 position,
                 cortical_type,
             )
-                .unwrap();
+            .unwrap();
 
             assert!(area.get_property("nonexistent_key").is_none());
         }
@@ -156,7 +156,7 @@ mod test_cortical_area {
                 position,
                 cortical_type,
             )
-                .unwrap();
+            .unwrap();
 
             assert_eq!(area.dimensions.width, 128);
             assert_eq!(area.dimensions.height, 256);
@@ -178,7 +178,7 @@ mod test_cortical_area {
                 position,
                 cortical_type,
             )
-                .unwrap();
+            .unwrap();
 
             assert_eq!(area.cortical_idx, 42);
         }
@@ -199,7 +199,7 @@ mod test_cortical_area {
                 position,
                 core_type,
             )
-                .unwrap();
+            .unwrap();
             assert_eq!(core_area.cortical_type, core_type);
 
             // Test Custom type
@@ -213,7 +213,7 @@ mod test_cortical_area {
                 position,
                 custom_type,
             )
-                .unwrap();
+            .unwrap();
             assert_eq!(custom_area.cortical_type, custom_type);
 
             // Test Memory type
@@ -227,7 +227,7 @@ mod test_cortical_area {
                 position,
                 memory_type,
             )
-                .unwrap();
+            .unwrap();
             assert_eq!(memory_area.cortical_type, memory_type);
         }
 
@@ -247,7 +247,7 @@ mod test_cortical_area {
                 position,
                 cortical_type,
             )
-                .unwrap();
+            .unwrap();
 
             area.properties
                 .insert("neurons_per_voxel".to_string(), serde_json::json!(4));
@@ -590,7 +590,10 @@ mod test_cortical_area {
             #[test]
             fn test_cortical_id_try_from_base64_wrong_length() {
                 // Valid base64 but only 4 bytes when decoded
-                let short = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, [1u8, 2, 3, 4]);
+                let short = base64::Engine::encode(
+                    &base64::engine::general_purpose::STANDARD,
+                    [1u8, 2, 3, 4],
+                );
                 let result = CorticalID::try_from_base_64(&short);
                 assert!(result.is_err());
             }
@@ -931,7 +934,10 @@ mod test_cortical_area {
             #[test]
             fn test_frame_change_handling_display() {
                 assert_eq!(format!("{}", FrameChangeHandling::Absolute), "Absolute");
-                assert_eq!(format!("{}", FrameChangeHandling::Incremental), "Incremental");
+                assert_eq!(
+                    format!("{}", FrameChangeHandling::Incremental),
+                    "Incremental"
+                );
             }
 
             #[test]
@@ -980,7 +986,10 @@ mod test_cortical_area {
             #[test]
             fn test_percentage_neuron_positioning_display() {
                 assert_eq!(format!("{}", PercentageNeuronPositioning::Linear), "Linear");
-                assert_eq!(format!("{}", PercentageNeuronPositioning::Fractional), "Fractional");
+                assert_eq!(
+                    format!("{}", PercentageNeuronPositioning::Fractional),
+                    "Fractional"
+                );
             }
 
             #[test]
@@ -1109,7 +1118,8 @@ mod test_cortical_area {
 
             #[test]
             fn test_misc_variant() {
-                let io_type = IOCorticalAreaConfigurationFlag::Misc(FrameChangeHandling::Incremental);
+                let io_type =
+                    IOCorticalAreaConfigurationFlag::Misc(FrameChangeHandling::Incremental);
                 match io_type {
                     IOCorticalAreaConfigurationFlag::Misc(_) => (),
                     _ => panic!("Expected Misc variant"),
@@ -1148,8 +1158,9 @@ mod test_cortical_area {
 
             #[test]
             fn test_configuration_flag_roundtrip_cartesian_plane() {
-                let original =
-                    IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Incremental);
+                let original = IOCorticalAreaConfigurationFlag::CartesianPlane(
+                    FrameChangeHandling::Incremental,
+                );
 
                 let flag = original.to_data_type_configuration_flag();
                 let recovered =
@@ -1240,8 +1251,10 @@ mod test_cortical_area {
                 for original in variants {
                     let flag = original.to_data_type_configuration_flag();
                     let recovered =
-                        IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(flag)
-                            .unwrap();
+                        IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(
+                            flag,
+                        )
+                        .unwrap();
                     assert_eq!(original, recovered, "Roundtrip failed for {:?}", original);
                 }
             }
@@ -1250,8 +1263,9 @@ mod test_cortical_area {
             fn test_configuration_flag_invalid_variant() {
                 // Variant 255 is invalid
                 let invalid_flag: u16 = 255;
-                let result =
-                    IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(invalid_flag);
+                let result = IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(
+                    invalid_flag,
+                );
                 assert!(result.is_err());
             }
 
@@ -1273,7 +1287,8 @@ mod test_cortical_area {
 
             #[test]
             fn test_try_from_trait_implementation() {
-                let original = IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Absolute);
+                let original =
+                    IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Absolute);
                 let flag = original.to_data_type_configuration_flag();
 
                 let recovered: IOCorticalAreaConfigurationFlag = flag.try_into().unwrap();
@@ -1345,12 +1360,8 @@ mod test_cortical_area {
                 let unit_index = CorticalUnitIndex::from(5u8);
                 let sub_unit_index = CorticalSubUnitIndex::from(3u8);
 
-                let cortical_id = io_type.as_io_cortical_id(
-                    true,
-                    *b"tst",
-                    unit_index,
-                    sub_unit_index,
-                );
+                let cortical_id =
+                    io_type.as_io_cortical_id(true, *b"tst", unit_index, sub_unit_index);
 
                 let bytes = cortical_id.as_bytes();
                 // Byte 7 is cortical_unit_index, byte 6 is cortical_sub_unit_index
@@ -1382,7 +1393,9 @@ mod test_cortical_area {
 
             #[test]
             fn test_cartesian_plane_display() {
-                let io_type = IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Incremental);
+                let io_type = IOCorticalAreaConfigurationFlag::CartesianPlane(
+                    FrameChangeHandling::Incremental,
+                );
                 let display = format!("{}", io_type);
                 assert!(display.contains("CartesianPlane"));
                 assert!(display.contains("Incremental"));
@@ -1399,34 +1412,55 @@ mod test_cortical_area {
             #[test]
             fn test_all_percentage_variants_display() {
                 let variants = [
-                    ("Percentage2D", IOCorticalAreaConfigurationFlag::Percentage2D(
-                        FrameChangeHandling::Absolute,
-                        PercentageNeuronPositioning::Linear,
-                    )),
-                    ("Percentage3D", IOCorticalAreaConfigurationFlag::Percentage3D(
-                        FrameChangeHandling::Incremental,
-                        PercentageNeuronPositioning::Fractional,
-                    )),
-                    ("Percentage4D", IOCorticalAreaConfigurationFlag::Percentage4D(
-                        FrameChangeHandling::Absolute,
-                        PercentageNeuronPositioning::Linear,
-                    )),
-                    ("SignedPercentage", IOCorticalAreaConfigurationFlag::SignedPercentage(
-                        FrameChangeHandling::Incremental,
-                        PercentageNeuronPositioning::Fractional,
-                    )),
-                    ("SignedPercentage2D", IOCorticalAreaConfigurationFlag::SignedPercentage2D(
-                        FrameChangeHandling::Absolute,
-                        PercentageNeuronPositioning::Linear,
-                    )),
-                    ("SignedPercentage3D", IOCorticalAreaConfigurationFlag::SignedPercentage3D(
-                        FrameChangeHandling::Incremental,
-                        PercentageNeuronPositioning::Fractional,
-                    )),
-                    ("SignedPercentage4D", IOCorticalAreaConfigurationFlag::SignedPercentage4D(
-                        FrameChangeHandling::Absolute,
-                        PercentageNeuronPositioning::Linear,
-                    )),
+                    (
+                        "Percentage2D",
+                        IOCorticalAreaConfigurationFlag::Percentage2D(
+                            FrameChangeHandling::Absolute,
+                            PercentageNeuronPositioning::Linear,
+                        ),
+                    ),
+                    (
+                        "Percentage3D",
+                        IOCorticalAreaConfigurationFlag::Percentage3D(
+                            FrameChangeHandling::Incremental,
+                            PercentageNeuronPositioning::Fractional,
+                        ),
+                    ),
+                    (
+                        "Percentage4D",
+                        IOCorticalAreaConfigurationFlag::Percentage4D(
+                            FrameChangeHandling::Absolute,
+                            PercentageNeuronPositioning::Linear,
+                        ),
+                    ),
+                    (
+                        "SignedPercentage",
+                        IOCorticalAreaConfigurationFlag::SignedPercentage(
+                            FrameChangeHandling::Incremental,
+                            PercentageNeuronPositioning::Fractional,
+                        ),
+                    ),
+                    (
+                        "SignedPercentage2D",
+                        IOCorticalAreaConfigurationFlag::SignedPercentage2D(
+                            FrameChangeHandling::Absolute,
+                            PercentageNeuronPositioning::Linear,
+                        ),
+                    ),
+                    (
+                        "SignedPercentage3D",
+                        IOCorticalAreaConfigurationFlag::SignedPercentage3D(
+                            FrameChangeHandling::Incremental,
+                            PercentageNeuronPositioning::Fractional,
+                        ),
+                    ),
+                    (
+                        "SignedPercentage4D",
+                        IOCorticalAreaConfigurationFlag::SignedPercentage4D(
+                            FrameChangeHandling::Absolute,
+                            PercentageNeuronPositioning::Linear,
+                        ),
+                    ),
                 ];
 
                 for (expected_name, variant) in variants {
@@ -1580,10 +1614,11 @@ mod test_sensory_cortical_unit {
         #[test]
         fn test_text_english_input_cortical_id_and_default_topology() {
             let group = CorticalUnitIndex::from(0u8);
-            let ids = SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
-                FrameChangeHandling::Absolute,
-                group,
-            );
+            let ids =
+                SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
+                    FrameChangeHandling::Absolute,
+                    group,
+                );
 
             let bytes = ids[0].as_bytes();
             assert_eq!(bytes[0], b'i', "Expected IPU cortical id prefix 'i'");
@@ -1813,10 +1848,9 @@ mod test_sensory_cortical_unit {
             let mut all_ids = Vec::new();
 
             for (frame, pos) in params.iter() {
-                let ids =
-                    SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
-                        *frame, *pos, group,
-                    );
+                let ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
+                    *frame, *pos, group,
+                );
                 all_ids.push(ids[0]);
             }
 

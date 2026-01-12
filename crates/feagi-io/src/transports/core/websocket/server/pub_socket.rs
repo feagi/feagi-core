@@ -12,14 +12,14 @@ use futures_util::{SinkExt, StreamExt};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::SystemTime;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use tracing::{debug, error, info, warn};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::SystemTime;
 
 /// WebSocket PUB socket implementation (publisher)
 pub struct WsPub {
@@ -215,11 +215,7 @@ fn ws_pub_record_publish_stats(stream: &'static str, bytes: u64) {
 
     info!(
         "[WS-PUB][{}] publish_rate_hz={:.2} bytes_per_ms={:.2} totals: messages={} bytes={}",
-        stream,
-        hz,
-        kbps,
-        published_now,
-        bytes_now
+        stream, hz, kbps, published_now, bytes_now
     );
 }
 
@@ -252,13 +248,17 @@ async fn handle_client(
             handshake_duration.as_secs_f64() * 1000.0
         );
     }
-    
+
     let (mut write, mut read) = ws_stream.split();
 
-    info!("[WS-PUB] Client {} connected (handshake: {:.2}ms)", peer_addr, handshake_duration.as_secs_f64() * 1000.0);
+    info!(
+        "[WS-PUB] Client {} connected (handshake: {:.2}ms)",
+        peer_addr,
+        handshake_duration.as_secs_f64() * 1000.0
+    );
 
     static LAGGED_TOTAL: AtomicU64 = AtomicU64::new(0);
-    
+
     // Spawn a task to monitor the read side for connection closure
     let peer_addr_monitor = peer_addr;
     let read_task = tokio::spawn(async move {
@@ -279,16 +279,25 @@ async fn handle_client(
                             debug!("[WS-PUB] Client {} sent pong", peer_addr_monitor);
                         }
                         _ => {
-                            debug!("[WS-PUB] Client {} sent unexpected message type", peer_addr_monitor);
+                            debug!(
+                                "[WS-PUB] Client {} sent unexpected message type",
+                                peer_addr_monitor
+                            );
                         }
                     }
                 }
                 Some(Err(e)) => {
-                    warn!("[WS-PUB] Client {} read error (connection may be closed): {}", peer_addr_monitor, e);
+                    warn!(
+                        "[WS-PUB] Client {} read error (connection may be closed): {}",
+                        peer_addr_monitor, e
+                    );
                     break;
                 }
                 None => {
-                    debug!("[WS-PUB] Client {} read stream ended (connection closed)", peer_addr_monitor);
+                    debug!(
+                        "[WS-PUB] Client {} read stream ended (connection closed)",
+                        peer_addr_monitor
+                    );
                     break;
                 }
             }
@@ -330,17 +339,20 @@ async fn handle_client(
                 break;
             }
         }
-        
+
         // Check if read task detected connection closure
         if read_task.is_finished() {
-            debug!("[WS-PUB] Client {} read task finished (connection closed)", peer_addr);
+            debug!(
+                "[WS-PUB] Client {} read task finished (connection closed)",
+                peer_addr
+            );
             break;
         }
     }
 
     // Abort the read task if we're breaking out of the loop
     read_task.abort();
-    
+
     clients.write().remove(&peer_addr);
     info!("[WS-PUB] Client {} disconnected", peer_addr);
 

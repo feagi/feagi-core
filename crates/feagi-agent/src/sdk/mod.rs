@@ -10,8 +10,8 @@ pub mod base;
 pub mod connector;
 pub mod error;
 pub mod motor;
-pub mod sensory;
 pub mod registration;
+pub mod sensory;
 #[cfg(feature = "sdk-io")]
 pub mod types;
 pub mod util;
@@ -23,4 +23,3 @@ pub use connector::ConnectorAgent;
 pub use error::{Result, SdkError};
 pub use motor::MotorDecoder;
 pub use sensory::SensoryEncoder;
-

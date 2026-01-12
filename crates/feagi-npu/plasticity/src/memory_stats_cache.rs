@@ -18,13 +18,13 @@ use std::sync::Arc;
 pub struct MemoryAreaStats {
     /// Current number of active neurons in this memory area
     pub neuron_count: usize,
-    
+
     /// Total neurons created since area was initialized
     pub created_total: usize,
-    
+
     /// Total neurons deleted/expired since area was initialized
     pub deleted_total: usize,
-    
+
     /// Last update timestamp (milliseconds since epoch)
     pub last_updated: u64,
 }
@@ -107,11 +107,11 @@ mod tests {
     #[test]
     fn test_memory_stats_creation() {
         let cache = create_memory_stats_cache();
-        
+
         on_neuron_created(&cache, "mem_00");
         on_neuron_created(&cache, "mem_00");
         on_neuron_created(&cache, "mem_01");
-        
+
         let snapshot = get_stats_snapshot(&cache);
         assert_eq!(snapshot.len(), 2);
         assert_eq!(snapshot.get("mem_00").unwrap().neuron_count, 2);
@@ -121,11 +121,11 @@ mod tests {
     #[test]
     fn test_memory_stats_deletion() {
         let cache = create_memory_stats_cache();
-        
+
         on_neuron_created(&cache, "mem_00");
         on_neuron_created(&cache, "mem_00");
         on_neuron_deleted(&cache, "mem_00");
-        
+
         let stats = get_area_stats(&cache, "mem_00").unwrap();
         assert_eq!(stats.neuron_count, 1);
         assert_eq!(stats.created_total, 2);
@@ -135,11 +135,10 @@ mod tests {
     #[test]
     fn test_memory_area_removal() {
         let cache = create_memory_stats_cache();
-        
+
         on_neuron_created(&cache, "mem_00");
         remove_memory_area(&cache, "mem_00");
-        
+
         assert!(get_area_stats(&cache, "mem_00").is_none());
     }
 }
-

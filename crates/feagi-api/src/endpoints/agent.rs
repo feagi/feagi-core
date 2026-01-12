@@ -40,7 +40,7 @@ pub async fn register_agent(
         "🦀 [API] Registration request received for agent '{}' (type: {})",
         request.agent_id, request.agent_type
     );
-    
+
     let agent_service = state
         .agent_service
         .as_ref()
@@ -48,7 +48,8 @@ pub async fn register_agent(
 
     // Extract device_registrations from capabilities before they're moved
     #[cfg(feature = "feagi-agent")]
-    let device_registrations_opt = request.capabilities
+    let device_registrations_opt = request
+        .capabilities
         .get("device_registrations")
         .and_then(|v| {
             // Validate structure before cloning
@@ -84,7 +85,7 @@ pub async fn register_agent(
                 "✅ [API] Agent '{}' registration succeeded (status: {})",
                 request.agent_id, response.status
             );
-            
+
             // Initialize ConnectorAgent for this agent
             // If capabilities contained device_registrations, import them
             #[cfg(feature = "feagi-agent")]
@@ -94,9 +95,11 @@ pub async fn register_agent(
                     .entry(request.agent_id.clone())
                     .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new())))
                     .clone();
-                
+
                 let mut connector_guard = connector.lock().unwrap();
-                if let Err(e) = connector_guard.import_device_registrations_as_config_json(device_registrations_value) {
+                if let Err(e) = connector_guard
+                    .import_device_registrations_as_config_json(device_registrations_value)
+                {
                     warn!(
                         "⚠️ [API] Failed to import device registrations from capabilities for agent '{}': {}",
                         request.agent_id, e
@@ -114,7 +117,7 @@ pub async fn register_agent(
                     .entry(request.agent_id.clone())
                     .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new())));
             }
-            
+
             // Convert service TransportConfig to API TransportConfig
             let transports = response.transports.map(|ts| {
                 ts.into_iter()
@@ -719,7 +722,10 @@ pub async fn export_device_registrations(
 
         let connector = match connector {
             Some(c) => {
-                info!("🔍 [API] Found existing ConnectorAgent for agent '{}'", agent_id);
+                info!(
+                    "🔍 [API] Found existing ConnectorAgent for agent '{}'",
+                    agent_id
+                );
                 c
             }
             None => {
@@ -764,19 +770,19 @@ pub async fn export_device_registrations(
                     .and_then(|v| v.as_array())
                     .map(|a| a.len())
                     .unwrap_or(0);
-                
+
                 info!(
                     "📤 [API] Exporting device registrations for agent '{}': {} input units, {} output units, {} feedbacks",
                     agent_id, input_count, output_count, feedback_count
                 );
-                
+
                 if input_count == 0 && output_count == 0 && feedback_count == 0 {
                     warn!(
                         "⚠️ [API] Exported device registrations for agent '{}' are empty - agent may not have synced device registrations yet",
                         agent_id
                     );
                 }
-                
+
                 registrations
             }
             Err(e) => {
@@ -891,42 +897,53 @@ pub async fn import_device_registrations(
             let connector = connectors
                 .entry(agent_id.clone())
                 .or_insert_with(|| {
-                    info!("🔧 [API] Creating new ConnectorAgent for agent '{}'", agent_id);
+                    info!(
+                        "🔧 [API] Creating new ConnectorAgent for agent '{}'",
+                        agent_id
+                    );
                     Arc::new(Mutex::new(ConnectorAgent::new()))
                 })
                 .clone();
             if was_existing {
-                info!("🔧 [API] Using existing ConnectorAgent for agent '{}'", agent_id);
+                info!(
+                    "🔧 [API] Using existing ConnectorAgent for agent '{}'",
+                    agent_id
+                );
             }
             connector
         };
 
         // Import device registrations using ConnectorAgent method
         let mut connector_guard = connector.lock().unwrap();
-        
+
         // Log what we're importing for debugging
-        let input_count = request.device_registrations
+        let input_count = request
+            .device_registrations
             .get("input_units_and_encoder_properties")
             .and_then(|v| v.as_object())
             .map(|m| m.len())
             .unwrap_or(0);
-        let output_count = request.device_registrations
+        let output_count = request
+            .device_registrations
             .get("output_units_and_decoder_properties")
             .and_then(|v| v.as_object())
             .map(|m| m.len())
             .unwrap_or(0);
-        let feedback_count = request.device_registrations
+        let feedback_count = request
+            .device_registrations
             .get("feedbacks")
             .and_then(|v| v.as_array())
             .map(|a| a.len())
             .unwrap_or(0);
-        
+
         info!(
             "📥 [API] Importing device registrations for agent '{}': {} input units, {} output units, {} feedbacks",
             agent_id, input_count, output_count, feedback_count
         );
-        
-        match connector_guard.import_device_registrations_as_config_json(request.device_registrations.clone()) {
+
+        match connector_guard
+            .import_device_registrations_as_config_json(request.device_registrations.clone())
+        {
             Ok(()) => {
                 // Verify the import worked by exporting again
                 match connector_guard.export_device_registrations_as_config_json() {
@@ -941,7 +958,7 @@ pub async fn import_device_registrations(
                             .and_then(|v| v.as_object())
                             .map(|m| m.len())
                             .unwrap_or(0);
-                        
+
                         info!(
                             "✅ [API] Device registration import succeeded for agent '{}' (verified: {} input, {} output)",
                             agent_id, exported_input_count, exported_output_count
@@ -954,7 +971,7 @@ pub async fn import_device_registrations(
                         );
                     }
                 }
-                
+
                 Ok(Json(DeviceRegistrationImportResponse {
                     success: true,
                     message: format!(

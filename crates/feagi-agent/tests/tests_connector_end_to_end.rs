@@ -151,7 +151,6 @@ mod test_connector_cache_sensor_load_image {
             // let bytes = sensor_cache.sensor_copy_feagi_byte_container();
         }
     }
-    
 
     #[test]
     fn test_encode_of_misc_then_reencode() {
@@ -193,14 +192,16 @@ mod test_connector_cache_sensor_load_image {
 
             // Test encoding/decoding cycle
             // Since the output of the sensor is under cortical ID imis00, to read it to the motor, we need to assign it to omis00,
-            let _sensor_cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
-                FrameChangeHandling::Absolute,
-                cortical_group,
-            )[0];
-            let _motor_cortical_id = MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
-                FrameChangeHandling::Absolute,
-                cortical_group,
-            )[0];
+            let _sensor_cortical_id =
+                SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                    FrameChangeHandling::Absolute,
+                    cortical_group,
+                )[0];
+            let _motor_cortical_id =
+                MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                    FrameChangeHandling::Absolute,
+                    cortical_group,
+                )[0];
 
             // Note: This test needs reworking for the new architecture where encoding/decoding is handled differently
             // For now, we verify the registration works

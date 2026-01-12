@@ -30,7 +30,6 @@ mod test_connector_cache_creation {
         let cache = ConnectorCache::default();
         let _ = format!("{}", cache);
     }
-
 }
 
 #[cfg(test)]
@@ -127,12 +126,14 @@ mod test_export_import {
 
         {
             let mut motor_cache = cache.get_motor_cache();
-            let image_props = feagi_sensorimotor::data_types::descriptors::ImageFrameProperties::new(
-                feagi_sensorimotor::data_types::descriptors::ImageXYResolution::new(128, 128).unwrap(),
-                feagi_sensorimotor::data_types::descriptors::ColorSpace::Gamma,
-                feagi_sensorimotor::data_types::descriptors::ColorChannelLayout::RGB,
-            )
-            .unwrap();
+            let image_props =
+                feagi_sensorimotor::data_types::descriptors::ImageFrameProperties::new(
+                    feagi_sensorimotor::data_types::descriptors::ImageXYResolution::new(128, 128)
+                        .unwrap(),
+                    feagi_sensorimotor::data_types::descriptors::ColorSpace::Gamma,
+                    feagi_sensorimotor::data_types::descriptors::ColorChannelLayout::RGB,
+                )
+                .unwrap();
 
             motor_cache
                 .simple_vision_output_register(
@@ -208,5 +209,3 @@ mod test_display {
         assert_eq!(display, "ConnectorAgent");
     }
 }
-
-

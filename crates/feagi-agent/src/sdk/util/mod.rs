@@ -4,4 +4,3 @@
 //! SDK utilities
 
 pub mod device_registrations;
-

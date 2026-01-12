@@ -120,14 +120,15 @@ pub async fn export_and_sync_with_client(
         "http://{}:{}/v1/agent/{}/device_registrations",
         feagi_host, feagi_api_port, agent_id
     );
-    
+
     if let Ok(verify_resp) = http_client.get(&export_url).send().await {
         if verify_resp.status().is_success() {
             if let Ok(verify_json) = verify_resp.json::<serde_json::Value>().await {
                 if let Some(exported_regs) = verify_json.get("device_registrations") {
                     let verify_counts = counts_from_exported_json(exported_regs);
-                    if verify_counts.output_units != counts.output_units 
-                        || verify_counts.input_units != counts.input_units {
+                    if verify_counts.output_units != counts.output_units
+                        || verify_counts.input_units != counts.input_units
+                    {
                         tracing::warn!(
                             "⚠️ [SDK] Device registration sync verification mismatch: sent {} input/{} output, but server has {} input/{} output",
                             counts.input_units, counts.output_units,
@@ -162,7 +163,8 @@ pub async fn export_and_sync(
     let client = reqwest::Client::builder()
         .timeout(http_timeout)
         .build()
-        .map_err(|e| SdkError::DeviceRegistrationSyncFailed(format!("http client build failed: {e}")))?;
+        .map_err(|e| {
+            SdkError::DeviceRegistrationSyncFailed(format!("http client build failed: {e}"))
+        })?;
     export_and_sync_with_client(connector, &client, feagi_host, feagi_api_port, agent_id).await
 }
-

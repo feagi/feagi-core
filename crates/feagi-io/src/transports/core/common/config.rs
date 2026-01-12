@@ -3,9 +3,9 @@
 
 //! Common configuration types for transports
 
+use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use feagi_structures::FeagiDataError;
 
 /// Generic transport configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,12 +96,16 @@ impl TransportConfig {
     /// Validate configuration
     pub fn validate(&self) -> Result<(), FeagiDataError> {
         if self.address.is_empty() {
-            return Err(FeagiDataError::BadParameters("Address cannot be empty".to_string()));
+            return Err(FeagiDataError::BadParameters(
+                "Address cannot be empty".to_string(),
+            ));
         }
 
         if let Some(max_size) = self.max_message_size {
             if max_size == 0 {
-                return Err(FeagiDataError::BadParameters("Maximum message size must be greater than 0".to_string()));
+                return Err(FeagiDataError::BadParameters(
+                    "Maximum message size must be greater than 0".to_string(),
+                ));
             }
         }
 

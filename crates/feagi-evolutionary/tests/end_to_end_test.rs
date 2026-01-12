@@ -223,9 +223,11 @@ fn test_flat_dstmap_object_rules_preserved() {
     });
 
     let json_str = serde_json::to_string_pretty(&flat).unwrap();
-    let genome = feagi_evolutionary::load_genome_from_json(&json_str).expect("Failed to load genome");
+    let genome =
+        feagi_evolutionary::load_genome_from_json(&json_str).expect("Failed to load genome");
 
-    let src_id = feagi_evolutionary::string_to_cortical_id("aXN2aQkABAA=").expect("Valid base64 src id");
+    let src_id =
+        feagi_evolutionary::string_to_cortical_id("aXN2aQkABAA=").expect("Valid base64 src id");
     let dst_id_b64 = "b2ltZwkAAAA=";
 
     let src_area = genome

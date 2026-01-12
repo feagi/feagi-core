@@ -33,7 +33,7 @@ use feagi_structures::genomic::SensoryCorticalUnit;
 pub struct TextEncoderConfig {
     // Identity
     pub agent_id: String,
-    pub cortical_unit_id: u8,  // Cortical unit index (which unit of this type)
+    pub cortical_unit_id: u8, // Cortical unit index (which unit of this type)
 
     // FEAGI network configuration
     pub feagi_host: String,
@@ -48,7 +48,7 @@ pub struct TextEncoderConfig {
 
 impl TextEncoderConfig {
     /// Get cortical ID for text input (iten)
-    /// 
+    ///
     /// Uses the canonical `SensoryCorticalUnit` mapping so IDs match the genome.
     pub fn cortical_id(&self) -> CorticalID {
         SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
@@ -122,7 +122,7 @@ mod tests {
             "aXRlbgoAAAA=",
             "Group 0 cortical ID should match canonical feagi-structures mapping"
         );
-        
+
         // Test group 1 - should match genome
         let config1 = TextEncoderConfig {
             agent_id: "test".to_string(),
@@ -145,4 +145,3 @@ mod tests {
         );
     }
 }
-

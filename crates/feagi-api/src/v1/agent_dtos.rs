@@ -148,7 +148,7 @@ pub struct ManualStimulationResponse {
 }
 
 /// Device registration export response
-/// 
+///
 /// Contains the complete device registration configuration including
 /// sensor and motor device registrations, encoder/decoder properties,
 /// and feedback configurations.
@@ -162,7 +162,7 @@ pub struct DeviceRegistrationExportResponse {
 }
 
 /// Device registration import request
-/// 
+///
 /// Contains the device registration configuration to import.
 /// This will replace all existing device registrations for the agent.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

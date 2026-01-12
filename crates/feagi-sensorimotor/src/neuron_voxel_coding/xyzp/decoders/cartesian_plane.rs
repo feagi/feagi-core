@@ -1,3 +1,4 @@
+use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::descriptors::ImageFrameProperties;
 use crate::data_types::ImageFrame;
@@ -8,7 +9,6 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
-use crate::configuration::jsonable::JSONDecoderProperties;
 
 #[derive(Debug)]
 pub struct CartesianPlaneNeuronVoxelXYZPDecoder {

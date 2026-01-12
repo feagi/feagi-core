@@ -38,20 +38,18 @@ mod tests {
     fn test_block_connection() {
         // Identity mapping: source coordinate maps to same destination coordinate (clamped)
         // Uses apply_vector_offset with vector (0, 0, 0)
-        let result =
-            syn_block_connection("src", "dst", (5, 5, 3), (100, 10, 10), (10, 10, 10), 10);
+        let result = syn_block_connection("src", "dst", (5, 5, 3), (100, 10, 10), (10, 10, 10), 10);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), (5, 5, 3)); // Same coordinates
-        
+
         // Test clamping: source coordinate larger than destination dimension
         let result =
             syn_block_connection("src", "dst", (20, 5, 3), (100, 10, 10), (10, 10, 10), 10);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), (9, 5, 3)); // Clamped to max (10-1=9)
-        
+
         // Test identity mapping at origin
-        let result =
-            syn_block_connection("src", "dst", (0, 0, 0), (10, 10, 10), (10, 10, 10), 1);
+        let result = syn_block_connection("src", "dst", (0, 0, 0), (10, 10, 10), (10, 10, 10), 1);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), (0, 0, 0)); // Same coordinates
     }

@@ -210,9 +210,9 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
         let state_manager_instance = StateManager::instance();
-        let state_manager = state_manager_instance.try_read().ok_or_else(|| {
-            ServiceError::Internal("Failed to read StateManager".to_string())
-        })?;
+        let state_manager = state_manager_instance
+            .try_read()
+            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
         let core_state = state_manager.get_core_state();
         let count = core_state.get_neuron_count() as usize;
 
@@ -224,9 +224,9 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
         let state_manager_instance = StateManager::instance();
-        let state_manager = state_manager_instance.try_read().ok_or_else(|| {
-            ServiceError::Internal("Failed to read StateManager".to_string())
-        })?;
+        let state_manager = state_manager_instance
+            .try_read()
+            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
         let core_state = state_manager.get_core_state();
         let count = core_state.get_synapse_count() as usize;
 
@@ -273,9 +273,9 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         // CRITICAL: Read from StateManager's atomic cache - NO iteration, NO locks, NO NPU access
         let state_manager_instance = StateManager::instance();
-        let state_manager = state_manager_instance.try_read().ok_or_else(|| {
-            ServiceError::Internal("Failed to read StateManager".to_string())
-        })?;
+        let state_manager = state_manager_instance
+            .try_read()
+            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
         let core_state = state_manager.get_core_state();
         let count = core_state.get_regular_neuron_count() as usize;
 
@@ -287,9 +287,9 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         // CRITICAL: Read from StateManager's atomic cache - NO iteration, NO locks, NO NPU access
         let state_manager_instance = StateManager::instance();
-        let state_manager = state_manager_instance.try_read().ok_or_else(|| {
-            ServiceError::Internal("Failed to read StateManager".to_string())
-        })?;
+        let state_manager = state_manager_instance
+            .try_read()
+            .ok_or_else(|| ServiceError::Internal("Failed to read StateManager".to_string()))?;
         let core_state = state_manager.get_core_state();
         let count = core_state.get_memory_neuron_count() as usize;
 

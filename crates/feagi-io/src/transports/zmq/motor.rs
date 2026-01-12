@@ -4,10 +4,10 @@
 // Motor stream for sending motor commands to agents (ZMQ fallback for remote clients)
 // Uses PUB socket pattern for one-to-many distribution
 
+use feagi_structures::FeagiDataError;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use tracing::{debug, error, info};
-use feagi_structures::FeagiDataError;
 
 /// Motor stream for publishing motor commands
 #[derive(Clone)]
@@ -32,12 +32,15 @@ impl MotorStream {
     /// Start the motor stream
     pub fn start(&self) -> Result<(), FeagiDataError> {
         if *self.running.lock() {
-            return Err(FeagiDataError::BadParameters("Motor stream already running".to_string()));
+            return Err(FeagiDataError::BadParameters(
+                "Motor stream already running".to_string(),
+            ));
         }
 
         // Create PUB socket for broadcasting motor data
-        let socket = self.context.socket(zmq::PUB)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to create ZMQ socket: {}", e)))?;
+        let socket = self.context.socket(zmq::PUB).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to create ZMQ socket: {}", e))
+        })?;
 
         // Set socket options for optimal performance
         socket
@@ -50,7 +53,8 @@ impl MotorStream {
         // For real-time data, subscribers should use DONTWAIT and discard old messages
 
         // Bind socket
-        socket.bind(&self.bind_address)
+        socket
+            .bind(&self.bind_address)
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
@@ -79,11 +83,16 @@ impl MotorStream {
         let sock_guard = self.socket.lock();
         let sock = match sock_guard.as_ref() {
             Some(s) => s,
-            None => return Err(FeagiDataError::BadParameters("Motor stream not started".to_string())),
+            None => {
+                return Err(FeagiDataError::BadParameters(
+                    "Motor stream not started".to_string(),
+                ))
+            }
         };
 
-        sock.send(data, 0)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to send motor data: {}", e)))?;
+        sock.send(data, 0).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to send motor data: {}", e))
+        })?;
 
         Ok(())
     }
@@ -98,7 +107,11 @@ impl MotorStream {
         let sock_guard = self.socket.lock();
         let sock = match sock_guard.as_ref() {
             Some(s) => s,
-            None => return Err(FeagiDataError::BadParameters("Motor stream not started".to_string())),
+            None => {
+                return Err(FeagiDataError::BadParameters(
+                    "Motor stream not started".to_string(),
+                ))
+            }
         };
 
         // Send as multipart message: [topic, data]

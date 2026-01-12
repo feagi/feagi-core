@@ -18,7 +18,10 @@ use feagi_npu_neural::synapse::SynapseType;
 use feagi_npu_neural::types::{FireCandidateList, NeuronId};
 use feagi_npu_runtime::std_impl::{NeuronArray, SynapseArray};
 
-fn create_test_genome(neuron_count: usize, synapses_per_neuron: usize) -> (NeuronArray<f32>, SynapseArray) {
+fn create_test_genome(
+    neuron_count: usize,
+    synapses_per_neuron: usize,
+) -> (NeuronArray<f32>, SynapseArray) {
     let mut neuron_array = NeuronArray::new(neuron_count);
     let synapse_count = neuron_count * synapses_per_neuron;
     let mut synapse_array = SynapseArray::new(synapse_count);
@@ -81,7 +84,7 @@ fn generate_fired_neurons(neuron_count: usize, firing_rate: f32) -> Vec<u32> {
 }
 
 fn bench_ci_cpu_backend(c: &mut Criterion) {
-    use feagi_npu_burst_engine::backend::{ComputeBackend, CPUBackend};
+    use feagi_npu_burst_engine::backend::{CPUBackend, ComputeBackend};
 
     let mut group = c.benchmark_group("ci_cpu_backend");
     group.sample_size(20);
@@ -162,7 +165,7 @@ fn bench_ci_cpu_backend(c: &mut Criterion) {
 }
 
 fn bench_large_candidate_counts(c: &mut Criterion) {
-    use feagi_npu_burst_engine::backend::{ComputeBackend, CPUBackend};
+    use feagi_npu_burst_engine::backend::{CPUBackend, ComputeBackend};
 
     let mut group = c.benchmark_group("large_candidates");
     group.sample_size(10); // Fewer samples for large tests
@@ -171,7 +174,7 @@ fn bench_large_candidate_counts(c: &mut Criterion) {
 
     // Match production scenario: 8M neurons (512x512x22 area ≈ 5.7M, but use 8M for safety)
     let neuron_count = 8_000_000;
-    
+
     // Create neuron array with proper initialization
     let mut neuron_array = NeuronArray::new(neuron_count);
     for _i in 0..neuron_count {
@@ -194,10 +197,10 @@ fn bench_large_candidate_counts(c: &mut Criterion) {
     neuron_array.count = neuron_count;
 
     let candidate_counts = vec![
-        100_000,      // 100k candidates
-        500_000,      // 500k candidates
-        1_000_000,    // 1M candidates
-        2_500_000,    // 2.5M candidates (production scenario)
+        100_000,   // 100k candidates
+        500_000,   // 500k candidates
+        1_000_000, // 1M candidates
+        2_500_000, // 2.5M candidates (production scenario)
     ];
 
     for candidate_count in candidate_counts {
@@ -207,7 +210,7 @@ fn bench_large_candidate_counts(c: &mut Criterion) {
             |b, &count| {
                 let mut backend: CPUBackend = CPUBackend::new();
                 let mut fcl = FireCandidateList::new();
-                
+
                 // Create sparse candidate distribution (realistic scenario)
                 // Distribute candidates across the neuron array to simulate real-world sparse patterns
                 for i in 0..count {
@@ -216,7 +219,7 @@ fn bench_large_candidate_counts(c: &mut Criterion) {
                     // Use small contribution (0.5) to simulate realistic synaptic inputs
                     fcl.add_candidate(NeuronId(neuron_id), 0.5);
                 }
-                
+
                 b.iter(|| {
                     let _ = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_neural_dynamics(
                     &mut backend,
@@ -245,5 +248,3 @@ criterion_group! {
     targets = bench_ci_cpu_backend, bench_large_candidate_counts
 }
 criterion_main!(ci_microbench);
-
-

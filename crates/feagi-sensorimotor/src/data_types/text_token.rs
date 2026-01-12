@@ -187,10 +187,7 @@ pub fn decode_token_id_from_misc_data_with_depth(
 }
 
 /// Encode a token id into a 1x1x`depth` `MiscData` bitplane buffer (see [`TextToken`] contract).
-pub fn encode_token_id_to_misc_data(
-    token_id: u32,
-    depth: u32,
-) -> Result<MiscData, FeagiDataError> {
+pub fn encode_token_id_to_misc_data(token_id: u32, depth: u32) -> Result<MiscData, FeagiDataError> {
     if depth == 0 {
         return Err(FeagiDataError::BadParameters(
             "TextToken depth must be > 0".into(),
@@ -263,5 +260,3 @@ mod tests {
         assert_eq!(decoded, Some(token_id));
     }
 }
-
-

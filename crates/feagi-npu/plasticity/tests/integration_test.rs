@@ -106,7 +106,7 @@ fn test_neuron_lifecycle_full_cycle() {
         ..Default::default()
     };
 
-    let pattern_hash = 0x0101010101010101u64;  // Simple test hash
+    let pattern_hash = 0x0101010101010101u64; // Simple test hash
 
     // Create neuron
     let idx = memory_array
@@ -179,7 +179,7 @@ fn test_neuron_id_allocation_integration() {
     // Create multiple memory neurons
     let mut neuron_ids = Vec::new();
     for i in 0..10 {
-        let pattern_hash = i as u64;  // Simple sequential hashes
+        let pattern_hash = i as u64; // Simple sequential hashes
 
         let idx = memory_array
             .create_memory_neuron(pattern_hash, 100, 0, &lifecycle_config)
@@ -233,9 +233,9 @@ fn test_plasticity_service_basic_workflow() {
     use feagi_npu_burst_engine::backend::CPUBackend;
     use feagi_npu_burst_engine::DynamicNPU;
     use feagi_npu_burst_engine::TracingMutex;
+    use feagi_npu_plasticity::create_memory_stats_cache;
     use feagi_npu_runtime::StdRuntime;
     use std::sync::Arc;
-    use feagi_npu_plasticity::create_memory_stats_cache;
 
     let config = PlasticityConfig::default();
     let cache = create_memory_stats_cache();
@@ -295,7 +295,7 @@ fn test_memory_array_capacity_and_reuse() {
 
     // Fill capacity
     for i in 0..10 {
-        let pattern_hash = i as u64;  // Simple sequential hashes
+        let pattern_hash = i as u64; // Simple sequential hashes
         let result = memory_array.create_memory_neuron(pattern_hash, 100, 0, &lifecycle_config);
         assert!(result.is_some());
     }
@@ -315,7 +315,7 @@ fn test_memory_array_capacity_and_reuse() {
 
     // Now we should be able to create new neurons by reusing indices
     for i in 10..20 {
-        let pattern_hash = i as u64;  // Different hashes for new neurons
+        let pattern_hash = i as u64; // Different hashes for new neurons
         let result = memory_array.create_memory_neuron(pattern_hash, 100, 2, &lifecycle_config);
         assert!(result.is_some());
     }

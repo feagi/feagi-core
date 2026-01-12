@@ -15,8 +15,8 @@ use axum::http::{Request, StatusCode};
 use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::backend::CPUBackend;
-use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
 use feagi_npu_burst_engine::TracingMutex;
+use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
 use feagi_npu_runtime::StdRuntime;
 use feagi_services::impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
@@ -49,7 +49,10 @@ async fn create_test_server() -> axum::Router {
     let genome_service_impl = Arc::new(GenomeServiceImpl::new(Arc::clone(&manager)));
     let current_genome = genome_service_impl.get_current_genome_arc();
     let genome_service = genome_service_impl;
-    let connectome_service = Arc::new(ConnectomeServiceImpl::new(Arc::clone(&manager), current_genome.clone()));
+    let connectome_service = Arc::new(ConnectomeServiceImpl::new(
+        Arc::clone(&manager),
+        current_genome.clone(),
+    ));
     // For tests, use empty version info
     let version_info = feagi_services::types::VersionInfo::default();
     let system_service = Arc::new(SystemServiceImpl::new(

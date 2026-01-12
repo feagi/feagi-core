@@ -1,5 +1,5 @@
-mod feedback_registration;
 mod feedback_registrar;
+mod feedback_registration;
 mod feedback_registration_targets;
 
 pub(crate) use feedback_registrar::FeedbackRegistrar;

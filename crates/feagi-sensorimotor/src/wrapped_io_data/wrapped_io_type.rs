@@ -1,11 +1,15 @@
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
 };
-use crate::data_types::{GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
+use crate::data_types::{
+    GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
+    Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
+    SignedPercentage3D, SignedPercentage4D,
+};
 use crate::wrapped_io_data::WrappedIOData;
 use feagi_structures::FeagiDataError;
-use std::mem::discriminant;
 use serde::{Deserialize, Serialize};
+use std::mem::discriminant;
 
 /// Type descriptor for wrapped I/O data.
 ///
@@ -39,7 +43,7 @@ pub enum WrappedIOType {
     SegmentedImageFrame(Option<SegmentedImageFrameProperties>),
     MiscData(Option<MiscDataDimensions>),
     GazeProperties,
-    ImageFilteringSettings
+    ImageFilteringSettings,
 }
 
 // NOTE: Due to some variations in some of the types, this isn't practical to turn into a macro.
@@ -139,8 +143,8 @@ impl WrappedIOType {
                 GazeProperties::create_default_centered(),
             )),
             WrappedIOType::ImageFilteringSettings => Ok(WrappedIOData::ImageFilteringSettings(
-                ImageFilteringSettings::default()
-            ))
+                ImageFilteringSettings::default(),
+            )),
         }
     }
 }
@@ -179,7 +183,9 @@ impl std::fmt::Display for WrappedIOType {
                 write!(f, "Misc({})", s)
             }
             WrappedIOType::GazeProperties => write!(f, "IOTypeVariant(GazeProperties)"),
-            WrappedIOType::ImageFilteringSettings => write!(f, "IOTypeVariant(ImageFilteringSettings)"),
+            WrappedIOType::ImageFilteringSettings => {
+                write!(f, "IOTypeVariant(ImageFilteringSettings)")
+            }
         }
     }
 }

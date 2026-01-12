@@ -455,4 +455,3 @@ pub struct CapacityInfo {
     pub current_cortical_areas: usize,
     pub max_cortical_areas: usize,
 }
-

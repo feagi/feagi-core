@@ -13,8 +13,8 @@
 //! - Burst processing speed
 //! - Dispatch overhead
 
-use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
 use feagi_npu_burst_engine::backend::CPUBackend;
+use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
 use feagi_npu_neural::types::INT8Value;
 use feagi_npu_runtime::StdRuntime;
 use std::time::Instant;

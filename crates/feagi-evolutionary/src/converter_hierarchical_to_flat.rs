@@ -41,17 +41,13 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
         if let Some(granularity_value) = area.properties.get("visualization_voxel_granularity") {
             if let Some(arr) = granularity_value.as_array() {
                 if arr.len() == 3 {
-                    if let (Some(x), Some(y), Some(z)) = (
-                        arr[0].as_u64(),
-                        arr[1].as_u64(),
-                        arr[2].as_u64(),
-                    ) {
+                    if let (Some(x), Some(y), Some(z)) =
+                        (arr[0].as_u64(), arr[1].as_u64(), arr[2].as_u64())
+                    {
                         // Only save if != 1x1x1 (default)
                         if x != 1 || y != 1 || z != 1 {
-                            visualization_overrides.insert(
-                                cortical_id_base64.clone(),
-                                json!([x, y, z]),
-                            );
+                            visualization_overrides
+                                .insert(cortical_id_base64.clone(), json!([x, y, z]));
                         }
                     }
                 }
@@ -338,8 +334,14 @@ fn convert_properties_to_flat(
             .unwrap_or(Value::Null);
 
         // Debug logging for key properties
-        let debug_props = ["mp_driven_psp", "snooze_length", "consecutive_fire_cnt_max", 
-                          "firing_threshold_increment_x", "firing_threshold", "leak_coefficient"];
+        let debug_props = [
+            "mp_driven_psp",
+            "snooze_length",
+            "consecutive_fire_cnt_max",
+            "firing_threshold_increment_x",
+            "firing_threshold",
+            "leak_coefficient",
+        ];
         if debug_props.contains(prop_key) {
             if let Some(prop_value) = properties.get(*prop_key) {
                 tracing::info!(
@@ -350,7 +352,9 @@ fn convert_properties_to_flat(
                 let default_val = required_defaults.get(*prop_key).unwrap_or(&json!(null));
                 tracing::info!(
                     "[GENOME-CONVERT] {} not in properties for area {}, using default={}",
-                    prop_key, prefix, default_val
+                    prop_key,
+                    prefix,
+                    default_val
                 );
             }
         }
@@ -483,8 +487,8 @@ mod tests {
     #[test]
     fn test_cortical_group_derived_from_type() {
         use feagi_structures::genomic::cortical_area::{
-            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
-            IOCorticalAreaConfigurationFlag, io_cortical_area_configuration_flag::FrameChangeHandling,
+            io_cortical_area_configuration_flag::FrameChangeHandling, CorticalArea,
+            CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
         };
         use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
 
@@ -519,9 +523,10 @@ mod tests {
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             GenomeCoordinate3D { x: 0, y: 0, z: 0 },
             CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::CartesianPlane(
-                FrameChangeHandling::Absolute
+                FrameChangeHandling::Absolute,
             )),
-        ).unwrap();
+        )
+        .unwrap();
 
         let ipu_id = CorticalID::try_from_base_64("aXN2aQkABAA=").unwrap();
         let ipu_area = CorticalArea::new(
@@ -531,9 +536,10 @@ mod tests {
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             GenomeCoordinate3D { x: 0, y: 0, z: 0 },
             CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::CartesianPlane(
-                FrameChangeHandling::Absolute
+                FrameChangeHandling::Absolute,
             )),
-        ).unwrap();
+        )
+        .unwrap();
 
         genome.cortical_areas.insert(opu_id, opu_area);
         genome.cortical_areas.insert(ipu_id, ipu_area);
@@ -543,20 +549,18 @@ mod tests {
 
         // Verify cortical_group is correctly derived from cortical_type
         let blueprint = flat["blueprint"].as_object().unwrap();
-        
+
         // Check OPU area
         let opu_group_key = "_____10c-b2ltZwkAAAA=-cx-_group-t";
         assert_eq!(
-            blueprint[opu_group_key],
-            "OPU",
+            blueprint[opu_group_key], "OPU",
             "OPU area should have _group-t set to OPU"
         );
 
         // Check IPU area
         let ipu_group_key = "_____10c-aXN2aQkABAA=-cx-_group-t";
         assert_eq!(
-            blueprint[ipu_group_key],
-            "IPU",
+            blueprint[ipu_group_key], "IPU",
             "IPU area should have _group-t set to IPU"
         );
     }

@@ -9,8 +9,8 @@ use feagi_structures::FeagiDataError;
 use feagi_structures::{
     define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions, define_xyz_mapping,
 };
-use std::fmt::Display;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 //region Images
 
 //region Image XY

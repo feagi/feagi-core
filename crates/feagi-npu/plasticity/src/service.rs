@@ -166,7 +166,9 @@ impl PlasticityService {
             config,
             npu,
             pattern_detector,
-            memory_neuron_array: Arc::new(Mutex::new(MemoryNeuronArray::new(memory_array_capacity))),
+            memory_neuron_array: Arc::new(Mutex::new(MemoryNeuronArray::new(
+                memory_array_capacity,
+            ))),
             memory_areas: Arc::new(Mutex::new(HashMap::new())),
             memory_lifecycle_configs: Arc::new(Mutex::new(HashMap::new())),
             memory_area_names: Arc::new(Mutex::new(HashMap::new())),
@@ -187,7 +189,7 @@ impl PlasticityService {
         // trace!("[PLASTICITY-SVC] 🔔 Burst {} notification received, waking compute thread", timestep);
         let (lock, cvar) = &*self.cv;
         let mut data = lock.lock().unwrap();
-        data.0 = true;  // ✅ Set flag to true so thread wakes up!
+        data.0 = true; // ✅ Set flag to true so thread wakes up!
         data.1 = timestep;
         cvar.notify_all();
     }
@@ -204,13 +206,13 @@ impl PlasticityService {
         let stats = Arc::clone(&self.stats);
         let config = self.config.clone();
         let memory_stats_cache = self.memory_stats_cache.clone();
-        let npu = Arc::clone(&self.npu);  // Clone NPU reference for thread
+        let npu = Arc::clone(&self.npu); // Clone NPU reference for thread
 
         tracing::info!(target: "plasticity", "🧠 Starting PlasticityService background thread...");
-        
+
         thread::spawn(move || {
             tracing::info!(target: "plasticity", "✓ PlasticityService thread started - waiting for burst notifications");
-            
+
             let (lock, cvar) = &*cv;
 
             loop {
@@ -219,12 +221,12 @@ impl PlasticityService {
                     while !data.0 {
                         data = cvar.wait(data).unwrap();
                     }
-                    data.0 = false;  // ✅ Reset flag so we wait again after processing
+                    data.0 = false; // ✅ Reset flag so we wait again after processing
                     data.1
                 };
 
                 // trace!("[PLASTICITY-THREAD] 💤➡️🏃 Woke up for burst {}, starting compute_plasticity", timestep);
-                
+
                 // Compute plasticity
                 Self::compute_plasticity(
                     timestep,
@@ -342,7 +344,7 @@ impl PlasticityService {
                 "[PLASTICITY-DEBUG] Burst {} - Processing memory area {} with {} upstream areas: {:?}",
                 current_timestep, memory_area_idx, area_config.upstream_areas.len(), area_config.upstream_areas
             );
-            
+
             // Query FireLedger for upstream firing history (CPU-resident, dense burst-aligned windows)
             let plasticity_lock_start = std::time::Instant::now();
             tracing::debug!(
@@ -429,8 +431,9 @@ impl PlasticityService {
                         } else {
                             // Flatten as: for each timestep (oldest->newest), for each upstream area (sorted),
                             // append that area's fired-neuron set at that timestep.
-                            let mut out: Vec<HashSet<u32>> =
-                                Vec::with_capacity(reference_timesteps.len() * upstream_sorted.len());
+                            let mut out: Vec<HashSet<u32>> = Vec::with_capacity(
+                                reference_timesteps.len() * upstream_sorted.len(),
+                            );
                             for frame_i in 0..reference_timesteps.len() {
                                 for (_area_idx, w) in &windows {
                                     let (_t, bitmap) = &w[frame_i];
@@ -442,7 +445,7 @@ impl PlasticityService {
                         }
                     }
                 };
-                
+
                 // Log lock hold time before release
                 let plasticity_lock_hold = plasticity_lock_start.elapsed();
                 tracing::debug!(
@@ -468,7 +471,7 @@ impl PlasticityService {
                 // No firing history available for upstream areas - skip pattern detection
                 continue;
             }
-            
+
             tracing::debug!(target: "plasticity",
                 "[PLASTICITY-DEBUG] Burst {} - Memory area {} has {} timestep bitmaps for pattern detection",
                 current_timestep, memory_area_idx, timestep_bitmaps.len()
@@ -484,7 +487,6 @@ impl PlasticityService {
                 timestep_bitmaps,
                 Some(area_config.temporal_depth),
             ) {
-                
                 let mut s = stats.lock().unwrap();
                 s.memory_patterns_detected += 1;
                 drop(s);
@@ -531,7 +533,7 @@ impl PlasticityService {
                         "[PLASTICITY] 🧠 Creating NEW memory neuron for pattern {} in area {}",
                         pattern.pattern_hash, memory_area_idx
                     );
-                    
+
                     let lifecycle_config = memory_lifecycle_configs
                         .lock()
                         .unwrap()
@@ -549,13 +551,15 @@ impl PlasticityService {
                             "[PLASTICITY] ✓ Memory neuron created: idx={}, pattern={}",
                             neuron_idx, pattern.pattern_hash
                         );
-                        
+
                         let mut s = stats.lock().unwrap();
                         s.memory_neurons_created += 1;
                         drop(s);
 
                         // Update memory stats cache
-                        if let Some(area_name) = memory_area_names.lock().unwrap().get(memory_area_idx) {
+                        if let Some(area_name) =
+                            memory_area_names.lock().unwrap().get(memory_area_idx)
+                        {
                             memory_stats_cache::on_neuron_created(memory_stats_cache, area_name);
                         }
 
@@ -566,7 +570,7 @@ impl PlasticityService {
                             "[PLASTICITY] 📤 Queueing commands: RegisterMemoryNeuron(id={}) + InjectMemoryNeuronToFCL(id={}, potential=1.5)",
                             neuron_id, neuron_id
                         );
-                        
+
                         commands.push(PlasticityCommand::RegisterMemoryNeuron {
                             neuron_id,
                             area_idx: *memory_area_idx,
@@ -722,7 +726,9 @@ impl PlasticityService {
         {
             use feagi_state_manager::StateManager;
             if let Some(state_manager) = StateManager::instance().try_write() {
-                state_manager.get_core_state().set_memory_neuron_util(memory_neuron_util);
+                state_manager
+                    .get_core_state()
+                    .set_memory_neuron_util(memory_neuron_util);
             }
         }
 

@@ -11,8 +11,8 @@ use feagi_sensorimotor::data_types::decode_token_id_from_xyzp_bitplanes;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use serde::Serialize;
-use tracing;
 use std::sync::atomic::{AtomicU64, Ordering};
+use tracing;
 
 /// Perception frame output
 #[derive(Debug, Clone, Serialize)]
@@ -74,7 +74,7 @@ impl PerceptionDecoder {
         // Fetch topologies individually - allow missing areas
         // This allows the decoder to work with partial cortical area sets
         let mut topologies: [Option<CorticalTopology>; 3] = [None, None, None];
-        
+
         for (idx, cortical_id) in cortical_ids.iter().enumerate() {
             match topology_cache.get_topology(cortical_id).await {
                 Ok(topology) => {
@@ -94,11 +94,12 @@ impl PerceptionDecoder {
                 }
             }
         }
-        
+
         // Check if at least one area exists
         if topologies.iter().all(|t| t.is_none()) {
             return Err(crate::sdk::error::SdkError::InvalidConfiguration(
-                "None of the required cortical areas (oseg, oimg, oten) exist in the topology".to_string(),
+                "None of the required cortical areas (oseg, oimg, oten) exist in the topology"
+                    .to_string(),
             ));
         }
 
@@ -127,7 +128,10 @@ impl PerceptionDecoder {
                             path,
                             e
                         );
-                        return Err(SdkError::InvalidConfiguration(format!("Failed to load tokenizer: {}", e)));
+                        return Err(SdkError::InvalidConfiguration(format!(
+                            "Failed to load tokenizer: {}",
+                            e
+                        )));
                     }
                 }
             }
@@ -292,14 +296,13 @@ impl MotorDecoder for PerceptionDecoder {
             (oten_token_id, &self.tokenizer)
         {
             // Try decoding with skip_special_tokens=true first
-            let decoded = tokenizer
-                .decode(std::slice::from_ref(&token_id), true)
-                .ok();
-            
+            let decoded = tokenizer.decode(std::slice::from_ref(&token_id), true).ok();
+
             // Log decoding attempts for debugging (first few and every 100th)
-            static DECODE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            static DECODE_COUNT: std::sync::atomic::AtomicU64 =
+                std::sync::atomic::AtomicU64::new(0);
             let count = DECODE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-            
+
             if count <= 5 || count.is_multiple_of(100) {
                 match &decoded {
                     Some(text) if !text.is_empty() => {
@@ -330,12 +333,13 @@ impl MotorDecoder for PerceptionDecoder {
                     _ => {}
                 }
             }
-            
+
             decoded.filter(|s| !s.is_empty())
         } else {
             // Log why tokenizer isn't being used
             if oten_token_id.is_some() && self.tokenizer.is_none() {
-                static WARNED_NO_TOKENIZER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                static WARNED_NO_TOKENIZER: std::sync::atomic::AtomicBool =
+                    std::sync::atomic::AtomicBool::new(false);
                 if !WARNED_NO_TOKENIZER.swap(true, std::sync::atomic::Ordering::Relaxed) {
                     tracing::warn!(
                         "[PERCEPTION-DECODER] Token ID {} received but tokenizer is not loaded! \
@@ -360,4 +364,3 @@ impl MotorDecoder for PerceptionDecoder {
         &self.cortical_ids
     }
 }
-

@@ -18,8 +18,7 @@ fn test_load_barebones_genome() {
         .join("barebones_genome.json");
 
     // Load genome
-    let genome =
-        load_genome_from_file(&genome_path).expect("Failed to load barebones genome");
+    let genome = load_genome_from_file(&genome_path).expect("Failed to load barebones genome");
 
     // Verify metadata
     assert_eq!(genome.metadata.version, "2.0");
@@ -46,10 +45,7 @@ fn test_load_barebones_genome() {
     );
 
     // Verify morphologies
-    assert!(
-        genome.morphologies.count() != 0,
-        "Should have morphologies"
-    );
+    assert!(genome.morphologies.count() != 0, "Should have morphologies");
     assert!(
         genome.morphologies.contains("block_to_block"),
         "Missing block_to_block morphology"

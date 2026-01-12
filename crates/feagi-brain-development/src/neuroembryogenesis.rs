@@ -942,18 +942,18 @@ impl Neuroembryogenesis {
             let manager = self.connectome_manager.read();
             manager.update_cached_synapse_count();
         }
-        
+
         // CRITICAL: Register memory areas with PlasticityExecutor after all mappings are created
         // This ensures memory areas have their complete upstream_cortical_areas lists populated.
         #[cfg(feature = "plasticity")]
         {
             use feagi_evolutionary::extract_memory_properties;
-            use feagi_npu_plasticity::{PlasticityExecutor, MemoryNeuronLifecycleConfig};
-            
+            use feagi_npu_plasticity::{MemoryNeuronLifecycleConfig, PlasticityExecutor};
+
             let manager = self.connectome_manager.read();
             if let Some(executor) = manager.get_plasticity_executor() {
                 let mut registered_count = 0;
-                
+
                 // Iterate through all cortical areas and register memory areas
                 for area_id in manager.get_cortical_area_ids() {
                     if let Some(area) = manager.get_cortical_area(area_id) {
@@ -975,9 +975,10 @@ impl Neuroembryogenesis {
                                         let desired = mem_props.temporal_depth as usize;
                                         let resolved = existing.max(desired);
                                         if resolved != existing {
-                                            if let Err(e) =
-                                                npu.configure_fire_ledger_window(upstream_idx, resolved)
-                                            {
+                                            if let Err(e) = npu.configure_fire_ledger_window(
+                                                upstream_idx,
+                                                resolved,
+                                            ) {
                                                 warn!(
                                                     target: "feagi-bdu",
                                                     "Failed to configure FireLedger window for upstream area idx={} (requested={}): {}",
@@ -992,7 +993,7 @@ impl Neuroembryogenesis {
                                     warn!(target: "feagi-bdu", "Failed to lock NPU for FireLedger configuration");
                                 }
                             }
-                            
+
                             if let Ok(exec) = executor.lock() {
                                 let lifecycle_config = MemoryNeuronLifecycleConfig {
                                     initial_lifespan: mem_props.init_lifespan,
@@ -1000,7 +1001,7 @@ impl Neuroembryogenesis {
                                     longterm_threshold: mem_props.longterm_threshold,
                                     max_reactivations: 1000,
                                 };
-                                
+
                                 exec.register_memory_area(
                                     area.cortical_idx,
                                     area_id.as_base_64(),
@@ -1008,7 +1009,7 @@ impl Neuroembryogenesis {
                                     upstream_areas.clone(),
                                     Some(lifecycle_config),
                                 );
-                                
+
                                 registered_count += 1;
                             }
                         }

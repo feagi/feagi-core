@@ -22,4 +22,3 @@ pub use patterns::apply_patterns_morphology;
 pub use projector::apply_projector_morphology;
 pub use projector::apply_projector_morphology_with_dimensions;
 pub use vectors::{apply_vectors_morphology, apply_vectors_morphology_with_dimensions};
-

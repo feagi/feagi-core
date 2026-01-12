@@ -1,15 +1,19 @@
+use crate::configuration::jsonable::{
+    JSONDeviceGrouping, JSONEncoderProperties, JSONUnitDefinition,
+};
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
 };
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex};
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
+};
+use feagi_structures::genomic::SensoryCorticalUnit;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
-use feagi_structures::genomic::SensoryCorticalUnit;
-use crate::configuration::jsonable::{JSONDeviceGrouping, JSONEncoderProperties, JSONUnitDefinition};
 
 /// Manages multiple sensory data streams with independent processing pipelines per channel.
 ///
@@ -58,34 +62,35 @@ impl SensoryCorticalUnitCache {
     pub fn new_from_json(
         sensory_unit: &SensoryCorticalUnit,
         unit_definition: &JSONUnitDefinition,
-        encoder_definition: &JSONEncoderProperties
+        encoder_definition: &JSONEncoderProperties,
     ) -> Result<Self, FeagiDataError> {
-
         unit_definition.verify_valid_structure()?;
         let channel_count = unit_definition.get_channel_count()?;
-        let cortical_ids = sensory_unit.get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-            unit_definition.cortical_unit_index,
-            unit_definition.io_configuration_flags.clone()
-        )?;
+        let cortical_ids = sensory_unit
+            .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+                unit_definition.cortical_unit_index,
+                unit_definition.io_configuration_flags.clone(),
+            )?;
 
         let initial_value = encoder_definition.default_wrapped_value()?;
-        let encoder = encoder_definition.to_box_encoder(
-            channel_count,
-            &cortical_ids
-        )?;
+        let encoder = encoder_definition.to_box_encoder(channel_count, &cortical_ids)?;
 
         let mut sensory_cortical_unit_cache = SensoryCorticalUnitCache::new(
             encoder,
             unit_definition.io_configuration_flags.clone(),
             channel_count,
-            initial_value
+            initial_value,
         )?;
 
-        let _ = sensory_cortical_unit_cache.set_friendly_name(unit_definition.friendly_name.clone());
+        let _ =
+            sensory_cortical_unit_cache.set_friendly_name(unit_definition.friendly_name.clone());
 
         // Update all the channels
         for (index, device_group) in unit_definition.device_grouping.iter().enumerate() {
-            let pipeline_runner = sensory_cortical_unit_cache.pipeline_runners.get_mut(index).unwrap();
+            let pipeline_runner = sensory_cortical_unit_cache
+                .pipeline_runners
+                .get_mut(index)
+                .unwrap();
 
             // Use replace_all_stages when importing from JSON since we're setting up a new pipeline
             // This works even when pipeline is empty (0 stages) unlike try_update_all_stage_properties
@@ -100,17 +105,19 @@ impl SensoryCorticalUnitCache {
         Ok(sensory_cortical_unit_cache)
     }
 
-    pub fn export_as_jsons(&self, cortical_unit_index: CorticalUnitIndex) -> (JSONUnitDefinition, JSONEncoderProperties) {
+    pub fn export_as_jsons(
+        &self,
+        cortical_unit_index: CorticalUnitIndex,
+    ) -> (JSONUnitDefinition, JSONEncoderProperties) {
         let encoder_properties = self.neuron_encoder.get_as_properties();
         let json_unit_definition = JSONUnitDefinition {
             friendly_name: self.device_friendly_name.clone(),
             cortical_unit_index,
             io_configuration_flags: self.io_configuration_flags.clone(),
-            device_grouping: self.get_all_device_grouping()
+            device_grouping: self.get_all_device_grouping(),
         };
         (json_unit_definition, encoder_properties)
     }
-
 
     //region Properties
 
@@ -149,10 +156,6 @@ impl SensoryCorticalUnitCache {
         let runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         Ok(runner.get_expected_type_to_input_and_process())
     }
-
-
-
-
 
     //endregion
 
@@ -381,7 +384,10 @@ impl SensoryCorticalUnitCache {
         &self.device_friendly_name
     }
 
-    pub fn set_friendly_name(&mut self, friendly_name: Option<String>) -> Result<(), FeagiDataError> {
+    pub fn set_friendly_name(
+        &mut self,
+        friendly_name: Option<String>,
+    ) -> Result<(), FeagiDataError> {
         self.device_friendly_name = friendly_name;
         Ok(())
     }
@@ -478,7 +484,7 @@ impl SensoryCorticalUnitCache {
         let mut output: Vec<JSONDeviceGrouping> = Vec::new();
         for group in self.pipeline_runners.iter() {
             output.push(group.export_as_json_device_grouping())
-        };
+        }
         output
     }
 

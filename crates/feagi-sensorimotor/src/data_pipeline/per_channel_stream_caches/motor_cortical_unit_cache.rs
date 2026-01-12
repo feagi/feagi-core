@@ -1,15 +1,19 @@
+use crate::configuration::jsonable::{
+    JSONDecoderProperties, JSONDeviceGrouping, JSONUnitDefinition,
+};
 use crate::data_pipeline::per_channel_stream_caches::pipeline_stage_runner_common::PipelineStageRunner;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex};
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
+};
+use feagi_structures::genomic::MotorCorticalUnit;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use rayon::prelude::*;
 use std::time::Instant;
-use feagi_structures::genomic::MotorCorticalUnit;
-use crate::configuration::jsonable::{JSONDecoderProperties, JSONDeviceGrouping, JSONUnitDefinition};
 
 #[derive(Debug)]
 pub(crate) struct MotorCorticalUnitCache {
@@ -56,36 +60,37 @@ impl MotorCorticalUnitCache {
     pub fn new_from_json(
         motor_unit: &MotorCorticalUnit,
         unit_definition: &JSONUnitDefinition,
-        decoder_definition: &JSONDecoderProperties
+        decoder_definition: &JSONDecoderProperties,
     ) -> Result<Self, FeagiDataError> {
-
         unit_definition.verify_valid_structure()?;
         let channel_count = unit_definition.get_channel_count()?;
-        let cortical_ids = motor_unit.get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-            unit_definition.cortical_unit_index,
-            unit_definition.io_configuration_flags.clone()
-        )?;
+        let cortical_ids = motor_unit
+            .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+                unit_definition.cortical_unit_index,
+                unit_definition.io_configuration_flags.clone(),
+            )?;
 
         let initial_value = decoder_definition.default_wrapped_value()?;
-        let encoder = decoder_definition.to_box_decoder(
-            channel_count,
-            &cortical_ids
-        )?;
+        let encoder = decoder_definition.to_box_decoder(channel_count, &cortical_ids)?;
 
         let mut motor_cortical_unit_cache = MotorCorticalUnitCache::new(
             encoder,
             unit_definition.io_configuration_flags.clone(),
             channel_count,
-            initial_value
+            initial_value,
         )?;
 
         let _ = motor_cortical_unit_cache.set_friendly_name(unit_definition.friendly_name.clone());
 
         // Update all the channels
         for (index, device_group) in unit_definition.device_grouping.iter().enumerate() {
-            let pipeline_runner = motor_cortical_unit_cache.pipeline_runners.get_mut(index).unwrap();
+            let pipeline_runner = motor_cortical_unit_cache
+                .pipeline_runners
+                .get_mut(index)
+                .unwrap();
 
-            pipeline_runner.try_update_all_stage_properties(device_group.pipeline_stages.clone())?;
+            pipeline_runner
+                .try_update_all_stage_properties(device_group.pipeline_stages.clone())?;
             pipeline_runner.set_channel_friendly_name(device_group.friendly_name.clone());
             pipeline_runner.set_channel_index_override(device_group.channel_index_override);
             pipeline_runner.set_json_device_properties(device_group.device_properties.clone());
@@ -94,18 +99,19 @@ impl MotorCorticalUnitCache {
         Ok(motor_cortical_unit_cache)
     }
 
-    pub fn export_as_jsons(&self, cortical_unit_index: CorticalUnitIndex) -> (JSONUnitDefinition, JSONDecoderProperties) {
+    pub fn export_as_jsons(
+        &self,
+        cortical_unit_index: CorticalUnitIndex,
+    ) -> (JSONUnitDefinition, JSONDecoderProperties) {
         let encoder_properties = self.neuron_decoder.get_as_properties();
         let json_unit_definition = JSONUnitDefinition {
             friendly_name: self.device_friendly_name.clone(),
             cortical_unit_index,
             io_configuration_flags: self.io_configuration_flags.clone(),
-            device_grouping: self.get_all_device_grouping()
+            device_grouping: self.get_all_device_grouping(),
         };
         (json_unit_definition, encoder_properties)
     }
-
-
 
     //region Properties
 
@@ -250,7 +256,10 @@ impl MotorCorticalUnitCache {
         &self.device_friendly_name
     }
 
-    pub fn set_friendly_name(&mut self, friendly_name: Option<String>) -> Result<(), FeagiDataError> {
+    pub fn set_friendly_name(
+        &mut self,
+        friendly_name: Option<String>,
+    ) -> Result<(), FeagiDataError> {
         self.device_friendly_name = friendly_name;
         Ok(())
     }
@@ -271,18 +280,13 @@ impl MotorCorticalUnitCache {
         let idx = *cortical_channel_index as usize;
         let callbacks_len = self.value_updated_callbacks.len();
         let runners_len = self.pipeline_runners.len();
-        let signal = self
-            .value_updated_callbacks
-            .get_mut(idx)
-            .ok_or_else(|| {
-                FeagiDataError::BadParameters(format!(
-                    "Callback signal index {} is out of bounds (callbacks_len={}, runners_len={}). \
+        let signal = self.value_updated_callbacks.get_mut(idx).ok_or_else(|| {
+            FeagiDataError::BadParameters(format!(
+                "Callback signal index {} is out of bounds (callbacks_len={}, runners_len={}). \
                      This indicates an internal cache invariant violation.",
-                    idx,
-                    callbacks_len,
-                    runners_len
-                ))
-            })?;
+                idx, callbacks_len, runners_len
+            ))
+        })?;
         Ok(signal.connect(callback))
     }
 
@@ -296,18 +300,13 @@ impl MotorCorticalUnitCache {
         let idx = *cortical_channel_index as usize;
         let callbacks_len = self.value_updated_callbacks.len();
         let runners_len = self.pipeline_runners.len();
-        let signal = self
-            .value_updated_callbacks
-            .get_mut(idx)
-            .ok_or_else(|| {
-                FeagiDataError::BadParameters(format!(
-                    "Callback signal index {} is out of bounds (callbacks_len={}, runners_len={}). \
+        let signal = self.value_updated_callbacks.get_mut(idx).ok_or_else(|| {
+            FeagiDataError::BadParameters(format!(
+                "Callback signal index {} is out of bounds (callbacks_len={}, runners_len={}). \
                      This indicates an internal cache invariant violation.",
-                    idx,
-                    callbacks_len,
-                    runners_len
-                ))
-            })?;
+                idx, callbacks_len, runners_len
+            ))
+        })?;
         signal.disconnect(signal_index)
     }
 
@@ -418,7 +417,7 @@ impl MotorCorticalUnitCache {
         let mut output: Vec<JSONDeviceGrouping> = Vec::new();
         for group in self.pipeline_runners.iter() {
             output.push(group.export_as_json_device_grouping())
-        };
+        }
         output
     }
 

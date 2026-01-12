@@ -5,12 +5,12 @@
 // Uses ROUTER socket pattern for request-reply with agent identity tracking
 
 use crate::core::{RegistrationHandler, RegistrationRequest};
+use feagi_structures::FeagiDataError;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::thread;
 use tracing::{debug, error, info};
-use feagi_structures::FeagiDataError;
 
 /// REST request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,22 +58,25 @@ impl RestStream {
     /// Start the REST stream
     pub fn start(&self) -> Result<(), FeagiDataError> {
         if *self.running.lock() {
-            return Err(FeagiDataError::BadParameters("REST stream already running".to_string()));
+            return Err(FeagiDataError::BadParameters(
+                "REST stream already running".to_string(),
+            ));
         }
 
         // Create ROUTER socket
-        let socket = self
-            .context
-            .socket(zmq::ROUTER)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to create ZMQ ROUTER socket: {}", e)))?;
+        let socket = self.context.socket(zmq::ROUTER).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to create ZMQ ROUTER socket: {}", e))
+        })?;
 
-        socket.set_linger(1000)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set linger: {}", e)))?;
         socket
-            .set_router_mandatory(false)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set router mandatory: {}", e)))?;
+            .set_linger(1000)
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set linger: {}", e)))?;
+        socket.set_router_mandatory(false).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to set router mandatory: {}", e))
+        })?;
 
-        socket.bind(&self.bind_address)
+        socket
+            .bind(&self.bind_address)
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
@@ -294,7 +297,9 @@ impl RestStream {
                 // Log at WARN (not ERROR) because this is a common, non-fatal condition.
                 tracing::warn!(
                     "🦀 [PNS] 💓 Heartbeat rejected for '{}' at {}: {}",
-                    agent_id, now, e
+                    agent_id,
+                    now,
+                    e
                 );
                 serde_json::json!({
                     "status": 404,
@@ -334,15 +339,22 @@ impl RestStream {
         let sock_guard = socket_mutex.lock();
         let sock = match sock_guard.as_ref() {
             Some(s) => s,
-            None => return Err(FeagiDataError::InternalError("Socket not available".to_string())),
+            None => {
+                return Err(FeagiDataError::InternalError(
+                    "Socket not available".to_string(),
+                ))
+            }
         };
 
-        sock.send(&identity, zmq::SNDMORE)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to send identity: {}", e)))?;
-        sock.send(Vec::<u8>::new(), zmq::SNDMORE)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to send empty frame: {}", e)))?;
-        sock.send(response_json.as_bytes(), 0)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to send response: {}", e)))?;
+        sock.send(&identity, zmq::SNDMORE).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to send identity: {}", e))
+        })?;
+        sock.send(Vec::<u8>::new(), zmq::SNDMORE).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to send empty frame: {}", e))
+        })?;
+        sock.send(response_json.as_bytes(), 0).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to send response: {}", e))
+        })?;
 
         Ok(())
     }

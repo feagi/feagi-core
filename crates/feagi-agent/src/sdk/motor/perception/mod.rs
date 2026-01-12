@@ -8,4 +8,3 @@ pub mod decoder;
 
 pub use config::PerceptionDecoderConfig;
 pub use decoder::{PerceptionDecoder, PerceptionFrame};
-

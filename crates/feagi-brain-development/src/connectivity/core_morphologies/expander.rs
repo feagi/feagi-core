@@ -72,4 +72,3 @@ pub fn apply_expander_morphology(
 
     Ok(synapse_count)
 }
-

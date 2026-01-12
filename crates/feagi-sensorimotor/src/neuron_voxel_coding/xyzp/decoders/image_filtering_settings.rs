@@ -95,11 +95,13 @@ impl ImageFilteringSettingsNeuronVoxelXYZPDecoder {
             interpolation,
             z_depth_brightness_scratch_space: vec![
                 Vec::new();
-                *number_channels as usize * BRIGHTNESS_CHANNEL_WIDTH as usize
+                *number_channels as usize
+                    * BRIGHTNESS_CHANNEL_WIDTH as usize
             ],
             z_depth_contrast_scratch_space: vec![
                 Vec::new();
-                *number_channels as usize * CONTRAST_CHANNEL_WIDTH as usize
+                *number_channels as usize
+                    * CONTRAST_CHANNEL_WIDTH as usize
             ],
             z_depth_diff_scratch_space: vec![
                 Vec::new();
@@ -107,7 +109,8 @@ impl ImageFilteringSettingsNeuronVoxelXYZPDecoder {
             ],
             z_depth_image_diff_scratch_space: vec![
                 Vec::new();
-                *number_channels as usize * DIFF_CHANNEL_WIDTH as usize
+                *number_channels as usize
+                    * DIFF_CHANNEL_WIDTH as usize
             ],
         };
         Ok(Box::new(decoder))
@@ -137,8 +140,7 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
     ) -> Result<(), FeagiDataError> {
         const ONLY_ALLOWED_Y: u32 = 0;
 
-        let brightness_neuron_array =
-            neurons_to_read.get_neurons_of(&self.brightness_cortical_id);
+        let brightness_neuron_array = neurons_to_read.get_neurons_of(&self.brightness_cortical_id);
         let contrast_neuron_array = neurons_to_read.get_neurons_of(&self.contrast_cortical_id);
         let diff_neuron_array = neurons_to_read.get_neurons_of(&self.diff_cortical_id);
         let diff_image_neuron_array = neurons_to_read.get_neurons_of(&self.diff_cortical_id);
@@ -165,7 +167,6 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
         for scratch in self.z_depth_image_diff_scratch_space.iter_mut() {
             scratch.clear();
         }
-
 
         let number_of_channels = pipelines_with_data_to_update.len() as u32;
         let brightness_z_depth: u32 = self.channel_brightness_dimensions.depth;
@@ -201,8 +202,7 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
                     continue;
                 }
 
-                if neuron.neuron_voxel_coordinate.x
-                    >= (number_of_channels * CONTRAST_CHANNEL_WIDTH)
+                if neuron.neuron_voxel_coordinate.x >= (number_of_channels * CONTRAST_CHANNEL_WIDTH)
                     || neuron.neuron_voxel_coordinate.z >= contrast_z_depth
                 {
                     continue;
@@ -297,7 +297,6 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
                 .get(diff_image_z_row_upper_index)
                 .unwrap();
 
-
             if brightness_z_vector.is_empty()
                 && contrast_z_vector.is_empty()
                 && diff_lower_z_vector.is_empty()
@@ -356,7 +355,6 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
                             prev_settings.image_diff_threshold_mut().b_mut(),
                         );
                     }
-
                 }
                 PercentageNeuronPositioning::Fractional => {
                     if !brightness_z_vector.is_empty() {
@@ -395,7 +393,6 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
                             prev_settings.image_diff_threshold_mut().b_mut(),
                         );
                     }
-
                 }
             }
         }

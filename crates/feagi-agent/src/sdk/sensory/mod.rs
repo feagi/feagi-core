@@ -12,4 +12,3 @@ pub mod video;
 pub mod text;
 
 pub use traits::SensoryEncoder;
-

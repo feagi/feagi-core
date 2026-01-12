@@ -132,7 +132,7 @@ pub struct MemoryMappedState {
     pub memory_usage: AtomicU32,
     pub regular_neuron_count: AtomicU32,
     pub memory_neuron_count: AtomicU32,
-    
+
     // Capacity (static values set at initialization, never change)
     pub neuron_capacity: AtomicU32,
     pub synapse_capacity: AtomicU32,
@@ -145,12 +145,12 @@ pub struct MemoryMappedState {
     pub genome_timestamp: AtomicU64,
 
     // Fatigue state (6 bytes)
-    pub fatigue_index: AtomicU8,        // 0-100
-    pub fatigue_active: AtomicU8,        // 0=false, 1=true
-    pub regular_neuron_util: AtomicU8,  // 0-100
-    pub memory_neuron_util: AtomicU8,    // 0-100
-    pub synapse_util: AtomicU8,         // 0-100
-    pub _reserved_fatigue: AtomicU8,     // Reserved for future use
+    pub fatigue_index: AtomicU8,       // 0-100
+    pub fatigue_active: AtomicU8,      // 0=false, 1=true
+    pub regular_neuron_util: AtomicU8, // 0-100
+    pub memory_neuron_util: AtomicU8,  // 0-100
+    pub synapse_util: AtomicU8,        // 0-100
+    pub _reserved_fatigue: AtomicU8,   // Reserved for future use
 
     // Padding to 128 bytes.
     //
@@ -462,7 +462,8 @@ impl MemoryMappedState {
     /// Set regular neuron utilization percentage (atomic write)
     /// Value should be 0-100
     pub fn set_regular_neuron_util(&self, util: u8) {
-        self.regular_neuron_util.store(util.min(100), Ordering::Release);
+        self.regular_neuron_util
+            .store(util.min(100), Ordering::Release);
         self.increment_version();
     }
 
@@ -475,7 +476,8 @@ impl MemoryMappedState {
     /// Set memory neuron utilization percentage (atomic write)
     /// Value should be 0-100
     pub fn set_memory_neuron_util(&self, util: u8) {
-        self.memory_neuron_util.store(util.min(100), Ordering::Release);
+        self.memory_neuron_util
+            .store(util.min(100), Ordering::Release);
         self.increment_version();
     }
 

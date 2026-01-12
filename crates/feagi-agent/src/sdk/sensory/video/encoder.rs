@@ -12,7 +12,9 @@ use feagi_sensorimotor::data_types::descriptors::{
     SegmentedImageFrameProperties, SegmentedXYImageResolutions,
 };
 use feagi_sensorimotor::data_types::processing::{ImageFrameProcessor, ImageFrameSegmentator};
-use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D, SegmentedImageFrame};
+use feagi_sensorimotor::data_types::{
+    GazeProperties, ImageFrame, Percentage, Percentage2D, SegmentedImageFrame,
+};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
@@ -85,7 +87,10 @@ impl VideoEncoder {
     ) -> Result<Self> {
         config.validate()?;
 
-        let unit_index = feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex::from(config.cortical_unit_id);
+        let unit_index =
+            feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex::from(
+                config.cortical_unit_id,
+            );
         let cortical_ids = config.encoding_strategy.cortical_ids(unit_index);
 
         // Fetch topologies
@@ -208,8 +213,12 @@ impl VideoEncoder {
             }
         };
 
-        let output_props =
-            SegmentedImageFrameProperties::new(res, center_layout, peripheral_layout, ColorSpace::Gamma);
+        let output_props = SegmentedImageFrameProperties::new(
+            res,
+            center_layout,
+            peripheral_layout,
+            ColorSpace::Gamma,
+        );
 
         // Default gaze (center, 75% modulation)
         let gaze = GazeProperties::new(
@@ -223,7 +232,8 @@ impl VideoEncoder {
         let prev_frame = SegmentedImageFrame::from_segmented_image_frame_properties(&output_props)?;
         // OPTIMIZATION: Pre-allocate reusable buffers
         let adjusted_buffer = ImageFrame::new_from_image_frame_properties(&input_props)?;
-        let segmented_buffer = SegmentedImageFrame::from_segmented_image_frame_properties(&output_props)?;
+        let segmented_buffer =
+            SegmentedImageFrame::from_segmented_image_frame_properties(&output_props)?;
 
         Ok(EncoderMode::Segmented {
             segmentator,
@@ -255,11 +265,9 @@ impl VideoEncoder {
                 segmentator.update_gaze(&new_gaze)?;
                 Ok(())
             }
-            EncoderMode::Simple { .. } => {
-                Err(SdkError::InvalidConfiguration(
-                    "Gaze properties only apply to SegmentedVision encoding".to_string(),
-                ))
-            }
+            EncoderMode::Simple { .. } => Err(SdkError::InvalidConfiguration(
+                "Gaze properties only apply to SegmentedVision encoding".to_string(),
+            )),
         }
     }
 
@@ -329,7 +337,6 @@ impl VideoEncoder {
             )),
         }
     }
-
 }
 
 impl SensoryEncoder for VideoEncoder {
@@ -396,7 +403,12 @@ impl SensoryEncoder for VideoEncoder {
                     self.cortical_ids[7],
                     self.cortical_ids[8],
                 ];
-                encode_segmented_frame_to_xyzp_mapped(segmented_buffer, 0, &cortical_ids_arr, &mut mapped)?;
+                encode_segmented_frame_to_xyzp_mapped(
+                    segmented_buffer,
+                    0,
+                    &cortical_ids_arr,
+                    &mut mapped,
+                )?;
 
                 // Serialize
                 serialize_xyzp(&mapped)
@@ -426,14 +438,14 @@ fn apply_diff_threshold_image(current: &mut ImageFrame, prev: &mut ImageFrame, t
     // Chunk size of 64 provides good balance between cache efficiency and loop overhead
     const CHUNK_SIZE: usize = 64;
     let len = cur.len();
-    
+
     // Process full chunks
     for chunk_idx in 0..(len / CHUNK_SIZE) {
         let start = chunk_idx * CHUNK_SIZE;
         let end = start + CHUNK_SIZE;
         let cur_chunk = &mut cur[start..end];
         let prev_chunk = &mut prev_bytes[start..end];
-        
+
         for (c, p) in cur_chunk.iter_mut().zip(prev_chunk.iter_mut()) {
             let diff = (*c as i16 - *p as i16).abs();
             if diff <= t {
@@ -443,11 +455,14 @@ fn apply_diff_threshold_image(current: &mut ImageFrame, prev: &mut ImageFrame, t
             }
         }
     }
-    
+
     // Process remaining elements
     let remainder_start = (len / CHUNK_SIZE) * CHUNK_SIZE;
     if remainder_start < len {
-        for (c, p) in cur[remainder_start..].iter_mut().zip(prev_bytes[remainder_start..].iter_mut()) {
+        for (c, p) in cur[remainder_start..]
+            .iter_mut()
+            .zip(prev_bytes[remainder_start..].iter_mut())
+        {
             let diff = (*c as i16 - *p as i16).abs();
             if diff <= t {
                 *c = 0;
@@ -485,14 +500,14 @@ fn apply_diff_threshold_segmented(
         let cur_bytes = cur.get_internal_byte_data_mut();
         let prev_bytes = prev.get_internal_byte_data_mut();
         let len = cur_bytes.len();
-        
+
         // Process full chunks
         for chunk_idx in 0..(len / CHUNK_SIZE) {
             let start = chunk_idx * CHUNK_SIZE;
             let end = start + CHUNK_SIZE;
             let cur_chunk = &mut cur_bytes[start..end];
             let prev_chunk = &mut prev_bytes[start..end];
-            
+
             for (c, p) in cur_chunk.iter_mut().zip(prev_chunk.iter_mut()) {
                 let diff = (*c as i16 - *p as i16).abs();
                 if diff <= t {
@@ -502,11 +517,14 @@ fn apply_diff_threshold_segmented(
                 }
             }
         }
-        
+
         // Process remaining elements
         let remainder_start = (len / CHUNK_SIZE) * CHUNK_SIZE;
         if remainder_start < len {
-            for (c, p) in cur_bytes[remainder_start..].iter_mut().zip(prev_bytes[remainder_start..].iter_mut()) {
+            for (c, p) in cur_bytes[remainder_start..]
+                .iter_mut()
+                .zip(prev_bytes[remainder_start..].iter_mut())
+            {
                 let diff = (*c as i16 - *p as i16).abs();
                 if diff <= t {
                     *c = 0;
@@ -531,15 +549,16 @@ fn encode_image_frame_to_xyzp(
     let x_offset = channel_index * width;
 
     write_target.clear();
-    
+
     // OPTIMIZATION: Pre-count active pixels to avoid reallocations during push operations
     // This eliminates multiple reallocations and improves performance significantly
     // For 256x192 RGB frame, this is ~147k pixels, but typically only 10-30% are active
-    let active_pixel_count = frame.get_internal_data()
+    let active_pixel_count = frame
+        .get_internal_data()
         .iter()
         .filter(|&&val| val > EPSILON)
         .count();
-    
+
     // Ensure capacity on the target (this allocates internal vectors)
     write_target.ensure_capacity(active_pixel_count);
 
@@ -550,13 +569,13 @@ fn encode_image_frame_to_xyzp(
         y_vec.reserve_exact(active_pixel_count);
         z_vec.reserve_exact(active_pixel_count);
         p_vec.reserve_exact(active_pixel_count);
-        
+
         // OPTIMIZATION: Use indexed_iter with explicit bounds checking disabled via unsafe indexing
         // This avoids bounds checks in the hot loop while maintaining safety via the iterator
         let data = frame.get_internal_data();
         let shape = data.shape();
         let (rows, cols, depth) = (shape[0], shape[1], shape[2]);
-        
+
         for row in 0..rows {
             let y_coord = height - 1 - (row as u32);
             for col in 0..cols {
@@ -600,4 +619,3 @@ fn serialize_xyzp(mapped: &CorticalMappedXYZPNeuronVoxels) -> Result<Vec<u8>> {
         .map_err(|e| SdkError::EncodingFailed(format!("Failed to serialize XYZP: {:?}", e)))?;
     Ok(byte_container.get_byte_ref().to_vec())
 }
-

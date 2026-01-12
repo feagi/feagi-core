@@ -1,3 +1,4 @@
+use crate::configuration::jsonable::{JSONDecoderProperties, JSONEncoderProperties};
 use crate::data_pipeline::per_channel_stream_caches::{
     MotorPipelineStageRunner, SensoryPipelineStageRunner,
 };
@@ -6,7 +7,6 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::fmt::Debug;
 use std::time::Instant;
-use crate::configuration::jsonable::{JSONDecoderProperties, JSONEncoderProperties};
 
 pub trait NeuronVoxelXYZPEncoder: Debug + Sync + Send {
     #[allow(dead_code)]
@@ -39,5 +39,4 @@ pub trait NeuronVoxelXYZPDecoder: Debug + Sync + Send {
         pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>,
         channel_changed: &mut Vec<bool>,
     ) -> Result<(), FeagiDataError>;
-
 }

@@ -10,7 +10,7 @@
 
 //! Tracing Mutex wrapper that automatically logs all lock acquisitions and releases
 //! This provides visibility into lock contention across all code paths
-//! 
+//!
 //! When `npu-lock-tracing` feature is disabled, this module provides a zero-overhead
 //! wrapper that behaves identically to std::sync::Mutex
 
@@ -45,7 +45,9 @@ impl<T> TracingMutex<T> {
 
     /// Acquire the lock, conditionally logging the acquisition and release
     #[cfg(feature = "npu-lock-tracing")]
-    pub fn lock(&self) -> Result<TracingMutexGuard<'_, T>, std::sync::PoisonError<MutexGuard<'_, T>>> {
+    pub fn lock(
+        &self,
+    ) -> Result<TracingMutexGuard<'_, T>, std::sync::PoisonError<MutexGuard<'_, T>>> {
         let thread_id = thread::current().id();
         let lock_start = Instant::now();
 
@@ -53,7 +55,7 @@ impl<T> TracingMutex<T> {
             Ok(guard) => {
                 let lock_acquired = Instant::now();
                 let lock_wait = lock_acquired.duration_since(lock_start);
-                
+
                 // Only log at warn level if wait time is significant (> 5ms)
                 // Fast acquisitions are normal (especially for burst loop) - use debug level
                 if lock_wait.as_millis() > 5 {
@@ -86,15 +88,20 @@ impl<T> TracingMutex<T> {
 
     /// Acquire the lock (zero-overhead when tracing disabled)
     #[cfg(not(feature = "npu-lock-tracing"))]
-    pub fn lock(&self) -> Result<std::sync::MutexGuard<'_, T>, std::sync::PoisonError<std::sync::MutexGuard<'_, T>>> {
+    pub fn lock(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, T>, std::sync::PoisonError<std::sync::MutexGuard<'_, T>>>
+    {
         self.inner.lock()
     }
 
     /// Try to acquire the lock without blocking (with tracing if enabled)
     #[cfg(feature = "npu-lock-tracing")]
-    pub fn try_lock(&self) -> Result<TracingMutexGuard<'_, T>, std::sync::TryLockError<MutexGuard<'_, T>>> {
+    pub fn try_lock(
+        &self,
+    ) -> Result<TracingMutexGuard<'_, T>, std::sync::TryLockError<MutexGuard<'_, T>>> {
         let thread_id = thread::current().id();
-        
+
         match self.inner.try_lock() {
             Ok(guard) => {
                 let lock_acquired = Instant::now();
@@ -119,7 +126,10 @@ impl<T> TracingMutex<T> {
 
     /// Try to acquire the lock without blocking (zero-overhead when tracing disabled)
     #[cfg(not(feature = "npu-lock-tracing"))]
-    pub fn try_lock(&self) -> Result<std::sync::MutexGuard<'_, T>, std::sync::TryLockError<std::sync::MutexGuard<'_, T>>> {
+    pub fn try_lock(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, T>, std::sync::TryLockError<std::sync::MutexGuard<'_, T>>>
+    {
         self.inner.try_lock()
     }
 
@@ -171,7 +181,7 @@ impl<'a, T> Drop for TracingMutexGuard<'a, T> {
         // Log release based on hold time and wait time
         // Long holds (> 5ms) or long waits (> 5ms) are suspicious - log at warn level
         let was_slow = hold_duration.as_millis() > 5 || self.wait_duration.as_millis() > 5;
-        
+
         if was_slow {
             warn!(
                 "[NPU-LOCK-TRACE] {}: Thread {:?} RELEASED lock (held for {:.2}ms, total from attempt: {:.2}ms)",
@@ -190,4 +200,3 @@ impl<'a, T> Drop for TracingMutexGuard<'a, T> {
         }
     }
 }
-

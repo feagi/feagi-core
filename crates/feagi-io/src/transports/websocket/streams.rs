@@ -7,13 +7,13 @@ use crate::blocking::compression;
 use crate::core::{IOConfig, IOError, Result};
 use crate::transports::core::common::ServerConfig;
 use crate::transports::core::prelude::*;
+use feagi_structures::FeagiDataError;
 use parking_lot::Mutex;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::runtime::Runtime;
 use tracing::{error, info};
-use feagi_structures::FeagiDataError;
 
 /// WebSocket streams manager
 ///
@@ -268,7 +268,7 @@ impl WebSocketStreams {
 
     /// Serialize raw fire queue data to FeagiByteContainer format
     /// Same logic as ZMQ visualization stream
-    /// 
+    ///
     /// CRITICAL PERFORMANCE: Takes ownership of fire_data to move vectors instead of cloning
     fn serialize_fire_queue(
         fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
@@ -288,11 +288,12 @@ impl WebSocketStreams {
 
             // Create CorticalID from cortical_id (base64 encoded)
             let cortical_id =
-                CorticalID::try_from_base_64(&area_data.cortical_id)
-                    .map_err(|e| FeagiDataError::BadParameters(format!(
+                CorticalID::try_from_base_64(&area_data.cortical_id).map_err(|e| {
+                    FeagiDataError::BadParameters(format!(
                         "Failed to decode CorticalID from base64 '{}': {:?}",
                         area_data.cortical_id, e
-                    )))?;
+                    ))
+                })?;
 
             // Create neuron voxel arrays - MOVE vectors instead of cloning (takes ownership)
             // This eliminates expensive cloning for large areas
@@ -308,8 +309,7 @@ impl WebSocketStreams {
 
         // Serialize to FeagiByteContainer
         let mut byte_container = FeagiByteContainer::new_empty();
-        byte_container
-            .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)?;
+        byte_container.overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)?;
 
         Ok(byte_container.get_byte_ref().to_vec())
     }
@@ -320,13 +320,11 @@ impl WebSocketStreams {
         if let Some(pub_server) = viz_pub.as_ref() {
             // CRITICAL: publish_simple is non-blocking (uses broadcast channel)
             // If it fails, it's likely because the server isn't running, not because of blocking
-            pub_server
-                .publish_simple(data)
-                .map_err(|e| {
-                    let error_msg = format!("WebSocket viz publish failed: {}", e);
-                    error!("[WS-VIZ] {}", error_msg);
-                    IOError::Transport(error_msg)
-                })?;
+            pub_server.publish_simple(data).map_err(|e| {
+                let error_msg = format!("WebSocket viz publish failed: {}", e);
+                error!("[WS-VIZ] {}", error_msg);
+                IOError::Transport(error_msg)
+            })?;
             Ok(())
         } else {
             let error_msg = "Visualization publisher not started".to_string();

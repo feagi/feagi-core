@@ -1,24 +1,31 @@
 //! Unified encoder for all percentage types (unsigned/signed, 1D-4D, linear/exponential).
 
+use crate::configuration::jsonable::JSONEncoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
 };
+use crate::data_types::descriptors::PercentageChannelDimensionality;
 use crate::data_types::{
     Percentage, Percentage2D, Percentage3D, Percentage4D, SignedPercentage, SignedPercentage2D,
     SignedPercentage3D, SignedPercentage4D,
 };
-use crate::data_types::descriptors::PercentageChannelDimensionality;
+use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
+    encode_signed_percentage_to_fractional_exponential_neuron_z_indexes,
+    encode_signed_percentage_to_linear_neuron_z_index,
+    encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes,
+    encode_unsigned_percentage_to_linear_neuron_z_index,
+};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex, NeuronDepth};
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex, NeuronDepth,
+};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
-use crate::configuration::jsonable::JSONEncoderProperties;
-use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{encode_signed_percentage_to_fractional_exponential_neuron_z_indexes, encode_signed_percentage_to_linear_neuron_z_index, encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes, encode_unsigned_percentage_to_linear_neuron_z_index};
 
 /// Scratch space sized appropriately for dimension count
 #[derive(Debug)]
@@ -35,9 +42,18 @@ impl ScratchSpace {
     fn new(dims: PercentageChannelDimensionality, num_channels: usize) -> Self {
         match dims {
             PercentageChannelDimensionality::D1 => ScratchSpace::D1(vec![Vec::new(); num_channels]),
-            PercentageChannelDimensionality::D2 => ScratchSpace::D2(vec![(Vec::new(), Vec::new()); num_channels]),
-            PercentageChannelDimensionality::D3 => ScratchSpace::D3(vec![(Vec::new(), Vec::new(), Vec::new()); num_channels]),
-            PercentageChannelDimensionality::D4 => ScratchSpace::D4(vec![(Vec::new(), Vec::new(), Vec::new(), Vec::new()); num_channels]),
+            PercentageChannelDimensionality::D2 => {
+                ScratchSpace::D2(vec![(Vec::new(), Vec::new()); num_channels])
+            }
+            PercentageChannelDimensionality::D3 => {
+                ScratchSpace::D3(vec![(Vec::new(), Vec::new(), Vec::new()); num_channels])
+            }
+            PercentageChannelDimensionality::D4 => {
+                ScratchSpace::D4(vec![
+                    (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+                    num_channels
+                ])
+            }
         }
     }
 }
@@ -65,7 +81,7 @@ impl PercentageNeuronVoxelXYZPEncoder {
         number_percentages: PercentageChannelDimensionality,
     ) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
-        
+
         let num_dims = number_percentages.as_u32();
         let channel_width = if is_signed { num_dims * 2 } else { num_dims };
         let num_channels = *number_channels as usize;
@@ -88,7 +104,11 @@ impl PercentageNeuronVoxelXYZPEncoder {
 
     fn channel_width(&self) -> u32 {
         let num_dims = self.number_percentages.as_u32();
-        if self.is_signed { num_dims * 2 } else { num_dims }
+        if self.is_signed {
+            num_dims * 2
+        } else {
+            num_dims
+        }
     }
 }
 
@@ -114,7 +134,7 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
             self.number_percentages,
         )
     }
-    
+
     fn write_neuron_data_multi_channel_from_processed_cache(
         &mut self,
         pipelines: &[SensoryPipelineStageRunner],
@@ -155,15 +175,23 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                     })?;
 
                 // Write to neurons
-                for (current_channel_index, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
+                for (current_channel_index, (s, s_neg)) in
+                    scratch.iter().zip(scratch_neg.iter()).enumerate()
+                {
                     let pipeline = pipelines.get(current_channel_index).unwrap();
-                    let channel_write_target = pipeline.get_channel_index_override()
-                        .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_index as u32)); // Get override if available
+                    let channel_write_target =
+                        pipeline.get_channel_index_override().unwrap_or_else(|| {
+                            CorticalChannelIndex::from(current_channel_index as u32)
+                        }); // Get override if available
                     let c = *channel_write_target;
                     const Y: u32 = 0;
-                    for z in s { neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0); }
+                    for z in s {
+                        neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0);
+                    }
                     if is_signed {
-                        for z in s_neg { neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0); }
+                        for z in s_neg {
+                            neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0);
+                        }
                     }
                 }
             }
@@ -180,8 +208,22 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         let data = pipeline.get_postprocessed_sensor_value();
                         if is_signed {
                             let p: SignedPercentage2D = data.try_into()?;
-                            encode_signed(interpolation, &p.a, z_depth, z_depth_float, &mut s.0, &mut s_neg.0);
-                            encode_signed(interpolation, &p.b, z_depth, z_depth_float, &mut s.1, &mut s_neg.1);
+                            encode_signed(
+                                interpolation,
+                                &p.a,
+                                z_depth,
+                                z_depth_float,
+                                &mut s.0,
+                                &mut s_neg.0,
+                            );
+                            encode_signed(
+                                interpolation,
+                                &p.b,
+                                z_depth,
+                                z_depth_float,
+                                &mut s.1,
+                                &mut s_neg.1,
+                            );
                         } else {
                             let p: Percentage2D = data.try_into()?;
                             encode_unsigned(interpolation, &p.a, z_depth, z_depth_float, &mut s.0);
@@ -190,20 +232,36 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         Ok(())
                     })?;
 
-                for (current_channel_index, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
+                for (current_channel_index, (s, s_neg)) in
+                    scratch.iter().zip(scratch_neg.iter()).enumerate()
+                {
                     let pipeline = pipelines.get(current_channel_index).unwrap();
-                    let channel_write_target = pipeline.get_channel_index_override()
-                        .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_index as u32)); // Get override if available
+                    let channel_write_target =
+                        pipeline.get_channel_index_override().unwrap_or_else(|| {
+                            CorticalChannelIndex::from(current_channel_index as u32)
+                        }); // Get override if available
                     let c = *channel_write_target;
                     const Y: u32 = 0;
                     if is_signed {
-                        for z in &s.0 { neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0); }
-                        for z in &s_neg.0 { neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0); }
-                        for z in &s.1 { neuron_array_target.push_raw(c * channel_width + 2, Y, *z, 1.0); }
-                        for z in &s_neg.1 { neuron_array_target.push_raw(c * channel_width + 3, Y, *z, 1.0); }
+                        for z in &s.0 {
+                            neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0);
+                        }
+                        for z in &s_neg.0 {
+                            neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0);
+                        }
+                        for z in &s.1 {
+                            neuron_array_target.push_raw(c * channel_width + 2, Y, *z, 1.0);
+                        }
+                        for z in &s_neg.1 {
+                            neuron_array_target.push_raw(c * channel_width + 3, Y, *z, 1.0);
+                        }
                     } else {
-                        for z in &s.0 { neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0); }
-                        for z in &s.1 { neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0); }
+                        for z in &s.0 {
+                            neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0);
+                        }
+                        for z in &s.1 {
+                            neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0);
+                        }
                     }
                 }
             }
@@ -220,9 +278,30 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         let data = pipeline.get_postprocessed_sensor_value();
                         if is_signed {
                             let p: SignedPercentage3D = data.try_into()?;
-                            encode_signed(interpolation, &p.a, z_depth, z_depth_float, &mut s.0, &mut s_neg.0);
-                            encode_signed(interpolation, &p.b, z_depth, z_depth_float, &mut s.1, &mut s_neg.1);
-                            encode_signed(interpolation, &p.c, z_depth, z_depth_float, &mut s.2, &mut s_neg.2);
+                            encode_signed(
+                                interpolation,
+                                &p.a,
+                                z_depth,
+                                z_depth_float,
+                                &mut s.0,
+                                &mut s_neg.0,
+                            );
+                            encode_signed(
+                                interpolation,
+                                &p.b,
+                                z_depth,
+                                z_depth_float,
+                                &mut s.1,
+                                &mut s_neg.1,
+                            );
+                            encode_signed(
+                                interpolation,
+                                &p.c,
+                                z_depth,
+                                z_depth_float,
+                                &mut s.2,
+                                &mut s_neg.2,
+                            );
                         } else {
                             let p: Percentage3D = data.try_into()?;
                             encode_unsigned(interpolation, &p.a, z_depth, z_depth_float, &mut s.0);
@@ -232,23 +311,45 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         Ok(())
                     })?;
 
-                for (current_channel_index, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
+                for (current_channel_index, (s, s_neg)) in
+                    scratch.iter().zip(scratch_neg.iter()).enumerate()
+                {
                     let pipeline = pipelines.get(current_channel_index).unwrap();
-                    let channel_write_target = pipeline.get_channel_index_override()
-                        .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_index as u32)); // Get override if available
+                    let channel_write_target =
+                        pipeline.get_channel_index_override().unwrap_or_else(|| {
+                            CorticalChannelIndex::from(current_channel_index as u32)
+                        }); // Get override if available
                     let c = *channel_write_target;
                     const Y: u32 = 0;
                     if is_signed {
-                        for z in &s.0 { neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0); }
-                        for z in &s_neg.0 { neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0); }
-                        for z in &s.1 { neuron_array_target.push_raw(c * channel_width + 2, Y, *z, 1.0); }
-                        for z in &s_neg.1 { neuron_array_target.push_raw(c * channel_width + 3, Y, *z, 1.0); }
-                        for z in &s.2 { neuron_array_target.push_raw(c * channel_width + 4, Y, *z, 1.0); }
-                        for z in &s_neg.2 { neuron_array_target.push_raw(c * channel_width + 5, Y, *z, 1.0); }
+                        for z in &s.0 {
+                            neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0);
+                        }
+                        for z in &s_neg.0 {
+                            neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0);
+                        }
+                        for z in &s.1 {
+                            neuron_array_target.push_raw(c * channel_width + 2, Y, *z, 1.0);
+                        }
+                        for z in &s_neg.1 {
+                            neuron_array_target.push_raw(c * channel_width + 3, Y, *z, 1.0);
+                        }
+                        for z in &s.2 {
+                            neuron_array_target.push_raw(c * channel_width + 4, Y, *z, 1.0);
+                        }
+                        for z in &s_neg.2 {
+                            neuron_array_target.push_raw(c * channel_width + 5, Y, *z, 1.0);
+                        }
                     } else {
-                        for z in &s.0 { neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0); }
-                        for z in &s.1 { neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0); }
-                        for z in &s.2 { neuron_array_target.push_raw(c * channel_width + 2, Y, *z, 1.0); }
+                        for z in &s.0 {
+                            neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0);
+                        }
+                        for z in &s.1 {
+                            neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0);
+                        }
+                        for z in &s.2 {
+                            neuron_array_target.push_raw(c * channel_width + 2, Y, *z, 1.0);
+                        }
                     }
                 }
             }
@@ -265,10 +366,38 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         let data = pipeline.get_postprocessed_sensor_value();
                         if is_signed {
                             let p: SignedPercentage4D = data.try_into()?;
-                            encode_signed(interpolation, &p.a, z_depth, z_depth_float, &mut s.0, &mut s_neg.0);
-                            encode_signed(interpolation, &p.b, z_depth, z_depth_float, &mut s.1, &mut s_neg.1);
-                            encode_signed(interpolation, &p.c, z_depth, z_depth_float, &mut s.2, &mut s_neg.2);
-                            encode_signed(interpolation, &p.d, z_depth, z_depth_float, &mut s.3, &mut s_neg.3);
+                            encode_signed(
+                                interpolation,
+                                &p.a,
+                                z_depth,
+                                z_depth_float,
+                                &mut s.0,
+                                &mut s_neg.0,
+                            );
+                            encode_signed(
+                                interpolation,
+                                &p.b,
+                                z_depth,
+                                z_depth_float,
+                                &mut s.1,
+                                &mut s_neg.1,
+                            );
+                            encode_signed(
+                                interpolation,
+                                &p.c,
+                                z_depth,
+                                z_depth_float,
+                                &mut s.2,
+                                &mut s_neg.2,
+                            );
+                            encode_signed(
+                                interpolation,
+                                &p.d,
+                                z_depth,
+                                z_depth_float,
+                                &mut s.3,
+                                &mut s_neg.3,
+                            );
                         } else {
                             let p: Percentage4D = data.try_into()?;
                             encode_unsigned(interpolation, &p.a, z_depth, z_depth_float, &mut s.0);
@@ -279,26 +408,54 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         Ok(())
                     })?;
 
-                for (current_channel_index, (s, s_neg)) in scratch.iter().zip(scratch_neg.iter()).enumerate() {
+                for (current_channel_index, (s, s_neg)) in
+                    scratch.iter().zip(scratch_neg.iter()).enumerate()
+                {
                     let pipeline = pipelines.get(current_channel_index).unwrap();
-                    let channel_write_target = pipeline.get_channel_index_override()
-                        .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_index as u32)); // Get override if available
+                    let channel_write_target =
+                        pipeline.get_channel_index_override().unwrap_or_else(|| {
+                            CorticalChannelIndex::from(current_channel_index as u32)
+                        }); // Get override if available
                     let c = *channel_write_target;
                     const Y: u32 = 0;
                     if is_signed {
-                        for z in &s.0 { neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0); }
-                        for z in &s_neg.0 { neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0); }
-                        for z in &s.1 { neuron_array_target.push_raw(c * channel_width + 2, Y, *z, 1.0); }
-                        for z in &s_neg.1 { neuron_array_target.push_raw(c * channel_width + 3, Y, *z, 1.0); }
-                        for z in &s.2 { neuron_array_target.push_raw(c * channel_width + 4, Y, *z, 1.0); }
-                        for z in &s_neg.2 { neuron_array_target.push_raw(c * channel_width + 5, Y, *z, 1.0); }
-                        for z in &s.3 { neuron_array_target.push_raw(c * channel_width + 6, Y, *z, 1.0); }
-                        for z in &s_neg.3 { neuron_array_target.push_raw(c * channel_width + 7, Y, *z, 1.0); }
+                        for z in &s.0 {
+                            neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0);
+                        }
+                        for z in &s_neg.0 {
+                            neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0);
+                        }
+                        for z in &s.1 {
+                            neuron_array_target.push_raw(c * channel_width + 2, Y, *z, 1.0);
+                        }
+                        for z in &s_neg.1 {
+                            neuron_array_target.push_raw(c * channel_width + 3, Y, *z, 1.0);
+                        }
+                        for z in &s.2 {
+                            neuron_array_target.push_raw(c * channel_width + 4, Y, *z, 1.0);
+                        }
+                        for z in &s_neg.2 {
+                            neuron_array_target.push_raw(c * channel_width + 5, Y, *z, 1.0);
+                        }
+                        for z in &s.3 {
+                            neuron_array_target.push_raw(c * channel_width + 6, Y, *z, 1.0);
+                        }
+                        for z in &s_neg.3 {
+                            neuron_array_target.push_raw(c * channel_width + 7, Y, *z, 1.0);
+                        }
                     } else {
-                        for z in &s.0 { neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0); }
-                        for z in &s.1 { neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0); }
-                        for z in &s.2 { neuron_array_target.push_raw(c * channel_width + 2, Y, *z, 1.0); }
-                        for z in &s.3 { neuron_array_target.push_raw(c * channel_width + 3, Y, *z, 1.0); }
+                        for z in &s.0 {
+                            neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0);
+                        }
+                        for z in &s.1 {
+                            neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0);
+                        }
+                        for z in &s.2 {
+                            neuron_array_target.push_raw(c * channel_width + 2, Y, *z, 1.0);
+                        }
+                        for z in &s.3 {
+                            neuron_array_target.push_raw(c * channel_width + 3, Y, *z, 1.0);
+                        }
                     }
                 }
             }
@@ -325,7 +482,9 @@ fn encode_unsigned(
             encode_unsigned_percentage_to_linear_neuron_z_index(value, z_depth_float, scratch);
         }
         PercentageNeuronPositioning::Fractional => {
-            encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(value, z_depth, scratch);
+            encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(
+                value, z_depth, scratch,
+            );
         }
     }
 }
@@ -341,10 +500,20 @@ fn encode_signed(
 ) {
     match interpolation {
         PercentageNeuronPositioning::Linear => {
-            encode_signed_percentage_to_linear_neuron_z_index(value, z_depth_float, scratch_pos, scratch_neg);
+            encode_signed_percentage_to_linear_neuron_z_index(
+                value,
+                z_depth_float,
+                scratch_pos,
+                scratch_neg,
+            );
         }
         PercentageNeuronPositioning::Fractional => {
-            encode_signed_percentage_to_fractional_exponential_neuron_z_indexes(value, z_depth, scratch_pos, scratch_neg);
+            encode_signed_percentage_to_fractional_exponential_neuron_z_indexes(
+                value,
+                z_depth,
+                scratch_pos,
+                scratch_neg,
+            );
         }
     }
 }

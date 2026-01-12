@@ -148,4 +148,3 @@ pub async fn sync_device_registrations(
     )
     .await
 }
-

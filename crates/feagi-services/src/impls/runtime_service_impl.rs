@@ -213,11 +213,13 @@ impl RuntimeService for RuntimeServiceImpl {
                 thread_id,
                 lock_wait.as_secs_f64() * 1000.0
             );
-            
+
             // STRICT: Resolve cortical_idx without fallbacks (memory neurons are handled explicitly).
             let fcl_data = npu_lock
                 .get_last_fcl_snapshot_with_cortical_idx()
-                .map_err(|e| ServiceError::Internal(format!("Failed to resolve FCL cortical_idx: {e}")))?;
+                .map_err(|e| {
+                    ServiceError::Internal(format!("Failed to resolve FCL cortical_idx: {e}"))
+                })?;
             debug!(
                 "[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} got FCL snapshot ({} neurons) with cortical_idx",
                 thread_id,
@@ -226,7 +228,9 @@ impl RuntimeService for RuntimeServiceImpl {
 
             fcl_data
                 .into_iter()
-                .map(|(neuron_id, cortical_idx, potential)| (neuron_id.0 as u64, cortical_idx, potential))
+                .map(|(neuron_id, cortical_idx, potential)| {
+                    (neuron_id.0 as u64, cortical_idx, potential)
+                })
                 .collect()
         }; // Lock released here
         let lock_released = std::time::Instant::now();
@@ -272,7 +276,9 @@ impl RuntimeService for RuntimeServiceImpl {
         let mut runner = self.burst_runner.write();
         runner
             .configure_fire_ledger_window(cortical_idx, window_size)
-            .map_err(|e| ServiceError::Internal(format!("Failed to configure fire ledger window: {e}")))?;
+            .map_err(|e| {
+                ServiceError::Internal(format!("Failed to configure fire ledger window: {e}"))
+            })?;
 
         info!(target: "feagi-services", "Configured Fire Ledger window for area {}: {} bursts",
             cortical_idx, window_size);

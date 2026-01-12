@@ -113,9 +113,9 @@ pub async fn post_mapping_properties(
                 .as_str()
                 .ok_or_else(|| ApiError::invalid_input("morphology_id must be a string"))?;
             let morphology_scalar = arr[1].clone();
-            let psc_multiplier = arr[2]
-                .as_i64()
-                .ok_or_else(|| ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer"))?;
+            let psc_multiplier = arr[2].as_i64().ok_or_else(|| {
+                ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer")
+            })?;
             let plasticity_flag = arr[3]
                 .as_bool()
                 .ok_or_else(|| ApiError::invalid_input("plasticity_flag must be a boolean"))?;
@@ -155,7 +155,9 @@ pub async fn post_mapping_properties(
             let psc_multiplier = obj
                 .get("postSynapticCurrent_multiplier")
                 .and_then(|v| v.as_i64())
-                .ok_or_else(|| ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer"))?;
+                .ok_or_else(|| {
+                    ApiError::invalid_input("postSynapticCurrent_multiplier must be an integer")
+                })?;
             let plasticity_flag = obj
                 .get("plasticity_flag")
                 .and_then(|v| v.as_bool())

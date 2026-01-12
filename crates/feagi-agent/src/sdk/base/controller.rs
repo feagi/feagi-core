@@ -48,4 +48,3 @@ pub trait Controller: Send + Sync {
     /// Get cortical IDs this controller produces/consumes
     fn cortical_ids(&self) -> &[CorticalID];
 }
-

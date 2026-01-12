@@ -63,7 +63,12 @@ fn test_load_barebones_flat_genome() {
 
 #[test]
 fn test_load_all_flat_genomes() {
-    let genome_files = ["barebones_genome.json", "essential_genome.json", "test_genome.json", "vision_genome.json"];
+    let genome_files = [
+        "barebones_genome.json",
+        "essential_genome.json",
+        "test_genome.json",
+        "vision_genome.json",
+    ];
 
     for genome_path in genome_files {
         let genome_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))

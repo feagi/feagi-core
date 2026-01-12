@@ -1,3 +1,4 @@
+use crate::configuration::jsonable::JSONEncoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
 };
@@ -5,7 +6,9 @@ use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex};
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex,
+};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
@@ -13,7 +16,6 @@ use feagi_structures::neuron_voxels::xyzp::{
 use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
-use crate::configuration::jsonable::JSONEncoderProperties;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -53,8 +55,10 @@ impl NeuronVoxelXYZPEncoder for MiscDataNeuronVoxelXYZPEncoder {
                     if channel_updated < time_of_previous_burst {
                         return Ok(()); // We haven't updated, do nothing
                     }
-                    let channel_write_target = pipeline.get_channel_index_override()
-                        .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_index as u32)); // Get override if available
+                    let channel_write_target =
+                        pipeline.get_channel_index_override().unwrap_or_else(|| {
+                            CorticalChannelIndex::from(current_channel_index as u32)
+                        }); // Get override if available
                     let updated_data = pipeline.get_postprocessed_sensor_value();
                     let updated_misc: &MiscData = updated_data.try_into()?;
 

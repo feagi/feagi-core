@@ -8,8 +8,8 @@ Creates synapses based on pattern matching between source and destination areas.
 */
 
 use crate::connectivity::core_morphologies::common::calculate_area_dimensions;
-use crate::connectivity::rules::patterns::Pattern3D;
 use crate::connectivity::rules::match_patterns_batch;
+use crate::connectivity::rules::patterns::Pattern3D;
 use crate::types::BduResult;
 use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
 use feagi_npu_neural::SynapseType;
@@ -83,4 +83,3 @@ pub fn apply_patterns_morphology(
 
     Ok(synapse_count)
 }
-

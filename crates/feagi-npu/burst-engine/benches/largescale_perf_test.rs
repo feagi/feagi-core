@@ -6,11 +6,11 @@
 //!
 //! Run with: cargo bench --bench largescale_perf_test
 
+use ahash::AHashMap;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use feagi_npu_burst_engine::synaptic_propagation::SynapticPropagationEngine;
 use feagi_npu_neural::types::{FireCandidateList, NeuronId};
 use feagi_npu_runtime::std_impl::{NeuronArray, SynapseArray};
-use feagi_npu_burst_engine::synaptic_propagation::SynapticPropagationEngine;
-use ahash::AHashMap;
 use feagi_structures::genomic::cortical_area::CorticalID;
 
 /// Create a large-scale test genome
@@ -72,40 +72,44 @@ fn generate_fired_neurons(neuron_count: usize, firing_rate: f32) -> Vec<NeuronId
 
 fn bench_largescale_propagation(c: &mut Criterion) {
     use std::time::Instant;
-    
+
     let mut group = c.benchmark_group("largescale_propagation");
     group.sample_size(10);
     group.warm_up_time(std::time::Duration::from_millis(1000));
 
     // Match user's actual scale: 8M neurons, ~1 synapse/neuron average
     let test_sizes = vec![
-        (100_000, 100, "100K_100syn"),    // 10M synapses
-        (500_000, 50, "500K_50syn"),      // 25M synapses  
-        (1_000_000, 10, "1M_10syn"),      // 10M synapses
-        (5_000_000, 2, "5M_2syn"),        // 10M synapses
-        (8_000_000, 1, "8M_1syn"),        // 8M synapses (matches user's scale)
+        (100_000, 100, "100K_100syn"), // 10M synapses
+        (500_000, 50, "500K_50syn"),   // 25M synapses
+        (1_000_000, 10, "1M_10syn"),   // 10M synapses
+        (5_000_000, 2, "5M_2syn"),     // 10M synapses
+        (8_000_000, 1, "8M_1syn"),     // 8M synapses (matches user's scale)
     ];
 
     for (neuron_count, synapses_per_neuron, label) in test_sizes {
         let total_synapses = neuron_count * synapses_per_neuron;
-        
-        println!("\n📊 Preparing test: {} neurons, {} synapses/neuron = {} total synapses", 
-                 neuron_count, synapses_per_neuron, total_synapses);
-        
+
+        println!(
+            "\n📊 Preparing test: {} neurons, {} synapses/neuron = {} total synapses",
+            neuron_count, synapses_per_neuron, total_synapses
+        );
+
         let (neuron_array, synapse_array) = create_large_genome(neuron_count, synapses_per_neuron);
         let fired_neurons = generate_fired_neurons(neuron_count, 0.01);
-        
-        println!("   ✅ Created genome: {} neurons, {} synapses", 
-                 neuron_array.count, synapse_array.count);
+
+        println!(
+            "   ✅ Created genome: {} neurons, {} synapses",
+            neuron_array.count, synapse_array.count
+        );
         println!("   ✅ Generated {} fired neurons", fired_neurons.len());
 
         // Build propagation engine
         let mut engine = SynapticPropagationEngine::new();
-        
+
         // Build synapse index
         engine.build_synapse_index(&synapse_array);
         println!("   ✅ Built synapse index");
-        
+
         // Create neuron-to-area mapping (all neurons in same area for simplicity)
         let mut neuron_to_area = AHashMap::new();
         // Create a valid CorticalID (custom type: starts with 'c' = 0x63)
@@ -119,7 +123,7 @@ fn bench_largescale_propagation(c: &mut Criterion) {
         }
         engine.set_neuron_mapping(neuron_to_area);
         println!("   ✅ Set neuron mapping");
-        
+
         // Set area flags (all false for simplicity)
         let mut mp_flags = AHashMap::new();
         let mut uniform_flags = AHashMap::new();
@@ -146,13 +150,16 @@ fn bench_largescale_propagation(c: &mut Criterion) {
                         black_box(&neuron_membrane_potentials),
                     );
                     let elapsed = start.elapsed();
-                    
+
                     // Log timing for first iteration
                     if first_iter {
-                        println!("   ⏱️  First iteration: {:.2}ms", elapsed.as_secs_f64() * 1000.0);
+                        println!(
+                            "   ⏱️  First iteration: {:.2}ms",
+                            elapsed.as_secs_f64() * 1000.0
+                        );
                         first_iter = false;
                     }
-                    
+
                     black_box(result)
                 });
             },
@@ -166,7 +173,7 @@ fn bench_largescale_propagation(c: &mut Criterion) {
 
 fn bench_fcl_batch_insertion(c: &mut Criterion) {
     let mut group = c.benchmark_group("fcl_batch_insertion");
-    
+
     let test_sizes = vec![
         (100_000, "100K"),
         (1_000_000, "1M"),
@@ -176,32 +183,31 @@ fn bench_fcl_batch_insertion(c: &mut Criterion) {
 
     for (candidate_count, label) in test_sizes {
         group.throughput(Throughput::Elements(candidate_count as u64));
-        
+
         group.bench_with_input(
             BenchmarkId::new("batch_insert", label),
             &candidate_count,
             |b, &count| {
                 b.iter(|| {
                     let mut fcl = FireCandidateList::new();
-                    
+
                     // Pre-allocate (optimization)
                     if count > 100_000 {
                         fcl.reserve(count / 10);
                     }
-                    
+
                     // Create batch of candidates
-                    let candidates: Vec<(NeuronId, f32)> = (0..count)
-                        .map(|i| (NeuronId(i as u32), 2.0))
-                        .collect();
-                    
+                    let candidates: Vec<(NeuronId, f32)> =
+                        (0..count).map(|i| (NeuronId(i as u32), 2.0)).collect();
+
                     // Batch insertion (optimized path)
                     fcl.add_candidates_batch(&candidates);
-                    
+
                     black_box(fcl)
                 });
             },
         );
-        
+
         // Compare with old method (individual insertions)
         group.bench_with_input(
             BenchmarkId::new("individual_insert", label),
@@ -209,11 +215,11 @@ fn bench_fcl_batch_insertion(c: &mut Criterion) {
             |b, &count| {
                 b.iter(|| {
                     let mut fcl = FireCandidateList::new();
-                    
+
                     for i in 0..count {
                         fcl.add_candidate(NeuronId(i as u32), 2.0);
                     }
-                    
+
                     black_box(fcl)
                 });
             },
@@ -230,4 +236,3 @@ criterion_group!(
 );
 
 criterion_main!(benches);
-

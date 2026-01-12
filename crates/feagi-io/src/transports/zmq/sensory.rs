@@ -4,11 +4,11 @@
 // Sensory stream for receiving sensory data from agents
 // Uses PULL socket pattern for receiving data from multiple agents (agents use PUSH)
 
+use feagi_structures::FeagiDataError;
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use std::thread;
 use tracing::{debug, error, info, warn};
-use feagi_structures::FeagiDataError;
 
 /// Runtime configuration for the ZMQ sensory receiver.
 #[derive(Clone, Debug)]
@@ -40,13 +40,19 @@ impl Default for SensoryReceiveConfig {
 impl SensoryReceiveConfig {
     pub fn validate(&self) -> Result<(), FeagiDataError> {
         if self.receive_high_water_mark < 0 {
-            return Err(FeagiDataError::BadParameters("receive_high_water_mark must be >= 0".to_string()));
+            return Err(FeagiDataError::BadParameters(
+                "receive_high_water_mark must be >= 0".to_string(),
+            ));
         }
         if self.poll_timeout_ms < 0 {
-            return Err(FeagiDataError::BadParameters("poll_timeout_ms must be >= 0".to_string()));
+            return Err(FeagiDataError::BadParameters(
+                "poll_timeout_ms must be >= 0".to_string(),
+            ));
         }
         if self.startup_drain_timeout_ms > 10000 {
-            return Err(FeagiDataError::BadParameters("startup_drain_timeout_ms must be <= 10000ms (10 seconds)".to_string()));
+            return Err(FeagiDataError::BadParameters(
+                "startup_drain_timeout_ms must be <= 10000ms (10 seconds)".to_string(),
+            ));
         }
         Ok(())
     }
@@ -61,7 +67,11 @@ pub struct SensoryStream {
     running: Arc<Mutex<bool>>,
     config: SensoryReceiveConfig,
     /// Reference to Rust NPU for direct injection (no FFI overhead!)
-    npu: Arc<Mutex<Option<Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
+    npu: Arc<
+        Mutex<
+            Option<Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>,
+        >,
+    >,
     /// Reference to AgentRegistry for security gating
     agent_registry: Arc<Mutex<Option<Arc<RwLock<crate::core::AgentRegistry>>>>>,
     /// Statistics
@@ -96,7 +106,10 @@ impl SensoryStream {
     }
 
     /// Set the Rust NPU reference for direct injection
-    pub fn set_npu(&self, npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>) {
+    pub fn set_npu(
+        &self,
+        npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) {
         *self.npu.lock() = Some(npu);
         info!("🦀 [SENSORY-STREAM] NPU connected for direct injection");
     }
@@ -110,12 +123,15 @@ impl SensoryStream {
     /// Start the sensory stream
     pub fn start(&self) -> Result<(), FeagiDataError> {
         if *self.running.lock() {
-            return Err(FeagiDataError::BadParameters("Sensory stream already running".to_string()));
+            return Err(FeagiDataError::BadParameters(
+                "Sensory stream already running".to_string(),
+            ));
         }
 
         // Create PULL socket for receiving sensory data
-        let socket = self.context.socket(zmq::PULL)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to create ZMQ PULL socket: {}", e)))?;
+        let socket = self.context.socket(zmq::PULL).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to create ZMQ PULL socket: {}", e))
+        })?;
 
         // Set socket options
         socket
@@ -123,13 +139,16 @@ impl SensoryStream {
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to set linger: {}", e)))?;
         socket
             .set_rcvhwm(self.config.receive_high_water_mark)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set receive HWM: {}", e)))?;
-        socket
-            .set_immediate(self.config.immediate)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set immediate: {}", e)))?;
+            .map_err(|e| {
+                FeagiDataError::InternalError(format!("Failed to set receive HWM: {}", e))
+            })?;
+        socket.set_immediate(self.config.immediate).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to set immediate: {}", e))
+        })?;
 
         // Bind socket
-        socket.bind(&self.bind_address)
+        socket
+            .bind(&self.bind_address)
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
@@ -325,7 +344,8 @@ impl SensoryStream {
                         ) {
                             Ok(neuron_count) => {
                                 *total_neurons.lock() += neuron_count as u64;
-                                let t_deserialize_ms = t_deserialize_start.elapsed().as_secs_f64() * 1000.0;
+                                let t_deserialize_ms =
+                                    t_deserialize_start.elapsed().as_secs_f64() * 1000.0;
                                 let t_zmq_total = t_zmq_receive_start.elapsed();
                                 let processing_time_ms = t_zmq_total.as_secs_f64() * 1000.0;
 
@@ -333,15 +353,21 @@ impl SensoryStream {
                                 if message_count <= 10 || message_count.is_multiple_of(50) {
                                     let total_msg = *total_messages.lock();
                                     let total_n = *total_neurons.lock();
-                                    let avg_neurons_per_msg = if total_msg > 0 { total_n / total_msg } else { 0 };
+                                    let avg_neurons_per_msg = if total_msg > 0 {
+                                        total_n / total_msg
+                                    } else {
+                                        0
+                                    };
                                     info!(
                                         "[PERF][FEAGI-ZMQ] Message #{}: {} bytes → {} neurons, deserialize+inject={:.2}ms, total={:.2}ms, avg_neurons={}, drained_newer={}",
                                         message_count, message_bytes.len(), neuron_count, t_deserialize_ms, processing_time_ms, avg_neurons_per_msg, drained_newer
                                     );
                                 }
-                                
+
                                 // Log performance warning if processing takes too long (affects frame rate)
-                                if processing_time_ms > 33.0 && (message_count <= 10 || message_count.is_multiple_of(100)) {
+                                if processing_time_ms > 33.0
+                                    && (message_count <= 10 || message_count.is_multiple_of(100))
+                                {
                                     warn!(
                                         "[PERF][FEAGI-ZMQ] ⚠️ Slow processing: {:.2}ms for {} neurons (target: <33ms for 30fps)",
                                         processing_time_ms, neuron_count
@@ -389,7 +415,13 @@ impl SensoryStream {
     /// Returns the number of neurons injected.
     fn deserialize_and_inject_xyzp(
         message_bytes: &[u8],
-        npu_mutex: &Arc<Mutex<Option<Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
+        npu_mutex: &Arc<
+            Mutex<
+                Option<
+                    Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+                >,
+            >,
+        >,
         agent_registry_mutex: &Arc<Mutex<Option<Arc<RwLock<crate::core::AgentRegistry>>>>>,
         rejected_no_genome: &Arc<Mutex<u64>>,
         rejected_no_agents: &Arc<Mutex<u64>>,
@@ -401,7 +433,11 @@ impl SensoryStream {
         let npu_lock = npu_mutex.lock();
         let npu_arc = match npu_lock.as_ref() {
             Some(n) => Arc::clone(n),
-            None => return Err(FeagiDataError::InternalError("NPU not connected".to_string())),
+            None => {
+                return Err(FeagiDataError::InternalError(
+                    "NPU not connected".to_string(),
+                ))
+            }
         };
         drop(npu_lock); // Release early
 
@@ -421,7 +457,9 @@ impl SensoryStream {
                 if count == 1 || count.is_multiple_of(100) {
                     warn!("🚫 [ZMQ-SENSORY] [SECURITY] Rejected sensory data: No genome loaded (rejected {} total)", count);
                 }
-                return Err(FeagiDataError::BadParameters("Security: No genome loaded".to_string()));
+                return Err(FeagiDataError::BadParameters(
+                    "Security: No genome loaded".to_string(),
+                ));
             }
         }
 
@@ -436,11 +474,15 @@ impl SensoryStream {
                     if count == 1 || count.is_multiple_of(100) {
                         warn!("🚫 [ZMQ-SENSORY] [SECURITY] Rejected sensory data: No registered sensory agents (rejected {} total)", count);
                     }
-                    return Err(FeagiDataError::BadParameters("Security: No registered sensory agents".to_string()));
+                    return Err(FeagiDataError::BadParameters(
+                        "Security: No registered sensory agents".to_string(),
+                    ));
                 }
             } else {
                 // AgentRegistry not connected yet - reject for safety
-                return Err(FeagiDataError::InternalError("Security: AgentRegistry not connected".to_string()));
+                return Err(FeagiDataError::InternalError(
+                    "Security: AgentRegistry not connected".to_string(),
+                ));
             }
         }
 
@@ -454,51 +496,68 @@ impl SensoryStream {
                 std::mem::swap(bytes, &mut data_vec);
                 Ok(())
             })
-            .map_err(|e| FeagiDataError::DeserializationError(format!("Failed to load FeagiByteContainer: {:?}", e)))?;
+            .map_err(|e| {
+                FeagiDataError::DeserializationError(format!(
+                    "Failed to load FeagiByteContainer: {:?}",
+                    e
+                ))
+            })?;
 
         // Verify container structure count
         let num_structures = byte_container
             .try_get_number_contained_structures()
-            .map_err(|e| FeagiDataError::DeserializationError(format!("Failed to get structure count: {:?}", e)))?;
+            .map_err(|e| {
+                FeagiDataError::DeserializationError(format!(
+                    "Failed to get structure count: {:?}",
+                    e
+                ))
+            })?;
 
         if num_structures == 0 {
-            return Err(FeagiDataError::BadParameters("FeagiByteContainer has no structures".to_string()));
+            return Err(FeagiDataError::BadParameters(
+                "FeagiByteContainer has no structures".to_string(),
+            ));
         }
 
         // Extract first structure (should be CorticalMappedXYZPNeuronVoxels)
-        let boxed_struct = byte_container
-            .try_create_new_struct_from_index(0)?;
+        let boxed_struct = byte_container.try_create_new_struct_from_index(0)?;
 
         // Downcast to CorticalMappedXYZPNeuronVoxels using as_any().downcast_ref()
         let cortical_mapped = boxed_struct
             .as_any()
             .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()
-            .ok_or_else(|| FeagiDataError::BadParameters("Structure is not CorticalMappedXYZPNeuronVoxels".to_string()))?;
+            .ok_or_else(|| {
+                FeagiDataError::BadParameters(
+                    "Structure is not CorticalMappedXYZPNeuronVoxels".to_string(),
+                )
+            })?;
 
         // ✅ CLEAN ARCHITECTURE: IOSystem just transports XYZP, NPU handles all neural logic
         // The NPU owns coordinate-to-ID conversion and does it efficiently in batch
 
         let t_inject_start = std::time::Instant::now();
         let mut total_injected = 0;
-        
+
         // Temporal smoothing parameters
         const SMOOTHING_RAMP_FACTOR: f32 = 0.85; // Apply 85% of target potential per frame
         const LARGE_FRAME_THRESHOLD: usize = 5000; // Only smooth very large frames (>5000 neurons)
-        
+
         // Calculate total neurons for batching decision
-        let total_neurons: usize = cortical_mapped.mappings.values()
+        let total_neurons: usize = cortical_mapped
+            .mappings
+            .values()
             .map(|arrays| arrays.len())
             .sum();
-        
+
         // CRITICAL FIX: For very large injections (>100k neurons), hold NPU lock for entire injection
         // to ensure atomicity. This prevents the sensory frame from being split across multiple bursts.
-        // 
+        //
         // Previous implementation released lock between batches, allowing burst loop to run and process
         // only partial data, causing correctness issues where one sensory frame was processed across
         // multiple bursts instead of a single burst.
         if total_neurons > 100_000 {
             let injection_start = std::time::Instant::now();
-            
+
             // Hold NPU lock for entire injection to ensure all data is added to pending_sensory_injections
             // before any burst can process it. This ensures the entire sensory frame is processed in ONE burst.
             let lock_start = std::time::Instant::now();
@@ -514,23 +573,29 @@ impl SensoryStream {
                 total_neurons
             );
             npu.clear_pending_sensory_injections();
-            
+
             // Process all cortical areas while holding the lock
             for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
-                let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
+                let (x_coords, y_coords, z_coords, potentials) =
+                    neuron_arrays.borrow_xyzp_vectors();
                 let num_neurons = x_coords.len();
-                
+
                 if num_neurons == 0 {
                     continue;
                 }
-                
+
                 // Apply smoothing if needed (pre-compute once for entire area)
                 let smoothed_potentials: Option<Vec<f32>> = if num_neurons > LARGE_FRAME_THRESHOLD {
-                    Some(potentials.iter().map(|&p| p * SMOOTHING_RAMP_FACTOR).collect())
+                    Some(
+                        potentials
+                            .iter()
+                            .map(|&p| p * SMOOTHING_RAMP_FACTOR)
+                            .collect(),
+                    )
                 } else {
                     None
                 };
-                
+
                 // Inject entire area at once (ensures atomicity - all neurons from this area
                 // are added to pending_sensory_injections before lock is released)
                 let injected = if let Some(ref smoothed) = smoothed_potentials {
@@ -552,7 +617,7 @@ impl SensoryStream {
                 };
                 total_injected += injected;
             }
-            
+
             // Lock released here - all injections are now in pending_sensory_injections
             // The next burst will process ALL of them atomically
             let lock_hold_duration = lock_start.elapsed();
@@ -561,7 +626,7 @@ impl SensoryStream {
                 "[NPU-LOCK] ZMQ-SENSORY: Lock released after large injection (held for {:.2}ms)",
                 lock_hold_duration.as_secs_f64() * 1000.0
             );
-            
+
             let total_duration = injection_start.elapsed();
             if total_duration.as_millis() > 500 {
                 warn!(
@@ -589,20 +654,22 @@ impl SensoryStream {
                 "[NPU-LOCK] ZMQ-SENSORY: Lock acquired for small injection (waited {:.2}ms)",
                 lock_wait.as_secs_f64() * 1000.0
             );
-            
+
             // Clear pending injections for large frames
             if total_neurons > LARGE_FRAME_THRESHOLD {
                 npu.clear_pending_sensory_injections();
             }
-            
+
             for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
-                let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
-                
+                let (x_coords, y_coords, z_coords, potentials) =
+                    neuron_arrays.borrow_xyzp_vectors();
+
                 let injected = if potentials.len() > LARGE_FRAME_THRESHOLD {
-                    let smoothed_potentials: Vec<f32> = potentials.iter()
+                    let smoothed_potentials: Vec<f32> = potentials
+                        .iter()
                         .map(|&p| p * SMOOTHING_RAMP_FACTOR)
                         .collect();
-                    
+
                     npu.inject_sensory_xyzp_arrays_by_id(
                         cortical_id,
                         x_coords,
@@ -620,7 +687,7 @@ impl SensoryStream {
                     )
                 };
                 total_injected += injected;
-                
+
                 if injected == 0 {
                     debug!(
                         "[ZMQ-SENSORY] No neurons injected for area '{}' ({} coords)",
@@ -636,7 +703,7 @@ impl SensoryStream {
                 lock_hold_duration.as_secs_f64() * 1000.0
             );
         }
-        
+
         let t_inject_ms = t_inject_start.elapsed().as_secs_f64() * 1000.0;
         // Log injection timing for large frames or periodically (use info! for visibility)
         if total_injected > 1000 || total_injected == 0 || t_inject_ms > 10.0 {

@@ -144,7 +144,9 @@ mod tests {
 
     #[test]
     fn test_cpu_backend_synaptic_propagation() {
-        use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType as NeuralSynapseType};
+        use feagi_npu_neural::synapse::{
+            compute_synaptic_contribution, SynapseType as NeuralSynapseType,
+        };
         let mut backend = CPUBackend::new();
 
         // Create minimal test data
@@ -163,7 +165,11 @@ mod tests {
         assert_eq!(fcl.get(NeuronId(2)), Some(6.0));
         assert_eq!(
             fcl.get(NeuronId(2)),
-            Some(compute_synaptic_contribution(2, 3, NeuralSynapseType::Excitatory))
+            Some(compute_synaptic_contribution(
+                2,
+                3,
+                NeuralSynapseType::Excitatory
+            ))
         );
     }
 }

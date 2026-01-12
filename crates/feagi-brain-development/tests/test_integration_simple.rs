@@ -6,8 +6,8 @@
 /// Tests basic functionality without complex genome loading
 use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID};
 use feagi_npu_burst_engine::RustNPU;
-use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
 use feagi_npu_burst_engine::TracingMutex;
+use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
 use std::sync::Arc;
 
 /// Helper to create an isolated test manager with NPU
@@ -90,17 +90,17 @@ fn test_create_and_query_neurons() {
             &neuron_cortical_id,
             5,
             5,
-            0,     // x, y, z
-            1.0,   // firing_threshold
+            0,        // x, y, z
+            1.0,      // firing_threshold
             f32::MAX, // firing_threshold_limit (MAX = no limit)
-            0.1,   // leak_coefficient
-            0.0,   // resting_potential
-            0,     // neuron_type
-            2,     // refractory_period
-            1.0,   // excitability
-            3,     // consecutive_fire_limit
-            5,     // snooze_length
-            false, // mp_charge_accumulation
+            0.1,      // leak_coefficient
+            0.0,      // resting_potential
+            0,        // neuron_type
+            2,        // refractory_period
+            1.0,      // excitability
+            3,        // consecutive_fire_limit
+            5,        // snooze_length
+            false,    // mp_charge_accumulation
         )
         .expect("Failed to create neuron");
 
@@ -267,17 +267,19 @@ fn test_batch_neuron_operations() {
         let x = (i % 20) as u32;
         let y = (i / 20) as u32;
         neurons_to_create.push((
-            x, y, 0u32,     // coordinates
-            1.0,   // threshold
+            x,
+            y,
+            0u32,     // coordinates
+            1.0,      // threshold
             f32::MAX, // threshold_limit
-            0.1,   // leak
-            0.0,   // resting
-            0,     // type
-            2,     // refractory
-            1.0,   // excitability
-            3,     // consec_limit
-            5,     // snooze
-            false, // mp_accum
+            0.1,      // leak
+            0.0,      // resting
+            0,        // type
+            2,        // refractory
+            1.0,      // excitability
+            3,        // consec_limit
+            5,        // snooze
+            false,    // mp_accum
         ));
     }
 

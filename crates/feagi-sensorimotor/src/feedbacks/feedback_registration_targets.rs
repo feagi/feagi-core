@@ -1,14 +1,14 @@
-use std::sync::{MutexGuard};
-use serde::{Deserialize, Serialize};
-use feagi_structures::FeagiDataError;
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelIndex, CorticalUnitIndex};
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use crate::caching::{MotorDeviceCache, SensorDeviceCache};
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelIndex, CorticalUnitIndex,
+};
+use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_structures::FeagiDataError;
+use serde::{Deserialize, Serialize};
+use std::sync::MutexGuard;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(PartialEq)]
-pub struct 
-FeedbackRegistrationTargets {
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FeedbackRegistrationTargets {
     sensor_unit_index: CorticalUnitIndex,
     sensor_channel_index: CorticalChannelIndex,
     motor_unit_index: CorticalUnitIndex,
@@ -16,10 +16,12 @@ FeedbackRegistrationTargets {
 }
 
 impl FeedbackRegistrationTargets {
-    pub fn new(sensor_unit_index: CorticalUnitIndex,
-               sensor_channel_index: CorticalChannelIndex,
-               motor_unit_index: CorticalUnitIndex,
-               motor_channel_index: CorticalChannelIndex) -> Self {
+    pub fn new(
+        sensor_unit_index: CorticalUnitIndex,
+        sensor_channel_index: CorticalChannelIndex,
+        motor_unit_index: CorticalUnitIndex,
+        motor_channel_index: CorticalChannelIndex,
+    ) -> Self {
         FeedbackRegistrationTargets {
             sensor_unit_index,
             sensor_channel_index,
@@ -45,14 +47,23 @@ impl FeedbackRegistrationTargets {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn verify_existence(&self,
-                                   sensor_type: SensoryCorticalUnit,
-                                   motor_type: MotorCorticalUnit,
-                                   sensor_cache: MutexGuard<'_, SensorDeviceCache>,
-                                   motor_cache: MutexGuard<'_, MotorDeviceCache>
+    pub(crate) fn verify_existence(
+        &self,
+        sensor_type: SensoryCorticalUnit,
+        motor_type: MotorCorticalUnit,
+        sensor_cache: MutexGuard<'_, SensorDeviceCache>,
+        motor_cache: MutexGuard<'_, MotorDeviceCache>,
     ) -> Result<(), FeagiDataError> {
-        sensor_cache.verify_existence(sensor_type, self.sensor_unit_index, self.sensor_channel_index)?;
-        motor_cache.verify_existence(motor_type, self.motor_unit_index, self.motor_channel_index)?;
+        sensor_cache.verify_existence(
+            sensor_type,
+            self.sensor_unit_index,
+            self.sensor_channel_index,
+        )?;
+        motor_cache.verify_existence(
+            motor_type,
+            self.motor_unit_index,
+            self.motor_channel_index,
+        )?;
         Ok(())
     }
 }

@@ -25,7 +25,7 @@
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub mod executor;  // Abstraction layer for different execution models
+pub mod executor; // Abstraction layer for different execution models
 pub mod memory_neuron_array;
 pub mod memory_stats_cache;
 pub mod neuron_id_manager;
@@ -33,7 +33,7 @@ pub mod pattern_detector;
 pub mod service;
 pub mod stdp;
 pub mod stdp_core; // Platform-agnostic STDP (no_std compatible)
-// pub mod lifecycle_manager;  // DEPRECATED: Use AsyncPlasticityExecutor instead
+                   // pub mod lifecycle_manager;  // DEPRECATED: Use AsyncPlasticityExecutor instead
 
 // Re-export key types
 pub use executor::{AsyncPlasticityExecutor, PlasticityExecutor};

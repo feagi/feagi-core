@@ -3,7 +3,6 @@ use crate::{define_index, define_nonzero_count, define_xyz_coordinates, define_x
 
 //region Cortical Indexing
 
-
 define_index!(
     CorticalUnitIndex,
     u8,

@@ -80,7 +80,12 @@ fn walk_estimates(dir: &Path) -> HashMap<String, Value> {
                 continue;
             }
             // Expect .../<bench...>/new/estimates.json
-            if path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()) != Some("new") {
+            if path
+                .parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                != Some("new")
+            {
                 continue;
             }
 
@@ -109,10 +114,7 @@ fn walk_estimates(dir: &Path) -> HashMap<String, Value> {
 }
 
 fn get_point_estimate(estimates: &Value, stat: &str) -> Option<f64> {
-    estimates
-        .get(stat)?
-        .get("point_estimate")?
-        .as_f64()
+    estimates.get(stat)?.get("point_estimate")?.as_f64()
 }
 
 fn main() {
@@ -220,11 +222,12 @@ fn main() {
     }
 
     if failed > 0 {
-        eprintln!("[perf_compare] Regression detected: {} failing benchmark(s)", failed);
+        eprintln!(
+            "[perf_compare] Regression detected: {} failing benchmark(s)",
+            failed
+        );
         process::exit(1);
     }
 
     println!("[perf_compare] All benchmarks within regression thresholds.");
 }
-
-

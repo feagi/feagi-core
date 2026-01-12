@@ -3,8 +3,7 @@
 
 //! Motor decoders
 
-pub mod traits;
 pub mod perception;
+pub mod traits;
 
 pub use traits::MotorDecoder;
-

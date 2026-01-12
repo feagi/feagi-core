@@ -53,9 +53,9 @@
 #[cfg(feature = "std")]
 use once_cell::sync::Lazy;
 #[cfg(feature = "std")]
-use std::sync::Arc;
-#[cfg(feature = "std")]
 use parking_lot::RwLock;
+#[cfg(feature = "std")]
+use std::sync::Arc;
 
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -294,7 +294,7 @@ impl StateManager {
 // ===== Singleton Pattern =====
 
 /// Global singleton instance of StateManager
-/// 
+///
 /// This is initialized lazily on first access. The initialization is thread-safe
 /// and non-blocking. If initialization fails, it will panic (which should never happen).
 #[cfg(feature = "std")]

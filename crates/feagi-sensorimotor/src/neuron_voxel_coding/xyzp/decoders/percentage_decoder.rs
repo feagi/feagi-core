@@ -1,6 +1,8 @@
 //! Unified decoder for all percentage types (unsigned/signed, 1D-4D, linear/exponential).
 
+use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
+use crate::data_types::descriptors::PercentageChannelDimensionality;
 use crate::data_types::{
     Percentage, Percentage2D, Percentage3D, Percentage4D, SignedPercentage, SignedPercentage2D,
     SignedPercentage3D, SignedPercentage4D,
@@ -16,13 +18,11 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelDimensions, NeuronDepth,
 };
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
-use crate::configuration::jsonable::JSONDecoderProperties;
-use crate::data_types::descriptors::PercentageChannelDimensionality;
 
 const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1;
 
@@ -83,7 +83,7 @@ impl PercentageNeuronVoxelXYZPDecoder {
         for scratch in self.z_depth_scratch_space.iter_mut() {
             scratch.clear();
         }
-        
+
         for scratch in self.z_depth_scratch_space_negative.iter_mut() {
             scratch.clear();
         }
@@ -139,8 +139,13 @@ impl PercentageNeuronVoxelXYZPDecoder {
         changed_flag: &mut bool,
     ) -> Result<(), FeagiDataError> {
         // Check if any data was collected
-        let has_data = (0..number_pairs)
-            .any(|i| !self.z_depth_scratch_space.get(base_index + i).unwrap().is_empty());
+        let has_data = (0..number_pairs).any(|i| {
+            !self
+                .z_depth_scratch_space
+                .get(base_index + i)
+                .unwrap()
+                .is_empty()
+        });
 
         if !has_data {
             return Ok(());
@@ -216,11 +221,18 @@ impl PercentageNeuronVoxelXYZPDecoder {
         pipeline: &mut MotorPipelineStageRunner,
         changed_flag: &mut bool,
     ) -> Result<(), FeagiDataError> {
-
         // Check if any data was collected
         let has_data = (0..number_pairs).any(|i| {
-            !self.z_depth_scratch_space.get(base_index + i).unwrap().is_empty()
-                || !self.z_depth_scratch_space_negative.get(base_index + i).unwrap().is_empty()
+            !self
+                .z_depth_scratch_space
+                .get(base_index + i)
+                .unwrap()
+                .is_empty()
+                || !self
+                    .z_depth_scratch_space_negative
+                    .get(base_index + i)
+                    .unwrap()
+                    .is_empty()
         });
 
         if !has_data {
@@ -243,7 +255,10 @@ impl PercentageNeuronVoxelXYZPDecoder {
                 let z_a_pos = self.z_depth_scratch_space.get(base_index).unwrap();
                 let z_b_pos = self.z_depth_scratch_space.get(base_index + 1).unwrap();
                 let z_a_neg = self.z_depth_scratch_space_negative.get(base_index).unwrap();
-                let z_b_neg = self.z_depth_scratch_space_negative.get(base_index + 1).unwrap();
+                let z_b_neg = self
+                    .z_depth_scratch_space_negative
+                    .get(base_index + 1)
+                    .unwrap();
 
                 if !z_a_pos.is_empty() || !z_a_neg.is_empty() {
                     self.decode_signed(z_a_pos, z_a_neg, &mut signed_2d.a);
@@ -259,8 +274,14 @@ impl PercentageNeuronVoxelXYZPDecoder {
                 let z_b_pos = self.z_depth_scratch_space.get(base_index + 1).unwrap();
                 let z_c_pos = self.z_depth_scratch_space.get(base_index + 2).unwrap();
                 let z_a_neg = self.z_depth_scratch_space_negative.get(base_index).unwrap();
-                let z_b_neg = self.z_depth_scratch_space_negative.get(base_index + 1).unwrap();
-                let z_c_neg = self.z_depth_scratch_space_negative.get(base_index + 2).unwrap();
+                let z_b_neg = self
+                    .z_depth_scratch_space_negative
+                    .get(base_index + 1)
+                    .unwrap();
+                let z_c_neg = self
+                    .z_depth_scratch_space_negative
+                    .get(base_index + 2)
+                    .unwrap();
 
                 if !z_a_pos.is_empty() || !z_a_neg.is_empty() {
                     self.decode_signed(z_a_pos, z_a_neg, &mut signed_3d.a);
@@ -280,9 +301,18 @@ impl PercentageNeuronVoxelXYZPDecoder {
                 let z_c_pos = self.z_depth_scratch_space.get(base_index + 2).unwrap();
                 let z_d_pos = self.z_depth_scratch_space.get(base_index + 3).unwrap();
                 let z_a_neg = self.z_depth_scratch_space_negative.get(base_index).unwrap();
-                let z_b_neg = self.z_depth_scratch_space_negative.get(base_index + 1).unwrap();
-                let z_c_neg = self.z_depth_scratch_space_negative.get(base_index + 2).unwrap();
-                let z_d_neg = self.z_depth_scratch_space_negative.get(base_index + 3).unwrap();
+                let z_b_neg = self
+                    .z_depth_scratch_space_negative
+                    .get(base_index + 1)
+                    .unwrap();
+                let z_c_neg = self
+                    .z_depth_scratch_space_negative
+                    .get(base_index + 2)
+                    .unwrap();
+                let z_d_neg = self
+                    .z_depth_scratch_space_negative
+                    .get(base_index + 3)
+                    .unwrap();
 
                 if !z_a_pos.is_empty() || !z_a_neg.is_empty() {
                     self.decode_signed(z_a_pos, z_a_neg, &mut signed_4d.a);
@@ -324,7 +354,7 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
             self.number_percentages,
         )
     }
-    
+
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(
         &mut self,
         neurons_to_read: &CorticalMappedXYZPNeuronVoxels,
@@ -354,8 +384,7 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
         match self.is_signed {
             false => {
                 for neuron in neuron_array.iter() {
-                    if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y
-                        || neuron.potential == 0.0
+                    if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0
                     {
                         continue;
                     }
@@ -375,8 +404,7 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
             }
             true => {
                 for neuron in neuron_array.iter() {
-                    if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y
-                        || neuron.potential == 0.0
+                    if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0
                     {
                         continue;
                     }
@@ -425,12 +453,7 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
                 }
                 true => {
                     let base_index = channel_index * number_pairs;
-                    self.process_signed_channel(
-                        base_index,
-                        number_pairs,
-                        pipeline,
-                        changed_flag,
-                    )?;
+                    self.process_signed_channel(base_index, number_pairs, pipeline, changed_flag)?;
                 }
             }
         }
@@ -438,4 +461,3 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
         Ok(())
     }
 }
-

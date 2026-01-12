@@ -47,10 +47,22 @@ pub fn uses_absolute_frames(area: &CorticalArea) -> bool {
                 | IOCorticalAreaConfigurationFlag::Percentage2D(FrameChangeHandling::Absolute, _)
                 | IOCorticalAreaConfigurationFlag::Percentage3D(FrameChangeHandling::Absolute, _)
                 | IOCorticalAreaConfigurationFlag::Percentage4D(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaConfigurationFlag::SignedPercentage(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaConfigurationFlag::SignedPercentage2D(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaConfigurationFlag::SignedPercentage3D(FrameChangeHandling::Absolute, _)
-                | IOCorticalAreaConfigurationFlag::SignedPercentage4D(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaConfigurationFlag::SignedPercentage(
+                    FrameChangeHandling::Absolute,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage2D(
+                    FrameChangeHandling::Absolute,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage3D(
+                    FrameChangeHandling::Absolute,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage4D(
+                    FrameChangeHandling::Absolute,
+                    _
+                )
                 | IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Absolute)
                 | IOCorticalAreaConfigurationFlag::Misc(FrameChangeHandling::Absolute)
         )
@@ -65,13 +77,34 @@ pub fn uses_incremental_frames(area: &CorticalArea) -> bool {
         matches!(
             io_type,
             IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaConfigurationFlag::Percentage2D(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaConfigurationFlag::Percentage3D(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaConfigurationFlag::Percentage4D(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaConfigurationFlag::SignedPercentage(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaConfigurationFlag::SignedPercentage2D(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaConfigurationFlag::SignedPercentage3D(FrameChangeHandling::Incremental, _)
-                | IOCorticalAreaConfigurationFlag::SignedPercentage4D(FrameChangeHandling::Incremental, _)
+                | IOCorticalAreaConfigurationFlag::Percentage2D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::Percentage3D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::Percentage4D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage2D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage3D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
+                | IOCorticalAreaConfigurationFlag::SignedPercentage4D(
+                    FrameChangeHandling::Incremental,
+                    _
+                )
                 | IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Incremental)
                 | IOCorticalAreaConfigurationFlag::Misc(FrameChangeHandling::Incremental)
         )

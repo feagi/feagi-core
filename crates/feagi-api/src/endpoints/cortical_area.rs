@@ -11,8 +11,8 @@ use std::collections::HashMap;
 
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
+use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 
 // ============================================================================
 // REQUEST/RESPONSE MODELS
@@ -445,14 +445,14 @@ pub async fn post_multi_cortical_area_properties(
 
     for cortical_id in cortical_ids {
         if let Ok(area_info) = connectome_service.get_cortical_area(&cortical_id).await {
-            tracing::debug!(target: "feagi-api", 
-                "[MULTI] Area {}: cortical_type={}, cortical_group={}, is_mem_type={:?}", 
+            tracing::debug!(target: "feagi-api",
+                "[MULTI] Area {}: cortical_type={}, cortical_group={}, is_mem_type={:?}",
                 cortical_id, area_info.cortical_type, area_info.cortical_group,
                 area_info.properties.get("is_mem_type")
             );
             let json_value = serde_json::to_value(&area_info).unwrap_or_default();
-            tracing::debug!(target: "feagi-api", 
-                "[MULTI] Serialized has cortical_type: {}", 
+            tracing::debug!(target: "feagi-api",
+                "[MULTI] Serialized has cortical_type: {}",
                 json_value.get("cortical_type").is_some()
             );
             result.insert(cortical_id, json_value);
@@ -532,25 +532,35 @@ pub async fn post_cortical_area(
     let mut data_type_configs_by_subunit: HashMap<u8, u16> = HashMap::new();
 
     for (k, v) in raw_configs {
-        let subunit_idx_u64 = k
-            .parse::<u64>()
-            .map_err(|_| ApiError::invalid_input("data_type_configs_by_subunit keys must be integers"))?;
-        let subunit_idx: u8 = subunit_idx_u64
-            .try_into()
-            .map_err(|_| ApiError::invalid_input("data_type_configs_by_subunit key out of range"))?;
+        let subunit_idx_u64 = k.parse::<u64>().map_err(|_| {
+            ApiError::invalid_input("data_type_configs_by_subunit keys must be integers")
+        })?;
+        let subunit_idx: u8 = subunit_idx_u64.try_into().map_err(|_| {
+            ApiError::invalid_input("data_type_configs_by_subunit key out of range")
+        })?;
 
         let parsed_u64 = if let Some(u) = v.as_u64() {
             Some(u)
         } else if let Some(i) = v.as_i64() {
-            if i >= 0 { Some(i as u64) } else { None }
+            if i >= 0 {
+                Some(i as u64)
+            } else {
+                None
+            }
         } else if let Some(f) = v.as_f64() {
-            if f >= 0.0 { Some(f.round() as u64) } else { None }
+            if f >= 0.0 {
+                Some(f.round() as u64)
+            } else {
+                None
+            }
         } else if let Some(s) = v.as_str() {
             s.parse::<u64>().ok()
         } else {
             None
         }
-        .ok_or_else(|| ApiError::invalid_input("data_type_configs_by_subunit values must be numeric"))?;
+        .ok_or_else(|| {
+            ApiError::invalid_input("data_type_configs_by_subunit values must be numeric")
+        })?;
 
         if parsed_u64 > u16::MAX as u64 {
             return Err(ApiError::invalid_input(
@@ -632,24 +642,26 @@ pub async fn post_cortical_area(
         let config_byte_5 = ((data_type_config >> 8) & 0xFF) as u8; // Upper byte
 
         // Get dimensions for this unit from topology
-        let dimensions = if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
-            let dims = topo.channel_dimensions_default;
-            (dims[0] as usize, dims[1] as usize, dims[2] as usize)
-        } else {
-            (1, 1, 1) // Fallback
-        };
+        let dimensions =
+            if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
+                let dims = topo.channel_dimensions_default;
+                (dims[0] as usize, dims[1] as usize, dims[2] as usize)
+            } else {
+                (1, 1, 1) // Fallback
+            };
 
         // Calculate position for this unit
-        let position = if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
-            let rel_pos = topo.relative_position;
-            (
-                coordinates_3d[0] + rel_pos[0],
-                coordinates_3d[1] + rel_pos[1],
-                coordinates_3d[2] + rel_pos[2],
-            )
-        } else {
-            (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2])
-        };
+        let position =
+            if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
+                let rel_pos = topo.relative_position;
+                (
+                    coordinates_3d[0] + rel_pos[0],
+                    coordinates_3d[1] + rel_pos[1],
+                    coordinates_3d[2] + rel_pos[2],
+                )
+            } else {
+                (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2])
+            };
 
         // Construct proper 8-byte cortical ID
         // Byte structure: [type(i/o), subtype[0], subtype[1], subtype[2], encoding_type, encoding_format, unit_idx, group_id]
@@ -1119,10 +1131,7 @@ pub async fn put_multi_cortical_area(
             "message".to_string(),
             format!("Updated {} cortical areas", cortical_ids.len()),
         ),
-        (
-            "cortical_ids".to_string(),
-            cortical_ids.join(", "),
-        ),
+        ("cortical_ids".to_string(), cortical_ids.join(", ")),
     ])))
 }
 

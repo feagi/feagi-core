@@ -368,15 +368,8 @@ impl AgentConfig {
     /// let config = AgentConfig::new("text_input", AgentType::Sensory)
     ///     .with_sensory_capability(20.0, None);
     /// ```
-    pub fn with_sensory_capability(
-        mut self,
-        rate_hz: f64,
-        shm_path: Option<String>,
-    ) -> Self {
-        self.capabilities.sensory = Some(SensoryCapability {
-            rate_hz,
-            shm_path,
-        });
+    pub fn with_sensory_capability(mut self, rate_hz: f64, shm_path: Option<String>) -> Self {
+        self.capabilities.sensory = Some(SensoryCapability { rate_hz, shm_path });
         self
     }
 

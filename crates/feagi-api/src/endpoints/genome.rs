@@ -390,7 +390,10 @@ pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde
     let genome_value: serde_json::Value = serde_json::from_str(&genome_json_str)
         .map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
 
-    info!("✅ Genome download complete, {} bytes", genome_json_str.len());
+    info!(
+        "✅ Genome download complete, {} bytes",
+        genome_json_str.len()
+    );
     Ok(Json(genome_value))
 }
 
@@ -615,15 +618,25 @@ pub async fn get_cortical_template(
     // deterministic across platforms and runs. No fallbacks.
     let data_type_to_json = |dt: IOCorticalAreaConfigurationFlag| -> serde_json::Value {
         let (variant, frame, positioning) = match dt {
-            IOCorticalAreaConfigurationFlag::Boolean => ("Boolean", FrameChangeHandling::Absolute, None),
+            IOCorticalAreaConfigurationFlag::Boolean => {
+                ("Boolean", FrameChangeHandling::Absolute, None)
+            }
             IOCorticalAreaConfigurationFlag::Percentage(f, p) => ("Percentage", f, Some(p)),
             IOCorticalAreaConfigurationFlag::Percentage2D(f, p) => ("Percentage2D", f, Some(p)),
             IOCorticalAreaConfigurationFlag::Percentage3D(f, p) => ("Percentage3D", f, Some(p)),
             IOCorticalAreaConfigurationFlag::Percentage4D(f, p) => ("Percentage4D", f, Some(p)),
-            IOCorticalAreaConfigurationFlag::SignedPercentage(f, p) => ("SignedPercentage", f, Some(p)),
-            IOCorticalAreaConfigurationFlag::SignedPercentage2D(f, p) => ("SignedPercentage2D", f, Some(p)),
-            IOCorticalAreaConfigurationFlag::SignedPercentage3D(f, p) => ("SignedPercentage3D", f, Some(p)),
-            IOCorticalAreaConfigurationFlag::SignedPercentage4D(f, p) => ("SignedPercentage4D", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage(f, p) => {
+                ("SignedPercentage", f, Some(p))
+            }
+            IOCorticalAreaConfigurationFlag::SignedPercentage2D(f, p) => {
+                ("SignedPercentage2D", f, Some(p))
+            }
+            IOCorticalAreaConfigurationFlag::SignedPercentage3D(f, p) => {
+                ("SignedPercentage3D", f, Some(p))
+            }
+            IOCorticalAreaConfigurationFlag::SignedPercentage4D(f, p) => {
+                ("SignedPercentage4D", f, Some(p))
+            }
             IOCorticalAreaConfigurationFlag::CartesianPlane(f) => ("CartesianPlane", f, None),
             IOCorticalAreaConfigurationFlag::Misc(f) => ("Misc", f, None),
         };
@@ -687,7 +700,10 @@ pub async fn get_cortical_template(
         let allowed_frames = motor_unit.get_allowed_frame_change_handling();
         let frames: Vec<FrameChangeHandling> = match allowed_frames {
             Some(allowed) => allowed.to_vec(),
-            None => vec![FrameChangeHandling::Absolute, FrameChangeHandling::Incremental],
+            None => vec![
+                FrameChangeHandling::Absolute,
+                FrameChangeHandling::Incremental,
+            ],
         };
 
         let positionings = [
@@ -725,7 +741,10 @@ pub async fn get_cortical_template(
 
                             let dedup_key = format!(
                                 "{}|{}|{}",
-                                dt_json.get("variant").and_then(|v| v.as_str()).unwrap_or(""),
+                                dt_json
+                                    .get("variant")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or(""),
                                 dt_json
                                     .get("frame_change_handling")
                                     .and_then(|v| v.as_str())
@@ -736,15 +755,16 @@ pub async fn get_cortical_template(
                                     .unwrap_or("")
                             );
 
-                            let seen = per_subunit_dedup
-                                .entry(subunit_key.clone())
-                                .or_default();
+                            let seen = per_subunit_dedup.entry(subunit_key.clone()).or_default();
                             if !seen.insert(dedup_key) {
                                 continue;
                             }
 
                             if let Some(subunit_obj) = subunits.get_mut(&subunit_key) {
-                                if let Some(arr) = subunit_obj.get_mut("supported_data_types").and_then(|v| v.as_array_mut()) {
+                                if let Some(arr) = subunit_obj
+                                    .get_mut("supported_data_types")
+                                    .and_then(|v| v.as_array_mut())
+                                {
                                     arr.push(dt_json);
                                 }
                             }
@@ -796,7 +816,10 @@ pub async fn get_cortical_template(
         let allowed_frames = sensory_unit.get_allowed_frame_change_handling();
         let frames: Vec<FrameChangeHandling> = match allowed_frames {
             Some(allowed) => allowed.to_vec(),
-            None => vec![FrameChangeHandling::Absolute, FrameChangeHandling::Incremental],
+            None => vec![
+                FrameChangeHandling::Absolute,
+                FrameChangeHandling::Incremental,
+            ],
         };
 
         let positionings = [
@@ -833,7 +856,10 @@ pub async fn get_cortical_template(
 
                             let dedup_key = format!(
                                 "{}|{}|{}",
-                                dt_json.get("variant").and_then(|v| v.as_str()).unwrap_or(""),
+                                dt_json
+                                    .get("variant")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or(""),
                                 dt_json
                                     .get("frame_change_handling")
                                     .and_then(|v| v.as_str())
@@ -844,15 +870,16 @@ pub async fn get_cortical_template(
                                     .unwrap_or("")
                             );
 
-                            let seen = per_subunit_dedup
-                                .entry(subunit_key.clone())
-                                .or_default();
+                            let seen = per_subunit_dedup.entry(subunit_key.clone()).or_default();
                             if !seen.insert(dedup_key) {
                                 continue;
                             }
 
                             if let Some(subunit_obj) = subunits.get_mut(&subunit_key) {
-                                if let Some(arr) = subunit_obj.get_mut("supported_data_types").and_then(|v| v.as_array_mut()) {
+                                if let Some(arr) = subunit_obj
+                                    .get_mut("supported_data_types")
+                                    .and_then(|v| v.as_array_mut())
+                                {
                                     arr.push(dt_json);
                                 }
                             }

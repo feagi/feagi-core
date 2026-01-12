@@ -42,12 +42,12 @@ pub mod backend;
 #[cfg(feature = "std")]
 pub mod burst_loop_runner;
 pub mod fire_ledger;
-#[cfg(feature = "std")]
-pub mod tracing_mutex;
 pub mod fire_structures;
 pub mod fq_sampler;
 pub mod motor_shm_writer;
 pub mod neural_dynamics;
+#[cfg(feature = "std")]
+pub mod tracing_mutex;
 // Neuron models moved to feagi-neural::models (Phase 2b)
 pub mod dynamic_npu;
 pub mod npu;

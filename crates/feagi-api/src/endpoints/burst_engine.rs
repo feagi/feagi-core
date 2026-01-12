@@ -6,8 +6,8 @@
 // Removed - using crate::common::State instead
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
-use std::collections::HashMap;
 use serde::Deserialize;
+use std::collections::HashMap;
 use utoipa::{IntoParams, ToSchema};
 
 /// Get the current simulation timestep in seconds.
@@ -93,8 +93,11 @@ pub async fn get_fcl(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get FCL snapshot: {}", e)))?;
     let call_duration = call_start.elapsed();
-    warn!("[API] /v1/burst_engine/fcl completed in {:.2}ms (returned {} neurons)", 
-        call_duration.as_secs_f64() * 1000.0, fcl_data.len());
+    warn!(
+        "[API] /v1/burst_engine/fcl completed in {:.2}ms (returned {} neurons)",
+        call_duration.as_secs_f64() * 1000.0,
+        fcl_data.len()
+    );
 
     // Get burst count for timestep
     let timestep = runtime_service
@@ -191,13 +194,17 @@ pub async fn get_fire_queue(
     if fq_sample.is_empty() {
         debug!("[FIRE-QUEUE-API] ⚠️ Fire queue sample is EMPTY - no areas");
     } else {
-        let total_neurons: usize = fq_sample.values()
+        let total_neurons: usize = fq_sample
+            .values()
             .map(|(x, y, z, _, _)| x.len() + y.len() + z.len())
             .sum();
-        info!("[FIRE-QUEUE-API] ✓ Received fire queue sample: {} areas, {} total neurons", 
-            fq_sample.len(), total_neurons);
+        info!(
+            "[FIRE-QUEUE-API] ✓ Received fire queue sample: {} areas, {} total neurons",
+            fq_sample.len(),
+            total_neurons
+        );
     }
-    
+
     // Get burst count for timestep
     let timestep = runtime_service
         .get_burst_count()
@@ -240,7 +247,7 @@ pub async fn get_fire_queue(
     }
 
     info!("[FIRE-QUEUE-API] Total fired neurons: {}", total_fired);
-    
+
     let mut response = HashMap::new();
     response.insert("timestep".to_string(), serde_json::json!(timestep));
     response.insert("total_fired".to_string(), serde_json::json!(total_fired));
@@ -286,7 +293,10 @@ pub async fn get_fcl_neuron(
         Some((_id, cortical_idx, potential)) => {
             response.insert("present".to_string(), serde_json::json!(true));
             response.insert("cortical_idx".to_string(), serde_json::json!(*cortical_idx));
-            response.insert("candidate_potential".to_string(), serde_json::json!(*potential));
+            response.insert(
+                "candidate_potential".to_string(),
+                serde_json::json!(*potential),
+            );
         }
         None => {
             response.insert("present".to_string(), serde_json::json!(false));

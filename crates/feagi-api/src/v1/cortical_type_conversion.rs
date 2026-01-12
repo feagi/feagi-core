@@ -157,7 +157,9 @@ fn positioning_to_string(
 mod tests {
     use super::*;
     use feagi_brain_development::{CorticalArea, CorticalID, Dimensions};
-    use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
+    use feagi_structures::genomic::cortical_area::{
+        CorticalAreaType, IOCorticalAreaConfigurationFlag,
+    };
 
     #[test]
     fn test_to_cortical_type_info_cartesian_plane() {

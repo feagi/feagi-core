@@ -1,15 +1,17 @@
+use crate::configuration::jsonable::JSONEncoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
 };
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex};
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex,
+};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
-use crate::configuration::jsonable::JSONEncoderProperties;
 
 const NEURON_TRUE_VAL: f32 = 1.0;
 const NEURON_FALSE_VAL: f32 = 0.0;
@@ -74,9 +76,9 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
             const Y: u32 = 0;
             const Z: u32 = 0;
             for (current_channel_x, changed) in self.scratch_space.iter().enumerate() {
-
                 let channel_stage_runner = pipelines.get(channel_index).unwrap(); // Should always be the right length
-                let channel_to_write = channel_stage_runner.get_channel_index_override()
+                let channel_to_write = channel_stage_runner
+                    .get_channel_index_override()
                     .unwrap_or_else(|| CorticalChannelIndex::from(current_channel_x as u32)); // Get override if available
 
                 match changed {

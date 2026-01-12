@@ -10,14 +10,13 @@ const MAX_AGENT_NAME_LENGTH: usize = 20;
 pub struct AgentID {
     instance_id: u32,
     manufacturer: [u8; MAX_MANUFACTURER_LENGTH], //ASCII
-    agent_name: [u8; MAX_AGENT_NAME_LENGTH], //ASCII
+    agent_name: [u8; MAX_AGENT_NAME_LENGTH],     //ASCII
     agent_version: u32,
 }
 
 impl AgentID {
     /// Total size in bytes of the AgentID structure
-    pub const SIZE_BYTES: usize =
-        4 + MAX_MANUFACTURER_LENGTH + MAX_AGENT_NAME_LENGTH + 4; // instance_id + manufacturer + agent_name + agent_version
+    pub const SIZE_BYTES: usize = 4 + MAX_MANUFACTURER_LENGTH + MAX_AGENT_NAME_LENGTH + 4; // instance_id + manufacturer + agent_name + agent_version
 
     pub fn new(
         instance_id: u32,
@@ -192,10 +191,7 @@ impl AgentID {
     /// Try to decode an AgentID from a base64 string
     pub fn try_from_base64(encoded: &str) -> Result<Self, FeagiDataError> {
         let decoded = general_purpose::STANDARD.decode(encoded).map_err(|e| {
-            FeagiDataError::DeserializationError(format!(
-                "Failed to decode base64 string: {}",
-                e
-            ))
+            FeagiDataError::DeserializationError(format!("Failed to decode base64 string: {}", e))
         })?;
 
         if decoded.len() != Self::SIZE_BYTES {

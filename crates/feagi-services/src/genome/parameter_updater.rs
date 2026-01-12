@@ -77,7 +77,8 @@ impl CorticalParameterUpdater {
                 // Firing threshold limit (different from firing threshold)
                 "neuron_firing_threshold_limit" | "firing_threshold_limit" => {
                     if let Some(limit) = value.as_f64() {
-                        let count = npu.update_cortical_area_threshold_limit(cortical_idx, limit as f32);
+                        let count =
+                            npu.update_cortical_area_threshold_limit(cortical_idx, limit as f32);
                         info!(
                             "✓ Synced firing_threshold_limit={} to {} neurons in area {}",
                             limit, count, cortical_id

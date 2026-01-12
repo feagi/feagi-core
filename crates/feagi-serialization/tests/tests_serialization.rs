@@ -251,10 +251,11 @@ fn test_byte_container_with_sensory_cortical_id() {
 #[test]
 fn test_byte_container_with_segmented_vision() {
     // Test with a more complex sensor that has multiple cortical areas
-    let cortical_ids = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-        FrameChangeHandling::Incremental,
-        CorticalUnitIndex::from(2u8),
-    );
+    let cortical_ids =
+        SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+            FrameChangeHandling::Incremental,
+            CorticalUnitIndex::from(2u8),
+        );
 
     let dimensions = CorticalAreaDimensions::new(4, 4, 2).unwrap();
     let mut neurons = CorticalMappedXYZPNeuronVoxels::new();
