@@ -142,3 +142,175 @@ jobs:
         if [ -f feagi-api-server.pid ]; then
           kill "$(cat feagi-api-server.pid)" 2>/dev/null || true
         fi
+
+  publish-local-sim:
+    name: Publish Simulation (local packaged deps gate)
+    runs-on: ubuntu-latest
+    needs: [test]
+    timeout-minutes: 45
+    steps:
+    - name: Checkout PR code (full history for diff)
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+
+    - name: Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: "publish-local-sim-staging-pr"
+        save-if: true
+
+    - name: Compute and apply independent version bumps (CI-only)
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        chmod +x scripts/smart-version-bump.sh
+        chmod +x scripts/apply-version-bumps.sh
+
+        VERSION_OUTPUT="$(./scripts/smart-version-bump.sh)"
+        echo "${VERSION_OUTPUT}"
+
+        VERSIONS_FILE="$(echo "${VERSION_OUTPUT}" | grep "VERSIONS_FILE=" | cut -d'=' -f2)"
+        if [ -z "${VERSIONS_FILE}" ]; then
+          echo "❌ Failed to detect VERSIONS_FILE from smart-version-bump output"
+          exit 1
+        fi
+
+        export VERSIONS_FILE="${VERSIONS_FILE}"
+        ./scripts/apply-version-bumps.sh
+
+    - name: Package and build published artifacts against local packaged dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        # This directory is created at runtime in CI only (not committed).
+        ROOT="/tmp/feagi_local_publish_sim"
+        DRIVER="${ROOT}/driver"
+        EXTRACTED="${ROOT}/extracted"
+        mkdir -p "${DRIVER}/.cargo" "${EXTRACTED}"
+
+        # Use the publish order baked into the existing smart publish script.
+        # Keep this list in sync with scripts/publish-crates-smart.sh CRATE_ORDER.
+        CRATE_ORDER=(
+          "feagi-observability"
+          "feagi-structures"
+          "feagi-config"
+          "feagi-npu-neural"
+          "feagi-npu-runtime"
+          "feagi-serialization"
+          "feagi-state-manager"
+          "feagi-npu-burst-engine"
+          "feagi-npu-plasticity"
+          "feagi-evolutionary"
+          "feagi-brain-development"
+          "feagi-sensorimotor"
+          "feagi-services"
+          "feagi-io"
+          "feagi-api"
+          "feagi-agent"
+          "feagi-hal"
+          "feagi"
+        )
+
+        crate_path_for() {
+          case "$1" in
+            feagi-observability) echo "crates/feagi-observability" ;;
+            feagi-structures) echo "crates/feagi-structures" ;;
+            feagi-config) echo "crates/feagi-config" ;;
+            feagi-npu-neural) echo "crates/feagi-npu/neural" ;;
+            feagi-npu-runtime) echo "crates/feagi-npu/runtime" ;;
+            feagi-serialization) echo "crates/feagi-serialization" ;;
+            feagi-state-manager) echo "crates/feagi-state-manager" ;;
+            feagi-npu-burst-engine) echo "crates/feagi-npu/burst-engine" ;;
+            feagi-npu-plasticity) echo "crates/feagi-npu/plasticity" ;;
+            feagi-evolutionary) echo "crates/feagi-evolutionary" ;;
+            feagi-brain-development) echo "crates/feagi-brain-development" ;;
+            feagi-sensorimotor) echo "crates/feagi-sensorimotor" ;;
+            feagi-services) echo "crates/feagi-services" ;;
+            feagi-io) echo "crates/feagi-io" ;;
+            feagi-api) echo "crates/feagi-api" ;;
+            feagi-agent) echo "crates/feagi-agent" ;;
+            feagi-hal) echo "crates/feagi-hal" ;;
+            feagi) echo "." ;;
+            *) return 1 ;;
+          esac
+        }
+
+        # 1) Produce .crate packages (manifest will be publish-style: no path/workspace deps).
+        for crate in "${CRATE_ORDER[@]}"; do
+          path="$(crate_path_for "${crate}")" || continue
+          [ -f "${path}/Cargo.toml" ] || continue
+          echo "📦 cargo package -p ${crate}"
+          cargo package --allow-dirty --no-verify --package "${crate}" --quiet
+        done
+
+        # 2) Extract packaged sources and build a [patch.crates-io] map to them.
+        PATCH_FILE="${DRIVER}/.cargo/config.toml"
+        {
+          echo "[patch.crates-io]"
+        } > "${PATCH_FILE}"
+
+        for crate in "${CRATE_ORDER[@]}"; do
+          path="$(crate_path_for "${crate}")" || continue
+          [ -f "${path}/Cargo.toml" ] || continue
+
+          version="$(grep '^version = ' "${path}/Cargo.toml" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+          if [ -z "${version}" ]; then
+            echo "❌ Failed to read version for ${crate} from ${path}/Cargo.toml"
+            exit 1
+          fi
+
+          crate_file="target/package/${crate}-${version}.crate"
+          if [ ! -f "${crate_file}" ]; then
+            echo "❌ Expected package not found: ${crate_file}"
+            exit 1
+          fi
+
+          dest="${EXTRACTED}/${crate}-${version}"
+          rm -rf "${dest}"
+          mkdir -p "${dest}"
+          tar -xf "${crate_file}" -C "${dest}"
+
+          # The tarball contains a single root folder: <name>-<version>/
+          src_dir="${dest}/${crate}-${version}"
+          if [ ! -f "${src_dir}/Cargo.toml" ]; then
+            echo "❌ Extracted package missing Cargo.toml: ${src_dir}/Cargo.toml"
+            exit 1
+          fi
+
+          echo "${crate} = { path = \"${src_dir}\" }" >> "${PATCH_FILE}"
+        done
+
+        echo ""
+        echo "✅ Patch map written to: ${PATCH_FILE}"
+        echo ""
+
+        # 3) Build each packaged crate against the packaged dependency set.
+        # Run from DRIVER so the patch config applies.
+        cd "${DRIVER}"
+
+        for crate in "${CRATE_ORDER[@]}"; do
+          # Find the extracted dir (we know the version from the repo Cargo.toml)
+          path="$(crate_path_for "${crate}")" || continue
+          [ -f "${GITHUB_WORKSPACE}/${path}/Cargo.toml" ] || continue
+
+          version="$(grep '^version = ' "${GITHUB_WORKSPACE}/${path}/Cargo.toml" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+          manifest="${EXTRACTED}/${crate}-${version}/${crate}-${version}/Cargo.toml"
+          if [ ! -f "${manifest}" ]; then
+            echo "❌ Missing extracted manifest: ${manifest}"
+            exit 1
+          fi
+
+          echo "🔨 Building packaged crate: ${crate} (${version})"
+          cargo build --manifest-path "${manifest}" --quiet
+        done
+
+        echo ""
+        echo "🎉 Local publish simulation build completed successfully."
