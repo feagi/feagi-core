@@ -24,305 +24,305 @@ jobs:
     if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        ref: staging  # Ensure we're on the staging branch after merge
-    
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-
-    - name: Install Rust components
-      run: |
-        rustup component add rustfmt clippy
-    
-    - name: Rust cache
-      uses: Swatinem/rust-cache@v2
-      with:
-        # Keep cache invalidation tied to dependency changes
-        shared-key: staging-merge-${{ hashFiles('**/Cargo.lock') }}
-        save-if: true
-    
-    - name: Smart version detection and bumping
-      id: version
-      run: |
-        echo "🔍 Detecting changed crates and computing independent version bumps..."
-        echo ""
-        
-        # Run smart version bump detection
-        chmod +x scripts/smart-version-bump.sh
-        chmod +x scripts/apply-version-bumps.sh
-        
-        # Detect changes and compute new versions
-        VERSION_OUTPUT=$(./scripts/smart-version-bump.sh)
-        echo "$VERSION_OUTPUT"
-        
-        # Extract version file path and changed crates list from output
-        VERSIONS_FILE=$(echo "$VERSION_OUTPUT" | grep "VERSIONS_FILE=" | cut -d'=' -f2)
-        CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
-        
-        echo ""
-        echo "versions_file=$VERSIONS_FILE" >> $GITHUB_OUTPUT
-        echo "changed_crates=$CHANGED_CRATES" >> $GITHUB_OUTPUT
-        
-        # Apply version bumps to Cargo.toml files
-        echo ""
-        echo "📝 Applying version updates to Cargo.toml files..."
-        export VERSIONS_FILE="$VERSIONS_FILE"
-        ./scripts/apply-version-bumps.sh
-        
-        echo ""
-        echo "✅ Smart independent versioning complete"
-    
-    - name: Check formatting
-      run: cargo fmt --all -- --check
-
-    - name: Guard: verify local path dependency versions are consistent
-      run: |
-        set -euo pipefail
-
-        echo "🔎 Verifying workspace path dependency version consistency..."
-
-        # Extract workspace version (used by crates with `version.workspace = true`)
-        WORKSPACE_VERSION="$(
-          awk '
-            BEGIN { in_ws=0 }
-            /^\[workspace\.package\]/ { in_ws=1; next }
-            /^\[/ { if (in_ws==1) exit }
-            in_ws==1 && /^version = / {
-              gsub(/version = /, "", $0);
-              gsub(/"/, "", $0);
-              print $0;
-              exit
-            }
-          ' Cargo.toml
-        )"
-
-        if [ -z "${WORKSPACE_VERSION}" ]; then
-          echo "❌ Failed to detect [workspace.package] version from Cargo.toml"
-          exit 1
-        fi
-
-        declare -A CRATE_VERSIONS
-
-        # Collect all crate versions (workspace + crates/* + crates/feagi-npu/*)
-        for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
-          [ -f "$manifest" ] || continue
-          name="$(grep -E '^name = ' "$manifest" | head -1 | sed 's/name = \"\\(.*\\)\"/\\1/')"
-          if [ -z "$name" ]; then
-            continue
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: staging  # Ensure we're on the staging branch after merge
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+  
+      - name: Install Rust components
+        run: |
+          rustup component add rustfmt clippy
+      
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Keep cache invalidation tied to dependency changes
+          shared-key: staging-merge-${{ hashFiles('**/Cargo.lock') }}
+          save-if: true
+      
+      - name: Smart version detection and bumping
+        id: version
+        run: |
+          echo "🔍 Detecting changed crates and computing independent version bumps..."
+          echo ""
+          
+          # Run smart version bump detection
+          chmod +x scripts/smart-version-bump.sh
+          chmod +x scripts/apply-version-bumps.sh
+          
+          # Detect changes and compute new versions
+          VERSION_OUTPUT=$(./scripts/smart-version-bump.sh)
+          echo "$VERSION_OUTPUT"
+          
+          # Extract version file path and changed crates list from output
+          VERSIONS_FILE=$(echo "$VERSION_OUTPUT" | grep "VERSIONS_FILE=" | cut -d'=' -f2)
+          CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
+          
+          echo ""
+          echo "versions_file=$VERSIONS_FILE" >> $GITHUB_OUTPUT
+          echo "changed_crates=$CHANGED_CRATES" >> $GITHUB_OUTPUT
+          
+          # Apply version bumps to Cargo.toml files
+          echo ""
+          echo "📝 Applying version updates to Cargo.toml files..."
+          export VERSIONS_FILE="$VERSIONS_FILE"
+          ./scripts/apply-version-bumps.sh
+          
+          echo ""
+          echo "✅ Smart independent versioning complete"
+      
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+  
+      - name: "Guard: verify local path dependency versions are consistent"
+        run: |
+          set -euo pipefail
+  
+          echo "🔎 Verifying workspace path dependency version consistency..."
+  
+          # Extract workspace version (used by crates with `version.workspace = true`)
+          WORKSPACE_VERSION="$(
+            awk '
+              BEGIN { in_ws=0 }
+              /^\[workspace\.package\]/ { in_ws=1; next }
+              /^\[/ { if (in_ws==1) exit }
+              in_ws==1 && /^version = / {
+                gsub(/version = /, "", $0);
+                gsub(/"/, "", $0);
+                print $0;
+                exit
+              }
+            ' Cargo.toml
+          )"
+  
+          if [ -z "${WORKSPACE_VERSION}" ]; then
+            echo "❌ Failed to detect [workspace.package] version from Cargo.toml"
+            exit 1
           fi
-
-          if grep -qE '^version\\.workspace = true' "$manifest"; then
-            ver="$WORKSPACE_VERSION"
-          else
-            ver="$(grep -E '^version = ' "$manifest" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
-          fi
-
-          if [ -n "$ver" ]; then
-            CRATE_VERSIONS["$name"]="$ver"
-          fi
-        done
-
-        mismatches=0
-
-        # Scan manifests for inline deps of the form:
-        #   dep = { version = "X", path = "../dep-path" }
-        for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
-          [ -f "$manifest" ] || continue
-
-          while IFS= read -r line; do
-            dep="$(echo "$line" | sed -n 's/^\\s*\\([A-Za-z0-9_-][A-Za-z0-9_-]*\\)\\s*=.*/\\1/p')"
-            req="$(echo "$line" | sed -n 's/.*version\\s*=\\s*\"\\([^\"]\\+\\)\".*/\\1/p')"
-            path="$(echo "$line" | sed -n 's/.*path\\s*=\\s*\"\\([^\"]\\+\\)\".*/\\1/p')"
-
-            [ -n "$dep" ] || continue
-            [ -n "$req" ] || continue
-            [ -n "$path" ] || continue
-
-            case "$path" in
-              ../*) ;;
-              *) continue ;;
-            esac
-
-            # Normalize requirement (strip Cargo's exact pin prefix and caret)
-            req="${req#=}"
-            req="${req#^}"
-
-            actual="${CRATE_VERSIONS[$dep]:-}"
-            if [ -z "$actual" ]; then
-              # Not a workspace crate (or renamed dependency); ignore.
+  
+          declare -A CRATE_VERSIONS
+  
+          # Collect all crate versions (workspace + crates/* + crates/feagi-npu/*)
+          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+            [ -f "$manifest" ] || continue
+            name="$(grep -E '^name = ' "$manifest" | head -1 | sed 's/name = \"\\(.*\\)\"/\\1/')"
+            if [ -z "$name" ]; then
               continue
             fi
-
-            if [ "$req" != "$actual" ]; then
-              echo "❌ Version mismatch in $manifest:"
-              echo "   - dependency: $dep"
-              echo "   - required:   $req"
-              echo "   - actual:     $actual"
-              echo "   - path:       $path"
-              mismatches=$((mismatches + 1))
+  
+            if grep -qE '^version\\.workspace = true' "$manifest"; then
+              ver="$WORKSPACE_VERSION"
+            else
+              ver="$(grep -E '^version = ' "$manifest" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
             fi
-          done < <(grep -E 'path\\s*=\\s*\"\\.\\./[^\\\"]+\"' "$manifest" || true)
-        done
-
-        if [ "$mismatches" -gt 0 ]; then
+  
+            if [ -n "$ver" ]; then
+              CRATE_VERSIONS["$name"]="$ver"
+            fi
+          done
+  
+          mismatches=0
+  
+          # Scan manifests for inline deps of the form:
+          #   dep = { version = "X", path = "../dep-path" }
+          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+            [ -f "$manifest" ] || continue
+  
+            while IFS= read -r line; do
+              dep="$(echo "$line" | sed -n 's/^\\s*\\([A-Za-z0-9_-][A-Za-z0-9_-]*\\)\\s*=.*/\\1/p')"
+              req="$(echo "$line" | sed -n 's/.*version\\s*=\\s*\"\\([^\"]\\+\\)\".*/\\1/p')"
+              path="$(echo "$line" | sed -n 's/.*path\\s*=\\s*\"\\([^\"]\\+\\)\".*/\\1/p')"
+  
+              [ -n "$dep" ] || continue
+              [ -n "$req" ] || continue
+              [ -n "$path" ] || continue
+  
+              case "$path" in
+                ../*) ;;
+                *) continue ;;
+              esac
+  
+              # Normalize requirement (strip Cargo's exact pin prefix and caret)
+              req="${req#=}"
+              req="${req#^}"
+  
+              actual="${CRATE_VERSIONS[$dep]:-}"
+              if [ -z "$actual" ]; then
+                # Not a workspace crate (or renamed dependency); ignore.
+                continue
+              fi
+  
+              if [ "$req" != "$actual" ]; then
+                echo "❌ Version mismatch in $manifest:"
+                echo "   - dependency: $dep"
+                echo "   - required:   $req"
+                echo "   - actual:     $actual"
+                echo "   - path:       $path"
+                mismatches=$((mismatches + 1))
+              fi
+            done < <(grep -E 'path\\s*=\\s*\"\\.\\./[^\\\"]+\"' "$manifest" || true)
+          done
+  
+          if [ "$mismatches" -gt 0 ]; then
+            echo ""
+            echo "❌ Found $mismatches workspace path dependency version mismatch(es)."
+            echo "   This would cause cargo/clippy to fail with 'failed to select a version'."
+            exit 1
+          fi
+  
+          echo "✅ Workspace path dependency versions are consistent."
+      
+      - name: Run Clippy (lib and tests only)
+        run: cargo clippy --workspace --lib --tests -- -D warnings
+      
+      - name: Run tests (lib only, examples have known API migration issues)
+        run: cargo test --workspace --lib --verbose
+  
+      - name: Run tests in release mode (lib only)
+        run: cargo test --workspace --lib --release --verbose
+      
+      - name: Build release
+        run: cargo build --release --lib --verbose
+      
+      - name: Publish changed crates to crates.io (smart independent versioning)
+        run: |
+          CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
+          echo "📦 Publishing changed feagi-core workspace crates..."
+          echo "Changed crates: $CHANGED_CRATES"
           echo ""
-          echo "❌ Found $mismatches workspace path dependency version mismatch(es)."
-          echo "   This would cause cargo/clippy to fail with 'failed to select a version'."
-          exit 1
-        fi
-
-        echo "✅ Workspace path dependency versions are consistent."
-    
-    - name: Run Clippy (lib and tests only)
-      run: cargo clippy --workspace --lib --tests -- -D warnings
-    
-    - name: Run tests (lib only, examples have known API migration issues)
-      run: cargo test --workspace --lib --verbose
-
-    - name: Run tests in release mode (lib only)
-      run: cargo test --workspace --lib --release --verbose
-    
-    - name: Build release
-      run: cargo build --release --lib --verbose
-    
-    - name: Publish changed crates to crates.io (smart independent versioning)
-      run: |
-        CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
-        echo "📦 Publishing changed feagi-core workspace crates..."
-        echo "Changed crates: $CHANGED_CRATES"
-        echo ""
-        
-        # Run the smart publish script (only publishes changed crates)
-        chmod +x scripts/publish-crates-smart.sh
-        export CHANGED_CRATES="$CHANGED_CRATES"
-        ./scripts/publish-crates-smart.sh
-        
-        echo ""
-        echo "✅ Successfully published changed workspace crates"
-      continue-on-error: false
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
-    
-    - name: Commit version updates
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        
-        CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
-        
-        # Commit the version updates
-        git add Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml
-        
-        # Create meaningful commit message listing changed crates
-        if [ -n "$CHANGED_CRATES" ]; then
-          echo "chore: bump versions for staging release (independent versioning)" > commit_msg.txt
-          echo "" >> commit_msg.txt
-          echo "Changed crates: $CHANGED_CRATES" >> commit_msg.txt
-          echo "" >> commit_msg.txt
-          echo "This release uses smart independent versioning - only changed crates" >> commit_msg.txt
-          echo "and their dependents have version bumps." >> commit_msg.txt
-          COMMIT_MSG=$(cat commit_msg.txt)
-        else
-          COMMIT_MSG="chore: staging release (no version changes)"
-        fi
-        
-        git commit -m "$COMMIT_MSG" || echo "No changes to commit"
-        git push origin staging || echo "Push failed (may already be up to date)"
-        
-        echo "✅ Version updates committed to staging branch"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Create prerelease tag
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        
-        # Use timestamp-based tag for independent versioning
-        TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-        TAG_NAME="staging-${TIMESTAMP}"
-        echo "Creating prerelease tag: $TAG_NAME"
-        
-        git tag "$TAG_NAME"
-        git push origin "$TAG_NAME"
-        
-        echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      id: tag
-    
-    - name: Create GitHub Prerelease
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.tag.outputs.tag_name }}
-        release_name: Staging Release ${{ steps.tag.outputs.tag_name }}
-        body: |
-          🚀 **FEAGI Core Staging Release (Smart Independent Versioning)**
           
-          This is a beta/staging release from the staging branch. Only changed crates have been published to crates.io with independent version numbers.
+          # Run the smart publish script (only publishes changed crates)
+          chmod +x scripts/publish-crates-smart.sh
+          export CHANGED_CRATES="$CHANGED_CRATES"
+          ./scripts/publish-crates-smart.sh
           
-          ## Changed Crates
+          echo ""
+          echo "✅ Successfully published changed workspace crates"
+        continue-on-error: false
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      
+      - name: Commit version updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
           
-          The following crates were updated in this release:
+          CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
           
-          ${{ steps.version.outputs.changed_crates }}
+          # Commit the version updates
+          git add Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml
           
-          **Note:** Each crate maintains its own independent version number. Only crates with actual changes (or dependency updates) are published.
+          # Create meaningful commit message listing changed crates
+          if [ -n "$CHANGED_CRATES" ]; then
+            echo "chore: bump versions for staging release (independent versioning)" > commit_msg.txt
+            echo "" >> commit_msg.txt
+            echo "Changed crates: $CHANGED_CRATES" >> commit_msg.txt
+            echo "" >> commit_msg.txt
+            echo "This release uses smart independent versioning - only changed crates" >> commit_msg.txt
+            echo "and their dependents have version bumps." >> commit_msg.txt
+            COMMIT_MSG=$(cat commit_msg.txt)
+          else
+            COMMIT_MSG="chore: staging release (no version changes)"
+          fi
           
-          ## Installation
+          git commit -m "$COMMIT_MSG" || echo "No changes to commit"
+          git push origin staging || echo "Push failed (may already be up to date)"
           
-          Install individual crates from crates.io:
+          echo "✅ Version updates committed to staging branch"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create prerelease tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
           
-          ```toml
-          [dependencies]
-          feagi-npu-neural = "0.0.1-beta.X"  # Check crates.io for latest version
-          feagi-npu-burst-engine = "0.0.1-beta.Y"
-          ```
+          # Use timestamp-based tag for independent versioning
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          TAG_NAME="staging-${TIMESTAMP}"
+          echo "Creating prerelease tag: $TAG_NAME"
           
-          Or use the workspace with feature flags:
+          git tag "$TAG_NAME"
+          git push origin "$TAG_NAME"
           
-          ```toml
-          [dependencies]
-          feagi = { version = "0.0.1-beta.Z", features = ["compute", "io"] }
-          ```
-          
-          ## Release Information
-          
-          - **Tag:** ${{ steps.tag.outputs.tag_name }}
-          - **Branch:** staging
-          - **Commit:** ${{ github.sha }}
-          - **Versioning Strategy:** Independent per-crate versioning
-          
-          ## Testing Status
-          
-          - ✅ All workspace tests passed
-          - ✅ Package builds successfully
-          - ✅ Changed crates published to crates.io
-          - ✅ Ready for testing and integration
-          
-          ## About Independent Versioning
-          
-          This release uses **smart independent versioning**:
-          - Each crate has its own version number
-          - Only changed crates get version bumps
-          - Dependent crates are automatically updated
-          - Unchanged crates remain at their current version
-          
-          This approach reduces version pollution and provides clearer semantic versioning.
-        draft: false
-        prerelease: true
-    
-    - name: Notify success
-      run: |
-        echo "🎉 Staging release ${{ steps.tag.outputs.tag_name }} completed successfully!"
-        echo "✅ Published changed crates: ${{ steps.version.outputs.changed_crates }}"
-        echo "🏷️ Tagged as: ${{ steps.tag.outputs.tag_name }}"
-        echo ""
-        echo "📊 Independent versioning ensures only changed crates were published"
-
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        id: tag
+      
+      - name: Create GitHub Prerelease
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          release_name: Staging Release ${{ steps.tag.outputs.tag_name }}
+          body: |
+            🚀 **FEAGI Core Staging Release (Smart Independent Versioning)**
+            
+            This is a beta/staging release from the staging branch. Only changed crates have been published to crates.io with independent version numbers.
+            
+            ## Changed Crates
+            
+            The following crates were updated in this release:
+            
+            ${{ steps.version.outputs.changed_crates }}
+            
+            **Note:** Each crate maintains its own independent version number. Only crates with actual changes (or dependency updates) are published.
+            
+            ## Installation
+            
+            Install individual crates from crates.io:
+            
+            ```toml
+            [dependencies]
+            feagi-npu-neural = "0.0.1-beta.X"  # Check crates.io for latest version
+            feagi-npu-burst-engine = "0.0.1-beta.Y"
+            ```
+            
+            Or use the workspace with feature flags:
+            
+            ```toml
+            [dependencies]
+            feagi = { version = "0.0.1-beta.Z", features = ["compute", "io"] }
+            ```
+            
+            ## Release Information
+            
+            - **Tag:** ${{ steps.tag.outputs.tag_name }}
+            - **Branch:** staging
+            - **Commit:** ${{ github.sha }}
+            - **Versioning Strategy:** Independent per-crate versioning
+            
+            ## Testing Status
+            
+            - ✅ All workspace tests passed
+            - ✅ Package builds successfully
+            - ✅ Changed crates published to crates.io
+            - ✅ Ready for testing and integration
+            
+            ## About Independent Versioning
+            
+            This release uses **smart independent versioning**:
+            - Each crate has its own version number
+            - Only changed crates get version bumps
+            - Dependent crates are automatically updated
+            - Unchanged crates remain at their current version
+            
+            This approach reduces version pollution and provides clearer semantic versioning.
+          draft: false
+          prerelease: true
+      
+      - name: Notify success
+        run: |
+          echo "🎉 Staging release ${{ steps.tag.outputs.tag_name }} completed successfully!"
+          echo "✅ Published changed crates: ${{ steps.version.outputs.changed_crates }}"
+          echo "🏷️ Tagged as: ${{ steps.tag.outputs.tag_name }}"
+          echo ""
+          echo "📊 Independent versioning ensures only changed crates were published"
+  
