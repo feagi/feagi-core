@@ -10,6 +10,46 @@ use feagi_services::types::LoadGenomeParams;
 use std::collections::HashMap;
 use tracing::info;
 
+/// Inject the current runtime simulation timestep (seconds) into a genome JSON value.
+///
+/// Rationale: the burst engine timestep can be updated at runtime, but `GenomeService::save_genome()`
+/// serializes the stored `RuntimeGenome` (which may still have the older physiology value).
+/// This keeps exported/saved genomes consistent with the *current* FEAGI simulation state.
+fn inject_simulation_timestep_into_genome(
+    mut genome: serde_json::Value,
+    simulation_timestep_s: f64,
+) -> Result<serde_json::Value, ApiError> {
+    let physiology = genome
+        .get_mut("physiology")
+        .and_then(|v| v.as_object_mut())
+        .ok_or_else(|| {
+            ApiError::internal(
+                "Genome JSON missing required object key 'physiology' while saving".to_string(),
+            )
+        })?;
+
+    physiology.insert(
+        "simulation_timestep".to_string(),
+        serde_json::Value::from(simulation_timestep_s),
+    );
+    Ok(genome)
+}
+
+async fn get_current_runtime_simulation_timestep_s(state: &ApiState) -> Result<f64, ApiError> {
+    let runtime_service = state.runtime_service.as_ref();
+    let status = runtime_service
+        .get_status()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get runtime status: {}", e)))?;
+
+    // Convert frequency (Hz) to timestep (seconds).
+    Ok(if status.frequency_hz > 0.0 {
+        1.0 / status.frequency_hz
+    } else {
+        0.0
+    })
+}
+
 /// Get the current genome file name.
 #[utoipa::path(get, path = "/v1/genome/file_name", tag = "genome")]
 pub async fn get_file_name(
@@ -244,6 +284,15 @@ pub async fn post_save(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to save genome: {}", e)))?;
 
+    // Ensure physiology.simulation_timestep reflects the *current* runtime timestep at save time.
+    let simulation_timestep_s = get_current_runtime_simulation_timestep_s(&state).await?;
+    let genome_value: serde_json::Value = serde_json::from_str(&genome_json)
+        .map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
+    let genome_value =
+        inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
+    let genome_json = serde_json::to_string_pretty(&genome_value)
+        .map_err(|e| ApiError::internal(format!("Failed to serialize genome JSON: {}", e)))?;
+
     // Determine file path
     let save_path = if let Some(path) = file_path {
         path
@@ -390,11 +439,44 @@ pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde
     let genome_value: serde_json::Value = serde_json::from_str(&genome_json_str)
         .map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
 
+    // Ensure physiology.simulation_timestep reflects the *current* runtime timestep at download time.
+    let simulation_timestep_s = get_current_runtime_simulation_timestep_s(&state).await?;
+    let genome_value =
+        inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
+
     info!(
         "✅ Genome download complete, {} bytes",
         genome_json_str.len()
     );
     Ok(Json(genome_value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_inject_simulation_timestep_into_genome_updates_physio_key() {
+        let genome = json!({
+            "version": "3.0",
+            "physiology": {
+                "simulation_timestep": 0.025,
+                "max_age": 10000000
+            }
+        });
+
+        let updated = inject_simulation_timestep_into_genome(genome, 0.05).unwrap();
+        assert_eq!(updated["physiology"]["simulation_timestep"], json!(0.05));
+        assert_eq!(updated["physiology"]["max_age"], json!(10000000));
+    }
+
+    #[test]
+    fn test_inject_simulation_timestep_into_genome_errors_when_missing_physio() {
+        let genome = json!({ "version": "3.0" });
+        let err = inject_simulation_timestep_into_genome(genome, 0.05).unwrap_err();
+        assert!(format!("{err:?}").contains("physiology"));
+    }
 }
 
 /// Get genome properties including metadata, size, and configuration details.

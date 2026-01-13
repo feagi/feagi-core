@@ -144,6 +144,16 @@ impl VizSHMWriter {
     /// This reinitializes the ring buffer header (frame sequence resets).
     /// BV polls the header each tick, so it will recover on the next read cycle.
     fn recreate_mmap_with_slot_size(&mut self, slot_size: usize) -> Result<(), std::io::Error> {
+        // IMPORTANT (macOS stability / SIGBUS avoidance):
+        // If we truncate/resize the backing file while an old mmap is still alive, any accidental
+        // access to that mapping can trigger SIGBUS (bus error) due to pages mapping beyond EOF.
+        // Drop the existing mapping *before* truncating/resizing the file.
+        if let Some(old_mmap) = self.mmap.take() {
+            // Best-effort flush; if this fails we still want to drop the mapping deterministically.
+            let _ = old_mmap.flush();
+            drop(old_mmap);
+        }
+
         // Calculate total size: header + (num_slots * slot_size)
         let total_size = HEADER_SIZE + (self.num_slots as usize * slot_size);
 

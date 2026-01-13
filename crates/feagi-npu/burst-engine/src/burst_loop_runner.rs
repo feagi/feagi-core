@@ -338,8 +338,15 @@ impl BurstLoopRunner {
         &mut self,
         shm_path: std::path::PathBuf,
     ) -> Result<(), std::io::Error> {
-        let writer = crate::viz_shm_writer::VizSHMWriter::new(shm_path, None, None)?;
+        // IMPORTANT (macOS SIGBUS avoidance / correctness):
+        // Creating a new SHM writer truncates/reinitializes the backing file. If the burst loop is
+        // concurrently writing via an existing mmap, truncation can SIGBUS this process.
+        //
+        // Therefore we must take the writer lock first (blocking burst writes), drop any existing
+        // writer (unmaps), and only then create the new writer and install it.
         let mut guard = self.viz_shm_writer.lock().unwrap();
+        *guard = None;
+        let writer = crate::viz_shm_writer::VizSHMWriter::new(shm_path, None, None)?;
         *guard = Some(writer);
         Ok(())
     }
@@ -349,8 +356,11 @@ impl BurstLoopRunner {
         &mut self,
         shm_path: std::path::PathBuf,
     ) -> Result<(), std::io::Error> {
-        let writer = crate::motor_shm_writer::MotorSHMWriter::new(shm_path, None, None)?;
+        // Same race as visualization SHM: motor SHM writer creation truncates the backing file.
+        // Take the lock first to prevent concurrent burst writes from using an invalidated mmap.
         let mut guard = self.motor_shm_writer.lock().unwrap();
+        *guard = None;
+        let writer = crate::motor_shm_writer::MotorSHMWriter::new(shm_path, None, None)?;
         *guard = Some(writer);
         Ok(())
     }
