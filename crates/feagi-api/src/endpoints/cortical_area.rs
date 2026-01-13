@@ -1216,10 +1216,18 @@ pub async fn post_clone(
     };
 
     // Create the cloned area via GenomeService (proper flow: genome update → neuroembryogenesis → NPU).
-    genome_service
+    let created_areas = genome_service
         .create_cortical_areas(vec![params])
         .await
         .map_err(|e| ApiError::internal(format!("Failed to clone cortical area: {}", e)))?;
+    
+    // DIAGNOSTIC: Log what coordinates were returned after creation
+    if let Some(created_area) = created_areas.first() {
+        tracing::info!(target: "feagi-api",
+            "Clone created area {} with position {:?} (requested {:?})",
+            new_area_id, created_area.position, request.coordinates_3d
+        );
+    }
 
     // Optionally clone cortical mappings (AutoWiring).
     if request.clone_cortical_mapping {

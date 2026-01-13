@@ -2897,6 +2897,12 @@ impl GenomeServiceImpl {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
+        
+        // DIAGNOSTIC: Log the position of the area being queried
+        tracing::info!(target: "feagi-services",
+            "get_cortical_area_info: querying {} - found position {:?}",
+            cortical_id, area.position
+        );
 
         let cortical_idx = manager
             .get_cortical_idx(&cortical_id_typed)
