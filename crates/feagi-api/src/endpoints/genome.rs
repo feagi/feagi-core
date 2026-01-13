@@ -12,6 +12,19 @@ use std::collections::HashMap;
 use tracing::info;
 use uuid::Uuid;
 
+#[cfg(feature = "http")]
+use axum::extract::Multipart;
+
+/// Multipart file upload schema for Swagger UI.
+///
+/// This enables Swagger to show a file picker for endpoints that accept genome JSON files.
+#[derive(Debug, Clone, utoipa::ToSchema)]
+pub struct GenomeFileUploadForm {
+    /// Genome JSON file contents.
+    #[schema(value_type = String, format = Binary)]
+    pub file: String,
+}
+
 fn queue_amalgamation_from_genome_json_str(
     state: &ApiState,
     genome_json: String,
@@ -1432,15 +1445,47 @@ pub async fn post_amalgamation_by_payload(
 }
 
 /// Perform genome amalgamation by uploading a genome file.
-#[utoipa::path(post, path = "/v1/genome/amalgamation_by_upload", tag = "genome")]
+#[cfg(feature = "http")]
+#[utoipa::path(
+    post,
+    path = "/v1/genome/amalgamation_by_upload",
+    tag = "genome",
+    request_body(content = GenomeFileUploadForm, content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "Amalgamation queued", body = HashMap<String, String>),
+        (status = 400, description = "Invalid request"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn post_amalgamation_by_upload(
     State(state): State<ApiState>,
-    Json(req): Json<serde_json::Value>,
+    mut multipart: Multipart,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // For FEAGI v2.0 core, this endpoint is treated equivalently to /amalgamation_by_payload
-    // because the transport layer already provides the decoded JSON body.
-    let json_str = serde_json::to_string(&req)
-        .map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
+    let mut genome_json: Option<String> = None;
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::invalid_input(format!("Invalid multipart upload: {}", e)))?
+    {
+        if field.name() == Some("file") {
+            let bytes = field
+                .bytes()
+                .await
+                .map_err(|e| ApiError::invalid_input(format!("Failed to read uploaded file: {}", e)))?;
+
+            let json_str = std::str::from_utf8(&bytes).map_err(|e| {
+                ApiError::invalid_input(format!(
+                    "Uploaded file must be UTF-8 encoded JSON (decode error: {})",
+                    e
+                ))
+            })?;
+            genome_json = Some(json_str.to_string());
+            break;
+        }
+    }
+
+    let json_str = genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
     let amalgamation_id = queue_amalgamation_from_genome_json_str(&state, json_str)?;
 
     Ok(Json(HashMap::from([
@@ -1450,10 +1495,19 @@ pub async fn post_amalgamation_by_upload(
 }
 
 /// Append structures to the genome from a file.
-#[utoipa::path(post, path = "/v1/genome/append-file", tag = "genome")]
+#[cfg(feature = "http")]
+#[utoipa::path(
+    post,
+    path = "/v1/genome/append-file",
+    tag = "genome",
+    request_body(content = GenomeFileUploadForm, content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "Append processed", body = HashMap<String, String>)
+    )
+)]
 pub async fn post_append_file(
     State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, String>>,
+    mut _multipart: Multipart,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([(
         "message".to_string(),
@@ -1462,22 +1516,86 @@ pub async fn post_append_file(
 }
 
 /// Upload and load a genome from a file.
-#[utoipa::path(post, path = "/v1/genome/upload/file", tag = "genome")]
+#[cfg(feature = "http")]
+#[utoipa::path(
+    post,
+    path = "/v1/genome/upload/file",
+    tag = "genome",
+    request_body(content = GenomeFileUploadForm, content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "Genome uploaded", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Invalid request"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn post_upload_file(
-    State(_state): State<ApiState>,
-    Json(_req): Json<serde_json::Value>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
+    State(state): State<ApiState>,
+    mut multipart: Multipart,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let mut genome_json: Option<String> = None;
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::invalid_input(format!("Invalid multipart upload: {}", e)))?
+    {
+        if field.name() == Some("file") {
+            let bytes = field
+                .bytes()
+                .await
+                .map_err(|e| ApiError::invalid_input(format!("Failed to read uploaded file: {}", e)))?;
+
+            let json_str = std::str::from_utf8(&bytes).map_err(|e| {
+                ApiError::invalid_input(format!(
+                    "Uploaded file must be UTF-8 encoded JSON (decode error: {})",
+                    e
+                ))
+            })?;
+            genome_json = Some(json_str.to_string());
+            break;
+        }
+    }
+
+    let json_str = genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
+
+    let genome_service = state.genome_service.as_ref();
+    let genome_info = genome_service
+        .load_genome(LoadGenomeParams { json_str })
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to upload genome from file: {}", e)))?;
+
+    let mut response = HashMap::new();
+    response.insert("success".to_string(), serde_json::json!(true));
+    response.insert(
         "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+        serde_json::json!("Genome uploaded successfully"),
+    );
+    response.insert(
+        "cortical_area_count".to_string(),
+        serde_json::json!(genome_info.cortical_area_count),
+    );
+    response.insert(
+        "brain_region_count".to_string(),
+        serde_json::json!(genome_info.brain_region_count),
+    );
+
+    Ok(Json(response))
 }
 
 /// Upload a genome file with edit mode enabled.
-#[utoipa::path(post, path = "/v1/genome/upload/file/edit", tag = "genome")]
+#[cfg(feature = "http")]
+#[utoipa::path(
+    post,
+    path = "/v1/genome/upload/file/edit",
+    tag = "genome",
+    request_body(content = GenomeFileUploadForm, content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "Upload processed", body = HashMap<String, String>)
+    )
+)]
 pub async fn post_upload_file_edit(
     State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, String>>,
+    mut _multipart: Multipart,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([(
         "message".to_string(),
