@@ -7,6 +7,7 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
 use feagi_structures::FeagiDataError;
 use std::cmp::PartialEq;
+use std::fmt::format;
 use std::time::Instant;
 
 /// Represents the direction of data flow in the pipeline, which affects validation logic.
@@ -118,6 +119,17 @@ pub(crate) trait PipelineStageRunner {
             .load_properties(updated_properties)?;
         Ok(())
     }
+
+    fn try_get_index_of_first_stage_property_of_type(&self, updated_properties: &PipelineStageProperties) -> Result<PipelineStagePropertyIndex, FeagiDataError> {
+        let stages = self.get_all_stage_properties();
+        for (i, stage) in stages.iter().enumerate() {
+            if stage.variant_name() == updated_properties.variant_name() {
+                return Ok((i as u32).into())
+            }
+        };
+        Err(FeagiDataError::BadParameters(format!("No stage of type {} found!", updated_properties.variant_name())))
+    }
+
 
     /// Updates the properties of all stages in the pipeline.
     ///
