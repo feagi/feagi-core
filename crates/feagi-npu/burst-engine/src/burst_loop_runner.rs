@@ -1719,92 +1719,39 @@ fn burst_loop(
                         );
                     }
 
-                    // Send raw data to PNS (non-blocking handoff, PNS will serialize on its own thread)
-                    if let Some(ref publisher) = viz_publisher {
-                        static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 =
-                            std::sync::atomic::AtomicU64::new(0);
+                        // Minimal, high-signal debugging for BV "no power" issues:
+                        // Log whether the outgoing visualization snapshot contains the Power cortical area (core idx=1).
+                        // This pinpoints whether the failure is upstream (sampling/packaging) or downstream (BV decode/apply).
+                        if burst_num.is_multiple_of(30) {
+                            use feagi_structures::genomic::cortical_area::CoreCorticalType;
+                            static POWER_ID_B64: std::sync::LazyLock<String> =
+                                std::sync::LazyLock::new(|| {
+                                    CoreCorticalType::Power.to_cortical_id().as_base_64()
+                                });
 
-                        // Update shared timestamp (used for throttle check above)
-                        LAST_VIZ_PUBLISH.store(now_ms, std::sync::atomic::Ordering::Relaxed);
+                            let power_neurons = raw_snapshot
+                                .values()
+                                .find(|d| d.cortical_id == *POWER_ID_B64)
+                                .map(|d| d.neuron_ids.len())
+                                .unwrap_or(0);
 
-                        let count =
-                            PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        if count.is_multiple_of(30) {
-                            trace!(
-                                "[BURST-LOOP] Viz handoff #{}: {} neurons -> PNS (serialization off-thread)",
-                                count,
-                                total_neurons
+                            info!(
+                                "[VIZ-DEBUG] burst={} transports: shm={} publisher={} should_publish_viz={} areas={} total_neurons={} power_neurons={}",
+                                burst_num,
+                                has_shm_writer,
+                                has_viz_publisher,
+                                should_publish_viz,
+                                raw_snapshot.len(),
+                                total_neurons,
+                                power_neurons
                             );
                         }
 
-                        // CRITICAL PERFORMANCE: Move raw_snapshot instead of cloning (we don't need it after this)
-                        // PNS will serialize on its own thread, so we can give it ownership
-                        let publish_start = Instant::now();
-                        if let Err(e) = publisher.publish_raw_fire_queue(raw_snapshot) {
-                            error!("[BURST-LOOP] ❌ VIZ HANDOFF ERROR: {}", e);
-                        }
-                        let publish_duration = publish_start.elapsed();
-                        // Only warn for extreme cases (>5 seconds) - large batch data can take hundreds of ms to serialize
-                        if publish_duration.as_millis() > 5000 {
-                            warn!(
-                                "[BURST-LOOP] Very slow viz publish handoff: {:.2}ms (burst {})",
-                                publish_duration.as_secs_f64() * 1000.0,
-                                burst_num
-                            );
-                        }
-                    }
-
-                    // SHM writer still needs serialized data (for local visualization)
-                    // This is acceptable since SHM is local IPC, not network-bound
-                    // NOTE: raw_snapshot was moved to publisher above, so we need to rebuild it for SHM
-                    // This is acceptable since SHM is typically not used when PNS publisher is available
+                    // IMPORTANT: Single visualization pipeline per burst.
+                    // If SHM is attached, we write to SHM and skip publisher handoff to avoid doing
+                    // two independent serialization paths (maintenance + performance nightmare).
                     if has_shm_writer {
-                        // Rebuild raw_snapshot for SHM (only if SHM is actually being used)
-                        // TODO: Share raw_snapshot between publisher and SHM to avoid rebuilding
-                        warn!("[BURST-LOOP] ⚠️ SHM writer requires rebuilding raw_snapshot (performance impact)");
-                        // For now, skip SHM encoding if we already published to PNS
-                        // SHM is typically only used for local visualization without PNS
-                        // Rebuild raw_snapshot from fire_data_arc for SHM
-                        let mut shm_snapshot = RawFireQueueSnapshot::new();
-                        // CRITICAL PERFORMANCE: Clone mappings to release lock immediately
-                        let cortical_id_mappings_shm = {
-                            let mappings = cached_cortical_id_mappings.lock().unwrap();
-                            mappings.clone()
-                        };
-                        for (area_id, (neuron_ids, coords_x, coords_y, coords_z, potentials)) in
-                            fire_data_arc.iter()
-                        {
-                            if neuron_ids.is_empty() {
-                                continue;
-                            }
-                            let cortical_id = match cortical_id_mappings_shm.get(area_id) {
-                                Some(id) => id.clone(),
-                                None => {
-                                    use feagi_structures::genomic::cortical_area::CoreCorticalType;
-                                    match area_id {
-                                        0 => CoreCorticalType::Death.to_cortical_id().as_base_64(),
-                                        1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
-                                        2 => {
-                                            CoreCorticalType::Fatigue.to_cortical_id().as_base_64()
-                                        }
-                                        _ => continue,
-                                    }
-                                }
-                            };
-                            shm_snapshot.insert(
-                                *area_id,
-                                RawFireQueueData {
-                                    cortical_area_idx: *area_id,
-                                    cortical_id,
-                                    neuron_ids: neuron_ids.clone(),
-                                    coords_x: coords_x.clone(),
-                                    coords_y: coords_y.clone(),
-                                    coords_z: coords_z.clone(),
-                                    potentials: potentials.clone(),
-                                },
-                            );
-                        }
-                        match encode_fire_data_to_xyzp(shm_snapshot, None) {
+                        match encode_fire_data_to_xyzp(raw_snapshot, None) {
                             Ok(buffer) => {
                                 let mut viz_writer_lock = viz_shm_writer.lock().unwrap();
                                 if let Some(writer) = viz_writer_lock.as_mut() {
@@ -1815,6 +1762,38 @@ fn burst_loop(
                             }
                             Err(e) => {
                                 error!("[BURST-LOOP] ❌ Failed to encode for SHM: {}", e);
+                            }
+                        }
+                    } else if should_publish_viz {
+                        // Send raw data to publisher (non-blocking handoff; serialization is off-thread).
+                        if let Some(ref publisher) = viz_publisher {
+                            static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 =
+                                std::sync::atomic::AtomicU64::new(0);
+
+                            // Update shared timestamp (used for throttle check above)
+                            LAST_VIZ_PUBLISH.store(now_ms, std::sync::atomic::Ordering::Relaxed);
+
+                            let count =
+                                PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            if count.is_multiple_of(30) {
+                                trace!(
+                                    "[BURST-LOOP] Viz handoff #{}: {} neurons -> publisher (serialization off-thread)",
+                                    count,
+                                    total_neurons
+                                );
+                            }
+
+                            let publish_start = Instant::now();
+                            if let Err(e) = publisher.publish_raw_fire_queue(raw_snapshot) {
+                                error!("[BURST-LOOP] ❌ VIZ HANDOFF ERROR: {}", e);
+                            }
+                            let publish_duration = publish_start.elapsed();
+                            if publish_duration.as_millis() > 5000 {
+                                warn!(
+                                    "[BURST-LOOP] Very slow viz publish handoff: {:.2}ms (burst {})",
+                                    publish_duration.as_secs_f64() * 1000.0,
+                                    burst_num
+                                );
                             }
                         }
                     }

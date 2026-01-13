@@ -36,6 +36,26 @@ pub type DeregistrationCallback =
 /// Type alias for dynamic gating callbacks
 pub type DynamicGatingCallback = Arc<parking_lot::Mutex<Option<Box<dyn Fn(String) + Send + Sync>>>>;
 
+/// Policy for whether FEAGI should advertise/allocate visualization SHM paths during registration.
+///
+/// This is an explicit, configuration-driven switch to avoid clients needing to hardcode transport
+/// decisions. The configuration is authoritative; client requests are treated as preferences.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VisualizationShmPolicy {
+    /// Honor the agent request (chosen_transport / shm_path presence).
+    Auto,
+    /// Never allocate/advertise visualization SHM paths.
+    ForceWebSocket,
+    /// Always allocate/advertise visualization SHM paths (when visualization capability is present).
+    ForceShm,
+}
+
+impl Default for VisualizationShmPolicy {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
 /// Registration Handler
 pub struct RegistrationHandler {
     agent_registry: Arc<RwLock<AgentRegistry>>,
@@ -74,6 +94,8 @@ pub struct RegistrationHandler {
     ws_motor_port: u16,
     ws_viz_port: u16,
     ws_registration_port: u16,
+    /// Visualization SHM allocation/advertising policy (driven by feagi-rs config TOML).
+    visualization_shm_policy: VisualizationShmPolicy,
     /// Callbacks for Python integration
     on_agent_registered: RegistrationCallback,
     on_agent_deregistered: DeregistrationCallback,
@@ -108,11 +130,21 @@ impl RegistrationHandler {
             ws_motor_port: 9052,
             ws_viz_port: 9050,
             ws_registration_port: 9053,
+            visualization_shm_policy: VisualizationShmPolicy::default(),
             on_agent_registered: Arc::new(parking_lot::Mutex::new(None)),
             on_agent_deregistered: Arc::new(parking_lot::Mutex::new(None)),
             on_agent_registered_dynamic: Arc::new(parking_lot::Mutex::new(None)),
             on_agent_deregistered_dynamic: Arc::new(parking_lot::Mutex::new(None)),
         }
+    }
+
+    /// Set visualization SHM policy (configuration-driven).
+    pub fn set_visualization_shm_policy(&mut self, policy: VisualizationShmPolicy) {
+        self.visualization_shm_policy = policy;
+        info!(
+            "[REGISTRATION] Visualization SHM policy set to: {:?}",
+            self.visualization_shm_policy
+        );
     }
 
     /// Set GenomeService for creating cortical areas
@@ -1040,7 +1072,7 @@ impl RegistrationHandler {
         let mut allocated_capabilities = capabilities.clone();
 
         // Check if agent explicitly wants SHM (either via chosen_transport or by providing shm_path)
-        let agent_wants_shm = match request.chosen_transport.as_deref() {
+        let wants_shm_by_request = match request.chosen_transport.as_deref() {
             Some("websocket") | Some("zmq") => false, // Agent explicitly chose non-SHM transport
             Some("shm") | Some("hybrid") => true,     // Agent explicitly wants SHM
             None => {
@@ -1054,6 +1086,12 @@ impl RegistrationHandler {
                     .is_some()
             }
             Some(_) => false, // Unknown transport, don't offer SHM
+        };
+
+        let agent_wants_shm = match self.visualization_shm_policy {
+            VisualizationShmPolicy::Auto => wants_shm_by_request,
+            VisualizationShmPolicy::ForceWebSocket => false,
+            VisualizationShmPolicy::ForceShm => true,
         };
 
         if agent_wants_shm {
