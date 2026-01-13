@@ -6,9 +6,64 @@
 // Removed - using crate::common::State instead
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Query, State};
+use crate::amalgamation;
 use feagi_services::types::LoadGenomeParams;
 use std::collections::HashMap;
 use tracing::info;
+use uuid::Uuid;
+
+fn queue_amalgamation_from_genome_json_str(
+    state: &ApiState,
+    genome_json: String,
+) -> Result<String, ApiError> {
+    // Only one pending amalgamation is supported per FEAGI session (matches BV workflow).
+    {
+        let lock = state.amalgamation_state.read();
+        if lock.pending.is_some() {
+            return Err(ApiError::invalid_input(
+                "Amalgamation already pending; cancel it first via /v1/genome/amalgamation_cancellation",
+            ));
+        }
+    }
+
+    let genome = feagi_evolutionary::load_genome_from_json(&genome_json)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid genome payload: {}", e)))?;
+
+    let circuit_size = amalgamation::compute_circuit_size_from_runtime_genome(&genome);
+
+    let amalgamation_id = Uuid::new_v4().to_string();
+    let genome_title = genome.metadata.genome_title.clone();
+
+    let summary = amalgamation::AmalgamationPendingSummary {
+        amalgamation_id: amalgamation_id.clone(),
+        genome_title,
+        circuit_size,
+    };
+
+    let pending = amalgamation::AmalgamationPending {
+        summary: summary.clone(),
+        genome_json,
+    };
+
+    {
+        let mut lock = state.amalgamation_state.write();
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+
+        lock.history.push(amalgamation::AmalgamationHistoryEntry {
+            amalgamation_id: summary.amalgamation_id.clone(),
+            genome_title: summary.genome_title.clone(),
+            circuit_size: summary.circuit_size,
+            status: "pending".to_string(),
+            timestamp_ms: now_ms,
+        });
+        lock.pending = Some(pending);
+    }
+
+    Ok(amalgamation_id)
+}
 
 /// Inject the current runtime simulation timestep (seconds) into a genome JSON value.
 ///
@@ -72,18 +127,308 @@ pub async fn get_circuits(State(_state): State<ApiState>) -> ApiResult<Json<Vec<
 /// Set the destination for genome amalgamation (merging genomes).
 #[utoipa::path(post, path = "/v1/genome/amalgamation_destination", tag = "genome")]
 pub async fn post_amalgamation_destination(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, serde_json::Value>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+    State(state): State<ApiState>,
+    Query(params): Query<HashMap<String, String>>,
+    Json(req): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    // BV sends query params:
+    // - circuit_origin_x/y/z
+    // - amalgamation_id
+    // - rewire_mode
+    //
+    // Body:
+    // - brain_region_id
+    let amalgamation_id = params
+        .get("amalgamation_id")
+        .ok_or_else(|| ApiError::invalid_input("amalgamation_id required"))?
+        .to_string();
+
+    let origin_x: i32 = params
+        .get("circuit_origin_x")
+        .ok_or_else(|| ApiError::invalid_input("circuit_origin_x required"))?
+        .parse()
+        .map_err(|_| ApiError::invalid_input("circuit_origin_x must be an integer"))?;
+    let origin_y: i32 = params
+        .get("circuit_origin_y")
+        .ok_or_else(|| ApiError::invalid_input("circuit_origin_y required"))?
+        .parse()
+        .map_err(|_| ApiError::invalid_input("circuit_origin_y must be an integer"))?;
+    let origin_z: i32 = params
+        .get("circuit_origin_z")
+        .ok_or_else(|| ApiError::invalid_input("circuit_origin_z required"))?
+        .parse()
+        .map_err(|_| ApiError::invalid_input("circuit_origin_z must be an integer"))?;
+
+    let rewire_mode = params
+        .get("rewire_mode")
+        .cloned()
+        .unwrap_or_else(|| "rewire_all".to_string());
+
+    let parent_region_id = req
+        .get("brain_region_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("brain_region_id required"))?
+        .to_string();
+
+    // Resolve and consume the pending request.
+    let pending = {
+        let lock = state.amalgamation_state.write();
+        let Some(p) = lock.pending.as_ref() else {
+            return Err(ApiError::invalid_input("No amalgamation is pending"));
+        };
+        if p.summary.amalgamation_id != amalgamation_id {
+            return Err(ApiError::invalid_input(format!(
+                "Pending amalgamation_id mismatch: expected {}, got {}",
+                p.summary.amalgamation_id, amalgamation_id
+            )));
+        }
+        p.clone()
+    };
+
+    // 1) Create a new brain region to host the imported circuit.
+    // Note: ConnectomeServiceImpl shares the same RuntimeGenome Arc with GenomeServiceImpl, so
+    // persisting the region into the RuntimeGenome is required for subsequent cortical-area creation.
+    let connectome_service = state.connectome_service.as_ref();
+
+    let mut region_properties: HashMap<String, serde_json::Value> = HashMap::new();
+    region_properties.insert(
+        "coordinate_3d".to_string(),
+        serde_json::json!([origin_x, origin_y, origin_z]),
+    );
+    region_properties.insert(
+        "amalgamation_id".to_string(),
+        serde_json::json!(pending.summary.amalgamation_id),
+    );
+    region_properties.insert(
+        "circuit_size".to_string(),
+        serde_json::json!(pending.summary.circuit_size),
+    );
+    region_properties.insert(
+        "rewire_mode".to_string(),
+        serde_json::json!(rewire_mode),
+    );
+
+    connectome_service
+        .create_brain_region(feagi_services::types::CreateBrainRegionParams {
+            region_id: amalgamation_id.clone(),
+            name: pending.summary.genome_title.clone(),
+            region_type: "Custom".to_string(),
+            parent_id: Some(parent_region_id.clone()),
+            properties: Some(region_properties),
+        })
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to create amalgamation brain region: {}", e)))?;
+
+    // 2) Import cortical areas into that region.
+    //
+    // Current deterministic behavior:
+    // - We import *only* cortical areas whose IDs do not exist in the current connectome.
+    // - We place them at an offset relative to the chosen origin.
+    // - We assign parent_region_id to the new region so the genome stays consistent.
+    //
+    // If a genome contains shared/global IDs (e.g., core areas), those will be skipped.
+    let imported_genome = feagi_evolutionary::load_genome_from_json(&pending.genome_json).map_err(|e| {
+        ApiError::invalid_input(format!(
+            "Pending genome payload can no longer be parsed as a genome: {}",
+            e
+        ))
+    })?;
+
+    let genome_service = state.genome_service.as_ref();
+    let mut to_create: Vec<feagi_services::types::CreateCorticalAreaParams> = Vec::new();
+    let mut skipped_existing: Vec<String> = Vec::new();
+
+    for area in imported_genome.cortical_areas.values() {
+        let cortical_id = area.cortical_id.as_base_64();
+        let exists = connectome_service
+            .cortical_area_exists(&cortical_id)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!(
+                    "Failed to check existing cortical area {}: {}",
+                    cortical_id, e
+                ))
+            })?;
+        if exists {
+            skipped_existing.push(cortical_id);
+            continue;
+        }
+
+        let mut props = area.properties.clone();
+        props.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(amalgamation_id.clone()),
+        );
+        props.insert(
+            "amalgamation_source".to_string(),
+            serde_json::json!("amalgamation_by_payload"),
+        );
+
+        to_create.push(feagi_services::types::CreateCorticalAreaParams {
+            cortical_id,
+            name: area.name.clone(),
+            dimensions: (
+                area.dimensions.width as usize,
+                area.dimensions.height as usize,
+                area.dimensions.depth as usize,
+            ),
+            position: (
+                origin_x.saturating_add(area.position.x),
+                origin_y.saturating_add(area.position.y),
+                origin_z.saturating_add(area.position.z),
+            ),
+            area_type: "Custom".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: area
+                .properties
+                .get("neurons_per_voxel")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32),
+            postsynaptic_current: area
+                .properties
+                .get("postsynaptic_current")
+                .and_then(|v| v.as_f64()),
+            plasticity_constant: area
+                .properties
+                .get("plasticity_constant")
+                .and_then(|v| v.as_f64()),
+            degeneration: area.properties.get("degeneration").and_then(|v| v.as_f64()),
+            psp_uniform_distribution: area
+                .properties
+                .get("psp_uniform_distribution")
+                .and_then(|v| v.as_bool()),
+            firing_threshold_increment: None,
+            firing_threshold_limit: area
+                .properties
+                .get("firing_threshold_limit")
+                .and_then(|v| v.as_f64()),
+            consecutive_fire_count: area
+                .properties
+                .get("consecutive_fire_limit")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32),
+            snooze_period: area
+                .properties
+                .get("snooze_period")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32),
+            refractory_period: area
+                .properties
+                .get("refractory_period")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32),
+            leak_coefficient: area
+                .properties
+                .get("leak_coefficient")
+                .and_then(|v| v.as_f64()),
+            leak_variability: area
+                .properties
+                .get("leak_variability")
+                .and_then(|v| v.as_f64()),
+            burst_engine_active: area
+                .properties
+                .get("burst_engine_active")
+                .and_then(|v| v.as_bool()),
+            properties: Some(props),
+        });
+    }
+
+    if !to_create.is_empty() {
+        genome_service
+            .create_cortical_areas(to_create)
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to import cortical areas: {}", e)))?;
+    }
+
+    // Clear pending + write history entry
+    {
+        let mut lock = state.amalgamation_state.write();
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        lock.history.push(amalgamation::AmalgamationHistoryEntry {
+            amalgamation_id: pending.summary.amalgamation_id.clone(),
+            genome_title: pending.summary.genome_title.clone(),
+            circuit_size: pending.summary.circuit_size,
+            status: "confirmed".to_string(),
+            timestamp_ms: now_ms,
+        });
+        lock.pending = None;
+    }
+
+    // Build a BV-compatible list response for brain regions (regions_members-like data, but as list).
+    let regions = state
+        .connectome_service
+        .list_brain_regions()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list brain regions: {}", e)))?;
+
+    let mut brain_regions: Vec<serde_json::Value> = Vec::new();
+    for region in regions {
+        // Shape matches BV expectations in FEAGIRequests.gd
+        let coordinate_3d = region
+            .properties
+            .get("coordinate_3d")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([0, 0, 0]));
+        let coordinate_2d = region
+            .properties
+            .get("coordinate_2d")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([0, 0]));
+
+        brain_regions.push(serde_json::json!({
+            "region_id": region.region_id,
+            "title": region.name,
+            "description": "",
+            "parent_region_id": region.parent_id,
+            "coordinate_2d": coordinate_2d,
+            "coordinate_3d": coordinate_3d,
+            "areas": region.cortical_areas,
+            "regions": region.child_regions,
+            "inputs": region.properties.get("inputs").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "outputs": region.properties.get("outputs").cloned().unwrap_or_else(|| serde_json::json!([])),
+        }));
+    }
+
+    Ok(Json(HashMap::from([
+        (
+            "message".to_string(),
+            serde_json::Value::String("Amalgamation confirmed".to_string()),
+        ),
+        ("brain_regions".to_string(), serde_json::Value::Array(brain_regions)),
+        (
+            "skipped_existing_areas".to_string(),
+            serde_json::json!(skipped_existing),
+        ),
+    ])))
 }
 
 /// Cancel a pending genome amalgamation operation.
 #[utoipa::path(delete, path = "/v1/genome/amalgamation_cancellation", tag = "genome")]
 pub async fn delete_amalgamation_cancellation(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+    let mut lock = state.amalgamation_state.write();
+    if let Some(pending) = lock.pending.take() {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        lock.history.push(amalgamation::AmalgamationHistoryEntry {
+            amalgamation_id: pending.summary.amalgamation_id,
+            genome_title: pending.summary.genome_title,
+            circuit_size: pending.summary.circuit_size,
+            status: "cancelled".to_string(),
+            timestamp_ms: now_ms,
+        });
+    }
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Amalgamation cancelled".to_string(),
+    )])))
 }
 
 /// Append additional structures to the current genome.
@@ -668,17 +1013,38 @@ pub async fn post_export_format(
 /// Get current amalgamation status and configuration.
 #[utoipa::path(get, path = "/v1/genome/amalgamation", tag = "genome")]
 pub async fn get_amalgamation(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    Ok(Json(HashMap::new()))
+    let lock = state.amalgamation_state.read();
+    let mut response = HashMap::new();
+    if let Some(p) = lock.pending.as_ref() {
+        response.insert(
+            "pending".to_string(),
+            amalgamation::pending_summary_to_health_json(&p.summary),
+        );
+    } else {
+        response.insert("pending".to_string(), serde_json::Value::Null);
+    }
+    Ok(Json(response))
 }
 
 /// Get history of all genome amalgamation operations performed.
 #[utoipa::path(get, path = "/v1/genome/amalgamation_history", tag = "genome")]
 pub async fn get_amalgamation_history_exact(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
 ) -> ApiResult<Json<Vec<HashMap<String, serde_json::Value>>>> {
-    Ok(Json(Vec::new()))
+    let lock = state.amalgamation_state.read();
+    let mut out: Vec<HashMap<String, serde_json::Value>> = Vec::new();
+    for entry in &lock.history {
+        out.push(HashMap::from([
+            ("amalgamation_id".to_string(), serde_json::json!(entry.amalgamation_id)),
+            ("genome_title".to_string(), serde_json::json!(entry.genome_title)),
+            ("circuit_size".to_string(), serde_json::json!(entry.circuit_size)),
+            ("status".to_string(), serde_json::json!(entry.status)),
+            ("timestamp_ms".to_string(), serde_json::json!(entry.timestamp_ms)),
+        ]));
+    }
+    Ok(Json(out))
 }
 
 /// Get metadata about all available cortical types including supported encodings and configurations.
@@ -1016,37 +1382,71 @@ pub async fn get_genome_number(State(_state): State<ApiState>) -> ApiResult<Json
 /// Perform genome amalgamation by specifying a filename.
 #[utoipa::path(post, path = "/v1/genome/amalgamation_by_filename", tag = "genome")]
 pub async fn post_amalgamation_by_filename(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, String>>,
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+    // Deterministic implementation:
+    // - Supports embedded Rust template genomes by name (no filesystem I/O).
+    // - For all other filenames, require /amalgamation_by_payload.
+    let file_name = req
+        .get("file_name")
+        .or_else(|| req.get("filename"))
+        .or_else(|| req.get("genome_file_name"))
+        .ok_or_else(|| ApiError::invalid_input("file_name required"))?;
+
+    let genome_json = match file_name.as_str() {
+        "barebones" => feagi_evolutionary::BAREBONES_GENOME_JSON.to_string(),
+        "essential" => feagi_evolutionary::ESSENTIAL_GENOME_JSON.to_string(),
+        "test" => feagi_evolutionary::TEST_GENOME_JSON.to_string(),
+        "vision" => feagi_evolutionary::VISION_GENOME_JSON.to_string(),
+        other => {
+            return Err(ApiError::invalid_input(format!(
+                "Unsupported file_name '{}'. Use /v1/genome/amalgamation_by_payload for arbitrary genomes.",
+                other
+            )))
+        }
+    };
+
+    let amalgamation_id = queue_amalgamation_from_genome_json_str(&state, genome_json)?;
+
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Amalgamation queued".to_string()),
+        ("amalgamation_id".to_string(), amalgamation_id),
+    ])))
 }
 
 /// Perform genome amalgamation using a direct JSON payload.
 #[utoipa::path(post, path = "/v1/genome/amalgamation_by_payload", tag = "genome")]
 pub async fn post_amalgamation_by_payload(
-    State(_state): State<ApiState>,
-    Json(_req): Json<serde_json::Value>,
+    State(state): State<ApiState>,
+    Json(req): Json<serde_json::Value>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+    let json_str = serde_json::to_string(&req)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
+    let amalgamation_id = queue_amalgamation_from_genome_json_str(&state, json_str)?;
+
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Amalgamation queued".to_string()),
+        ("amalgamation_id".to_string(), amalgamation_id),
+    ])))
 }
 
 /// Perform genome amalgamation by uploading a genome file.
 #[utoipa::path(post, path = "/v1/genome/amalgamation_by_upload", tag = "genome")]
 pub async fn post_amalgamation_by_upload(
-    State(_state): State<ApiState>,
-    Json(_req): Json<serde_json::Value>,
+    State(state): State<ApiState>,
+    Json(req): Json<serde_json::Value>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([(
-        "message".to_string(),
-        "Not yet implemented".to_string(),
-    )])))
+    // For FEAGI v2.0 core, this endpoint is treated equivalently to /amalgamation_by_payload
+    // because the transport layer already provides the decoded JSON body.
+    let json_str = serde_json::to_string(&req)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
+    let amalgamation_id = queue_amalgamation_from_genome_json_str(&state, json_str)?;
+
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Amalgamation queued".to_string()),
+        ("amalgamation_id".to_string(), amalgamation_id),
+    ])))
 }
 
 /// Append structures to the genome from a file.

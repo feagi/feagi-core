@@ -686,7 +686,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let region_type = Self::string_to_region_type(&params.region_type)?;
 
         // Create BrainRegion
-        let region = BrainRegion::new(
+        let mut region = BrainRegion::new(
             RegionID::from_string(&params.region_id)
                 .map_err(|e| ServiceError::InvalidInput(format!("Invalid region ID: {}", e)))?,
             params.name.clone(),
@@ -694,11 +694,34 @@ impl ConnectomeService for ConnectomeServiceImpl {
         )
         .map_err(ServiceError::from)?;
 
+        // Apply initial properties (persisted into ConnectomeManager and RuntimeGenome).
+        if let Some(props) = params.properties.clone() {
+            region = region.with_properties(props);
+        }
+
         // Add to connectome
         self.connectome
             .write()
             .add_brain_region(region, params.parent_id.clone())
             .map_err(ServiceError::from)?;
+
+        // Persist into RuntimeGenome (source of truth for genome save/export).
+        //
+        // NOTE: GenomeServiceImpl::create_cortical_areas requires that parent_region_id exists
+        // in the RuntimeGenome brain_regions map. Without this, any subsequent cortical-area
+        // creation that targets this region will fail.
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            // Fetch the canonical region instance from ConnectomeManager to ensure any internal
+            // normalization is reflected in the persisted copy.
+            if let Some(created) = self
+                .connectome
+                .read()
+                .get_brain_region(&params.region_id)
+                .cloned()
+            {
+                genome.brain_regions.insert(params.region_id.clone(), created);
+            }
+        }
 
         // Return info
         self.get_brain_region(&params.region_id).await

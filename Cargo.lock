@@ -2047,6 +2047,7 @@ name = "feagi-npu-burst-engine"
 version = "0.0.1-beta.1"
 dependencies = [
  "ahash",
+ "base64 0.22.1",
  "bytemuck",
  "chrono",
  "criterion",
