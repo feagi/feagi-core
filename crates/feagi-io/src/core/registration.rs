@@ -1031,8 +1031,11 @@ impl RegistrationHandler {
         // Check and ensure required cortical areas exist (auto-create if enabled)
         let cortical_areas_availability = self.ensure_cortical_areas_exist(&capabilities)?;
 
-        // Allocate SHM paths ONLY if agent didn't explicitly choose a non-SHM transport
-        // AND the agent didn't explicitly set shm_path to None (which indicates ZMQ-only)
+        // Allocate SHM paths only when the agent explicitly requests SHM/hybrid transport, or when
+        // capabilities already include SHM paths (e.g., sensory.shm_path).
+        //
+        // IMPORTANT: Avoid hardcoding assumptions about client intent. The client must choose
+        // "shm" or "hybrid" to receive shm_paths in the response.
         let mut shm_paths = HashMap::new();
         let mut allocated_capabilities = capabilities.clone();
 
@@ -1090,6 +1093,35 @@ impl RegistrationHandler {
             info!(
                 "🦀 [REGISTRATION] Skipping SHM paths - agent chose transport: {:?}",
                 request.chosen_transport
+            );
+        }
+
+        // If visualization SHM is allocated, attach the burst-engine SHM writer so BV can read frames.
+        // Without this, BV may receive a shm_paths.visualization value but the file will never be created/updated.
+        if let Some(viz_path) = shm_paths.get("visualization") {
+            let runner_opt = self.burst_runner.lock().clone();
+            let runner = runner_opt.ok_or_else(|| {
+                FeagiDataError::BadParameters(
+                    "Visualization SHM requested but BurstLoopRunner is not connected to RegistrationHandler"
+                        .to_string(),
+                )
+            })?;
+
+            {
+                let mut runner_guard = runner.write();
+                runner_guard
+                    .attach_viz_shm_writer(std::path::PathBuf::from(viz_path))
+                    .map_err(|e| {
+                        FeagiDataError::BadParameters(format!(
+                            "Failed to attach visualization SHM writer: {}",
+                            e
+                        ))
+                    })?;
+            }
+
+            info!(
+                "🦀 [REGISTRATION] ✅ Visualization SHM writer attached at: {}",
+                viz_path
             );
         }
 

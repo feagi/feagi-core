@@ -92,61 +92,19 @@ impl VizSHMWriter {
         let num_slots = num_slots.unwrap_or(DEFAULT_NUM_SLOTS);
         let slot_size = slot_size.unwrap_or(DEFAULT_SLOT_SIZE);
 
-        // Calculate total size: header + (num_slots * slot_size)
-        let total_size = HEADER_SIZE + (num_slots as usize * slot_size);
-
-        // Create/open SHM file
-        #[cfg(unix)]
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o666) // rw-rw-rw-
-            .open(&shm_path)?;
-
-        #[cfg(not(unix))]
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(&shm_path)?;
-
-        // Set file size
-        file.set_len(total_size as u64)?;
-
-        // Memory-map the file
-        let mut mmap = unsafe { MmapMut::map_mut(&file)? };
-
-        // Initialize header
-        mmap[0..8].copy_from_slice(MAGIC);
-        mmap[8..12].copy_from_slice(&VERSION.to_le_bytes());
-        mmap[12..16].copy_from_slice(&num_slots.to_le_bytes());
-        mmap[16..20].copy_from_slice(&(slot_size as u32).to_le_bytes());
-        mmap[20..28].copy_from_slice(&0u64.to_le_bytes()); // frame_seq
-        mmap[28..32].copy_from_slice(&0u32.to_le_bytes()); // write_index
-                                                           // Padding (32..256) is already zeroed by file.set_len()
-
-        mmap.flush()?;
-
-        info!(
-            "✅ Created Viz SHM Writer: {:?} (FEAGIVIS ring buffer: {} slots x {} bytes = {} MB)",
+        let mut writer = Self {
             shm_path,
-            num_slots,
-            slot_size,
-            total_size / 1024 / 1024
-        );
-
-        Ok(Self {
-            shm_path,
-            mmap: Some(mmap),
+            mmap: None,
             num_slots,
             slot_size,
             frame_seq: 0,
             write_index: 0,
             total_writes: 0,
             enabled: true,
-        })
+        };
+        writer.recreate_mmap_with_slot_size(slot_size)?;
+
+        Ok(writer)
     }
 
     /// Write binary neuron data to SHM ring buffer
@@ -157,24 +115,84 @@ impl VizSHMWriter {
             return Ok(());
         }
 
-        // Check payload size
-        if payload.len() + 4 > self.slot_size {
-            // Truncate if too large (should not happen with proper encoding)
+        // Ensure the payload fits in a slot; never truncate (data integrity requirement).
+        // Deterministic growth rule: grow slot_size to the smallest multiple of DEFAULT_SLOT_SIZE
+        // that can fit (payload_len + 4 bytes length header).
+        let required = payload
+            .len()
+            .checked_add(4)
+            .ok_or_else(|| std::io::Error::other("payload length overflow"))?;
+
+        if required > self.slot_size {
+            let new_slot_size = round_up_to_multiple(required, DEFAULT_SLOT_SIZE);
             warn!(
-                "⚠️  [VIZ-SHM] WARNING: Payload {} bytes exceeds slot size {} bytes - DATA WILL BE TRUNCATED!",
-                payload.len(), self.slot_size
+                "[VIZ-SHM] Payload {} bytes exceeds slot size {} bytes; resizing SHM slot_size to {} bytes",
+                payload.len(),
+                self.slot_size,
+                new_slot_size
             );
-            warn!(
-                "⚠️  [VIZ-SHM] This should NOT happen! Shared memory mode may not be fully supported yet."
-            );
-            warn!(
-                "⚠️  [VIZ-SHM] Recommendation: Run FEAGI without --shared-mem flag to use ZMQ mode instead."
-            );
-            let truncated = &payload[0..(self.slot_size - 4)];
-            self.write_to_ring_slot(truncated)?;
-        } else {
-            self.write_to_ring_slot(payload)?;
+            self.recreate_mmap_with_slot_size(new_slot_size)?;
         }
+
+        self.write_to_ring_slot(payload)?;
+
+        Ok(())
+    }
+
+    /// Recreate the SHM file mapping with the given slot size.
+    ///
+    /// This reinitializes the ring buffer header (frame sequence resets).
+    /// BV polls the header each tick, so it will recover on the next read cycle.
+    fn recreate_mmap_with_slot_size(&mut self, slot_size: usize) -> Result<(), std::io::Error> {
+        // Calculate total size: header + (num_slots * slot_size)
+        let total_size = HEADER_SIZE + (self.num_slots as usize * slot_size);
+
+        // Create/open SHM file
+        #[cfg(unix)]
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o666) // rw-rw-rw-
+            .open(&self.shm_path)?;
+
+        #[cfg(not(unix))]
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&self.shm_path)?;
+
+        // Set file size
+        file.set_len(total_size as u64)?;
+
+        // Memory-map the file
+        let mut mmap = unsafe { MmapMut::map_mut(&file)? };
+
+        // Initialize header
+        mmap[0..8].copy_from_slice(MAGIC);
+        mmap[8..12].copy_from_slice(&VERSION.to_le_bytes());
+        mmap[12..16].copy_from_slice(&self.num_slots.to_le_bytes());
+        mmap[16..20].copy_from_slice(&(slot_size as u32).to_le_bytes());
+        mmap[20..28].copy_from_slice(&0u64.to_le_bytes()); // frame_seq
+        mmap[28..32].copy_from_slice(&0u32.to_le_bytes()); // write_index
+
+        mmap.flush()?;
+
+        self.slot_size = slot_size;
+        self.mmap = Some(mmap);
+        self.frame_seq = 0;
+        self.write_index = 0;
+
+        info!(
+            "✅ Viz SHM initialized: {:?} (FEAGIVIS ring buffer: {} slots x {} bytes = {} MB)",
+            self.shm_path,
+            self.num_slots,
+            self.slot_size,
+            total_size / 1024 / 1024
+        );
 
         Ok(())
     }
@@ -225,6 +243,12 @@ impl VizSHMWriter {
     pub fn get_stats(&self) -> (u64, u64) {
         (self.frame_seq, self.total_writes)
     }
+}
+
+/// Round `n` up to the nearest multiple of `multiple` (must be > 0).
+fn round_up_to_multiple(n: usize, multiple: usize) -> usize {
+    debug_assert!(multiple > 0);
+    ((n + multiple - 1) / multiple) * multiple
 }
 
 impl Drop for VizSHMWriter {

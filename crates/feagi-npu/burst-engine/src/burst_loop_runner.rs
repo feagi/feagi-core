@@ -23,6 +23,7 @@ use crate::parameter_update_queue::ParameterUpdateQueue;
 use crate::sensory::AgentManager;
 #[cfg(feature = "std")]
 use crate::{tracing_mutex::TracingMutex, DynamicNPU};
+use crate::update_sim_timestep_from_hz;
 use feagi_npu_neural::types::NeuronId;
 use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -937,6 +938,7 @@ fn burst_loop(
 ) {
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
+    update_sim_timestep_from_hz(initial_freq);
     info!(
         "[{}] [BURST-LOOP] Starting main loop at {:.2} Hz",
         timestamp, initial_freq
@@ -956,6 +958,10 @@ fn burst_loop(
     while running.load(Ordering::Acquire) {
         let iteration_start = Instant::now();
         let burst_start = Instant::now();
+        // Keep simulation timestep snapshot aligned with runtime frequency.
+        // This is used by injection warnings (warn if injection exceeds timestep).
+        let current_frequency_hz = *frequency_hz.lock().unwrap();
+        update_sim_timestep_from_hz(current_frequency_hz);
 
         // DIAGNOSTIC: Log that we're alive
         if burst_num.is_multiple_of(100) {
@@ -968,9 +974,11 @@ fn burst_loop(
             let mut last_end = LAST_ITERATION_END.lock().unwrap();
             if let Some(last) = *last_end {
                 let gap = iteration_start.duration_since(last);
-                if gap.as_millis() > 100 {
+                // Only warn for extreme gaps (>10 seconds) that might indicate system issues
+                // Normal batch processing (e.g., MRI data) can have multi-second gaps
+                if gap.as_millis() > 10000 {
                     warn!(
-                        "[BURST-LOOP] ⚠️ Large gap between bursts: {:.2}ms (expected ~66ms at 15Hz) - burst {}",
+                        "[BURST-LOOP] ⚠️ Extremely large gap between bursts: {:.2}ms - burst {} (this may indicate system issues)",
                         gap.as_secs_f64() * 1000.0,
                         burst_num
                     );
@@ -1011,11 +1019,11 @@ fn burst_loop(
         if let Ok(last_release) = LAST_LOCK_RELEASE.lock() {
             if let Some(last) = *last_release {
                 let gap = lock_start.duration_since(last);
-                // Only warn if gap is suspiciously long (suggests lock was held during sleep)
-                // Normal sleep for 15Hz = ~66ms, so if gap > 70ms, something might be wrong
-                if gap.as_millis() > 70 {
+                // Only warn for extreme gaps (>30 seconds) that might indicate deadlock
+                // Batch processing (e.g., medical imaging) can hold lock for several seconds legitimately
+                if gap.as_millis() > 30000 {
                     warn!(
-                        "[NPU-LOCK] Burst {}: Suspicious gap since last release: {:.2}ms (expected ~66ms for 15Hz) - lock may have been held during sleep!",
+                        "[NPU-LOCK] Burst {}: Extreme gap since last release: {:.2}ms (possible deadlock or system issue)",
                         burst_num,
                         gap.as_secs_f64() * 1000.0
                     );
@@ -1048,22 +1056,22 @@ fn burst_loop(
             let lock_wait_duration = acquired.duration_since(lock_start);
 
             // Log if lock acquisition took significant time (could indicate contention)
-            if lock_wait_duration.as_millis() > 10 {
+            // Only warn for extreme lock wait times (>30 seconds) - batch processing legitimately holds lock for seconds
+            if lock_wait_duration.as_millis() > 30000 {
                 // Check if we can see what might have been holding it
                 if let Ok(last_release) = LAST_LOCK_RELEASE.lock() {
                     if let Some(last) = *last_release {
                         let time_since_release = acquisition_start.duration_since(last);
                         warn!(
-                            "[NPU-LOCK] ⚠️ Slow lock acquisition: {:.2}ms wait (burst {}, thread={:?}) | Time since last release: {:.2}ms | Another thread held the lock for ~{:.2}ms during sleep! Check logs for [NPU-LOCK] entries immediately before this.",
+                            "[NPU-LOCK] Extreme lock wait: {:.2}ms wait (burst {}, thread={:?}) | Time since last release: {:.2}ms (possible deadlock)",
                             lock_wait_duration.as_secs_f64() * 1000.0,
                             burst_num,
                             current_thread_id,
-                            time_since_release.as_secs_f64() * 1000.0,
-                            lock_wait_duration.as_secs_f64() * 1000.0
+                            time_since_release.as_secs_f64() * 1000.0
                         );
                     } else {
                         warn!(
-                            "[NPU-LOCK] ⚠️ Slow lock acquisition: {:.2}ms (burst {}, thread={:?}) - possible lock contention!",
+                            "[NPU-LOCK] Extreme lock wait: {:.2}ms (burst {}, thread={:?}) - possible deadlock!",
                             lock_wait_duration.as_secs_f64() * 1000.0,
                             burst_num,
                             current_thread_id
@@ -1736,10 +1744,10 @@ fn burst_loop(
                             error!("[BURST-LOOP] ❌ VIZ HANDOFF ERROR: {}", e);
                         }
                         let publish_duration = publish_start.elapsed();
-                        // Lower threshold to catch smaller slowdowns (10ms instead of 100ms)
-                        if publish_duration.as_millis() > 10 {
+                        // Only warn for extreme cases (>5 seconds) - large batch data can take hundreds of ms to serialize
+                        if publish_duration.as_millis() > 5000 {
                             warn!(
-                                "[BURST-LOOP] ⚠️ Slow viz publish handoff: {:.2}ms (burst {})",
+                                "[BURST-LOOP] Very slow viz publish handoff: {:.2}ms (burst {})",
                                 publish_duration.as_secs_f64() * 1000.0,
                                 burst_num
                             );
@@ -2055,11 +2063,10 @@ fn burst_loop(
         } // Close motor block
 
         let post_burst_duration = post_burst_start.elapsed();
-        // Lower threshold to catch smaller slowdowns (10ms instead of 100ms)
-        // This will help us identify where the 100-600ms is coming from
-        if post_burst_duration.as_millis() > 10 {
+        // Only warn for extreme cases (>5 seconds) - batch processing can take time for viz/motor
+        if post_burst_duration.as_millis() > 5000 {
             warn!(
-                "[BURST-LOOP] ⚠️ Slow post-burst processing: {:.2}ms (viz+motor, burst {})",
+                "[BURST-LOOP] Very slow post-burst processing: {:.2}ms (viz+motor, burst {})",
                 post_burst_duration.as_secs_f64() * 1000.0,
                 burst_num
             );
@@ -2105,18 +2112,19 @@ fn burst_loop(
         }
 
         // Log total iteration time if it's slow
+        // Warn if burst iteration is truly slow (>1 second) - indicates real problems
         let iteration_duration = iteration_start.elapsed();
-        if iteration_duration.as_millis() > 100 {
+        if iteration_duration.as_millis() > 1000 {
             // BREAKDOWN: Show where time was spent (use stored duration from process_burst)
             // Note: process_burst_duration is only available in the NPU lock scope, so we approximate
             // The actual breakdown will be logged in the next iteration when we have all timings
             warn!(
-                "[BURST-LOOP] ⚠️ Slow burst iteration: {:.2}ms total (burst {}) | breakdown: gap_before_post={:.2}ms, post_burst={:.2}ms, stats={:.2}ms, unaccounted={:.2}ms",
-                iteration_duration.as_secs_f64() * 1000.0,
-                burst_num,
-                time_between_npu_release_and_post_burst.as_secs_f64() * 1000.0,
-                post_burst_duration.as_secs_f64() * 1000.0,
-                stats_duration.as_secs_f64() * 1000.0,
+                    "[BURST-LOOP] ⚠️ Slow burst iteration: {:.2}ms total (burst {}) | breakdown: gap_before_post={:.2}ms, post_burst={:.2}ms, stats={:.2}ms, unaccounted={:.2}ms",
+                    iteration_duration.as_secs_f64() * 1000.0,
+                    burst_num,
+                    time_between_npu_release_and_post_burst.as_secs_f64() * 1000.0,
+                    post_burst_duration.as_secs_f64() * 1000.0,
+                    stats_duration.as_secs_f64() * 1000.0,
                 iteration_duration.as_secs_f64() * 1000.0 - time_between_npu_release_and_post_burst.as_secs_f64() * 1000.0 - post_burst_duration.as_secs_f64() * 1000.0 - stats_duration.as_secs_f64() * 1000.0
             );
         }
@@ -2138,10 +2146,10 @@ fn burst_loop(
         let target_time = burst_start + Duration::from_secs_f64(interval_sec);
         let now = Instant::now();
 
-        // Log if we're already past target (iteration took too long)
+        // Log if we're significantly past target (>1 second overshoot) - indicates real problems
         if now > target_time {
             let overshoot = now.duration_since(target_time);
-            if overshoot.as_millis() > 50 {
+            if overshoot.as_millis() > 1000 {
                 warn!(
                     "[BURST-LOOP] Iteration overshoot: {:.2}ms past target (burst {}) - no sleep needed",
                     overshoot.as_secs_f64() * 1000.0,
