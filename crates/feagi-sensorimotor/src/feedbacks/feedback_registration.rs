@@ -55,9 +55,6 @@ impl FeedBackRegistration {
         let (sensory_cortical_unit, motor_cortical_unit) = self.get_sensor_motor_cortical_units();
 
         // Verify required units/channels exist.
-        //
-        // IMPORTANT: do not hold these locks while registering callbacks, otherwise the callback
-        // registration path can deadlock by attempting to re-lock the same caches.
         {
             let sensors = sensor_cache.lock().unwrap();
             sensors.verify_existence(

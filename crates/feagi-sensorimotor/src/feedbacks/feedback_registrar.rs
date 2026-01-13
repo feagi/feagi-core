@@ -17,7 +17,6 @@ impl FeedbackRegistrar {
         }
     }
 
-    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.registered_feedbacks.clear();
     }
@@ -39,13 +38,23 @@ impl FeedbackRegistrar {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn verify_not_contain_registration(
-        &self,
-        targets: FeedbackRegistrationTargets,
-        registration: FeedBackRegistration,
+    pub(crate) fn push_verified_feedback(
+        &mut self,
+        target: FeedbackRegistrationTargets,
+        feed_back_registration: FeedBackRegistration,
     ) -> Result<(), FeagiDataError> {
-        let compare = &(targets, registration);
+        self.verify_not_contain_registration(&target, &feed_back_registration)?;
+        self.registered_feedbacks
+            .push((target, feed_back_registration));
+        Ok(())
+    }
+
+    fn verify_not_contain_registration(
+        &self,
+        targets: &FeedbackRegistrationTargets,
+        registration: &FeedBackRegistration,
+    ) -> Result<(), FeagiDataError> {
+        let compare = &(targets.clone(), registration.clone());
         if self.registered_feedbacks.contains(compare) {
             return Err(FeagiDataError::BadParameters(format!(
                 "Feedback {} already registered to motor unit {} channel {}, and sensor unit {} channel {}!",
@@ -57,14 +66,5 @@ impl FeedbackRegistrar {
             )));
         }
         Ok(())
-    }
-
-    pub(crate) fn push_verified_feedback(
-        &mut self,
-        target: FeedbackRegistrationTargets,
-        feed_back_registration: FeedBackRegistration,
-    ) {
-        self.registered_feedbacks
-            .push((target, feed_back_registration));
     }
 }

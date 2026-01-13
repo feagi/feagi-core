@@ -28,6 +28,8 @@ macro_rules! match_bytes_by_cortical_type {
     };
 }
 
+
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CorticalID {
     pub(crate) bytes: [u8; CorticalID::CORTICAL_ID_LENGTH],
@@ -108,11 +110,8 @@ impl CorticalID {
     ///
     /// This is used internally for both BrainInput and BrainOutput cortical areas.
     #[inline]
-    /// Extract IO configuration flag from this cortical ID (bytes 4-5).
-    ///
-    /// This exposes the authoritative FDP encoding metadata (variant, frame handling,
-    /// and optional percentage positioning) as `IOCorticalAreaConfigurationFlag`.
-    pub fn extract_io_data_flag(&self) -> Result<IOCorticalAreaConfigurationFlag, FeagiDataError> {
+    fn extract_io_data_flag(&self) -> Result<IOCorticalAreaConfigurationFlag, FeagiDataError> {
+        // NOTE: This can NOT be made public, as we work with internal state!
         let data_type_config = u16::from_le_bytes([self.bytes[4], self.bytes[5]]);
         IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(data_type_config)
     }
