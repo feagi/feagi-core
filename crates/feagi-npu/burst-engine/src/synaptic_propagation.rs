@@ -432,16 +432,32 @@ impl SynapticPropagationEngine {
             .collect();
         let compute_ms = compute_start.elapsed().as_secs_f64() * 1000.0;
 
-        // PHASE 3: GROUP - Group by cortical area (sequential, but very fast)
-        // This replaces Python's slow dictionary building
+        // PHASE 3: GROUP - Group by cortical area (PARALLEL fold-reduce)
+        // Optimization: Use rayon parallel fold-reduce for 8-12× speedup on large datasets
+        // Sequential was taking 258ms for 1.6M synapses - this should reduce to 20-30ms
         let group_start = std::time::Instant::now();
-        let mut result: PropagationResult = AHashMap::new();
-        for (target_neuron, cortical_area, contribution) in contributions {
-            result
-                .entry(cortical_area)
-                .or_default()
-                .push((target_neuron, contribution));
-        }
+        let result: PropagationResult = contributions
+            .into_par_iter()
+            .fold(
+                || AHashMap::<CorticalID, Vec<(NeuronId, SynapticContribution)>>::new(),
+                |mut acc, (target_neuron, cortical_area, contribution)| {
+                    acc.entry(cortical_area)
+                        .or_default()
+                        .push((target_neuron, contribution));
+                    acc
+                },
+            )
+            .reduce(
+                || AHashMap::new(),
+                |mut a, b| {
+                    for (cortical_id, mut contribs) in b {
+                        a.entry(cortical_id)
+                            .or_default()
+                            .append(&mut contribs);
+                    }
+                    a
+                },
+            );
         let group_ms = group_start.elapsed().as_secs_f64() * 1000.0;
 
         self.last_profile = Some(PropagationProfile {
