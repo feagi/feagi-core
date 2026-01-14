@@ -10,6 +10,7 @@
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod common;
+pub mod amalgamation;
 pub mod endpoints;
 #[cfg(feature = "http")]
 pub mod middleware;

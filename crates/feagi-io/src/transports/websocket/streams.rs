@@ -3,7 +3,6 @@
 
 //! WebSocket stream implementations for PNS
 
-use crate::blocking::compression;
 use crate::core::{IOConfig, IOError, Result};
 use crate::transports::core::common::ServerConfig;
 use crate::transports::core::prelude::*;
@@ -72,7 +71,12 @@ impl WebSocketStreams {
         info!("🦀 [WS-STREAMS] Starting WebSocket control streams...");
         // TODO: Start WsRouter for registration/control
         // For now, control happens via ZMQ REST stream
-        info!("🦀 [WS-STREAMS] ✅ Control streams ready (using ZMQ for now)");
+        //
+        // IMPORTANT:
+        // The visualization WS server must be listening before BV can connect, even if
+        // the burst engine isn't ready to publish data yet.
+        self.start_viz_publisher_if_needed()?;
+        info!("🦀 [WS-STREAMS] ✅ Control streams ready (registration via ZMQ; viz WS listening)");
         Ok(())
     }
 
@@ -89,9 +93,14 @@ impl WebSocketStreams {
 
         info!("🦀 [WS-STREAMS] Starting WebSocket data streams...");
 
-        // Get handle to the existing tokio runtime (Axum's runtime)
-        let handle = tokio::runtime::Handle::try_current()
-            .map_err(|e| IOError::Transport(format!("No tokio runtime available: {}", e)))?;
+        // Use the dedicated tokio runtime owned by WebSocketStreams.
+        // This avoids relying on `Handle::try_current()`, which can fail when this is called
+        // from a non-async thread, resulting in "advertised but not listening".
+        let runtime = self
+            .runtime
+            .lock()
+            .clone()
+            .ok_or_else(|| IOError::Transport("WebSocket runtime not initialized".to_string()))?;
 
         // Clone config for async closures
         let viz_host = self.config.websocket.host.clone();
@@ -105,8 +114,8 @@ impl WebSocketStreams {
         let motor_pub = self.motor_pub.clone();
         let sensory_pull = self.sensory_pull.clone();
 
-        // Spawn server creation on the tokio runtime
-        handle.spawn(async move {
+        // Spawn server creation on the dedicated runtime
+        runtime.spawn(async move {
             // Start visualization publisher
             let viz_addr = format!("{}:{}", viz_host, viz_port);
             let config = ServerConfig::new(&viz_addr);
@@ -129,7 +138,7 @@ impl WebSocketStreams {
             }
         });
 
-        handle.spawn(async move {
+        runtime.spawn(async move {
             // Start motor publisher
             let motor_addr = format!("{}:{}", motor_host, motor_port);
             let config = ServerConfig::new(&motor_addr);
@@ -152,7 +161,7 @@ impl WebSocketStreams {
             }
         });
 
-        handle.spawn(async move {
+        runtime.spawn(async move {
             // Start sensory pull
             let sensory_addr = format!("{}:{}", sensory_host, sensory_port);
             let config = ServerConfig::new(&sensory_addr);
@@ -175,9 +184,6 @@ impl WebSocketStreams {
             }
         });
 
-        // Give the async servers a moment to bind
-        std::thread::sleep(std::time::Duration::from_millis(200));
-
         *self.running.lock() = true;
 
         info!("🦀 [WS-STREAMS] ✅ WebSocket data streams startup initiated");
@@ -193,6 +199,46 @@ impl WebSocketStreams {
             "🦀 [WS-STREAMS]    📤 Agents can receive motor from: ws://{}:{}",
             self.config.websocket.host, self.config.websocket.motor_port
         );
+
+        Ok(())
+    }
+
+    fn start_viz_publisher_if_needed(&self) -> Result<()> {
+        if self.viz_pub.lock().is_some() {
+            return Ok(());
+        }
+
+        let runtime = self
+            .runtime
+            .lock()
+            .clone()
+            .ok_or_else(|| IOError::Transport("WebSocket runtime not initialized".to_string()))?;
+
+        let viz_host = self.config.websocket.host.clone();
+        let viz_port = self.config.websocket.visualization_port;
+        let viz_pub = self.viz_pub.clone();
+
+        runtime.spawn(async move {
+            let viz_addr = format!("{}:{}", viz_host, viz_port);
+            let config = ServerConfig::new(&viz_addr);
+            match WsPub::new(config) {
+                Ok(mut pub_server) => match pub_server.start_async().await {
+                    Ok(()) => {
+                        info!(
+                            "🦀 [WS-STREAMS] ✅ Visualization publisher started on ws://{}:{}",
+                            viz_host, viz_port
+                        );
+                        *viz_pub.lock() = Some(pub_server);
+                    }
+                    Err(e) => {
+                        error!("❌ [WS-STREAMS] Failed to start viz publisher: {}", e);
+                    }
+                },
+                Err(e) => {
+                    error!("❌ [WS-STREAMS] Failed to create viz publisher: {}", e);
+                }
+            }
+        });
 
         Ok(())
     }
@@ -246,24 +292,18 @@ impl WebSocketStreams {
             .map_err(|e| IOError::Transport(format!("Failed to serialize fire queue: {}", e)))?;
         let serialize_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
-        // ✅ Compress with LZ4 (BV expects LZ4-compressed msgpack, same as ZMQ)
-        let t1 = Instant::now();
-        let compressed = compression::compress_lz4(&serialized)?;
-        let compress_ms = t1.elapsed().as_secs_f64() * 1000.0;
-
         if publish_idx == 1 || publish_idx % 300 == 0 {
             info!(
-                "[WS-VIZ] publish_idx={} serialize_ms={:.2} compress_ms={:.2} bytes_raw={} bytes_lz4={}",
+                "[WS-VIZ] publish_idx={} serialize_ms={:.2} bytes_raw={}",
                 publish_idx,
                 serialize_ms,
-                compress_ms,
-                serialized.len(),
-                compressed.len()
+                serialized.len()
             );
         }
 
-        // Publish compressed data to WebSocket clients
-        self.publish_visualization(&compressed)
+        // ARCHITECTURE: canonical visualization pipeline (transport-independent).
+        // WebSocket receives the raw FeagiByteContainer bytes (no LZ4), matching SHM.
+        self.publish_visualization(&serialized)
     }
 
     /// Serialize raw fire queue data to FeagiByteContainer format
@@ -400,9 +440,10 @@ impl WebSocketStreams {
     /// Start visualization stream only (dynamic gating)
     pub fn start_viz_stream(&self) -> Result<()> {
         info!(
-            "🦀 [WS-STREAMS] Viz stream on port {} (already started in start_data_streams)",
+            "🦀 [WS-STREAMS] Viz stream on port {} (publisher stays active)",
             self.config.websocket.visualization_port
         );
+        self.start_viz_publisher_if_needed()?;
         Ok(())
     }
 

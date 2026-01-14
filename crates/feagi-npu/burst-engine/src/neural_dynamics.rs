@@ -213,10 +213,19 @@ pub fn process_neural_dynamics<T: NeuralValue>(
 
     let dynamics_duration = dynamics_start.elapsed();
 
-    // Log if dynamics processing is slow (>20ms)
-    if dynamics_duration.as_millis() > 20 {
+    // Log dynamics processing timing only for extreme cases (>30 seconds)
+    // Batch processing with millions of candidates can legitimately take 5-10 seconds
+    if dynamics_duration.as_millis() > 30000 {
         tracing::warn!(
-            "[PHASE2-DYNAMICS] Slow dynamics processing: {:.2}ms for {} candidates, {} fired",
+            "[PHASE2-DYNAMICS] Very slow dynamics processing: {:.2}ms for {} candidates, {} fired",
+            dynamics_duration.as_secs_f64() * 1000.0,
+            candidates.len(),
+            fired_neurons.len()
+        );
+    } else if candidates.len() > 1_000_000 {
+        // Info log for large batch processing
+        tracing::info!(
+            "[PHASE2-DYNAMICS] Batch processing: {:.2}ms for {} candidates, {} fired",
             dynamics_duration.as_secs_f64() * 1000.0,
             candidates.len(),
             fired_neurons.len()

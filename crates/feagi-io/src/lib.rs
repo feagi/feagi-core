@@ -1276,7 +1276,7 @@ impl IOSystem {
                     match ws_streams.start_data_streams() {
                         Ok(()) => {
                             info!("🦀 [PNS] ✅ WebSocket data streams started");
-                            info!("🦀 [PNS] 🌐 Brain Visualizer can now connect to: ws://{}:{}/visualization",
+                            info!("🦀 [PNS] 🌐 Brain Visualizer can now connect to: ws://{}:{}",
                                   self.config.websocket.host, self.config.websocket.visualization_port);
                         }
                         Err(e) => {
@@ -1500,17 +1500,14 @@ impl IOSystem {
 
             if should_publish_ws {
                 if let Some(streams) = self.websocket_streams.lock().as_ref() {
-                    if streams.is_running() {
-                        match streams.publish_raw_fire_queue(fire_data.clone()) {
-                            Ok(()) => published_to.push("WebSocket"),
-                            Err(e) => errors.push(format!("WebSocket: {}", e)),
-                        }
-                    } else {
-                        if log_count.is_multiple_of(100) {
-                            warn!(
-                                "[PNS] ⚠️ WebSocket enabled but not running (servers not started)"
-                            );
-                        }
+                    // Publish regardless of the internal `running` flag.
+                    //
+                    // The WS visualization publisher may be started eagerly (for BV handshake)
+                    // before `start_data_streams()` is called. Gating on `is_running()` can
+                    // incorrectly suppress all WS visualization output.
+                    match streams.publish_raw_fire_queue(fire_data.clone()) {
+                        Ok(()) => published_to.push("WebSocket"),
+                        Err(e) => errors.push(format!("WebSocket: {}", e)),
                     }
                 } else {
                     if log_count.is_multiple_of(100) {
@@ -1574,11 +1571,11 @@ impl IOSystem {
         #[cfg(feature = "websocket-transport")]
         {
             if let Some(streams) = self.websocket_streams.lock().as_ref() {
-                if streams.is_running() {
-                    match streams.publish_motor(agent_id, data) {
-                        Ok(()) => published_to.push("WebSocket"),
-                        Err(e) => errors.push(format!("WebSocket: {}", e)),
-                    }
+                // Same rationale as visualization: WS publishers can be started before the
+                // data-stream lifecycle flips.
+                match streams.publish_motor(agent_id, data) {
+                    Ok(()) => published_to.push("WebSocket"),
+                    Err(e) => errors.push(format!("WebSocket: {}", e)),
                 }
             }
         }

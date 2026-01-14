@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, State};
+use crate::amalgamation;
 
 // ============================================================================
 // REQUEST/RESPONSE MODELS (matching Python schemas exactly)
@@ -207,7 +208,23 @@ pub async fn get_health_check(
     // Prefer the plasticity cache-derived total to avoid discrepancies.
     let memory_neuron_count = memory_neuron_count_from_cache.or(memory_neuron_count);
 
-    let amalgamation_pending = None; // TODO: Get from evolution/genome merging service
+    // BV expects `amalgamation_pending` to be a dict with:
+    // - amalgamation_id
+    // - genome_title
+    // - circuit_size
+    let amalgamation_pending = state
+        .amalgamation_state
+        .read()
+        .pending
+        .as_ref()
+        .map(|p| {
+            let v = amalgamation::pending_summary_to_health_json(&p.summary);
+            v.as_object()
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .collect::<HashMap<String, serde_json::Value>>()
+        });
 
     // Get root region ID from ConnectomeManager (only available when services feature is enabled)
     #[cfg(feature = "services")]

@@ -1553,42 +1553,24 @@ impl<
 
         let total_duration = burst_start.elapsed();
 
-        // Log timing info: WARN if slow (>20ms), INFO every 100 bursts, DEBUG for all bursts
-        // Lowered threshold from 50ms to 20ms to catch more performance issues
-        let is_slow = total_duration.as_millis() > 20;
-        let should_log = is_slow || burst_count.is_multiple_of(100);
-
-        if should_log {
+        // Burst timing telemetry - warn only for truly slow bursts (>200ms) that indicate real problems
+        let is_slow = total_duration.as_millis() > 200;
+        
+        if is_slow {
             let neuron_count = neuron_storage.count();
-            if is_slow {
-                warn!(
-                    "[BURST-TIMING] Burst {}: total={:.2}ms | locks={:.2}ms | phase1={:.2}ms | phase2={:.2}ms | phase3={:.2}ms | phase4={:.2}ms | neurons={} | fired={} | candidates={}",
-                    burst_count,
-                    total_duration.as_secs_f64() * 1000.0,
-                    lock_duration.as_secs_f64() * 1000.0,
-                    phase1_duration.as_secs_f64() * 1000.0,
-                    phase2_duration.as_secs_f64() * 1000.0,
-                    phase3_duration.as_secs_f64() * 1000.0,
-                    phase4_duration.as_secs_f64() * 1000.0,
-                    neuron_count,
-                    dynamics_result.neurons_fired,
-                    fire_structures.fire_candidate_list.len()
-                );
-            } else {
-                info!(
-                    "[BURST-TIMING] Burst {}: total={:.2}ms | locks={:.2}ms | phase1={:.2}ms | phase2={:.2}ms | phase3={:.2}ms | phase4={:.2}ms | neurons={} | fired={} | candidates={}",
-                    burst_count,
-                    total_duration.as_secs_f64() * 1000.0,
-                    lock_duration.as_secs_f64() * 1000.0,
-                    phase1_duration.as_secs_f64() * 1000.0,
-                    phase2_duration.as_secs_f64() * 1000.0,
-                    phase3_duration.as_secs_f64() * 1000.0,
-                    phase4_duration.as_secs_f64() * 1000.0,
-                    neuron_count,
-                    dynamics_result.neurons_fired,
-                    fire_structures.fire_candidate_list.len()
-                );
-            }
+            warn!(
+                "[BURST-TIMING] Burst {}: total={:.2}ms | locks={:.2}ms | phase1={:.2}ms | phase2={:.2}ms | phase3={:.2}ms | phase4={:.2}ms | neurons={} | fired={} | candidates={}",
+                burst_count,
+                total_duration.as_secs_f64() * 1000.0,
+                lock_duration.as_secs_f64() * 1000.0,
+                phase1_duration.as_secs_f64() * 1000.0,
+                phase2_duration.as_secs_f64() * 1000.0,
+                phase3_duration.as_secs_f64() * 1000.0,
+                phase4_duration.as_secs_f64() * 1000.0,
+                neuron_count,
+                dynamics_result.neurons_fired,
+                fire_structures.fire_candidate_list.len()
+            );
         }
 
         // Build result
@@ -2030,10 +2012,15 @@ impl<
                 .batch_coordinate_lookup_from_slices(cortical_area, x_coords, y_coords, z_coords)
         };
         let coord_lookup_duration = coord_lookup_start.elapsed();
-        if coord_lookup_duration.as_millis() > 50 {
+        let sim_timestep = crate::sim_timestep();
+        if !x_coords.is_empty()
+            && sim_timestep > std::time::Duration::from_nanos(0)
+            && coord_lookup_duration > sim_timestep
+        {
             tracing::warn!(
-                "[NPU-INJECT] ⚠️ Slow coordinate lookup: {:.2}ms for {} coordinates",
+                "[NPU-INJECT] Coordinate lookup exceeded timestep: {:.2}ms > {:.2}ms ({} coordinates)",
                 coord_lookup_duration.as_secs_f64() * 1000.0,
+                sim_timestep.as_secs_f64() * 1000.0,
                 x_coords.len()
             );
         }
@@ -2056,10 +2043,15 @@ impl<
         };
         let pair_build_duration = pair_build_start.elapsed();
         let found_count = neuron_potential_pairs.len();
-        if pair_build_duration.as_millis() > 10 {
+        let sim_timestep = crate::sim_timestep();
+        if found_count > 0
+            && sim_timestep > std::time::Duration::from_nanos(0)
+            && pair_build_duration > sim_timestep
+        {
             tracing::warn!(
-                "[NPU-INJECT] ⚠️ Slow pair building: {:.2}ms for {} pairs",
+                "[NPU-INJECT] Pair building exceeded timestep: {:.2}ms > {:.2}ms ({} pairs)",
                 pair_build_duration.as_secs_f64() * 1000.0,
+                sim_timestep.as_secs_f64() * 1000.0,
                 found_count
             );
         }
@@ -3501,6 +3493,8 @@ fn phase1_injection_with_synapses<
     // Clear FCL from previous burst
     fcl.clear();
 
+    let sim_timestep = crate::sim_timestep();
+
     let mut power_count = 0;
     let mut synaptic_count = 0;
     let mut sensory_count = 0;
@@ -3529,11 +3523,14 @@ fn phase1_injection_with_synapses<
     }
     let sensory_duration = sensory_start.elapsed();
 
-    // Log sensory injection timing if it's slow (>5ms)
-    if sensory_duration.as_millis() > 5 {
+    // Warn when injection exceeds the configured simulation timestep.
+    // This accounts for all use-cases (real-time, batch, etc.) because timestep is runtime-configured.
+    if sensory_count > 0 && sim_timestep > std::time::Duration::from_nanos(0) && sensory_duration > sim_timestep
+    {
         warn!(
-            "[PHASE1-SENSORY] Slow sensory injection: {:.2}ms for {} neurons",
+            "[PHASE1-SENSORY] Injection exceeded timestep: {:.2}ms > {:.2}ms ({} neurons)",
             sensory_duration.as_secs_f64() * 1000.0,
+            sim_timestep.as_secs_f64() * 1000.0,
             sensory_count
         );
     }
@@ -3600,11 +3597,13 @@ fn phase1_injection_with_synapses<
 
     let power_duration = power_start.elapsed();
 
-    // Log power injection timing if it's slow (>5ms) - lowered threshold for better visibility
-    if power_duration.as_millis() > 5 {
+    // Warn when injection exceeds the configured simulation timestep.
+    if power_count > 0 && sim_timestep > std::time::Duration::from_nanos(0) && power_duration > sim_timestep
+    {
         warn!(
-            "[PHASE1-POWER] Slow power injection: {:.2}ms for {} neurons (total: {})",
+            "[PHASE1-POWER] Injection exceeded timestep: {:.2}ms > {:.2}ms ({} neurons, total: {})",
             power_duration.as_secs_f64() * 1000.0,
+            sim_timestep.as_secs_f64() * 1000.0,
             power_count,
             neuron_count
         );
@@ -3749,33 +3748,35 @@ fn phase1_injection_with_synapses<
         let inject_duration = inject_start.elapsed();
         let synaptic_duration = synaptic_start.elapsed();
 
-        // Log if synaptic propagation is slow (>10ms) - lowered threshold for better visibility
-        if synaptic_duration.as_millis() > 10 {
-            warn!(
-                "[PHASE1-SYNAPTIC] Slow synaptic propagation: total={:.2}ms | mp_build={:.2}ms | propagate={:.2}ms | inject={:.2}ms | fired={} | synapses={}",
-                synaptic_duration.as_secs_f64() * 1000.0,
-                mp_build_duration.as_secs_f64() * 1000.0,
-                propagate_duration.as_secs_f64() * 1000.0,
-                inject_duration.as_secs_f64() * 1000.0,
-                fired_ids.len(),
-                synaptic_count
-            );
-
-            // Fine-grained breakdown from the propagation engine (populated per-call).
-            if let Some(profile) = propagation_engine.last_profile() {
-                warn!(
-                    "[PHASE1-SYNAPTIC-PROFILE] fired={} synapse_indices={} unique_sources={} contributions={} | gather={:.2}ms metadata={:.2}ms compute={:.2}ms group={:.2}ms total={:.2}ms | rayon_threads={}",
-                    profile.fired_neurons,
-                    profile.synapse_indices,
-                    profile.unique_sources,
-                    profile.contributions,
-                    profile.gather_ms,
-                    profile.metadata_ms,
-                    profile.compute_ms,
-                    profile.group_ms,
-                    profile.total_ms,
-                    profile.rayon_threads
+        // Synaptic propagation telemetry - only checked when debug logging is enabled (zero runtime overhead otherwise)
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            if synaptic_duration.as_millis() > 10 {
+                debug!(
+                    "[PHASE1-SYNAPTIC] Slow synaptic propagation: total={:.2}ms | mp_build={:.2}ms | propagate={:.2}ms | inject={:.2}ms | fired={} | synapses={}",
+                    synaptic_duration.as_secs_f64() * 1000.0,
+                    mp_build_duration.as_secs_f64() * 1000.0,
+                    propagate_duration.as_secs_f64() * 1000.0,
+                    inject_duration.as_secs_f64() * 1000.0,
+                    fired_ids.len(),
+                    synaptic_count
                 );
+
+                // Fine-grained breakdown from the propagation engine (populated per-call).
+                if let Some(profile) = propagation_engine.last_profile() {
+                    debug!(
+                        "[PHASE1-SYNAPTIC-PROFILE] fired={} synapse_indices={} unique_sources={} contributions={} | gather={:.2}ms metadata={:.2}ms compute={:.2}ms group={:.2}ms total={:.2}ms | rayon_threads={}",
+                        profile.fired_neurons,
+                        profile.synapse_indices,
+                        profile.unique_sources,
+                        profile.contributions,
+                        profile.gather_ms,
+                        profile.metadata_ms,
+                        profile.compute_ms,
+                        profile.group_ms,
+                        profile.total_ms,
+                        profile.rayon_threads
+                    );
+                }
             }
         }
     }
