@@ -12,7 +12,6 @@
 //!
 //! This is the foundational layer used by the SDK and custom agent implementations.
 
-mod agent_id;
 pub mod client;
 pub mod config;
 pub mod error;

@@ -456,6 +456,7 @@ pub struct MotorDeviceCache {
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
+    is_active: bool,
 }
 
 impl std::fmt::Debug for MotorDeviceCache {
@@ -479,6 +480,7 @@ impl MotorDeviceCache {
             neuron_data: CorticalMappedXYZPNeuronVoxels::new(),
             byte_data: FeagiByteContainer::new_empty(),
             previous_burst: Instant::now(),
+            is_active: false,
         }
     }
 

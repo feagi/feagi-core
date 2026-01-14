@@ -6,6 +6,8 @@ use feagi_structures::FeagiDataError;
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+// TODO this file may be redudant, we may want to clear it
+
 fn lock_recover<'a, T>(mutex: &'a Mutex<T>) -> MutexGuard<'a, T> {
     match mutex.lock() {
         Ok(guard) => guard,

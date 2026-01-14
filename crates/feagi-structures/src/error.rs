@@ -32,6 +32,8 @@ pub enum FeagiDataError {
     NeuronError(String),
     /// Internal error indicating a bug (please report)
     InternalError(String),
+    /// resource is locked while system is running
+    ResourceLockedWhileRunning(String),
     /// failed to process something in a const function
     ConstError(&'static str),
     /// Feature not yet implemented
@@ -54,6 +56,7 @@ impl Display for FeagiDataError {
                 "Internal Error, please raise an issue on Github: {}",
                 msg
             ),
+            FeagiDataError::ResourceLockedWhileRunning(msg) => write!(f, "Resource Locked While Running: {}", msg),
             FeagiDataError::ConstError(msg) => write!(f, "ConstError: {}", msg),
             FeagiDataError::NotImplemented => write!(
                 f,
