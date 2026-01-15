@@ -55,7 +55,7 @@ impl ConnectorAgent {
     }
 
     pub fn set_device_registrations_from_json(&mut self, json: serde_json::Value) -> Result<(), FeagiDataError> {
-        if self.get_current_connection_state().is_active() {
+        if self.current_connection_state().is_active() {
             return Err(FeagiDataError::ResourceLockedWhileRunning(
                 "Cannot reload device registrations while running!".into_string()
             ))
@@ -67,15 +67,15 @@ impl ConnectorAgent {
 }
 
 impl FeagiAgent for ConnectorAgent {
-    fn get_agent_id(&self) -> &AgentID {
+    fn agent_id(&self) -> &AgentID {
         &self.agent_id
     }
 
-    fn get_current_connection_state(&self) -> &AgentConnectionState {
+    fn current_connection_state(&self) -> &AgentConnectionState {
         &self.current_connection_state
     }
 
-    fn get_agent_capabilities(&self) -> &[AgentCapabilities] {
+    fn agent_capabilities(&self) -> &[AgentCapabilities] {
         &[
             AgentCapabilities::SendSensorData,
             AgentCapabilities::ReceiveMotorData
@@ -83,7 +83,7 @@ impl FeagiAgent for ConnectorAgent {
     }
 
     fn connect_to_feagi(&mut self, connection_configuration: FeagiConnectionConfiguration) -> Result<(), FeagiDataError> {
-        if self.get_current_connection_state().is_active() {
+        if self.current_connection_state().is_active() {
             return Err(FeagiDataError::ResourceLockedWhileRunning(
                 "Cannot try to connect to FEAGI while a connection is active!".into_string()
             ))
@@ -93,7 +93,7 @@ impl FeagiAgent for ConnectorAgent {
     }
 
     fn disconnect(&mut self) -> Result<(), FeagiDataError> {
-        if !self.get_current_connection_state().is_active() {
+        if !self.current_connection_state().is_active() {
             return Ok(()) // Already disconnected lol
         }
 
