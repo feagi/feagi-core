@@ -275,6 +275,12 @@ pub async fn get_cortical_area_geometry(
                 .map(|area| {
                     // Return FULL cortical area data (matching Python format)
                     // This is what Brain Visualizer expects for genome loading
+                    let coordinate_2d = area
+                        .properties
+                        .get("coordinate_2d")
+                        .or_else(|| area.properties.get("coordinates_2d"))
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!([0, 0]));
                     let data = serde_json::json!({
                         "cortical_id": area.cortical_id,
                         "cortical_name": area.name,
@@ -282,7 +288,7 @@ pub async fn get_cortical_area_geometry(
                         "cortical_type": area.cortical_type,  // NEW: Explicitly include cortical_type for BV
                         "cortical_sub_group": area.sub_group.as_ref().unwrap_or(&String::new()),  // Return empty string instead of null
                         "coordinates_3d": [area.position.0, area.position.1, area.position.2],
-                        "coordinates_2d": [0, 0],  // TODO: Extract from properties when available
+                        "coordinates_2d": coordinate_2d,
                         "cortical_dimensions": [area.dimensions.0, area.dimensions.1, area.dimensions.2],
                         "cortical_neuron_per_vox_count": area.neurons_per_voxel,
                         "visualization": area.visible,
@@ -1370,11 +1376,23 @@ pub async fn put_multi_cortical_area(
     // Remove cortical_id_list from changes (it's not a property to update)
     request.remove("cortical_id_list");
 
-    // Update each cortical area with the same properties
+    // Build shared properties (applies to all unless overridden per-id)
+    let mut shared_properties = request.clone();
+    for cortical_id in &cortical_ids {
+        shared_properties.remove(cortical_id);
+    }
+
+    // Update each cortical area, using per-id properties when provided
     for cortical_id in &cortical_ids {
         tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - updating area: {}", cortical_id);
+        let mut properties = shared_properties.clone();
+        if let Some(serde_json::Value::Object(per_id_map)) = request.get(cortical_id) {
+            for (key, value) in per_id_map {
+                properties.insert(key.clone(), value.clone());
+            }
+        }
         match genome_service
-            .update_cortical_area(cortical_id, request.clone())
+            .update_cortical_area(cortical_id, properties)
             .await
         {
             Ok(_) => {

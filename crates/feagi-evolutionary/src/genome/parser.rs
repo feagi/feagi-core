@@ -199,6 +199,17 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
 
     // Try base64 first (new format)
     if let Ok(cortical_id) = CorticalID::try_from_base_64(id_str) {
+        let mut bytes = [0u8; CorticalID::CORTICAL_ID_LENGTH];
+        cortical_id.write_id_to_bytes(&mut bytes);
+        if bytes == *b"___power" {
+            return Ok(CoreCorticalType::Power.to_cortical_id());
+        }
+        if bytes == *b"___death" {
+            return Ok(CoreCorticalType::Death.to_cortical_id());
+        }
+        if bytes == *b"___fatig" {
+            return Ok(CoreCorticalType::Fatigue.to_cortical_id());
+        }
         return Ok(cortical_id);
     }
 
@@ -209,6 +220,16 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
     // Legacy shorthand used by older FEAGI genomes: "___pwr" (6-char) refers to core Power.
     if id_str == "___pwr" {
         return Ok(CoreCorticalType::Power.to_cortical_id());
+    }
+    // Legacy 8-char core names used in some BV caches
+    if id_str == "___power" {
+        return Ok(CoreCorticalType::Power.to_cortical_id());
+    }
+    if id_str == "___death" {
+        return Ok(CoreCorticalType::Death.to_cortical_id());
+    }
+    if id_str == "___fatig" {
+        return Ok(CoreCorticalType::Fatigue.to_cortical_id());
     }
     if id_str == "_death" {
         return Ok(CoreCorticalType::Death.to_cortical_id());

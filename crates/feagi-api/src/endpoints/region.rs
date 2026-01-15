@@ -199,10 +199,69 @@ pub async fn post_clone(
 /// PUT /v1/region/relocate_members
 #[utoipa::path(put, path = "/v1/region/relocate_members", tag = "region")]
 pub async fn put_relocate_members(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, serde_json::Value>>,
+    State(state): State<ApiState>,
+    Json(request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+    let connectome_service = state.connectome_service.as_ref();
+
+    if request.is_empty() {
+        return Err(ApiError::invalid_input("Request cannot be empty"));
+    }
+
+    let mut updated_regions: Vec<String> = Vec::new();
+
+    for (region_id, payload) in request {
+        let payload_obj = payload.as_object().ok_or_else(|| {
+            ApiError::invalid_input(format!(
+                "Region '{}' entry must be an object",
+                region_id
+            ))
+        })?;
+
+        if payload_obj.contains_key("parent_region_id") {
+            return Err(ApiError::invalid_input(
+                "parent_region_id relocation is not implemented via relocate_members",
+            ));
+        }
+
+        let mut properties: HashMap<String, serde_json::Value> = HashMap::new();
+        if let Some(value) = payload_obj
+            .get("coordinate_2d")
+            .or_else(|| payload_obj.get("coordinates_2d"))
+        {
+            properties.insert("coordinate_2d".to_string(), value.clone());
+        }
+        if let Some(value) = payload_obj
+            .get("coordinate_3d")
+            .or_else(|| payload_obj.get("coordinates_3d"))
+        {
+            properties.insert("coordinate_3d".to_string(), value.clone());
+        }
+
+        if properties.is_empty() {
+            return Err(ApiError::invalid_input(format!(
+                "Region '{}' has no supported properties to update",
+                region_id
+            )));
+        }
+
+        connectome_service
+            .update_brain_region(&region_id, properties)
+            .await
+            .map_err(|e| {
+                ApiError::internal(format!("Failed to update region {}: {}", region_id, e))
+            })?;
+
+        updated_regions.push(region_id);
+    }
+
+    Ok(Json(HashMap::from([
+        (
+            "message".to_string(),
+            format!("Updated {} brain regions", updated_regions.len()),
+        ),
+        ("region_ids".to_string(), updated_regions.join(", ")),
+    ])))
 }
 
 /// DELETE /v1/region/region_and_members

@@ -86,6 +86,8 @@ impl CorticalChangeClassifier {
             "name",
             "visible",
             // Position changes are purely for visualization
+            "coordinate_2d",
+            "coordinates_2d",
             "coordinates_3d",
             "coordinate_3d",
             "coordinates",
