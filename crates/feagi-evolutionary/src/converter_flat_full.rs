@@ -308,6 +308,11 @@ fn process_coordinate_property(
     prop_name: &str,
     area_data: &mut serde_json::Map<String, Value>,
 ) -> EvoResult<()> {
+    // Deterministic coordinate "jitter" for legacy flat genomes:
+    // If a 2D coordinate field is null, we assign a stable, per-cortical-id offset so
+    // multiple areas don't overlap at (0,0). This is NOT random (Rust/RTOS compatible).
+    const NULL_2D_JITTER_SPREAD: i32 = 30;
+
     // Extract axis from key (last character before type specifier)
     let axis_char = flat_key.chars().rev().nth(2).unwrap_or('x');
 
@@ -326,6 +331,61 @@ fn process_coordinate_property(
             json!([0, 0, 0])
         };
         area_data.insert(prop_name.to_string(), default_array);
+    }
+
+    // Legacy flat genomes sometimes encode coordinates as null.
+    // For 2D coordinates, we apply deterministic jitter; otherwise, keep default 0.
+    if flat_value.is_null() {
+        // Try to extract cortical_id from "_____10c-<cortical_id>-..."
+        let cortical_id = flat_key
+            .split('-')
+            .nth(1)
+            .unwrap_or("<unknown>");
+
+        if prop_name == "2d_coordinate" {
+            // Stable FNV-1a 32-bit hash (no RandomState).
+            let mut h: u32 = 2166136261;
+            for b in cortical_id.as_bytes() {
+                h ^= *b as u32;
+                h = h.wrapping_mul(16777619);
+            }
+
+            // Map hash bits to [-spread, +spread]
+            let spread = NULL_2D_JITTER_SPREAD.max(0);
+            let jitter = if spread == 0 {
+                0
+            } else {
+                let span = (spread * 2 + 1) as u32;
+                let raw = if index == 0 { h } else { h.rotate_left(16) };
+                (raw % span) as i32 - spread
+            };
+
+            // Ensure array exists then set jittered value for the axis.
+            if let Some(arr) = area_data.get_mut(prop_name).and_then(|v| v.as_array_mut()) {
+                if index < arr.len() {
+                    arr[index] = json!(jitter);
+                }
+            }
+
+            tracing::warn!(
+                target: "feagi-evo",
+                "⚠️ [GENOME-LOAD] Null 2D coordinate '{}' for cortical_id='{}' axis={} -> jitter={}",
+                flat_key,
+                cortical_id,
+                axis_char,
+                jitter
+            );
+            return Ok(());
+        }
+
+        tracing::warn!(
+            target: "feagi-evo",
+            "⚠️ [GENOME-LOAD] Null coordinate value for key '{}' ({} axis={}); defaulting to 0",
+            flat_key,
+            prop_name,
+            axis_char
+        );
+        return Ok(());
     }
 
     // Update the specific index
@@ -565,5 +625,43 @@ mod tests {
         assert_eq!(dest_rules[0]["morphology_id"], "projector");
         assert_eq!(dest_rules[0]["postSynapticCurrent_multiplier"], 1);
         assert_eq!(dest_rules[0]["plasticity_flag"], false);
+    }
+
+    #[test]
+    fn test_null_coordinates_default_to_zero() {
+        // Flat genomes may contain null for some coordinate fields.
+        // Converter must treat null as missing. For 2D coordinates it applies deterministic jitter,
+        // and for other coordinate types it keeps deterministic 0 defaults (not propagate null).
+        let flat = json!({
+            "version": "2.0",
+            "blueprint": {
+                "_____10c-CIStra-cx-2dcorx-i": null,
+                "_____10c-CIStra-cx-2dcory-i": null,
+                "_____10c-CIStra-cx-rcordx-i": 10,
+                "_____10c-CIStra-cx-rcordy-i": null,
+                "_____10c-CIStra-cx-rcordz-i": -20,
+                "_____10c-CIStra-cx-___bbx-i": 1,
+                "_____10c-CIStra-cx-___bby-i": 1,
+                "_____10c-CIStra-cx-___bbz-i": 1,
+                "_____10c-CIStra-cx-__name-t": "train_forward"
+            },
+            "brain_regions": null,
+            "neuron_morphologies": {},
+            "physiology": {}
+        });
+
+        let hierarchical = convert_flat_to_hierarchical_full(&flat).unwrap();
+        let blueprint = hierarchical
+            .get("blueprint")
+            .and_then(|v| v.as_object())
+            .unwrap();
+        let area = blueprint.get("CIStra").and_then(|v| v.as_object()).unwrap();
+
+        // 2D null coords are jittered deterministically (not necessarily 0,0) but must be integers.
+        let coords_2d = area.get("2d_coordinate").unwrap().as_array().unwrap();
+        assert_eq!(coords_2d.len(), 2);
+        assert!(coords_2d[0].as_i64().is_some());
+        assert!(coords_2d[1].as_i64().is_some());
+        assert_eq!(area.get("relative_coordinate").unwrap(), &json!([10, 0, -20]));
     }
 }

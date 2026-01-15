@@ -206,6 +206,10 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
     if id_str == "_power" {
         return Ok(CoreCorticalType::Power.to_cortical_id());
     }
+    // Legacy shorthand used by older FEAGI genomes: "___pwr" (6-char) refers to core Power.
+    if id_str == "___pwr" {
+        return Ok(CoreCorticalType::Power.to_cortical_id());
+    }
     if id_str == "_death" {
         return Ok(CoreCorticalType::Death.to_cortical_id());
     }
@@ -736,6 +740,15 @@ mod tests {
                 area.cortical_id
             );
         }
+    }
+
+    #[test]
+    fn test_string_to_cortical_id_legacy_power_shorthand() {
+        // Older FEAGI genomes may encode the power core area as "___pwr" (6-char shorthand).
+        // Migration must map this deterministically to the core Power cortical ID.
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        let id = string_to_cortical_id("___pwr").unwrap();
+        assert_eq!(id.as_base_64(), CoreCorticalType::Power.to_cortical_id().as_base_64());
     }
 
     #[test]

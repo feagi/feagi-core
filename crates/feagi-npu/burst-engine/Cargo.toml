@@ -68,14 +68,17 @@ npu-lock-tracing = []
 
 [[bench]]
 name = "backend_comparison"
+path = "benches/backend_comparison.rs"
 harness = false
 
 [[bench]]
 name = "ci_microbench"
+path = "benches/ci_microbench.rs"
 harness = false
 
 [[bench]]
 name = "grouping_optimization"
+path = "benches/grouping_optimization.rs"
 harness = false
 
 #[[bench]]

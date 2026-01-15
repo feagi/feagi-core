@@ -75,6 +75,14 @@ fn queue_amalgamation_from_genome_json_str(
         lock.pending = Some(pending);
     }
 
+    tracing::info!(
+        target: "feagi-api",
+        "🧬 [AMALGAMATION] Queued pending amalgamation id={} title='{}' circuit_size={:?}",
+        summary.amalgamation_id,
+        summary.genome_title,
+        summary.circuit_size
+    );
+
     Ok(amalgamation_id)
 }
 
@@ -371,6 +379,14 @@ pub async fn post_amalgamation_destination(
         lock.pending = None;
     }
 
+    tracing::info!(
+        target: "feagi-api",
+        "🧬 [AMALGAMATION] Confirmed and cleared pending amalgamation id={} imported_areas={} skipped_existing_areas={}",
+        pending.summary.amalgamation_id,
+        if skipped_existing.is_empty() { "unknown".to_string() } else { "partial".to_string() },
+        skipped_existing.len()
+    );
+
     // Build a BV-compatible list response for brain regions (regions_members-like data, but as list).
     let regions = state
         .connectome_service
@@ -437,6 +453,15 @@ pub async fn delete_amalgamation_cancellation(
             status: "cancelled".to_string(),
             timestamp_ms: now_ms,
         });
+
+        tracing::info!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Cancelled and cleared pending amalgamation id={}",
+            lock.history
+                .last()
+                .map(|e| e.amalgamation_id.clone())
+                .unwrap_or_else(|| "<unknown>".to_string())
+        );
     }
     Ok(Json(HashMap::from([(
         "message".to_string(),
