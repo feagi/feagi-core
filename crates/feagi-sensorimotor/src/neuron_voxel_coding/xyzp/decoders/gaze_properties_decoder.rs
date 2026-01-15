@@ -275,19 +275,19 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use feagi_structures::genomic::cortical_area::cortical_area_type::CoreCorticalType;
     use feagi_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
-    use feagi_structures::genomic::cortical_area::CorticalID;
 
-    #[test]
     /// Ensures partial gaze packets do not panic.
+    #[test]
     fn gaze_decoder_does_not_panic_on_partial_gaze_packet() {
         // This regression test ensures that when only ONE of the gaze cortical IDs
         // is present in the motor packet (common during activation/warm-up),
         // the decoder returns Ok(()) instead of panicking via unwrap().
 
         // Minimal decoder: 1 channel, 1-depth each, linear interpolation.
-        let eccentricity_id = CorticalID::try_from_u64(1).unwrap();
-        let modularity_id = CorticalID::try_from_u64(2).unwrap();
+        let eccentricity_id = CoreCorticalType::Power.to_cortical_id();
+        let modularity_id = CoreCorticalType::Death.to_cortical_id();
 
         let mut decoder = GazePropertiesNeuronVoxelXYZPDecoder::new_box(
             eccentricity_id,
