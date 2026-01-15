@@ -279,14 +279,15 @@ mod tests {
     use feagi_structures::genomic::cortical_area::CorticalID;
 
     #[test]
+    /// Ensures partial gaze packets do not panic.
     fn gaze_decoder_does_not_panic_on_partial_gaze_packet() {
         // This regression test ensures that when only ONE of the gaze cortical IDs
         // is present in the motor packet (common during activation/warm-up),
         // the decoder returns Ok(()) instead of panicking via unwrap().
 
         // Minimal decoder: 1 channel, 1-depth each, linear interpolation.
-        let eccentricity_id = CorticalID::new_unique_id();
-        let modularity_id = CorticalID::new_unique_id();
+        let eccentricity_id = CorticalID::try_from_u64(1).unwrap();
+        let modularity_id = CorticalID::try_from_u64(2).unwrap();
 
         let mut decoder = GazePropertiesNeuronVoxelXYZPDecoder::new_box(
             eccentricity_id,
@@ -300,9 +301,7 @@ mod tests {
 
         // Motor packet contains ONLY eccentricity array, modularity missing.
         let mut voxels = CorticalMappedXYZPNeuronVoxels::new();
-        voxels
-            .insert(eccentricity_id, NeuronVoxelXYZPArrays::new())
-            .ok();
+        let _ = voxels.insert(eccentricity_id, NeuronVoxelXYZPArrays::new());
 
         let mut pipelines: Vec<MotorPipelineStageRunner> = Vec::new();
         let mut changed: Vec<bool> = Vec::new();
