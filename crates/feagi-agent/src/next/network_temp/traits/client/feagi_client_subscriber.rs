@@ -1,6 +1,6 @@
-use crate::next::network_temp::traits::server::feagi_server::FeagiServer;
+use crate::next::network_temp::traits::client::feagi_client::FeagiClient;
 
-pub trait FeagiServerPuller: FeagiServer {
+pub trait FeagiClientSubscriber: FeagiClient {
     fn set_callback_for_data_received<F>(&self, on_data_received: F) where
         F: Fn(&[u8]) -> &[u8] + Send + Sync + 'static;
 }
