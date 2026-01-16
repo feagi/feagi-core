@@ -89,11 +89,10 @@ pub async fn get_health_check(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get system health: {}", e)))?;
 
-    // Get runtime status if available
-    let burst_engine_active = state
-        .runtime_service
-        .get_status()
-        .await
+    // Get runtime status if available (source of truth for current burst frequency).
+    let runtime_status = state.runtime_service.get_status().await.ok();
+    let burst_engine_active = runtime_status
+        .as_ref()
         .map(|status| status.is_running)
         .unwrap_or(false);
 
@@ -133,7 +132,19 @@ pub async fn get_health_check(
     // Get genome info for simulation_timestep, genome_num, and genome_timestamp
     let genome_info = state.genome_service.get_genome_info().await.ok();
 
-    let simulation_timestep = genome_info.as_ref().map(|info| info.simulation_timestep);
+    // Prefer runtime frequency-derived timestep to reflect the active simulation rate.
+    let runtime_timestep = runtime_status.as_ref().map(|status| {
+        if status.frequency_hz > 0.0 {
+            1.0 / status.frequency_hz
+        } else {
+            0.0
+        }
+    });
+    let simulation_timestep = runtime_timestep.or_else(|| {
+        genome_info
+            .as_ref()
+            .map(|info| info.simulation_timestep)
+    });
     let genome_num = genome_info.as_ref().and_then(|info| info.genome_num);
     let genome_timestamp = genome_info.as_ref().and_then(|info| info.genome_timestamp);
 
