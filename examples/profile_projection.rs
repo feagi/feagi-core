@@ -89,8 +89,8 @@ fn run_profiling(
     println!("Initializing NPU and loading genome...");
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
-    let rust_npu = RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10)
-        .expect("Failed to create NPU");
+    let rust_npu =
+        RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).expect("Failed to create NPU");
     let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "ProfileNPU"));
     let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
         npu.clone(),

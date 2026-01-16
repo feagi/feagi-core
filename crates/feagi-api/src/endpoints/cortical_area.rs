@@ -1080,8 +1080,8 @@ pub async fn post_clone(
     Json(request): Json<CloneCorticalAreaRequest>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     use base64::{engine::general_purpose, Engine as _};
-    use feagi_structures::genomic::cortical_area::CorticalID;
     use feagi_services::types::CreateCorticalAreaParams;
+    use feagi_structures::genomic::cortical_area::CorticalID;
     use serde_json::Value;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1090,8 +1090,8 @@ pub async fn post_clone(
 
     // Resolve + validate source cortical ID.
     let source_id = request.source_area_id.clone();
-    let source_typed =
-        CorticalID::try_from_base_64(&source_id).map_err(|e| ApiError::invalid_input(e.to_string()))?;
+    let source_typed = CorticalID::try_from_base_64(&source_id)
+        .map_err(|e| ApiError::invalid_input(e.to_string()))?;
     let src_first_byte = source_typed.as_bytes()[0];
     if src_first_byte != b'c' && src_first_byte != b'm' {
         return Err(ApiError::invalid_input(format!(
@@ -1226,7 +1226,7 @@ pub async fn post_clone(
         .create_cortical_areas(vec![params])
         .await
         .map_err(|e| ApiError::internal(format!("Failed to clone cortical area: {}", e)))?;
-    
+
     // DIAGNOSTIC: Log what coordinates were returned after creation
     if let Some(created_area) = created_areas.first() {
         tracing::info!(target: "feagi-api",
@@ -1303,7 +1303,11 @@ pub async fn post_clone(
             };
 
             connectome_service
-                .update_cortical_mapping(area.cortical_id.clone(), new_area_id.clone(), rules_array.clone())
+                .update_cortical_mapping(
+                    area.cortical_id.clone(),
+                    new_area_id.clone(),
+                    rules_array.clone(),
+                )
                 .await
                 .map_err(|e| {
                     ApiError::internal(format!(

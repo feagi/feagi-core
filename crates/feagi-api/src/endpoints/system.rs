@@ -8,9 +8,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::amalgamation;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, State};
-use crate::amalgamation;
 
 // ============================================================================
 // REQUEST/RESPONSE MODELS (matching Python schemas exactly)
@@ -212,19 +212,14 @@ pub async fn get_health_check(
     // - amalgamation_id
     // - genome_title
     // - circuit_size
-    let amalgamation_pending = state
-        .amalgamation_state
-        .read()
-        .pending
-        .as_ref()
-        .map(|p| {
-            let v = amalgamation::pending_summary_to_health_json(&p.summary);
-            v.as_object()
-                .cloned()
-                .unwrap_or_default()
-                .into_iter()
-                .collect::<HashMap<String, serde_json::Value>>()
-        });
+    let amalgamation_pending = state.amalgamation_state.read().pending.as_ref().map(|p| {
+        let v = amalgamation::pending_summary_to_health_json(&p.summary);
+        v.as_object()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .collect::<HashMap<String, serde_json::Value>>()
+    });
 
     // Get root region ID from ConnectomeManager (only available when services feature is enabled)
     #[cfg(feature = "services")]

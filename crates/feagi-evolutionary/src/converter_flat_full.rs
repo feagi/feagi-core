@@ -337,10 +337,7 @@ fn process_coordinate_property(
     // For 2D coordinates, we apply deterministic jitter; otherwise, keep default 0.
     if flat_value.is_null() {
         // Try to extract cortical_id from "_____10c-<cortical_id>-..."
-        let cortical_id = flat_key
-            .split('-')
-            .nth(1)
-            .unwrap_or("<unknown>");
+        let cortical_id = flat_key.split('-').nth(1).unwrap_or("<unknown>");
 
         if prop_name == "2d_coordinate" {
             // Stable FNV-1a 32-bit hash (no RandomState).
@@ -662,6 +659,9 @@ mod tests {
         assert_eq!(coords_2d.len(), 2);
         assert!(coords_2d[0].as_i64().is_some());
         assert!(coords_2d[1].as_i64().is_some());
-        assert_eq!(area.get("relative_coordinate").unwrap(), &json!([10, 0, -20]));
+        assert_eq!(
+            area.get("relative_coordinate").unwrap(),
+            &json!([10, 0, -20])
+        );
     }
 }

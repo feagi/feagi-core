@@ -1555,7 +1555,7 @@ impl<
 
         // Burst timing telemetry - warn only for truly slow bursts (>200ms) that indicate real problems
         let is_slow = total_duration.as_millis() > 200;
-        
+
         if is_slow {
             let neuron_count = neuron_storage.count();
             warn!(
@@ -3525,7 +3525,9 @@ fn phase1_injection_with_synapses<
 
     // Warn when injection exceeds the configured simulation timestep.
     // This accounts for all use-cases (real-time, batch, etc.) because timestep is runtime-configured.
-    if sensory_count > 0 && sim_timestep > std::time::Duration::from_nanos(0) && sensory_duration > sim_timestep
+    if sensory_count > 0
+        && sim_timestep > std::time::Duration::from_nanos(0)
+        && sensory_duration > sim_timestep
     {
         warn!(
             "[PHASE1-SENSORY] Injection exceeded timestep: {:.2}ms > {:.2}ms ({} neurons)",
@@ -3598,7 +3600,9 @@ fn phase1_injection_with_synapses<
     let power_duration = power_start.elapsed();
 
     // Warn when injection exceeds the configured simulation timestep.
-    if power_count > 0 && sim_timestep > std::time::Duration::from_nanos(0) && power_duration > sim_timestep
+    if power_count > 0
+        && sim_timestep > std::time::Duration::from_nanos(0)
+        && power_duration > sim_timestep
     {
         warn!(
             "[PHASE1-POWER] Injection exceeded timestep: {:.2}ms > {:.2}ms ({} neurons, total: {})",
@@ -3749,34 +3753,32 @@ fn phase1_injection_with_synapses<
         let synaptic_duration = synaptic_start.elapsed();
 
         // Synaptic propagation telemetry - only checked when debug logging is enabled (zero runtime overhead otherwise)
-        if tracing::enabled!(tracing::Level::DEBUG) {
-            if synaptic_duration.as_millis() > 10 {
-                debug!(
-                    "[PHASE1-SYNAPTIC] Slow synaptic propagation: total={:.2}ms | mp_build={:.2}ms | propagate={:.2}ms | inject={:.2}ms | fired={} | synapses={}",
-                    synaptic_duration.as_secs_f64() * 1000.0,
-                    mp_build_duration.as_secs_f64() * 1000.0,
-                    propagate_duration.as_secs_f64() * 1000.0,
-                    inject_duration.as_secs_f64() * 1000.0,
-                    fired_ids.len(),
-                    synaptic_count
-                );
+        if tracing::enabled!(tracing::Level::DEBUG) && synaptic_duration.as_millis() > 10 {
+            debug!(
+                "[PHASE1-SYNAPTIC] Slow synaptic propagation: total={:.2}ms | mp_build={:.2}ms | propagate={:.2}ms | inject={:.2}ms | fired={} | synapses={}",
+                synaptic_duration.as_secs_f64() * 1000.0,
+                mp_build_duration.as_secs_f64() * 1000.0,
+                propagate_duration.as_secs_f64() * 1000.0,
+                inject_duration.as_secs_f64() * 1000.0,
+                fired_ids.len(),
+                synaptic_count
+            );
 
-                // Fine-grained breakdown from the propagation engine (populated per-call).
-                if let Some(profile) = propagation_engine.last_profile() {
-                    debug!(
-                        "[PHASE1-SYNAPTIC-PROFILE] fired={} synapse_indices={} unique_sources={} contributions={} | gather={:.2}ms metadata={:.2}ms compute={:.2}ms group={:.2}ms total={:.2}ms | rayon_threads={}",
-                        profile.fired_neurons,
-                        profile.synapse_indices,
-                        profile.unique_sources,
-                        profile.contributions,
-                        profile.gather_ms,
-                        profile.metadata_ms,
-                        profile.compute_ms,
-                        profile.group_ms,
-                        profile.total_ms,
-                        profile.rayon_threads
-                    );
-                }
+            // Fine-grained breakdown from the propagation engine (populated per-call).
+            if let Some(profile) = propagation_engine.last_profile() {
+                debug!(
+                    "[PHASE1-SYNAPTIC-PROFILE] fired={} synapse_indices={} unique_sources={} contributions={} | gather={:.2}ms metadata={:.2}ms compute={:.2}ms group={:.2}ms total={:.2}ms | rayon_threads={}",
+                    profile.fired_neurons,
+                    profile.synapse_indices,
+                    profile.unique_sources,
+                    profile.contributions,
+                    profile.gather_ms,
+                    profile.metadata_ms,
+                    profile.compute_ms,
+                    profile.group_ms,
+                    profile.total_ms,
+                    profile.rayon_threads
+                );
             }
         }
     }

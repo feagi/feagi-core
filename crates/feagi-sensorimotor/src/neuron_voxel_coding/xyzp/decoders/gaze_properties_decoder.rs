@@ -109,8 +109,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
             return Ok(());
         }
 
-        let has_any_data = eccentricity_neuron_array
-            .is_some_and(|a| !a.is_empty())
+        let has_any_data = eccentricity_neuron_array.is_some_and(|a| !a.is_empty())
             || modularity_neuron_array.is_some_and(|a| !a.is_empty());
         if !has_any_data {
             return Ok(());
@@ -275,8 +274,10 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_structures::genomic::cortical_area::cortical_area_type::CoreCorticalType;
-    use feagi_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
+    use feagi_structures::genomic::cortical_area::CoreCorticalType;
+    use feagi_structures::neuron_voxels::xyzp::{
+        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+    };
 
     /// Ensures partial gaze packets do not panic.
     #[test]

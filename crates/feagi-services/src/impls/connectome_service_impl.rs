@@ -719,7 +719,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .get_brain_region(&params.region_id)
                 .cloned()
             {
-                genome.brain_regions.insert(params.region_id.clone(), created);
+                genome
+                    .brain_regions
+                    .insert(params.region_id.clone(), created);
             }
         }
 
@@ -1214,8 +1216,9 @@ mod tests {
         use std::sync::Arc;
 
         // Isolated connectome manager instance for this test.
-        let connectome =
-            Arc::new(RwLock::new(feagi_brain_development::ConnectomeManager::new_for_testing()));
+        let connectome = Arc::new(RwLock::new(
+            feagi_brain_development::ConnectomeManager::new_for_testing(),
+        ));
 
         // Minimal RuntimeGenome (source of truth) for persistence.
         let genome = feagi_evolutionary::RuntimeGenome {
@@ -1317,8 +1320,9 @@ mod tests {
         use std::sync::Arc;
 
         // Isolated connectome manager instance for this test.
-        let connectome =
-            Arc::new(RwLock::new(feagi_brain_development::ConnectomeManager::new_for_testing()));
+        let connectome = Arc::new(RwLock::new(
+            feagi_brain_development::ConnectomeManager::new_for_testing(),
+        ));
 
         // Use a known-valid cortical ID/type pair to avoid ID encoding intricacies in this unit test.
         let cortical_id = CoreCorticalType::Power.to_cortical_id();

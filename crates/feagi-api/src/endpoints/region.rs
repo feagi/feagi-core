@@ -212,10 +212,7 @@ pub async fn put_relocate_members(
 
     for (region_id, payload) in request {
         let payload_obj = payload.as_object().ok_or_else(|| {
-            ApiError::invalid_input(format!(
-                "Region '{}' entry must be an object",
-                region_id
-            ))
+            ApiError::invalid_input(format!("Region '{}' entry must be an object", region_id))
         })?;
 
         if payload_obj.contains_key("parent_region_id") {

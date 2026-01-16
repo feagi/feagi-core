@@ -96,11 +96,10 @@ impl WebSocketStreams {
         // Use the dedicated tokio runtime owned by WebSocketStreams.
         // This avoids relying on `Handle::try_current()`, which can fail when this is called
         // from a non-async thread, resulting in "advertised but not listening".
-        let runtime = self
-            .runtime
-            .lock()
-            .clone()
-            .ok_or_else(|| IOError::Transport("WebSocket runtime not initialized".to_string()))?;
+        let runtime =
+            self.runtime.lock().clone().ok_or_else(|| {
+                IOError::Transport("WebSocket runtime not initialized".to_string())
+            })?;
 
         // Clone config for async closures
         let viz_host = self.config.websocket.host.clone();
@@ -208,11 +207,10 @@ impl WebSocketStreams {
             return Ok(());
         }
 
-        let runtime = self
-            .runtime
-            .lock()
-            .clone()
-            .ok_or_else(|| IOError::Transport("WebSocket runtime not initialized".to_string()))?;
+        let runtime =
+            self.runtime.lock().clone().ok_or_else(|| {
+                IOError::Transport("WebSocket runtime not initialized".to_string())
+            })?;
 
         let viz_host = self.config.websocket.host.clone();
         let viz_port = self.config.websocket.visualization_port;

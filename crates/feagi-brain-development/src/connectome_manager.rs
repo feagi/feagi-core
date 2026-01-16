@@ -925,7 +925,8 @@ impl ConnectomeManager {
         morphology_id: String,
         morphology: feagi_evolutionary::Morphology,
     ) {
-        self.morphology_registry.add_morphology(morphology_id, morphology);
+        self.morphology_registry
+            .add_morphology(morphology_id, morphology);
     }
 
     /// Remove a morphology definition from the in-memory registry.

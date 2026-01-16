@@ -769,7 +769,10 @@ mod tests {
         // Migration must map this deterministically to the core Power cortical ID.
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let id = string_to_cortical_id("___pwr").unwrap();
-        assert_eq!(id.as_base_64(), CoreCorticalType::Power.to_cortical_id().as_base_64());
+        assert_eq!(
+            id.as_base_64(),
+            CoreCorticalType::Power.to_cortical_id().as_base_64()
+        );
     }
 
     #[test]

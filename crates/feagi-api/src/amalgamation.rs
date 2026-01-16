@@ -69,7 +69,7 @@ pub fn new_shared_state() -> SharedAmalgamationState {
 /// Bounding box is computed over all cortical areas:
 /// - min corner = min(position)
 /// - max corner = max(position + dimensions)
-/// size = max - min (per axis)
+/// - size = max - min (per axis)
 ///
 /// If there are no cortical areas, size is [0,0,0].
 pub fn compute_circuit_size_from_runtime_genome(
@@ -136,10 +136,8 @@ mod tests {
 
     #[test]
     fn compute_circuit_size_empty_genome_is_zero() {
-        let genome = feagi_evolutionary::templates::create_minimal_genome(
-            "g".to_string(),
-            "t".to_string(),
-        );
+        let genome =
+            feagi_evolutionary::templates::create_minimal_genome("g".to_string(), "t".to_string());
         assert_eq!(compute_circuit_size_from_runtime_genome(&genome), [0, 0, 0]);
     }
 
@@ -178,4 +176,3 @@ mod tests {
         assert_eq!(compute_circuit_size_from_runtime_genome(&genome), [2, 3, 4]);
     }
 }
-

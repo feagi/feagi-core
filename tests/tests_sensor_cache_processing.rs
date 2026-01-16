@@ -38,10 +38,7 @@ fn test_chained_encoders() -> Result<(), Box<dyn std::error::Error>> {
 
     let container = sensor_cache.get_feagi_byte_container();
     assert!(container.is_valid());
-    assert_eq!(
-        container.try_get_number_contained_structures().unwrap(),
-        1
-    );
+    assert_eq!(container.try_get_number_contained_structures().unwrap(), 1);
     assert_eq!(
         container.get_contained_struct_types(),
         vec![FeagiByteStructureType::NeuronCategoricalXYZP]

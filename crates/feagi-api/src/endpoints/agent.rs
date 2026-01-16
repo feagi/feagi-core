@@ -201,8 +201,9 @@ async fn auto_create_cortical_areas_from_device_registrations(
                                         "cortical_name".to_string(),
                                         serde_json::json!(desired_name),
                                     );
-                                    if let Err(e) =
-                                        genome_service.update_cortical_area(&cortical_id_b64, changes).await
+                                    if let Err(e) = genome_service
+                                        .update_cortical_area(&cortical_id_b64, changes)
+                                        .await
                                     {
                                         warn!(
                                             "⚠️ [API] Failed to auto-rename existing gaze cortical area '{}': {}",
@@ -247,7 +248,12 @@ async fn auto_create_cortical_areas_from_device_registrations(
                         1 => "Modulation",
                         _ => "Subunit",
                     };
-                    format!("{} ({}) Unit {}", motor_unit.get_friendly_name(), subunit_name, group_u8)
+                    format!(
+                        "{} ({}) Unit {}",
+                        motor_unit.get_friendly_name(),
+                        subunit_name,
+                        group_u8
+                    )
                 } else {
                     format!("{} Unit {}", motor_unit.get_snake_case_name(), group_u8)
                 };

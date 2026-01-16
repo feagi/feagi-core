@@ -21,9 +21,9 @@
 
 use crate::parameter_update_queue::ParameterUpdateQueue;
 use crate::sensory::AgentManager;
+use crate::update_sim_timestep_from_hz;
 #[cfg(feature = "std")]
 use crate::{tracing_mutex::TracingMutex, DynamicNPU};
-use crate::update_sim_timestep_from_hz;
 use feagi_npu_neural::types::NeuronId;
 use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -1729,23 +1729,23 @@ fn burst_loop(
                         );
                     }
 
-                        // Minimal, high-signal debugging for BV "no power" issues:
-                        // Log whether the outgoing visualization snapshot contains the Power cortical area (core idx=1).
-                        // This pinpoints whether the failure is upstream (sampling/packaging) or downstream (BV decode/apply).
-                        if burst_num.is_multiple_of(30) {
-                            use feagi_structures::genomic::cortical_area::CoreCorticalType;
-                            static POWER_ID_B64: std::sync::LazyLock<String> =
-                                std::sync::LazyLock::new(|| {
-                                    CoreCorticalType::Power.to_cortical_id().as_base_64()
-                                });
+                    // Minimal, high-signal debugging for BV "no power" issues:
+                    // Log whether the outgoing visualization snapshot contains the Power cortical area (core idx=1).
+                    // This pinpoints whether the failure is upstream (sampling/packaging) or downstream (BV decode/apply).
+                    if burst_num.is_multiple_of(30) {
+                        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+                        static POWER_ID_B64: std::sync::LazyLock<String> =
+                            std::sync::LazyLock::new(|| {
+                                CoreCorticalType::Power.to_cortical_id().as_base_64()
+                            });
 
-                            let power_neurons = raw_snapshot
-                                .values()
-                                .find(|d| d.cortical_id == *POWER_ID_B64)
-                                .map(|d| d.neuron_ids.len())
-                                .unwrap_or(0);
+                        let power_neurons = raw_snapshot
+                            .values()
+                            .find(|d| d.cortical_id == *POWER_ID_B64)
+                            .map(|d| d.neuron_ids.len())
+                            .unwrap_or(0);
 
-                            info!(
+                        info!(
                                 "[VIZ-DEBUG] burst={} transports: shm={} publisher={} should_publish_viz={} areas={} total_neurons={} power_neurons={}",
                                 burst_num,
                                 has_shm_writer,
@@ -1755,7 +1755,7 @@ fn burst_loop(
                                 total_neurons,
                                 power_neurons
                             );
-                        }
+                    }
 
                     // IMPORTANT: Single visualization pipeline per burst.
                     // If SHM is attached, we write to SHM and skip publisher handoff to avoid doing

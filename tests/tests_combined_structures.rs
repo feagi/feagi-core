@@ -62,7 +62,10 @@ fn test_combined_neuron_json_multistruct_serialize_deserialize() {
     let ordered_types = combined_byte_structure.get_contained_struct_types();
     assert_eq!(ordered_types.len(), 2);
     assert_eq!(ordered_types[0], FeagiByteStructureType::JSON);
-    assert_eq!(ordered_types[1], FeagiByteStructureType::NeuronCategoricalXYZP);
+    assert_eq!(
+        ordered_types[1],
+        FeagiByteStructureType::NeuronCategoricalXYZP
+    );
 
     // Serialize to bytes (simulate network transmission)
     let serialized_bytes = combined_byte_structure.get_byte_ref().to_vec();
@@ -82,10 +85,12 @@ fn test_combined_neuron_json_multistruct_serialize_deserialize() {
     );
 
     // Extract individual structures from the multi-struct
-    let received_json_structure_bytes =
-        received_combined_structure.try_create_new_struct_from_index(0).unwrap();
-    let received_neuron_structure_bytes =
-        received_combined_structure.try_create_new_struct_from_index(1).unwrap();
+    let received_json_structure_bytes = received_combined_structure
+        .try_create_new_struct_from_index(0)
+        .unwrap();
+    let received_neuron_structure_bytes = received_combined_structure
+        .try_create_new_struct_from_index(1)
+        .unwrap();
 
     // Convert back to original data types
     let recovered_json_structure = FeagiJSON::try_from(received_json_structure_bytes).unwrap();
@@ -150,7 +155,9 @@ fn test_multistruct_with_multiple_json_and_neuron_structures() {
         .unwrap();
 
     assert_eq!(
-        combined_container.try_get_number_contained_structures().unwrap(),
+        combined_container
+            .try_get_number_contained_structures()
+            .unwrap(),
         4
     );
     let contained_types = combined_container.get_contained_struct_types();
@@ -170,11 +177,18 @@ fn test_multistruct_with_multiple_json_and_neuron_structures() {
         .try_write_data_by_ownership_to_container_and_verify(bytes)
         .unwrap();
 
-    let json_boxed = received_container.try_create_new_struct_from_index(0).unwrap();
+    let json_boxed = received_container
+        .try_create_new_struct_from_index(0)
+        .unwrap();
     let recovered_json = FeagiJSON::try_from(json_boxed).unwrap();
-    assert_eq!(recovered_json.borrow_json_value(), json1.borrow_json_value());
+    assert_eq!(
+        recovered_json.borrow_json_value(),
+        json1.borrow_json_value()
+    );
 
-    let neuron_boxed = received_container.try_create_new_struct_from_index(2).unwrap();
+    let neuron_boxed = received_container
+        .try_create_new_struct_from_index(2)
+        .unwrap();
     let recovered_neurons = CorticalMappedXYZPNeuronVoxels::try_from(neuron_boxed).unwrap();
     assert!(recovered_neurons.contains_cortical_id(&cortical_id_1));
 }

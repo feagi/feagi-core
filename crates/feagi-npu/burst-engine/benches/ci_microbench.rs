@@ -13,13 +13,13 @@
 
 use std::time::Duration;
 
+use ahash::AHashMap;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use feagi_npu_burst_engine::synaptic_propagation::SynapticPropagationEngine;
 use feagi_npu_neural::synapse::SynapseType;
 use feagi_npu_neural::types::{FireCandidateList, NeuronId};
 use feagi_npu_runtime::std_impl::{NeuronArray, SynapseArray};
-use feagi_npu_burst_engine::synaptic_propagation::SynapticPropagationEngine;
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
-use ahash::AHashMap;
 
 fn create_test_genome(
     neuron_count: usize,
@@ -243,22 +243,22 @@ fn bench_synaptic_propagation_engine(c: &mut Criterion) {
     group.sample_size(20);
     group.warm_up_time(Duration::from_millis(500));
     group.measurement_time(Duration::from_secs(2));
-    
+
     // Test realistic scenarios matching production logs
     let test_cases = vec![
-        (1_000, 100, 0.1),    // 1K neurons, 100K synapses, 10% firing
-        (10_000, 50, 0.05),   // 10K neurons, 500K synapses, 5% firing
-        (20_000, 80, 0.1),    // 20K neurons, 1.6M synapses, 10% firing (matches your worst case!)
+        (1_000, 100, 0.1),  // 1K neurons, 100K synapses, 10% firing
+        (10_000, 50, 0.05), // 10K neurons, 500K synapses, 5% firing
+        (20_000, 80, 0.1),  // 20K neurons, 1.6M synapses, 10% firing (matches your worst case!)
     ];
-    
+
     for (neuron_count, synapses_per_neuron, firing_rate) in test_cases {
         let (_, synapse_array) = create_test_genome(neuron_count, synapses_per_neuron);
         let synapse_count = neuron_count * synapses_per_neuron;
-        
+
         // Create SynapticPropagationEngine
         let mut engine = SynapticPropagationEngine::new();
         engine.build_synapse_index(&synapse_array);
-        
+
         // Set neuron mapping (all to same cortical area for simplicity)
         let mut neuron_mapping = AHashMap::new();
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
@@ -266,20 +266,25 @@ fn bench_synaptic_propagation_engine(c: &mut Criterion) {
             neuron_mapping.insert(NeuronId(i as u32), cortical_id);
         }
         engine.set_neuron_mapping(neuron_mapping);
-        
+
         // Generate fired neurons
         let fired_neurons = generate_fired_neurons(neuron_count, firing_rate);
         let fired_ids: Vec<NeuronId> = fired_neurons.iter().map(|&id| NeuronId(id)).collect();
-        
+
         // Empty membrane potentials map (not using mp_driven_psp)
         let neuron_mps = AHashMap::new();
-        
+
         group.throughput(Throughput::Elements(synapse_count as u64));
-        
+
         group.bench_with_input(
             BenchmarkId::new(
                 "propagate",
-                format!("{}n_{}syn_{}fire", neuron_count, synapse_count, fired_neurons.len())
+                format!(
+                    "{}n_{}syn_{}fire",
+                    neuron_count,
+                    synapse_count,
+                    fired_neurons.len()
+                ),
             ),
             &synapse_count,
             |b, _| {
@@ -294,7 +299,7 @@ fn bench_synaptic_propagation_engine(c: &mut Criterion) {
             },
         );
     }
-    
+
     group.finish();
 }
 

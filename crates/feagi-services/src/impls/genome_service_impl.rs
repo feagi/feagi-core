@@ -621,10 +621,8 @@ impl GenomeService for GenomeServiceImpl {
         info!(target: "feagi-services", "Updating cortical area: {} with {} changes", cortical_id, changes.len());
 
         // Convert String to CorticalID (supports legacy core aliases)
-        let cortical_id_typed =
-            feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
-                ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e))
-            })?;
+        let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
         // Verify cortical area exists
         {
@@ -1731,31 +1729,29 @@ impl GenomeServiceImpl {
                                 info!(target: "feagi-services", "[GENOME-UPDATE] Updated position (object format): ({}, {}, {})", x, y, z);
                             }
                         }
-                    "coordinate_2d" | "coordinates_2d" => {
-                        if let Some(arr) = value.as_array() {
-                            if arr.len() >= 2 {
-                                let x = arr[0].as_i64().unwrap_or(0) as i32;
-                                let y = arr[1].as_i64().unwrap_or(0) as i32;
-                                area.properties.insert(
-                                    "coordinate_2d".to_string(),
-                                    serde_json::json!([x, y]),
-                                );
-                                info!(target: "feagi-services", "[GENOME-UPDATE] Updated coordinate_2d: ({}, {})", x, y);
+                        "coordinate_2d" | "coordinates_2d" => {
+                            if let Some(arr) = value.as_array() {
+                                if arr.len() >= 2 {
+                                    let x = arr[0].as_i64().unwrap_or(0) as i32;
+                                    let y = arr[1].as_i64().unwrap_or(0) as i32;
+                                    area.properties.insert(
+                                        "coordinate_2d".to_string(),
+                                        serde_json::json!([x, y]),
+                                    );
+                                    info!(target: "feagi-services", "[GENOME-UPDATE] Updated coordinate_2d: ({}, {})", x, y);
+                                } else {
+                                    warn!(target: "feagi-services", "[GENOME-UPDATE] coordinate_2d array must have 2 elements, got {}", arr.len());
+                                }
+                            } else if let Some(obj) = value.as_object() {
+                                let x = obj.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                                let y = obj.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                                area.properties
+                                    .insert("coordinate_2d".to_string(), serde_json::json!([x, y]));
+                                info!(target: "feagi-services", "[GENOME-UPDATE] Updated coordinate_2d (object format): ({}, {})", x, y);
                             } else {
-                                warn!(target: "feagi-services", "[GENOME-UPDATE] coordinate_2d array must have 2 elements, got {}", arr.len());
+                                warn!(target: "feagi-services", "[GENOME-UPDATE] coordinate_2d must be array or object, got: {:?}", value);
                             }
-                        } else if let Some(obj) = value.as_object() {
-                            let x = obj.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                            let y = obj.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                            area.properties.insert(
-                                "coordinate_2d".to_string(),
-                                serde_json::json!([x, y]),
-                            );
-                            info!(target: "feagi-services", "[GENOME-UPDATE] Updated coordinate_2d (object format): ({}, {})", x, y);
-                        } else {
-                            warn!(target: "feagi-services", "[GENOME-UPDATE] coordinate_2d must be array or object, got: {:?}", value);
                         }
-                    }
                         "visualization_voxel_granularity" => {
                             // Only store if != 1x1x1 (default), delete if set to 1x1x1
                             info!(target: "feagi-services", "[GENOME-UPDATE] Received visualization_voxel_granularity update: {:?}", value);
@@ -1855,10 +1851,8 @@ impl GenomeServiceImpl {
                             if arr.len() >= 2 {
                                 let x = arr[0].as_i64().unwrap_or(0) as i32;
                                 let y = arr[1].as_i64().unwrap_or(0) as i32;
-                                area.properties.insert(
-                                    "coordinate_2d".to_string(),
-                                    serde_json::json!([x, y]),
-                                );
+                                area.properties
+                                    .insert("coordinate_2d".to_string(), serde_json::json!([x, y]));
                                 info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated coordinate_2d: ({}, {})", x, y);
                             } else {
                                 warn!(target: "feagi-services", "[CONNECTOME-UPDATE] coordinate_2d array must have 2 elements, got {}", arr.len());
@@ -1866,10 +1860,8 @@ impl GenomeServiceImpl {
                         } else if let Some(obj) = value.as_object() {
                             let x = obj.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                             let y = obj.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                            area.properties.insert(
-                                "coordinate_2d".to_string(),
-                                serde_json::json!([x, y]),
-                            );
+                            area.properties
+                                .insert("coordinate_2d".to_string(), serde_json::json!([x, y]));
                             info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated coordinate_2d (object format): ({}, {})", x, y);
                         } else {
                             warn!(target: "feagi-services", "[CONNECTOME-UPDATE] coordinate_2d must be array or object, got: {:?}", value);
@@ -2949,7 +2941,7 @@ impl GenomeServiceImpl {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
-        
+
         // DIAGNOSTIC: Log the position, dimensions, and visibility of the area being queried
         tracing::info!(target: "feagi-services",
             "get_cortical_area_info: querying {} - position {:?}, dimensions {:?}, visible: {}",

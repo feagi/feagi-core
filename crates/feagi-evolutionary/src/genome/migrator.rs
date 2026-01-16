@@ -83,7 +83,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
     let is_flat = blueprint.keys().any(|k| k.starts_with("_____10c-"));
 
     // Collect unique cortical IDs found in the genome blueprint.
-    use std::collections::{HashSet, BTreeSet};
+    use std::collections::{BTreeSet, HashSet};
     let mut seen_ids: HashSet<String> = HashSet::new();
     let mut cortical_ids: BTreeSet<String> = BTreeSet::new(); // deterministic ordering
 
@@ -119,9 +119,9 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
         // We only apply this when we can deterministically infer the intended SegmentedVision tile
         // from the cortical area's name (vision_LL/LM/LR/ML/C/MR/TL/TM/TR). This avoids guessing.
         {
-            use feagi_structures::genomic::cortical_area::CorticalID;
             use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
             use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
+            use feagi_structures::genomic::cortical_area::CorticalID;
             use feagi_structures::genomic::SensoryCorticalUnit;
 
             let name_opt: Option<&str> = if is_flat {
@@ -166,7 +166,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                             if !used_base64.contains(&new_id) {
                                 used_base64.insert(new_id.clone());
                                 result.id_mapping.insert(id.clone(), new_id.clone());
-                            result.cortical_ids_migrated += 1;
+                                result.cortical_ids_migrated += 1;
                                 result.warnings.push(format!(
                                     "Legacy base64 vision cortical ID '{}' (subtype=mis, name='{}') migrated to SegmentedVision(tile_index={}, group=0) → '{}'",
                                     id, name, idx, new_id
@@ -326,7 +326,8 @@ fn apply_legacy_io_shorthand_migration(
         loop {
             if *next_group > u8::MAX as u16 {
                 return Err(EvoError::InvalidGenome(
-                    "Unable to allocate unique MiscData group ID for legacy IO shorthands".to_string(),
+                    "Unable to allocate unique MiscData group ID for legacy IO shorthands"
+                        .to_string(),
                 ));
             }
             let group_u8 = *next_group as u8;
@@ -337,13 +338,13 @@ fn apply_legacy_io_shorthand_migration(
                     frame_handling,
                     group_index,
                 )[0]
-                    .as_base_64()
+                .as_base_64()
             } else {
                 MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
                     frame_handling,
                     group_index,
                 )[0]
-                    .as_base_64()
+                .as_base_64()
             };
 
             *next_group += 1;
@@ -923,16 +924,14 @@ mod tests {
         use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
         use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
         use feagi_structures::genomic::SensoryCorticalUnit;
-        let expected_center = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-            FrameChangeHandling::Absolute,
-            CorticalUnitIndex::from(0u8),
-        )[4]
+        let expected_center =
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                FrameChangeHandling::Absolute,
+                CorticalUnitIndex::from(0u8),
+            )[4]
             .as_base_64();
 
-        assert_eq!(
-            result.id_mapping.get("iv00_C").unwrap(),
-            &expected_center
-        );
+        assert_eq!(result.id_mapping.get("iv00_C").unwrap(), &expected_center);
 
         // Unknown shorthands → distinct MiscData group IDs (deterministic allocation).
         let i_mapped = result.id_mapping.get("i___id").expect("i___id mapped");
@@ -941,7 +940,10 @@ mod tests {
 
         // Ensure we generated an exceptions report.
         assert!(
-            result.warnings.iter().any(|w| w.contains("Legacy") && w.contains("mapped")),
+            result
+                .warnings
+                .iter()
+                .any(|w| w.contains("Legacy") && w.contains("mapped")),
             "Expected migration warnings report for legacy IO shorthands"
         );
     }
@@ -965,10 +967,11 @@ mod tests {
         use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
         use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
         use feagi_structures::genomic::SensoryCorticalUnit;
-        let expected = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-            FrameChangeHandling::Absolute,
-            CorticalUnitIndex::from(0u8),
-        )[6]
+        let expected =
+            SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                FrameChangeHandling::Absolute,
+                CorticalUnitIndex::from(0u8),
+            )[6]
             .as_base_64();
 
         assert_eq!(result.id_mapping.get("iv00TL").unwrap(), &expected);

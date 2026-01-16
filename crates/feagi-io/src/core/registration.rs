@@ -40,20 +40,15 @@ pub type DynamicGatingCallback = Arc<parking_lot::Mutex<Option<Box<dyn Fn(String
 ///
 /// This is an explicit, configuration-driven switch to avoid clients needing to hardcode transport
 /// decisions. The configuration is authoritative; client requests are treated as preferences.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum VisualizationShmPolicy {
     /// Honor the agent request (chosen_transport / shm_path presence).
+    #[default]
     Auto,
     /// Never allocate/advertise visualization SHM paths.
     ForceWebSocket,
     /// Always allocate/advertise visualization SHM paths (when visualization capability is present).
     ForceShm,
-}
-
-impl Default for VisualizationShmPolicy {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 /// Registration Handler
