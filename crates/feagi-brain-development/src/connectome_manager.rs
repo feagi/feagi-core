@@ -50,6 +50,8 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_state_manager::StateManager;
 
 const DATA_HASH_SEED: u64 = 0;
+// JSON number precision (Godot) is limited to 53 bits; mask to keep hashes stable across transports.
+const HASH_SAFE_MASK: u64 = (1u64 << 53) - 1;
 
 // NPU integration (optional dependency)
 // use feagi_npu_burst_engine::RustNPU; // Now using DynamicNPU
@@ -354,22 +356,22 @@ impl ConnectomeManager {
         morphologies: Option<u64>,
         cortical_mappings: Option<u64>,
     ) {
-        if let Some(state_manager) = StateManager::instance().try_read() {
-            if let Some(value) = brain_regions {
-                state_manager.set_brain_regions_hash(value);
-            }
-            if let Some(value) = cortical_areas {
-                state_manager.set_cortical_areas_hash(value);
-            }
-            if let Some(value) = brain_geometry {
-                state_manager.set_brain_geometry_hash(value);
-            }
-            if let Some(value) = morphologies {
-                state_manager.set_morphologies_hash(value);
-            }
-            if let Some(value) = cortical_mappings {
-                state_manager.set_cortical_mappings_hash(value);
-            }
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        if let Some(value) = brain_regions {
+            state_manager.set_brain_regions_hash(value);
+        }
+        if let Some(value) = cortical_areas {
+            state_manager.set_cortical_areas_hash(value);
+        }
+        if let Some(value) = brain_geometry {
+            state_manager.set_brain_geometry_hash(value);
+        }
+        if let Some(value) = morphologies {
+            state_manager.set_morphologies_hash(value);
+        }
+        if let Some(value) = cortical_mappings {
+            state_manager.set_cortical_mappings_hash(value);
         }
     }
 
@@ -459,7 +461,7 @@ impl ConnectomeManager {
             Self::hash_properties_filtered(&mut hasher, &region.properties, &[]);
         }
 
-        hasher.finish()
+        hasher.finish() & HASH_SAFE_MASK
     }
 
     /// Compute hash for cortical areas and properties (excluding mappings).
@@ -479,7 +481,7 @@ impl ConnectomeManager {
             Self::hash_properties_filtered(&mut hasher, &area.properties, &excluded);
         }
 
-        hasher.finish()
+        hasher.finish() & HASH_SAFE_MASK
     }
 
     /// Compute hash for brain geometry (area positions, dimensions, and 2D coordinates).
@@ -510,7 +512,7 @@ impl ConnectomeManager {
             }
         }
 
-        hasher.finish()
+        hasher.finish() & HASH_SAFE_MASK
     }
 
     /// Compute hash for morphologies.
@@ -530,7 +532,7 @@ impl ConnectomeManager {
             }
         }
 
-        hasher.finish()
+        hasher.finish() & HASH_SAFE_MASK
     }
 
     /// Compute hash for cortical mappings (cortical_mapping_dst).
@@ -558,7 +560,7 @@ impl ConnectomeManager {
             }
         }
 
-        hasher.finish()
+        hasher.finish() & HASH_SAFE_MASK
     }
 
     /// Hash a string with a separator to avoid concatenation collisions.

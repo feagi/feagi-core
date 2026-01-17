@@ -285,18 +285,17 @@ pub async fn get_health_check(
         None
     };
 
-    let (brain_regions_hash, cortical_areas_hash, brain_geometry_hash, morphologies_hash, cortical_mappings_hash) =
-        if let Some(state_manager) = feagi_state_manager::StateManager::instance().try_read() {
-            (
-                Some(state_manager.get_brain_regions_hash()),
-                Some(state_manager.get_cortical_areas_hash()),
-                Some(state_manager.get_brain_geometry_hash()),
-                Some(state_manager.get_morphologies_hash()),
-                Some(state_manager.get_cortical_mappings_hash()),
-            )
-        } else {
-            (None, None, None, None, None)
-        };
+    let (brain_regions_hash, cortical_areas_hash, brain_geometry_hash, morphologies_hash, cortical_mappings_hash) = {
+        let state_manager = feagi_state_manager::StateManager::instance();
+        let state_manager = state_manager.read();
+        (
+            Some(state_manager.get_brain_regions_hash()),
+            Some(state_manager.get_cortical_areas_hash()),
+            Some(state_manager.get_brain_geometry_hash()),
+            Some(state_manager.get_morphologies_hash()),
+            Some(state_manager.get_cortical_mappings_hash()),
+        )
+    };
 
     Ok(Json(HealthCheckResponse {
         burst_engine: burst_engine_active,
