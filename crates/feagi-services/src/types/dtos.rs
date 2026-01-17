@@ -15,6 +15,18 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // ============================================================================
+// IO CODING DTOs
+// ============================================================================
+
+/// IO coding options for IPU/OPU cortical areas.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IOCodingOptions {
+    pub signage_options: Vec<String>,
+    pub behavior_options: Vec<String>,
+    pub coding_type_options: Vec<String>,
+}
+
+// ============================================================================
 // NEURON DTOs
 // ============================================================================
 
@@ -135,6 +147,22 @@ pub struct CorticalAreaInfo {
     /// Group ID (0, 1, 2, ...) - only for IPU/OPU
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_id: Option<u8>,
+
+    /// IO coding signage (e.g., "Percentage Signed", "Percentage Unsigned")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coding_signage: Option<String>,
+
+    /// IO coding behavior ("Absolute" or "Incremental")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coding_behavior: Option<String>,
+
+    /// IO coding type ("Linear" or "Fractional")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coding_type: Option<String>,
+
+    /// Allowed IO coding options for this cortical unit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coding_options: Option<IOCodingOptions>,
 
     /// Parent brain region ID (UUID string) - which brain region this cortical area belongs to
     /// This is required by Brain Visualizer to correctly place cortical areas in the 3D scene

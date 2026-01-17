@@ -3,117 +3,76 @@
 //! This test demonstrates creating a proximity sensor with rolling window and range
 //! processing, processing sensor data, and encoding to FEAGI bytes structures.
 
-// NOTE: These tests use old APIs that have been refactored. They need to be updated to use
-// the new feagi-sensorimotor API (SensorDeviceCache, WrappedIOData, etc.)
-// For now, commenting out to allow compilation to proceed.
-/*
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalGroupIndex,
-};
+use feagi_sensorimotor::caching::SensorDeviceCache;
+use feagi_sensorimotor::data_types::Percentage;
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
-use feagi_serialization::FeagiByteStructureCompatible;
-use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-*/
-#[allow(unused_imports)]
+use feagi_serialization::FeagiByteStructureType;
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
+};
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    FrameChangeHandling, PercentageNeuronPositioning,
+};
 use std::time::Instant;
 
 #[test]
-#[ignore] // TODO: Update to use new sensorimotor API
-#[allow(unused_variables, dead_code)]
 fn test_chained_encoders() -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: Update this test to use new sensorimotor API
-    // These types no longer exist: LinearAverageRollingWindowProcessor, LinearScaleTo0And1Processor, IOTypeData
+    let mut sensor_cache = SensorDeviceCache::new();
+    sensor_cache.proximity_register(
+        CorticalUnitIndex::from(0),
+        CorticalChannelCount::new(1).unwrap(),
+        FrameChangeHandling::Absolute,
+        NeuronDepth::new(10).unwrap(),
+        PercentageNeuronPositioning::Linear,
+    )?;
+
+    let input_value = Percentage::new_from_0_1(0.5)?;
+    sensor_cache.proximity_write(
+        CorticalUnitIndex::from(0),
+        CorticalChannelIndex::from(0),
+        WrappedIOData::from(input_value),
+    )?;
+
+    sensor_cache.encode_all_sensors_to_neurons(Instant::now())?;
+    sensor_cache.encode_neurons_to_bytes()?;
+
+    let container = sensor_cache.get_feagi_byte_container();
+    assert!(container.is_valid());
+    assert_eq!(container.try_get_number_contained_structures().unwrap(), 1);
+    assert_eq!(
+        container.get_contained_struct_types(),
+        vec![FeagiByteStructureType::NeuronCategoricalXYZP]
+    );
+
     Ok(())
-    // Commented out old API code:
-    // Create the rolling window processor (5-sample window, initial value 0.0)
-    // let mut rolling_window_processor = LinearAverageRollingWindowProcessor::new(5, 0.0)?;
-
-    // Create the range scaling processor (maps 0-50 to 0-1)
-    // let mut range_processor = LinearScaleTo0And1Processor::new(0.0, 50.0, 25.0)?;
-
-    // All old API code commented out - test needs full rewrite
-    // In here, lets try manually running the data through without the help of higher level structures, just to ensure the math is fine in here
-    // {
-    //     // Verify the processing handle the correct data types
-    //     assert_eq!(
-    //         range_processor.get_input_data_type(),
-    //         rolling_window_processor.get_output_data_type()
-    //     );
-    //
-    //     // Create the input sensor value (25.0)
-    //     let sensor_value = IOTypeData::new_f32(25.0)?;
-    //     let timestamp = Instant::now();
-    //
-    //     // Process through the rolling window processor first
-    //     let windowed_result =
-    //         rolling_window_processor.process_new_input(&sensor_value, timestamp)?; // 0 + 0 + 0 + 0 + 25 / 5 -> 5
-    //
-    //     // Then process through the range scaling processor
-    //     let scaled_result = range_processor.process_new_input(windowed_result, timestamp)?; // 0 <-> 5 <-> 50 -> 0.1
-    //
-    //     assert_eq!(f32::try_from(scaled_result)?, 0.1);
-    //
-    //     Ok(())
-    // }
 }
 
 #[test]
-#[ignore] // TODO: Update to use new sensorimotor API
 fn test_simple_sensor_neuron_encodering() -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: Rewrite this test to use the new sensorimotor API
-    // Old API: SensorCache, register_cortical_group_for_proximity, send_data_for_proximity
-    // New API: SensorDeviceCache, register methods, update methods
-    todo!("Update test to use new sensorimotor API")
-}
-
-/*
-#[test]
-fn test_sensor_cache_with_stream_processors_and_encoding() -> Result<(), Box<dyn std::error::Error>> {
-    // Create Sensor Cache
-    let mut sensor_cache = SensorCache::new();
-
-    // Register proximity cortical area (group 1)
-    _ = sensor_cache.register_single_cortical_area(
-        SensorCorticalType::Proximity,
-        1.into(),
-        3,
-        SingleChannelDimensions::new(1, 1, 10)?
+    let mut sensor_cache = SensorDeviceCache::new();
+    sensor_cache.proximity_register(
+        CorticalUnitIndex::from(0),
+        CorticalChannelCount::new(1).unwrap(),
+        FrameChangeHandling::Absolute,
+        NeuronDepth::new(10).unwrap(),
+        PercentageNeuronPositioning::Linear,
     )?;
 
-    // register channel 2 on cortical area with chained cache processing
-    _ = sensor_cache.register_single_channel(
-        SensorCorticalType::Proximity,
-        1.into(),
-        2.into(),
-        vec![
-            Box::new(LinearAverageRollingWindowProcessor::new(5, 0.0)?),
-            Box::new(LinearScaleTo0And1Processor::new(0.0, 50.0, 25.0)?)
-        ],
-        true
+    let input_value = Percentage::new_from_0_1(0.1)?;
+    sensor_cache.proximity_write(
+        CorticalUnitIndex::from(0),
+        CorticalChannelIndex::from(0),
+        WrappedIOData::from(input_value),
     )?;
 
-    // Update the value on that channel
-    _ = sensor_cache.update_value_by_channel(IOTypeData::new_f32(25.0)?,
-                                             SensorCorticalType::Proximity, 1.into(), 2.into())?;
+    let cached_value = sensor_cache.proximity_read_postprocessed_cache_value(
+        CorticalUnitIndex::from(0),
+        CorticalChannelIndex::from(0),
+    )?;
+    assert!((cached_value.get_as_0_1() - 0.1).abs() < f32::EPSILON);
 
-    // Neuron write target
-    let mut cortical_neuron_data = CorticalMappedXYZPNeuronData::new();
-    _ = sensor_cache.encode_to_neurons(Instant::now(), &mut cortical_neuron_data)?;
-
-    // Verify the neural data was created
-    assert!(cortical_neuron_data.len() == 1, "Cortical neuron data should not be empty after encoding");
-
-    // Encode to FEAGI bytes structure
-    let byte_structure = cortical_neuron_data.as_new_feagi_byte_structure()?;
-
-    // Convert to raw bytes
-    let raw_bytes = byte_structure.copy_out_as_byte_vector();
-
-    // Verify we got some bytes
-    assert!(!raw_bytes.is_empty(), "Should have non-empty bytes representation");
-    println!("Encoded to {} bytes", raw_bytes.len());
+    sensor_cache.encode_all_sensors_to_neurons(Instant::now())?;
+    assert_eq!(sensor_cache.get_neurons().len(), 1);
 
     Ok(())
 }
-
- */

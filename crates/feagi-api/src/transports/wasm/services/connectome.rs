@@ -329,6 +329,32 @@ impl ConnectomeService for WasmConnectomeService {
         ))
     }
 
+    async fn create_morphology(
+        &self,
+        _morphology_id: String,
+        _morphology: feagi_evolutionary::Morphology,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn update_morphology(
+        &self,
+        _morphology_id: String,
+        _morphology: feagi_evolutionary::Morphology,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn delete_morphology(&self, _morphology_id: &str) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
     async fn update_cortical_mapping(
         &self,
         _src_area_id: String,

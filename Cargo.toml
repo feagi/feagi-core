@@ -74,6 +74,8 @@ feagi-agent = { version = "0.0.1-beta.2", path = "crates/feagi-agent", optional 
 [dev-dependencies]
 # For integration tests that need GenomeService
 feagi-services = { version = "0.0.1-beta.2", path = "crates/feagi-services" }
+feagi-npu-runtime = { version = "0.0.1-beta.1", path = "crates/feagi-npu/runtime", features = ["std"] }
+parking_lot = "0.12"
 tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros"] }
 
 # ============================================================================

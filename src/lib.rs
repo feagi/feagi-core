@@ -45,25 +45,12 @@
 //! ```
 //!
 //! ```rust,no_run
-//! use feagi::prelude::*;
+//! use feagi::burst_engine::{backend::CPUBackend, RustNPU};
+//! use feagi_npu_runtime::StdRuntime;
 //!
 //! // Create NPU
-//! let mut npu = RustNPU::new_cpu_only(100_000, 1_000_000, 20);
-//!
-//! // Add neurons
-//! let neuron_id = npu.add_neuron(
-//!     1.0,    // threshold
-//!     0.1,    // leak
-//!     0.0,    // resting
-//!     0,      // type
-//!     3,      // refractory
-//!     1.0,    // excitability
-//!     10,     // consecutive limit
-//!     5,      // snooze
-//!     true,   // mp accumulation
-//!     0,      // cortical area
-//!     0, 0, 0 // x, y, z
-//! )?;
+//! let mut npu =
+//!     RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100_000, 1_000_000, 20)?;
 //!
 //! // Run burst
 //! let result = npu.process_burst()?;
@@ -78,12 +65,15 @@
 //! ```
 //!
 //! ```rust,no_run
-//! use feagi::burst_engine::RustNPU;
+//! use feagi::burst_engine::{backend::CPUBackend, DynamicNPU};
 //! use feagi::serialization::load_connectome;
+//! use feagi_npu_runtime::StdRuntime;
 //!
-//! // Load pre-trained brain
-//! let snapshot = load_connectome("brain.connectome")?;
-//! let mut npu = RustNPU::<f32>::import_connectome(snapshot);
+//! // Load pre-trained brain (snapshot usage pending import API refactor)
+//! let _snapshot = load_connectome("brain.connectome")?;
+//!
+//! // Create NPU for inference
+//! let mut npu = DynamicNPU::new_f32(StdRuntime, CPUBackend::new(), 100_000, 1_000_000, 20)?;
 //!
 //! // Run inference
 //! loop {

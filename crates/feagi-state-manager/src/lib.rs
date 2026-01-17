@@ -73,6 +73,7 @@ pub mod core_state; // Memory-mapped atomic state
 pub mod cortical_locks; // Cortical locking
 pub mod events; // Event streaming
 pub mod fcl_cache; // FCL window size cache
+pub mod hash_state; // Event-driven data hashes
 pub mod persistence; // State save/load
 
 // Re-exports
@@ -88,6 +89,9 @@ pub use cortical_locks::CorticalLockManager;
 
 #[cfg(feature = "std")]
 pub use fcl_cache::FCLWindowCache;
+
+#[cfg(feature = "std")]
+pub use hash_state::HashState;
 
 #[cfg(feature = "std")]
 pub use persistence::StateSnapshot;
@@ -155,6 +159,9 @@ pub struct StateManager {
 
     /// FCL window size cache
     fcl_cache: std::sync::Arc<FCLWindowCache>,
+
+    /// Event-driven data hashes for health check change detection
+    hash_state: HashState,
 }
 
 #[cfg(feature = "std")]
@@ -171,6 +178,7 @@ impl StateManager {
             agent_registry: std::sync::Arc::new(AgentRegistry::new()),
             cortical_locks: std::sync::Arc::new(CorticalLockManager::new()),
             fcl_cache: std::sync::Arc::new(FCLWindowCache::new(fcl_window)),
+            hash_state: HashState::new(),
         })
     }
 
@@ -204,6 +212,58 @@ impl StateManager {
     /// Set brain readiness
     pub fn set_brain_ready(&self, ready: bool) {
         self.core_state.set_brain_ready(ready)
+    }
+
+    // ===== Hash State Access =====
+
+    /// Get brain regions hash.
+    pub fn get_brain_regions_hash(&self) -> u64 {
+        self.hash_state.get_brain_regions_hash()
+    }
+
+    /// Set brain regions hash.
+    pub fn set_brain_regions_hash(&self, value: u64) {
+        self.hash_state.set_brain_regions_hash(value)
+    }
+
+    /// Get cortical areas hash.
+    pub fn get_cortical_areas_hash(&self) -> u64 {
+        self.hash_state.get_cortical_areas_hash()
+    }
+
+    /// Set cortical areas hash.
+    pub fn set_cortical_areas_hash(&self, value: u64) {
+        self.hash_state.set_cortical_areas_hash(value)
+    }
+
+    /// Get brain geometry hash.
+    pub fn get_brain_geometry_hash(&self) -> u64 {
+        self.hash_state.get_brain_geometry_hash()
+    }
+
+    /// Set brain geometry hash.
+    pub fn set_brain_geometry_hash(&self, value: u64) {
+        self.hash_state.set_brain_geometry_hash(value)
+    }
+
+    /// Get morphologies hash.
+    pub fn get_morphologies_hash(&self) -> u64 {
+        self.hash_state.get_morphologies_hash()
+    }
+
+    /// Set morphologies hash.
+    pub fn set_morphologies_hash(&self, value: u64) {
+        self.hash_state.set_morphologies_hash(value)
+    }
+
+    /// Get cortical mappings hash.
+    pub fn get_cortical_mappings_hash(&self) -> u64 {
+        self.hash_state.get_cortical_mappings_hash()
+    }
+
+    /// Set cortical mappings hash.
+    pub fn set_cortical_mappings_hash(&self, value: u64) {
+        self.hash_state.set_cortical_mappings_hash(value)
     }
 
     // ===== Agent Management =====

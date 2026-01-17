@@ -81,6 +81,22 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "Count output - unsigned percentage encoding (linear, absolute)."]
+                CountOutput => {
+                    friendly_name: "Count Output",
+                    accepted_wrapped_io_data_type: Percentage,
+                    cortical_id_unit_reference: *b"cnt",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [110, 0, -20], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                    }
+                },
+
                 #[doc = "Object semantic segmentation output (bitplane class encoding)"]
                 ObjectSegmentation => {
                     friendly_name: "Object Segmentation",

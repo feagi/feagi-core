@@ -628,15 +628,17 @@ impl SensoryStream {
             );
 
             let total_duration = injection_start.elapsed();
-            if total_duration.as_millis() > 500 {
+            // Only warn for extreme cases (>30 seconds) - batch processing can legitimately take several seconds
+            if total_duration.as_millis() > 30000 {
                 warn!(
-                    "[ZMQ-SENSORY] ⚠️ Large injection: {} neurons injected atomically in {:.2}ms (lock held to prevent cross-burst splitting)",
+                    "[ZMQ-SENSORY] Extremely slow injection: {} neurons in {:.2}ms (possible performance issue)",
                     total_injected,
                     total_duration.as_secs_f64() * 1000.0
                 );
-            } else if total_injected > 0 {
+            } else if total_injected > 1_000_000 {
+                // Info log for large batch injections (medical imaging, analysis, etc.)
                 info!(
-                    "[ZMQ-SENSORY] ✅ Large injection: {} neurons injected atomically in {:.2}ms (ensures single-burst processing)",
+                    "[ZMQ-SENSORY] Batch injection: {} neurons in {:.2}ms (batch processing mode)",
                     total_injected,
                     total_duration.as_secs_f64() * 1000.0
                 );
@@ -704,13 +706,16 @@ impl SensoryStream {
             );
         }
 
-        let t_inject_ms = t_inject_start.elapsed().as_secs_f64() * 1000.0;
-        // Log injection timing for large frames or periodically (use info! for visibility)
-        if total_injected > 1000 || total_injected == 0 || t_inject_ms > 10.0 {
-            info!(
-                "[PERF][FEAGI-INJECT] Injected {} neurons in {:.2}ms",
-                total_injected, t_inject_ms
-            );
+        // Log injection timing only for slow injections (>50ms) when debug logging is enabled
+        // Zero injections are normal in event-driven systems - no need to log
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let t_inject_ms = t_inject_start.elapsed().as_secs_f64() * 1000.0;
+            if t_inject_ms > 50.0 {
+                debug!(
+                    "[PERF][FEAGI-INJECT] Injected {} neurons in {:.2}ms",
+                    total_injected, t_inject_ms
+                );
+            }
         }
 
         Ok(total_injected)

@@ -251,6 +251,18 @@ fn validate_value_ranges(config: &FeagiConfig, errors: &mut Vec<ConfigValidation
             reason: "must be 'inference' or 'design'".to_string(),
         });
     }
+
+    // Visualization transport policy must be a known value.
+    // This is enforced here (in addition to serde defaults) so invalid TOML fails fast.
+    match config.visualization.transport.as_str() {
+        "auto" | "websocket" | "shm" => {}
+        other => {
+            errors.push(ConfigValidationError::InvalidValue {
+                field: "visualization.transport".to_string(),
+                reason: format!("must be 'auto', 'websocket', or 'shm' (got '{}')", other),
+            });
+        }
+    }
 }
 
 #[cfg(test)]

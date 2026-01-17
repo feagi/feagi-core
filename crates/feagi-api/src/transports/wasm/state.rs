@@ -41,6 +41,8 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as i64,
+        memory_stats_cache: None,
+        amalgamation_state: ApiState::init_amalgamation_state(),
         #[cfg(feature = "feagi-agent")]
         agent_connectors: ApiState::init_agent_connectors(),
     }

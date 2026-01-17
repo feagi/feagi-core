@@ -9,6 +9,8 @@ use crate::common::{ApiError, ApiResult, Json, Path, State};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
+const DEFAULT_MORPHOLOGY_CLASS: &str = "custom";
+
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct MorphologyListResponse {
     pub morphology_list: Vec<String>,
@@ -98,28 +100,186 @@ pub async fn get_morphologies(
 /// Create a new morphology definition.
 #[utoipa::path(post, path = "/v1/morphology/morphology", tag = "morphology")]
 pub async fn post_morphology(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, serde_json::Value>>,
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+    let morphology_name = req
+        .get("morphology_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("Missing morphology_name"))?
+        .trim()
+        .to_string();
+
+    if morphology_name.is_empty() {
+        return Err(ApiError::invalid_input("morphology_name must be non-empty"));
+    }
+
+    let morphology_type = req
+        .get("morphology_type")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("Missing morphology_type"))?
+        .trim()
+        .to_lowercase();
+
+    let morphology_parameters = req
+        .get("morphology_parameters")
+        .cloned()
+        .ok_or_else(|| ApiError::invalid_input("Missing morphology_parameters"))?;
+
+    let (morphology_type_enum, params_value) = match morphology_type.as_str() {
+        "vectors" => (
+            feagi_evolutionary::MorphologyType::Vectors,
+            morphology_parameters,
+        ),
+        "patterns" => (
+            feagi_evolutionary::MorphologyType::Patterns,
+            morphology_parameters,
+        ),
+        "functions" => (
+            feagi_evolutionary::MorphologyType::Functions,
+            morphology_parameters,
+        ),
+        "composite" => {
+            // BV payload wraps composite fields under {"composite": {...}}.
+            // Accept that exact schema (and also accept the direct flat schema).
+            let composite_obj = morphology_parameters
+                .get("composite")
+                .cloned()
+                .unwrap_or(morphology_parameters);
+            (feagi_evolutionary::MorphologyType::Composite, composite_obj)
+        }
+        other => {
+            return Err(ApiError::invalid_input(format!(
+                "Unknown morphology_type '{}'",
+                other
+            )))
+        }
+    };
+
+    let parameters: feagi_evolutionary::MorphologyParameters = serde_json::from_value(params_value)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid morphology_parameters: {}", e)))?;
+
+    let morphology = feagi_evolutionary::Morphology {
+        morphology_type: morphology_type_enum,
+        parameters,
+        class: DEFAULT_MORPHOLOGY_CLASS.to_string(),
+    };
+
+    state
+        .connectome_service
+        .create_morphology(morphology_name, morphology)
+        .await
+        .map_err(ApiError::from)?;
+
+    Ok(Json(HashMap::from([(
+        "status".to_string(),
+        "success".to_string(),
+    )])))
 }
 
 /// Update an existing morphology definition.
 #[utoipa::path(put, path = "/v1/morphology/morphology", tag = "morphology")]
 pub async fn put_morphology(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, serde_json::Value>>,
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+    let morphology_name = req
+        .get("morphology_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("Missing morphology_name"))?
+        .trim()
+        .to_string();
+
+    if morphology_name.is_empty() {
+        return Err(ApiError::invalid_input("morphology_name must be non-empty"));
+    }
+
+    let morphology_type = req
+        .get("morphology_type")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("Missing morphology_type"))?
+        .trim()
+        .to_lowercase();
+
+    let morphology_parameters = req
+        .get("morphology_parameters")
+        .cloned()
+        .ok_or_else(|| ApiError::invalid_input("Missing morphology_parameters"))?;
+
+    let (morphology_type_enum, params_value) = match morphology_type.as_str() {
+        "vectors" => (
+            feagi_evolutionary::MorphologyType::Vectors,
+            morphology_parameters,
+        ),
+        "patterns" => (
+            feagi_evolutionary::MorphologyType::Patterns,
+            morphology_parameters,
+        ),
+        "functions" => (
+            feagi_evolutionary::MorphologyType::Functions,
+            morphology_parameters,
+        ),
+        "composite" => {
+            let composite_obj = morphology_parameters
+                .get("composite")
+                .cloned()
+                .unwrap_or(morphology_parameters);
+            (feagi_evolutionary::MorphologyType::Composite, composite_obj)
+        }
+        other => {
+            return Err(ApiError::invalid_input(format!(
+                "Unknown morphology_type '{}'",
+                other
+            )))
+        }
+    };
+
+    let parameters: feagi_evolutionary::MorphologyParameters = serde_json::from_value(params_value)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid morphology_parameters: {}", e)))?;
+
+    let morphology = feagi_evolutionary::Morphology {
+        morphology_type: morphology_type_enum,
+        parameters,
+        class: DEFAULT_MORPHOLOGY_CLASS.to_string(),
+    };
+
+    state
+        .connectome_service
+        .update_morphology(morphology_name, morphology)
+        .await
+        .map_err(ApiError::from)?;
+
+    Ok(Json(HashMap::from([(
+        "status".to_string(),
+        "success".to_string(),
+    )])))
 }
 
 /// Delete a morphology by name provided in request body.
 #[utoipa::path(delete, path = "/v1/morphology/morphology", tag = "morphology")]
 pub async fn delete_morphology_by_name(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, String>>,
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+    let morphology_name = req
+        .get("morphology_name")
+        .ok_or_else(|| ApiError::invalid_input("Missing morphology_name"))?
+        .trim();
+
+    if morphology_name.is_empty() {
+        return Err(ApiError::invalid_input("morphology_name must be non-empty"));
+    }
+
+    state
+        .connectome_service
+        .delete_morphology(morphology_name)
+        .await
+        .map_err(ApiError::from)?;
+
+    Ok(Json(HashMap::from([(
+        "status".to_string(),
+        "success".to_string(),
+    )])))
 }
 
 /// Get detailed properties for a specific morphology by name.
