@@ -833,11 +833,18 @@ pub async fn put_cortical_area(
         .update_cortical_area(&cortical_id, request)
         .await
     {
-        Ok(_) => {
-            tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/cortical_area - success for {}", cortical_id);
+        Ok(area_info) => {
+            let updated_id = area_info.cortical_id.clone();
+            tracing::debug!(
+                target: "feagi-api",
+                "PUT /v1/cortical_area/cortical_area - success for {} (updated_id={})",
+                cortical_id,
+                updated_id
+            );
             Ok(Json(HashMap::from([
                 ("message".to_string(), "Cortical area updated".to_string()),
-                ("cortical_id".to_string(), cortical_id),
+                ("cortical_id".to_string(), updated_id),
+                ("previous_cortical_id".to_string(), cortical_id),
             ])))
         }
         Err(e) => {

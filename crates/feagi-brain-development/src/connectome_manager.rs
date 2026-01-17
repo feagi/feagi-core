@@ -43,7 +43,7 @@ type BrainRegionIoRegistry = HashMap<String, (Vec<String>, Vec<String>)>;
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use crate::types::{BduError, BduResult};
 use feagi_npu_neural::types::NeuronId;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::cortical_area::{CorticalAreaType, CorticalID};
 
 // State manager access for fatigue calculation
 // Note: feagi-state-manager is always available when std is enabled (it's a default feature)
@@ -837,6 +837,85 @@ impl ConnectomeManager {
         self.cortical_idx_to_id.remove(&area.cortical_idx);
 
         self.refresh_cortical_area_hashes(true, true);
+        Ok(())
+    }
+
+    /// Update a cortical area ID without changing its cortical_idx.
+    ///
+    /// This remaps internal lookup tables, brain-region membership, and mapping keys.
+    pub fn rename_cortical_area_id(
+        &mut self,
+        old_id: &CorticalID,
+        new_id: CorticalID,
+        new_cortical_type: CorticalAreaType,
+    ) -> BduResult<()> {
+        if !self.cortical_areas.contains_key(old_id) {
+            return Err(BduError::InvalidArea(format!(
+                "Cortical area {} does not exist",
+                old_id
+            )));
+        }
+        if self.cortical_areas.contains_key(&new_id) {
+            return Err(BduError::InvalidArea(format!(
+                "Cortical area {} already exists",
+                new_id
+            )));
+        }
+
+        let mut area = self
+            .cortical_areas
+            .remove(old_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("Cortical area {} does not exist", old_id)))?;
+        let cortical_idx = area.cortical_idx;
+        area.cortical_id = new_id;
+        area.cortical_type = new_cortical_type;
+
+        self.cortical_areas.insert(new_id, area);
+        self.cortical_id_to_idx.remove(old_id);
+        self.cortical_id_to_idx.insert(new_id, cortical_idx);
+        self.cortical_idx_to_id.insert(cortical_idx, new_id);
+
+        // Update per-area count caches
+        {
+            let mut neuron_cache = self.cached_neuron_counts_per_area.write();
+            if let Some(value) = neuron_cache.remove(old_id) {
+                neuron_cache.insert(new_id, value);
+            }
+            let mut synapse_cache = self.cached_synapse_counts_per_area.write();
+            if let Some(value) = synapse_cache.remove(old_id) {
+                synapse_cache.insert(new_id, value);
+            }
+        }
+
+        // Update brain-region membership
+        self.brain_regions.rename_cortical_area_id(old_id, new_id);
+
+        // Update cortical mapping properties referencing the old ID
+        let old_id_str = old_id.as_base_64();
+        let new_id_str = new_id.as_base_64();
+        for area in self.cortical_areas.values_mut() {
+            if let Some(mapping) = area
+                .properties
+                .get_mut("cortical_mapping_dst")
+                .and_then(|v| v.as_object_mut())
+            {
+                if let Some(value) = mapping.remove(&old_id_str) {
+                    mapping.insert(new_id_str.clone(), value);
+                }
+            }
+        }
+
+        // Update NPU cortical_id registry
+        if let Some(ref npu) = self.npu {
+            if let Ok(mut npu_lock) = npu.lock() {
+                npu_lock.register_cortical_area(cortical_idx, new_id.as_base_64());
+            }
+        }
+
+        self.refresh_cortical_area_hashes(true, true);
+        self.refresh_brain_regions_hash();
+        self.refresh_cortical_mappings_hash();
+
         Ok(())
     }
 

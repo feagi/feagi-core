@@ -94,6 +94,11 @@ impl CorticalChangeClassifier {
             "position",
             // Visualization-only aggregation control (BV/UI-driven)
             "visualization_voxel_granularity",
+            // IO coding updates (cortical ID remap)
+            "coding_signage",
+            "coding_behavior",
+            "coding_type",
+            "new_cortical_id",
         ]
         .iter()
         .copied()
