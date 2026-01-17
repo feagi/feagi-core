@@ -32,9 +32,11 @@ use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::hash::Hasher;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, error, info, trace, warn};
+use xxhash_rust::xxh64::Xxh64;
 
 type BrainRegionIoRegistry = HashMap<String, (Vec<String>, Vec<String>)>;
 
@@ -46,6 +48,8 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 // State manager access for fatigue calculation
 // Note: feagi-state-manager is always available when std is enabled (it's a default feature)
 use feagi_state_manager::StateManager;
+
+const DATA_HASH_SEED: u64 = 0;
 
 // NPU integration (optional dependency)
 // use feagi_npu_burst_engine::RustNPU; // Now using DynamicNPU
@@ -338,6 +342,299 @@ impl ConnectomeManager {
     }
 
     // ======================================================================
+    // Data Hashing (event-driven updates for health_check)
+    // ======================================================================
+
+    /// Update stored hashes for data types that have changed.
+    fn update_state_hashes(
+        &self,
+        brain_regions: Option<u64>,
+        cortical_areas: Option<u64>,
+        brain_geometry: Option<u64>,
+        morphologies: Option<u64>,
+        cortical_mappings: Option<u64>,
+    ) {
+        if let Some(state_manager) = StateManager::instance().try_read() {
+            if let Some(value) = brain_regions {
+                state_manager.set_brain_regions_hash(value);
+            }
+            if let Some(value) = cortical_areas {
+                state_manager.set_cortical_areas_hash(value);
+            }
+            if let Some(value) = brain_geometry {
+                state_manager.set_brain_geometry_hash(value);
+            }
+            if let Some(value) = morphologies {
+                state_manager.set_morphologies_hash(value);
+            }
+            if let Some(value) = cortical_mappings {
+                state_manager.set_cortical_mappings_hash(value);
+            }
+        }
+    }
+
+    /// Refresh the brain regions hash (hierarchy, membership, and properties).
+    fn refresh_brain_regions_hash(&self) {
+        let hash = self.compute_brain_regions_hash();
+        self.update_state_hashes(Some(hash), None, None, None, None);
+    }
+
+    /// Refresh the cortical areas hash (metadata and properties).
+    fn refresh_cortical_areas_hash(&self) {
+        let hash = self.compute_cortical_areas_hash();
+        self.update_state_hashes(None, Some(hash), None, None, None);
+    }
+
+    /// Refresh the brain geometry hash (positions, dimensions, 2D coordinates).
+    fn refresh_brain_geometry_hash(&self) {
+        let hash = self.compute_brain_geometry_hash();
+        self.update_state_hashes(None, None, Some(hash), None, None);
+    }
+
+    /// Refresh the morphologies hash.
+    fn refresh_morphologies_hash(&self) {
+        let hash = self.compute_morphologies_hash();
+        self.update_state_hashes(None, None, None, Some(hash), None);
+    }
+
+    /// Refresh the cortical mappings hash.
+    fn refresh_cortical_mappings_hash(&self) {
+        let hash = self.compute_cortical_mappings_hash();
+        self.update_state_hashes(None, None, None, None, Some(hash));
+    }
+
+    /// Refresh cortical area-related hashes based on the affected data.
+    pub fn refresh_cortical_area_hashes(
+        &self,
+        properties_changed: bool,
+        geometry_changed: bool,
+    ) {
+        let cortical_hash = if properties_changed {
+            Some(self.compute_cortical_areas_hash())
+        } else {
+            None
+        };
+        let geometry_hash = if geometry_changed {
+            Some(self.compute_brain_geometry_hash())
+        } else {
+            None
+        };
+        self.update_state_hashes(None, cortical_hash, geometry_hash, None, None);
+    }
+
+    /// Compute hash for brain regions (hierarchy, membership, and properties).
+    fn compute_brain_regions_hash(&self) -> u64 {
+        let mut hasher = Xxh64::new(DATA_HASH_SEED);
+        let mut region_ids: Vec<String> = self
+            .brain_regions
+            .get_all_region_ids()
+            .into_iter()
+            .cloned()
+            .collect();
+        region_ids.sort();
+
+        for region_id in region_ids {
+            let Some(region) = self.brain_regions.get_region(&region_id) else {
+                continue;
+            };
+            Self::hash_str(&mut hasher, &region_id);
+            Self::hash_str(&mut hasher, &region.name);
+            Self::hash_str(&mut hasher, &region.region_type.to_string());
+            let parent_id = self.brain_regions.get_parent(&region_id);
+            match parent_id {
+                Some(parent) => Self::hash_str(&mut hasher, parent),
+                None => Self::hash_str(&mut hasher, "null"),
+            }
+
+            let mut cortical_ids: Vec<String> = region
+                .cortical_areas
+                .iter()
+                .map(|id| id.as_base_64())
+                .collect();
+            cortical_ids.sort();
+            for cortical_id in cortical_ids {
+                Self::hash_str(&mut hasher, &cortical_id);
+            }
+
+            Self::hash_properties_filtered(&mut hasher, &region.properties, &[]);
+        }
+
+        hasher.finish()
+    }
+
+    /// Compute hash for cortical areas and properties (excluding mappings).
+    fn compute_cortical_areas_hash(&self) -> u64 {
+        let mut hasher = Xxh64::new(DATA_HASH_SEED);
+        let mut areas: Vec<&CorticalArea> = self.cortical_areas.values().collect();
+        areas.sort_by_key(|area| area.cortical_id.as_base_64());
+
+        for area in areas {
+            let cortical_id = area.cortical_id.as_base_64();
+            Self::hash_str(&mut hasher, &cortical_id);
+            hasher.write_u32(area.cortical_idx);
+            Self::hash_str(&mut hasher, &area.name);
+            Self::hash_str(&mut hasher, &area.cortical_type.to_string());
+
+            let excluded = ["cortical_mapping_dst", "upstream_cortical_areas"];
+            Self::hash_properties_filtered(&mut hasher, &area.properties, &excluded);
+        }
+
+        hasher.finish()
+    }
+
+    /// Compute hash for brain geometry (area positions, dimensions, and 2D coordinates).
+    fn compute_brain_geometry_hash(&self) -> u64 {
+        let mut hasher = Xxh64::new(DATA_HASH_SEED);
+        let mut areas: Vec<&CorticalArea> = self.cortical_areas.values().collect();
+        areas.sort_by_key(|area| area.cortical_id.as_base_64());
+
+        for area in areas {
+            let cortical_id = area.cortical_id.as_base_64();
+            Self::hash_str(&mut hasher, &cortical_id);
+
+            Self::hash_i32(&mut hasher, area.position.x);
+            Self::hash_i32(&mut hasher, area.position.y);
+            Self::hash_i32(&mut hasher, area.position.z);
+
+            Self::hash_u32(&mut hasher, area.dimensions.width);
+            Self::hash_u32(&mut hasher, area.dimensions.height);
+            Self::hash_u32(&mut hasher, area.dimensions.depth);
+
+            let coord_2d = area
+                .properties
+                .get("coordinate_2d")
+                .or_else(|| area.properties.get("coordinates_2d"));
+            match coord_2d {
+                Some(value) => Self::hash_json_value(&mut hasher, value),
+                None => Self::hash_str(&mut hasher, "null"),
+            }
+        }
+
+        hasher.finish()
+    }
+
+    /// Compute hash for morphologies.
+    fn compute_morphologies_hash(&self) -> u64 {
+        let mut hasher = Xxh64::new(DATA_HASH_SEED);
+        let mut morphology_ids = self.morphology_registry.morphology_ids();
+        morphology_ids.sort();
+
+        for morphology_id in morphology_ids {
+            if let Some(morphology) = self.morphology_registry.get(&morphology_id) {
+                Self::hash_str(&mut hasher, &morphology_id);
+                Self::hash_str(&mut hasher, &format!("{:?}", morphology.morphology_type));
+                Self::hash_str(&mut hasher, &morphology.class);
+                if let Ok(value) = serde_json::to_value(&morphology.parameters) {
+                    Self::hash_json_value(&mut hasher, &value);
+                }
+            }
+        }
+
+        hasher.finish()
+    }
+
+    /// Compute hash for cortical mappings (cortical_mapping_dst).
+    fn compute_cortical_mappings_hash(&self) -> u64 {
+        let mut hasher = Xxh64::new(DATA_HASH_SEED);
+        let mut areas: Vec<&CorticalArea> = self.cortical_areas.values().collect();
+        areas.sort_by_key(|area| area.cortical_id.as_base_64());
+
+        for area in areas {
+            let cortical_id = area.cortical_id.as_base_64();
+            Self::hash_str(&mut hasher, &cortical_id);
+            if let Some(serde_json::Value::Object(map)) =
+                area.properties.get("cortical_mapping_dst")
+            {
+                let mut dest_ids: Vec<&String> = map.keys().collect();
+                dest_ids.sort();
+                for dest_id in dest_ids {
+                    Self::hash_str(&mut hasher, dest_id);
+                    if let Some(value) = map.get(dest_id) {
+                        Self::hash_json_value(&mut hasher, value);
+                    }
+                }
+            } else {
+                Self::hash_str(&mut hasher, "null");
+            }
+        }
+
+        hasher.finish()
+    }
+
+    /// Hash a string with a separator to avoid concatenation collisions.
+    fn hash_str(hasher: &mut Xxh64, value: &str) {
+        hasher.write(value.as_bytes());
+        hasher.write_u8(0);
+    }
+
+    /// Hash a signed 32-bit integer deterministically.
+    fn hash_i32(hasher: &mut Xxh64, value: i32) {
+        hasher.write(&value.to_le_bytes());
+    }
+
+    /// Hash an unsigned 32-bit integer deterministically.
+    fn hash_u32(hasher: &mut Xxh64, value: u32) {
+        hasher.write(&value.to_le_bytes());
+    }
+
+    /// Hash JSON values deterministically with sorted object keys.
+    fn hash_json_value(hasher: &mut Xxh64, value: &serde_json::Value) {
+        match value {
+            serde_json::Value::Null => {
+                hasher.write_u8(0);
+            }
+            serde_json::Value::Bool(val) => {
+                hasher.write_u8(1);
+                hasher.write_u8(*val as u8);
+            }
+            serde_json::Value::Number(num) => {
+                hasher.write_u8(2);
+                Self::hash_str(hasher, &num.to_string());
+            }
+            serde_json::Value::String(val) => {
+                hasher.write_u8(3);
+                Self::hash_str(hasher, val);
+            }
+            serde_json::Value::Array(items) => {
+                hasher.write_u8(4);
+                for item in items {
+                    Self::hash_json_value(hasher, item);
+                }
+            }
+            serde_json::Value::Object(map) => {
+                hasher.write_u8(5);
+                let mut keys: Vec<&String> = map.keys().collect();
+                keys.sort();
+                for key in keys {
+                    Self::hash_str(hasher, key);
+                    if let Some(val) = map.get(key) {
+                        Self::hash_json_value(hasher, val);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Hash JSON properties deterministically, excluding specific keys.
+    fn hash_properties_filtered(
+        hasher: &mut Xxh64,
+        properties: &HashMap<String, serde_json::Value>,
+        excluded_keys: &[&str],
+    ) {
+        let mut keys: Vec<&String> = properties.keys().collect();
+        keys.sort();
+        for key in keys {
+            if excluded_keys.contains(&key.as_str()) {
+                continue;
+            }
+            Self::hash_str(hasher, key);
+            if let Some(value) = properties.get(key) {
+                Self::hash_json_value(hasher, value);
+            }
+        }
+    }
+
+    // ======================================================================
     // Cortical Area Management
     // ======================================================================
 
@@ -508,6 +805,9 @@ impl ConnectomeManager {
 
         self.initialized = true;
 
+        self.refresh_cortical_area_hashes(true, true);
+        self.refresh_brain_regions_hash();
+
         Ok(cortical_idx)
     }
 
@@ -534,6 +834,7 @@ impl ConnectomeManager {
         self.cortical_id_to_idx.remove(cortical_id);
         self.cortical_idx_to_id.remove(&area.cortical_idx);
 
+        self.refresh_cortical_area_hashes(true, true);
         Ok(())
     }
 
@@ -686,6 +987,8 @@ impl ConnectomeManager {
 
             computed.insert(rid, (inputs, outputs));
         }
+
+        self.refresh_brain_regions_hash();
 
         Ok(computed)
     }
@@ -874,12 +1177,16 @@ impl ConnectomeManager {
         region: BrainRegion,
         parent_id: Option<String>,
     ) -> BduResult<()> {
-        self.brain_regions.add_region(region, parent_id)
+        self.brain_regions.add_region(region, parent_id)?;
+        self.refresh_brain_regions_hash();
+        Ok(())
     }
 
     /// Remove a brain region
     pub fn remove_brain_region(&mut self, region_id: &str) -> BduResult<()> {
-        self.brain_regions.remove_region(region_id)
+        self.brain_regions.remove_region(region_id)?;
+        self.refresh_brain_regions_hash();
+        Ok(())
     }
 
     /// Get a brain region by ID
@@ -927,6 +1234,7 @@ impl ConnectomeManager {
     ) {
         self.morphology_registry
             .add_morphology(morphology_id, morphology);
+        self.refresh_morphologies_hash();
     }
 
     /// Remove a morphology definition from the in-memory registry.
@@ -935,7 +1243,11 @@ impl ConnectomeManager {
     ///
     /// NOTE: Callers that also maintain a RuntimeGenome (source of truth) MUST update it too.
     pub fn remove_morphology(&mut self, morphology_id: &str) -> bool {
-        self.morphology_registry.remove_morphology(morphology_id)
+        let removed = self.morphology_registry.remove_morphology(morphology_id);
+        if removed {
+            self.refresh_morphologies_hash();
+        }
+        removed
     }
 
     // ========================================================================
@@ -1004,6 +1316,8 @@ impl ConnectomeManager {
             info!(target: "feagi-bdu", "Updated mapping from {} to {} with {} connections",
                   src_area_id, dst_area_id, mapping_data.len());
         }
+
+        self.refresh_cortical_mappings_hash();
 
         Ok(())
     }
@@ -4052,6 +4366,8 @@ impl ConnectomeManager {
             new_dimensions
         );
 
+        self.refresh_cortical_area_hashes(false, true);
+
         Ok(())
     }
 
@@ -4117,6 +4433,8 @@ impl ConnectomeManager {
         }
 
         info!(target: "feagi-bdu","Updated brain region {}", region_id);
+
+        self.refresh_brain_regions_hash();
 
         Ok(())
     }

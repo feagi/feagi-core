@@ -16,12 +16,63 @@ use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions};
 // Note: decode_cortical_id removed - use feagi_structures::CorticalID directly
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, info, trace, warn};
+
+fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
+    let bytes = cortical_id.as_bytes();
+    let is_input = bytes[0] == b'i';
+    let is_output = bytes[0] == b'o';
+    if !is_input && !is_output {
+        return None;
+    }
+
+    let unit_ref: [u8; 3] = [bytes[1], bytes[2], bytes[3]];
+    let subunit_index = bytes[6];
+    let unit_index = bytes[7];
+
+    if is_input {
+        for unit in SensoryCorticalUnit::list_all() {
+            if unit.get_cortical_id_unit_reference() == unit_ref {
+                let unit_name = unit.get_friendly_name();
+                let has_subunits = unit.get_number_cortical_areas() > 1;
+                let name = if has_subunits {
+                    format!("{} Subunit {} Unit {}", unit_name, subunit_index, unit_index)
+                } else {
+                    format!("{} Unit {}", unit_name, unit_index)
+                };
+                return Some(name);
+            }
+        }
+    } else {
+        for unit in MotorCorticalUnit::list_all() {
+            if unit.get_cortical_id_unit_reference() == unit_ref {
+                let unit_name = unit.get_friendly_name();
+                let has_subunits = unit.get_number_cortical_areas() > 1;
+                let name = if matches!(unit, MotorCorticalUnit::Gaze) {
+                    let subunit_name = match subunit_index {
+                        0 => "Eccentricity",
+                        1 => "Modulation",
+                        _ => "Subunit",
+                    };
+                    format!("{} ({}) Unit {}", unit_name, subunit_name, unit_index)
+                } else if has_subunits {
+                    format!("{} Subunit {} Unit {}", unit_name, subunit_index, unit_index)
+                } else {
+                    format!("{} Unit {}", unit_name, unit_index)
+                };
+                return Some(name);
+            }
+        }
+    }
+
+    None
+}
 
 /// Update a cortical area's `cortical_mapping_dst` property in-place.
 ///
@@ -427,11 +478,17 @@ impl ConnectomeService for ConnectomeServiceImpl {
             extract_memory_properties(&area.properties)
         };
 
+        let name = if area.name.is_empty() || area.name == area.cortical_id.to_string() {
+            derive_friendly_cortical_name(&area.cortical_id).unwrap_or_else(|| area.name.clone())
+        } else {
+            area.name.clone()
+        };
+
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
             cortical_id_s: area.cortical_id.to_string(), // Human-readable ASCII string
             cortical_idx,
-            name: area.name.clone(),
+            name,
             dimensions: (
                 area.dimensions.width as usize,
                 area.dimensions.height as usize,

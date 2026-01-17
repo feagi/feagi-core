@@ -1059,6 +1059,7 @@ impl GenomeServiceImpl {
                     }
                 }
             }
+            manager.refresh_cortical_area_hashes(true, false);
         }
 
         // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
@@ -1580,6 +1581,7 @@ impl GenomeServiceImpl {
                     _ => {}
                 }
             }
+            manager.refresh_cortical_area_hashes(true, false);
         }
 
         // If memory-related parameters were updated, immediately apply them to the runtime
@@ -1692,6 +1694,22 @@ impl GenomeServiceImpl {
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}", cortical_id);
         let needs_burst_cache_refresh = changes.contains_key("visualization_voxel_granularity");
+        let mut properties_changed = false;
+        let mut geometry_changed = false;
+        for key in changes.keys() {
+            match key.as_str() {
+                "coordinates_3d" | "coordinate_3d" | "coordinates" | "position" | "coordinate_2d"
+                | "coordinates_2d" => {
+                    geometry_changed = true;
+                }
+                "cortical_name" | "name" | "visible" | "visualization_voxel_granularity" => {
+                    properties_changed = true;
+                }
+                _ => {
+                    properties_changed = true;
+                }
+            }
+        }
 
         // Convert cortical_id to CorticalID
         let cortical_id_typed =
@@ -1914,6 +1932,7 @@ impl GenomeServiceImpl {
                     _ => {}
                 }
             }
+            manager.refresh_cortical_area_hashes(properties_changed, geometry_changed);
         }
 
         // Refresh burst runner cache so the NPU aggregation path immediately uses new granularity.
@@ -2267,6 +2286,7 @@ impl GenomeServiceImpl {
                     }
                 }
             }
+            manager.refresh_cortical_area_hashes(true, true);
         }
 
         // Step 4: Recreate neurons with new dimensions/density

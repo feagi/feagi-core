@@ -56,6 +56,21 @@ pub struct HealthCheckResponse {
     pub simulation_timestep: Option<f64>,
     pub memory_area_stats: Option<HashMap<String, HashMap<String, serde_json::Value>>>,
     pub amalgamation_pending: Option<HashMap<String, serde_json::Value>>,
+    /// Hash of brain regions (hierarchy, membership, and properties)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brain_regions_hash: Option<u64>,
+    /// Hash of cortical areas and properties (excluding mappings)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cortical_areas_hash: Option<u64>,
+    /// Hash of brain geometry (area positions/dimensions and 2D coordinates)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brain_geometry_hash: Option<u64>,
+    /// Hash of morphology registry
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub morphologies_hash: Option<u64>,
+    /// Hash of cortical mappings
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cortical_mappings_hash: Option<u64>,
     /// Root brain region ID (UUID string) for O(1) root lookup
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brain_regions_root: Option<String>,
@@ -270,6 +285,19 @@ pub async fn get_health_check(
         None
     };
 
+    let (brain_regions_hash, cortical_areas_hash, brain_geometry_hash, morphologies_hash, cortical_mappings_hash) =
+        if let Some(state_manager) = feagi_state_manager::StateManager::instance().try_read() {
+            (
+                Some(state_manager.get_brain_regions_hash()),
+                Some(state_manager.get_cortical_areas_hash()),
+                Some(state_manager.get_brain_geometry_hash()),
+                Some(state_manager.get_morphologies_hash()),
+                Some(state_manager.get_cortical_mappings_hash()),
+            )
+        } else {
+            (None, None, None, None, None)
+        };
+
     Ok(Json(HealthCheckResponse {
         burst_engine: burst_engine_active,
         connected_agents,
@@ -293,6 +321,11 @@ pub async fn get_health_check(
         simulation_timestep,
         memory_area_stats,
         amalgamation_pending,
+        brain_regions_hash,
+        cortical_areas_hash,
+        brain_geometry_hash,
+        morphologies_hash,
+        cortical_mappings_hash,
         brain_regions_root, // NEW: Root region ID for O(1) lookup
         fatigue,
     }))
