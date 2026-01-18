@@ -1872,7 +1872,7 @@ impl GenomeServiceImpl {
                     "new_cortical_id is required when updating IO coding parameters".to_string(),
                 )
             })?;
-        let new_cortical_id = CorticalID::try_from_base_64(new_cortical_id_str).map_err(|e| {
+        let _new_cortical_id = CorticalID::try_from_base_64(new_cortical_id_str).map_err(|e| {
             ServiceError::InvalidInput(format!(
                 "Invalid new_cortical_id '{}': {}",
                 new_cortical_id_str, e
@@ -2144,6 +2144,12 @@ impl GenomeServiceImpl {
                 computed_id.as_base_64()
             )));
         }
+        info!(
+            target: "feagi-services",
+            "[IO-CODING] Remapping cortical ID {} -> {}",
+            cortical_id.as_base_64(),
+            computed_id.as_base_64()
+        );
 
         let new_cortical_type = if is_input {
             CorticalAreaType::BrainInput(new_flag)

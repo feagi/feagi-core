@@ -486,7 +486,7 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("cortical_id required"))?;
 
-    let group_id = request
+    let mut group_id = request
         .get("group_id")
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as u8;
@@ -517,6 +517,19 @@ pub async fn post_cortical_area(
         .get("cortical_type")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("cortical_type required"))?;
+
+    let unit_id: Option<u8> = request
+        .get("unit_id")
+        .and_then(|v| v.as_u64())
+        .map(|value| {
+            value
+                .try_into()
+                .map_err(|_| ApiError::invalid_input("unit_id out of range"))
+        })
+        .transpose()?;
+    if let Some(unit_id) = unit_id {
+        group_id = unit_id;
+    }
 
     // Extract neurons_per_voxel from request (default to 1 if not provided)
     let neurons_per_voxel = request
