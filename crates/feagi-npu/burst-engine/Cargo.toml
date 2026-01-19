@@ -74,9 +74,9 @@ harness = false
 name = "ci_microbench"
 harness = false
 
-[[bench]]
-name = "grouping_optimization"
-harness = false
+#[[bench]]
+#name = "grouping_optimization"
+#harness = false
 
 #[[bench]]
 #name = "largescale_perf_test"

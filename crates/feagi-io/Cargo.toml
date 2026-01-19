@@ -38,6 +38,7 @@ ahash.workspace = true
 thiserror = "1.0"
 lz4 = "1.28"  # LZ4 compression (used by multiple transports)
 tracing = { workspace = true }  # Structured logging
+# url = "2.5.8" # for URL support
 
 # Connectome serialization dependencies (optional, behind feature)
 bincode = { version = "1.3", optional = true }  # Fast binary serialization

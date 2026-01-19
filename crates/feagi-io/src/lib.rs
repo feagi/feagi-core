@@ -512,6 +512,7 @@ pub use transports::websocket::WebSocketStreams;
 
 // Keep shm module at root for now (will be moved to transports/ in future)
 pub mod shm;
+mod next;
 
 /// Main PNS - manages all agent I/O
 ///
