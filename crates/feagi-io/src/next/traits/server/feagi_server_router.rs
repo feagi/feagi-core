@@ -7,10 +7,8 @@ pub trait FeagiServerRouter: FeagiServer {
     // "Fn(&[u8], &mut [u8])  Send + Sync + 'static"
 
     /// INTERNAL ONLY
-    fn _received_request(&self, request_data: &[u8]) -> Result<(), FeagiNetworkError>;
+    fn _received_request(&mut self, request_data: &[u8]) -> Result<(), FeagiNetworkError>;
     // On data being received, run it through the internal function, get the output data, then
     // call _send_response with it
-
-    /// INTERNAL ONLY
-    fn _send_response(&self);
+    
 }
