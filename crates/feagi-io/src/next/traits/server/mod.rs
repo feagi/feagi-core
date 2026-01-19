@@ -1,3 +1,12 @@
+//! Server-side networking traits for FEAGI.
+//!
+//! This module defines the core abstractions for server-side network communication,
+//! supporting multiple messaging patterns:
+//!
+//! - **Publisher** ([`FeagiServerPublisher`]): One-to-many broadcast pattern
+//! - **Puller** ([`FeagiServerPuller`]): Receives pushed data from clients
+//! - **Router** ([`FeagiServerRouter`]): Request-response pattern with automatic routing
+
 mod feagi_server;
 mod feagi_server_publisher;
 mod feagi_server_router;

@@ -58,15 +58,14 @@ pub struct FEAGIZMQServerPuller {
     server_bind_address: String,
     current_state: FeagiServerBindState,
     socket: zmq::Socket,
-    data_received_callback: Fn(&[u8]) + Send + Sync + 'static
+    data_received_callback: fn(&[u8])
 }
 
 impl FEAGIZMQServerPuller {
-    fn new<F>(context: &mut zmq::Context, server_bind_address: String, data_received_callback: F)
+    fn new(context: &mut zmq::Context, server_bind_address: String, data_received_callback: fn(&[u8]))
         -> Result<Self, FeagiNetworkError>
-    where
-        F: Fn(&[u8]) + Send + Sync + 'static {
-    validate_zmq_url(&server_bind_address)?;
+    {
+        validate_zmq_url(&server_bind_address)?;
         let socket = context.socket(zmq::PULL).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         Ok(Self {
             context_ref: context.clone(),
@@ -110,18 +109,16 @@ pub struct FEAGIZMQServerRouter {
     server_bind_address: String,
     current_state: FeagiServerBindState,
     socket: zmq::Socket,
-    data_process_callback: Fn(&[u8], &mut [u8]) -> Result<(), FeagiNetworkError> + Send + Sync + 'static,
+    data_process_callback: fn(&[u8], &mut [u8]) -> Result<(), FeagiNetworkError>,
     cache_processed_bytes: Vec<u8>
 }
 
 impl FEAGIZMQServerRouter {
-    fn new<F>(context: &mut zmq::Context, server_bind_address: String, data_process_callback: F)
+    fn new(context: &mut zmq::Context, server_bind_address: String, data_process_callback: fn(&[u8], &mut [u8]) -> Result<(), FeagiNetworkError>)
         -> Result<Self, FeagiNetworkError>
-    where
-        F: Fn(&[u8], &mut [u8]) -> Result<(), FeagiNetworkError> + Send + Sync + 'static
     {
         validate_zmq_url(&server_bind_address)?;
-        let socket = context.socket(zmq::ROUTER).unwrap();
+        let socket = context.socket(zmq::ROUTER).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         Ok(Self {
             context_ref: context.clone(),
             server_bind_address,
@@ -154,7 +151,7 @@ impl FeagiServer for FEAGIZMQServerRouter {
 
 impl FeagiServerRouter for FEAGIZMQServerRouter {
     fn _received_request(&mut self, request_data: &[u8]) -> Result<(), FeagiNetworkError> {
-        self.data_process_callback(request_data, &mut self.cache_processed_bytes)?;
+        (self.data_process_callback)(request_data, &mut self.cache_processed_bytes)?;
         self.socket.send(&self.cache_processed_bytes, 0).map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
         Ok(())
     }
