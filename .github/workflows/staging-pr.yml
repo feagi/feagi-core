@@ -283,7 +283,9 @@ jobs:
                 crate = name_m.group(1) if name_m else str(mf)
                 deps = parse_dependencies_with_features(text)
                 for dep, features in deps.items():
-                    available = crate_features.get(dep, set())
+                    available = crate_features.get(dep)
+                    if available is None:
+                        continue
                     missing = [f for f in features if f not in available]
                     if missing:
                         errors.append(
