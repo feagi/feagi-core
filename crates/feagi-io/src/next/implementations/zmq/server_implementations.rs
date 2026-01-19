@@ -12,7 +12,7 @@ pub struct FEAGIZMQServerPublisher {
 }
 
 impl FEAGIZMQServerPublisher {
-    fn new(context: &mut zmq::Context, server_bind_address: String) -> Result<Self, FeagiNetworkError> {
+    pub fn new(context: &mut zmq::Context, server_bind_address: String) -> Result<Self, FeagiNetworkError> {
         validate_zmq_url(&server_bind_address)?;
         let socket = context.socket(zmq::PUB).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         Ok(Self {
@@ -62,7 +62,7 @@ pub struct FEAGIZMQServerPuller {
 }
 
 impl FEAGIZMQServerPuller {
-    fn new(context: &mut zmq::Context, server_bind_address: String, data_received_callback: fn(&[u8]))
+    pub fn new(context: &mut zmq::Context, server_bind_address: String, data_received_callback: fn(&[u8]))
         -> Result<Self, FeagiNetworkError>
     {
         validate_zmq_url(&server_bind_address)?;
@@ -114,7 +114,7 @@ pub struct FEAGIZMQServerRouter {
 }
 
 impl FEAGIZMQServerRouter {
-    fn new(context: &mut zmq::Context, server_bind_address: String, data_process_callback: fn(&[u8], &mut [u8]) -> Result<(), FeagiNetworkError>)
+    pub fn new(context: &mut zmq::Context, server_bind_address: String, data_process_callback: fn(&[u8], &mut [u8]) -> Result<(), FeagiNetworkError>)
         -> Result<Self, FeagiNetworkError>
     {
         validate_zmq_url(&server_bind_address)?;

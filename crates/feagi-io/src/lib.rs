@@ -1,35 +1,11 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! FEAGI I/O System
-//!
-//! Handles all agent I/O: registration, ZMQ, SHM, heartbeat tracking.
-//!
-//! # Architecture
-//!
-//! This crate follows a hybrid module structure:
-//! - **`core/`**: Shared types, agent registry, configuration
-//! - **`blocking/`**: Infrastructure for blocking I/O transports (threads, channels, compression)
-//! - **`nonblocking/`**: Infrastructure for async/await transports (tokio, async channels)
-//! - **`transports/`**: Specific transport implementations (ZMQ, UDP, SHM, WebSocket, RTOS)
-//!
-//! # Example
-//!
-//! ```no_run
-//! use feagi_io::{IOSystem, IOConfig};
-//!
-//! let io_system = IOSystem::new().unwrap();
-//! io_system.start().unwrap();
-//!
-//! // Publish visualization data
-//! let data = vec![1, 2, 3];
-//! io_system.publish_visualization(&data).unwrap();
-//!
-//! io_system.stop().unwrap();
-//! ```
 
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub mod next;
 
 use feagi_structures::FeagiSignal;
 use parking_lot::{Mutex, RwLock};
@@ -512,7 +488,6 @@ pub use transports::websocket::WebSocketStreams;
 
 // Keep shm module at root for now (will be moved to transports/ in future)
 pub mod shm;
-mod next;
 
 /// Main PNS - manages all agent I/O
 ///
