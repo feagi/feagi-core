@@ -15,15 +15,15 @@ use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::neuroembryogenesis::Neuroembryogenesis;
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::{BurstLoopRunner, ParameterUpdateQueue};
-use feagi_structures::genomic::cortical_area::{
-    CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
-    IOCorticalAreaConfigurationFlag,
-};
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalSubUnitIndex, CorticalUnitIndex,
 };
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
+};
+use feagi_structures::genomic::cortical_area::{
+    CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+    IOCorticalAreaConfigurationFlag,
 };
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use parking_lot::RwLock;
@@ -76,7 +76,9 @@ fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static 
         | IOCorticalAreaConfigurationFlag::SignedPercentage(frame, _)
         | IOCorticalAreaConfigurationFlag::SignedPercentage2D(frame, _)
         | IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame, _)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame, _) => frame_handling_label(*frame),
+        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame, _) => {
+            frame_handling_label(*frame)
+        }
     }
 }
 
@@ -1922,22 +1924,14 @@ impl GenomeServiceImpl {
             }
         };
 
-        let requested_signage = changes
-            .get("coding_signage")
-            .and_then(|v| v.as_str());
-        let requested_behavior = changes
-            .get("coding_behavior")
-            .and_then(|v| v.as_str());
+        let requested_signage = changes.get("coding_signage").and_then(|v| v.as_str());
+        let requested_behavior = changes.get("coding_behavior").and_then(|v| v.as_str());
         let requested_type = changes.get("coding_type").and_then(|v| v.as_str());
 
         let new_flag = match current_flag {
             IOCorticalAreaConfigurationFlag::Percentage(frame, positioning) => {
-                let signed = requested_signage
-                    .and_then(parse_signage)
-                    .unwrap_or(false);
-                let new_frame = requested_behavior
-                    .and_then(parse_frame)
-                    .unwrap_or(frame);
+                let signed = requested_signage.and_then(parse_signage).unwrap_or(false);
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 let new_positioning = requested_type
                     .and_then(parse_positioning)
                     .unwrap_or(positioning);
@@ -1948,12 +1942,8 @@ impl GenomeServiceImpl {
                 }
             }
             IOCorticalAreaConfigurationFlag::Percentage2D(frame, positioning) => {
-                let signed = requested_signage
-                    .and_then(parse_signage)
-                    .unwrap_or(false);
-                let new_frame = requested_behavior
-                    .and_then(parse_frame)
-                    .unwrap_or(frame);
+                let signed = requested_signage.and_then(parse_signage).unwrap_or(false);
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 let new_positioning = requested_type
                     .and_then(parse_positioning)
                     .unwrap_or(positioning);
@@ -1964,12 +1954,8 @@ impl GenomeServiceImpl {
                 }
             }
             IOCorticalAreaConfigurationFlag::Percentage3D(frame, positioning) => {
-                let signed = requested_signage
-                    .and_then(parse_signage)
-                    .unwrap_or(false);
-                let new_frame = requested_behavior
-                    .and_then(parse_frame)
-                    .unwrap_or(frame);
+                let signed = requested_signage.and_then(parse_signage).unwrap_or(false);
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 let new_positioning = requested_type
                     .and_then(parse_positioning)
                     .unwrap_or(positioning);
@@ -1980,12 +1966,8 @@ impl GenomeServiceImpl {
                 }
             }
             IOCorticalAreaConfigurationFlag::Percentage4D(frame, positioning) => {
-                let signed = requested_signage
-                    .and_then(parse_signage)
-                    .unwrap_or(false);
-                let new_frame = requested_behavior
-                    .and_then(parse_frame)
-                    .unwrap_or(frame);
+                let signed = requested_signage.and_then(parse_signage).unwrap_or(false);
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 let new_positioning = requested_type
                     .and_then(parse_positioning)
                     .unwrap_or(positioning);
@@ -1996,12 +1978,8 @@ impl GenomeServiceImpl {
                 }
             }
             IOCorticalAreaConfigurationFlag::SignedPercentage(frame, positioning) => {
-                let signed = requested_signage
-                    .and_then(parse_signage)
-                    .unwrap_or(true);
-                let new_frame = requested_behavior
-                    .and_then(parse_frame)
-                    .unwrap_or(frame);
+                let signed = requested_signage.and_then(parse_signage).unwrap_or(true);
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 let new_positioning = requested_type
                     .and_then(parse_positioning)
                     .unwrap_or(positioning);
@@ -2012,12 +1990,8 @@ impl GenomeServiceImpl {
                 }
             }
             IOCorticalAreaConfigurationFlag::SignedPercentage2D(frame, positioning) => {
-                let signed = requested_signage
-                    .and_then(parse_signage)
-                    .unwrap_or(true);
-                let new_frame = requested_behavior
-                    .and_then(parse_frame)
-                    .unwrap_or(frame);
+                let signed = requested_signage.and_then(parse_signage).unwrap_or(true);
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 let new_positioning = requested_type
                     .and_then(parse_positioning)
                     .unwrap_or(positioning);
@@ -2028,12 +2002,8 @@ impl GenomeServiceImpl {
                 }
             }
             IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame, positioning) => {
-                let signed = requested_signage
-                    .and_then(parse_signage)
-                    .unwrap_or(true);
-                let new_frame = requested_behavior
-                    .and_then(parse_frame)
-                    .unwrap_or(frame);
+                let signed = requested_signage.and_then(parse_signage).unwrap_or(true);
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 let new_positioning = requested_type
                     .and_then(parse_positioning)
                     .unwrap_or(positioning);
@@ -2044,12 +2014,8 @@ impl GenomeServiceImpl {
                 }
             }
             IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame, positioning) => {
-                let signed = requested_signage
-                    .and_then(parse_signage)
-                    .unwrap_or(true);
-                let new_frame = requested_behavior
-                    .and_then(parse_frame)
-                    .unwrap_or(frame);
+                let signed = requested_signage.and_then(parse_signage).unwrap_or(true);
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 let new_positioning = requested_type
                     .and_then(parse_positioning)
                     .unwrap_or(positioning);
@@ -2061,48 +2027,44 @@ impl GenomeServiceImpl {
             }
             IOCorticalAreaConfigurationFlag::CartesianPlane(frame) => {
                 if let Some(signage) = requested_signage {
-                    if signage.trim().to_ascii_lowercase() != "not applicable" {
+                    if !signage.trim().eq_ignore_ascii_case("not applicable") {
                         return Err(ServiceError::InvalidInput(
                             "coding_signage not supported for CartesianPlane".to_string(),
                         ));
                     }
                 }
                 if let Some(coding_type) = requested_type {
-                    if coding_type.trim().to_ascii_lowercase() != "not applicable" {
+                    if !coding_type.trim().eq_ignore_ascii_case("not applicable") {
                         return Err(ServiceError::InvalidInput(
                             "coding_type not supported for CartesianPlane".to_string(),
                         ));
                     }
                 }
-                let new_frame = requested_behavior
-                    .and_then(parse_frame)
-                    .unwrap_or(frame);
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 IOCorticalAreaConfigurationFlag::CartesianPlane(new_frame)
             }
             IOCorticalAreaConfigurationFlag::Misc(frame) => {
                 if let Some(signage) = requested_signage {
-                    if signage.trim().to_ascii_lowercase() != "not applicable" {
+                    if !signage.trim().eq_ignore_ascii_case("not applicable") {
                         return Err(ServiceError::InvalidInput(
                             "coding_signage not supported for Misc".to_string(),
                         ));
                     }
                 }
                 if let Some(coding_type) = requested_type {
-                    if coding_type.trim().to_ascii_lowercase() != "not applicable" {
+                    if !coding_type.trim().eq_ignore_ascii_case("not applicable") {
                         return Err(ServiceError::InvalidInput(
                             "coding_type not supported for Misc".to_string(),
                         ));
                     }
                 }
-                let new_frame = requested_behavior
-                    .and_then(parse_frame)
-                    .unwrap_or(frame);
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 IOCorticalAreaConfigurationFlag::Misc(new_frame)
             }
             IOCorticalAreaConfigurationFlag::Boolean => {
                 if let Some(signage) = requested_signage {
-                    if signage.trim().to_ascii_lowercase() != "boolean"
-                        && signage.trim().to_ascii_lowercase() != "not applicable"
+                    if !signage.trim().eq_ignore_ascii_case("boolean")
+                        && !signage.trim().eq_ignore_ascii_case("not applicable")
                     {
                         return Err(ServiceError::InvalidInput(
                             "coding_signage not supported for Boolean".to_string(),
@@ -2110,14 +2072,14 @@ impl GenomeServiceImpl {
                     }
                 }
                 if let Some(coding_type) = requested_type {
-                    if coding_type.trim().to_ascii_lowercase() != "not applicable" {
+                    if !coding_type.trim().eq_ignore_ascii_case("not applicable") {
                         return Err(ServiceError::InvalidInput(
                             "coding_type not supported for Boolean".to_string(),
                         ));
                     }
                 }
                 if let Some(behavior) = requested_behavior {
-                    if behavior.trim().to_ascii_lowercase() != "not applicable" {
+                    if !behavior.trim().eq_ignore_ascii_case("not applicable") {
                         return Err(ServiceError::InvalidInput(
                             "coding_behavior not supported for Boolean".to_string(),
                         ));
@@ -2216,8 +2178,8 @@ impl GenomeServiceImpl {
         let mut geometry_changed = false;
         for key in changes.keys() {
             match key.as_str() {
-                "coordinates_3d" | "coordinate_3d" | "coordinates" | "position" | "coordinate_2d"
-                | "coordinates_2d" => {
+                "coordinates_3d" | "coordinate_3d" | "coordinates" | "position"
+                | "coordinate_2d" | "coordinates_2d" => {
                     geometry_changed = true;
                 }
                 "cortical_name" | "name" | "visible" | "visualization_voxel_granularity" => {
@@ -3232,8 +3194,16 @@ impl GenomeServiceImpl {
             } else {
                 None
             };
-            let unit_id = if is_io_area { Some(cortical_bytes[6]) } else { None };
-            let group_id = if is_io_area { Some(cortical_bytes[7]) } else { None };
+            let unit_id = if is_io_area {
+                Some(cortical_bytes[6])
+            } else {
+                None
+            };
+            let group_id = if is_io_area {
+                Some(cortical_bytes[7])
+            } else {
+                None
+            };
             let coding_signage = io_flag
                 .as_ref()
                 .map(|flag| signage_label_from_flag(flag).to_string());
@@ -3410,8 +3380,16 @@ impl GenomeServiceImpl {
         } else {
             None
         };
-        let unit_id = if is_io_area { Some(cortical_bytes[6]) } else { None };
-        let group_id = if is_io_area { Some(cortical_bytes[7]) } else { None };
+        let unit_id = if is_io_area {
+            Some(cortical_bytes[6])
+        } else {
+            None
+        };
+        let group_id = if is_io_area {
+            Some(cortical_bytes[7])
+        } else {
+            None
+        };
         let coding_signage = io_flag
             .as_ref()
             .map(|flag| signage_label_from_flag(flag).to_string());
@@ -3589,8 +3567,16 @@ impl GenomeServiceImpl {
         } else {
             None
         };
-        let unit_id = if is_io_area { Some(cortical_bytes[6]) } else { None };
-        let group_id = if is_io_area { Some(cortical_bytes[7]) } else { None };
+        let unit_id = if is_io_area {
+            Some(cortical_bytes[6])
+        } else {
+            None
+        };
+        let group_id = if is_io_area {
+            Some(cortical_bytes[7])
+        } else {
+            None
+        };
         let coding_signage = io_flag
             .as_ref()
             .map(|flag| signage_label_from_flag(flag).to_string());

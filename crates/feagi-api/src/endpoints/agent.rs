@@ -313,9 +313,11 @@ async fn auto_create_cortical_areas_from_device_registrations(
     if let Some(input_units) = input_units {
         // Auto-rename sensory cortical areas if they exist with placeholder names.
         for (sensory_unit_key, unit_defs) in input_units {
-            let sensory_unit: SensoryCorticalUnit = match serde_json::from_value::<SensoryCorticalUnit>(
-                serde_json::Value::String(sensory_unit_key.clone()),
-            ) {
+            let sensory_unit: SensoryCorticalUnit = match serde_json::from_value::<
+                SensoryCorticalUnit,
+            >(serde_json::Value::String(
+                sensory_unit_key.clone(),
+            )) {
                 Ok(v) => v,
                 Err(e) => {
                     warn!(
@@ -482,7 +484,11 @@ async fn auto_create_cortical_areas_from_device_registrations(
                                         group_u8
                                     )
                                 } else {
-                                    format!("{} Unit {}", sensory_unit.get_friendly_name(), group_u8)
+                                    format!(
+                                        "{} Unit {}",
+                                        sensory_unit.get_friendly_name(),
+                                        group_u8
+                                    )
                                 };
                                 let mut changes = std::collections::HashMap::new();
                                 changes.insert(

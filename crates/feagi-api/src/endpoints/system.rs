@@ -155,11 +155,8 @@ pub async fn get_health_check(
             0.0
         }
     });
-    let simulation_timestep = runtime_timestep.or_else(|| {
-        genome_info
-            .as_ref()
-            .map(|info| info.simulation_timestep)
-    });
+    let simulation_timestep =
+        runtime_timestep.or_else(|| genome_info.as_ref().map(|info| info.simulation_timestep));
     let genome_num = genome_info.as_ref().and_then(|info| info.genome_num);
     let genome_timestamp = genome_info.as_ref().and_then(|info| info.genome_timestamp);
 
@@ -285,7 +282,13 @@ pub async fn get_health_check(
         None
     };
 
-    let (brain_regions_hash, cortical_areas_hash, brain_geometry_hash, morphologies_hash, cortical_mappings_hash) = {
+    let (
+        brain_regions_hash,
+        cortical_areas_hash,
+        brain_geometry_hash,
+        morphologies_hash,
+        cortical_mappings_hash,
+    ) = {
         let state_manager = feagi_state_manager::StateManager::instance();
         let state_manager = state_manager.read();
         (

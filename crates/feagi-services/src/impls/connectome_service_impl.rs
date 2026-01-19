@@ -15,13 +15,13 @@ use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
-use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
+use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag;
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions};
+use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 // Note: decode_cortical_id removed - use feagi_structures::CorticalID directly
 use parking_lot::RwLock;
 use std::collections::HashMap;
@@ -46,7 +46,10 @@ fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
                 let unit_name = unit.get_friendly_name();
                 let has_subunits = unit.get_number_cortical_areas() > 1;
                 let name = if has_subunits {
-                    format!("{} Subunit {} Unit {}", unit_name, subunit_index, unit_index)
+                    format!(
+                        "{} Subunit {} Unit {}",
+                        unit_name, subunit_index, unit_index
+                    )
                 } else {
                     format!("{} Unit {}", unit_name, unit_index)
                 };
@@ -66,7 +69,10 @@ fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
                     };
                     format!("{} ({}) Unit {}", unit_name, subunit_name, unit_index)
                 } else if has_subunits {
-                    format!("{} Subunit {} Unit {}", unit_name, subunit_index, unit_index)
+                    format!(
+                        "{} Subunit {} Unit {}",
+                        unit_name, subunit_index, unit_index
+                    )
                 } else {
                     format!("{} Unit {}", unit_name, unit_index)
                 };
@@ -120,7 +126,9 @@ fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static 
         | IOCorticalAreaConfigurationFlag::SignedPercentage(frame, _)
         | IOCorticalAreaConfigurationFlag::SignedPercentage2D(frame, _)
         | IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame, _)
-        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame, _) => frame_handling_label(*frame),
+        | IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame, _) => {
+            frame_handling_label(*frame)
+        }
     }
 }
 
@@ -150,9 +158,7 @@ fn io_unit_reference_from_cortical_id(cortical_id: &CorticalID) -> Option<[u8; 3
     Some([bytes[1], bytes[2], bytes[3]])
 }
 
-fn io_coding_options_for_unit(
-    cortical_id: &CorticalID,
-) -> Option<IOCodingOptions> {
+fn io_coding_options_for_unit(cortical_id: &CorticalID) -> Option<IOCodingOptions> {
     let unit_ref = io_unit_reference_from_cortical_id(cortical_id)?;
     let is_input = cortical_id.as_bytes()[0] == b'i';
 
@@ -657,8 +663,16 @@ impl ConnectomeService for ConnectomeServiceImpl {
         } else {
             None
         };
-        let unit_id = if is_io_area { Some(cortical_bytes[6]) } else { None };
-        let group_id = if is_io_area { Some(cortical_bytes[7]) } else { None };
+        let unit_id = if is_io_area {
+            Some(cortical_bytes[6])
+        } else {
+            None
+        };
+        let group_id = if is_io_area {
+            Some(cortical_bytes[7])
+        } else {
+            None
+        };
         let coding_signage = io_flag
             .as_ref()
             .map(|flag| signage_label_from_flag(flag).to_string());

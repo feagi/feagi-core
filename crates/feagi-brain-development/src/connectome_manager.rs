@@ -381,12 +381,14 @@ impl ConnectomeManager {
         self.update_state_hashes(Some(hash), None, None, None, None);
     }
 
+    #[allow(dead_code)]
     /// Refresh the cortical areas hash (metadata and properties).
     fn refresh_cortical_areas_hash(&self) {
         let hash = self.compute_cortical_areas_hash();
         self.update_state_hashes(None, Some(hash), None, None, None);
     }
 
+    #[allow(dead_code)]
     /// Refresh the brain geometry hash (positions, dimensions, 2D coordinates).
     fn refresh_brain_geometry_hash(&self) {
         let hash = self.compute_brain_geometry_hash();
@@ -406,11 +408,7 @@ impl ConnectomeManager {
     }
 
     /// Refresh cortical area-related hashes based on the affected data.
-    pub fn refresh_cortical_area_hashes(
-        &self,
-        properties_changed: bool,
-        geometry_changed: bool,
-    ) {
+    pub fn refresh_cortical_area_hashes(&self, properties_changed: bool, geometry_changed: bool) {
         let cortical_hash = if properties_changed {
             Some(self.compute_cortical_areas_hash())
         } else {
@@ -862,10 +860,9 @@ impl ConnectomeManager {
             )));
         }
 
-        let mut area = self
-            .cortical_areas
-            .remove(old_id)
-            .ok_or_else(|| BduError::InvalidArea(format!("Cortical area {} does not exist", old_id)))?;
+        let mut area = self.cortical_areas.remove(old_id).ok_or_else(|| {
+            BduError::InvalidArea(format!("Cortical area {} does not exist", old_id))
+        })?;
         let cortical_idx = area.cortical_idx;
         area.cortical_id = new_id;
         area.cortical_type = new_cortical_type;

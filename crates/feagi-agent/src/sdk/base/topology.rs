@@ -283,15 +283,26 @@ impl TopologyCache {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_topology_cache_creation() {
-        let cache = TopologyCache::new("localhost", 8080, 5.0);
-        assert!(cache.is_ok());
+    /// Build a proxy-free cache for unit tests.
+    fn build_test_cache() -> TopologyCache {
+        let http_client = reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test HTTP client should build");
+        TopologyCache::with_http_client("localhost", 8080, http_client)
     }
 
+    /// Verifies that a fresh cache starts empty.
+    #[test]
+    fn test_topology_cache_creation() {
+        let cache = build_test_cache();
+        assert_eq!(cache.cache_size(), 0);
+    }
+
+    /// Verifies that clearing the cache is idempotent.
     #[test]
     fn test_cache_clear() {
-        let cache = TopologyCache::new("localhost", 8080, 5.0).unwrap();
+        let cache = build_test_cache();
         assert_eq!(cache.cache_size(), 0);
         cache.clear_cache();
         assert_eq!(cache.cache_size(), 0);
