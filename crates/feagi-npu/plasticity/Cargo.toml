@@ -1,6 +1,6 @@
 [package]
 name = "feagi-npu-plasticity"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -26,7 +26,7 @@ default = ["std"]
 std = ["feagi-state-manager/std"]
 
 [dev-dependencies]
-feagi-npu-runtime = { version = "0.0.1-beta.1", path = "../runtime", features = ["std"] }
+feagi-npu-runtime = { version = "0.0.1-beta.2", path = "../runtime", features = ["std"] }
 
 
 

@@ -19,7 +19,7 @@ connectome-serialization = ["bincode", "connectome-compression"]  # Connectome f
 connectome-compression = []  # LZ4 compression for connectome files (lz4 already in dependencies)
 
 [dependencies]
-feagi-npu-burst-engine = { version = "0.0.1-beta.1", path = "../feagi-npu/burst-engine" }
+feagi-npu-burst-engine = { version = "0.0.1-beta.2", path = "../feagi-npu/burst-engine" }
 feagi-brain-development = { version = "0.0.1-beta.1", path = "../feagi-brain-development" }  # For CorticalAreaExt
 feagi-services = { version = "0.0.1-beta.1", path = "../feagi-services" }  # For GenomeService and ConnectomeService
 feagi-npu-neural = { version = "0.0.1-beta.1", path = "../feagi-npu/neural" }  # For types
