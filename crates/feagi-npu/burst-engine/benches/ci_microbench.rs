@@ -306,8 +306,8 @@ fn bench_synaptic_propagation_engine(c: &mut Criterion) {
 fn criterion_config() -> Criterion {
     Criterion::default()
         .warm_up_time(Duration::from_millis(500))
-        .measurement_time(Duration::from_secs(1))
-        .sample_size(20)
+        .measurement_time(Duration::from_secs(2))
+        .sample_size(15)
 }
 
 criterion_group! {

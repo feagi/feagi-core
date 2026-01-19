@@ -123,4 +123,10 @@ cargo test --workspace --lib --verbose
 cargo test --workspace --lib --release --verbose
 cargo build --release --lib --verbose
 
+echo "Running microbenchmarks (criterion) and regression gate..."
+cargo bench -p feagi-npu-burst-engine --bench ci_microbench
+cargo run --bin perf_compare -- \
+  --baseline perf/ci_microbench_baseline.json \
+  --criterion-dir target/criterion
+
 echo "Pre-release checks complete."

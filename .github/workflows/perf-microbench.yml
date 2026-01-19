@@ -9,7 +9,7 @@ jobs:
   microbench:
     name: Microbench (criterion) + regression gate
     runs-on: macos-14
-    timeout-minutes: 45
+    timeout-minutes: 5
     defaults:
       run:
         shell: bash
