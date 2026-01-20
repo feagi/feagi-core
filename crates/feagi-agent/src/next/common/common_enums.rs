@@ -1,6 +1,6 @@
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
 pub enum AgentConnectionState {
     #[default]
     Disconnected,
@@ -26,18 +26,19 @@ impl AgentConnectionState {
 
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq)]
 pub enum AgentCapabilities {
     SendSensorData,
     ReceiveMotorData,
     ReceiveNeuronVisualizations
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Eq)]
 pub enum FeagiConnectionConfiguration {
     NeuroRoboticsStudio,
     DummyTesting,
-    ZMQDirect,
+    ZMQDirect{host: String},
+    WebsocketDirect{host: String},
 }
 
 
