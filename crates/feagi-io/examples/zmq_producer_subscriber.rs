@@ -7,12 +7,12 @@
 //!
 //! Terminal 1 (Publisher/Server):
 //! ```sh
-//! cargo run --example producer_subscriber -- publisher
+//! cargo run --example zmq_producer_subscriber -- publisher
 //! ```
 //!
 //! Terminal 2 (Subscriber/Client):
 //! ```sh
-//! cargo run --example producer_subscriber -- subscriber
+//! cargo run --example zmq_producer_subscriber -- subscriber
 //! ```
 
 use std::env;
@@ -101,8 +101,6 @@ fn main() {
         println!("Usage:");
         println!("  {} publisher   - Start the publisher (sends messages)", args[0]);
         println!("  {} subscriber  - Start the subscriber (receives messages)", args[0]);
-        println!();
-        println!("Note: Requires --features zmq-transport");
         println!();
         println!("Run the publisher first, then the subscriber in another terminal.");
         return;

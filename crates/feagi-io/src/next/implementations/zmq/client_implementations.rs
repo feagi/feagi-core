@@ -122,18 +122,22 @@ pub struct FEAGIZMQClientRequester {
     context_ref: zmq::Context,
     server_address: String,
     current_state: FeagiClientConnectionState,
-    socket: zmq::Socket
+    socket: zmq::Socket,
+    cached_response_data: Vec<u8>
 }
 
 impl FEAGIZMQClientRequester {
     pub fn new(context: &mut zmq::Context, server_address: String) -> Result<Self, FeagiNetworkError> {
         validate_zmq_url(&server_address)?;
         let socket = context.socket(zmq::DEALER).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        // Set socket to non-blocking mode for try_poll_response
+        socket.set_rcvtimeo(0).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         Ok(Self {
             context_ref: context.clone(),
             server_address,
             current_state: FeagiClientConnectionState::Disconnected,
-            socket
+            socket,
+            cached_response_data: Vec::new()
         })
     }
 }
@@ -163,18 +167,38 @@ impl FeagiClient for FEAGIZMQClientRequester {
 }
 
 impl FeagiClientRequester for FEAGIZMQClientRequester {
-    fn send_request_and_process_response<F>(&self, request: &[u8], on_response_received: F)
-    where
-        F: Fn(&[u8]) -> &[u8] + Send + Sync + 'static
-    {
-        // Send request
-        if self.socket.send(request, 0).is_err() {
-            return;
+    fn send_request(&self, request: &[u8]) -> Result<(), FeagiNetworkError> {
+        // DEALER/ROUTER protocol: send empty delimiter frame first, then request
+        self.socket.send(zmq::Message::new(), zmq::SNDMORE)
+            .map_err(|e| FeagiNetworkError::SendFailed(format!("Failed to send delimiter: {}", e)))?;
+        self.socket.send(request, 0)
+            .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
+        Ok(())
+    }
+
+    fn try_poll_response(&mut self) -> Result<bool, FeagiNetworkError> {
+        // Response format: [empty_delimiter, response_data]
+        // First, try to receive the empty delimiter frame
+        match self.socket.recv_bytes(0) {
+            Ok(_delimiter) => {
+                // Delimiter received, now get the actual response
+            }
+            Err(zmq::Error::EAGAIN) => return Ok(false), // No data available
+            Err(e) => return Err(FeagiNetworkError::ReceiveFailed(e.to_string()))
         }
-        // Receive response (blocking) // TODO not blocking!
-        if let Ok(response) = self.socket.recv_bytes(0) {
-            on_response_received(&response);
+
+        // Receive actual response data
+        match self.socket.recv_bytes(0) {
+            Ok(data) => {
+                self.cached_response_data = data;
+                Ok(true)
+            }
+            Err(e) => Err(FeagiNetworkError::ReceiveFailed(e.to_string()))
         }
+    }
+
+    fn get_response_data(&self) -> &[u8] {
+        &self.cached_response_data
     }
 }
 

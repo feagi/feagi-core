@@ -58,11 +58,11 @@ pub struct FEAGIZMQServerPuller {
     server_bind_address: String,
     current_state: FeagiServerBindState,
     socket: zmq::Socket,
-    data_received_callback: fn(&[u8])
+    cached_data: Vec<u8>
 }
 
 impl FEAGIZMQServerPuller {
-    pub fn new(context: &mut zmq::Context, server_bind_address: String, data_received_callback: fn(&[u8]))
+    pub fn new(context: &mut zmq::Context, server_bind_address: String)
         -> Result<Self, FeagiNetworkError>
     {
         validate_zmq_url(&server_bind_address)?;
@@ -72,13 +72,15 @@ impl FEAGIZMQServerPuller {
             server_bind_address,
             current_state: FeagiServerBindState::Inactive,
             socket,
-            data_received_callback
+            cached_data: Vec::new()
         })
     }
 }
 
 impl FeagiServer for FEAGIZMQServerPuller {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
+        // Set socket to non-blocking mode for try_poll
+        self.socket.set_rcvtimeo(0).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         // NOTE: there is a period of ~200 ms when this needs to activate!
         self.socket.bind(&self.server_bind_address).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.current_state = FeagiServerBindState::Active;
@@ -97,7 +99,20 @@ impl FeagiServer for FEAGIZMQServerPuller {
 }
 
 impl FeagiServerPuller for FEAGIZMQServerPuller {
-    // Nothing
+    fn try_poll(&mut self) -> Result<bool, FeagiNetworkError> {
+        match self.socket.recv_bytes(0) {
+            Ok(data) => {
+                self.cached_data = data; // TODO this does reallocation, we should find a better way of handling this
+                Ok(true)
+            }
+            Err(zmq::Error::EAGAIN) => Ok(false), // No data available (non-blocking)
+            Err(e) => Err(FeagiNetworkError::ReceiveFailed(e.to_string()))
+        }
+    }
+
+    fn get_cached_data(&self) -> &[u8] {
+        &self.cached_data
+    }
 }
 
 //endregion
@@ -109,12 +124,12 @@ pub struct FEAGIZMQServerRouter {
     server_bind_address: String,
     current_state: FeagiServerBindState,
     socket: zmq::Socket,
-    data_process_callback: fn(&[u8], &mut [u8]) -> Result<(), FeagiNetworkError>,
-    cache_processed_bytes: Vec<u8>
+    cached_client_identity: Vec<u8>,
+    cached_request_data: Vec<u8>
 }
 
 impl FEAGIZMQServerRouter {
-    pub fn new(context: &mut zmq::Context, server_bind_address: String, data_process_callback: fn(&[u8], &mut [u8]) -> Result<(), FeagiNetworkError>)
+    pub fn new(context: &mut zmq::Context, server_bind_address: String)
         -> Result<Self, FeagiNetworkError>
     {
         validate_zmq_url(&server_bind_address)?;
@@ -124,14 +139,16 @@ impl FEAGIZMQServerRouter {
             server_bind_address,
             current_state: FeagiServerBindState::Inactive,
             socket,
-            data_process_callback,
-            cache_processed_bytes: Vec::new()
+            cached_client_identity: Vec::new(),
+            cached_request_data: Vec::new()
         })
     }
 }
 
 impl FeagiServer for FEAGIZMQServerRouter {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
+        // Set socket to non-blocking mode for try_poll
+        self.socket.set_rcvtimeo(0).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         // NOTE: there is a period of ~200 ms when this needs to activate!
         self.socket.bind(&self.server_bind_address).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.current_state = FeagiServerBindState::Active;
@@ -150,9 +167,44 @@ impl FeagiServer for FEAGIZMQServerRouter {
 }
 
 impl FeagiServerRouter for FEAGIZMQServerRouter {
-    fn _received_request(&mut self, request_data: &[u8]) -> Result<(), FeagiNetworkError> {
-        (self.data_process_callback)(request_data, &mut self.cache_processed_bytes)?;
-        self.socket.send(&self.cache_processed_bytes, 0).map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
+    fn try_poll(&mut self) -> Result<bool, FeagiNetworkError> {
+        // ROUTER receives: [identity, empty_delimiter, request_data]
+        // First, try to receive the identity frame
+        match self.socket.recv_bytes(0) {
+            Ok(identity) => {
+                self.cached_client_identity = identity;
+            }
+            Err(zmq::Error::EAGAIN) => return Ok(false), // No data available
+            Err(e) => return Err(FeagiNetworkError::ReceiveFailed(e.to_string()))
+        }
+
+        // Receive empty delimiter frame (sent by DEALER)
+        if let Err(e) = self.socket.recv_bytes(0) {
+            return Err(FeagiNetworkError::ReceiveFailed(format!("Failed to receive delimiter: {}", e)));
+        }
+
+        // Receive actual request data
+        match self.socket.recv_bytes(0) {
+            Ok(data) => {
+                self.cached_request_data = data;
+                Ok(true)
+            }
+            Err(e) => Err(FeagiNetworkError::ReceiveFailed(e.to_string()))
+        }
+    }
+
+    fn get_request_data(&self) -> &[u8] {
+        &self.cached_request_data
+    }
+
+    fn send_response(&mut self, response: &[u8]) -> Result<(), FeagiNetworkError> {
+        // Send response: [identity, empty_delimiter, response_data]
+        self.socket.send(&self.cached_client_identity, zmq::SNDMORE)
+            .map_err(|e| FeagiNetworkError::SendFailed(format!("Failed to send identity: {}", e)))?;
+        self.socket.send(zmq::Message::new(), zmq::SNDMORE)
+            .map_err(|e| FeagiNetworkError::SendFailed(format!("Failed to send delimiter: {}", e)))?;
+        self.socket.send(response, 0)
+            .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
         Ok(())
     }
 }
