@@ -1,5 +1,5 @@
 use crate::next::FeagiNetworkError;
-use crate::next::traits::server::FeagiServer;
+use crate::next::traits_and_enums::server::FeagiServer;
 
 /// A server that handles request-response communication with automatic client routing.
 ///

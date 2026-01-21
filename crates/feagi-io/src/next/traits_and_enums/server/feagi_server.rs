@@ -1,5 +1,5 @@
 use crate::next::FeagiNetworkError;
-use crate::next::state_enums::FeagiServerBindState;
+use crate::next::traits_and_enums::server::server_enums::FeagiServerBindState;
 
 /// Base trait for all FEAGI server types.
 ///
@@ -23,4 +23,14 @@ pub trait FeagiServer {
 
     /// Returns the current bind state of the server.
     fn get_current_state(&self) -> FeagiServerBindState;
+
+    /// Sets a function that gets immediately following the bind state changing
+    fn set_callback_on_state_change<F>(&self, callback: F) where
+        F: Fn(FeagiServerBindStateChange) + Send + Sync + 'static;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FeagiServerBindStateChange {
+    previous: FeagiServerBindState,
+    now: FeagiServerBindState,
 }

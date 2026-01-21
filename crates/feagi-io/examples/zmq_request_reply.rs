@@ -26,8 +26,8 @@ use std::thread;
 use std::time::Duration;
 
 use feagi_io::next::implementations::zmq::{FEAGIZMQServerRouter, FEAGIZMQClientRequester};
-use feagi_io::next::traits::server::{FeagiServer, FeagiServerRouter};
-use feagi_io::next::traits::client::{FeagiClient, FeagiClientRequester};
+use feagi_io::next::traits_and_enums::server::{FeagiServer, FeagiServerRouter};
+use feagi_io::next::traits_and_enums::client::{FeagiClient, FeagiClientRequester};
 
 const ADDRESS: &str = "tcp://127.0.0.1:5557";
 

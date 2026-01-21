@@ -1,6 +1,6 @@
 use feagi_io::next::FeagiNetworkError;
 use feagi_io::next::implementations::zmq::FEAGIZMQClientPusher;
-use feagi_io::next::traits::client::{FeagiClientPusher, FeagiClientSubscriber};
+use feagi_io::next::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
 
 pub trait ConnectorAgentNetworkImplementation {
     // contains a sensor stream, motor stream

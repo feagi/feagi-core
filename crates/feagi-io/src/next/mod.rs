@@ -1,8 +1,9 @@
 mod error;
 mod state_enums;
 
-pub mod traits;
+pub mod traits_and_enums;
 pub mod implementations;
 
 pub use error::FeagiNetworkError;
-pub use state_enums::{FeagiServerBindState, FeagiClientConnectionState};
+pub use traits_and_enums::client::client_enums::FeagiClientConnectionState;
+pub use traits_and_enums::server::server_enums::FeagiServerBindState;

@@ -1,7 +1,7 @@
 use crate::next::FeagiNetworkError;
 use crate::next::implementations::zmq::shared_functions::validate_zmq_url;
-use crate::next::state_enums::FeagiServerBindState;
-use crate::next::traits::server::{FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
+use crate::next::traits_and_enums::server::server_enums::FeagiServerBindState;
+use crate::next::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
 
 //region Publisher
 pub struct FEAGIZMQServerPublisher {

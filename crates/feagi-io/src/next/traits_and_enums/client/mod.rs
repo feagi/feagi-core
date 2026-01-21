@@ -2,6 +2,7 @@ mod feagi_client;
 mod feagi_client_subscriber;
 mod feagi_client_requester;
 mod feagi_client_pusher;
+mod client_enums;
 
 pub use feagi_client::FeagiClient;
 pub use feagi_client_subscriber::FeagiClientSubscriber;

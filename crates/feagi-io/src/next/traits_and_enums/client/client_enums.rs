@@ -1,10 +1,3 @@
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub enum FeagiServerBindState {
-    Inactive,
-    Active,
-}
-
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum FeagiClientConnectionState {
     Disconnected,
@@ -12,4 +5,3 @@ pub enum FeagiClientConnectionState {
     Connected,
     Reconnecting,
 }
-

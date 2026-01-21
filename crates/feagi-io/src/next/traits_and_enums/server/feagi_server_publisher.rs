@@ -1,20 +1,11 @@
 use crate::next::FeagiNetworkError;
-use crate::next::traits::server::FeagiServer;
+use crate::next::traits_and_enums::server::FeagiServer;
 
 /// A server that broadcasts data to all connected subscribers.
 ///
 /// Implements the publish-subscribe pattern where the server pushes data
 /// to any number of subscribed clients. Clients receive data passively
 /// without sending requests.
-///
-/// # ZMQ Implementation
-/// Uses a `PUB` socket. Clients connect with `SUB` sockets.
-///
-/// # Example
-/// ```ignore
-/// server.start()?;
-/// server.publish(b"sensor_data")?;
-/// ```
 pub trait FeagiServerPublisher: FeagiServer {
     /// Broadcasts data to all connected subscribers.
     ///

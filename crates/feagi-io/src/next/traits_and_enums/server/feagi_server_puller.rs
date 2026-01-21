@@ -1,26 +1,10 @@
 use crate::next::FeagiNetworkError;
-use crate::next::traits::server::FeagiServer;
+use crate::next::traits_and_enums::server::FeagiServer;
 
 /// A server that receives pushed data from clients.
 ///
 /// Implements the push-pull pattern where clients push data to the server.
 /// The server polls for incoming data and caches it internally for zero-copy access.
-///
-/// # ZMQ Implementation
-/// Uses a `PULL` socket. Clients connect with `PUSH` sockets.
-///
-/// # Usage
-/// ```ignore
-/// let mut server = FEAGIZMQServerPuller::new(&mut context, address)?;
-/// server.start()?;
-///
-/// loop {
-///     if server.try_poll()? {
-///         let data = server.get_cached_data();
-///         // process data...
-///     }
-/// }
-/// ```
 pub trait FeagiServerPuller: FeagiServer {
     /// Non-blocking poll for incoming data.
     ///
@@ -28,7 +12,7 @@ pub trait FeagiServerPuller: FeagiServer {
     /// it is cached internally and can be accessed via [`get_cached_data`].
     ///
     /// # Returns
-    /// - `Ok(true)` - New data was received and cached
+    /// - `Ok(true)` - New data was received and cached (use get_cached_data to retrieve)
     /// - `Ok(false)` - No data available
     /// - `Err(...)` - An error occurred while polling
     fn try_poll(&mut self) -> Result<bool, FeagiNetworkError>;
