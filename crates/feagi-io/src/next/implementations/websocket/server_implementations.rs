@@ -9,7 +9,7 @@ use tungstenite::{accept, Message, WebSocket};
 use tungstenite::protocol::Role;
 
 use crate::next::FeagiNetworkError;
-use crate::next::traits_and_enums::server::server_enums::FeagiServerBindState;
+use crate::next::traits_and_enums::server::server_shared::FeagiServerBindState;
 use crate::next::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
 
 //region Publisher

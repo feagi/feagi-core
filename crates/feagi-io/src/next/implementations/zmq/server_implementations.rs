@@ -1,34 +1,45 @@
-use crate::next::FeagiNetworkError;
+use crate::next::{FeagiNetworkError, FeagiServerBindState};
 use crate::next::implementations::zmq::shared_functions::validate_zmq_url;
-use crate::next::traits_and_enums::server::server_enums::FeagiServerBindState;
 use crate::next::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
+use crate::next::traits_and_enums::server::server_shared::FeagiServerBindStateChange;
 
 //region Publisher
-pub struct FEAGIZMQServerPublisher {
+pub struct FEAGIZMQServerPublisher<S>
+where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
+{
     context_ref: zmq::Context,
     server_bind_address: String,
     current_state: FeagiServerBindState,
-    socket: zmq::Socket
+    socket: zmq::Socket,
+    state_change_callback: S
 }
 
-impl FEAGIZMQServerPublisher {
-    pub fn new(context: &mut zmq::Context, server_bind_address: String) -> Result<Self, FeagiNetworkError> {
+
+impl<S> FEAGIZMQServerPublisher<S>
+where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
+    pub fn new(context: &mut zmq::Context, server_bind_address: String, state_change_callback: S) -> Result<Self, FeagiNetworkError> {
         validate_zmq_url(&server_bind_address)?;
         let socket = context.socket(zmq::PUB).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         Ok(Self {
             context_ref: context.clone(),
             server_bind_address,
             current_state: FeagiServerBindState::Inactive,
-            socket
+            socket,
+            state_change_callback
         })
     }
 }
 
-impl FeagiServer for FEAGIZMQServerPublisher {
+impl<S> FeagiServer for FEAGIZMQServerPublisher<S>
+where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         // NOTE: there is a period of ~200 ms when this needs to activate!
         self.socket.bind(&self.server_bind_address).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.current_state = FeagiServerBindState::Active;
+        (self.state_change_callback)(
+            FeagiServerBindStateChange::new(
+                FeagiServerBindState::Inactive, FeagiServerBindState::Inactive
+            ));
         Ok(())
     }
 
@@ -43,7 +54,8 @@ impl FeagiServer for FEAGIZMQServerPublisher {
     }
 }
 
-impl FeagiServerPublisher for FEAGIZMQServerPublisher {
+impl<S> FeagiServerPublisher for FEAGIZMQServerPublisher<S>
+where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
     fn publish(&mut self, buffered_data_to_send: &[u8]) -> Result<(), FeagiNetworkError> {
         self.socket.send(buffered_data_to_send, 0).map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
         Ok(())

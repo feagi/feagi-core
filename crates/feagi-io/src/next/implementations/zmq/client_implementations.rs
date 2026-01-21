@@ -1,6 +1,6 @@
 use crate::next::FeagiNetworkError;
 use crate::next::implementations::zmq::shared_functions::validate_zmq_url;
-use crate::next::traits_and_enums::client::client_enums::FeagiClientConnectionState;
+use crate::next::traits_and_enums::client::client_shared::FeagiClientConnectionState;
 use crate::next::traits_and_enums::client::{FeagiClient, FeagiClientSubscriber, FeagiClientPusher, FeagiClientRequester};
 
 //region Subscriber

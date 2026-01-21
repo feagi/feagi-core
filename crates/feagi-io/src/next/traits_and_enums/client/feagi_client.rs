@@ -1,5 +1,5 @@
 use crate::next::FeagiNetworkError;
-use crate::next::traits_and_enums::client::client_enums::FeagiClientConnectionState;
+use crate::next::traits_and_enums::client::client_shared::FeagiClientConnectionState;
 
 pub trait FeagiClient {
     fn connect(&self, host: String);

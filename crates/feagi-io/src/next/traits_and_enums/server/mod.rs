@@ -11,7 +11,7 @@ mod feagi_server;
 mod feagi_server_publisher;
 mod feagi_server_router;
 mod feagi_server_puller;
-mod server_enums;
+pub mod server_shared;
 
 pub use feagi_server::FeagiServer;
 pub use feagi_server_publisher::FeagiServerPublisher;
