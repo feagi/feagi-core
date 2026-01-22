@@ -1,9 +1,9 @@
-use crate::next::common::agent_id::AgentID;
+use crate::next::common::agent_descriptor::AgentDescriptor;
 use crate::next::common::common_enums::{AgentCapabilities, FeagiConnectionConfiguration};
 use crate::next::common::common_enums::AgentConnectionState;
 
 pub trait FeagiAgent {
-    fn agent_id(&self) -> &AgentID;
+    fn agent_id(&self) -> &AgentDescriptor;
 
     fn current_connection_state(&self) -> &AgentConnectionState;
 

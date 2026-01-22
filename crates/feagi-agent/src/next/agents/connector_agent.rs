@@ -3,16 +3,16 @@ use feagi_sensorimotor::caching::{MotorDeviceCache, SensorDeviceCache};
 use feagi_sensorimotor::ConnectorCache;
 use feagi_sensorimotor::feedbacks::{FeedBackRegistration, FeedbackRegistrationTargets};
 use feagi_structures::FeagiDataError;
-use crate::next::common::{AgentCapabilities, AgentConnectionState, AgentID, FeagiAgent, FeagiConnectionConfiguration};
+use crate::next::common::{AgentCapabilities, AgentConnectionState, AgentDescriptor, FeagiAgent, FeagiConnectionConfiguration};
 
 pub struct ConnectorAgent {
-    agent_id: AgentID,
+    agent_id: AgentDescriptor,
     current_connection_state: AgentConnectionState,
     connector_cache: ConnectorCache
 }
 
 impl ConnectorAgent {
-    pub fn new_empty(agent_id: AgentID) -> Self {
+    pub fn new_empty(agent_id: AgentDescriptor) -> Self {
         ConnectorAgent {
             agent_id,
             current_connection_state: AgentConnectionState::Disconnected,
@@ -20,7 +20,7 @@ impl ConnectorAgent {
         }
     }
 
-    pub fn new_from_device_registration_json(agent_id: AgentID, json: serde_json::Value) -> Result<Self, FeagiDataError> {
+    pub fn new_from_device_registration_json(agent_id: AgentDescriptor, json: serde_json::Value) -> Result<Self, FeagiDataError> {
         let mut agent = Self::new_empty(agent_id);
         agent.set_device_registrations_from_json(json)?;
         Ok(agent)
@@ -67,7 +67,7 @@ impl ConnectorAgent {
 }
 
 impl FeagiAgent for ConnectorAgent {
-    fn agent_id(&self) -> &AgentID {
+    fn agent_id(&self) -> &AgentDescriptor {
         &self.agent_id
     }
 

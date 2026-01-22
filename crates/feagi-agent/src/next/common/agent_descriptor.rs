@@ -5,15 +5,15 @@ const MAX_MANUFACTURER_LENGTH: usize = 20;
 const MAX_AGENT_NAME_LENGTH: usize = 20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AgentID {
+pub struct AgentDescriptor {
     instance_id: u32,
     manufacturer: [u8; MAX_MANUFACTURER_LENGTH], //ASCII
     agent_name: [u8; MAX_AGENT_NAME_LENGTH],     //ASCII
     agent_version: u32,
 }
 
-impl AgentID {
-    /// Total size in bytes of the AgentID structure
+impl AgentDescriptor {
+    /// Total size in bytes of the AgentDescriptor structure
     pub const SIZE_BYTES: usize = 4 + MAX_MANUFACTURER_LENGTH + MAX_AGENT_NAME_LENGTH + 4; // instance_id + manufacturer + agent_name + agent_version
 
     pub fn new(
@@ -53,7 +53,7 @@ impl AgentID {
         let mut agent_name_bytes = [0u8; MAX_AGENT_NAME_LENGTH];
         agent_name_bytes[..agent_name.len()].copy_from_slice(agent_name.as_bytes());
 
-        Ok(AgentID {
+        Ok(AgentDescriptor {
             instance_id,
             manufacturer: manufacturer_bytes,
             agent_name: agent_name_bytes,
@@ -172,7 +172,7 @@ impl AgentID {
             ));
         }
 
-        Ok(AgentID {
+        Ok(AgentDescriptor {
             instance_id,
             manufacturer,
             agent_name,
@@ -180,12 +180,12 @@ impl AgentID {
         })
     }
 
-    /// Encode the AgentID to a base64 string
+    /// Encode the AgentDescriptor to a base64 string
     pub fn to_base64(&self) -> String {
         general_purpose::STANDARD.encode(self.to_bytes())
     }
 
-    /// Try to decode an AgentID from a base64 string
+    /// Try to decode an AgentDescriptor from a base64 string
     pub fn try_from_base64(encoded: &str) -> Result<Self, FeagiDataError> {
         let decoded = general_purpose::STANDARD.decode(encoded).map_err(|e| {
             FeagiDataError::DeserializationError(format!("Failed to decode base64 string: {}", e))
@@ -193,7 +193,7 @@ impl AgentID {
 
         if decoded.len() != Self::SIZE_BYTES {
             return Err(FeagiDataError::DeserializationError(format!(
-                "Invalid AgentID length: expected {} bytes, got {}",
+                "Invalid AgentDescriptor length: expected {} bytes, got {}",
                 Self::SIZE_BYTES,
                 decoded.len()
             )));
