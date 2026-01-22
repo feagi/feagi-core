@@ -37,31 +37,33 @@ fn run_server() {
 
     let mut context = zmq::Context::new();
 
-    let mut server = FEAGIZMQServerRouter::new(&mut context, ADDRESS.to_string())
-        .expect("Failed to create server router");
+    let mut server = FEAGIZMQServerRouter::new(
+        &mut context,
+        ADDRESS.to_string(),
+        |state_change| println!("[SERVER] State changed: {:?}", state_change)
+    ).expect("Failed to create server router");
 
     server.start().expect("Failed to start server");
     println!("Server started successfully!");
     println!("Waiting for client requests...\n");
 
     loop {
-        // Non-blocking poll for incoming requests
-        match server.try_poll() {
-            Ok(true) => {
-                // Request received! Get the data
-                let request = server.get_request_data();
+        // Non-blocking poll for incoming requests - returns Option<(ClientId, &[u8])>
+        match server.try_poll_receive() {
+            Ok(Some((client_id, request))) => {
+                // Request received! client_id identifies which client sent it
                 let request_str = String::from_utf8_lossy(request);
-                println!("[SERVER] Received request: {}", request_str);
+                println!("[SERVER] Received request from {:?}: {}", client_id, request_str);
 
                 // Process and create response
                 let response_str = format!("Server processed: '{}'", request_str);
-                println!("[SERVER] Sending response: {}\n", response_str);
+                println!("[SERVER] Sending response to {:?}: {}\n", client_id, response_str);
 
-                // Send response back to the client
-                server.send_response(response_str.as_bytes())
+                // Send response back to the specific client using their ClientId
+                server.send_response(client_id, response_str.as_bytes())
                     .expect("Failed to send response");
             }
-            Ok(false) => {
+            Ok(None) => {
                 // No request available, do other work or sleep briefly
                 thread::sleep(Duration::from_millis(10));
             }
@@ -79,10 +81,13 @@ fn run_client() {
 
     let mut context = zmq::Context::new();
 
-    let mut client = FEAGIZMQClientRequester::new(&mut context, ADDRESS.to_string())
-        .expect("Failed to create client requester");
+    let mut client = FEAGIZMQClientRequester::new(
+        &mut context,
+        ADDRESS.to_string(),
+        |state_change| println!("[CLIENT] State changed: {:?}", state_change)
+    ).expect("Failed to create client requester");
 
-    client.connect(ADDRESS.to_string());
+    client.connect(ADDRESS).expect("Failed to connect");
     println!("Client connected successfully!\n");
 
     // Brief delay to ensure connection is established
@@ -97,16 +102,15 @@ fn run_client() {
         client.send_request(request.as_bytes())
             .expect("Failed to send request");
 
-        // Poll for response
+        // Poll for response - returns Option<&[u8]>
         loop {
-            match client.try_poll_response() {
-                Ok(true) => {
-                    let response = client.get_response_data();
+            match client.try_poll_receive() {
+                Ok(Some(response)) => {
                     let response_str = String::from_utf8_lossy(response);
                     println!("[CLIENT] Received response: {}\n", response_str);
                     break;
                 }
-                Ok(false) => {
+                Ok(None) => {
                     // No response yet, keep polling
                     thread::sleep(Duration::from_millis(10));
                 }

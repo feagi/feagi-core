@@ -62,6 +62,11 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
 
 impl<S> FeagiServerPublisher for FEAGIZMQServerPublisher<S>
 where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
+    fn poll(&mut self) -> Result<(), FeagiNetworkError> {
+        // ZMQ handles connections internally - no-op
+        Ok(())
+    }
+
     fn publish(&mut self, buffered_data_to_send: &[u8]) -> Result<(), FeagiNetworkError> {
         self.socket.send(buffered_data_to_send, 0).map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
         Ok(())

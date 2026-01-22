@@ -31,8 +31,11 @@ fn run_publisher() {
 
     let mut context = zmq::Context::new();
 
-    let mut publisher = FEAGIZMQServerPublisher::new(&mut context, ADDRESS.to_string())
-        .expect("Failed to create publisher");
+    let mut publisher = FEAGIZMQServerPublisher::new(
+        &mut context,
+        ADDRESS.to_string(),
+        |state_change| println!("[PUB] State changed: {:?}", state_change)
+    ).expect("Failed to create publisher");
 
     publisher.start().expect("Failed to start publisher");
     println!("Publisher started successfully!");
@@ -43,6 +46,9 @@ fn run_publisher() {
 
     let mut counter = 0u64;
     loop {
+        // Poll for new connections (no-op for ZMQ, accepts connections for WebSocket)
+        publisher.poll().expect("Failed to poll");
+
         let message = format!("Message #{}: Hello from FEAGI!", counter);
         println!("[PUB] Sending: {}", message);
 
@@ -55,34 +61,30 @@ fn run_publisher() {
     }
 }
 
-/// Callback function for handling received data
-fn on_data_received(data: &[u8]) {
-    let message = String::from_utf8_lossy(data);
-    println!("[SUB] Received: {}", message);
-}
-
 fn run_subscriber() {
     println!("=== FEAGI ZMQ Subscriber Example ===\n");
     println!("Connecting subscriber to {}", ADDRESS);
 
     let mut context = zmq::Context::new();
 
-    let subscriber = FEAGIZMQClientSubscriber::new(&mut context, ADDRESS.to_string(), on_data_received)
-        .expect("Failed to create subscriber");
+    let mut subscriber = FEAGIZMQClientSubscriber::new(
+        &mut context,
+        ADDRESS.to_string(),
+        |state_change| println!("[SUB] State changed: {:?}", state_change)
+    ).expect("Failed to create subscriber");
 
-    subscriber.connect(ADDRESS.to_string());
+    subscriber.connect(ADDRESS).expect("Failed to connect");
     println!("Subscriber connected. Waiting for messages...\n");
 
-    // Create a raw socket for receiving since our trait-based implementation
-    // uses callbacks that would require async infrastructure
-    let socket = context.socket(zmq::SUB).expect("Failed to create SUB socket");
-    socket.connect(ADDRESS).expect("Failed to connect");
-    socket.set_subscribe(b"").expect("Failed to subscribe");
-
     loop {
-        match socket.recv_bytes(0) {
-            Ok(bytes) => {
-                on_data_received(&bytes);
+        match subscriber.try_poll_receive() {
+            Ok(Some(data)) => {
+                let message = String::from_utf8_lossy(data);
+                println!("[SUB] Received: {}", message);
+            }
+            Ok(None) => {
+                // No data available, sleep briefly
+                thread::sleep(Duration::from_millis(10));
             }
             Err(e) => {
                 eprintln!("[SUB] Error receiving: {}", e);

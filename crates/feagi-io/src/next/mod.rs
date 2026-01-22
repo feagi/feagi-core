@@ -1,5 +1,4 @@
 mod error;
-mod state_enums;
 
 pub mod traits_and_enums;
 pub mod implementations;

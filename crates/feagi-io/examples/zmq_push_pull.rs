@@ -37,23 +37,24 @@ fn run_server() {
 
     let mut context = zmq::Context::new();
 
-    let mut server = FEAGIZMQServerPuller::new(&mut context, ADDRESS.to_string())
-        .expect("Failed to create server puller");
+    let mut server = FEAGIZMQServerPuller::new(
+        &mut context,
+        ADDRESS.to_string(),
+        |state_change| println!("[SERVER] State changed: {:?}", state_change)
+    ).expect("Failed to create server puller");
 
     server.start().expect("Failed to start server");
     println!("Server started successfully!");
     println!("Waiting for clients to push data...\n");
 
     loop {
-        // Non-blocking poll - check if data is available
-        match server.try_poll() {
-            Ok(true) => {
-                // Data received!
-                let data = server.get_cached_data();
+        // Non-blocking poll - returns Option<(ClientId, &[u8])>
+        match server.try_poll_receive() {
+            Ok(Some(data)) => {
                 let message = String::from_utf8_lossy(data);
                 println!("[SERVER] Received: {}", message);
             }
-            Ok(false) => {
+            Ok(None) => {
                 // No data available, do other work or sleep briefly
                 thread::sleep(Duration::from_millis(10));
             }
@@ -71,10 +72,13 @@ fn run_client() {
 
     let mut context = zmq::Context::new();
 
-    let client = FEAGIZMQClientPusher::new(&mut context, ADDRESS.to_string())
-        .expect("Failed to create client pusher");
+    let mut client = FEAGIZMQClientPusher::new(
+        &mut context,
+        ADDRESS.to_string(),
+        |state_change| println!("[CLIENT] State changed: {:?}", state_change)
+    ).expect("Failed to create client pusher");
 
-    client.connect(ADDRESS.to_string());
+    client.connect(ADDRESS).expect("Failed to connect");
     println!("Client connected successfully!");
 
     // Brief delay to ensure connection is established
