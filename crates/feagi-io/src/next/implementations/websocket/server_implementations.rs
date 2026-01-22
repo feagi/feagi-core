@@ -7,7 +7,10 @@ use tungstenite::{accept, Message, WebSocket};
 
 use crate::next::FeagiNetworkError;
 use crate::next::traits_and_enums::server::server_shared::{ClientId, FeagiServerBindState, FeagiServerBindStateChange};
-use crate::next::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
+use crate::next::traits_and_enums::server::{
+    FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter,
+    FeagiServerPublisherProperties, FeagiServerPullerProperties, FeagiServerRouterProperties
+};
 
 //region Publisher
 
@@ -477,5 +480,102 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
         Ok(())
     }
 }
+
+//endregion
+
+//region Properties
+
+//region Publisher Properties
+
+/// Properties for configuring and building a WebSocket Server Publisher.
+pub struct FEAGIWebSocketServerPublisherProperties {
+    bind_address: String,
+}
+
+impl FEAGIWebSocketServerPublisherProperties {
+    /// Create new properties with the given bind address.
+    pub fn new(bind_address: String) -> Self {
+        Self {
+            bind_address,
+        }
+    }
+}
+
+impl FeagiServerPublisherProperties for FEAGIWebSocketServerPublisherProperties {
+    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiServerPublisher>
+    where F: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
+    {
+        let publisher = FEAGIWebSocketServerPublisher::new(
+            self.bind_address,
+            state_change_callback,
+        ).expect("Failed to create WebSocket publisher");
+        
+        Box::new(publisher)
+    }
+}
+
+//endregion
+
+//region Puller Properties
+
+/// Properties for configuring and building a WebSocket Server Puller.
+pub struct FEAGIWebSocketServerPullerProperties {
+    bind_address: String,
+}
+
+impl FEAGIWebSocketServerPullerProperties {
+    /// Create new properties with the given bind address.
+    pub fn new(bind_address: String) -> Self {
+        Self {
+            bind_address,
+        }
+    }
+}
+
+impl FeagiServerPullerProperties for FEAGIWebSocketServerPullerProperties {
+    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiServerPuller>
+    where F: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
+    {
+        let puller = FEAGIWebSocketServerPuller::new(
+            self.bind_address,
+            state_change_callback,
+        ).expect("Failed to create WebSocket puller");
+        
+        Box::new(puller)
+    }
+}
+
+//endregion
+
+//region Router Properties
+
+/// Properties for configuring and building a WebSocket Server Router.
+pub struct FEAGIWebSocketServerRouterProperties {
+    bind_address: String,
+}
+
+impl FEAGIWebSocketServerRouterProperties {
+    /// Create new properties with the given bind address.
+    pub fn new(bind_address: String) -> Self {
+        Self {
+            bind_address,
+        }
+    }
+}
+
+impl FeagiServerRouterProperties for FEAGIWebSocketServerRouterProperties {
+    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiServerRouter>
+    where F: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
+    {
+        let router = FEAGIWebSocketServerRouter::new(
+            self.bind_address,
+            state_change_callback,
+        ).expect("Failed to create WebSocket router");
+        
+        Box::new(router)
+    }
+}
+
+//endregion
 
 //endregion

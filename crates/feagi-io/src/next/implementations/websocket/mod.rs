@@ -1,7 +1,7 @@
 //! WebSocket implementations for FEAGI network traits.
 //!
-//! Uses `tokio-tungstenite` for async WebSocket communication with
-//! a synchronous polling API that matches the ZMQ implementations.
+//! Uses `tungstenite` for synchronous WebSocket communication with
+//! a polling API that matches the ZMQ implementations.
 
 #[cfg(feature = "websocket-transport")]
 mod server_implementations;
@@ -9,6 +9,12 @@ mod server_implementations;
 mod client_implementations;
 
 #[cfg(feature = "websocket-transport")]
-pub use server_implementations::{FEAGIWebSocketServerPublisher, FEAGIWebSocketServerPuller, FEAGIWebSocketServerRouter};
+pub use server_implementations::{
+    FEAGIWebSocketServerPublisher, FEAGIWebSocketServerPuller, FEAGIWebSocketServerRouter,
+    FEAGIWebSocketServerPublisherProperties, FEAGIWebSocketServerPullerProperties, FEAGIWebSocketServerRouterProperties
+};
 #[cfg(feature = "websocket-transport")]
-pub use client_implementations::{FEAGIWebSocketClientSubscriber, FEAGIWebSocketClientPusher, FEAGIWebSocketClientRequester};
+pub use client_implementations::{
+    FEAGIWebSocketClientSubscriber, FEAGIWebSocketClientPusher, FEAGIWebSocketClientRequester,
+    FEAGIWebSocketClientSubscriberProperties, FEAGIWebSocketClientPusherProperties, FEAGIWebSocketClientRequesterProperties
+};

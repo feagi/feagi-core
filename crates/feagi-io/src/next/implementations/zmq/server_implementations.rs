@@ -2,41 +2,78 @@ use std::collections::HashMap;
 
 use crate::next::{FeagiNetworkError, FeagiServerBindState};
 use crate::next::implementations::zmq::shared_functions::validate_zmq_url;
-use crate::next::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
+use crate::next::traits_and_enums::server::{
+    FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter,
+    FeagiServerPublisherProperties, FeagiServerPullerProperties, FeagiServerRouterProperties
+};
 use crate::next::traits_and_enums::server::server_shared::{ClientId, FeagiServerBindStateChange};
 
 //region Publisher
 pub struct FEAGIZMQServerPublisher<S>
 where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
 {
-    context_ref: zmq::Context,
     server_bind_address: String,
     current_state: FeagiServerBindState,
     socket: zmq::Socket,
-    state_change_callback: S
+    state_change_callback: S,
+    // Configuration options (applied on start)
+    linger: i32,
+    sndhwm: i32,
 }
-
 
 impl<S> FEAGIZMQServerPublisher<S>
 where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
-    pub fn new(context: &mut zmq::Context, server_bind_address: String, state_change_callback: S) -> Result<Self, FeagiNetworkError> {
+    
+    const DEFAULT_LINGER: i32 = 0;
+    const DEFAULT_SNDHWM: i32 = 1000;
+    
+    pub fn new(server_bind_address: String, state_change_callback: S) -> Result<Self, FeagiNetworkError> {
         validate_zmq_url(&server_bind_address)?;
-        let socket = context.socket(zmq::PUB).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        let context = zmq::Context::new();
+        let socket = context.socket(zmq::PUB)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         Ok(Self {
-            context_ref: context.clone(),
             server_bind_address,
             current_state: FeagiServerBindState::Inactive,
             socket,
-            state_change_callback
+            state_change_callback,
+            linger: Self::DEFAULT_LINGER,
+            sndhwm: Self::DEFAULT_SNDHWM,
         })
+    }
+    
+    /// Set the linger period for socket shutdown (milliseconds).
+    /// Returns error if socket is already running.
+    pub fn set_linger(&mut self, linger: i32) -> Result<(), FeagiNetworkError> {
+        if self.current_state == FeagiServerBindState::Active {
+            return Err(FeagiNetworkError::GeneralFailure("Cannot change configuration while socket is active".to_string()));
+        }
+        self.linger = linger;
+        Ok(())
+    }
+    
+    /// Set the send high water mark (message queue size).
+    /// Returns error if socket is already running.
+    pub fn set_sndhwm(&mut self, sndhwm: i32) -> Result<(), FeagiNetworkError> {
+        if self.current_state == FeagiServerBindState::Active {
+            return Err(FeagiNetworkError::GeneralFailure("Cannot change configuration while socket is active".to_string()));
+        }
+        self.sndhwm = sndhwm;
+        Ok(())
     }
 }
 
 impl<S> FeagiServer for FEAGIZMQServerPublisher<S>
 where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
+        // Apply configuration options
+        self.socket.set_linger(self.linger)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        self.socket.set_sndhwm(self.sndhwm)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         // NOTE: there is a period of ~200 ms when this needs to activate!
-        self.socket.bind(&self.server_bind_address).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+        self.socket.bind(&self.server_bind_address)
+            .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.current_state = FeagiServerBindState::Active;
         (self.state_change_callback)(
             FeagiServerBindStateChange::new(
@@ -46,7 +83,8 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
     }
 
     fn stop(&mut self) -> Result<(), FeagiNetworkError> {
-        self.socket.unbind(&self.server_bind_address).map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
+        self.socket.unbind(&self.server_bind_address)
+            .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
         self.current_state = FeagiServerBindState::Inactive;
         (self.state_change_callback)(
             FeagiServerBindStateChange::new(
@@ -68,7 +106,8 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
     }
 
     fn publish(&mut self, buffered_data_to_send: &[u8]) -> Result<(), FeagiNetworkError> {
-        self.socket.send(buffered_data_to_send, 0).map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
+        self.socket.send(buffered_data_to_send, 0)
+            .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
         Ok(())
     }
 }
@@ -79,30 +118,71 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
 pub struct FEAGIZMQServerPuller<S>
 where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
 {
-    context_ref: zmq::Context,
     server_bind_address: String,
     current_state: FeagiServerBindState,
     socket: zmq::Socket,
     state_change_callback: S,
     cached_data: Vec<u8>,
+    // Configuration options (applied on start)
+    linger: i32,
+    rcvhwm: i32,
+    immediate: bool,
 }
 
 impl<S> FEAGIZMQServerPuller<S>
 where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
 {
-    pub fn new(context: &mut zmq::Context, server_bind_address: String, state_change_callback: S)
+    const DEFAULT_LINGER: i32 = 0;
+    const DEFAULT_RCVHWM: i32 = 1000;
+    const DEFAULT_IMMEDIATE: bool = false;
+    
+    pub fn new(server_bind_address: String, state_change_callback: S)
         -> Result<Self, FeagiNetworkError>
     {
         validate_zmq_url(&server_bind_address)?;
-        let socket = context.socket(zmq::PULL).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        let context = zmq::Context::new();
+        let socket = context.socket(zmq::PULL)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         Ok(Self {
-            context_ref: context.clone(),
             server_bind_address,
             current_state: FeagiServerBindState::Inactive,
             socket,
             state_change_callback,
             cached_data: Vec::new(),
+            linger: Self::DEFAULT_LINGER,
+            rcvhwm: Self::DEFAULT_RCVHWM,
+            immediate: Self::DEFAULT_IMMEDIATE,
         })
+    }
+    
+    /// Set the linger period for socket shutdown (milliseconds).
+    /// Returns error if socket is already running.
+    pub fn set_linger(&mut self, linger: i32) -> Result<(), FeagiNetworkError> {
+        if self.current_state == FeagiServerBindState::Active {
+            return Err(FeagiNetworkError::GeneralFailure("Cannot change configuration while socket is active".to_string()));
+        }
+        self.linger = linger;
+        Ok(())
+    }
+    
+    /// Set the receive high water mark (message queue size).
+    /// Returns error if socket is already running.
+    pub fn set_rcvhwm(&mut self, rcvhwm: i32) -> Result<(), FeagiNetworkError> {
+        if self.current_state == FeagiServerBindState::Active {
+            return Err(FeagiNetworkError::GeneralFailure("Cannot change configuration while socket is active".to_string()));
+        }
+        self.rcvhwm = rcvhwm;
+        Ok(())
+    }
+    
+    /// Set immediate mode (only queue messages to completed connections).
+    /// Returns error if socket is already running.
+    pub fn set_immediate(&mut self, immediate: bool) -> Result<(), FeagiNetworkError> {
+        if self.current_state == FeagiServerBindState::Active {
+            return Err(FeagiNetworkError::GeneralFailure("Cannot change configuration while socket is active".to_string()));
+        }
+        self.immediate = immediate;
+        Ok(())
     }
 }
 
@@ -110,10 +190,19 @@ impl<S> FeagiServer for FEAGIZMQServerPuller<S>
 where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
 {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
+        // Apply configuration options
+        self.socket.set_linger(self.linger)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        self.socket.set_rcvhwm(self.rcvhwm)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        self.socket.set_immediate(self.immediate)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         // Set socket to non-blocking mode for try_poll
-        self.socket.set_rcvtimeo(0).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        self.socket.set_rcvtimeo(0)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         // NOTE: there is a period of ~200 ms when this needs to activate!
-        self.socket.bind(&self.server_bind_address).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+        self.socket.bind(&self.server_bind_address)
+            .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.current_state = FeagiServerBindState::Active;
         (self.state_change_callback)(
             FeagiServerBindStateChange::new(
@@ -123,7 +212,8 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
     }
 
     fn stop(&mut self) -> Result<(), FeagiNetworkError> {
-        self.socket.unbind(&self.server_bind_address).map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
+        self.socket.unbind(&self.server_bind_address)
+            .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
         self.current_state = FeagiServerBindState::Inactive;
         (self.state_change_callback)(
             FeagiServerBindStateChange::new(
@@ -159,7 +249,6 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
 pub struct FEAGIZMQServerRouter<S>
 where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
 {
-    context_ref: zmq::Context,
     server_bind_address: String,
     current_state: FeagiServerBindState,
     socket: zmq::Socket,
@@ -171,18 +260,29 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
     // Cached request data
     cached_request_data: Vec<u8>,
     last_client_id: Option<ClientId>,
+    // Configuration options (applied on start)
+    linger: i32,
+    rcvhwm: i32,
+    sndhwm: i32,
+    immediate: bool,
 }
 
 impl<S> FEAGIZMQServerRouter<S>
 where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
 {
-    pub fn new(context: &mut zmq::Context, server_bind_address: String, state_change_callback: S)
+    const DEFAULT_LINGER: i32 = 0;
+    const DEFAULT_RCVHWM: i32 = 1000;
+    const DEFAULT_SNDHWM: i32 = 1000;
+    const DEFAULT_IMMEDIATE: bool = false;
+    
+    pub fn new(server_bind_address: String, state_change_callback: S)
         -> Result<Self, FeagiNetworkError>
     {
         validate_zmq_url(&server_bind_address)?;
-        let socket = context.socket(zmq::ROUTER).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        let context = zmq::Context::new();
+        let socket = context.socket(zmq::ROUTER)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         Ok(Self {
-            context_ref: context.clone(),
             server_bind_address,
             current_state: FeagiServerBindState::Inactive,
             socket,
@@ -192,7 +292,51 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
             id_to_identity: HashMap::new(),
             cached_request_data: Vec::new(),
             last_client_id: None,
+            linger: Self::DEFAULT_LINGER,
+            rcvhwm: Self::DEFAULT_RCVHWM,
+            sndhwm: Self::DEFAULT_SNDHWM,
+            immediate: Self::DEFAULT_IMMEDIATE,
         })
+    }
+    
+    /// Set the linger period for socket shutdown (milliseconds).
+    /// Returns error if socket is already running.
+    pub fn set_linger(&mut self, linger: i32) -> Result<(), FeagiNetworkError> {
+        if self.current_state == FeagiServerBindState::Active {
+            return Err(FeagiNetworkError::GeneralFailure("Cannot change configuration while socket is active".to_string()));
+        }
+        self.linger = linger;
+        Ok(())
+    }
+    
+    /// Set the receive high water mark (message queue size).
+    /// Returns error if socket is already running.
+    pub fn set_rcvhwm(&mut self, rcvhwm: i32) -> Result<(), FeagiNetworkError> {
+        if self.current_state == FeagiServerBindState::Active {
+            return Err(FeagiNetworkError::GeneralFailure("Cannot change configuration while socket is active".to_string()));
+        }
+        self.rcvhwm = rcvhwm;
+        Ok(())
+    }
+    
+    /// Set the send high water mark (message queue size).
+    /// Returns error if socket is already running.
+    pub fn set_sndhwm(&mut self, sndhwm: i32) -> Result<(), FeagiNetworkError> {
+        if self.current_state == FeagiServerBindState::Active {
+            return Err(FeagiNetworkError::GeneralFailure("Cannot change configuration while socket is active".to_string()));
+        }
+        self.sndhwm = sndhwm;
+        Ok(())
+    }
+    
+    /// Set immediate mode (only queue messages to completed connections).
+    /// Returns error if socket is already running.
+    pub fn set_immediate(&mut self, immediate: bool) -> Result<(), FeagiNetworkError> {
+        if self.current_state == FeagiServerBindState::Active {
+            return Err(FeagiNetworkError::GeneralFailure("Cannot change configuration while socket is active".to_string()));
+        }
+        self.immediate = immediate;
+        Ok(())
     }
 
     /// Get or create a ClientId for the given ZMQ identity
@@ -213,10 +357,21 @@ impl<S> FeagiServer for FEAGIZMQServerRouter<S>
 where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
 {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
+        // Apply configuration options
+        self.socket.set_linger(self.linger)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        self.socket.set_rcvhwm(self.rcvhwm)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        self.socket.set_sndhwm(self.sndhwm)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        self.socket.set_immediate(self.immediate)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         // Set socket to non-blocking mode for try_poll
-        self.socket.set_rcvtimeo(0).map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        self.socket.set_rcvtimeo(0)
+            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         // NOTE: there is a period of ~200 ms when this needs to activate!
-        self.socket.bind(&self.server_bind_address).map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+        self.socket.bind(&self.server_bind_address)
+            .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.current_state = FeagiServerBindState::Active;
         (self.state_change_callback)(
             FeagiServerBindStateChange::new(
@@ -226,7 +381,14 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
     }
 
     fn stop(&mut self) -> Result<(), FeagiNetworkError> {
-        self.socket.unbind(&self.server_bind_address).map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
+        self.socket.unbind(&self.server_bind_address)
+            .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
+        // Clear client mappings when stopping
+        self.identity_to_id.clear();
+        self.id_to_identity.clear();
+        self.next_client_id = 1;
+        self.last_client_id = None;
+        
         self.current_state = FeagiServerBindState::Inactive;
         (self.state_change_callback)(
             FeagiServerBindStateChange::new(
@@ -285,5 +447,198 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
         Ok(())
     }
 }
+
+//endregion
+
+//region Properties
+
+//region Publisher Properties
+
+/// Properties for configuring and building a ZMQ Server Publisher.
+pub struct FEAGIZMQServerPublisherProperties {
+    server_bind_address: String,
+    linger: i32,
+    sndhwm: i32,
+}
+
+impl FEAGIZMQServerPublisherProperties {
+    const DEFAULT_LINGER: i32 = 0;
+    const DEFAULT_SNDHWM: i32 = 1000;
+    
+    /// Create new properties with the given bind address.
+    pub fn new(server_bind_address: String) -> Self {
+        Self {
+            server_bind_address,
+            linger: Self::DEFAULT_LINGER,
+            sndhwm: Self::DEFAULT_SNDHWM,
+        }
+    }
+    
+    /// Set the linger period for socket shutdown (milliseconds).
+    pub fn set_linger(&mut self, linger: i32) -> &mut Self {
+        self.linger = linger;
+        self
+    }
+    
+    /// Set the send high water mark (message queue size).
+    pub fn set_sndhwm(&mut self, sndhwm: i32) -> &mut Self {
+        self.sndhwm = sndhwm;
+        self
+    }
+}
+
+impl FeagiServerPublisherProperties for FEAGIZMQServerPublisherProperties {
+    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiServerPublisher>
+    where F: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
+    {
+        let mut publisher = FEAGIZMQServerPublisher::new(
+            self.server_bind_address,
+            state_change_callback,
+        ).expect("Failed to create ZMQ publisher");
+        
+        let _ = publisher.set_linger(self.linger);
+        let _ = publisher.set_sndhwm(self.sndhwm);
+        
+        Box::new(publisher)
+    }
+}
+
+//endregion
+
+//region Puller Properties
+
+/// Properties for configuring and building a ZMQ Server Puller.
+pub struct FEAGIZMQServerPullerProperties {
+    server_bind_address: String,
+    linger: i32,
+    rcvhwm: i32,
+    immediate: bool,
+}
+
+impl FEAGIZMQServerPullerProperties {
+    const DEFAULT_LINGER: i32 = 0;
+    const DEFAULT_RCVHWM: i32 = 1000;
+    const DEFAULT_IMMEDIATE: bool = false;
+    
+    /// Create new properties with the given bind address.
+    pub fn new(server_bind_address: String) -> Self {
+        Self {
+            server_bind_address,
+            linger: Self::DEFAULT_LINGER,
+            rcvhwm: Self::DEFAULT_RCVHWM,
+            immediate: Self::DEFAULT_IMMEDIATE,
+        }
+    }
+    
+    /// Set the linger period for socket shutdown (milliseconds).
+    pub fn set_linger(&mut self, linger: i32) -> &mut Self {
+        self.linger = linger;
+        self
+    }
+    
+    /// Set the receive high water mark (message queue size).
+    pub fn set_rcvhwm(&mut self, rcvhwm: i32) -> &mut Self {
+        self.rcvhwm = rcvhwm;
+        self
+    }
+    
+    /// Set immediate mode (only queue messages to completed connections).
+    pub fn set_immediate(&mut self, immediate: bool) -> &mut Self {
+        self.immediate = immediate;
+        self
+    }
+}
+
+impl FeagiServerPullerProperties for FEAGIZMQServerPullerProperties {
+    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiServerPuller>
+    where F: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
+    {
+        let mut puller = FEAGIZMQServerPuller::new(
+            self.server_bind_address,
+            state_change_callback,
+        ).expect("Failed to create ZMQ puller");
+        
+        let _ = puller.set_linger(self.linger);
+        let _ = puller.set_rcvhwm(self.rcvhwm);
+        let _ = puller.set_immediate(self.immediate);
+        
+        Box::new(puller)
+    }
+}
+
+//endregion
+
+//region Router Properties
+
+/// Properties for configuring and building a ZMQ Server Router.
+pub struct FEAGIZMQServerRouterProperties {
+    server_bind_address: String,
+    linger: i32,
+    rcvhwm: i32,
+    sndhwm: i32,
+    immediate: bool,
+}
+
+impl FEAGIZMQServerRouterProperties {
+    const DEFAULT_LINGER: i32 = 0;
+    const DEFAULT_RCVHWM: i32 = 1000;
+    const DEFAULT_SNDHWM: i32 = 1000;
+    const DEFAULT_IMMEDIATE: bool = false;
+    
+    /// Create new properties with the given bind address.
+    pub fn new(server_bind_address: String) -> Self {
+        Self {
+            server_bind_address,
+            linger: Self::DEFAULT_LINGER,
+            rcvhwm: Self::DEFAULT_RCVHWM,
+            sndhwm: Self::DEFAULT_SNDHWM,
+            immediate: Self::DEFAULT_IMMEDIATE,
+        }
+    }
+    
+    /// Set the linger period for socket shutdown (milliseconds).
+    pub fn set_linger(&mut self, linger: i32) -> &mut Self {
+        self.linger = linger;
+        self
+    }
+    
+    /// Set the receive high water mark (message queue size).
+    pub fn set_rcvhwm(&mut self, rcvhwm: i32) -> &mut Self {
+        self.rcvhwm = rcvhwm;
+        self
+    }
+    
+    /// Set the send high water mark (message queue size).
+    pub fn set_sndhwm(&mut self, sndhwm: i32) -> &mut Self {
+        self.sndhwm = sndhwm;
+        self
+    }
+    
+    /// Set immediate mode (only queue messages to completed connections).
+    pub fn set_immediate(&mut self, immediate: bool) -> &mut Self {
+        self.immediate = immediate;
+        self
+    }
+}
+
+impl FeagiServerRouterProperties for FEAGIZMQServerRouterProperties {
+    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiServerRouter>
+    where F: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
+    {
+        let mut router = FEAGIZMQServerRouter::new(
+            self.server_bind_address,
+            state_change_callback,
+        ).expect("Failed to create ZMQ router");
+        
+        let _ = router.set_linger(self.linger);
+        let _ = router.set_rcvhwm(self.rcvhwm);
+        let _ = router.set_sndhwm(self.sndhwm);
+        let _ = router.set_immediate(self.immediate);
+        
+        Box::new(router)
+    }
+}
+
+//endregion
 
 //endregion

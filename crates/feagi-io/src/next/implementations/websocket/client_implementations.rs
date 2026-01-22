@@ -6,7 +6,10 @@ use tungstenite::{connect, Message, WebSocket, stream::MaybeTlsStream};
 
 use crate::next::{FeagiClientConnectionState, FeagiNetworkError};
 use crate::next::traits_and_enums::client::client_shared::FeagiClientConnectionStateChange;
-use crate::next::traits_and_enums::client::{FeagiClient, FeagiClientSubscriber, FeagiClientPusher, FeagiClientRequester};
+use crate::next::traits_and_enums::client::{
+    FeagiClient, FeagiClientSubscriber, FeagiClientPusher, FeagiClientRequester,
+    FeagiClientSubscriberProperties, FeagiClientPusherProperties, FeagiClientRequesterProperties
+};
 
 //region Subscriber
 
@@ -342,5 +345,102 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
         Ok(())
     }
 }
+
+//endregion
+
+//region Properties
+
+//region Subscriber Properties
+
+/// Properties for configuring and building a WebSocket Client Subscriber.
+pub struct FEAGIWebSocketClientSubscriberProperties {
+    server_address: String,
+}
+
+impl FEAGIWebSocketClientSubscriberProperties {
+    /// Create new properties with the given server address.
+    pub fn new(server_address: String) -> Self {
+        Self {
+            server_address,
+        }
+    }
+}
+
+impl FeagiClientSubscriberProperties for FEAGIWebSocketClientSubscriberProperties {
+    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiClientSubscriber>
+    where F: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
+    {
+        let subscriber = FEAGIWebSocketClientSubscriber::new(
+            self.server_address,
+            state_change_callback,
+        ).expect("Failed to create WebSocket subscriber");
+        
+        Box::new(subscriber)
+    }
+}
+
+//endregion
+
+//region Pusher Properties
+
+/// Properties for configuring and building a WebSocket Client Pusher.
+pub struct FEAGIWebSocketClientPusherProperties {
+    server_address: String,
+}
+
+impl FEAGIWebSocketClientPusherProperties {
+    /// Create new properties with the given server address.
+    pub fn new(server_address: String) -> Self {
+        Self {
+            server_address,
+        }
+    }
+}
+
+impl FeagiClientPusherProperties for FEAGIWebSocketClientPusherProperties {
+    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiClientPusher>
+    where F: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
+    {
+        let pusher = FEAGIWebSocketClientPusher::new(
+            self.server_address,
+            state_change_callback,
+        ).expect("Failed to create WebSocket pusher");
+        
+        Box::new(pusher)
+    }
+}
+
+//endregion
+
+//region Requester Properties
+
+/// Properties for configuring and building a WebSocket Client Requester.
+pub struct FEAGIWebSocketClientRequesterProperties {
+    server_address: String,
+}
+
+impl FEAGIWebSocketClientRequesterProperties {
+    /// Create new properties with the given server address.
+    pub fn new(server_address: String) -> Self {
+        Self {
+            server_address,
+        }
+    }
+}
+
+impl FeagiClientRequesterProperties for FEAGIWebSocketClientRequesterProperties {
+    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiClientRequester>
+    where F: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
+    {
+        let requester = FEAGIWebSocketClientRequester::new(
+            self.server_address,
+            state_change_callback,
+        ).expect("Failed to create WebSocket requester");
+        
+        Box::new(requester)
+    }
+}
+
+//endregion
 
 //endregion

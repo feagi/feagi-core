@@ -19,6 +19,8 @@ pub enum FeagiNetworkError {
     InvalidUrl(String),
     /// Socket creation failed
     SocketCreationFailed(String),
+    /// General failure (e.g., configuration error, invalid state)
+    GeneralFailure(String),
 }
 
 impl Display for FeagiNetworkError {
@@ -47,6 +49,9 @@ impl Display for FeagiNetworkError {
             }
             FeagiNetworkError::SocketCreationFailed(msg) => {
                 write!(f, "FeagiNetworkError: Socket creation failed: {}", msg)
+            }
+            FeagiNetworkError::GeneralFailure(msg) => {
+                write!(f, "FeagiNetworkError: {}", msg)
             }
         }
     }
