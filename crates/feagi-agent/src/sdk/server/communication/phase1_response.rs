@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::next::common::ConnectionId;
+use crate::sdk::common::ConnectionId;
 
 /// Response sent back after successful phase 1 registration.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,0 +1,41 @@
+🚀 FEAGI HTTP API Server - Starting...
+
+📦 Initializing core components...
+✅ Core components initialized
+
+🔧 Creating service layer...
+✅ Service layer created:
+   - GenomeService
+   - ConnectomeService
+   - NeuronService
+   - AnalyticsService
+   - RuntimeService
+   - SystemService
+
+🌐 Creating API state...
+✅ API state created (FEAGI session: 1768797923168)
+
+🌐 Starting HTTP server on 127.0.0.1:8000...
+✅ HTTP server configured
+
+╔═══════════════════════════════════════════════════════════╗
+║                   FEAGI API SERVER READY                  ║
+╠═══════════════════════════════════════════════════════════╣
+║                                                           ║
+║  HTTP API:       http://127.0.0.1:8000                 ║
+║  Swagger UI:     http://127.0.0.1:8000/swagger-ui/      ║
+║  OpenAPI Spec:   http://127.0.0.1:8000/openapi.json    ║
+║                                                           ║
+║  Available Endpoints:                                     ║
+║    - GET  /health                                         ║
+║    - GET  /v1/genome/file_name                            ║
+║    - POST /v1/genome/upload/barebones                    ║
+║    - GET  /v1/cortical_area/ipu                           ║
+║    - GET  /v1/cortical_area/cortical_area_id_list         ║
+║    - GET  /v1/system/health_check                         ║
+║    - GET  /v1/system/readiness_check                      ║
+║    ...and 50+ more endpoints                              ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+
+Error: Os { code: 48, kind: AddrInUse, message: "Address already in use" }

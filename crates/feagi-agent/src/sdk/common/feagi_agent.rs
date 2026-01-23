@@ -1,8 +1,8 @@
 use feagi_io::next::traits_and_enums::client::FeagiClientRequesterProperties;
 use feagi_structures::FeagiDataError;
-use crate::next::common::agent_descriptor::AgentDescriptor;
-use crate::next::common::common_enums::{AgentCapabilities, FeagiConnectionConfiguration};
-use crate::next::common::common_enums::AgentConnectionState;
+use crate::sdk::common::agent_descriptor::AgentDescriptor;
+use crate::sdk::common::common_enums::{AgentCapabilities, FeagiConnectionConfiguration};
+use crate::sdk::common::common_enums::AgentConnectionState;
 
 pub trait FeagiAgent {
     fn agent_id(&self) -> &AgentDescriptor;

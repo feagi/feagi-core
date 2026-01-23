@@ -10,10 +10,10 @@ use std::time::{Duration, Instant};
 use feagi_io::next::traits_and_enums::server::server_shared::{FeagiServerBindState, FeagiServerBindStateChange};
 use feagi_io::next::traits_and_enums::server::{FeagiServer, FeagiServerRouter, FeagiServerRouterProperties};
 use feagi_io::next::FeagiNetworkError;
-use crate::next::client::communication::auth_request::AuthRequest;
-use crate::next::client::communication::registration_request::RegistrationRequest;
-use crate::next::common::{AgentCapabilities, AgentDescriptor, ConnectionId, FeagiAgentError};
-use crate::next::server::communication::{Phase1Response, Phase2Response};
+use crate::sdk::client::communication::auth_request::AuthRequest;
+use crate::sdk::client::communication::registration_request::RegistrationRequest;
+use crate::sdk::common::{AgentCapabilities, AgentDescriptor, ConnectionId, FeagiAgentError};
+use crate::sdk::server::communication::{Phase1Response, Phase2Response};
 
 /// Data stored for a phase 1 (initial) registration.
 #[derive(Debug, Clone)]

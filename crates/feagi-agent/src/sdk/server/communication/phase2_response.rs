@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::next::common::AgentCapabilities;
+use crate::sdk::common::AgentCapabilities;
 
 /// Response sent back after successful phase 2 registration.
 /// Contains endpoint addresses for each requested capability.

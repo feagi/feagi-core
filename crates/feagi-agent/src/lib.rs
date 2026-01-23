@@ -66,7 +66,6 @@ pub use core::{AgentClient, AgentConfig, AgentType, Result, SdkError};
 // SDK module (behind feature flag)
 #[cfg(feature = "sdk")]
 pub mod sdk;
-mod next;
 
 #[cfg(test)]
 mod tests {

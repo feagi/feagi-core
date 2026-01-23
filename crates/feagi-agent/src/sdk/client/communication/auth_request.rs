@@ -3,9 +3,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::next::common::AgentDescriptor;
-use crate::next::common::AuthToken;
-use crate::next::common::FeagiAgentError;
+use crate::sdk::common::AgentDescriptor;
+use crate::sdk::common::AuthToken;
+use crate::sdk::common::FeagiAgentError;
 
 /// An authentication request containing agent identification and credentials.
 ///

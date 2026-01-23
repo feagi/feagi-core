@@ -16,9 +16,9 @@ use feagi_sensorimotor::caching::{MotorDeviceCache, SensorDeviceCache};
 use feagi_sensorimotor::ConnectorCache;
 use feagi_sensorimotor::feedbacks::{FeedBackRegistration, FeedbackRegistrationTargets};
 use feagi_structures::FeagiDataError;
-use crate::next::client::communication::auth_request::AuthRequest;
-use crate::next::client::communication::registration_request::RegistrationRequest;
-use crate::next::common::{
+use crate::sdk::client::communication::auth_request::AuthRequest;
+use crate::sdk::client::communication::registration_request::RegistrationRequest;
+use crate::sdk::common::{
     AgentCapabilities, AgentConnectionState, AgentDescriptor, AuthToken, FeagiAgent,
 };
 

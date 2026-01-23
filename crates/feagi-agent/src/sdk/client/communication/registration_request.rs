@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::next::common::{AgentCapabilities, ConnectionId, FeagiAgentError};
+use crate::sdk::common::{AgentCapabilities, ConnectionId, FeagiAgentError};
 
 /// Request sent by agent to complete registration (phase 2).
 #[derive(Debug, Clone, Serialize, Deserialize)]
