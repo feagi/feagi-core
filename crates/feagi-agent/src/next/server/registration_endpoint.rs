@@ -7,13 +7,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use serde::{Deserialize, Serialize};
-
 use feagi_io::next::traits_and_enums::server::server_shared::{FeagiServerBindState, FeagiServerBindStateChange};
 use feagi_io::next::traits_and_enums::server::{FeagiServer, FeagiServerRouter, FeagiServerRouterProperties};
 use feagi_io::next::FeagiNetworkError;
-
-use crate::next::common::{AgentCapabilities, AgentDescriptor, AuthRequest, ConnectionId, FeagiAgentError};
+use crate::next::client::communication::auth_request::AuthRequest;
+use crate::next::client::communication::registration_request::RegistrationRequest;
+use crate::next::common::{AgentCapabilities, AgentDescriptor, ConnectionId, FeagiAgentError};
+use crate::next::server::communication::{Phase1Response, Phase2Response};
 
 /// Data stored for a phase 1 (initial) registration.
 #[derive(Debug, Clone)]
@@ -53,82 +53,6 @@ impl RegisteredAgentData {
             registered_at: Instant::now(),
             capabilities,
         }
-    }
-}
-
-/// Response sent back after successful phase 1 registration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Phase1Response {
-    /// The connection ID assigned to this agent (base64 encoded).
-    pub connection_id: String,
-}
-
-impl Phase1Response {
-    /// Create a new phase 1 response.
-    pub fn new(connection_id: &ConnectionId) -> Self {
-        Self {
-            connection_id: connection_id.to_base64(),
-        }
-    }
-
-    /// Serialize to JSON bytes.
-    pub fn to_json_bytes(&self) -> Vec<u8> {
-        serde_json::to_vec(self).expect("Phase1Response serialization should never fail")
-    }
-}
-
-/// Request sent by agent to complete registration (phase 2).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RegistrationRequest {
-    /// The connection ID received from phase 1 (base64 encoded).
-    pub connection_id: String,
-    /// Generic JSON data for future use.
-    pub data: serde_json::Value,
-    /// The capabilities this agent requires.
-    pub capabilities: Vec<AgentCapabilities>,
-}
-
-impl RegistrationRequest {
-    /// Parse from a JSON value.
-    pub fn from_json(json: &serde_json::Value) -> Result<Self, FeagiAgentError> {
-        serde_json::from_value(json.clone())
-            .map_err(|e| FeagiAgentError::GeneralFailure(format!("Invalid RegistrationRequest: {}", e)))
-    }
-
-    /// Get the connection ID.
-    pub fn connection_id(&self) -> Result<ConnectionId, FeagiAgentError> {
-        ConnectionId::from_base64(&self.connection_id)
-            .ok_or_else(|| FeagiAgentError::GeneralFailure("Invalid connection_id: bad base64 or wrong length".to_string()))
-    }
-}
-
-/// Response sent back after successful phase 2 registration.
-/// Contains endpoint addresses for each requested capability.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Phase2Response {
-    /// Map of capability to endpoint address.
-    pub endpoints: HashMap<AgentCapabilities, String>,
-}
-
-impl Phase2Response {
-    /// Create a new phase 2 response with placeholder endpoints.
-    pub fn new(capabilities: &[AgentCapabilities]) -> Self {
-        let mut endpoints = HashMap::new();
-        for cap in capabilities {
-            // TODO: Replace placeholders with actual endpoint addresses
-            let placeholder = match cap {
-                AgentCapabilities::SendSensorData => "tcp://placeholder:5001",
-                AgentCapabilities::ReceiveMotorData => "tcp://placeholder:5002",
-                AgentCapabilities::ReceiveNeuronVisualizations => "tcp://placeholder:5003",
-            };
-            endpoints.insert(*cap, placeholder.to_string());
-        }
-        Self { endpoints }
-    }
-
-    /// Serialize to JSON bytes.
-    pub fn to_json_bytes(&self) -> Vec<u8> {
-        serde_json::to_vec(self).expect("Phase2Response serialization should never fail")
     }
 }
 
@@ -248,7 +172,7 @@ impl RegistrationEndpoint {
         
         // Check if this connection ID exists in phase 1 registrations
         let phase1_data = self.phase1_registrations.remove(&connection_id)
-            .ok_or_else(|| FeagiAgentError::AuthenticationFailure(
+            .ok_or_else(|| FeagiAgentError::AuthenticationFailed(
                 "Invalid or expired connection_id. Please complete phase 1 first.".to_string()
             ))?;
         
@@ -260,7 +184,6 @@ impl RegistrationEndpoint {
         
         // Store in registered agents
         self.registered_agents.insert(connection_id, registered_data);
-
         
         // Create response with endpoint addresses (placeholders for now)
         let response = Phase2Response::new(&registration_request.capabilities);
