@@ -108,10 +108,9 @@ impl CorticalID {
     /// Extracts the data type configuration flag from bytes 4-5 (u16, little-endian)
     /// and converts it to an IOCorticalAreaDataFlag.
     ///
-    /// This is used internally for both BrainInput and BrainOutput cortical areas.
+    /// This is used for both BrainInput and BrainOutput cortical areas.
     #[inline]
-    fn extract_io_data_flag(&self) -> Result<IOCorticalAreaConfigurationFlag, FeagiDataError> {
-        // NOTE: This can NOT be made public, as we work with internal state!
+    pub fn extract_io_data_flag(&self) -> Result<IOCorticalAreaConfigurationFlag, FeagiDataError> {
         let data_type_config = u16::from_le_bytes([self.bytes[4], self.bytes[5]]);
         IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(data_type_config)
     }

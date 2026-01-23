@@ -2,7 +2,7 @@
 
 use std::net::TcpStream;
 
-use tungstenite::{connect, Message, WebSocket, stream::MaybeTlsStream};
+use tokio_tungstenite::tungstenite::{self, connect, Message, WebSocket, stream::MaybeTlsStream};
 
 use crate::next::{FeagiClientConnectionState, FeagiNetworkError};
 use crate::next::traits_and_enums::client::client_shared::FeagiClientConnectionStateChange;

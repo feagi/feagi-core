@@ -21,13 +21,13 @@ impl DataEndpoint {
         voxel_visual_endpoint: String,
         sensor_endpoint: String,
     ) -> Result<Self, FeagiNetworkError> {
-        let mut motor = FEAGIZMQServerPublisherProperties::new(motor_endpoint).build(Box::new(|change| {
+        let mut motor = Box::new(FEAGIZMQServerPublisherProperties::new(motor_endpoint)).build(Box::new(|change| {
             Self::handle_motor_state_change(change);
         }));
-        let mut voxel_visual = FEAGIZMQServerPublisherProperties::new(voxel_visual_endpoint).build(Box::new(|change| {
+        let mut voxel_visual = Box::new(FEAGIZMQServerPublisherProperties::new(voxel_visual_endpoint)).build(Box::new(|change| {
             Self::handle_voxel_visual_state_change(change);
         }));
-        let mut sensor = FEAGIZMQServerPullerProperties::new(sensor_endpoint).build(Box::new(|change| {
+        let mut sensor = Box::new(FEAGIZMQServerPullerProperties::new(sensor_endpoint)).build(Box::new(|change| {
             Self::handle_sensor_state_change(change);
         }));
 

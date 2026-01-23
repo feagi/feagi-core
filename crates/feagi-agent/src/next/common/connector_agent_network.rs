@@ -1,28 +1,27 @@
 use feagi_io::next::FeagiNetworkError;
-use feagi_io::next::implementations::zmq::FEAGIZMQClientPusher;
+use feagi_io::next::implementations::zmq::{FEAGIZMQClientPusher, FEAGIZMQClientSubscriber};
 use feagi_io::next::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
 
+/// Marker trait for connector agent network implementations.
 pub trait ConnectorAgentNetworkImplementation {
-    // contains a sensor stream, motor stream
-    fn send sensor
-    fn motor_recieved
-
 }
 
-
-
-
-
 pub struct ConnectorAgentNetwork {
-
     sensor_stream: Box<dyn FeagiClientPusher>,
     motor_stream: Box<dyn FeagiClientSubscriber>,
 }
 
 impl ConnectorAgentNetwork {
-    pub fn new_zmq(sensor_endpoint: String, motor_endpoint: String) -> Result<ConnectorAgentNetwork, FeagiNetworkError> {
-
-        let sensor_stream = FEAGIZMQClientPusher::new(sensor_endpoint)
-
+    /// Create a ZMQ-based connector network with sensor/motor streams.
+    pub fn new_zmq(
+        sensor_endpoint: String,
+        motor_endpoint: String,
+    ) -> Result<ConnectorAgentNetwork, FeagiNetworkError> {
+        let sensor_stream = FEAGIZMQClientPusher::new(sensor_endpoint, Box::new(|_change| {}))?;
+        let motor_stream = FEAGIZMQClientSubscriber::new(motor_endpoint, Box::new(|_change| {}))?;
+        Ok(ConnectorAgentNetwork {
+            sensor_stream: Box::new(sensor_stream),
+            motor_stream: Box::new(motor_stream),
+        })
     }
 }

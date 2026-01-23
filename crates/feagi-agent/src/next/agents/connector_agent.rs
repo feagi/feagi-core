@@ -96,11 +96,15 @@ impl ConnectorAgent {
                 "Cannot reload device registrations while running!".to_string()
             ))
         }
-        let sender = self.sensor_sender.unwrap();
+        let Some(sender) = self.sensor_sender.as_ref() else {
+            return Err(FeagiDataError::ResourceLockedWhileRunning(
+                "Cannot reload device registrations while running!".to_string()
+            ));
+        };
 
-        self.get_sensor_cache().encode_neurons_to_bytes();
-        let bytes = self.get_sensor_cache().get_feagi_byte_container();
-
+        let mut sensor_cache = self.get_sensor_cache();
+        sensor_cache.encode_neurons_to_bytes();
+        let bytes = sensor_cache.get_feagi_byte_container();
         sender.push_data(bytes.get_byte_ref());
         Ok(())
     }
@@ -196,8 +200,9 @@ impl FeagiAgent for ConnectorAgent {
             .map_err(|e| FeagiDataError::DeserializationError(e.to_string()))?;
         let endpoints = Self::parse_phase2_endpoints(&phase2_json)?;
 
-        for capability in self.agent_capabilities() {
-            let endpoint = endpoints.get(capability).ok_or_else(|| {
+        let capabilities = self.agent_capabilities().to_vec();
+        for capability in capabilities {
+            let endpoint = endpoints.get(&capability).ok_or_else(|| {
                 FeagiDataError::DeserializationError(format!(
                     "Missing endpoint for capability {:?}",
                     capability
@@ -206,7 +211,7 @@ impl FeagiAgent for ConnectorAgent {
 
             match capability {
                 AgentCapabilities::SendSensorData => {
-                    let mut sensor_sender = FEAGIZMQClientPusherProperties::new(endpoint.to_string())
+                    let mut sensor_sender = Box::new(FEAGIZMQClientPusherProperties::new(endpoint.to_string()))
                         .build(Box::new(|_change: FeagiClientConnectionStateChange| {
                             // TODO: track sensor sender connection state changes
                         }));
@@ -215,7 +220,7 @@ impl FeagiAgent for ConnectorAgent {
                     self.sensor_sender = Some(sensor_sender);
                 }
                 AgentCapabilities::ReceiveMotorData => {
-                    let mut motor_receiver = FEAGIZMQClientSubscriberProperties::new(endpoint.to_string())
+                    let mut motor_receiver = Box::new(FEAGIZMQClientSubscriberProperties::new(endpoint.to_string()))
                         .build(Box::new(|_change: FeagiClientConnectionStateChange| {
                             // TODO: track motor receiver connection state changes
                         }));

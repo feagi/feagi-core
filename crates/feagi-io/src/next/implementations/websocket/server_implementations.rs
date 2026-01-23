@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::net::{TcpListener, TcpStream};
 
-use tungstenite::{accept, Message, WebSocket};
+use tokio_tungstenite::tungstenite::{self, accept, Message, WebSocket};
 
 use crate::next::FeagiNetworkError;
 use crate::next::traits_and_enums::server::server_shared::{ClientId, FeagiServerBindState, FeagiServerBindStateChange};
