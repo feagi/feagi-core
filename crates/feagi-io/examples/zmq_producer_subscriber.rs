@@ -19,9 +19,9 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use feagi_io::next::implementations::zmq::{FEAGIZMQServerPublisher, FEAGIZMQClientSubscriber};
-use feagi_io::next::traits_and_enums::server::{FeagiServer, FeagiServerPublisher};
-use feagi_io::next::traits_and_enums::client::FeagiClient;
+use feagi_io::io_api::implementations::zmq::{FEAGIZMQServerPublisher, FEAGIZMQClientSubscriber};
+use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerPublisher};
+use feagi_io::io_api::traits_and_enums::client::FeagiClient;
 
 const ADDRESS: &str = "tcp://127.0.0.1:5555";
 
@@ -99,7 +99,7 @@ fn main() {
 
     if args.len() < 2 {
         println!("FEAGI ZMQ Publisher-Subscriber Example");
-        println!("Using implementations from feagi_io::next module\n");
+        println!("Using implementations from feagi_io::io_api module\n");
         println!("Usage:");
         println!("  {} publisher   - Start the publisher (sends messages)", args[0]);
         println!("  {} subscriber  - Start the subscriber (receives messages)", args[0]);

@@ -5,7 +5,7 @@
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub mod next;
+pub mod io_api;
 
 use feagi_structures::FeagiSignal;
 use parking_lot::{Mutex, RwLock};

@@ -25,9 +25,9 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use feagi_io::next::implementations::zmq::{FEAGIZMQServerPuller, FEAGIZMQClientPusher};
-use feagi_io::next::traits_and_enums::server::{FeagiServer, FeagiServerPuller};
-use feagi_io::next::traits_and_enums::client::{FeagiClient, FeagiClientPusher};
+use feagi_io::io_api::implementations::zmq::{FEAGIZMQServerPuller, FEAGIZMQClientPusher};
+use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerPuller};
+use feagi_io::io_api::traits_and_enums::client::{FeagiClient, FeagiClientPusher};
 
 const ADDRESS: &str = "tcp://127.0.0.1:5556";
 
@@ -102,7 +102,7 @@ fn main() {
 
     if args.len() < 2 {
         println!("FEAGI ZMQ Push-Pull Example");
-        println!("Using implementations from feagi_io::next module\n");
+        println!("Using implementations from feagi_io::io_api module\n");
         println!("Pattern: Client PUSHES data → Server PULLS/receives data\n");
         println!("Usage:");
         println!("  {} server   - Start the server (receives pushed data)", args[0]);

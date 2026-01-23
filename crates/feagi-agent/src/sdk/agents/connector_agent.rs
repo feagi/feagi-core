@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
-use feagi_io::next::FeagiNetworkError;
-use feagi_io::next::implementations::zmq::{
+use feagi_io::io_api::FeagiNetworkError;
+use feagi_io::io_api::implementations::zmq::{
     FEAGIZMQClientPusherProperties, FEAGIZMQClientSubscriberProperties,
 };
-use feagi_io::next::traits_and_enums::client::{
+use feagi_io::io_api::traits_and_enums::client::{
     FeagiClient, FeagiClientPusher, FeagiClientRequester, FeagiClientRequesterProperties,
     FeagiClientSubscriber, client_shared::FeagiClientConnectionStateChange,
 };
-use feagi_io::next::traits_and_enums::client::{
+use feagi_io::io_api::traits_and_enums::client::{
     FeagiClientPusherProperties as _, FeagiClientSubscriberProperties as _,
 };
 use feagi_sensorimotor::caching::{MotorDeviceCache, SensorDeviceCache};

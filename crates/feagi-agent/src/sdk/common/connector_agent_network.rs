@@ -1,6 +1,6 @@
-use feagi_io::next::FeagiNetworkError;
-use feagi_io::next::implementations::zmq::{FEAGIZMQClientPusher, FEAGIZMQClientSubscriber};
-use feagi_io::next::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
+use feagi_io::io_api::FeagiNetworkError;
+use feagi_io::io_api::implementations::zmq::{FEAGIZMQClientPusher, FEAGIZMQClientSubscriber};
+use feagi_io::io_api::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
 
 /// Marker trait for connector agent network implementations.
 pub trait ConnectorAgentNetworkImplementation {

@@ -1,11 +1,11 @@
 //! Data endpoint for handling sensor input and motor/visual outputs.
 
-use feagi_io::next::implementations::zmq::{
+use feagi_io::io_api::implementations::zmq::{
     FEAGIZMQServerPublisherProperties, FEAGIZMQServerPullerProperties,
 };
-use feagi_io::next::traits_and_enums::server::server_shared::FeagiServerBindStateChange;
-use feagi_io::next::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties};
-use feagi_io::next::FeagiNetworkError;
+use feagi_io::io_api::traits_and_enums::server::server_shared::FeagiServerBindStateChange;
+use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties};
+use feagi_io::io_api::FeagiNetworkError;
 
 /// Data endpoint that owns motor/voxel publishers and a sensor puller.
 pub struct DataEndpoint {
