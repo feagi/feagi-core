@@ -70,8 +70,7 @@ impl PerceptionDecoderConfig {
 
     /// Convert to AgentConfig for core client
     pub fn to_agent_config(&self) -> Result<AgentConfig> {
-        let cortical_ids = self.cortical_ids();
-        let output_count = cortical_ids.len();
+        let output_count = 4;
 
         let group = self.cortical_unit_id;
 
@@ -105,6 +104,10 @@ impl PerceptionDecoderConfig {
                     },
                     feagi_io::MotorUnitSpec {
                         unit: feagi_io::MotorUnit::TextEnglishOutput,
+                        group,
+                    },
+                    feagi_io::MotorUnitSpec {
+                        unit: feagi_io::MotorUnit::CountOutput,
                         group,
                     },
                 ],

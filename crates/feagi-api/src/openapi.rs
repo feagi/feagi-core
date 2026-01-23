@@ -661,8 +661,8 @@ mod tests {
         let openapi = ApiDoc::openapi();
         let json = serde_json::to_value(&openapi).expect("serialize openapi");
 
-        let content = &json["paths"]["/v1/genome/amalgamation_by_upload"]["post"]["requestBody"]
-            ["content"];
+        let content =
+            &json["paths"]["/v1/genome/amalgamation_by_upload"]["post"]["requestBody"]["content"];
 
         assert!(
             content.get("multipart/form-data").is_some(),

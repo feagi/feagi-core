@@ -109,8 +109,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
             return Ok(());
         }
 
-        let has_any_data = eccentricity_neuron_array
-            .is_some_and(|a| !a.is_empty())
+        let has_any_data = eccentricity_neuron_array.is_some_and(|a| !a.is_empty())
             || modularity_neuron_array.is_some_and(|a| !a.is_empty());
         if !has_any_data {
             return Ok(());
@@ -275,9 +274,12 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
-    use feagi_structures::genomic::cortical_area::CorticalID;
+    use feagi_structures::genomic::cortical_area::CoreCorticalType;
+    use feagi_structures::neuron_voxels::xyzp::{
+        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+    };
 
+    /// Ensures partial gaze packets do not panic.
     #[test]
     fn gaze_decoder_does_not_panic_on_partial_gaze_packet() {
         // This regression test ensures that when only ONE of the gaze cortical IDs
@@ -285,8 +287,8 @@ mod tests {
         // the decoder returns Ok(()) instead of panicking via unwrap().
 
         // Minimal decoder: 1 channel, 1-depth each, linear interpolation.
-        let eccentricity_id = CorticalID::new_unique_id();
-        let modularity_id = CorticalID::new_unique_id();
+        let eccentricity_id = CoreCorticalType::Power.to_cortical_id();
+        let modularity_id = CoreCorticalType::Death.to_cortical_id();
 
         let mut decoder = GazePropertiesNeuronVoxelXYZPDecoder::new_box(
             eccentricity_id,
@@ -300,9 +302,7 @@ mod tests {
 
         // Motor packet contains ONLY eccentricity array, modularity missing.
         let mut voxels = CorticalMappedXYZPNeuronVoxels::new();
-        voxels
-            .insert(eccentricity_id, NeuronVoxelXYZPArrays::new())
-            .ok();
+        let _ = voxels.insert(eccentricity_id, NeuronVoxelXYZPArrays::new());
 
         let mut pipelines: Vec<MotorPipelineStageRunner> = Vec::new();
         let mut changed: Vec<bool> = Vec::new();

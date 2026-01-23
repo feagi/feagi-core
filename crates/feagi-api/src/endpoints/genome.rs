@@ -4,9 +4,9 @@
 //! Genome API Endpoints - Exact port from Python `/v1/genome/*`
 
 // Removed - using crate::common::State instead
+use crate::amalgamation;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Query, State};
-use crate::amalgamation;
 use feagi_services::types::LoadGenomeParams;
 use std::collections::HashMap;
 use tracing::info;
@@ -74,6 +74,14 @@ fn queue_amalgamation_from_genome_json_str(
         });
         lock.pending = Some(pending);
     }
+
+    tracing::info!(
+        target: "feagi-api",
+        "🧬 [AMALGAMATION] Queued pending amalgamation id={} title='{}' circuit_size={:?}",
+        summary.amalgamation_id,
+        summary.genome_title,
+        summary.circuit_size
+    );
 
     Ok(amalgamation_id)
 }
@@ -216,10 +224,7 @@ pub async fn post_amalgamation_destination(
         "circuit_size".to_string(),
         serde_json::json!(pending.summary.circuit_size),
     );
-    region_properties.insert(
-        "rewire_mode".to_string(),
-        serde_json::json!(rewire_mode),
-    );
+    region_properties.insert("rewire_mode".to_string(), serde_json::json!(rewire_mode));
 
     connectome_service
         .create_brain_region(feagi_services::types::CreateBrainRegionParams {
@@ -230,7 +235,9 @@ pub async fn post_amalgamation_destination(
             properties: Some(region_properties),
         })
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to create amalgamation brain region: {}", e)))?;
+        .map_err(|e| {
+            ApiError::internal(format!("Failed to create amalgamation brain region: {}", e))
+        })?;
 
     // 2) Import cortical areas into that region.
     //
@@ -240,12 +247,13 @@ pub async fn post_amalgamation_destination(
     // - We assign parent_region_id to the new region so the genome stays consistent.
     //
     // If a genome contains shared/global IDs (e.g., core areas), those will be skipped.
-    let imported_genome = feagi_evolutionary::load_genome_from_json(&pending.genome_json).map_err(|e| {
-        ApiError::invalid_input(format!(
-            "Pending genome payload can no longer be parsed as a genome: {}",
-            e
-        ))
-    })?;
+    let imported_genome =
+        feagi_evolutionary::load_genome_from_json(&pending.genome_json).map_err(|e| {
+            ApiError::invalid_input(format!(
+                "Pending genome payload can no longer be parsed as a genome: {}",
+                e
+            ))
+        })?;
 
     let genome_service = state.genome_service.as_ref();
     let mut to_create: Vec<feagi_services::types::CreateCorticalAreaParams> = Vec::new();
@@ -371,6 +379,14 @@ pub async fn post_amalgamation_destination(
         lock.pending = None;
     }
 
+    tracing::info!(
+        target: "feagi-api",
+        "🧬 [AMALGAMATION] Confirmed and cleared pending amalgamation id={} imported_areas={} skipped_existing_areas={}",
+        pending.summary.amalgamation_id,
+        if skipped_existing.is_empty() { "unknown".to_string() } else { "partial".to_string() },
+        skipped_existing.len()
+    );
+
     // Build a BV-compatible list response for brain regions (regions_members-like data, but as list).
     let regions = state
         .connectome_service
@@ -411,7 +427,10 @@ pub async fn post_amalgamation_destination(
             "message".to_string(),
             serde_json::Value::String("Amalgamation confirmed".to_string()),
         ),
-        ("brain_regions".to_string(), serde_json::Value::Array(brain_regions)),
+        (
+            "brain_regions".to_string(),
+            serde_json::Value::Array(brain_regions),
+        ),
         (
             "skipped_existing_areas".to_string(),
             serde_json::json!(skipped_existing),
@@ -437,6 +456,15 @@ pub async fn delete_amalgamation_cancellation(
             status: "cancelled".to_string(),
             timestamp_ms: now_ms,
         });
+
+        tracing::info!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Cancelled and cleared pending amalgamation id={}",
+            lock.history
+                .last()
+                .map(|e| e.amalgamation_id.clone())
+                .unwrap_or_else(|| "<unknown>".to_string())
+        );
     }
     Ok(Json(HashMap::from([(
         "message".to_string(),
@@ -646,8 +674,7 @@ pub async fn post_save(
     let simulation_timestep_s = get_current_runtime_simulation_timestep_s(&state).await?;
     let genome_value: serde_json::Value = serde_json::from_str(&genome_json)
         .map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
-    let genome_value =
-        inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
+    let genome_value = inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
     let genome_json = serde_json::to_string_pretty(&genome_value)
         .map_err(|e| ApiError::internal(format!("Failed to serialize genome JSON: {}", e)))?;
 
@@ -799,8 +826,7 @@ pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde
 
     // Ensure physiology.simulation_timestep reflects the *current* runtime timestep at download time.
     let simulation_timestep_s = get_current_runtime_simulation_timestep_s(&state).await?;
-    let genome_value =
-        inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
+    let genome_value = inject_simulation_timestep_into_genome(genome_value, simulation_timestep_s)?;
 
     info!(
         "✅ Genome download complete, {} bytes",
@@ -1050,11 +1076,23 @@ pub async fn get_amalgamation_history_exact(
     let mut out: Vec<HashMap<String, serde_json::Value>> = Vec::new();
     for entry in &lock.history {
         out.push(HashMap::from([
-            ("amalgamation_id".to_string(), serde_json::json!(entry.amalgamation_id)),
-            ("genome_title".to_string(), serde_json::json!(entry.genome_title)),
-            ("circuit_size".to_string(), serde_json::json!(entry.circuit_size)),
+            (
+                "amalgamation_id".to_string(),
+                serde_json::json!(entry.amalgamation_id),
+            ),
+            (
+                "genome_title".to_string(),
+                serde_json::json!(entry.genome_title),
+            ),
+            (
+                "circuit_size".to_string(),
+                serde_json::json!(entry.circuit_size),
+            ),
             ("status".to_string(), serde_json::json!(entry.status)),
-            ("timestamp_ms".to_string(), serde_json::json!(entry.timestamp_ms)),
+            (
+                "timestamp_ms".to_string(),
+                serde_json::json!(entry.timestamp_ms),
+            ),
         ]));
     }
     Ok(Json(out))
@@ -1469,10 +1507,9 @@ pub async fn post_amalgamation_by_upload(
         .map_err(|e| ApiError::invalid_input(format!("Invalid multipart upload: {}", e)))?
     {
         if field.name() == Some("file") {
-            let bytes = field
-                .bytes()
-                .await
-                .map_err(|e| ApiError::invalid_input(format!("Failed to read uploaded file: {}", e)))?;
+            let bytes = field.bytes().await.map_err(|e| {
+                ApiError::invalid_input(format!("Failed to read uploaded file: {}", e))
+            })?;
 
             let json_str = std::str::from_utf8(&bytes).map_err(|e| {
                 ApiError::invalid_input(format!(
@@ -1485,7 +1522,8 @@ pub async fn post_amalgamation_by_upload(
         }
     }
 
-    let json_str = genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
+    let json_str =
+        genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
     let amalgamation_id = queue_amalgamation_from_genome_json_str(&state, json_str)?;
 
     Ok(Json(HashMap::from([
@@ -1540,10 +1578,9 @@ pub async fn post_upload_file(
         .map_err(|e| ApiError::invalid_input(format!("Invalid multipart upload: {}", e)))?
     {
         if field.name() == Some("file") {
-            let bytes = field
-                .bytes()
-                .await
-                .map_err(|e| ApiError::invalid_input(format!("Failed to read uploaded file: {}", e)))?;
+            let bytes = field.bytes().await.map_err(|e| {
+                ApiError::invalid_input(format!("Failed to read uploaded file: {}", e))
+            })?;
 
             let json_str = std::str::from_utf8(&bytes).map_err(|e| {
                 ApiError::invalid_input(format!(
@@ -1556,7 +1593,8 @@ pub async fn post_upload_file(
         }
     }
 
-    let json_str = genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
+    let json_str =
+        genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
 
     let genome_service = state.genome_service.as_ref();
     let genome_info = genome_service

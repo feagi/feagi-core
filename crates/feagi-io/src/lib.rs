@@ -1252,8 +1252,11 @@ impl IOSystem {
                     match ws_streams.start_data_streams() {
                         Ok(()) => {
                             info!("🦀 [PNS] ✅ WebSocket data streams started");
-                            info!("🦀 [PNS] 🌐 Brain Visualizer can now connect to: ws://{}:{}",
-                                  self.config.websocket.host, self.config.websocket.visualization_port);
+                            info!(
+                                "🦀 [PNS] 🌐 Brain Visualizer can now connect to: ws://{}:{}",
+                                self.config.websocket.host,
+                                self.config.websocket.visualization_port
+                            );
                         }
                         Err(e) => {
                             warn!(

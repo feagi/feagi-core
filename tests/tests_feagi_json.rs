@@ -2,33 +2,35 @@
 // - FeagiByteContainer instead of FeagiByteStructure
 // - FeagiSerializable trait instead of FeagiByteStructureCompatible
 // TODO: Update tests to use new serialization API
-#[allow(unused_imports)]
-use feagi_serialization::FeagiByteContainer;
-#[allow(unused_imports)]
-use feagi_serialization::FeagiSerializable;
+use feagi_serialization::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 use feagi_structures::FeagiJSON;
-#[allow(unused_imports)]
 use serde_json::json;
 
 #[test]
-#[ignore] // TODO: Update to use new serialization API (FeagiByteContainer)
-#[allow(unused_variables, dead_code, unreachable_code)]
 fn test_json_structure_serialize_deserialize_simple() {
-    // TODO: This test needs to be fully updated to use the new serialization API
-    // All code below is commented out until the test is fully rewritten
-    /*
     // Create a simple JSON structure from a string
     let json_string = r#"{"name": "test", "value": 42, "active": true}"#;
     let json_structure = FeagiJSON::from_json_string(json_string.to_string()).unwrap();
 
     // Serialize to bytes
-    let sending_byte_structure = json_structure.as_new_feagi_byte_structure().unwrap();
-    let bytes = sending_byte_structure.copy_out_as_byte_vector();
+    let mut sending_container = FeagiByteContainer::new_empty();
+    sending_container
+        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
+        .unwrap();
+    let bytes = sending_container.get_byte_ref().to_vec();
 
     // Deserialize back (pretend bytes were sent over network)
-    let received_byte_structure = FeagiByteStructure::create_from_bytes(bytes).unwrap();
-    let received_json_structure =
-        FeagiJSON::new_from_feagi_byte_structure(&received_byte_structure).unwrap();
+    let received_boxed = {
+        let mut received_container = FeagiByteContainer::new_empty();
+        received_container
+            .try_write_data_by_ownership_to_container_and_verify(bytes)
+            .unwrap();
+        received_container
+            .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
+            .unwrap()
+            .unwrap()
+    };
+    let received_json_structure = FeagiJSON::try_from(received_boxed).unwrap();
 
     // Check that the JSON content is consistent
     let original_json_string = json_structure.to_string();
@@ -39,16 +41,10 @@ fn test_json_structure_serialize_deserialize_simple() {
     let received_value: serde_json::Value = serde_json::from_str(&received_json_string).unwrap();
 
     assert_eq!(original_value, received_value);
-    */
 }
 
 #[test]
-#[ignore] // TODO: Update to use new serialization API (FeagiByteContainer)
-#[allow(unused_variables, dead_code, unreachable_code)]
 fn test_json_structure_serialize_deserialize_complex() {
-    // TODO: This test needs to be fully updated to use the new serialization API
-    // All code below is commented out until the test is fully rewritten
-    /*
     // Create a more complex JSON structure using serde_json::json! macro
     let json_value = json!({
         "users": [
@@ -79,73 +75,85 @@ fn test_json_structure_serialize_deserialize_complex() {
     let json_structure = FeagiJSON::from_json_value(json_value.clone());
 
     // Test serialization/deserialization
-    let sending_byte_structure = json_structure.as_new_feagi_byte_structure().unwrap();
-    let bytes = sending_byte_structure.copy_out_as_byte_vector();
-
-    let received_byte_structure = FeagiByteStructure::create_from_bytes(bytes).unwrap();
-    let received_json_structure =
-        FeagiJSON::new_from_feagi_byte_structure(&received_byte_structure).unwrap();
+    let mut sending_container = FeagiByteContainer::new_empty();
+    sending_container
+        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
+        .unwrap();
+    let bytes = sending_container.get_byte_ref().to_vec();
+    let received_boxed = {
+        let mut received_container = FeagiByteContainer::new_empty();
+        received_container
+            .try_write_data_by_ownership_to_container_and_verify(bytes)
+            .unwrap();
+        received_container
+            .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
+            .unwrap()
+            .unwrap()
+    };
+    let received_json_structure = FeagiJSON::try_from(received_boxed).unwrap();
 
     // Compare the original JSON value with the received one
     let received_value = received_json_structure.borrow_json_value();
     assert_eq!(&json_value, received_value);
-    */
 }
 
 #[test]
-#[ignore] // TODO: Update to use new serialization API (FeagiByteContainer)
-#[allow(unused_variables, dead_code, unreachable_code)]
 fn test_json_structure_empty_object() {
-    // TODO: This test needs to be fully updated to use the new serialization API
-    // All code below is commented out until the test is fully rewritten
-    /*
     // Test with empty JSON object
     let json_string = "{}";
     let json_structure = FeagiJSON::from_json_string(json_string.to_string()).unwrap();
 
-    let sending_byte_structure = json_structure.as_new_feagi_byte_structure().unwrap();
-    let bytes = sending_byte_structure.copy_out_as_byte_vector();
-
-    let received_byte_structure = FeagiByteStructure::create_from_bytes(bytes).unwrap();
-    let received_json_structure =
-        FeagiJSON::new_from_feagi_byte_structure(&received_byte_structure).unwrap();
+    let mut sending_container = FeagiByteContainer::new_empty();
+    sending_container
+        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
+        .unwrap();
+    let bytes = sending_container.get_byte_ref().to_vec();
+    let received_boxed = {
+        let mut received_container = FeagiByteContainer::new_empty();
+        received_container
+            .try_write_data_by_ownership_to_container_and_verify(bytes)
+            .unwrap();
+        received_container
+            .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
+            .unwrap()
+            .unwrap()
+    };
+    let received_json_structure = FeagiJSON::try_from(received_boxed).unwrap();
 
     let original_value: serde_json::Value = json!({});
     let received_value = received_json_structure.borrow_json_value();
     assert_eq!(&original_value, received_value);
-    */
 }
 
 #[test]
-#[ignore] // TODO: Update to use new serialization API (FeagiByteContainer)
-#[allow(unused_variables, dead_code, unreachable_code)]
 fn test_json_structure_array() {
-    // TODO: This test needs to be fully updated to use the new serialization API
-    // All code below is commented out until the test is fully rewritten
-    /*
     // Test with JSON array
     let json_value = json!([1, 2, 3, "hello", true, null, {"nested": "object"}]);
     let json_structure = FeagiJSON::from_json_value(json_value.clone());
 
-    let sending_byte_structure = json_structure.as_new_feagi_byte_structure().unwrap();
-    let bytes = sending_byte_structure.copy_out_as_byte_vector();
-
-    let received_byte_structure = FeagiByteStructure::create_from_bytes(bytes).unwrap();
-    let received_json_structure =
-        FeagiJSON::new_from_feagi_byte_structure(&received_byte_structure).unwrap();
+    let mut sending_container = FeagiByteContainer::new_empty();
+    sending_container
+        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
+        .unwrap();
+    let bytes = sending_container.get_byte_ref().to_vec();
+    let received_boxed = {
+        let mut received_container = FeagiByteContainer::new_empty();
+        received_container
+            .try_write_data_by_ownership_to_container_and_verify(bytes)
+            .unwrap();
+        received_container
+            .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
+            .unwrap()
+            .unwrap()
+    };
+    let received_json_structure = FeagiJSON::try_from(received_boxed).unwrap();
 
     let received_value = received_json_structure.borrow_json_value();
     assert_eq!(&json_value, received_value);
-    */
 }
 
 #[test]
-#[ignore] // TODO: Update to use new serialization API (FeagiByteContainer)
-#[allow(unused_variables, dead_code, unreachable_code)]
 fn test_json_structure_unicode() {
-    // TODO: This test needs to be fully updated to use the new serialization API
-    // All code below is commented out until the test is fully rewritten
-    /*
     // Test with Unicode characters
     let json_value = json!({
         "message": "Hello, 世界! 🌍",
@@ -160,25 +168,29 @@ fn test_json_structure_unicode() {
 
     let json_structure = FeagiJSON::from_json_value(json_value.clone());
 
-    let sending_byte_structure = json_structure.as_new_feagi_byte_structure().unwrap();
-    let bytes = sending_byte_structure.copy_out_as_byte_vector();
-
-    let received_byte_structure = FeagiByteStructure::create_from_bytes(bytes).unwrap();
-    let received_json_structure =
-        FeagiJSON::new_from_feagi_byte_structure(&received_byte_structure).unwrap();
+    let mut sending_container = FeagiByteContainer::new_empty();
+    sending_container
+        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
+        .unwrap();
+    let bytes = sending_container.get_byte_ref().to_vec();
+    let received_boxed = {
+        let mut received_container = FeagiByteContainer::new_empty();
+        received_container
+            .try_write_data_by_ownership_to_container_and_verify(bytes)
+            .unwrap();
+        received_container
+            .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
+            .unwrap()
+            .unwrap()
+    };
+    let received_json_structure = FeagiJSON::try_from(received_boxed).unwrap();
 
     let received_value = received_json_structure.borrow_json_value();
     assert_eq!(&json_value, received_value);
-    */
 }
 
 #[test]
-#[ignore] // TODO: Update to use new serialization API (FeagiByteContainer)
-#[allow(unused_variables, dead_code, unreachable_code)]
 fn test_json_structure_max_bytes_consistency() {
-    // TODO: This test needs to be fully updated to use the new serialization API
-    // All code below is commented out until the test is fully rewritten
-    /*
     // Test that max_number_bytes_needed is consistent (similar to the neuron test)
     let json_value = json!({
         "test": "data",
@@ -189,33 +201,31 @@ fn test_json_structure_max_bytes_consistency() {
     let json_structure = FeagiJSON::from_json_value(json_value);
 
     // Check if max_number_bytes_needed is consistent
-    let size1 = json_structure.max_number_bytes_needed();
-    let size2 = json_structure.max_number_bytes_needed();
+    let size1 = json_structure.get_number_of_bytes_needed();
+    let size2 = json_structure.get_number_of_bytes_needed();
     println!("Size check: {} == {}", size1, size2);
     assert_eq!(size1, size2);
 
-    // Create a manual bytes vector and serialize to it
-    let mut manual_bytes = vec![0u8; size1];
-    println!(
-        "Manual bytes before serialization: {:?}",
-        &manual_bytes[0..4.min(manual_bytes.len())]
-    );
-
-    let result = json_structure.overwrite_feagi_byte_structure_slice(&mut manual_bytes);
-    println!("Serialization result: {:?}", result);
-    println!(
-        "Manual bytes after serialization: {:?}",
-        &manual_bytes[0..4.min(manual_bytes.len())]
-    );
-
-    // Verify we can deserialize it back
-    let structure = FeagiByteStructure::create_from_bytes(manual_bytes.clone()).unwrap();
-    let received_json_structure = FeagiJSON::new_from_feagi_byte_structure(&structure).unwrap();
+    let mut sending_container = FeagiByteContainer::new_empty();
+    sending_container
+        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
+        .unwrap();
+    let bytes = sending_container.get_byte_ref().to_vec();
+    let received_boxed = {
+        let mut received_container = FeagiByteContainer::new_empty();
+        received_container
+            .try_write_data_by_ownership_to_container_and_verify(bytes)
+            .unwrap();
+        received_container
+            .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
+            .unwrap()
+            .unwrap()
+    };
+    let received_json_structure = FeagiJSON::try_from(received_boxed).unwrap();
 
     // Should be able to get the JSON back
     let json_string = received_json_structure.to_string();
     assert!(!json_string.is_empty());
-    */
 }
 
 #[test]

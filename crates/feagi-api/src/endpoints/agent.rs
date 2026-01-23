@@ -31,6 +31,8 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
 #[cfg(feature = "feagi-agent")]
 use feagi_structures::genomic::MotorCorticalUnit;
 #[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::SensoryCorticalUnit;
+#[cfg(feature = "feagi-agent")]
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "feagi-agent")]
@@ -47,6 +49,9 @@ async fn auto_create_cortical_areas_from_device_registrations(
     else {
         return;
     };
+    let input_units = device_registrations
+        .get("input_units_and_encoder_properties")
+        .and_then(|v| v.as_object());
 
     // Build creation params for missing OPU areas based on default topologies.
     let mut to_create: Vec<CreateCorticalAreaParams> = Vec::new();
@@ -134,6 +139,12 @@ async fn auto_create_cortical_areas_from_device_registrations(
                     group,
                 )
                 .to_vec(),
+                MotorCorticalUnit::CountOutput => MotorCorticalUnit::get_cortical_ids_array_for_count_output_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec(),
                 MotorCorticalUnit::ObjectSegmentation => MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
                     frame_change_handling,
                     group,
@@ -176,47 +187,55 @@ async fn auto_create_cortical_areas_from_device_registrations(
                     //
                     // IMPORTANT: We only auto-rename if the current name is clearly a placeholder (== cortical_id),
                     // to avoid overwriting user-custom names.
-                    if matches!(motor_unit, MotorCorticalUnit::Gaze) {
-                        let desired_name = {
-                            let subunit_name = match i {
-                                0 => "Eccentricity",
-                                1 => "Modulation",
-                                _ => "Subunit",
-                            };
-                            format!(
-                                "{} ({}) Unit {}",
-                                motor_unit.get_friendly_name(),
-                                subunit_name,
-                                group_u8
-                            )
+                    let desired_name = if matches!(motor_unit, MotorCorticalUnit::Gaze) {
+                        let subunit_name = match i {
+                            0 => "Eccentricity",
+                            1 => "Modulation",
+                            _ => "Subunit",
                         };
+                        format!(
+                            "{} ({}) Unit {}",
+                            motor_unit.get_friendly_name(),
+                            subunit_name,
+                            group_u8
+                        )
+                    } else if cortical_ids.len() > 1 {
+                        format!(
+                            "{} Subunit {} Unit {}",
+                            motor_unit.get_friendly_name(),
+                            i,
+                            group_u8
+                        )
+                    } else {
+                        format!("{} Unit {}", motor_unit.get_friendly_name(), group_u8)
+                    };
 
-                        match connectome_service.get_cortical_area(&cortical_id_b64).await {
-                            Ok(existing_area) => {
-                                if existing_area.name.is_empty()
-                                    || existing_area.name == existing_area.cortical_id
+                    match connectome_service.get_cortical_area(&cortical_id_b64).await {
+                        Ok(existing_area) => {
+                            if existing_area.name.is_empty()
+                                || existing_area.name == existing_area.cortical_id
+                            {
+                                let mut changes = std::collections::HashMap::new();
+                                changes.insert(
+                                    "cortical_name".to_string(),
+                                    serde_json::json!(desired_name),
+                                );
+                                if let Err(e) = genome_service
+                                    .update_cortical_area(&cortical_id_b64, changes)
+                                    .await
                                 {
-                                    let mut changes = std::collections::HashMap::new();
-                                    changes.insert(
-                                        "cortical_name".to_string(),
-                                        serde_json::json!(desired_name),
+                                    warn!(
+                                        "⚠️ [API] Failed to auto-rename existing motor cortical area '{}': {}",
+                                        cortical_id_b64, e
                                     );
-                                    if let Err(e) =
-                                        genome_service.update_cortical_area(&cortical_id_b64, changes).await
-                                    {
-                                        warn!(
-                                            "⚠️ [API] Failed to auto-rename existing gaze cortical area '{}': {}",
-                                            cortical_id_b64, e
-                                        );
-                                    }
                                 }
                             }
-                            Err(e) => {
-                                warn!(
-                                    "⚠️ [API] Failed to fetch existing cortical area '{}' for potential rename: {}",
-                                    cortical_id_b64, e
-                                );
-                            }
+                        }
+                        Err(e) => {
+                            warn!(
+                                "⚠️ [API] Failed to fetch existing cortical area '{}' for potential rename: {}",
+                                cortical_id_b64, e
+                            );
                         }
                     }
                     continue;
@@ -247,9 +266,21 @@ async fn auto_create_cortical_areas_from_device_registrations(
                         1 => "Modulation",
                         _ => "Subunit",
                     };
-                    format!("{} ({}) Unit {}", motor_unit.get_friendly_name(), subunit_name, group_u8)
+                    format!(
+                        "{} ({}) Unit {}",
+                        motor_unit.get_friendly_name(),
+                        subunit_name,
+                        group_u8
+                    )
+                } else if cortical_ids.len() > 1 {
+                    format!(
+                        "{} Subunit {} Unit {}",
+                        motor_unit.get_friendly_name(),
+                        i,
+                        group_u8
+                    )
                 } else {
-                    format!("{} Unit {}", motor_unit.get_snake_case_name(), group_u8)
+                    format!("{} Unit {}", motor_unit.get_friendly_name(), group_u8)
                 };
 
                 to_create.push(CreateCorticalAreaParams {
@@ -275,6 +306,214 @@ async fn auto_create_cortical_areas_from_device_registrations(
                     burst_engine_active: None,
                     properties: None,
                 });
+            }
+        }
+    }
+
+    if let Some(input_units) = input_units {
+        // Auto-rename sensory cortical areas if they exist with placeholder names.
+        for (sensory_unit_key, unit_defs) in input_units {
+            let sensory_unit: SensoryCorticalUnit = match serde_json::from_value::<
+                SensoryCorticalUnit,
+            >(serde_json::Value::String(
+                sensory_unit_key.clone(),
+            )) {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!(
+                        "⚠️ [API] Unable to parse SensoryCorticalUnit key '{}' from device_registrations: {}",
+                        sensory_unit_key, e
+                    );
+                    continue;
+                }
+            };
+
+            let Some(unit_defs_arr) = unit_defs.as_array() else {
+                continue;
+            };
+
+            for entry in unit_defs_arr {
+                let Some(pair) = entry.as_array() else {
+                    continue;
+                };
+                let Some(unit_def) = pair.first() else {
+                    continue;
+                };
+                let Some(group_u64) = unit_def.get("cortical_unit_index").and_then(|v| v.as_u64())
+                else {
+                    continue;
+                };
+                let group_u8: u8 = match group_u64.try_into() {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let group: CorticalUnitIndex = group_u8.into();
+
+                let device_count = unit_def
+                    .get("device_grouping")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                if device_count == 0 {
+                    continue;
+                }
+
+                let frame_change_handling = FrameChangeHandling::Absolute;
+                let percentage_neuron_positioning = PercentageNeuronPositioning::Linear;
+                let cortical_ids = match sensory_unit {
+                    SensoryCorticalUnit::Infrared => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Proximity => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_proximity_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Shock => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_shock_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Battery => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_battery_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Servo => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_servo_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::AnalogGPIO => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::DigitalGPIO => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_digital_g_p_i_o_with_parameters(
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::MiscData => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::TextEnglishInput => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::CountInput => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_count_input_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Vision => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_vision_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::SegmentedVision => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Accelerometer => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_accelerometer_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Gyroscope => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_gyroscope_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                };
+
+                for (i, cortical_id) in cortical_ids.iter().enumerate() {
+                    let cortical_id_b64 = cortical_id.as_base_64();
+                    match connectome_service.get_cortical_area(&cortical_id_b64).await {
+                        Ok(existing_area) => {
+                            if existing_area.name.is_empty()
+                                || existing_area.name == existing_area.cortical_id
+                            {
+                                let desired_name = if cortical_ids.len() > 1 {
+                                    format!(
+                                        "{} Subunit {} Unit {}",
+                                        sensory_unit.get_friendly_name(),
+                                        i,
+                                        group_u8
+                                    )
+                                } else {
+                                    format!(
+                                        "{} Unit {}",
+                                        sensory_unit.get_friendly_name(),
+                                        group_u8
+                                    )
+                                };
+                                let mut changes = std::collections::HashMap::new();
+                                changes.insert(
+                                    "cortical_name".to_string(),
+                                    serde_json::json!(desired_name),
+                                );
+                                if let Err(e) = genome_service
+                                    .update_cortical_area(&cortical_id_b64, changes)
+                                    .await
+                                {
+                                    warn!(
+                                        "⚠️ [API] Failed to auto-rename existing sensory cortical area '{}': {}",
+                                        cortical_id_b64, e
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!(
+                                "⚠️ [API] Failed to fetch existing cortical area '{}' for potential rename: {}",
+                                cortical_id_b64, e
+                            );
+                        }
+                    }
+                }
             }
         }
     }

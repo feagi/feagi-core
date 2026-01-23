@@ -127,9 +127,18 @@ pub async fn post_morphology(
         .ok_or_else(|| ApiError::invalid_input("Missing morphology_parameters"))?;
 
     let (morphology_type_enum, params_value) = match morphology_type.as_str() {
-        "vectors" => (feagi_evolutionary::MorphologyType::Vectors, morphology_parameters),
-        "patterns" => (feagi_evolutionary::MorphologyType::Patterns, morphology_parameters),
-        "functions" => (feagi_evolutionary::MorphologyType::Functions, morphology_parameters),
+        "vectors" => (
+            feagi_evolutionary::MorphologyType::Vectors,
+            morphology_parameters,
+        ),
+        "patterns" => (
+            feagi_evolutionary::MorphologyType::Patterns,
+            morphology_parameters,
+        ),
+        "functions" => (
+            feagi_evolutionary::MorphologyType::Functions,
+            morphology_parameters,
+        ),
         "composite" => {
             // BV payload wraps composite fields under {"composite": {...}}.
             // Accept that exact schema (and also accept the direct flat schema).
@@ -147,10 +156,8 @@ pub async fn post_morphology(
         }
     };
 
-    let parameters: feagi_evolutionary::MorphologyParameters =
-        serde_json::from_value(params_value).map_err(|e| {
-            ApiError::invalid_input(format!("Invalid morphology_parameters: {}", e))
-        })?;
+    let parameters: feagi_evolutionary::MorphologyParameters = serde_json::from_value(params_value)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid morphology_parameters: {}", e)))?;
 
     let morphology = feagi_evolutionary::Morphology {
         morphology_type: morphology_type_enum,
@@ -200,9 +207,18 @@ pub async fn put_morphology(
         .ok_or_else(|| ApiError::invalid_input("Missing morphology_parameters"))?;
 
     let (morphology_type_enum, params_value) = match morphology_type.as_str() {
-        "vectors" => (feagi_evolutionary::MorphologyType::Vectors, morphology_parameters),
-        "patterns" => (feagi_evolutionary::MorphologyType::Patterns, morphology_parameters),
-        "functions" => (feagi_evolutionary::MorphologyType::Functions, morphology_parameters),
+        "vectors" => (
+            feagi_evolutionary::MorphologyType::Vectors,
+            morphology_parameters,
+        ),
+        "patterns" => (
+            feagi_evolutionary::MorphologyType::Patterns,
+            morphology_parameters,
+        ),
+        "functions" => (
+            feagi_evolutionary::MorphologyType::Functions,
+            morphology_parameters,
+        ),
         "composite" => {
             let composite_obj = morphology_parameters
                 .get("composite")
@@ -218,10 +234,8 @@ pub async fn put_morphology(
         }
     };
 
-    let parameters: feagi_evolutionary::MorphologyParameters =
-        serde_json::from_value(params_value).map_err(|e| {
-            ApiError::invalid_input(format!("Invalid morphology_parameters: {}", e))
-        })?;
+    let parameters: feagi_evolutionary::MorphologyParameters = serde_json::from_value(params_value)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid morphology_parameters: {}", e)))?;
 
     let morphology = feagi_evolutionary::Morphology {
         morphology_type: morphology_type_enum,

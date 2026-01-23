@@ -439,7 +439,7 @@ impl SynapticPropagationEngine {
         let result: PropagationResult = contributions
             .into_par_iter()
             .fold(
-                || AHashMap::<CorticalID, Vec<(NeuronId, SynapticContribution)>>::new(),
+                AHashMap::<CorticalID, Vec<(NeuronId, SynapticContribution)>>::new,
                 |mut acc, (target_neuron, cortical_area, contribution)| {
                     acc.entry(cortical_area)
                         .or_default()
@@ -447,17 +447,12 @@ impl SynapticPropagationEngine {
                     acc
                 },
             )
-            .reduce(
-                || AHashMap::new(),
-                |mut a, b| {
-                    for (cortical_id, mut contribs) in b {
-                        a.entry(cortical_id)
-                            .or_default()
-                            .append(&mut contribs);
-                    }
-                    a
-                },
-            );
+            .reduce(AHashMap::new, |mut a, b| {
+                for (cortical_id, mut contribs) in b {
+                    a.entry(cortical_id).or_default().append(&mut contribs);
+                }
+                a
+            });
         let group_ms = group_start.elapsed().as_secs_f64() * 1000.0;
 
         self.last_profile = Some(PropagationProfile {

@@ -1843,12 +1843,14 @@ dependencies = [
  "feagi-npu-burst-engine",
  "feagi-npu-neural",
  "feagi-npu-plasticity",
+ "feagi-npu-runtime",
  "feagi-sensorimotor",
  "feagi-serialization",
  "feagi-services",
  "feagi-state-manager",
  "feagi-structures",
  "ndarray",
+ "parking_lot",
  "serde_json",
  "tokio",
 ]
@@ -1956,6 +1958,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tracing",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -2045,7 +2048,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-burst-engine"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "ahash",
  "base64 0.22.1",
@@ -2074,7 +2077,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-neural"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "ahash",
  "serde",
@@ -2084,7 +2087,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-plasticity"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "ahash",
  "feagi-npu-burst-engine",
@@ -2102,7 +2105,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-runtime"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "ahash",
  "feagi-npu-neural",

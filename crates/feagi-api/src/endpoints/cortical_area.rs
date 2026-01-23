@@ -275,6 +275,12 @@ pub async fn get_cortical_area_geometry(
                 .map(|area| {
                     // Return FULL cortical area data (matching Python format)
                     // This is what Brain Visualizer expects for genome loading
+                    let coordinate_2d = area
+                        .properties
+                        .get("coordinate_2d")
+                        .or_else(|| area.properties.get("coordinates_2d"))
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!([0, 0]));
                     let data = serde_json::json!({
                         "cortical_id": area.cortical_id,
                         "cortical_name": area.name,
@@ -282,7 +288,7 @@ pub async fn get_cortical_area_geometry(
                         "cortical_type": area.cortical_type,  // NEW: Explicitly include cortical_type for BV
                         "cortical_sub_group": area.sub_group.as_ref().unwrap_or(&String::new()),  // Return empty string instead of null
                         "coordinates_3d": [area.position.0, area.position.1, area.position.2],
-                        "coordinates_2d": [0, 0],  // TODO: Extract from properties when available
+                        "coordinates_2d": coordinate_2d,
                         "cortical_dimensions": [area.dimensions.0, area.dimensions.1, area.dimensions.2],
                         "cortical_neuron_per_vox_count": area.neurons_per_voxel,
                         "visualization": area.visible,
@@ -480,7 +486,7 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("cortical_id required"))?;
 
-    let group_id = request
+    let mut group_id = request
         .get("group_id")
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as u8;
@@ -511,6 +517,19 @@ pub async fn post_cortical_area(
         .get("cortical_type")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("cortical_type required"))?;
+
+    let unit_id: Option<u8> = request
+        .get("unit_id")
+        .and_then(|v| v.as_u64())
+        .map(|value| {
+            value
+                .try_into()
+                .map_err(|_| ApiError::invalid_input("unit_id out of range"))
+        })
+        .transpose()?;
+    if let Some(unit_id) = unit_id {
+        group_id = unit_id;
+    }
 
     // Extract neurons_per_voxel from request (default to 1 if not provided)
     let neurons_per_voxel = request
@@ -827,11 +846,18 @@ pub async fn put_cortical_area(
         .update_cortical_area(&cortical_id, request)
         .await
     {
-        Ok(_) => {
-            tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/cortical_area - success for {}", cortical_id);
+        Ok(area_info) => {
+            let updated_id = area_info.cortical_id.clone();
+            tracing::debug!(
+                target: "feagi-api",
+                "PUT /v1/cortical_area/cortical_area - success for {} (updated_id={})",
+                cortical_id,
+                updated_id
+            );
             Ok(Json(HashMap::from([
                 ("message".to_string(), "Cortical area updated".to_string()),
-                ("cortical_id".to_string(), cortical_id),
+                ("cortical_id".to_string(), updated_id),
+                ("previous_cortical_id".to_string(), cortical_id),
             ])))
         }
         Err(e) => {
@@ -1074,8 +1100,8 @@ pub async fn post_clone(
     Json(request): Json<CloneCorticalAreaRequest>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     use base64::{engine::general_purpose, Engine as _};
-    use feagi_structures::genomic::cortical_area::CorticalID;
     use feagi_services::types::CreateCorticalAreaParams;
+    use feagi_structures::genomic::cortical_area::CorticalID;
     use serde_json::Value;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1084,8 +1110,8 @@ pub async fn post_clone(
 
     // Resolve + validate source cortical ID.
     let source_id = request.source_area_id.clone();
-    let source_typed =
-        CorticalID::try_from_base_64(&source_id).map_err(|e| ApiError::invalid_input(e.to_string()))?;
+    let source_typed = CorticalID::try_from_base_64(&source_id)
+        .map_err(|e| ApiError::invalid_input(e.to_string()))?;
     let src_first_byte = source_typed.as_bytes()[0];
     if src_first_byte != b'c' && src_first_byte != b'm' {
         return Err(ApiError::invalid_input(format!(
@@ -1220,7 +1246,7 @@ pub async fn post_clone(
         .create_cortical_areas(vec![params])
         .await
         .map_err(|e| ApiError::internal(format!("Failed to clone cortical area: {}", e)))?;
-    
+
     // DIAGNOSTIC: Log what coordinates were returned after creation
     if let Some(created_area) = created_areas.first() {
         tracing::info!(target: "feagi-api",
@@ -1297,7 +1323,11 @@ pub async fn post_clone(
             };
 
             connectome_service
-                .update_cortical_mapping(area.cortical_id.clone(), new_area_id.clone(), rules_array.clone())
+                .update_cortical_mapping(
+                    area.cortical_id.clone(),
+                    new_area_id.clone(),
+                    rules_array.clone(),
+                )
                 .await
                 .map_err(|e| {
                     ApiError::internal(format!(
@@ -1370,11 +1400,23 @@ pub async fn put_multi_cortical_area(
     // Remove cortical_id_list from changes (it's not a property to update)
     request.remove("cortical_id_list");
 
-    // Update each cortical area with the same properties
+    // Build shared properties (applies to all unless overridden per-id)
+    let mut shared_properties = request.clone();
+    for cortical_id in &cortical_ids {
+        shared_properties.remove(cortical_id);
+    }
+
+    // Update each cortical area, using per-id properties when provided
     for cortical_id in &cortical_ids {
         tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - updating area: {}", cortical_id);
+        let mut properties = shared_properties.clone();
+        if let Some(serde_json::Value::Object(per_id_map)) = request.get(cortical_id) {
+            for (key, value) in per_id_map {
+                properties.insert(key.clone(), value.clone());
+            }
+        }
         match genome_service
-            .update_cortical_area(cortical_id, request.clone())
+            .update_cortical_area(cortical_id, properties)
             .await
         {
             Ok(_) => {

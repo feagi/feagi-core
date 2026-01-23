@@ -40,20 +40,15 @@ pub type DynamicGatingCallback = Arc<parking_lot::Mutex<Option<Box<dyn Fn(String
 ///
 /// This is an explicit, configuration-driven switch to avoid clients needing to hardcode transport
 /// decisions. The configuration is authoritative; client requests are treated as preferences.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum VisualizationShmPolicy {
     /// Honor the agent request (chosen_transport / shm_path presence).
+    #[default]
     Auto,
     /// Never allocate/advertise visualization SHM paths.
     ForceWebSocket,
     /// Always allocate/advertise visualization SHM paths (when visualization capability is present).
     ForceShm,
-}
-
-impl Default for VisualizationShmPolicy {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 /// Registration Handler
@@ -355,6 +350,14 @@ impl RegistrationHandler {
                 )
                 .to_vec()
             }
+            CountInput => {
+                SensoryCorticalUnit::get_cortical_ids_array_for_count_input_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec()
+            }
             Vision => {
                 SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                     frame_change_handling,
@@ -513,6 +516,7 @@ impl RegistrationHandler {
                     SensoryUnit::DigitalGpio => SensoryCorticalUnit::DigitalGPIO,
                     SensoryUnit::MiscData => SensoryCorticalUnit::MiscData,
                     SensoryUnit::TextEnglishInput => SensoryCorticalUnit::TextEnglishInput,
+                    SensoryUnit::CountInput => SensoryCorticalUnit::CountInput,
                     SensoryUnit::Vision => SensoryCorticalUnit::Vision,
                     SensoryUnit::SegmentedVision => SensoryCorticalUnit::SegmentedVision,
                     SensoryUnit::Accelerometer => SensoryCorticalUnit::Accelerometer,
@@ -698,6 +702,7 @@ impl RegistrationHandler {
                         MotorUnit::Gaze => MotorCorticalUnit::Gaze,
                         MotorUnit::MiscData => MotorCorticalUnit::MiscData,
                         MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
+                        MotorUnit::CountOutput => MotorCorticalUnit::CountOutput,
                         MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
                         MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
                     };
@@ -728,6 +733,12 @@ impl RegistrationHandler {
                         .to_vec(),
                         MotorCorticalUnit::TextEnglishOutput => MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
                             frame_change_handling,
+                            group,
+                        )
+                        .to_vec(),
+                        MotorCorticalUnit::CountOutput => MotorCorticalUnit::get_cortical_ids_array_for_count_output_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
                             group,
                         )
                         .to_vec(),
@@ -769,6 +780,7 @@ impl RegistrationHandler {
                     MotorUnit::Gaze => MotorCorticalUnit::Gaze,
                     MotorUnit::MiscData => MotorCorticalUnit::MiscData,
                     MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
+                    MotorUnit::CountOutput => MotorCorticalUnit::CountOutput,
                     MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
                     MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
                 };
@@ -799,6 +811,12 @@ impl RegistrationHandler {
                     .to_vec(),
                     MotorCorticalUnit::TextEnglishOutput => MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
                         frame_change_handling,
+                        group,
+                    )
+                    .to_vec(),
+                    MotorCorticalUnit::CountOutput => MotorCorticalUnit::get_cortical_ids_array_for_count_output_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
                         group,
                     )
                     .to_vec(),
@@ -1329,6 +1347,7 @@ impl RegistrationHandler {
                             MotorUnit::Gaze => MotorCorticalUnit::Gaze,
                             MotorUnit::MiscData => MotorCorticalUnit::MiscData,
                             MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
+                            MotorUnit::CountOutput => MotorCorticalUnit::CountOutput,
                             MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
                             MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
                         };
@@ -1372,6 +1391,14 @@ impl RegistrationHandler {
                                 )
                                 .to_vec()
                             }
+                            MotorCorticalUnit::CountOutput => {
+                                MotorCorticalUnit::get_cortical_ids_array_for_count_output_with_parameters(
+                                    frame_change_handling,
+                                    percentage_neuron_positioning,
+                                    group,
+                                )
+                                .to_vec()
+                            }
                             MotorCorticalUnit::ObjectSegmentation => {
                                 MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
                                     frame_change_handling,
@@ -1411,6 +1438,7 @@ impl RegistrationHandler {
                         MotorUnit::Gaze => MotorCorticalUnit::Gaze,
                         MotorUnit::MiscData => MotorCorticalUnit::MiscData,
                         MotorUnit::TextEnglishOutput => MotorCorticalUnit::TextEnglishOutput,
+                        MotorUnit::CountOutput => MotorCorticalUnit::CountOutput,
                         MotorUnit::ObjectSegmentation => MotorCorticalUnit::ObjectSegmentation,
                         MotorUnit::SimpleVisionOutput => MotorCorticalUnit::SimpleVisionOutput,
                     };
@@ -1450,6 +1478,14 @@ impl RegistrationHandler {
                         MotorCorticalUnit::TextEnglishOutput => {
                             MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
                                 frame_change_handling,
+                                group,
+                            )
+                            .to_vec()
+                        }
+                        MotorCorticalUnit::CountOutput => {
+                            MotorCorticalUnit::get_cortical_ids_array_for_count_output_with_parameters(
+                                frame_change_handling,
+                                percentage_neuron_positioning,
                                 group,
                             )
                             .to_vec()

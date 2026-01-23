@@ -258,7 +258,7 @@ impl VizSHMWriter {
 /// Round `n` up to the nearest multiple of `multiple` (must be > 0).
 fn round_up_to_multiple(n: usize, multiple: usize) -> usize {
     debug_assert!(multiple > 0);
-    ((n + multiple - 1) / multiple) * multiple
+    n.div_ceil(multiple) * multiple
 }
 
 impl Drop for VizSHMWriter {

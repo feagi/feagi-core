@@ -13,16 +13,20 @@
 /// ```
 ///
 /// Note: Edit the constants below to change test parameters
-// Note: parking_lot removed, using std::sync::Mutex
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use feagi_bdu::Neuroembryogenesis;
+use feagi_brain_development::{ConnectomeManager, Neuroembryogenesis};
+use feagi_evolutionary::genome::map_old_id_to_new;
 use feagi_evolutionary::{templates, RuntimeGenome};
-use feagi_npu_burst_engine::DynamicNPU;
+use feagi_npu_burst_engine::backend::CPUBackend;
+use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::{
-    AreaType, CorticalArea, CorticalAreaDimensions as Dimensions, CorticalID,
+    CoreCorticalType, CorticalArea, CorticalAreaDimensions as Dimensions, CorticalID,
 };
+use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+use parking_lot::RwLock;
 
 // Configuration - edit these to change test parameters
 const WITH_PROJECTION: bool = true; // Set to true to test with projection
@@ -74,7 +78,7 @@ fn main() {
 fn run_profiling(
     with_projection: bool,
     num_bursts: usize,
-    target_hz: f32,
+    _target_hz: f32,
     stimulus_count: usize,
 ) -> PerformanceMetrics {
     const AREA_SIZE: (u32, u32, u32) = (128, 128, 1);
@@ -82,29 +86,37 @@ fn run_profiling(
     println!("Creating genome...");
     let genome = create_genome(with_projection, AREA_SIZE);
 
-    println!("Initializing BDU and loading genome...");
-    let bdu = Arc::new(Mutex::new(BrainDevelopmentUnit::new()));
+    println!("Initializing NPU and loading genome...");
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let rust_npu =
+        RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).expect("Failed to create NPU");
+    let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "ProfileNPU"));
+    let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+        npu.clone(),
+    )));
+
+    let mut neuro = Neuroembryogenesis::new(manager.clone());
+    neuro
+        .develop_from_genome(&genome)
+        .expect("Failed to load genome");
 
     {
-        let mut bdu_lock = bdu.lock();
-        bdu_lock
-            .load_from_genome(genome)
-            .expect("Failed to load genome");
+        let mut manager_lock = manager.write();
+        manager_lock
+            .ensure_core_cortical_areas()
+            .expect("Failed to ensure core cortical areas");
     }
-
-    let npu = {
-        let bdu_lock = bdu.lock();
-        bdu_lock.get_npu().expect("Failed to get NPU")
-    };
 
     println!("✓ Genome loaded");
     println!();
 
     // Warmup
     println!("Warming up (50 bursts)...");
+    let power_id = CoreCorticalType::Power.to_cortical_id();
     for _ in 0..50 {
-        inject_stimulus(&npu, stimulus_count, AREA_SIZE);
-        let mut npu_lock = npu.lock();
+        inject_stimulus(&npu, &power_id, stimulus_count, AREA_SIZE);
+        let npu_lock = npu.lock().expect("Failed to lock NPU");
         npu_lock.process_burst().expect("Burst failed");
     }
     println!("✓ Warmup complete");
@@ -120,13 +132,13 @@ fn run_profiling(
 
         // Inject
         let inject_start = Instant::now();
-        inject_stimulus(&npu, stimulus_count, AREA_SIZE);
+        inject_stimulus(&npu, &power_id, stimulus_count, AREA_SIZE);
         let inject_duration = inject_start.elapsed();
 
         // Process burst
         let exec_start = Instant::now();
         {
-            let mut npu_lock = npu.lock();
+            let npu_lock = npu.lock().expect("Failed to lock NPU");
             npu_lock.process_burst().expect("Burst failed");
         }
         let exec_duration = exec_start.elapsed();
@@ -161,46 +173,52 @@ fn create_genome(with_projection: bool, area_size: (u32, u32, u32)) -> RuntimeGe
     templates::add_core_morphologies(&mut genome.morphologies);
 
     // Create power00
+    let power_id = CoreCorticalType::Power.to_cortical_id();
     let power_area = CorticalArea::new(
-        "power00".to_string(),
-        2,
+        power_id,
+        1,
         "Power".to_string(),
-        Dimensions::new(
-            area_size.0 as usize,
-            area_size.1 as usize,
-            area_size.2 as usize,
-        ),
-        (0, 0, 0),
-        AreaType::Memory,
+        Dimensions::new(area_size.0, area_size.1, area_size.2)
+            .expect("Failed to create power area dimensions"),
+        GenomeCoordinate3D::new(0, 0, 0),
+        power_id
+            .as_cortical_type()
+            .expect("Power cortical ID should map to Core type"),
     )
     .expect("Failed to create power area");
 
-    genome
-        .cortical_areas
-        .insert("power00".to_string(), power_area);
+    genome.cortical_areas.insert(power_id, power_area);
 
     if with_projection {
+        let iic400_base64 =
+            map_old_id_to_new("iic400").expect("Failed to map iic400 to new cortical ID");
+        let iic400_id =
+            CorticalID::try_from_base_64(&iic400_base64).expect("Invalid iic400 cortical ID");
         let iic400 = CorticalArea::new(
-            "iic400".to_string(),
+            iic400_id,
             3,
             "Vision Input".to_string(),
-            Dimensions::new(
-                area_size.0 as usize,
-                area_size.1 as usize,
-                area_size.2 as usize,
-            ),
-            (10, 0, 0),
-            AreaType::Sensory, // Use Sensory for visual input areas
+            Dimensions::new(area_size.0, area_size.1, area_size.2)
+                .expect("Failed to create iic400 dimensions"),
+            GenomeCoordinate3D::new(10, 0, 0),
+            iic400_id
+                .as_cortical_type()
+                .expect("iic400 cortical ID should map to IO type"),
         )
         .expect("Failed to create iic400");
 
-        genome.cortical_areas.insert("iic400".to_string(), iic400);
+        genome.cortical_areas.insert(iic400_id, iic400);
     }
 
     genome
 }
 
-fn inject_stimulus(npu: &Arc<Mutex<DynamicNPU>>, neuron_count: usize, area_size: (u32, u32, u32)) {
+fn inject_stimulus(
+    npu: &Arc<TracingMutex<DynamicNPU>>,
+    cortical_id: &CorticalID,
+    neuron_count: usize,
+    area_size: (u32, u32, u32),
+) {
     // Create a simple fixed pattern for stimulus (avoid rand dependency)
     // Just iterate through neurons with a stride to get good distribution
     let max_id = (area_size.0 * area_size.1) as usize;
@@ -216,8 +234,8 @@ fn inject_stimulus(npu: &Arc<Mutex<DynamicNPU>>, neuron_count: usize, area_size:
         xyzp_data.push((x, y, z, potential));
     }
 
-    let mut npu_lock = npu.lock();
-    npu_lock.inject_sensory_xyzp("power00", &xyzp_data);
+    let mut npu_lock = npu.lock().expect("Failed to lock NPU");
+    npu_lock.inject_sensory_xyzp_by_id(cortical_id, &xyzp_data);
 }
 
 #[derive(Debug)]

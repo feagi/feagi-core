@@ -5,18 +5,15 @@
   "benchmarks": [
     {
       "id": "ci_cpu_backend/full_burst/10k_50syn",
-      "baseline_ns": 2015415.2920168065
+      "baseline_ns": 1909857.4111111113
     },
     {
       "id": "ci_cpu_backend/synaptic_only/10k_50syn",
-      "baseline_ns": 1985705.4636591477
+      "baseline_ns": 1872449.0555555555
     },
     {
       "id": "ci_cpu_backend/neural_only/10k_50syn",
-      "baseline_ns": 5838.512945113789
+      "baseline_ns": 5031.154597089102
     }
   ]
 }
-
-
-

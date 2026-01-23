@@ -23,9 +23,9 @@ use tower_http::{
 };
 use utoipa::OpenApi;
 
+use crate::amalgamation;
 #[cfg(feature = "http")]
 use crate::openapi::ApiDoc;
-use crate::amalgamation;
 #[cfg(feature = "services")]
 use feagi_services::traits::{AgentService, SystemService};
 #[cfg(feature = "services")]
