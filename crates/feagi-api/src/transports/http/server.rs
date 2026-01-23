@@ -56,7 +56,7 @@ pub struct ApiState {
     pub agent_connectors: Arc<
         parking_lot::RwLock<
             std::collections::HashMap<
-                String,
+                feagi_agent::sdk::AgentDescriptor,
                 Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
             >,
         >,
@@ -69,7 +69,7 @@ impl ApiState {
     pub fn init_agent_connectors() -> Arc<
         parking_lot::RwLock<
             std::collections::HashMap<
-                String,
+                feagi_agent::sdk::AgentDescriptor,
                 Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
             >,
         >,

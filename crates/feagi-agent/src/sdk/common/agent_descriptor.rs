@@ -4,7 +4,7 @@ use feagi_structures::FeagiDataError;
 const MAX_MANUFACTURER_LENGTH: usize = 20;
 const MAX_AGENT_NAME_LENGTH: usize = 20;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AgentDescriptor {
     instance_id: u32,
     manufacturer: [u8; MAX_MANUFACTURER_LENGTH], //ASCII

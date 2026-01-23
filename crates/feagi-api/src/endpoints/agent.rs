@@ -19,6 +19,8 @@ use tracing::{error, info, warn};
 #[cfg(feature = "feagi-agent")]
 use feagi_agent::sdk::ConnectorAgent;
 #[cfg(feature = "feagi-agent")]
+use feagi_agent::sdk::AgentDescriptor;
+#[cfg(feature = "feagi-agent")]
 use feagi_services::types::CreateCorticalAreaParams;
 #[cfg(feature = "feagi-agent")]
 use feagi_structures::genomic::cortical_area::descriptors::{
@@ -34,6 +36,15 @@ use feagi_structures::genomic::MotorCorticalUnit;
 use feagi_structures::genomic::SensoryCorticalUnit;
 #[cfg(feature = "feagi-agent")]
 use std::sync::{Arc, Mutex};
+
+#[cfg(feature = "feagi-agent")]
+fn parse_agent_descriptor(agent_id: &str) -> ApiResult<AgentDescriptor> {
+    AgentDescriptor::try_from_base64(agent_id).map_err(|e| {
+        ApiError::invalid_input(format!(
+            "Invalid agent_id (expected AgentDescriptor base64): {e}"
+        ))
+    })
+}
 
 #[cfg(feature = "feagi-agent")]
 async fn auto_create_cortical_areas_from_device_registrations(
@@ -604,22 +615,35 @@ pub async fn register_agent(
             // If capabilities contained device_registrations, import them
             #[cfg(feature = "feagi-agent")]
             if let Some(device_registrations_value) = device_registrations_opt {
+                let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
                 let device_registrations_for_autocreate = device_registrations_value.clone();
                 // IMPORTANT: do not hold a non-Send lock guard across an await.
                 let connector = {
                     let mut connectors = state.agent_connectors.write();
-                    connectors
-                        .entry(request.agent_id.clone())
-                        .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new())))
-                        .clone()
+                    if let Some(existing) = connectors.get(&agent_descriptor) {
+                        existing.clone()
+                    } else {
+                        let connector = ConnectorAgent::new_from_device_registration_json(
+                            agent_descriptor,
+                            device_registrations_value.clone(),
+                        )
+                        .map_err(|e| {
+                            ApiError::invalid_input(format!(
+                                "Failed to initialize connector from device registrations: {e}"
+                            ))
+                        })?;
+                        let connector = Arc::new(Mutex::new(connector));
+                        connectors.insert(agent_descriptor, connector.clone());
+                        connector
+                    }
                 };
 
                 // IMPORTANT: do not hold a non-Send MutexGuard across an await.
-                let import_result = {
+                let import_result = (|| {
                     let mut connector_guard = connector.lock().unwrap();
                     connector_guard
-                        .import_device_registrations_as_config_json(device_registrations_value)
-                };
+                        .set_device_registrations_from_json(device_registrations_value)
+                })();
 
                 match import_result {
                     Err(e) => {
@@ -641,11 +665,12 @@ pub async fn register_agent(
                     }
                 }
             } else {
+                let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
                 // Initialize empty ConnectorAgent even if no device_registrations
                 let mut connectors = state.agent_connectors.write();
                 connectors
-                    .entry(request.agent_id.clone())
-                    .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new())));
+                    .entry(agent_descriptor)
+                    .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor))));
             }
 
             // Convert service TransportConfig to API TransportConfig
@@ -1200,7 +1225,7 @@ pub async fn post_configure(
 /// Returns the complete device registration configuration including
 /// sensor and motor device registrations, encoder/decoder properties,
 /// and feedback configurations in the format compatible with
-/// ConnectorAgent::export_device_registrations_as_config_json.
+/// ConnectorAgent::get_device_registration_json.
 #[utoipa::path(
     get,
     path = "/v1/agent/{agent_id}/device_registrations",
@@ -1243,11 +1268,12 @@ pub async fn export_device_registrations(
     // Get existing ConnectorAgent for this agent (don't create new one)
     #[cfg(feature = "feagi-agent")]
     let device_registrations = {
+        let agent_descriptor = parse_agent_descriptor(&agent_id)?;
         // Get existing ConnectorAgent - don't create a new one
         // If no ConnectorAgent exists, it means device registrations haven't been imported yet
         let connector = {
             let connectors = state.agent_connectors.read();
-            connectors.get(&agent_id).cloned()
+            connectors.get(&agent_descriptor).cloned()
         };
 
         let connector = match connector {
@@ -1282,7 +1308,7 @@ pub async fn export_device_registrations(
 
         // Export device registrations using ConnectorAgent method
         let connector_guard = connector.lock().unwrap();
-        match connector_guard.export_device_registrations_as_config_json() {
+        match connector_guard.get_device_registration_json() {
             Ok(registrations) => {
                 // Log what we're exporting for debugging
                 let input_count = registrations
@@ -1355,7 +1381,7 @@ pub async fn export_device_registrations(
 ///
 /// Imports a device registration configuration, replacing all existing
 /// device registrations for the agent. The configuration must be in
-/// the format compatible with ConnectorAgent::import_device_registrations_as_config_json.
+/// the format compatible with ConnectorAgent::set_device_registrations_from_json.
 ///
 /// # Warning
 /// This operation **wipes all existing registered devices** before importing
@@ -1420,18 +1446,19 @@ pub async fn import_device_registrations(
     // Import device registrations using ConnectorAgent
     #[cfg(feature = "feagi-agent")]
     {
+        let agent_descriptor = parse_agent_descriptor(&agent_id)?;
         // Get or create ConnectorAgent for this agent
         let connector = {
             let mut connectors = state.agent_connectors.write();
-            let was_existing = connectors.contains_key(&agent_id);
+            let was_existing = connectors.contains_key(&agent_descriptor);
             let connector = connectors
-                .entry(agent_id.clone())
+                .entry(agent_descriptor)
                 .or_insert_with(|| {
                     info!(
                         "🔧 [API] Creating new ConnectorAgent for agent '{}'",
                         agent_id
                     );
-                    Arc::new(Mutex::new(ConnectorAgent::new()))
+                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor)))
                 })
                 .clone();
             if was_existing {
@@ -1475,11 +1502,11 @@ pub async fn import_device_registrations(
                 .map_err(|e| format!("ConnectorAgent lock poisoned: {e}"))?;
 
             connector_guard
-                .import_device_registrations_as_config_json(request.device_registrations.clone())
+                .set_device_registrations_from_json(request.device_registrations.clone())
                 .map_err(|e| format!("import failed: {e}"))?;
 
             // Verify the import worked by exporting again (no await here).
-            match connector_guard.export_device_registrations_as_config_json() {
+            match connector_guard.get_device_registration_json() {
                 Ok(exported) => {
                     let exported_input_count = exported
                         .get("input_units_and_encoder_properties")
