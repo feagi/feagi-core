@@ -3,6 +3,9 @@
 use super::FeagiServerPuller;
 use super::server_shared::FeagiServerBindStateChange;
 
+/// Boxed callback type for server bind state changes.
+pub type ServerStateChangeCallback = Box<dyn Fn(FeagiServerBindStateChange) + Send + Sync + 'static>;
+
 /// Properties trait for creating a FeagiServerPuller instance.
 ///
 /// Implement this trait to define the configuration needed to construct
@@ -10,6 +13,5 @@ use super::server_shared::FeagiServerBindStateChange;
 pub trait FeagiServerPullerProperties {
     /// Build and return a boxed FeagiServerPuller instance.
     /// Consumes self to allow moving owned resources into the implementation.
-    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiServerPuller>
-    where F: Fn(FeagiServerBindStateChange) + Send + Sync + 'static;
+    fn build(self: Box<Self>, state_change_callback: ServerStateChangeCallback) -> Box<dyn FeagiServerPuller>;
 }

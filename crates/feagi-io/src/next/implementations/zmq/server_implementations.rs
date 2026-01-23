@@ -8,26 +8,25 @@ use crate::next::traits_and_enums::server::{
 };
 use crate::next::traits_and_enums::server::server_shared::{ClientId, FeagiServerBindStateChange};
 
+/// Type alias for the server state change callback.
+type StateChangeCallback = Box<dyn Fn(FeagiServerBindStateChange) + Send + Sync + 'static>;
+
 //region Publisher
-pub struct FEAGIZMQServerPublisher<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-{
+pub struct FEAGIZMQServerPublisher {
     server_bind_address: String,
     current_state: FeagiServerBindState,
     socket: zmq::Socket,
-    state_change_callback: S,
+    state_change_callback: StateChangeCallback,
     // Configuration options (applied on start)
     linger: i32,
     sndhwm: i32,
 }
 
-impl<S> FEAGIZMQServerPublisher<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
-    
+impl FEAGIZMQServerPublisher {
     const DEFAULT_LINGER: i32 = 0;
     const DEFAULT_SNDHWM: i32 = 1000;
     
-    pub fn new(server_bind_address: String, state_change_callback: S) -> Result<Self, FeagiNetworkError> {
+    pub fn new(server_bind_address: String, state_change_callback: StateChangeCallback) -> Result<Self, FeagiNetworkError> {
         validate_zmq_url(&server_bind_address)?;
         let context = zmq::Context::new();
         let socket = context.socket(zmq::PUB)
@@ -63,8 +62,7 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
     }
 }
 
-impl<S> FeagiServer for FEAGIZMQServerPublisher<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
+impl FeagiServer for FEAGIZMQServerPublisher {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         // Apply configuration options
         self.socket.set_linger(self.linger)
@@ -98,8 +96,7 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
     }
 }
 
-impl<S> FeagiServerPublisher for FEAGIZMQServerPublisher<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
+impl FeagiServerPublisher for FEAGIZMQServerPublisher {
     fn poll(&mut self) -> Result<(), FeagiNetworkError> {
         // ZMQ handles connections internally - no-op
         Ok(())
@@ -115,13 +112,11 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static {
 
 //region Puller
 
-pub struct FEAGIZMQServerPuller<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-{
+pub struct FEAGIZMQServerPuller {
     server_bind_address: String,
     current_state: FeagiServerBindState,
     socket: zmq::Socket,
-    state_change_callback: S,
+    state_change_callback: StateChangeCallback,
     cached_data: Vec<u8>,
     // Configuration options (applied on start)
     linger: i32,
@@ -129,14 +124,12 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
     immediate: bool,
 }
 
-impl<S> FEAGIZMQServerPuller<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-{
+impl FEAGIZMQServerPuller {
     const DEFAULT_LINGER: i32 = 0;
     const DEFAULT_RCVHWM: i32 = 1000;
     const DEFAULT_IMMEDIATE: bool = false;
     
-    pub fn new(server_bind_address: String, state_change_callback: S)
+    pub fn new(server_bind_address: String, state_change_callback: StateChangeCallback)
         -> Result<Self, FeagiNetworkError>
     {
         validate_zmq_url(&server_bind_address)?;
@@ -186,9 +179,7 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiServer for FEAGIZMQServerPuller<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-{
+impl FeagiServer for FEAGIZMQServerPuller {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         // Apply configuration options
         self.socket.set_linger(self.linger)
@@ -227,9 +218,7 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiServerPuller for FEAGIZMQServerPuller<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-{
+impl FeagiServerPuller for FEAGIZMQServerPuller {
     fn try_poll_receive(&mut self) -> Result<Option<&[u8]>, FeagiNetworkError> {
         match self.socket.recv_bytes(0) {
             Ok(data) => {
@@ -246,13 +235,11 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
 
 //region Router
 
-pub struct FEAGIZMQServerRouter<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-{
+pub struct FEAGIZMQServerRouter {
     server_bind_address: String,
     current_state: FeagiServerBindState,
     socket: zmq::Socket,
-    state_change_callback: S,
+    state_change_callback: StateChangeCallback,
     // Bidirectional mapping between ClientId and ZMQ identity
     next_client_id: u64,
     identity_to_id: HashMap<Vec<u8>, u64>,
@@ -267,15 +254,13 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
     immediate: bool,
 }
 
-impl<S> FEAGIZMQServerRouter<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-{
+impl FEAGIZMQServerRouter {
     const DEFAULT_LINGER: i32 = 0;
     const DEFAULT_RCVHWM: i32 = 1000;
     const DEFAULT_SNDHWM: i32 = 1000;
     const DEFAULT_IMMEDIATE: bool = false;
     
-    pub fn new(server_bind_address: String, state_change_callback: S)
+    pub fn new(server_bind_address: String, state_change_callback: StateChangeCallback)
         -> Result<Self, FeagiNetworkError>
     {
         validate_zmq_url(&server_bind_address)?;
@@ -353,9 +338,7 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiServer for FEAGIZMQServerRouter<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-{
+impl FeagiServer for FEAGIZMQServerRouter {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         // Apply configuration options
         self.socket.set_linger(self.linger)
@@ -403,9 +386,7 @@ where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiServerRouter for FEAGIZMQServerRouter<S>
-where S: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-{
+impl FeagiServerRouter for FEAGIZMQServerRouter {
     fn try_poll_receive(&mut self) -> Result<Option<(ClientId, &[u8])>, FeagiNetworkError> {
         // ROUTER receives: [identity, empty_delimiter, request_data]
         // First, try to receive the identity frame
@@ -488,9 +469,7 @@ impl FEAGIZMQServerPublisherProperties {
 }
 
 impl FeagiServerPublisherProperties for FEAGIZMQServerPublisherProperties {
-    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiServerPublisher>
-    where F: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-    {
+    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiServerPublisher> {
         let mut publisher = FEAGIZMQServerPublisher::new(
             self.server_bind_address,
             state_change_callback,
@@ -550,9 +529,7 @@ impl FEAGIZMQServerPullerProperties {
 }
 
 impl FeagiServerPullerProperties for FEAGIZMQServerPullerProperties {
-    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiServerPuller>
-    where F: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-    {
+    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiServerPuller> {
         let mut puller = FEAGIZMQServerPuller::new(
             self.server_bind_address,
             state_change_callback,
@@ -622,9 +599,7 @@ impl FEAGIZMQServerRouterProperties {
 }
 
 impl FeagiServerRouterProperties for FEAGIZMQServerRouterProperties {
-    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiServerRouter>
-    where F: Fn(FeagiServerBindStateChange) + Send + Sync + 'static
-    {
+    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiServerRouter> {
         let mut router = FEAGIZMQServerRouter::new(
             self.server_bind_address,
             state_change_callback,

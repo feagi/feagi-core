@@ -14,6 +14,14 @@ impl FeagiServerBindStateChange {
     pub fn new(previous: FeagiServerBindState, now: FeagiServerBindState) -> Self {
         Self { previous, now }
     }
+    
+    pub fn get_previous(self) -> FeagiServerBindState {
+        self.previous
+    }
+    
+    pub fn get_now(self) -> FeagiServerBindState {
+        self.now
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

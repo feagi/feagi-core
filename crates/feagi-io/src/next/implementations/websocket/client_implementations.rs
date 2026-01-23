@@ -11,23 +11,22 @@ use crate::next::traits_and_enums::client::{
     FeagiClientSubscriberProperties, FeagiClientPusherProperties, FeagiClientRequesterProperties
 };
 
+/// Type alias for the client state change callback.
+type StateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static>;
+
 //region Subscriber
 
 /// WebSocket client that subscribes to messages from a server.
-pub struct FEAGIWebSocketClientSubscriber<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+pub struct FEAGIWebSocketClientSubscriber {
     server_address: String,
     current_state: FeagiClientConnectionState,
-    state_change_callback: S,
+    state_change_callback: StateChangeCallback,
     socket: Option<WebSocket<MaybeTlsStream<TcpStream>>>,
     cached_data: Vec<u8>,
 }
 
-impl<S> FEAGIWebSocketClientSubscriber<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
-    pub fn new(server_address: String, state_change_callback: S) -> Result<Self, FeagiNetworkError> {
+impl FEAGIWebSocketClientSubscriber {
+    pub fn new(server_address: String, state_change_callback: StateChangeCallback) -> Result<Self, FeagiNetworkError> {
         Ok(Self {
             server_address,
             current_state: FeagiClientConnectionState::Disconnected,
@@ -70,9 +69,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClient for FEAGIWebSocketClientSubscriber<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClient for FEAGIWebSocketClientSubscriber {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
         let url = if host.starts_with("ws://") || host.starts_with("wss://") {
             host.to_string()
@@ -115,9 +112,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClientSubscriber for FEAGIWebSocketClientSubscriber<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClientSubscriber for FEAGIWebSocketClientSubscriber {
     // Polling method is on the impl block directly since trait is empty
 }
 
@@ -126,19 +121,15 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
 //region Pusher
 
 /// WebSocket client that pushes data to a server.
-pub struct FEAGIWebSocketClientPusher<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+pub struct FEAGIWebSocketClientPusher {
     server_address: String,
     current_state: FeagiClientConnectionState,
-    state_change_callback: S,
+    state_change_callback: StateChangeCallback,
     socket: Option<WebSocket<MaybeTlsStream<TcpStream>>>,
 }
 
-impl<S> FEAGIWebSocketClientPusher<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
-    pub fn new(server_address: String, state_change_callback: S) -> Result<Self, FeagiNetworkError> {
+impl FEAGIWebSocketClientPusher {
+    pub fn new(server_address: String, state_change_callback: StateChangeCallback) -> Result<Self, FeagiNetworkError> {
         Ok(Self {
             server_address,
             current_state: FeagiClientConnectionState::Disconnected,
@@ -148,9 +139,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClient for FEAGIWebSocketClientPusher<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClient for FEAGIWebSocketClientPusher {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
         let url = if host.starts_with("ws://") || host.starts_with("wss://") {
             host.to_string()
@@ -187,18 +176,14 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClientPusher for FEAGIWebSocketClientPusher<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClientPusher for FEAGIWebSocketClientPusher {
     fn push_data(&self, _data: &[u8]) {
         // Note: Can't mutate with &self - this is a limitation of the trait
         // Use push_data_mut below for actual functionality
     }
 }
 
-impl<S> FEAGIWebSocketClientPusher<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FEAGIWebSocketClientPusher {
     /// Push data to the server (mutable version needed for WebSocket).
     pub fn push_data_mut(&mut self, data: &[u8]) -> Result<(), FeagiNetworkError> {
         let socket = match &mut self.socket {
@@ -219,20 +204,16 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
 //region Requester
 
 /// WebSocket client that sends requests and receives responses.
-pub struct FEAGIWebSocketClientRequester<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+pub struct FEAGIWebSocketClientRequester {
     server_address: String,
     current_state: FeagiClientConnectionState,
-    state_change_callback: S,
+    state_change_callback: StateChangeCallback,
     socket: Option<WebSocket<MaybeTlsStream<TcpStream>>>,
     cached_response_data: Vec<u8>,
 }
 
-impl<S> FEAGIWebSocketClientRequester<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
-    pub fn new(server_address: String, state_change_callback: S) -> Result<Self, FeagiNetworkError> {
+impl FEAGIWebSocketClientRequester {
+    pub fn new(server_address: String, state_change_callback: StateChangeCallback) -> Result<Self, FeagiNetworkError> {
         Ok(Self {
             server_address,
             current_state: FeagiClientConnectionState::Disconnected,
@@ -243,9 +224,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClient for FEAGIWebSocketClientRequester<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClient for FEAGIWebSocketClientRequester {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
         let url = if host.starts_with("ws://") || host.starts_with("wss://") {
             host.to_string()
@@ -288,9 +267,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClientRequester for FEAGIWebSocketClientRequester<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClientRequester for FEAGIWebSocketClientRequester {
     fn send_request(&self, _request: &[u8]) -> Result<(), FeagiNetworkError> {
         // Note: Can't mutate with &self - use send_request_mut below
         Err(FeagiNetworkError::SendFailed("Use send_request_mut instead for WebSocket".to_string()))
@@ -328,9 +305,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FEAGIWebSocketClientRequester<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FEAGIWebSocketClientRequester {
     /// Send a request to the server (mutable version needed for WebSocket).
     pub fn send_request_mut(&mut self, request: &[u8]) -> Result<(), FeagiNetworkError> {
         let socket = match &mut self.socket {
@@ -367,9 +342,7 @@ impl FEAGIWebSocketClientSubscriberProperties {
 }
 
 impl FeagiClientSubscriberProperties for FEAGIWebSocketClientSubscriberProperties {
-    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiClientSubscriber>
-    where F: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-    {
+    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiClientSubscriber> {
         let subscriber = FEAGIWebSocketClientSubscriber::new(
             self.server_address,
             state_change_callback,
@@ -398,9 +371,7 @@ impl FEAGIWebSocketClientPusherProperties {
 }
 
 impl FeagiClientPusherProperties for FEAGIWebSocketClientPusherProperties {
-    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiClientPusher>
-    where F: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-    {
+    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiClientPusher> {
         let pusher = FEAGIWebSocketClientPusher::new(
             self.server_address,
             state_change_callback,
@@ -429,9 +400,7 @@ impl FEAGIWebSocketClientRequesterProperties {
 }
 
 impl FeagiClientRequesterProperties for FEAGIWebSocketClientRequesterProperties {
-    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiClientRequester>
-    where F: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-    {
+    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiClientRequester> {
         let requester = FEAGIWebSocketClientRequester::new(
             self.server_address,
             state_change_callback,

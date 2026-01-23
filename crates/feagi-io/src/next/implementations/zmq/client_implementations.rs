@@ -6,28 +6,27 @@ use crate::next::traits_and_enums::client::{
 };
 use crate::next::traits_and_enums::client::client_shared::FeagiClientConnectionStateChange;
 
+/// Type alias for the client state change callback.
+type StateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static>;
+
 //region Subscriber
 
-pub struct FEAGIZMQClientSubscriber<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+pub struct FEAGIZMQClientSubscriber {
     server_address: String,
     current_state: FeagiClientConnectionState,
     socket: zmq::Socket,
-    state_change_callback: S,
+    state_change_callback: StateChangeCallback,
     cached_data: Vec<u8>,
     // Configuration options (applied on connect)
     linger: i32,
     rcvhwm: i32,
 }
 
-impl<S> FEAGIZMQClientSubscriber<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FEAGIZMQClientSubscriber {
     const DEFAULT_LINGER: i32 = 0;
     const DEFAULT_RCVHWM: i32 = 1000;
     
-    pub fn new(server_address: String, state_change_callback: S)
+    pub fn new(server_address: String, state_change_callback: StateChangeCallback)
         -> Result<Self, FeagiNetworkError>
     {
         validate_zmq_url(&server_address)?;
@@ -79,9 +78,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClient for FEAGIZMQClientSubscriber<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClient for FEAGIZMQClientSubscriber {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
         // Apply configuration options
         self.socket.set_linger(self.linger)
@@ -122,9 +119,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClientSubscriber for FEAGIZMQClientSubscriber<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClientSubscriber for FEAGIZMQClientSubscriber {
     // Polling method is on the impl block directly since trait is empty
 }
 
@@ -132,25 +127,21 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
 
 //region Pusher
 
-pub struct FEAGIZMQClientPusher<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+pub struct FEAGIZMQClientPusher {
     server_address: String,
     current_state: FeagiClientConnectionState,
     socket: zmq::Socket,
-    state_change_callback: S,
+    state_change_callback: StateChangeCallback,
     // Configuration options (applied on connect)
     linger: i32,
     sndhwm: i32,
 }
 
-impl<S> FEAGIZMQClientPusher<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FEAGIZMQClientPusher {
     const DEFAULT_LINGER: i32 = 0;
     const DEFAULT_SNDHWM: i32 = 1000;
     
-    pub fn new(server_address: String, state_change_callback: S) 
+    pub fn new(server_address: String, state_change_callback: StateChangeCallback) 
         -> Result<Self, FeagiNetworkError> 
     {
         validate_zmq_url(&server_address)?;
@@ -188,9 +179,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClient for FEAGIZMQClientPusher<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClient for FEAGIZMQClientPusher {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
         // Apply configuration options
         self.socket.set_linger(self.linger)
@@ -225,9 +214,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClientPusher for FEAGIZMQClientPusher<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClientPusher for FEAGIZMQClientPusher {
     fn push_data(&self, data: &[u8]) {
         // TODO: Return Result in state changes if theres an error
         let _ = self.socket.send(data, 0);
@@ -238,13 +225,11 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
 
 //region Requester (Dealer)
 
-pub struct FEAGIZMQClientRequester<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+pub struct FEAGIZMQClientRequester {
     server_address: String,
     current_state: FeagiClientConnectionState,
     socket: zmq::Socket,
-    state_change_callback: S,
+    state_change_callback: StateChangeCallback,
     cached_response_data: Vec<u8>,
     // Configuration options (applied on connect)
     linger: i32,
@@ -252,14 +237,12 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     sndhwm: i32,
 }
 
-impl<S> FEAGIZMQClientRequester<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FEAGIZMQClientRequester {
     const DEFAULT_LINGER: i32 = 0;
     const DEFAULT_RCVHWM: i32 = 1000;
     const DEFAULT_SNDHWM: i32 = 1000;
     
-    pub fn new(server_address: String, state_change_callback: S) 
+    pub fn new(server_address: String, state_change_callback: StateChangeCallback) 
         -> Result<Self, FeagiNetworkError> 
     {
         validate_zmq_url(&server_address)?;
@@ -309,9 +292,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClient for FEAGIZMQClientRequester<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClient for FEAGIZMQClientRequester {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
         // Apply configuration options
         self.socket.set_linger(self.linger)
@@ -351,9 +332,7 @@ where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
     }
 }
 
-impl<S> FeagiClientRequester for FEAGIZMQClientRequester<S>
-where S: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-{
+impl FeagiClientRequester for FEAGIZMQClientRequester {
     fn send_request(&self, request: &[u8]) -> Result<(), FeagiNetworkError> {
         // DEALER/ROUTER protocol: send empty delimiter frame first, then request
         self.socket.send(zmq::Message::new(), zmq::SNDMORE)
@@ -425,9 +404,7 @@ impl FEAGIZMQClientSubscriberProperties {
 }
 
 impl FeagiClientSubscriberProperties for FEAGIZMQClientSubscriberProperties {
-    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiClientSubscriber>
-    where F: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-    {
+    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiClientSubscriber> {
         let mut subscriber = FEAGIZMQClientSubscriber::new(
             self.server_address,
             state_change_callback,
@@ -478,9 +455,7 @@ impl FEAGIZMQClientPusherProperties {
 }
 
 impl FeagiClientPusherProperties for FEAGIZMQClientPusherProperties {
-    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiClientPusher>
-    where F: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-    {
+    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiClientPusher> {
         let mut pusher = FEAGIZMQClientPusher::new(
             self.server_address,
             state_change_callback,
@@ -540,9 +515,7 @@ impl FEAGIZMQClientRequesterProperties {
 }
 
 impl FeagiClientRequesterProperties for FEAGIZMQClientRequesterProperties {
-    fn build<F>(self, state_change_callback: F) -> Box<dyn FeagiClientRequester>
-    where F: Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static
-    {
+    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiClientRequester> {
         let mut requester = FEAGIZMQClientRequester::new(
             self.server_address,
             state_change_callback,
