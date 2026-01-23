@@ -1,3 +1,5 @@
+use feagi_io::next::traits_and_enums::client::FeagiClientRequesterProperties;
+use feagi_structures::FeagiDataError;
 use crate::next::common::agent_descriptor::AgentDescriptor;
 use crate::next::common::common_enums::{AgentCapabilities, FeagiConnectionConfiguration};
 use crate::next::common::common_enums::AgentConnectionState;
@@ -9,7 +11,12 @@ pub trait FeagiAgent {
 
     fn agent_capabilities(&self) -> &[AgentCapabilities];
 
-    fn connect_to_feagi(&mut self, connection_configuration: FeagiConnectionConfiguration);
+    fn connect_to_feagi(
+        &mut self,
+        connection_configuration: String,
+        requester_properties: Box<dyn FeagiClientRequesterProperties>,
+        agent_descriptor: AgentDescriptor,
+    ) -> Result<(), FeagiDataError>;
 
     fn disconnect(&mut self);
 }
