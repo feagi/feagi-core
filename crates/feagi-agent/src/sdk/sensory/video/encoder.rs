@@ -101,7 +101,7 @@ impl VideoEncoder {
     /// Set gaze properties for segmented vision encoding.
     pub fn set_gaze_properties(&mut self, gaze: &GazeProperties) -> Result<(), SdkError> {
         self.gaze_properties = gaze.clone();
-        // TODO: propagate gaze changes into segmented vision pipeline stage.
+        self.update_segmented_gaze_stage()?;
         Ok(())
     }
 
@@ -121,27 +121,127 @@ impl VideoEncoder {
     /// Set brightness adjustment applied before encoding.
     pub fn set_brightness(&mut self, brightness: i32) -> Result<(), SdkError> {
         self.config.brightness = brightness;
-        // TODO: apply brightness in encode().
+        self.update_segmented_tuning_stages()?;
         Ok(())
     }
 
     /// Set contrast adjustment applied before encoding.
     pub fn set_contrast(&mut self, contrast: f32) -> Result<(), SdkError> {
         self.config.contrast = contrast;
-        // TODO: apply contrast in encode().
+        self.update_segmented_tuning_stages()?;
         Ok(())
     }
 
     /// Set diff threshold for segmented/simple vision encoders.
     pub fn set_diff_threshold(&mut self, threshold: u8) -> Result<(), SdkError> {
         self.config.diff_threshold = threshold;
-        // TODO: apply diff threshold in encode().
+        self.update_segmented_tuning_stages()?;
         Ok(())
     }
 
     /// Returns true if this encoder uses segmented vision.
     pub fn is_segmented_vision(&self) -> bool {
         self.config.encoding_strategy == VideoEncodingStrategy::SegmentedVision
+    }
+
+    fn update_segmented_tuning_stages(&mut self) -> Result<(), SdkError> {
+        if self.config.encoding_strategy != VideoEncodingStrategy::SegmentedVision {
+            return Ok(());
+        }
+        let Some(props) = self.input_properties else {
+            return Ok(());
+        };
+
+        let mut processor = ImageFrameProcessor::new(props);
+        processor
+            .set_brightness_offset(self.config.brightness)
+            .map_err(|e| SdkError::Other(format!("Segmented processor brightness failed: {e}")))?;
+        processor
+            .set_contrast_change(self.config.contrast)
+            .map_err(|e| SdkError::Other(format!("Segmented processor contrast failed: {e}")))?;
+
+        let processor_stage = PipelineStageProperties::new_image_frame_processor(processor);
+        let per_pixel_min = self.config.diff_threshold.max(1);
+        let per_pixel_range = per_pixel_min..=u8::MAX;
+        let activity_min = SensorPercentage::new_from_0_1(0.0)
+            .map_err(|e| SdkError::Other(format!("Segmented diff activity min failed: {e}")))?;
+        let activity_max = SensorPercentage::new_from_0_1(1.0)
+            .map_err(|e| SdkError::Other(format!("Segmented diff activity max failed: {e}")))?;
+        let diff_stage = PipelineStageProperties::new_image_quick_diff(
+            per_pixel_range,
+            activity_min..=activity_max,
+            props,
+        );
+
+        let processor_index = PipelineStagePropertyIndex::from(0u32);
+        let diff_index = PipelineStagePropertyIndex::from(1u32);
+        let unit = CorticalUnitIndex::from(self.config.cortical_unit_id);
+        for channel in 0..*self.channel_count {
+            let channel_index = CorticalChannelIndex::from(channel as u32);
+            self.cache
+                .segmented_vision_update_single_stage_properties(
+                    unit,
+                    channel_index,
+                    processor_index,
+                    processor_stage.clone(),
+                )
+                .map_err(|e| {
+                    SdkError::Other(format!(
+                        "Segmented vision update processor stage failed: {e}"
+                    ))
+                })?;
+            self.cache
+                .segmented_vision_update_single_stage_properties(
+                    unit,
+                    channel_index,
+                    diff_index,
+                    diff_stage.clone(),
+                )
+                .map_err(|e| {
+                    SdkError::Other(format!(
+                        "Segmented vision update diff stage failed: {e}"
+                    ))
+                })?;
+        }
+
+        Ok(())
+    }
+
+    fn update_segmented_gaze_stage(&mut self) -> Result<(), SdkError> {
+        if self.config.encoding_strategy != VideoEncodingStrategy::SegmentedVision {
+            return Ok(());
+        }
+        let Some(props) = self.input_properties else {
+            return Ok(());
+        };
+        let Some(segmented_props) = self.segmented_props else {
+            return Ok(());
+        };
+
+        let segmentator_stage = PipelineStageProperties::new_image_frame_segmentator(
+            props,
+            segmented_props,
+            self.gaze_properties,
+        );
+        let segmentator_index = PipelineStagePropertyIndex::from(2u32);
+        let unit = CorticalUnitIndex::from(self.config.cortical_unit_id);
+        for channel in 0..*self.channel_count {
+            let channel_index = CorticalChannelIndex::from(channel as u32);
+            self.cache
+                .segmented_vision_update_single_stage_properties(
+                    unit,
+                    channel_index,
+                    segmentator_index,
+                    segmentator_stage.clone(),
+                )
+                .map_err(|e| {
+                    SdkError::Other(format!(
+                        "Segmented vision update gaze stage failed: {e}"
+                    ))
+                })?;
+        }
+
+        Ok(())
     }
 }
 
