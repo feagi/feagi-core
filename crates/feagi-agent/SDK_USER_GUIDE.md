@@ -86,6 +86,18 @@ Your Application
     └────────────────────────┘
 ```
 
+### Agent Identifiers
+
+FEAGI 2.0 uses structured agent identifiers. Provide a base64-encoded
+`AgentDescriptor` (not a raw string) when configuring SDK clients.
+
+```rust
+use feagi_agent::sdk::AgentDescriptor;
+
+let descriptor = AgentDescriptor::new(1, "neuraville", "camera", 1)?;
+let agent_id_b64 = descriptor.to_base64();
+```
+
 ### Key Components
 
 #### 1. **Core Module** (Low-Level)
