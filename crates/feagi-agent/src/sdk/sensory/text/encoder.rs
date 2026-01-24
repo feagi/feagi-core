@@ -71,6 +71,9 @@ impl SensoryEncoder for TextEncoder {
             .map_err(|e| SdkError::Other(format!("Text cache write failed: {e}")))?;
 
         self.cache
+            .encode_all_sensors_to_neurons(std::time::Instant::now())
+            .map_err(|e| SdkError::Other(format!("Text sensor encode failed: {e}")))?;
+        self.cache
             .encode_neurons_to_bytes()
             .map_err(|e| SdkError::Other(format!("Text byte encode failed: {e}")))?;
 

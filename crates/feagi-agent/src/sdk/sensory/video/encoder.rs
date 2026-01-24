@@ -9,6 +9,7 @@ use crate::sdk::types::{
     FrameChangeHandling, GazeProperties, ImageFrame, ImageFrameProperties, ImageXYResolution,
     SegmentedImageFrameProperties, SensorDeviceCache, SensoryCorticalUnit, WrappedIOData,
 };
+use feagi_sensorimotor::data_types::{Percentage, Percentage2D};
 use feagi_sensorimotor::data_types::descriptors::SegmentedXYImageResolutions;
 
 /// Video encoder backed by a sensor cache.
@@ -72,7 +73,7 @@ impl VideoEncoder {
                 resolutions,
                 center_layout,
                 peripheral_layout,
-                ColorSpace::Gamma,
+                ColorSpace::Linear,
             );
             (channel_count, Some(segmented_props))
         } else {
@@ -101,6 +102,19 @@ impl VideoEncoder {
         Ok(())
     }
 
+    /// Set gaze position and modulation for segmented vision.
+    pub fn set_gaze(&mut self, x: f32, y: f32, modulation: f32) -> Result<(), SdkError> {
+        let x_pct = Percentage::new_from_0_1(x)
+            .map_err(|e| SdkError::Other(format!("Invalid gaze x: {e}")))?;
+        let y_pct = Percentage::new_from_0_1(y)
+            .map_err(|e| SdkError::Other(format!("Invalid gaze y: {e}")))?;
+        let mod_pct = Percentage::new_from_0_1(modulation)
+            .map_err(|e| SdkError::Other(format!("Invalid gaze modulation: {e}")))?;
+        let pos = Percentage2D::new(x_pct, y_pct);
+        let gaze = GazeProperties::new(pos, mod_pct);
+        self.set_gaze_properties(&gaze)
+    }
+
     /// Set brightness adjustment applied before encoding.
     pub fn set_brightness(&mut self, brightness: i32) -> Result<(), SdkError> {
         self.config.brightness = brightness;
@@ -113,6 +127,18 @@ impl VideoEncoder {
         self.config.contrast = contrast;
         // TODO: apply contrast in encode().
         Ok(())
+    }
+
+    /// Set diff threshold for segmented/simple vision encoders.
+    pub fn set_diff_threshold(&mut self, threshold: u8) -> Result<(), SdkError> {
+        self.config.diff_threshold = threshold;
+        // TODO: apply diff threshold in encode().
+        Ok(())
+    }
+
+    /// Returns true if this encoder uses segmented vision.
+    pub fn is_segmented_vision(&self) -> bool {
+        self.config.encoding_strategy == VideoEncodingStrategy::SegmentedVision
     }
 }
 
@@ -172,6 +198,9 @@ impl SensoryEncoder for VideoEncoder {
             }
         }
 
+        self.cache
+            .encode_all_sensors_to_neurons(std::time::Instant::now())
+            .map_err(|e| SdkError::Other(format!("Video sensor encode failed: {e}")))?;
         self.cache
             .encode_neurons_to_bytes()
             .map_err(|e| SdkError::Other(format!("Video byte encode failed: {e}")))?;

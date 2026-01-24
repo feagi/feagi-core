@@ -5,6 +5,7 @@ use crate::sdk::types::{
     CorticalID, CorticalSubUnitIndex, CorticalUnitIndex, FrameChangeHandling,
     IOCorticalAreaConfigurationFlag, MotorCorticalUnit,
 };
+use feagi_io::{MotorUnit, MotorUnitSpec};
 
 /// Configuration for the perception decoder.
 #[derive(Debug, Clone)]
@@ -36,7 +37,25 @@ impl PerceptionDecoderConfig {
         let motor_endpoint = format!("tcp://{}:{}", self.feagi_host, self.feagi_zmq_motor_port);
 
         let agent_type = AgentType::Motor;
+        let group = self.cortical_unit_id;
+        let motor_units = vec![
+            MotorUnitSpec {
+                unit: MotorUnit::ObjectSegmentation,
+                group,
+            },
+            MotorUnitSpec {
+                unit: MotorUnit::SimpleVisionOutput,
+                group,
+            },
+            MotorUnitSpec {
+                unit: MotorUnit::TextEnglishOutput,
+                group,
+            },
+        ];
+        let output_count = motor_units.len();
+
         Ok(AgentConfig::new(self.agent_id.clone(), agent_type)
+            .with_motor_units("perception", output_count, motor_units)
             .with_registration_endpoint(registration_endpoint)
             .with_sensory_endpoint(sensory_endpoint)
             .with_motor_endpoint(motor_endpoint)

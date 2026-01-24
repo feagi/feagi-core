@@ -32,6 +32,7 @@ impl TextEncoderConfig {
 
         let agent_type = AgentType::Sensory;
         Ok(AgentConfig::new(self.agent_id.clone(), agent_type)
+            .with_sensory_capability(self.feagi_tick_hz as f64, None)
             .with_registration_endpoint(registration_endpoint)
             .with_sensory_endpoint(sensory_endpoint)
             .with_heartbeat_interval(self.feagi_heartbeat_interval_s)

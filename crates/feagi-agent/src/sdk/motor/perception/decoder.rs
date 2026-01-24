@@ -135,6 +135,15 @@ impl PerceptionDecoder {
         })
     }
 
+    /// Returns availability flags for (oseg, oimg, oten).
+    pub fn available_areas(&self) -> (bool, bool, bool) {
+        (
+            self.oseg_topology.width > 0,
+            self.oimg_topology.width > 0,
+            self.oten_topology.width > 0,
+        )
+    }
+
     fn decode_oseg(&self, unit: CorticalUnitIndex) -> Result<Option<OsegFrame>, SdkError> {
         // TODO: Support multiple channels and channel-wise aggregation.
         let channel = CorticalChannelIndex::from(0u32);

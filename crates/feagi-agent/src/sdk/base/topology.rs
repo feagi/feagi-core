@@ -191,31 +191,73 @@ impl TopologyCache {
     fn parse_dimensions(
         entry_obj: &serde_json::Map<String, serde_json::Value>,
     ) -> Option<((u32, u32, u32), u32)> {
-        if let (Some(dim_val), Some(dev_count)) = (
-            entry_obj.get("cortical_dimensions_per_device"),
-            entry_obj.get("dev_count"),
-        ) {
-            let dims = Self::parse_dim_array(dim_val)?;
-            let channels = dev_count.as_u64()? as u32;
+        let properties = entry_obj
+            .get("properties")
+            .and_then(|value| value.as_object());
+
+        let per_device_dims = entry_obj
+            .get("cortical_dimensions_per_device")
+            .and_then(Self::parse_dim_array)
+            .or_else(|| {
+                properties
+                    .and_then(|props| props.get("cortical_dimensions_per_device"))
+                    .and_then(Self::parse_dim_array)
+            });
+
+        let dev_count = entry_obj
+            .get("dev_count")
+            .and_then(|value| value.as_u64())
+            .map(|value| value as u32)
+            .or_else(|| {
+                properties
+                    .and_then(|props| props.get("dev_count"))
+                    .and_then(|value| value.as_u64())
+                    .map(|value| value as u32)
+            });
+
+        let total_dims = entry_obj
+            .get("cortical_dimensions")
+            .or_else(|| entry_obj.get("dimensions"))
+            .or_else(|| {
+                properties
+                    .and_then(|props| props.get("cortical_dimensions"))
+                    .or_else(|| properties.and_then(|props| props.get("dimensions")))
+            })
+            .and_then(|dim_val| {
+                if dim_val.is_array() {
+                    Self::parse_dim_array(dim_val)
+                } else if dim_val.is_object() {
+                    Self::parse_dim_object(dim_val)
+                } else {
+                    None
+                }
+            });
+
+        if let (Some(dims), Some(channels)) = (per_device_dims, dev_count) {
             return Some((dims, channels));
         }
 
-        if let Some(dim_val) = entry_obj.get("dimensions") {
-            let dims = if dim_val.is_array() {
-                Self::parse_dim_array(dim_val)?
-            } else if dim_val.is_object() {
-                Self::parse_dim_object(dim_val)?
-            } else {
-                return None;
-            };
-            let channels = entry_obj
-                .get("dev_count")
-                .and_then(|v| v.as_u64())
-                .map(|v| v as u32)?;
-            return Some((dims, channels));
+        if let (Some(dims), Some(total_dims)) = (per_device_dims, total_dims) {
+            if dims.0 > 0 && total_dims.0 % dims.0 == 0 {
+                let channels = total_dims.0 / dims.0;
+                if channels > 0 {
+                    return Some((dims, channels));
+                }
+            }
         }
 
-        // TODO: Support nested properties.cortical_dimensions_* shapes if API returns them.
+        if let (Some(total_dims), Some(channels)) = (total_dims, dev_count) {
+            if channels > 0 && total_dims.0 % channels == 0 {
+                let per_device = (total_dims.0 / channels, total_dims.1, total_dims.2);
+                return Some((per_device, channels));
+            }
+        }
+
+        if let Some(total_dims) = total_dims {
+            return Some((total_dims, 1));
+        }
+
+        // TODO: Support alternate topology payload shapes if API expands fields.
         None
     }
 

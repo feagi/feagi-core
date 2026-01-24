@@ -2,7 +2,6 @@
 
 use crate::core::SdkError;
 use crate::sdk::base::TopologyCache;
-use crate::sdk::ConnectorAgent;
 
 /// Configuration for FEAGI HTTP API access.
 #[derive(Debug, Clone)]
@@ -71,13 +70,9 @@ impl AgentRegistrar {
     #[cfg(feature = "sdk-io")]
     pub async fn sync_device_registrations(
         &self,
-        connector: &ConnectorAgent,
+        device_registrations: serde_json::Value,
         agent_id: &str,
     ) -> Result<DeviceRegistrationCounts, SdkError> {
-        let device_registrations = connector
-            .get_device_registration_json()
-            .map_err(|e| SdkError::Other(format!("Export device registrations failed: {e}")))?;
-
         let counts = count_device_registrations(&device_registrations)?;
 
         let url = format!(
@@ -121,11 +116,23 @@ fn count_device_registrations(
         .ok_or_else(|| {
             SdkError::Other("Device registrations missing output units".to_string())
         })?;
-    let feedbacks = device_registrations
+    let feedbacks_value = device_registrations
         .get("feedbacks")
-        .and_then(|v| v.as_array())
-        .map(|v| v.len())
         .ok_or_else(|| SdkError::Other("Device registrations missing feedbacks".to_string()))?;
+    let feedbacks = if let Some(list) = feedbacks_value.as_array() {
+        list.len()
+    } else if let Some(obj) = feedbacks_value.as_object() {
+        obj.get("registered_feedbacks")
+            .and_then(|v| v.as_array())
+            .map(|v| v.len())
+            .ok_or_else(|| {
+                SdkError::Other("Device registrations feedbacks missing registered_feedbacks".to_string())
+            })?
+    } else {
+        return Err(SdkError::Other(
+            "Device registrations feedbacks must be an array or object".to_string(),
+        ));
+    };
 
     Ok(DeviceRegistrationCounts {
         input_units,

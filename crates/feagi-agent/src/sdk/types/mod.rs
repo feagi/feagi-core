@@ -21,3 +21,4 @@ pub use feagi_structures::genomic::cortical_area::io_cortical_area_configuration
 };
 pub use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 pub use feagi_structures::genomic::cortical_area::CorticalID;
+pub use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
