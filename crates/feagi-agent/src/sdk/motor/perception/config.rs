@@ -50,20 +50,23 @@ impl PerceptionDecoderConfig {
         let unit = CorticalUnitIndex::from(self.cortical_unit_id);
         let frame = FrameChangeHandling::Absolute;
 
-        let oseg = MotorCorticalUnit::ObjectSegmentation
-            .get_cortical_ids_array_for_object_segmentation_with_parameters(frame, unit)
-            .first()
-            .copied();
+        let oseg = MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
+            frame, unit,
+        )
+        .first()
+        .copied();
 
-        let oimg = MotorCorticalUnit::SimpleVisionOutput
-            .get_cortical_ids_array_for_simple_vision_output_with_parameters(frame, unit)
-            .first()
-            .copied();
+        let oimg = MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+            frame, unit,
+        )
+        .first()
+        .copied();
 
-        let oten = MotorCorticalUnit::TextEnglishOutput
-            .get_cortical_ids_array_for_text_english_output_with_parameters(frame, unit)
-            .first()
-            .copied();
+        let oten = MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
+            frame, unit,
+        )
+        .first()
+        .copied();
 
         [oseg, oimg, oten].into_iter().flatten().collect()
     }

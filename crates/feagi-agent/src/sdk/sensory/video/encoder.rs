@@ -32,11 +32,12 @@ impl VideoEncoder {
         let frame = FrameChangeHandling::Absolute;
 
         let cortical_ids = match config.encoding_strategy {
-            VideoEncodingStrategy::SimpleVision => SensoryCorticalUnit::Vision
-                .get_cortical_ids_array_for_vision_with_parameters(frame, unit)
-                .to_vec(),
-            VideoEncodingStrategy::SegmentedVision => SensoryCorticalUnit::SegmentedVision
-                .get_cortical_ids_array_for_segmented_vision_with_parameters(frame, unit)
+            VideoEncodingStrategy::SimpleVision => {
+                SensoryCorticalUnit::get_cortical_ids_array_for_vision_with_parameters(frame, unit)
+                    .to_vec()
+            }
+            VideoEncodingStrategy::SegmentedVision => SensoryCorticalUnit::
+                get_cortical_ids_array_for_segmented_vision_with_parameters(frame, unit)
                 .to_vec(),
         };
 

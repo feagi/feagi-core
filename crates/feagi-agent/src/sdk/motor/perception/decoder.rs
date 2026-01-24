@@ -15,7 +15,6 @@ use crate::sdk::types::{
     MiscDataDimensions, MotorCorticalUnit,
 };
 use feagi_sensorimotor::data_types::text_token::decode_token_id_from_misc_data_with_depth;
-use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use std::sync::Mutex;
 use feagi_sensorimotor::caching::MotorDeviceCache;
@@ -79,12 +78,18 @@ impl PerceptionDecoder {
         let unit = CorticalUnitIndex::from(config.cortical_unit_id);
         let frame = FrameChangeHandling::Absolute;
 
-        let oseg_id = MotorCorticalUnit::ObjectSegmentation
-            .get_cortical_ids_array_for_object_segmentation_with_parameters(frame, unit)[0];
-        let oimg_id = MotorCorticalUnit::SimpleVisionOutput
-            .get_cortical_ids_array_for_simple_vision_output_with_parameters(frame, unit)[0];
-        let oten_id = MotorCorticalUnit::TextEnglishOutput
-            .get_cortical_ids_array_for_text_english_output_with_parameters(frame, unit)[0];
+        let oseg_id =
+            MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                frame, unit,
+            )[0];
+        let oimg_id =
+            MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+                frame, unit,
+            )[0];
+        let oten_id =
+            MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
+                frame, unit,
+            )[0];
 
         let oseg_topology = topology_cache.get_topology(&oseg_id).await?;
         let oimg_topology = topology_cache.get_topology(&oimg_id).await?;
@@ -227,9 +232,7 @@ impl PerceptionDecoder {
 
         #[cfg(feature = "sdk-text")]
         let text = if let (Some(token_id), Some(tokenizer)) = (token_id, &self.tokenizer) {
-            tokenizer
-                .decode(vec![token_id], true)
-                .ok()
+            tokenizer.decode(&[token_id], true).ok()
         } else {
             None
         };

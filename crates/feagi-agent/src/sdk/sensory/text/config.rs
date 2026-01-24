@@ -41,10 +41,9 @@ impl TextEncoderConfig {
 
     /// Cortical ID used for text input.
     pub fn cortical_id(&self) -> CorticalID {
-        SensoryCorticalUnit::TextEnglishInput
-            .get_cortical_ids_array_for_text_english_input_with_parameters(
-                FrameChangeHandling::Absolute,
-                CorticalUnitIndex::from(self.cortical_unit_id),
-            )[0]
+        SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
+            FrameChangeHandling::Absolute,
+            CorticalUnitIndex::from(self.cortical_unit_id),
+        )[0]
     }
 }
