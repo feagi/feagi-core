@@ -9,7 +9,10 @@ use crate::sdk::types::{
     FrameChangeHandling, GazeProperties, ImageFrame, ImageFrameProperties, ImageXYResolution,
     SegmentedImageFrameProperties, SensorDeviceCache, SensoryCorticalUnit, WrappedIOData,
 };
+use feagi_sensorimotor::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use feagi_sensorimotor::data_types::{Percentage, Percentage2D};
+use feagi_sensorimotor::data_types::processing::ImageFrameProcessor;
+use feagi_sensorimotor::data_types::Percentage as SensorPercentage;
 use feagi_sensorimotor::data_types::descriptors::SegmentedXYImageResolutions;
 
 /// Video encoder backed by a sensor cache.
@@ -73,7 +76,7 @@ impl VideoEncoder {
                 resolutions,
                 center_layout,
                 peripheral_layout,
-                ColorSpace::Linear,
+                ColorSpace::Gamma,
             );
             (channel_count, Some(segmented_props))
         } else {
@@ -179,6 +182,69 @@ impl SensoryEncoder for VideoEncoder {
                         .map_err(|e| {
                             SdkError::Other(format!("Segmented vision register failed: {e}"))
                         })?;
+
+                    let mut processor = ImageFrameProcessor::new(props);
+                    processor
+                        .set_brightness_offset(self.config.brightness)
+                        .map_err(|e| {
+                            SdkError::Other(format!("Segmented processor brightness failed: {e}"))
+                        })?;
+                    processor
+                        .set_contrast_change(self.config.contrast)
+                        .map_err(|e| {
+                            SdkError::Other(format!("Segmented processor contrast failed: {e}"))
+                        })?;
+
+                    let processor_stage =
+                        PipelineStageProperties::new_image_frame_processor(processor);
+                    let per_pixel_min = self.config.diff_threshold.max(1);
+                    let per_pixel_range = per_pixel_min..=u8::MAX;
+                    let activity_min =
+                        SensorPercentage::new_from_0_1(0.0).map_err(|e| {
+                            SdkError::Other(format!("Segmented diff activity min failed: {e}"))
+                        })?;
+                    let activity_max =
+                        SensorPercentage::new_from_0_1(1.0).map_err(|e| {
+                            SdkError::Other(format!("Segmented diff activity max failed: {e}"))
+                        })?;
+                    let diff_stage = PipelineStageProperties::new_image_quick_diff(
+                        per_pixel_range,
+                        activity_min..=activity_max,
+                        props,
+                    );
+
+                    let stage_index = PipelineStagePropertyIndex::from(0u32);
+                    for channel in 0..*self.channel_count {
+                        let channel_index = CorticalChannelIndex::from(channel as u32);
+                        let segmentor_stage = self
+                            .cache
+                            .segmented_vision_get_single_stage_properties(
+                                unit,
+                                channel_index,
+                                stage_index,
+                            )
+                            .map_err(|e| {
+                                SdkError::Other(format!(
+                                    "Segmented vision fetch segmentor stage failed: {e}"
+                                ))
+                            })?;
+                        let new_pipeline = vec![
+                            processor_stage.clone(),
+                            diff_stage.clone(),
+                            segmentor_stage,
+                        ];
+                        self.cache
+                            .segmented_vision_replace_all_stages(
+                                unit,
+                                channel_index,
+                                new_pipeline,
+                            )
+                            .map_err(|e| {
+                                SdkError::Other(format!(
+                                    "Segmented vision replace pipeline failed: {e}"
+                                ))
+                            })?;
+                    }
                 }
             }
         }
