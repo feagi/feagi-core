@@ -1,10 +1,11 @@
 //! Factory trait for creating FeagiServerPublisher instances.
 
-use super::FeagiServerPublisher;
 use super::server_shared::FeagiServerBindStateChange;
+use super::FeagiServerPublisher;
 
 /// Boxed callback type for server bind state changes.
-pub type ServerStateChangeCallback = Box<dyn Fn(FeagiServerBindStateChange) + Send + Sync + 'static>;
+pub type ServerStateChangeCallback =
+    Box<dyn Fn(FeagiServerBindStateChange) + Send + Sync + 'static>;
 
 /// Properties trait for creating a FeagiServerPublisher instance.
 ///
@@ -13,5 +14,8 @@ pub type ServerStateChangeCallback = Box<dyn Fn(FeagiServerBindStateChange) + Se
 pub trait FeagiServerPublisherProperties {
     /// Build and return a boxed FeagiServerPublisher instance.
     /// Consumes self to allow moving owned resources into the implementation.
-    fn build(self: Box<Self>, state_change_callback: ServerStateChangeCallback) -> Box<dyn FeagiServerPublisher>;
+    fn build(
+        self: Box<Self>,
+        state_change_callback: ServerStateChangeCallback,
+    ) -> Box<dyn FeagiServerPublisher>;
 }

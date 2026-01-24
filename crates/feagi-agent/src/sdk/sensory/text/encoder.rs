@@ -29,16 +29,19 @@ impl TextEncoder {
         let depth = topology.depth;
 
         let unit = CorticalUnitIndex::from(config.cortical_unit_id);
-        let channel_count =
-            CorticalChannelCount::new(topology.channels).map_err(|e| {
-                SdkError::Other(format!("Invalid text channel count: {e}"))
-            })?;
+        let channel_count = CorticalChannelCount::new(topology.channels)
+            .map_err(|e| SdkError::Other(format!("Invalid text channel count: {e}")))?;
         let dimensions = MiscDataDimensions::new(1, 1, depth)
             .map_err(|e| SdkError::Other(format!("Invalid text dimensions: {e}")))?;
 
         let mut cache = SensorDeviceCache::new();
         cache
-            .text_english_input_register(unit, channel_count, FrameChangeHandling::Absolute, dimensions)
+            .text_english_input_register(
+                unit,
+                channel_count,
+                FrameChangeHandling::Absolute,
+                dimensions,
+            )
             .map_err(|e| SdkError::Other(format!("Text register failed: {e}")))?;
 
         Ok(Self {
@@ -77,7 +80,11 @@ impl SensoryEncoder for TextEncoder {
             .encode_neurons_to_bytes()
             .map_err(|e| SdkError::Other(format!("Text byte encode failed: {e}")))?;
 
-        Ok(self.cache.get_feagi_byte_container().get_byte_ref().to_vec())
+        Ok(self
+            .cache
+            .get_feagi_byte_container()
+            .get_byte_ref()
+            .to_vec())
     }
 
     fn cortical_ids(&self) -> &[crate::sdk::types::CorticalID] {

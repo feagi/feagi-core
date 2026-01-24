@@ -1871,7 +1871,8 @@ mod tests {
         handler.set_auto_create_missing_areas(false);
 
         let request = RegistrationRequest {
-            agent_id: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+            agent_id: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                .to_string(),
             // Keep this unit test focused on the registration plumbing without requiring both
             // input+output capability validation (which would also require motor cortical area setup).
             agent_type: "sensory".to_string(),

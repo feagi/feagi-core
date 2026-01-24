@@ -45,7 +45,7 @@ impl FeedbackRegistrationTargets {
     pub fn get_motor_channel_index(&self) -> CorticalChannelIndex {
         self.motor_channel_index
     }
-    
+
     #[allow(dead_code)]
     pub(crate) fn verify_existence(
         &self,

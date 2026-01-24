@@ -13,7 +13,7 @@
    - SystemService
 
 🌐 Creating API state...
-✅ API state created (FEAGI session: 1768797923168)
+✅ API state created (FEAGI session: 1769286010057)
 
 🌐 Starting HTTP server on 127.0.0.1:8000...
 ✅ HTTP server configured
@@ -38,4 +38,16 @@
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 
-Error: Os { code: 48, kind: AddrInUse, message: "Address already in use" }
+2026-01-24T20:20:11.078231Z  INFO 🦀 [API] Device registration import requested for agent 'CEBNxHNkawAAAAAAAAAAAAAAAAAAAAAAbGl2ZV9jb250cmFjdAAAAAAAAAABAAAA'
+2026-01-24T20:20:11.078323Z  INFO ℹ️ [API] Agent service not available; skipping agent existence check for import (agent 'CEBNxHNkawAAAAAAAAAAAAAAAAAAAAAAbGl2ZV9jb250cmFjdAAAAAAAAAABAAAA')
+2026-01-24T20:20:11.078384Z  INFO 🔧 [API] Creating new ConnectorAgent for agent 'CEBNxHNkawAAAAAAAAAAAAAAAAAAAAAAbGl2ZV9jb250cmFjdAAAAAAAAAABAAAA'
+2026-01-24T20:20:11.078425Z  INFO 📥 [API] Importing device registrations for agent 'CEBNxHNkawAAAAAAAAAAAAAAAAAAAAAAbGl2ZV9jb250cmFjdAAAAAAAAAABAAAA': 1 input units, 0 output units, 0 feedbacks
+2026-01-24T20:20:11.078731Z  INFO ✅ [API] Device registration import succeeded for agent 'CEBNxHNkawAAAAAAAAAAAAAAAAAAAAAAbGl2ZV9jb250cmFjdAAAAAAAAAABAAAA' (verified: 1 input, 0 output)
+2026-01-24T20:20:11.078791Z  WARN ⚠️ [API] Failed to fetch existing cortical area 'aW1pcwoAAAA=' for potential rename: Not found: CorticalArea with id 'aW1pcwoAAAA='
+2026-01-24T20:20:11.079195Z  INFO 🦀 [API] Device registration export requested for agent 'CEBNxHNkawAAAAAAAAAAAAAAAAAAAAAAbGl2ZV9jb250cmFjdAAAAAAAAAABAAAA'
+2026-01-24T20:20:11.079202Z  INFO ℹ️ [API] Agent service not available; skipping agent existence check for export (agent 'CEBNxHNkawAAAAAAAAAAAAAAAAAAAAAAbGl2ZV9jb250cmFjdAAAAAAAAAABAAAA')
+2026-01-24T20:20:11.079205Z  INFO 🔍 [API] Found existing ConnectorAgent for agent 'CEBNxHNkawAAAAAAAAAAAAAAAAAAAAAAbGl2ZV9jb250cmFjdAAAAAAAAAABAAAA'
+2026-01-24T20:20:11.079219Z  INFO 📤 [API] Exporting device registrations for agent 'CEBNxHNkawAAAAAAAAAAAAAAAAAAAAAAbGl2ZV9jb250cmFjdAAAAAAAAAABAAAA': 1 input units, 0 output units, 0 feedbacks
+2026-01-24T20:20:11.079222Z  INFO ✅ [API] Device registration export succeeded for agent 'CEBNxHNkawAAAAAAAAAAAAAAAAAAAAAAbGl2ZV9jb250cmFjdAAAAAAAAAABAAAA'
+2026-01-24T20:20:25.632740Z  INFO 🦀 [API] Registration request received for agent 'AQAAAG5ldXJhdmlsbGUAAAAAAAAAAAAAYnJhaW4tdmlzdWFsaXplcgAAAAABAAAA' (type: visualization)
+2026-01-24T20:20:25.632983Z ERROR Request failed: error_class=StatusCode(500), latency=329.458µs

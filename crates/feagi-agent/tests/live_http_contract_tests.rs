@@ -32,6 +32,18 @@ fn base_url() -> String {
     format!("http://{}:{}", feagi_api_host(), feagi_api_port())
 }
 
+fn encode_path_segment(value: &str) -> String {
+    value
+        .chars()
+        .flat_map(|ch| match ch {
+            '+' => "%2B".chars().collect::<Vec<char>>(),
+            '/' => "%2F".chars().collect::<Vec<char>>(),
+            '=' => "%3D".chars().collect::<Vec<char>>(),
+            _ => vec![ch],
+        })
+        .collect()
+}
+
 #[tokio::test]
 async fn device_registrations_import_then_export_roundtrip() {
     // Use a unique agent_id per run.
@@ -39,9 +51,8 @@ async fn device_registrations_import_then_export_roundtrip() {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos() as u32;
-    let agent_descriptor =
-        AgentDescriptor::new(instance_id, "sdk", "live_contract", 1).unwrap();
-    let agent_id = agent_descriptor.to_base64();
+    let agent_descriptor = AgentDescriptor::new(instance_id, "sdk", "live_contract", 1).unwrap();
+    let agent_id = encode_path_segment(&agent_descriptor.to_base64());
 
     // Build a simple non-empty device registration export using the SDK connector.
     let connector = ConnectorAgent::new_empty(agent_descriptor);
@@ -62,6 +73,7 @@ async fn device_registrations_import_then_export_roundtrip() {
     // POST import
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
+        .no_proxy()
         .build()
         .unwrap();
 

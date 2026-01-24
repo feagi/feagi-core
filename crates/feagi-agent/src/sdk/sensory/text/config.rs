@@ -25,10 +25,7 @@ impl TextEncoderConfig {
             "tcp://{}:{}",
             self.feagi_host, self.feagi_zmq_registration_port
         );
-        let sensory_endpoint = format!(
-            "tcp://{}:{}",
-            self.feagi_host, self.feagi_zmq_sensory_port
-        );
+        let sensory_endpoint = format!("tcp://{}:{}", self.feagi_host, self.feagi_zmq_sensory_port);
 
         let agent_type = AgentType::Sensory;
         Ok(AgentConfig::new(self.agent_id.clone(), agent_type)

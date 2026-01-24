@@ -179,7 +179,8 @@ mod tests {
         });
 
         signal.emit(&AgentRegisteredEvent {
-            agent_id: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+            agent_id: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                .to_string(),
             agent_type: "sensory".to_string(),
             capabilities: "{}".to_string(),
         });

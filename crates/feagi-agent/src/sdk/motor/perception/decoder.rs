@@ -14,10 +14,10 @@ use crate::sdk::types::{
     FrameChangeHandling, ImageFrame, ImageFrameProperties, ImageXYResolution, MiscData,
     MiscDataDimensions, MotorCorticalUnit,
 };
+use feagi_sensorimotor::caching::MotorDeviceCache;
 use feagi_sensorimotor::data_types::text_token::decode_token_id_from_misc_data_with_depth;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use std::sync::Mutex;
-use feagi_sensorimotor::caching::MotorDeviceCache;
 
 /// Semantic segmentation frame decoded from OSEG motor output.
 #[derive(Debug, Clone, Serialize)]
@@ -153,9 +153,7 @@ impl PerceptionDecoder {
             .map_err(|_| SdkError::Other("OSEG cache lock poisoned".to_string()))?
             .object_segmentation_read_postprocessed_cache_value(unit, channel)
             .map_err(|e| SdkError::Other(format!("OSEG read failed: {e}")))?;
-        let misc: MiscData = wrapped
-            .try_into()
-            .map_err(|e| SdkError::Other(format!("OSEG decode failed: {e}")))?;
+        let misc: MiscData = wrapped;
         let dims = misc.get_dimensions();
 
         let mut x = Vec::new();
@@ -193,9 +191,7 @@ impl PerceptionDecoder {
             .map_err(|_| SdkError::Other("OIMG cache lock poisoned".to_string()))?
             .simple_vision_output_read_postprocessed_cache_value(unit, channel)
             .map_err(|e| SdkError::Other(format!("OIMG read failed: {e}")))?;
-        let image: ImageFrame = wrapped
-            .try_into()
-            .map_err(|e| SdkError::Other(format!("OIMG decode failed: {e}")))?;
+        let image: ImageFrame = wrapped;
 
         let resolution = image.get_image_frame_properties().get_image_resolution();
         let mut x = Vec::new();
@@ -217,7 +213,9 @@ impl PerceptionDecoder {
         Ok(Some(OimgFrame {
             width: resolution.width,
             height: resolution.height,
-            depth: image.get_image_frame_properties().get_color_channel_layout() as u32,
+            depth: image
+                .get_image_frame_properties()
+                .get_color_channel_layout() as u32,
             channels: self.oimg_topology.channels.max(1),
             x,
             y,
@@ -226,7 +224,10 @@ impl PerceptionDecoder {
         }))
     }
 
-    fn decode_oten(&self, unit: CorticalUnitIndex) -> Result<(Option<u32>, Option<String>), SdkError> {
+    fn decode_oten(
+        &self,
+        unit: CorticalUnitIndex,
+    ) -> Result<(Option<u32>, Option<String>), SdkError> {
         let channel = CorticalChannelIndex::from(0u32);
         let wrapped = self
             .motor_cache
@@ -234,9 +235,7 @@ impl PerceptionDecoder {
             .map_err(|_| SdkError::Other("OTEN cache lock poisoned".to_string()))?
             .text_english_output_read_postprocessed_cache_value(unit, channel)
             .map_err(|e| SdkError::Other(format!("OTEN read failed: {e}")))?;
-        let misc: MiscData = wrapped
-            .try_into()
-            .map_err(|e| SdkError::Other(format!("OTEN decode failed: {e}")))?;
+        let misc: MiscData = wrapped;
         let token_id = decode_token_id_from_misc_data_with_depth(&misc, self.oten_topology.depth)
             .map_err(|e| SdkError::Other(format!("OTEN token decode failed: {e}")))?;
 
@@ -297,13 +296,10 @@ fn register_oseg(
     topology: CorticalTopology,
     frame: FrameChangeHandling,
 ) -> Result<(), SdkError> {
-    let channels = CorticalChannelCount::new(topology.channels).map_err(|e| {
-        SdkError::Other(format!("Invalid OSEG channel count: {e}"))
-    })?;
-    let dims =
-        MiscDataDimensions::new(topology.width, topology.height, topology.depth).map_err(|e| {
-            SdkError::Other(format!("Invalid OSEG dimensions: {e}"))
-        })?;
+    let channels = CorticalChannelCount::new(topology.channels)
+        .map_err(|e| SdkError::Other(format!("Invalid OSEG channel count: {e}")))?;
+    let dims = MiscDataDimensions::new(topology.width, topology.height, topology.depth)
+        .map_err(|e| SdkError::Other(format!("Invalid OSEG dimensions: {e}")))?;
     motor_cache
         .object_segmentation_register(unit, channels, frame, dims)
         .map_err(|e| SdkError::Other(format!("OSEG register failed: {e}")))
@@ -315,12 +311,10 @@ fn register_oimg(
     topology: CorticalTopology,
     frame: FrameChangeHandling,
 ) -> Result<(), SdkError> {
-    let channels = CorticalChannelCount::new(topology.channels).map_err(|e| {
-        SdkError::Other(format!("Invalid OIMG channel count: {e}"))
-    })?;
-    let resolution = ImageXYResolution::new(topology.width, topology.height).map_err(|e| {
-        SdkError::Other(format!("Invalid OIMG resolution: {e}"))
-    })?;
+    let channels = CorticalChannelCount::new(topology.channels)
+        .map_err(|e| SdkError::Other(format!("Invalid OIMG channel count: {e}")))?;
+    let resolution = ImageXYResolution::new(topology.width, topology.height)
+        .map_err(|e| SdkError::Other(format!("Invalid OIMG resolution: {e}")))?;
     let layout = match topology.depth {
         1 => ColorChannelLayout::GrayScale,
         3 => ColorChannelLayout::RGB,
@@ -345,13 +339,10 @@ fn register_oten(
     topology: CorticalTopology,
     frame: FrameChangeHandling,
 ) -> Result<(), SdkError> {
-    let channels = CorticalChannelCount::new(topology.channels).map_err(|e| {
-        SdkError::Other(format!("Invalid OTEN channel count: {e}"))
-    })?;
-    let dims =
-        MiscDataDimensions::new(topology.width, topology.height, topology.depth).map_err(|e| {
-            SdkError::Other(format!("Invalid OTEN dimensions: {e}"))
-        })?;
+    let channels = CorticalChannelCount::new(topology.channels)
+        .map_err(|e| SdkError::Other(format!("Invalid OTEN channel count: {e}")))?;
+    let dims = MiscDataDimensions::new(topology.width, topology.height, topology.depth)
+        .map_err(|e| SdkError::Other(format!("Invalid OTEN dimensions: {e}")))?;
     motor_cache
         .text_english_output_register(unit, channels, frame, dims)
         .map_err(|e| SdkError::Other(format!("OTEN register failed: {e}")))

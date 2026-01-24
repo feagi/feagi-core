@@ -106,16 +106,12 @@ fn count_device_registrations(
         .get("input_units_and_encoder_properties")
         .and_then(|v| v.as_object())
         .map(|m| m.len())
-        .ok_or_else(|| {
-            SdkError::Other("Device registrations missing input units".to_string())
-        })?;
+        .ok_or_else(|| SdkError::Other("Device registrations missing input units".to_string()))?;
     let output_units = device_registrations
         .get("output_units_and_decoder_properties")
         .and_then(|v| v.as_object())
         .map(|m| m.len())
-        .ok_or_else(|| {
-            SdkError::Other("Device registrations missing output units".to_string())
-        })?;
+        .ok_or_else(|| SdkError::Other("Device registrations missing output units".to_string()))?;
     let feedbacks_value = device_registrations
         .get("feedbacks")
         .ok_or_else(|| SdkError::Other("Device registrations missing feedbacks".to_string()))?;
@@ -126,7 +122,9 @@ fn count_device_registrations(
             .and_then(|v| v.as_array())
             .map(|v| v.len())
             .ok_or_else(|| {
-                SdkError::Other("Device registrations feedbacks missing registered_feedbacks".to_string())
+                SdkError::Other(
+                    "Device registrations feedbacks missing registered_feedbacks".to_string(),
+                )
             })?
     } else {
         return Err(SdkError::Other(

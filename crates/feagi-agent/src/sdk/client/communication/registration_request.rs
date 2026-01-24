@@ -18,13 +18,17 @@ pub struct RegistrationRequest {
 impl RegistrationRequest {
     /// Parse from a JSON value.
     pub fn from_json(json: &serde_json::Value) -> Result<Self, FeagiAgentError> {
-        serde_json::from_value(json.clone())
-            .map_err(|e| FeagiAgentError::GeneralFailure(format!("Invalid RegistrationRequest: {}", e)))
+        serde_json::from_value(json.clone()).map_err(|e| {
+            FeagiAgentError::GeneralFailure(format!("Invalid RegistrationRequest: {}", e))
+        })
     }
 
     /// Get the connection ID.
     pub fn connection_id(&self) -> Result<ConnectionId, FeagiAgentError> {
-        ConnectionId::from_base64(&self.connection_id)
-            .ok_or_else(|| FeagiAgentError::GeneralFailure("Invalid connection_id: bad base64 or wrong length".to_string()))
+        ConnectionId::from_base64(&self.connection_id).ok_or_else(|| {
+            FeagiAgentError::GeneralFailure(
+                "Invalid connection_id: bad base64 or wrong length".to_string(),
+            )
+        })
     }
 }

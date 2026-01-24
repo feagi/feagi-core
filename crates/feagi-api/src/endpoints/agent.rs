@@ -17,9 +17,9 @@ use feagi_services::traits::agent_service::{
 use tracing::{error, info, warn};
 
 #[cfg(feature = "feagi-agent")]
-use feagi_agent::sdk::ConnectorAgent;
-#[cfg(feature = "feagi-agent")]
 use feagi_agent::sdk::AgentDescriptor;
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::sdk::ConnectorAgent;
 #[cfg(feature = "feagi-agent")]
 use feagi_services::types::CreateCorticalAreaParams;
 #[cfg(feature = "feagi-agent")]
@@ -639,11 +639,10 @@ pub async fn register_agent(
                 };
 
                 // IMPORTANT: do not hold a non-Send MutexGuard across an await.
-                let import_result = (|| {
+                let import_result = {
                     let mut connector_guard = connector.lock().unwrap();
-                    connector_guard
-                        .set_device_registrations_from_json(device_registrations_value)
-                })();
+                    connector_guard.set_device_registrations_from_json(device_registrations_value)
+                };
 
                 match import_result {
                     Err(e) => {
@@ -668,9 +667,9 @@ pub async fn register_agent(
                 let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
                 // Initialize empty ConnectorAgent even if no device_registrations
                 let mut connectors = state.agent_connectors.write();
-                connectors
-                    .entry(agent_descriptor)
-                    .or_insert_with(|| Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor))));
+                connectors.entry(agent_descriptor).or_insert_with(|| {
+                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor)))
+                });
             }
 
             // Convert service TransportConfig to API TransportConfig

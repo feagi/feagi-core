@@ -1,5 +1,5 @@
-use crate::io_api::FeagiNetworkError;
 use crate::io_api::traits_and_enums::client::client_shared::FeagiClientConnectionState;
+use crate::io_api::FeagiNetworkError;
 
 pub trait FeagiClient: Send {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError>;

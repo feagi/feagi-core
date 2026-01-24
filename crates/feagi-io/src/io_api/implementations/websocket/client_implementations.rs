@@ -2,14 +2,14 @@
 
 use std::net::TcpStream;
 
-use tokio_tungstenite::tungstenite::{self, connect, Message, WebSocket, stream::MaybeTlsStream};
+use tokio_tungstenite::tungstenite::{self, connect, stream::MaybeTlsStream, Message, WebSocket};
 
-use crate::io_api::{FeagiClientConnectionState, FeagiNetworkError};
 use crate::io_api::traits_and_enums::client::client_shared::FeagiClientConnectionStateChange;
 use crate::io_api::traits_and_enums::client::{
-    FeagiClient, FeagiClientSubscriber, FeagiClientPusher, FeagiClientRequester,
-    FeagiClientSubscriberProperties, FeagiClientPusherProperties, FeagiClientRequesterProperties
+    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester,
+    FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties,
 };
+use crate::io_api::{FeagiClientConnectionState, FeagiNetworkError};
 
 /// Type alias for the client state change callback.
 type StateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static>;
@@ -27,7 +27,10 @@ pub struct FEAGIWebSocketClientSubscriber {
 }
 
 impl FEAGIWebSocketClientSubscriber {
-    pub fn new(server_address: String, state_change_callback: StateChangeCallback) -> Result<Self, FeagiNetworkError> {
+    pub fn new(
+        server_address: String,
+        state_change_callback: StateChangeCallback,
+    ) -> Result<Self, FeagiNetworkError> {
         Ok(Self {
             server_address,
             current_state: FeagiClientConnectionState::Disconnected,
@@ -41,7 +44,11 @@ impl FEAGIWebSocketClientSubscriber {
     pub fn try_poll_receive(&mut self) -> Result<Option<&[u8]>, FeagiNetworkError> {
         let socket = match &mut self.socket {
             Some(s) => s,
-            None => return Err(FeagiNetworkError::ReceiveFailed("Not connected".to_string())),
+            None => {
+                return Err(FeagiNetworkError::ReceiveFailed(
+                    "Not connected".to_string(),
+                ))
+            }
         };
 
         match socket.read() {
@@ -56,10 +63,13 @@ impl FEAGIWebSocketClientSubscriber {
             Ok(Message::Close(_)) => {
                 let previous = self.current_state;
                 self.current_state = FeagiClientConnectionState::Disconnected;
-                (self.state_change_callback)(
-                    FeagiClientConnectionStateChange::new(previous, self.current_state)
-                );
-                Err(FeagiNetworkError::ReceiveFailed("Connection closed".to_string()))
+                (self.state_change_callback)(FeagiClientConnectionStateChange::new(
+                    previous,
+                    self.current_state,
+                ));
+                Err(FeagiNetworkError::ReceiveFailed(
+                    "Connection closed".to_string(),
+                ))
             }
             Ok(_) => Ok(None), // Ping/Pong
             Err(tungstenite::Error::Io(ref e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -78,21 +88,23 @@ impl FeagiClient for FEAGIWebSocketClientSubscriber {
             format!("ws://{}", host)
         };
 
-        let (socket, _response) = connect(&url)
-            .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
-        
+        let (socket, _response) =
+            connect(&url).map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
+
         // Set non-blocking for polling
         if let MaybeTlsStream::Plain(ref stream) = socket.get_ref() {
-            stream.set_nonblocking(true)
+            stream
+                .set_nonblocking(true)
                 .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         }
-        
+
         self.socket = Some(socket);
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Connected;
-        (self.state_change_callback)(
-            FeagiClientConnectionStateChange::new(previous, self.current_state)
-        );
+        (self.state_change_callback)(FeagiClientConnectionStateChange::new(
+            previous,
+            self.current_state,
+        ));
         Ok(())
     }
 
@@ -102,9 +114,10 @@ impl FeagiClient for FEAGIWebSocketClientSubscriber {
         }
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Disconnected;
-        (self.state_change_callback)(
-            FeagiClientConnectionStateChange::new(previous, self.current_state)
-        );
+        (self.state_change_callback)(FeagiClientConnectionStateChange::new(
+            previous,
+            self.current_state,
+        ));
         Ok(())
     }
 
@@ -131,7 +144,10 @@ pub struct FEAGIWebSocketClientPusher {
 }
 
 impl FEAGIWebSocketClientPusher {
-    pub fn new(server_address: String, state_change_callback: StateChangeCallback) -> Result<Self, FeagiNetworkError> {
+    pub fn new(
+        server_address: String,
+        state_change_callback: StateChangeCallback,
+    ) -> Result<Self, FeagiNetworkError> {
         Ok(Self {
             server_address,
             current_state: FeagiClientConnectionState::Disconnected,
@@ -149,15 +165,16 @@ impl FeagiClient for FEAGIWebSocketClientPusher {
             format!("ws://{}", host)
         };
 
-        let (socket, _response) = connect(&url)
-            .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
-        
+        let (socket, _response) =
+            connect(&url).map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
+
         self.socket = Some(socket);
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Connected;
-        (self.state_change_callback)(
-            FeagiClientConnectionStateChange::new(previous, self.current_state)
-        );
+        (self.state_change_callback)(FeagiClientConnectionStateChange::new(
+            previous,
+            self.current_state,
+        ));
         Ok(())
     }
 
@@ -167,9 +184,10 @@ impl FeagiClient for FEAGIWebSocketClientPusher {
         }
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Disconnected;
-        (self.state_change_callback)(
-            FeagiClientConnectionStateChange::new(previous, self.current_state)
-        );
+        (self.state_change_callback)(FeagiClientConnectionStateChange::new(
+            previous,
+            self.current_state,
+        ));
         Ok(())
     }
 
@@ -194,9 +212,10 @@ impl FEAGIWebSocketClientPusher {
         };
 
         let message = Message::Binary(data.to_vec());
-        socket.send(message)
+        socket
+            .send(message)
             .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
-        
+
         Ok(())
     }
 }
@@ -216,7 +235,10 @@ pub struct FEAGIWebSocketClientRequester {
 }
 
 impl FEAGIWebSocketClientRequester {
-    pub fn new(server_address: String, state_change_callback: StateChangeCallback) -> Result<Self, FeagiNetworkError> {
+    pub fn new(
+        server_address: String,
+        state_change_callback: StateChangeCallback,
+    ) -> Result<Self, FeagiNetworkError> {
         Ok(Self {
             server_address,
             current_state: FeagiClientConnectionState::Disconnected,
@@ -235,21 +257,23 @@ impl FeagiClient for FEAGIWebSocketClientRequester {
             format!("ws://{}", host)
         };
 
-        let (socket, _response) = connect(&url)
-            .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
-        
+        let (socket, _response) =
+            connect(&url).map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
+
         // Set non-blocking for polling
         if let MaybeTlsStream::Plain(ref stream) = socket.get_ref() {
-            stream.set_nonblocking(true)
+            stream
+                .set_nonblocking(true)
                 .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         }
-        
+
         self.socket = Some(socket);
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Connected;
-        (self.state_change_callback)(
-            FeagiClientConnectionStateChange::new(previous, self.current_state)
-        );
+        (self.state_change_callback)(FeagiClientConnectionStateChange::new(
+            previous,
+            self.current_state,
+        ));
         Ok(())
     }
 
@@ -259,9 +283,10 @@ impl FeagiClient for FEAGIWebSocketClientRequester {
         }
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Disconnected;
-        (self.state_change_callback)(
-            FeagiClientConnectionStateChange::new(previous, self.current_state)
-        );
+        (self.state_change_callback)(FeagiClientConnectionStateChange::new(
+            previous,
+            self.current_state,
+        ));
         Ok(())
     }
 
@@ -273,13 +298,19 @@ impl FeagiClient for FEAGIWebSocketClientRequester {
 impl FeagiClientRequester for FEAGIWebSocketClientRequester {
     fn send_request(&self, _request: &[u8]) -> Result<(), FeagiNetworkError> {
         // Note: Can't mutate with &self - use send_request_mut below
-        Err(FeagiNetworkError::SendFailed("Use send_request_mut instead for WebSocket".to_string()))
+        Err(FeagiNetworkError::SendFailed(
+            "Use send_request_mut instead for WebSocket".to_string(),
+        ))
     }
 
     fn try_poll_receive(&mut self) -> Result<Option<&[u8]>, FeagiNetworkError> {
         let socket = match &mut self.socket {
             Some(s) => s,
-            None => return Err(FeagiNetworkError::ReceiveFailed("Not connected".to_string())),
+            None => {
+                return Err(FeagiNetworkError::ReceiveFailed(
+                    "Not connected".to_string(),
+                ))
+            }
         };
 
         match socket.read() {
@@ -294,10 +325,13 @@ impl FeagiClientRequester for FEAGIWebSocketClientRequester {
             Ok(Message::Close(_)) => {
                 let previous = self.current_state;
                 self.current_state = FeagiClientConnectionState::Disconnected;
-                (self.state_change_callback)(
-                    FeagiClientConnectionStateChange::new(previous, self.current_state)
-                );
-                Err(FeagiNetworkError::ReceiveFailed("Connection closed".to_string()))
+                (self.state_change_callback)(FeagiClientConnectionStateChange::new(
+                    previous,
+                    self.current_state,
+                ));
+                Err(FeagiNetworkError::ReceiveFailed(
+                    "Connection closed".to_string(),
+                ))
             }
             Ok(_) => Ok(None),
             Err(tungstenite::Error::Io(ref e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
@@ -317,9 +351,10 @@ impl FEAGIWebSocketClientRequester {
         };
 
         let message = Message::Binary(request.to_vec());
-        socket.send(message)
+        socket
+            .send(message)
             .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
-        
+
         Ok(())
     }
 }
@@ -338,19 +373,19 @@ pub struct FEAGIWebSocketClientSubscriberProperties {
 impl FEAGIWebSocketClientSubscriberProperties {
     /// Create new properties with the given server address.
     pub fn new(server_address: String) -> Self {
-        Self {
-            server_address,
-        }
+        Self { server_address }
     }
 }
 
 impl FeagiClientSubscriberProperties for FEAGIWebSocketClientSubscriberProperties {
-    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiClientSubscriber> {
-        let subscriber = FEAGIWebSocketClientSubscriber::new(
-            self.server_address,
-            state_change_callback,
-        ).expect("Failed to create WebSocket subscriber");
-        
+    fn build(
+        self: Box<Self>,
+        state_change_callback: StateChangeCallback,
+    ) -> Box<dyn FeagiClientSubscriber> {
+        let subscriber =
+            FEAGIWebSocketClientSubscriber::new(self.server_address, state_change_callback)
+                .expect("Failed to create WebSocket subscriber");
+
         Box::new(subscriber)
     }
 }
@@ -367,19 +402,18 @@ pub struct FEAGIWebSocketClientPusherProperties {
 impl FEAGIWebSocketClientPusherProperties {
     /// Create new properties with the given server address.
     pub fn new(server_address: String) -> Self {
-        Self {
-            server_address,
-        }
+        Self { server_address }
     }
 }
 
 impl FeagiClientPusherProperties for FEAGIWebSocketClientPusherProperties {
-    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiClientPusher> {
-        let pusher = FEAGIWebSocketClientPusher::new(
-            self.server_address,
-            state_change_callback,
-        ).expect("Failed to create WebSocket pusher");
-        
+    fn build(
+        self: Box<Self>,
+        state_change_callback: StateChangeCallback,
+    ) -> Box<dyn FeagiClientPusher> {
+        let pusher = FEAGIWebSocketClientPusher::new(self.server_address, state_change_callback)
+            .expect("Failed to create WebSocket pusher");
+
         Box::new(pusher)
     }
 }
@@ -396,19 +430,19 @@ pub struct FEAGIWebSocketClientRequesterProperties {
 impl FEAGIWebSocketClientRequesterProperties {
     /// Create new properties with the given server address.
     pub fn new(server_address: String) -> Self {
-        Self {
-            server_address,
-        }
+        Self { server_address }
     }
 }
 
 impl FeagiClientRequesterProperties for FEAGIWebSocketClientRequesterProperties {
-    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiClientRequester> {
-        let requester = FEAGIWebSocketClientRequester::new(
-            self.server_address,
-            state_change_callback,
-        ).expect("Failed to create WebSocket requester");
-        
+    fn build(
+        self: Box<Self>,
+        state_change_callback: StateChangeCallback,
+    ) -> Box<dyn FeagiClientRequester> {
+        let requester =
+            FEAGIWebSocketClientRequester::new(self.server_address, state_change_callback)
+                .expect("Failed to create WebSocket requester");
+
         Box::new(requester)
     }
 }

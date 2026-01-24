@@ -5375,10 +5375,7 @@ mod tests {
         use feagi_npu_burst_engine::TracingMutex;
         use std::sync::Arc;
 
-        // Get ConnectomeManager singleton
-        let manager_arc = ConnectomeManager::instance();
-
-        // Create and attach NPU
+        // Create NPU and manager for isolated test state
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::DynamicNPU;
         use feagi_npu_runtime::StdRuntime;
@@ -5388,12 +5385,7 @@ mod tests {
         let npu_result =
             RustNPU::new(runtime, backend, 100, 1000, 10).expect("Failed to create NPU");
         let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu_result), "TestNPU"));
-        {
-            let mut manager = manager_arc.write();
-            manager.set_npu(npu.clone());
-        }
-
-        let mut manager = manager_arc.write();
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(npu.clone());
 
         // First create a cortical area to add neurons to
         use feagi_structures::genomic::cortical_area::{

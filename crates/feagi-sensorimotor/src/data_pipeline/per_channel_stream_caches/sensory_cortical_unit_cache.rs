@@ -240,12 +240,12 @@ impl SensoryCorticalUnitCache {
     pub fn try_get_first_index_of_stage_property_type(
         &self,
         cortical_channel_index: CorticalChannelIndex,
-        pipeline_stage_property_type: &PipelineStageProperties
+        pipeline_stage_property_type: &PipelineStageProperties,
     ) -> Result<PipelineStagePropertyIndex, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         pipeline_runner.try_get_index_of_first_stage_property_of_type(pipeline_stage_property_type)
     }
-    
+
     /// Retrieves the properties of a single pipeline stage for a specific channel.
     ///
     /// # Arguments

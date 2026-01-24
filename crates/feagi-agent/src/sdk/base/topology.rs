@@ -35,11 +35,7 @@ pub struct TopologyCache {
 
 impl TopologyCache {
     /// Create a new topology cache for a FEAGI HTTP endpoint.
-    pub fn new(
-        host: impl Into<String>,
-        port: u16,
-        timeout_s: f64,
-    ) -> Result<Self, SdkError> {
+    pub fn new(host: impl Into<String>, port: u16, timeout_s: f64) -> Result<Self, SdkError> {
         let host = host.into();
         let timeout = std::time::Duration::from_secs_f64(timeout_s);
         #[cfg(feature = "sdk-io")]
@@ -80,9 +76,10 @@ impl TopologyCache {
         ids: &[CorticalID],
     ) -> Result<Vec<CorticalTopology>, SdkError> {
         let missing: Vec<String> = {
-            let cache = self.cache.read().map_err(|_| {
-                SdkError::Other("Topology cache lock poisoned".to_string())
-            })?;
+            let cache = self
+                .cache
+                .read()
+                .map_err(|_| SdkError::Other("Topology cache lock poisoned".to_string()))?;
             ids.iter()
                 .filter(|id| !cache.contains_key(*id))
                 .map(|id| id.as_base_64())
@@ -149,8 +146,9 @@ impl TopologyCache {
             SdkError::Other(format!("Topology entry is not an object for key: {key}"))
         })?;
 
-        let (dims, channels) = Self::parse_dimensions(entry_obj)
-            .ok_or_else(|| SdkError::Other(format!("Topology dimensions missing for key: {key}")))?;
+        let (dims, channels) = Self::parse_dimensions(entry_obj).ok_or_else(|| {
+            SdkError::Other(format!("Topology dimensions missing for key: {key}"))
+        })?;
 
         Ok(CorticalTopology {
             width: dims.0,

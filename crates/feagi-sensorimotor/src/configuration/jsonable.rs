@@ -97,12 +97,16 @@ impl JSONInputOutputDefinition {
         unit_definition: JSONUnitDefinition,
         decoder_properties: JSONDecoderProperties,
     ) {
-
-        if !self.output_units_and_decoder_properties.contains_key(&motor) {
-            self.output_units_and_decoder_properties.insert(motor.clone(), vec![(unit_definition, decoder_properties)]);
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            self.output_units_and_decoder_properties.entry(motor)
+        {
+            entry.insert(vec![(unit_definition, decoder_properties)]);
             return;
         }
-        let vec = self.output_units_and_decoder_properties.get_mut(&motor).unwrap();
+        let vec = self
+            .output_units_and_decoder_properties
+            .get_mut(&motor)
+            .unwrap();
         vec.push((unit_definition, decoder_properties));
     }
 
@@ -112,12 +116,16 @@ impl JSONInputOutputDefinition {
         unit_definition: JSONUnitDefinition,
         encoder_properties: JSONEncoderProperties,
     ) {
-
-        if !self.input_units_and_encoder_properties.contains_key(&sensor) {
-            self.input_units_and_encoder_properties.insert(sensor.clone(), vec![(unit_definition, encoder_properties)]);
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            self.input_units_and_encoder_properties.entry(sensor)
+        {
+            entry.insert(vec![(unit_definition, encoder_properties)]);
             return;
         }
-        let vec = self.input_units_and_encoder_properties.get_mut(&sensor).unwrap();
+        let vec = self
+            .input_units_and_encoder_properties
+            .get_mut(&sensor)
+            .unwrap();
         vec.push((unit_definition, encoder_properties));
     }
 

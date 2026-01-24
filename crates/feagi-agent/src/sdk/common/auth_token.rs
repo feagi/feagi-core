@@ -28,7 +28,7 @@ impl AuthToken {
         if hex.len() != AUTH_TOKEN_LENGTH * 2 {
             return None;
         }
-        
+
         let mut value = [0u8; AUTH_TOKEN_LENGTH];
         for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
             let hex_byte = std::str::from_utf8(chunk).ok()?;
@@ -67,7 +67,7 @@ impl AuthToken {
     /// Convert to base64 string.
     pub fn to_base64(&self) -> String {
         use base64::Engine;
-        base64::engine::general_purpose::STANDARD.encode(&self.value)
+        base64::engine::general_purpose::STANDARD.encode(self.value)
     }
 }
 

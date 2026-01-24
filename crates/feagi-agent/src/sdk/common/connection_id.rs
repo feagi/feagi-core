@@ -26,20 +26,20 @@ impl ConnectionId {
     /// Generate a random connection ID.
     pub fn generate() -> Self {
         use std::time::{SystemTime, UNIX_EPOCH};
-        
+
         let mut value = [0u8; CONNECTION_ID_LENGTH];
-        
+
         // Use timestamp for first 8 bytes
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos() as u64;
         value[0..8].copy_from_slice(&timestamp.to_le_bytes());
-        
+
         // Fill rest with pseudo-random data based on memory addresses and timestamp
         let ptr = &value as *const _ as u64;
         value[8..16].copy_from_slice(&ptr.to_le_bytes());
-        
+
         // XOR with additional entropy
         let entropy = timestamp.wrapping_mul(ptr).wrapping_add(0x517cc1b727220a95);
         for (i, chunk) in value[16..].chunks_mut(8).enumerate() {
@@ -51,7 +51,7 @@ impl ConnectionId {
                 }
             }
         }
-        
+
         Self { value }
     }
 
@@ -63,7 +63,7 @@ impl ConnectionId {
         if hex.len() != CONNECTION_ID_LENGTH * 2 {
             return None;
         }
-        
+
         let mut value = [0u8; CONNECTION_ID_LENGTH];
         for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
             let hex_byte = std::str::from_utf8(chunk).ok()?;
@@ -100,7 +100,7 @@ impl ConnectionId {
     /// Convert to base64 string.
     pub fn to_base64(&self) -> String {
         use base64::Engine;
-        base64::engine::general_purpose::STANDARD.encode(&self.value)
+        base64::engine::general_purpose::STANDARD.encode(self.value)
     }
 }
 

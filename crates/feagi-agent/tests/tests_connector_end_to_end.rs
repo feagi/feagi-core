@@ -45,6 +45,7 @@ fn test_agent_descriptor() -> feagi_agent::sdk::AgentDescriptor {
 #[cfg(test)]
 mod test_connector_cache_sensor_load_image {
     use crate::load_bird_image;
+    use crate::test_agent_descriptor;
     use feagi_sensorimotor::data_types::descriptors::{
         SegmentedImageFrameProperties, SegmentedXYImageResolutions,
     };

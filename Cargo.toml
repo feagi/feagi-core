@@ -8,7 +8,7 @@
 
 [package]
 name = "feagi"
-version = "0.0.1-beta.2"
+version = "0.0.1-beta.1"
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
@@ -49,32 +49,32 @@ agent-sdk = ["feagi-agent"]
 
 [dependencies]
 # Foundation (vendored into feagi-core when published)
-feagi-evolutionary = { version = "=0.0.1-beta.2", path = "crates/feagi-evolutionary" }
-feagi-npu-neural = { version = "=0.0.1-beta.2", path = "crates/feagi-npu/neural" }
+feagi-evolutionary = { version = "=0.0.1-beta.1", path = "crates/feagi-evolutionary" }
+feagi-npu-neural = { version = "=0.0.1-beta.1", path = "crates/feagi-npu/neural" }
 serde_json = "1.0"
-feagi-structures = { version = "=0.0.1-beta.2", path = "crates/feagi-structures" }
-feagi-serialization = { version = "=0.0.1-beta.2", path = "crates/feagi-serialization" }
+feagi-structures = { version = "=0.0.1-beta.1", path = "crates/feagi-structures" }
+feagi-serialization = { version = "=0.0.1-beta.1", path = "crates/feagi-serialization" }
 ndarray = { workspace = true }
 
 # Infrastructure (vendored)
-feagi-state-manager = { version = "=0.0.1-beta.2", path = "crates/feagi-state-manager", optional = true }
+feagi-state-manager = { version = "=0.0.1-beta.1", path = "crates/feagi-state-manager", optional = true }
 
 # Algorithms (vendored)
-feagi-npu-burst-engine = { version = "=0.0.1-beta.2", path = "crates/feagi-npu/burst-engine", optional = true }
-feagi-brain-development = { version = "=0.0.1-beta.2", path = "crates/feagi-brain-development", optional = true }
-feagi-sensorimotor = { version = "=0.0.1-beta.2", path = "crates/feagi-sensorimotor", optional = true }
-feagi-npu-plasticity = { version = "=0.0.1-beta.2", path = "crates/feagi-npu/plasticity", optional = true }
+feagi-npu-burst-engine = { version = "=0.0.1-beta.1", path = "crates/feagi-npu/burst-engine", optional = true }
+feagi-brain-development = { version = "=0.0.1-beta.1", path = "crates/feagi-brain-development", optional = true }
+feagi-sensorimotor = { version = "=0.0.1-beta.1", path = "crates/feagi-sensorimotor", optional = true }
+feagi-npu-plasticity = { version = "=0.0.1-beta.1", path = "crates/feagi-npu/plasticity", optional = true }
 
 # I/O (vendored)
-feagi-io = { version = "=0.0.1-beta.2", path = "crates/feagi-io", optional = true }
-feagi-agent = { version = "=0.0.1-beta.2", path = "crates/feagi-agent", optional = true }
+feagi-io = { version = "=0.0.1-beta.1", path = "crates/feagi-io", optional = true }
+feagi-agent = { version = "=0.0.1-beta.1", path = "crates/feagi-agent", optional = true }
 
 # Async runtime is now a feature of feagi-data-structures
 
 [dev-dependencies]
 # For integration tests that need GenomeService
-feagi-services = { version = "=0.0.1-beta.2", path = "crates/feagi-services" }
-feagi-npu-runtime = { version = "=0.0.1-beta.2", path = "crates/feagi-npu/runtime", features = ["std"] }
+feagi-services = { version = "=0.0.1-beta.1", path = "crates/feagi-services" }
+feagi-npu-runtime = { version = "=0.0.1-beta.1", path = "crates/feagi-npu/runtime", features = ["std"] }
 parking_lot = "0.12"
 tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros"] }
 
@@ -120,7 +120,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.1-beta.2"
+version = "0.0.1-beta.1"
 edition = "2021"
 rust-version = "1.75"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
@@ -150,11 +150,11 @@ pollster = "0.3"  # Async/await executor for GPU operations
 bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU buffers
 
 # FEAGI data crates (now internal to workspace)
-feagi-structures = { version = "=0.0.1-beta.2", path = "crates/feagi-structures" }
-feagi-serialization = { version = "=0.0.1-beta.2", path = "crates/feagi-serialization" }
+feagi-structures = { version = "=0.0.1-beta.1", path = "crates/feagi-structures" }
+feagi-serialization = { version = "=0.0.1-beta.1", path = "crates/feagi-serialization" }
 
 # Workspace-internal crates
-feagi-observability = { version = "=0.0.1-beta.2", path = "crates/feagi-observability" }
+feagi-observability = { version = "=0.0.1-beta.1", path = "crates/feagi-observability" }
 
 # PyO3 for Python bindings
 pyo3 = { version = "0.22", features = ["extension-module"] }

@@ -56,7 +56,9 @@ impl Display for FeagiDataError {
                 "Internal Error, please raise an issue on Github: {}",
                 msg
             ),
-            FeagiDataError::ResourceLockedWhileRunning(msg) => write!(f, "Resource Locked While Running: {}", msg),
+            FeagiDataError::ResourceLockedWhileRunning(msg) => {
+                write!(f, "Resource Locked While Running: {}", msg)
+            }
             FeagiDataError::ConstError(msg) => write!(f, "ConstError: {}", msg),
             FeagiDataError::NotImplemented => write!(
                 f,

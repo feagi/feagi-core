@@ -69,6 +69,11 @@ feagi_services::types::RuntimeStatus
 
 ---
 
+## Benchmark Integrity Note
+
+- Never update benchmark baselines or thresholds just to make CI pass.
+- If perf regressions occur, investigate and fix the code or revert the change.
+
 ## 🎯 Next Steps to Fix Tests
 
 ### Step 1: Check Service Exports (5 min)

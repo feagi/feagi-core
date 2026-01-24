@@ -28,8 +28,6 @@ macro_rules! match_bytes_by_cortical_type {
     };
 }
 
-
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CorticalID {
     pub(crate) bytes: [u8; CorticalID::CORTICAL_ID_LENGTH],

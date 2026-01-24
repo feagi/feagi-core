@@ -41,10 +41,7 @@ impl VideoEncoderConfig {
             "tcp://{}:{}",
             self.feagi_host, self.feagi_zmq_registration_port
         );
-        let sensory_endpoint = format!(
-            "tcp://{}:{}",
-            self.feagi_host, self.feagi_zmq_sensory_port
-        );
+        let sensory_endpoint = format!("tcp://{}:{}", self.feagi_host, self.feagi_zmq_sensory_port);
         let motor_endpoint = format!("tcp://{}:{}", self.feagi_host, self.feagi_zmq_motor_port);
 
         let agent_type = AgentType::Sensory;
@@ -70,10 +67,7 @@ impl VideoEncoderConfig {
             "tcp://{}:{}",
             self.feagi_host, self.feagi_zmq_registration_port
         );
-        let sensory_endpoint = format!(
-            "tcp://{}:{}",
-            self.feagi_host, self.feagi_zmq_sensory_port
-        );
+        let sensory_endpoint = format!("tcp://{}:{}", self.feagi_host, self.feagi_zmq_sensory_port);
         let motor_endpoint = format!("tcp://{}:{}", self.feagi_host, self.feagi_zmq_motor_port);
 
         let agent_type = AgentType::Both;

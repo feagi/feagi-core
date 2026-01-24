@@ -1,12 +1,11 @@
 #![allow(dead_code)]
 
-use feagi_io::io_api::FeagiNetworkError;
 use feagi_io::io_api::implementations::zmq::{FEAGIZMQClientPusher, FEAGIZMQClientSubscriber};
 use feagi_io::io_api::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
+use feagi_io::io_api::FeagiNetworkError;
 
 /// Marker trait for connector agent network implementations.
-pub trait ConnectorAgentNetworkImplementation {
-}
+pub trait ConnectorAgentNetworkImplementation {}
 
 pub struct ConnectorAgentNetwork {
     sensor_stream: Box<dyn FeagiClientPusher>,

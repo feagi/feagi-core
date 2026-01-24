@@ -25,9 +25,9 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use feagi_io::io_api::implementations::zmq::{FEAGIZMQServerRouter, FEAGIZMQClientRequester};
-use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerRouter};
+use feagi_io::io_api::implementations::zmq::{FEAGIZMQClientRequester, FEAGIZMQServerRouter};
 use feagi_io::io_api::traits_and_enums::client::{FeagiClient, FeagiClientRequester};
+use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerRouter};
 
 const ADDRESS: &str = "tcp://127.0.0.1:5557";
 
@@ -37,11 +37,10 @@ fn run_server() {
 
     let mut context = zmq::Context::new();
 
-    let mut server = FEAGIZMQServerRouter::new(
-        &mut context,
-        ADDRESS.to_string(),
-        |state_change| println!("[SERVER] State changed: {:?}", state_change)
-    ).expect("Failed to create server router");
+    let mut server = FEAGIZMQServerRouter::new(&mut context, ADDRESS.to_string(), |state_change| {
+        println!("[SERVER] State changed: {:?}", state_change)
+    })
+    .expect("Failed to create server router");
 
     server.start().expect("Failed to start server");
     println!("Server started successfully!");
@@ -53,14 +52,21 @@ fn run_server() {
             Ok(Some((client_id, request))) => {
                 // Request received! client_id identifies which client sent it
                 let request_str = String::from_utf8_lossy(request);
-                println!("[SERVER] Received request from {:?}: {}", client_id, request_str);
+                println!(
+                    "[SERVER] Received request from {:?}: {}",
+                    client_id, request_str
+                );
 
                 // Process and create response
                 let response_str = format!("Server processed: '{}'", request_str);
-                println!("[SERVER] Sending response to {:?}: {}\n", client_id, response_str);
+                println!(
+                    "[SERVER] Sending response to {:?}: {}\n",
+                    client_id, response_str
+                );
 
                 // Send response back to the specific client using their ClientId
-                server.send_response(client_id, response_str.as_bytes())
+                server
+                    .send_response(client_id, response_str.as_bytes())
                     .expect("Failed to send response");
             }
             Ok(None) => {
@@ -81,11 +87,11 @@ fn run_client() {
 
     let mut context = zmq::Context::new();
 
-    let mut client = FEAGIZMQClientRequester::new(
-        &mut context,
-        ADDRESS.to_string(),
-        |state_change| println!("[CLIENT] State changed: {:?}", state_change)
-    ).expect("Failed to create client requester");
+    let mut client =
+        FEAGIZMQClientRequester::new(&mut context, ADDRESS.to_string(), |state_change| {
+            println!("[CLIENT] State changed: {:?}", state_change)
+        })
+        .expect("Failed to create client requester");
 
     client.connect(ADDRESS).expect("Failed to connect");
     println!("Client connected successfully!\n");
@@ -99,7 +105,8 @@ fn run_client() {
         println!("[CLIENT] Sending request: {}", request);
 
         // Send the request
-        client.send_request(request.as_bytes())
+        client
+            .send_request(request.as_bytes())
             .expect("Failed to send request");
 
         // Poll for response - returns Option<&[u8]>
@@ -134,7 +141,10 @@ fn main() {
         println!("Using implementations from feagi_io::io_api module\n");
         println!("Pattern: Client sends REQUEST → Server processes → Server sends REPLY\n");
         println!("Usage:");
-        println!("  {} server   - Start the server (handles requests)", args[0]);
+        println!(
+            "  {} server   - Start the server (handles requests)",
+            args[0]
+        );
         println!("  {} client   - Start the client (sends requests)", args[0]);
         println!();
         println!("Run the server first, then the client in another terminal.");

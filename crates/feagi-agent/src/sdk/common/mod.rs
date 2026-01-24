@@ -1,15 +1,14 @@
-mod feagi_agent;
 mod agent_descriptor;
-mod common_enums;
-mod connector_agent_network;
 mod auth_token;
+mod common_enums;
 mod connection_id;
+mod connector_agent_network;
 mod error;
+mod feagi_agent;
 
-pub use feagi_agent::FeagiAgent;
 pub use agent_descriptor::AgentDescriptor;
-pub use common_enums::*;
-pub use error::FeagiAgentError;
 pub use auth_token::AuthToken;
+pub use common_enums::*;
 pub use connection_id::ConnectionId;
-
+pub use error::FeagiAgentError;
+pub use feagi_agent::FeagiAgent;

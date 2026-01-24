@@ -1,5 +1,9 @@
 use crate::caching::{MotorDeviceCache, SensorDeviceCache};
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_types::descriptors::{
+    ColorChannelLayout, ColorSpace, ImageFrameProperties, SegmentedImageFrameProperties,
+    SegmentedXYImageResolutions,
+};
 use crate::data_types::{GazeProperties, ImageFilteringSettings};
 use crate::feedbacks::feedback_registrar::FeedbackRegistrar;
 use crate::feedbacks::feedback_registration_targets::FeedbackRegistrationTargets;
@@ -9,7 +13,6 @@ use feagi_structures::{FeagiDataError, FeagiSignalIndex};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::sync::{Arc, Mutex};
-use crate::data_types::descriptors::{ColorChannelLayout, ColorSpace, ImageFrameProperties, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FeedBackRegistration {
@@ -69,7 +72,7 @@ impl FeedBackRegistration {
                 sensory_cortical_unit,
                 target.get_sensor_unit_index(),
                 target.get_sensor_channel_index(),
-                &self.create_example_property()
+                &self.create_example_property(),
             )?
         }
         {
@@ -87,7 +90,7 @@ impl FeedBackRegistration {
                     &target,
                     sensor_cache.clone(),
                     motor_cache.clone(),
-                    target_stage_index
+                    target_stage_index,
                 )?;
             }
             FeedBackRegistration::SegmentedVisionWithImageFiltering {} => {
@@ -95,7 +98,7 @@ impl FeedBackRegistration {
                     &target,
                     sensor_cache.clone(),
                     motor_cache.clone(),
-                    target_stage_index
+                    target_stage_index,
                 )?;
             }
             FeedBackRegistration::VisionWithImageFiltering {} => {
@@ -103,7 +106,7 @@ impl FeedBackRegistration {
                     &target,
                     sensor_cache.clone(),
                     motor_cache.clone(),
-                    target_stage_index
+                    target_stage_index,
                 )?;
             }
         }
@@ -132,16 +135,20 @@ impl FeedBackRegistration {
             FeedBackRegistration::SegmentedVisionWithGaze {} => {
                 PipelineStageProperties::ImageFrameSegmentator {
                     input_image_properties: ImageFrameProperties::new(
-                        (1,1).try_into().unwrap(),
+                        (1, 1).try_into().unwrap(),
                         ColorSpace::Linear,
-                        ColorChannelLayout::GrayScale).unwrap(),
+                        ColorChannelLayout::GrayScale,
+                    )
+                    .unwrap(),
                     output_image_properties: SegmentedImageFrameProperties::new(
                         SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-                            (1,1).try_into().unwrap(),
-                            (1,1).try_into().unwrap()),
+                            (1, 1).try_into().unwrap(),
+                            (1, 1).try_into().unwrap(),
+                        ),
                         ColorChannelLayout::GrayScale,
                         ColorChannelLayout::GrayScale,
-                        ColorSpace::Linear) ,
+                        ColorSpace::Linear,
+                    ),
                     segmentation_gaze: GazeProperties::create_default_centered(),
                 }
             }
@@ -151,11 +158,14 @@ impl FeedBackRegistration {
             FeedBackRegistration::VisionWithImageFiltering {} => {
                 PipelineStageProperties::ImageQuickDiff {
                     per_pixel_allowed_range: 0..=1,
-                    acceptable_amount_of_activity_in_image: 0.0.try_into().unwrap()..=0.1.try_into().unwrap(),
+                    acceptable_amount_of_activity_in_image: 0.0.try_into().unwrap()
+                        ..=0.1.try_into().unwrap(),
                     image_properties: ImageFrameProperties::new(
-                        (1,1).try_into().unwrap(),
+                        (1, 1).try_into().unwrap(),
                         ColorSpace::Linear,
-                        ColorChannelLayout::GrayScale).unwrap(),
+                        ColorChannelLayout::GrayScale,
+                    )
+                    .unwrap(),
                 }
             }
         }

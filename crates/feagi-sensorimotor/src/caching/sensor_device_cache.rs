@@ -499,11 +499,12 @@ impl SensorDeviceCache {
         sensory_cortical_unit: SensoryCorticalUnit,
         unit_index: CorticalUnitIndex,
         cortical_channel_index: CorticalChannelIndex,
-        property_example: &PipelineStageProperties
+        property_example: &PipelineStageProperties,
     ) -> Result<PipelineStagePropertyIndex, FeagiDataError> {
         let sensor_stream_caches =
             self.try_get_sensory_channel_stream_caches(sensory_cortical_unit, unit_index)?;
-        sensor_stream_caches.try_get_first_index_of_stage_property_type(cortical_channel_index, property_example)
+        sensor_stream_caches
+            .try_get_first_index_of_stage_property_type(cortical_channel_index, property_example)
     }
 
     //region Data IO

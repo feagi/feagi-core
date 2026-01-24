@@ -25,9 +25,9 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use feagi_io::io_api::implementations::zmq::{FEAGIZMQServerPuller, FEAGIZMQClientPusher};
-use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerPuller};
+use feagi_io::io_api::implementations::zmq::{FEAGIZMQClientPusher, FEAGIZMQServerPuller};
 use feagi_io::io_api::traits_and_enums::client::{FeagiClient, FeagiClientPusher};
+use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerPuller};
 
 const ADDRESS: &str = "tcp://127.0.0.1:5556";
 
@@ -37,11 +37,10 @@ fn run_server() {
 
     let mut context = zmq::Context::new();
 
-    let mut server = FEAGIZMQServerPuller::new(
-        &mut context,
-        ADDRESS.to_string(),
-        |state_change| println!("[SERVER] State changed: {:?}", state_change)
-    ).expect("Failed to create server puller");
+    let mut server = FEAGIZMQServerPuller::new(&mut context, ADDRESS.to_string(), |state_change| {
+        println!("[SERVER] State changed: {:?}", state_change)
+    })
+    .expect("Failed to create server puller");
 
     server.start().expect("Failed to start server");
     println!("Server started successfully!");
@@ -72,11 +71,10 @@ fn run_client() {
 
     let mut context = zmq::Context::new();
 
-    let mut client = FEAGIZMQClientPusher::new(
-        &mut context,
-        ADDRESS.to_string(),
-        |state_change| println!("[CLIENT] State changed: {:?}", state_change)
-    ).expect("Failed to create client pusher");
+    let mut client = FEAGIZMQClientPusher::new(&mut context, ADDRESS.to_string(), |state_change| {
+        println!("[CLIENT] State changed: {:?}", state_change)
+    })
+    .expect("Failed to create client pusher");
 
     client.connect(ADDRESS).expect("Failed to connect");
     println!("Client connected successfully!");
@@ -105,8 +103,14 @@ fn main() {
         println!("Using implementations from feagi_io::io_api module\n");
         println!("Pattern: Client PUSHES data → Server PULLS/receives data\n");
         println!("Usage:");
-        println!("  {} server   - Start the server (receives pushed data)", args[0]);
-        println!("  {} client   - Start the client (pushes data to server)", args[0]);
+        println!(
+            "  {} server   - Start the server (receives pushed data)",
+            args[0]
+        );
+        println!(
+            "  {} client   - Start the client (pushes data to server)",
+            args[0]
+        );
         println!();
         println!("Run the server first, then the client in another terminal.");
         return;

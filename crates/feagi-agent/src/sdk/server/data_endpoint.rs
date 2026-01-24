@@ -4,7 +4,10 @@ use feagi_io::io_api::implementations::zmq::{
     FEAGIZMQServerPublisherProperties, FEAGIZMQServerPullerProperties,
 };
 use feagi_io::io_api::traits_and_enums::server::server_shared::FeagiServerBindStateChange;
-use feagi_io::io_api::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties};
+use feagi_io::io_api::traits_and_enums::server::{
+    FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller,
+    FeagiServerPullerProperties,
+};
 use feagi_io::io_api::FeagiNetworkError;
 
 /// Data endpoint that owns motor/voxel publishers and a sensor puller.
@@ -21,15 +24,22 @@ impl DataEndpoint {
         voxel_visual_endpoint: String,
         sensor_endpoint: String,
     ) -> Result<Self, FeagiNetworkError> {
-        let mut motor = Box::new(FEAGIZMQServerPublisherProperties::new(motor_endpoint)).build(Box::new(|change| {
-            Self::handle_motor_state_change(change);
-        }));
-        let mut voxel_visual = Box::new(FEAGIZMQServerPublisherProperties::new(voxel_visual_endpoint)).build(Box::new(|change| {
+        let mut motor = Box::new(FEAGIZMQServerPublisherProperties::new(motor_endpoint)).build(
+            Box::new(|change| {
+                Self::handle_motor_state_change(change);
+            }),
+        );
+        let mut voxel_visual = Box::new(FEAGIZMQServerPublisherProperties::new(
+            voxel_visual_endpoint,
+        ))
+        .build(Box::new(|change| {
             Self::handle_voxel_visual_state_change(change);
         }));
-        let mut sensor = Box::new(FEAGIZMQServerPullerProperties::new(sensor_endpoint)).build(Box::new(|change| {
-            Self::handle_sensor_state_change(change);
-        }));
+        let mut sensor = Box::new(FEAGIZMQServerPullerProperties::new(sensor_endpoint)).build(
+            Box::new(|change| {
+                Self::handle_sensor_state_change(change);
+            }),
+        );
 
         motor.start()?;
         voxel_visual.start()?;
@@ -49,10 +59,7 @@ impl DataEndpoint {
             self.motor.poll()?;
             self.voxel_visual.poll()?;
 
-            let sensor_data = match self.sensor.try_poll_receive()? {
-                Some(data) => Some(data.to_vec()),
-                None => None,
-            };
+            let sensor_data = self.sensor.try_poll_receive()?.map(|data| data.to_vec());
 
             if let Some(data) = sensor_data {
                 self.handle_sensor_data(data);

@@ -1,10 +1,11 @@
 //! Factory trait for creating FeagiClientPusher instances.
 
-use super::FeagiClientPusher;
 use super::client_shared::FeagiClientConnectionStateChange;
+use super::FeagiClientPusher;
 
 /// Boxed callback type for client connection state changes.
-pub type ClientStateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static>;
+pub type ClientStateChangeCallback =
+    Box<dyn Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static>;
 
 /// Properties trait for creating a FeagiClientPusher instance.
 ///
@@ -13,5 +14,8 @@ pub type ClientStateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange
 pub trait FeagiClientPusherProperties {
     /// Build and return a boxed FeagiClientPusher instance.
     /// Consumes self to allow moving owned resources into the implementation.
-    fn build(self: Box<Self>, state_change_callback: ClientStateChangeCallback) -> Box<dyn FeagiClientPusher>;
+    fn build(
+        self: Box<Self>,
+        state_change_callback: ClientStateChangeCallback,
+    ) -> Box<dyn FeagiClientPusher>;
 }

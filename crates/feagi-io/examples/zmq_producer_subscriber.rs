@@ -19,9 +19,9 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use feagi_io::io_api::implementations::zmq::{FEAGIZMQServerPublisher, FEAGIZMQClientSubscriber};
-use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerPublisher};
+use feagi_io::io_api::implementations::zmq::{FEAGIZMQClientSubscriber, FEAGIZMQServerPublisher};
 use feagi_io::io_api::traits_and_enums::client::FeagiClient;
+use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerPublisher};
 
 const ADDRESS: &str = "tcp://127.0.0.1:5555";
 
@@ -31,11 +31,11 @@ fn run_publisher() {
 
     let mut context = zmq::Context::new();
 
-    let mut publisher = FEAGIZMQServerPublisher::new(
-        &mut context,
-        ADDRESS.to_string(),
-        |state_change| println!("[PUB] State changed: {:?}", state_change)
-    ).expect("Failed to create publisher");
+    let mut publisher =
+        FEAGIZMQServerPublisher::new(&mut context, ADDRESS.to_string(), |state_change| {
+            println!("[PUB] State changed: {:?}", state_change)
+        })
+        .expect("Failed to create publisher");
 
     publisher.start().expect("Failed to start publisher");
     println!("Publisher started successfully!");
@@ -67,11 +67,11 @@ fn run_subscriber() {
 
     let mut context = zmq::Context::new();
 
-    let mut subscriber = FEAGIZMQClientSubscriber::new(
-        &mut context,
-        ADDRESS.to_string(),
-        |state_change| println!("[SUB] State changed: {:?}", state_change)
-    ).expect("Failed to create subscriber");
+    let mut subscriber =
+        FEAGIZMQClientSubscriber::new(&mut context, ADDRESS.to_string(), |state_change| {
+            println!("[SUB] State changed: {:?}", state_change)
+        })
+        .expect("Failed to create subscriber");
 
     subscriber.connect(ADDRESS).expect("Failed to connect");
     println!("Subscriber connected. Waiting for messages...\n");
@@ -101,8 +101,14 @@ fn main() {
         println!("FEAGI ZMQ Publisher-Subscriber Example");
         println!("Using implementations from feagi_io::io_api module\n");
         println!("Usage:");
-        println!("  {} publisher   - Start the publisher (sends messages)", args[0]);
-        println!("  {} subscriber  - Start the subscriber (receives messages)", args[0]);
+        println!(
+            "  {} publisher   - Start the publisher (sends messages)",
+            args[0]
+        );
+        println!(
+            "  {} subscriber  - Start the subscriber (receives messages)",
+            args[0]
+        );
         println!();
         println!("Run the publisher first, then the subscriber in another terminal.");
         return;
@@ -112,7 +118,10 @@ fn main() {
         "publisher" | "pub" | "p" => run_publisher(),
         "subscriber" | "sub" | "s" => run_subscriber(),
         _ => {
-            eprintln!("Unknown mode: '{}'. Use 'publisher' or 'subscriber'.", args[1]);
+            eprintln!(
+                "Unknown mode: '{}'. Use 'publisher' or 'subscriber'.",
+                args[1]
+            );
             std::process::exit(1);
         }
     }

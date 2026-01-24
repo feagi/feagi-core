@@ -37,8 +37,9 @@ impl AuthRequest {
     /// # Errors
     /// Returns an error if the stored base64 is invalid.
     pub fn agent_descriptor(&self) -> Result<AgentDescriptor, FeagiAgentError> {
-        AgentDescriptor::try_from_base64(&self.agent_descriptor)
-            .map_err(|e| FeagiAgentError::GeneralFailure(format!("Invalid agent descriptor: {}", e)))
+        AgentDescriptor::try_from_base64(&self.agent_descriptor).map_err(|e| {
+            FeagiAgentError::GeneralFailure(format!("Invalid agent descriptor: {}", e))
+        })
     }
 
     /// Get the auth token.
@@ -46,8 +47,11 @@ impl AuthRequest {
     /// # Errors
     /// Returns an error if the stored base64 is invalid.
     pub fn auth_token(&self) -> Result<AuthToken, FeagiAgentError> {
-        AuthToken::from_base64(&self.auth_token)
-            .ok_or_else(|| FeagiAgentError::GeneralFailure("Invalid auth token: bad base64 or wrong length".to_string()))
+        AuthToken::from_base64(&self.auth_token).ok_or_else(|| {
+            FeagiAgentError::GeneralFailure(
+                "Invalid auth token: bad base64 or wrong length".to_string(),
+            )
+        })
     }
 
     /// Parse an AuthRequest from a JSON value.
@@ -58,33 +62,47 @@ impl AuthRequest {
     /// # Errors
     /// Returns an error if required fields are missing or invalid.
     pub fn from_json(json: &Value) -> Result<Self, FeagiAgentError> {
-        let obj = json.as_object().ok_or_else(|| {
-            FeagiAgentError::GeneralFailure("Expected JSON object".to_string())
-        })?;
+        let obj = json
+            .as_object()
+            .ok_or_else(|| FeagiAgentError::GeneralFailure("Expected JSON object".to_string()))?;
 
         // Extract agent_descriptor
         let agent_descriptor = obj
             .get("agent_descriptor")
-            .ok_or_else(|| FeagiAgentError::GeneralFailure("Missing field: 'agent_descriptor'".to_string()))?
+            .ok_or_else(|| {
+                FeagiAgentError::GeneralFailure("Missing field: 'agent_descriptor'".to_string())
+            })?
             .as_str()
-            .ok_or_else(|| FeagiAgentError::GeneralFailure("Field 'agent_descriptor' must be a string".to_string()))?
+            .ok_or_else(|| {
+                FeagiAgentError::GeneralFailure(
+                    "Field 'agent_descriptor' must be a string".to_string(),
+                )
+            })?
             .to_string();
 
         // Validate agent_descriptor is valid base64 and correct format
-        AgentDescriptor::try_from_base64(&agent_descriptor)
-            .map_err(|e| FeagiAgentError::GeneralFailure(format!("Invalid agent descriptor: {}", e)))?;
+        AgentDescriptor::try_from_base64(&agent_descriptor).map_err(|e| {
+            FeagiAgentError::GeneralFailure(format!("Invalid agent descriptor: {}", e))
+        })?;
 
         // Extract auth_token
         let auth_token = obj
             .get("auth_token")
-            .ok_or_else(|| FeagiAgentError::GeneralFailure("Missing field: 'auth_token'".to_string()))?
+            .ok_or_else(|| {
+                FeagiAgentError::GeneralFailure("Missing field: 'auth_token'".to_string())
+            })?
             .as_str()
-            .ok_or_else(|| FeagiAgentError::GeneralFailure("Field 'auth_token' must be a string".to_string()))?
+            .ok_or_else(|| {
+                FeagiAgentError::GeneralFailure("Field 'auth_token' must be a string".to_string())
+            })?
             .to_string();
 
         // Validate auth_token is valid base64 and correct length
-        AuthToken::from_base64(&auth_token)
-            .ok_or_else(|| FeagiAgentError::GeneralFailure("Invalid auth token: bad base64 or wrong length".to_string()))?;
+        AuthToken::from_base64(&auth_token).ok_or_else(|| {
+            FeagiAgentError::GeneralFailure(
+                "Invalid auth token: bad base64 or wrong length".to_string(),
+            )
+        })?;
 
         Ok(Self {
             agent_descriptor,

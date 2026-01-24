@@ -5,12 +5,14 @@ use std::net::{TcpListener, TcpStream};
 
 use tokio_tungstenite::tungstenite::{self, accept, Message, WebSocket};
 
-use crate::io_api::FeagiNetworkError;
-use crate::io_api::traits_and_enums::server::server_shared::{ClientId, FeagiServerBindState, FeagiServerBindStateChange};
-use crate::io_api::traits_and_enums::server::{
-    FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter,
-    FeagiServerPublisherProperties, FeagiServerPullerProperties, FeagiServerRouterProperties
+use crate::io_api::traits_and_enums::server::server_shared::{
+    ClientId, FeagiServerBindState, FeagiServerBindStateChange,
 };
+use crate::io_api::traits_and_enums::server::{
+    FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller,
+    FeagiServerPullerProperties, FeagiServerRouter, FeagiServerRouterProperties,
+};
+use crate::io_api::FeagiNetworkError;
 
 /// Type alias for the server state change callback.
 type StateChangeCallback = Box<dyn Fn(FeagiServerBindStateChange) + Send + Sync + 'static>;
@@ -27,7 +29,10 @@ pub struct FEAGIWebSocketServerPublisher {
 }
 
 impl FEAGIWebSocketServerPublisher {
-    pub fn new(bind_address: String, state_change_callback: StateChangeCallback) -> Result<Self, FeagiNetworkError> {
+    pub fn new(
+        bind_address: String,
+        state_change_callback: StateChangeCallback,
+    ) -> Result<Self, FeagiNetworkError> {
         Ok(Self {
             bind_address,
             current_state: FeagiServerBindState::Inactive,
@@ -48,7 +53,8 @@ impl FEAGIWebSocketServerPublisher {
         loop {
             match listener.accept() {
                 Ok((stream, _addr)) => {
-                    stream.set_nonblocking(true)
+                    stream
+                        .set_nonblocking(true)
                         .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
                     match accept(stream) {
                         Ok(ws) => {
@@ -82,13 +88,15 @@ impl FeagiServer for FEAGIWebSocketServerPublisher {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         let listener = TcpListener::bind(&self.bind_address)
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
-        listener.set_nonblocking(true)
+        listener
+            .set_nonblocking(true)
             .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         self.listener = Some(listener);
         self.current_state = FeagiServerBindState::Active;
-        (self.state_change_callback)(
-            FeagiServerBindStateChange::new(FeagiServerBindState::Inactive, FeagiServerBindState::Active)
-        );
+        (self.state_change_callback)(FeagiServerBindStateChange::new(
+            FeagiServerBindState::Inactive,
+            FeagiServerBindState::Active,
+        ));
         Ok(())
     }
 
@@ -99,9 +107,10 @@ impl FeagiServer for FEAGIWebSocketServerPublisher {
         }
         self.listener = None;
         self.current_state = FeagiServerBindState::Inactive;
-        (self.state_change_callback)(
-            FeagiServerBindStateChange::new(FeagiServerBindState::Active, FeagiServerBindState::Inactive)
-        );
+        (self.state_change_callback)(FeagiServerBindStateChange::new(
+            FeagiServerBindState::Active,
+            FeagiServerBindState::Inactive,
+        ));
         Ok(())
     }
 
@@ -119,7 +128,7 @@ impl FeagiServerPublisher for FEAGIWebSocketServerPublisher {
 
     fn publish(&mut self, buffered_data_to_send: &[u8]) -> Result<(), FeagiNetworkError> {
         let message = Message::Binary(buffered_data_to_send.to_vec());
-        
+
         // Send to all clients, removing any that fail
         let mut failed_indices = Vec::new();
         for (i, client) in self.clients.iter_mut().enumerate() {
@@ -127,12 +136,12 @@ impl FeagiServerPublisher for FEAGIWebSocketServerPublisher {
                 failed_indices.push(i);
             }
         }
-        
+
         // Remove failed clients (in reverse order to preserve indices)
         for i in failed_indices.into_iter().rev() {
             self.clients.remove(i);
         }
-        
+
         Ok(())
     }
 }
@@ -152,7 +161,10 @@ pub struct FEAGIWebSocketServerPuller {
 }
 
 impl FEAGIWebSocketServerPuller {
-    pub fn new(bind_address: String, state_change_callback: StateChangeCallback) -> Result<Self, FeagiNetworkError> {
+    pub fn new(
+        bind_address: String,
+        state_change_callback: StateChangeCallback,
+    ) -> Result<Self, FeagiNetworkError> {
         Ok(Self {
             bind_address,
             current_state: FeagiServerBindState::Inactive,
@@ -174,7 +186,8 @@ impl FEAGIWebSocketServerPuller {
         loop {
             match listener.accept() {
                 Ok((stream, _addr)) => {
-                    stream.set_nonblocking(true)
+                    stream
+                        .set_nonblocking(true)
                         .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
                     match accept(stream) {
                         Ok(ws) => {
@@ -202,13 +215,15 @@ impl FeagiServer for FEAGIWebSocketServerPuller {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         let listener = TcpListener::bind(&self.bind_address)
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
-        listener.set_nonblocking(true)
+        listener
+            .set_nonblocking(true)
             .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         self.listener = Some(listener);
         self.current_state = FeagiServerBindState::Active;
-        (self.state_change_callback)(
-            FeagiServerBindStateChange::new(FeagiServerBindState::Inactive, FeagiServerBindState::Active)
-        );
+        (self.state_change_callback)(FeagiServerBindStateChange::new(
+            FeagiServerBindState::Inactive,
+            FeagiServerBindState::Active,
+        ));
         Ok(())
     }
 
@@ -218,9 +233,10 @@ impl FeagiServer for FEAGIWebSocketServerPuller {
         }
         self.listener = None;
         self.current_state = FeagiServerBindState::Inactive;
-        (self.state_change_callback)(
-            FeagiServerBindStateChange::new(FeagiServerBindState::Active, FeagiServerBindState::Inactive)
-        );
+        (self.state_change_callback)(FeagiServerBindStateChange::new(
+            FeagiServerBindState::Active,
+            FeagiServerBindState::Inactive,
+        ));
         Ok(())
     }
 
@@ -233,10 +249,10 @@ impl FeagiServerPuller for FEAGIWebSocketServerPuller {
     fn try_poll_receive(&mut self) -> Result<Option<&[u8]>, FeagiNetworkError> {
         // Accept any pending connections first
         self.accept_pending_connections()?;
-        
+
         // Check all clients for incoming data
         let mut failed_indices = Vec::new();
-        
+
         for (i, client) in self.clients.iter_mut().enumerate() {
             match client.read() {
                 Ok(Message::Binary(data)) => {
@@ -253,7 +269,9 @@ impl FeagiServerPuller for FEAGIWebSocketServerPuller {
                 Ok(_) => {
                     // Ping/Pong/Frame - continue
                 }
-                Err(tungstenite::Error::Io(ref e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                Err(tungstenite::Error::Io(ref e))
+                    if e.kind() == std::io::ErrorKind::WouldBlock =>
+                {
                     // No data available on this client
                 }
                 Err(_) => {
@@ -261,12 +279,12 @@ impl FeagiServerPuller for FEAGIWebSocketServerPuller {
                 }
             }
         }
-        
+
         // Remove disconnected clients
         for i in failed_indices.into_iter().rev() {
             self.clients.remove(i);
         }
-        
+
         Ok(None)
     }
 }
@@ -292,7 +310,10 @@ pub struct FEAGIWebSocketServerRouter {
 }
 
 impl FEAGIWebSocketServerRouter {
-    pub fn new(bind_address: String, state_change_callback: StateChangeCallback) -> Result<Self, FeagiNetworkError> {
+    pub fn new(
+        bind_address: String,
+        state_change_callback: StateChangeCallback,
+    ) -> Result<Self, FeagiNetworkError> {
         Ok(Self {
             bind_address,
             current_state: FeagiServerBindState::Inactive,
@@ -318,14 +339,15 @@ impl FEAGIWebSocketServerRouter {
         loop {
             match listener.accept() {
                 Ok((stream, _addr)) => {
-                    stream.set_nonblocking(true)
+                    stream
+                        .set_nonblocking(true)
                         .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
                     match accept(stream) {
                         Ok(ws) => {
                             let index = self.clients.len();
                             let client_id = self.next_client_id;
                             self.next_client_id += 1;
-                            
+
                             self.clients.push(ws);
                             self.index_to_id.insert(index, client_id);
                             self.id_to_index.insert(client_id, index);
@@ -353,17 +375,21 @@ impl FEAGIWebSocketServerRouter {
             self.id_to_index.remove(&client_id);
         }
         self.clients.remove(index);
-        
+
         // Update indices for all clients after the removed one
         let mut new_index_to_id = HashMap::new();
         let mut new_id_to_index = HashMap::new();
-        
+
         for (old_idx, client_id) in self.index_to_id.drain() {
-            let new_idx = if old_idx > index { old_idx - 1 } else { old_idx };
+            let new_idx = if old_idx > index {
+                old_idx - 1
+            } else {
+                old_idx
+            };
             new_index_to_id.insert(new_idx, client_id);
             new_id_to_index.insert(client_id, new_idx);
         }
-        
+
         self.index_to_id = new_index_to_id;
         self.id_to_index = new_id_to_index;
     }
@@ -373,13 +399,15 @@ impl FeagiServer for FEAGIWebSocketServerRouter {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         let listener = TcpListener::bind(&self.bind_address)
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
-        listener.set_nonblocking(true)
+        listener
+            .set_nonblocking(true)
             .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
         self.listener = Some(listener);
         self.current_state = FeagiServerBindState::Active;
-        (self.state_change_callback)(
-            FeagiServerBindStateChange::new(FeagiServerBindState::Inactive, FeagiServerBindState::Active)
-        );
+        (self.state_change_callback)(FeagiServerBindStateChange::new(
+            FeagiServerBindState::Inactive,
+            FeagiServerBindState::Active,
+        ));
         Ok(())
     }
 
@@ -391,9 +419,10 @@ impl FeagiServer for FEAGIWebSocketServerRouter {
         self.id_to_index.clear();
         self.listener = None;
         self.current_state = FeagiServerBindState::Inactive;
-        (self.state_change_callback)(
-            FeagiServerBindStateChange::new(FeagiServerBindState::Active, FeagiServerBindState::Inactive)
-        );
+        (self.state_change_callback)(FeagiServerBindStateChange::new(
+            FeagiServerBindState::Active,
+            FeagiServerBindState::Inactive,
+        ));
         Ok(())
     }
 
@@ -406,9 +435,9 @@ impl FeagiServerRouter for FEAGIWebSocketServerRouter {
     fn try_poll_receive(&mut self) -> Result<Option<(ClientId, &[u8])>, FeagiNetworkError> {
         // Accept any pending connections first
         self.accept_pending_connections()?;
-        
+
         let mut failed_indices = Vec::new();
-        
+
         for (i, client) in self.clients.iter_mut().enumerate() {
             match client.read() {
                 Ok(Message::Binary(data)) => {
@@ -429,33 +458,42 @@ impl FeagiServerRouter for FEAGIWebSocketServerRouter {
                     failed_indices.push(i);
                 }
                 Ok(_) => {}
-                Err(tungstenite::Error::Io(ref e)) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(tungstenite::Error::Io(ref e))
+                    if e.kind() == std::io::ErrorKind::WouldBlock => {}
                 Err(_) => {
                     failed_indices.push(i);
                 }
             }
         }
-        
+
         // Remove failed clients (in reverse order)
         for i in failed_indices.into_iter().rev() {
             self.remove_client(i);
         }
-        
+
         Ok(None)
     }
 
-    fn send_response(&mut self, client: ClientId, response: &[u8]) -> Result<(), FeagiNetworkError> {
-        let client_index = self.id_to_index.get(&client.0)
-            .ok_or_else(|| FeagiNetworkError::SendFailed(format!("Unknown client ID: {:?}", client)))?;
-        
+    fn send_response(
+        &mut self,
+        client: ClientId,
+        response: &[u8],
+    ) -> Result<(), FeagiNetworkError> {
+        let client_index = self.id_to_index.get(&client.0).ok_or_else(|| {
+            FeagiNetworkError::SendFailed(format!("Unknown client ID: {:?}", client))
+        })?;
+
         if *client_index >= self.clients.len() {
-            return Err(FeagiNetworkError::SendFailed("Client disconnected".to_string()));
+            return Err(FeagiNetworkError::SendFailed(
+                "Client disconnected".to_string(),
+            ));
         }
-        
+
         let message = Message::Binary(response.to_vec());
-        self.clients[*client_index].send(message)
+        self.clients[*client_index]
+            .send(message)
             .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
-        
+
         Ok(())
     }
 }
@@ -474,19 +512,19 @@ pub struct FEAGIWebSocketServerPublisherProperties {
 impl FEAGIWebSocketServerPublisherProperties {
     /// Create new properties with the given bind address.
     pub fn new(bind_address: String) -> Self {
-        Self {
-            bind_address,
-        }
+        Self { bind_address }
     }
 }
 
 impl FeagiServerPublisherProperties for FEAGIWebSocketServerPublisherProperties {
-    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiServerPublisher> {
-        let publisher = FEAGIWebSocketServerPublisher::new(
-            self.bind_address,
-            state_change_callback,
-        ).expect("Failed to create WebSocket publisher");
-        
+    fn build(
+        self: Box<Self>,
+        state_change_callback: StateChangeCallback,
+    ) -> Box<dyn FeagiServerPublisher> {
+        let publisher =
+            FEAGIWebSocketServerPublisher::new(self.bind_address, state_change_callback)
+                .expect("Failed to create WebSocket publisher");
+
         Box::new(publisher)
     }
 }
@@ -503,19 +541,18 @@ pub struct FEAGIWebSocketServerPullerProperties {
 impl FEAGIWebSocketServerPullerProperties {
     /// Create new properties with the given bind address.
     pub fn new(bind_address: String) -> Self {
-        Self {
-            bind_address,
-        }
+        Self { bind_address }
     }
 }
 
 impl FeagiServerPullerProperties for FEAGIWebSocketServerPullerProperties {
-    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiServerPuller> {
-        let puller = FEAGIWebSocketServerPuller::new(
-            self.bind_address,
-            state_change_callback,
-        ).expect("Failed to create WebSocket puller");
-        
+    fn build(
+        self: Box<Self>,
+        state_change_callback: StateChangeCallback,
+    ) -> Box<dyn FeagiServerPuller> {
+        let puller = FEAGIWebSocketServerPuller::new(self.bind_address, state_change_callback)
+            .expect("Failed to create WebSocket puller");
+
         Box::new(puller)
     }
 }
@@ -532,19 +569,18 @@ pub struct FEAGIWebSocketServerRouterProperties {
 impl FEAGIWebSocketServerRouterProperties {
     /// Create new properties with the given bind address.
     pub fn new(bind_address: String) -> Self {
-        Self {
-            bind_address,
-        }
+        Self { bind_address }
     }
 }
 
 impl FeagiServerRouterProperties for FEAGIWebSocketServerRouterProperties {
-    fn build(self: Box<Self>, state_change_callback: StateChangeCallback) -> Box<dyn FeagiServerRouter> {
-        let router = FEAGIWebSocketServerRouter::new(
-            self.bind_address,
-            state_change_callback,
-        ).expect("Failed to create WebSocket router");
-        
+    fn build(
+        self: Box<Self>,
+        state_change_callback: StateChangeCallback,
+    ) -> Box<dyn FeagiServerRouter> {
+        let router = FEAGIWebSocketServerRouter::new(self.bind_address, state_change_callback)
+            .expect("Failed to create WebSocket router");
+
         Box::new(router)
     }
 }
