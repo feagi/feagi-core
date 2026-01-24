@@ -83,7 +83,7 @@ pub struct MotorCommandEvent {
 /// // PNS emits when data received
 /// let fbc = Arc::new(FeagiByteContainer::new_empty());
 /// sensory_signal.emit(&SensoryDataEvent {
-///     agent_id: "agent-001".to_string(),
+///     agent_id: "<agent_descriptor_b64>".to_string(),
 ///     fbc,
 /// });
 /// ```
@@ -159,12 +159,13 @@ mod tests {
         });
 
         let fbc = Arc::new(FeagiByteContainer::new_empty());
+        let agent_id = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         signal.emit(&SensoryDataEvent {
-            agent_id: "test-agent".to_string(),
+            agent_id: agent_id.to_string(),
             fbc,
         });
 
-        assert_eq!(*agent_id_received.lock().unwrap(), "test-agent");
+        assert_eq!(*agent_id_received.lock().unwrap(), agent_id);
     }
 
     #[test]
@@ -178,7 +179,7 @@ mod tests {
         });
 
         signal.emit(&AgentRegisteredEvent {
-            agent_id: "agent-001".to_string(),
+            agent_id: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
             agent_type: "sensory".to_string(),
             capabilities: "{}".to_string(),
         });
