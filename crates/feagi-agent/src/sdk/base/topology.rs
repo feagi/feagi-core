@@ -26,6 +26,7 @@ pub struct CorticalTopology {
 pub struct TopologyCache {
     host: String,
     port: u16,
+    #[allow(dead_code)]
     timeout: std::time::Duration,
     cache: Arc<RwLock<HashMap<CorticalID, CorticalTopology>>>,
     #[cfg(feature = "sdk-io")]

@@ -237,7 +237,6 @@ impl VideoEncoder {
         );
 
         let processor_index = PipelineStagePropertyIndex::from(0u32);
-        let diff_index = PipelineStagePropertyIndex::from(1u32);
         let unit = CorticalUnitIndex::from(self.config.cortical_unit_id);
         for channel in 0..*self.channel_count {
             let channel_index = CorticalChannelIndex::from(channel as u32);

@@ -4,7 +4,7 @@ use feagi_io::io_api::implementations::zmq::{
     FEAGIZMQServerPublisherProperties, FEAGIZMQServerPullerProperties,
 };
 use feagi_io::io_api::traits_and_enums::server::server_shared::FeagiServerBindStateChange;
-use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties};
+use feagi_io::io_api::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties};
 use feagi_io::io_api::FeagiNetworkError;
 
 /// Data endpoint that owns motor/voxel publishers and a sensor puller.

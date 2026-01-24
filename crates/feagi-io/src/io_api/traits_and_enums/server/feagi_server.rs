@@ -1,5 +1,5 @@
 use crate::io_api::FeagiNetworkError;
-use crate::io_api::traits_and_enums::server::server_shared::{FeagiServerBindState, FeagiServerBindStateChange};
+use crate::io_api::traits_and_enums::server::server_shared::FeagiServerBindState;
 
 /// Base trait for all FEAGI server types.
 ///

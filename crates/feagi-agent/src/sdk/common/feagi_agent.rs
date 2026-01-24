@@ -1,7 +1,7 @@
 use feagi_io::io_api::traits_and_enums::client::FeagiClientRequesterProperties;
 use feagi_structures::FeagiDataError;
 use crate::sdk::common::agent_descriptor::AgentDescriptor;
-use crate::sdk::common::common_enums::{AgentCapabilities, FeagiConnectionConfiguration};
+use crate::sdk::common::common_enums::AgentCapabilities;
 use crate::sdk::common::common_enums::AgentConnectionState;
 
 pub trait FeagiAgent {

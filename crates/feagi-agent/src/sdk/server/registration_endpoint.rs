@@ -8,7 +8,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use feagi_io::io_api::traits_and_enums::server::server_shared::{FeagiServerBindState, FeagiServerBindStateChange};
-use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerRouter, FeagiServerRouterProperties};
+
+use feagi_io::io_api::traits_and_enums::server::{FeagiServerRouter, FeagiServerRouterProperties};
 use feagi_io::io_api::FeagiNetworkError;
 use crate::sdk::client::communication::auth_request::AuthRequest;
 use crate::sdk::client::communication::registration_request::RegistrationRequest;

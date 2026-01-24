@@ -43,7 +43,7 @@ impl FeedBackRegistration {
         target: FeedbackRegistrationTargets,
     ) -> Result<(), FeagiDataError> {
         self.try_registering_feedbacks(sensor_cache, motor_cache, target.clone())?;
-        feedback_registrar.push_verified_feedback(target, self.clone());
+        let _ = feedback_registrar.push_verified_feedback(target, self.clone());
         Ok(())
     }
 

@@ -203,12 +203,13 @@ impl PerceptionDecoder {
         let mut z = Vec::new();
         let mut p = Vec::new();
 
+        let height = resolution.height;
         for ((row, col, channel), val) in image.get_internal_data().indexed_iter() {
             if *val == 0 {
                 continue;
             }
             x.push(col as u32);
-            y.push(row as u32);
+            y.push(height - 1 - (row as u32));
             z.push(channel as u32);
             p.push(*val as u32);
         }

@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
-use feagi_io::io_api::FeagiNetworkError;
 use feagi_io::io_api::implementations::zmq::{
     FEAGIZMQClientPusherProperties, FEAGIZMQClientSubscriberProperties,
 };
 use feagi_io::io_api::traits_and_enums::client::{
-    FeagiClient, FeagiClientPusher, FeagiClientRequester, FeagiClientRequesterProperties,
-    FeagiClientSubscriber, client_shared::FeagiClientConnectionStateChange,
+    FeagiClientPusher, FeagiClientRequesterProperties, FeagiClientSubscriber,
+    client_shared::FeagiClientConnectionStateChange,
 };
 use feagi_io::io_api::traits_and_enums::client::{
     FeagiClientPusherProperties as _, FeagiClientSubscriberProperties as _,
@@ -103,7 +102,7 @@ impl ConnectorAgent {
         };
 
         let mut sensor_cache = self.get_sensor_cache();
-        sensor_cache.encode_neurons_to_bytes();
+        let _ = sensor_cache.encode_neurons_to_bytes();
         let bytes = sensor_cache.get_feagi_byte_container();
         sender.push_data(bytes.get_byte_ref());
         Ok(())

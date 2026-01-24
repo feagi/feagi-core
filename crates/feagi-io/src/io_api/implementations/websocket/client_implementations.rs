@@ -18,6 +18,7 @@ type StateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange) + Send +
 
 /// WebSocket client that subscribes to messages from a server.
 pub struct FEAGIWebSocketClientSubscriber {
+    #[allow(dead_code)]
     server_address: String,
     current_state: FeagiClientConnectionState,
     state_change_callback: StateChangeCallback,
@@ -122,6 +123,7 @@ impl FeagiClientSubscriber for FEAGIWebSocketClientSubscriber {
 
 /// WebSocket client that pushes data to a server.
 pub struct FEAGIWebSocketClientPusher {
+    #[allow(dead_code)]
     server_address: String,
     current_state: FeagiClientConnectionState,
     state_change_callback: StateChangeCallback,
@@ -205,6 +207,7 @@ impl FEAGIWebSocketClientPusher {
 
 /// WebSocket client that sends requests and receives responses.
 pub struct FEAGIWebSocketClientRequester {
+    #[allow(dead_code)]
     server_address: String,
     current_state: FeagiClientConnectionState,
     state_change_callback: StateChangeCallback,

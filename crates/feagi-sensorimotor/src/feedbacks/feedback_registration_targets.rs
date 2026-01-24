@@ -46,6 +46,7 @@ impl FeedbackRegistrationTargets {
         self.motor_channel_index
     }
     
+    #[allow(dead_code)]
     pub(crate) fn verify_existence(
         &self,
         sensor_type: SensoryCorticalUnit,

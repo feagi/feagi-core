@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use feagi_io::io_api::FeagiNetworkError;
 use feagi_io::io_api::implementations::zmq::{FEAGIZMQClientPusher, FEAGIZMQClientSubscriber};
 use feagi_io::io_api::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};

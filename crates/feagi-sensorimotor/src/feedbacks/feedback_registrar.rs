@@ -17,6 +17,7 @@ impl FeedbackRegistrar {
         }
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.registered_feedbacks.clear();
     }

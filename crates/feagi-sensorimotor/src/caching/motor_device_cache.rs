@@ -456,6 +456,7 @@ pub struct MotorDeviceCache {
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
+    #[allow(dead_code)]
     is_active: bool,
 }
 

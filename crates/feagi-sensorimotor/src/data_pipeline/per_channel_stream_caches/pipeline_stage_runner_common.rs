@@ -7,7 +7,6 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
 use feagi_structures::FeagiDataError;
 use std::cmp::PartialEq;
-use std::fmt::format;
 use std::time::Instant;
 
 /// Represents the direction of data flow in the pipeline, which affects validation logic.

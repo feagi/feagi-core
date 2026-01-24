@@ -28,7 +28,6 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 /// Top level JSON representation of registered devices and feedbacks
