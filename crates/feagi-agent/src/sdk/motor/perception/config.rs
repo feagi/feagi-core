@@ -52,7 +52,7 @@ impl PerceptionDecoderConfig {
                 group,
             },
         ];
-        let output_count = motor_units.len();
+        let output_count = 1;
 
         Ok(AgentConfig::new(self.agent_id.clone(), agent_type)
             .with_motor_units("perception", output_count, motor_units)

@@ -145,24 +145,18 @@ impl GazeProperties {
             // map to allowed scales
             let x: f32 = {
                 let x = self.eccentricity_location_xy.a.get_as_0_1();
-                dbg!(x);
                 let min = modulation_normal.0 / 2.0;
                 let max = 1.0 - min;
                 (x * (max - min)) + min
             };
             let y: f32 = {
                 let y = 1.0 - self.eccentricity_location_xy.b.get_as_0_1(); // Remember that in an image, Y increases downward
-                dbg!(y);
                 let min = modulation_normal.1 / 2.0;
                 let max = 1.0 - min;
                 (y * (max - min)) + min
             };
             (x, y)
         };
-
-        dbg!(modulation_normal);
-        dbg!(&self.eccentricity_location_xy);
-        dbg!(eccentricity_normal);
         let left_position_normal: f32 = eccentricity_normal.0 - (modulation_normal.0 / 2.0);
         let top_position_normal: f32 = eccentricity_normal.1 - (modulation_normal.1 / 2.0);
         let right_position_normal: f32 = eccentricity_normal.0 + (modulation_normal.0 / 2.0);
