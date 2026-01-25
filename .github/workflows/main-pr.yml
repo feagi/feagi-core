@@ -438,7 +438,7 @@ jobs:
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${path}/Cargo.toml" ] || continue
 
-          version="$(grep '^version = ' "${path}/Cargo.toml" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+          version="$(awk -F'"' '/^version = / { print $2; exit }' "${path}/Cargo.toml")"
           if [ -z "${version}" ]; then
             echo "❌ Failed to read version for ${crate} from ${path}/Cargo.toml"
             exit 1
@@ -478,7 +478,7 @@ jobs:
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${GITHUB_WORKSPACE}/${path}/Cargo.toml" ] || continue
 
-          version="$(grep '^version = ' "${GITHUB_WORKSPACE}/${path}/Cargo.toml" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+          version="$(awk -F'"' '/^version = / { print $2; exit }' "${GITHUB_WORKSPACE}/${path}/Cargo.toml")"
           manifest="${EXTRACTED}/${crate}-${version}/${crate}-${version}/Cargo.toml"
           if [ ! -f "${manifest}" ]; then
             echo "❌ Missing extracted manifest: ${manifest}"
