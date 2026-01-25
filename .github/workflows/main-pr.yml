@@ -421,11 +421,20 @@ jobs:
         } > "${PATCH_LOCAL}"
 
         # 1) Produce .crate packages (manifest will be publish-style: no path/workspace deps).
+        PACKAGES_DIR="${ROOT}/packages"
+        mkdir -p "${PACKAGES_DIR}"
         for crate in "${CRATE_ORDER[@]}"; do
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${path}/Cargo.toml" ] || continue
           echo "📦 cargo package -p ${crate}"
           cargo package --allow-dirty --no-verify --package "${crate}" --quiet
+          version="$(awk -F'"' '/^version = / { print $2; exit }' "${path}/Cargo.toml")"
+          crate_file="target/package/${crate}-${version}.crate"
+          if [ ! -f "${crate_file}" ]; then
+            echo "❌ Expected package not found: ${crate_file}"
+            exit 1
+          fi
+          mv "${crate_file}" "${PACKAGES_DIR}/"
         done
 
         # 2) Extract packaged sources and build a [patch.crates-io] map to them.
@@ -444,7 +453,7 @@ jobs:
             exit 1
           fi
 
-          crate_file="target/package/${crate}-${version}.crate"
+          crate_file="${PACKAGES_DIR}/${crate}-${version}.crate"
           if [ ! -f "${crate_file}" ]; then
             echo "❌ Expected package not found: ${crate_file}"
             exit 1
@@ -485,8 +494,11 @@ jobs:
             exit 1
           fi
 
+          # Generate a lockfile for deterministic builds from the extracted manifest.
+          cargo generate-lockfile --manifest-path "${manifest}"
+
           echo "🔨 Building packaged crate: ${crate} (${version})"
-          cargo build --manifest-path "${manifest}" --quiet
+          cargo build --manifest-path "${manifest}" --locked --quiet
         done
 
         echo ""
