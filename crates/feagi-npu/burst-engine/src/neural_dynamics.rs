@@ -175,8 +175,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
 
                 // Count refractory neurons (neuron_id == array index)
                 let idx = neuron_id.0 as usize;
-                if idx < neuron_array.count() && neuron_array.refractory_countdowns_mut()[idx] > 0
-                {
+                if idx < neuron_array.count() && neuron_array.refractory_countdowns_mut()[idx] > 0 {
                     refractory += 1;
                 }
             }
