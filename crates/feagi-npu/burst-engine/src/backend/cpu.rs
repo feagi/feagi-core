@@ -15,6 +15,7 @@
 
 use super::ComputeBackend;
 use crate::neural_dynamics;
+use ahash::AHashSet;
 use feagi_npu_neural::models::{LIFModel, NeuronModel};
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::{NeuronStorage, SynapseStorage};
@@ -62,6 +63,12 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
         synapse_storage: &S,
         fcl: &mut FireCandidateList,
     ) -> Result<usize> {
+        if fired_neurons.is_empty() {
+            return Ok(0);
+        }
+
+        let fired_set: AHashSet<u32> = fired_neurons.iter().copied().collect();
+
         // FCL-aware: Accumulate synaptic contributions into FCL
         let mut synapse_count = 0;
 
@@ -69,32 +76,33 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
         // TODO: Add source_index to SynapseStorage trait or build on-the-fly
         for syn_idx in 0..synapse_storage.count() {
             let source_id = synapse_storage.source_neurons()[syn_idx];
-            if fired_neurons.contains(&source_id) {
-                if !synapse_storage.valid_mask()[syn_idx] {
-                    continue;
-                }
-
-                let target_id = synapse_storage.target_neurons()[syn_idx];
-                // Canonical synaptic units: u8 (0..255) stored in synapse arrays.
-                // We use direct cast to f32 (NO /255 normalization) to match the rest of FEAGI.
-                let weight = synapse_storage.weights()[syn_idx] as f32;
-                let psp = synapse_storage.postsynaptic_potentials()[syn_idx] as f32;
-                let synapse_type = if synapse_storage.types()[syn_idx] == 0 {
-                    SynapseType::Excitatory
-                } else {
-                    SynapseType::Inhibitory
-                };
-
-                // ✅ Use neuron model trait (LIF formula)
-                // Result range: -65,025.0 to +65,025.0 (255 × 255) for excitatory/inhibitory.
-                let contribution =
-                    self.neuron_model
-                        .compute_synaptic_contribution(weight, psp, synapse_type);
-
-                // Accumulate into FCL
-                fcl.add_candidate(NeuronId(target_id), contribution);
-                synapse_count += 1;
+            if !fired_set.contains(&source_id) {
+                continue;
             }
+            if !synapse_storage.valid_mask()[syn_idx] {
+                continue;
+            }
+
+            let target_id = synapse_storage.target_neurons()[syn_idx];
+            // Canonical synaptic units: u8 (0..255) stored in synapse arrays.
+            // We use direct cast to f32 (NO /255 normalization) to match the rest of FEAGI.
+            let weight = synapse_storage.weights()[syn_idx] as f32;
+            let psp = synapse_storage.postsynaptic_potentials()[syn_idx] as f32;
+            let synapse_type = if synapse_storage.types()[syn_idx] == 0 {
+                SynapseType::Excitatory
+            } else {
+                SynapseType::Inhibitory
+            };
+
+            // ✅ Use neuron model trait (LIF formula)
+            // Result range: -65,025.0 to +65,025.0 (255 × 255) for excitatory/inhibitory.
+            let contribution =
+                self.neuron_model
+                    .compute_synaptic_contribution(weight, psp, synapse_type);
+
+            // Accumulate into FCL
+            fcl.add_candidate(NeuronId(target_id), contribution);
+            synapse_count += 1;
         }
 
         Ok(synapse_count)
