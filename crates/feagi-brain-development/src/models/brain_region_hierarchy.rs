@@ -343,6 +343,15 @@ impl BrainRegionHierarchy {
         areas
     }
 
+    /// Update a cortical area ID across all brain regions.
+    pub fn rename_cortical_area_id(&mut self, old_id: &CorticalID, new_id: CorticalID) {
+        for region in self.regions.values_mut() {
+            if region.cortical_areas.remove(old_id) {
+                region.cortical_areas.insert(new_id);
+            }
+        }
+    }
+
     /// Get the root region ID
     pub fn get_root_id(&self) -> Option<&String> {
         self.root_id.as_ref()

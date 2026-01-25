@@ -555,6 +555,7 @@ impl AgentClient {
                 feagi_io::SensoryUnit::DigitalGpio => SensoryCorticalUnit::DigitalGPIO,
                 feagi_io::SensoryUnit::MiscData => SensoryCorticalUnit::MiscData,
                 feagi_io::SensoryUnit::TextEnglishInput => SensoryCorticalUnit::TextEnglishInput,
+                feagi_io::SensoryUnit::CountInput => SensoryCorticalUnit::CountInput,
                 feagi_io::SensoryUnit::Vision => SensoryCorticalUnit::Vision,
                 feagi_io::SensoryUnit::SegmentedVision => SensoryCorticalUnit::SegmentedVision,
                 feagi_io::SensoryUnit::Accelerometer => SensoryCorticalUnit::Accelerometer,
@@ -618,6 +619,13 @@ impl AgentClient {
                 SensoryCorticalUnit::TextEnglishInput => {
                     SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
                         frame_change_handling,
+                        group,
+                    )[0]
+                }
+                SensoryCorticalUnit::CountInput => {
+                    SensoryCorticalUnit::get_cortical_ids_array_for_count_input_with_parameters(
+                        frame_change_handling,
+                        percentage_neuron_positioning,
                         group,
                     )[0]
                 }

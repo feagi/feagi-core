@@ -119,6 +119,7 @@ pub enum SensoryUnit {
     DigitalGpio,
     MiscData,
     TextEnglishInput,
+    CountInput,
     Vision,
     SegmentedVision,
     Accelerometer,
@@ -134,6 +135,7 @@ pub enum MotorUnit {
     Gaze,
     MiscData,
     TextEnglishOutput,
+    CountOutput,
     ObjectSegmentation,
     SimpleVisionOutput,
 }

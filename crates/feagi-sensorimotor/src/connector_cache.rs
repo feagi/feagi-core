@@ -6,6 +6,18 @@ use feagi_structures::FeagiDataError;
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+// TODO this file may be redudant, we may want to clear it
+
+fn lock_recover<'a, T>(mutex: &'a Mutex<T>) -> MutexGuard<'a, T> {
+    match mutex.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            mutex.clear_poison();
+            poisoned.into_inner()
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ConnectorCache {
     sensor_cache: Arc<Mutex<SensorDeviceCache>>,
@@ -29,7 +41,7 @@ impl ConnectorCache {
     }
 
     pub fn get_sensor_cache(&self) -> MutexGuard<'_, SensorDeviceCache> {
-        self.sensor_cache.lock().unwrap()
+        lock_recover(&self.sensor_cache)
     }
 
     pub fn get_sensor_cache_ref(&self) -> Arc<Mutex<SensorDeviceCache>> {
@@ -37,7 +49,7 @@ impl ConnectorCache {
     }
 
     pub fn get_motor_cache(&self) -> MutexGuard<'_, MotorDeviceCache> {
-        self.motor_cache.lock().unwrap()
+        lock_recover(&self.motor_cache)
     }
 
     pub fn get_motor_cache_ref(&self) -> Arc<Mutex<MotorDeviceCache>> {
@@ -70,7 +82,8 @@ impl ConnectorCache {
         self.get_motor_cache()
             .export_to_output_definition(&mut output)?;
         output.set_feedbacks(self.feedback_registrar.clone());
-        Ok(serde_json::to_value(output).unwrap())
+        serde_json::to_value(output)
+            .map_err(|err| FeagiDataError::SerializationError(err.to_string()))
     }
 
     pub fn import_device_registrations_as_config_json(

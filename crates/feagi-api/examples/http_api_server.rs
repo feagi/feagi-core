@@ -242,6 +242,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         snapshot_service: None,
         feagi_session_timestamp,
         memory_stats_cache: None,
+        amalgamation_state: ApiState::init_amalgamation_state(),
         #[cfg(feature = "feagi-agent")]
         agent_connectors: ApiState::init_agent_connectors(),
     };

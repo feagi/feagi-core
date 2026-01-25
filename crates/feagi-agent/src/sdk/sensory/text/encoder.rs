@@ -1,106 +1,93 @@
-// Copyright 2025 Neuraville Inc.
-// SPDX-License-Identifier: Apache-2.0
+//! Text encoder implementation.
 
-//! Text encoder implementation
-
-use crate::sdk::base::CorticalTopology;
-use crate::sdk::error::{Result, SdkError};
+use crate::core::SdkError;
+use crate::sdk::base::TopologyCache;
 use crate::sdk::sensory::text::config::TextEncoderConfig;
 use crate::sdk::sensory::traits::SensoryEncoder;
-use feagi_sensorimotor::data_types::encode_token_id_to_xyzp_bitplanes;
-use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use crate::sdk::types::{
+    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, FrameChangeHandling,
+    MiscDataDimensions, SensorDeviceCache, WrappedIOData,
+};
+use feagi_sensorimotor::data_types::encode_token_id_to_misc_data;
 
-/// Text encoder for FEAGI sensory data
-///
-/// Encodes token IDs into FEAGI's bitplane XYZP format for the `iten` cortical area.
-///
-/// # Example
-/// ```ignore
-/// use feagi_agent::sdk::sensory::text::{TextEncoder, TextEncoderConfig};
-/// use feagi_agent::sdk::base::TopologyCache;
-///
-/// // Create encoder
-/// let config = TextEncoderConfig { /* ... */ };
-/// let topology_cache = TopologyCache::new("localhost", 8080, 5.0)?;
-/// let encoder = TextEncoder::new(config, &topology_cache).await?;
-///
-/// // Encode tokens
-/// let token_id = 123;
-/// let encoded = encoder.encode(&token_id)?;
-/// ```
+/// Text encoder backed by a sensor cache.
 pub struct TextEncoder {
-    _config: TextEncoderConfig,
-    cortical_id: CorticalID,
-    topology: CorticalTopology,
+    config: TextEncoderConfig,
+    cache: SensorDeviceCache,
+    cortical_ids: Vec<crate::sdk::types::CorticalID>,
+    depth: u32,
 }
 
 impl TextEncoder {
-    /// Create a new text encoder
-    ///
-    /// This fetches the iten topology from FEAGI and configures the encoder.
-    ///
-    /// # Arguments
-    /// * `config` - Encoder configuration
-    /// * `topology_cache` - Topology cache for fetching cortical dimensions
+    /// Create a new text encoder and register device definitions.
     pub async fn new(
         config: TextEncoderConfig,
-        topology_cache: &crate::sdk::base::TopologyCache,
-    ) -> Result<Self> {
-        config.validate()?;
-
+        topology_cache: &TopologyCache,
+    ) -> Result<Self, SdkError> {
         let cortical_id = config.cortical_id();
-
-        // Fetch topology
         let topology = topology_cache.get_topology(&cortical_id).await?;
+        let depth = topology.depth;
+
+        let unit = CorticalUnitIndex::from(config.cortical_unit_id);
+        let channel_count = CorticalChannelCount::new(topology.channels)
+            .map_err(|e| SdkError::Other(format!("Invalid text channel count: {e}")))?;
+        let dimensions = MiscDataDimensions::new(1, 1, depth)
+            .map_err(|e| SdkError::Other(format!("Invalid text dimensions: {e}")))?;
+
+        let mut cache = SensorDeviceCache::new();
+        cache
+            .text_english_input_register(
+                unit,
+                channel_count,
+                FrameChangeHandling::Absolute,
+                dimensions,
+            )
+            .map_err(|e| SdkError::Other(format!("Text register failed: {e}")))?;
 
         Ok(Self {
-            _config: config,
-            cortical_id,
-            topology,
+            config,
+            cache,
+            cortical_ids: vec![cortical_id],
+            depth,
         })
     }
 
-    /// Get the topology depth (number of bits for token encoding)
+    /// Return the Z depth (bitplanes) used for token encoding.
     pub fn depth(&self) -> u32 {
-        self.topology.depth
+        self.depth
     }
 }
 
 impl SensoryEncoder for TextEncoder {
     type Input = u32;
 
-    fn encode(&mut self, token_id: &Self::Input) -> Result<Vec<u8>> {
-        // Encode token ID to bitplanes
-        let voxels = encode_token_id_to_xyzp_bitplanes(*token_id, self.topology.depth)
-            .map_err(|e| SdkError::EncodingFailed(format!("Token encoding failed: {:?}", e)))?;
+    fn encode(&mut self, input: &Self::Input) -> Result<Vec<u8>, SdkError> {
+        let misc = encode_token_id_to_misc_data(*input, self.depth)
+            .map_err(|e| SdkError::Other(format!("Text encode failed: {e}")))?;
 
-        // Wrap in mapped container
-        let mut mapped = CorticalMappedXYZPNeuronVoxels::new_with_capacity(1);
-        let (x, y, z, p) = voxels.borrow_xyzp_vectors();
-        let target = mapped.ensure_clear_and_borrow_mut(&self.cortical_id);
-        target.clear();
-        target.ensure_capacity(x.len());
-        target
-            .update_vectors_from_external(|xv, yv, zv, pv| {
-                xv.extend_from_slice(x);
-                yv.extend_from_slice(y);
-                zv.extend_from_slice(z);
-                pv.extend_from_slice(p);
-                Ok(())
-            })
-            .map_err(|e| SdkError::EncodingFailed(format!("XYZP update failed: {:?}", e)))?;
+        self.cache
+            .text_english_input_write(
+                CorticalUnitIndex::from(self.config.cortical_unit_id),
+                CorticalChannelIndex::from(0u32),
+                WrappedIOData::MiscData(misc),
+            )
+            .map_err(|e| SdkError::Other(format!("Text cache write failed: {e}")))?;
 
-        // Serialize
-        let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
-        byte_container
-            .overwrite_byte_data_with_single_struct_data(&mapped, 0)
-            .map_err(|e| SdkError::EncodingFailed(format!("Serialization failed: {:?}", e)))?;
+        self.cache
+            .encode_all_sensors_to_neurons(std::time::Instant::now())
+            .map_err(|e| SdkError::Other(format!("Text sensor encode failed: {e}")))?;
+        self.cache
+            .encode_neurons_to_bytes()
+            .map_err(|e| SdkError::Other(format!("Text byte encode failed: {e}")))?;
 
-        Ok(byte_container.get_byte_ref().to_vec())
+        Ok(self
+            .cache
+            .get_feagi_byte_container()
+            .get_byte_ref()
+            .to_vec())
     }
 
-    fn cortical_ids(&self) -> &[CorticalID] {
-        std::slice::from_ref(&self.cortical_id)
+    fn cortical_ids(&self) -> &[crate::sdk::types::CorticalID] {
+        &self.cortical_ids
     }
 }

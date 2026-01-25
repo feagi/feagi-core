@@ -155,7 +155,7 @@ pub struct ManualStimulationResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct DeviceRegistrationExportResponse {
     /// Device registration configuration as JSON
-    /// This matches the format from ConnectorAgent::export_device_registrations_as_config_json
+    /// This matches the format from ConnectorAgent::get_device_registration_json
     pub device_registrations: serde_json::Value,
     /// Agent ID this configuration belongs to
     pub agent_id: String,
@@ -168,7 +168,7 @@ pub struct DeviceRegistrationExportResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct DeviceRegistrationImportRequest {
     /// Device registration configuration as JSON
-    /// This matches the format expected by ConnectorAgent::import_device_registrations_as_config_json
+    /// This matches the format expected by ConnectorAgent::set_device_registrations_from_json
     pub device_registrations: serde_json::Value,
 }
 

@@ -14,7 +14,7 @@ use feagi_agent::sdk::types::{
     CorticalChannelCount, CorticalUnitIndex, FrameChangeHandling, MiscDataDimensions,
 };
 
-use feagi_agent::sdk::ConnectorAgent;
+use feagi_agent::sdk::{AgentDescriptor, ConnectorAgent};
 
 fn feagi_api_host() -> String {
     std::env::var("FEAGI_API_HOST")
@@ -32,19 +32,30 @@ fn base_url() -> String {
     format!("http://{}:{}", feagi_api_host(), feagi_api_port())
 }
 
+fn encode_path_segment(value: &str) -> String {
+    value
+        .chars()
+        .flat_map(|ch| match ch {
+            '+' => "%2B".chars().collect::<Vec<char>>(),
+            '/' => "%2F".chars().collect::<Vec<char>>(),
+            '=' => "%3D".chars().collect::<Vec<char>>(),
+            _ => vec![ch],
+        })
+        .collect()
+}
+
 #[tokio::test]
 async fn device_registrations_import_then_export_roundtrip() {
     // Use a unique agent_id per run.
-    let agent_id = format!(
-        "sdk_live_contract_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    );
+    let instance_id = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos() as u32;
+    let agent_descriptor = AgentDescriptor::new(instance_id, "sdk", "live_contract", 1).unwrap();
+    let agent_id = encode_path_segment(&agent_descriptor.to_base64());
 
     // Build a simple non-empty device registration export using the SDK connector.
-    let connector = ConnectorAgent::new();
+    let connector = ConnectorAgent::new_empty(agent_descriptor);
     {
         let mut sensor_cache = connector.get_sensor_cache();
         sensor_cache
@@ -57,13 +68,12 @@ async fn device_registrations_import_then_export_roundtrip() {
             .unwrap();
     }
 
-    let exported = connector
-        .export_device_registrations_as_config_json()
-        .unwrap();
+    let exported = connector.get_device_registration_json().unwrap();
 
     // POST import
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
+        .no_proxy()
         .build()
         .unwrap();
 

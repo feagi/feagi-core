@@ -275,6 +275,12 @@ pub async fn get_cortical_area_geometry(
                 .map(|area| {
                     // Return FULL cortical area data (matching Python format)
                     // This is what Brain Visualizer expects for genome loading
+                    let coordinate_2d = area
+                        .properties
+                        .get("coordinate_2d")
+                        .or_else(|| area.properties.get("coordinates_2d"))
+                        .cloned()
+                        .unwrap_or_else(|| serde_json::json!([0, 0]));
                     let data = serde_json::json!({
                         "cortical_id": area.cortical_id,
                         "cortical_name": area.name,
@@ -282,7 +288,7 @@ pub async fn get_cortical_area_geometry(
                         "cortical_type": area.cortical_type,  // NEW: Explicitly include cortical_type for BV
                         "cortical_sub_group": area.sub_group.as_ref().unwrap_or(&String::new()),  // Return empty string instead of null
                         "coordinates_3d": [area.position.0, area.position.1, area.position.2],
-                        "coordinates_2d": [0, 0],  // TODO: Extract from properties when available
+                        "coordinates_2d": coordinate_2d,
                         "cortical_dimensions": [area.dimensions.0, area.dimensions.1, area.dimensions.2],
                         "cortical_neuron_per_vox_count": area.neurons_per_voxel,
                         "visualization": area.visible,
@@ -480,7 +486,7 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("cortical_id required"))?;
 
-    let group_id = request
+    let mut group_id = request
         .get("group_id")
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as u8;
@@ -511,6 +517,19 @@ pub async fn post_cortical_area(
         .get("cortical_type")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("cortical_type required"))?;
+
+    let unit_id: Option<u8> = request
+        .get("unit_id")
+        .and_then(|v| v.as_u64())
+        .map(|value| {
+            value
+                .try_into()
+                .map_err(|_| ApiError::invalid_input("unit_id out of range"))
+        })
+        .transpose()?;
+    if let Some(unit_id) = unit_id {
+        group_id = unit_id;
+    }
 
     // Extract neurons_per_voxel from request (default to 1 if not provided)
     let neurons_per_voxel = request
@@ -827,11 +846,18 @@ pub async fn put_cortical_area(
         .update_cortical_area(&cortical_id, request)
         .await
     {
-        Ok(_) => {
-            tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/cortical_area - success for {}", cortical_id);
+        Ok(area_info) => {
+            let updated_id = area_info.cortical_id.clone();
+            tracing::debug!(
+                target: "feagi-api",
+                "PUT /v1/cortical_area/cortical_area - success for {} (updated_id={})",
+                cortical_id,
+                updated_id
+            );
             Ok(Json(HashMap::from([
                 ("message".to_string(), "Cortical area updated".to_string()),
-                ("cortical_id".to_string(), cortical_id),
+                ("cortical_id".to_string(), updated_id),
+                ("previous_cortical_id".to_string(), cortical_id),
             ])))
         }
         Err(e) => {
@@ -1069,13 +1095,274 @@ pub async fn post_custom_cortical_area(
 
 /// Clone an existing cortical area with all its properties and structure. (Not yet implemented)
 #[utoipa::path(post, path = "/v1/cortical_area/clone", tag = "cortical_area")]
-#[allow(unused_variables)] // In development
 pub async fn post_clone(
     State(state): State<ApiState>,
-    Json(request): Json<HashMap<String, serde_json::Value>>,
+    Json(request): Json<CloneCorticalAreaRequest>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Clone cortical area
-    Err(ApiError::internal("Not yet implemented"))
+    use base64::{engine::general_purpose, Engine as _};
+    use feagi_services::types::CreateCorticalAreaParams;
+    use feagi_structures::genomic::cortical_area::CorticalID;
+    use serde_json::Value;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let genome_service = state.genome_service.as_ref();
+    let connectome_service = state.connectome_service.as_ref();
+
+    // Resolve + validate source cortical ID.
+    let source_id = request.source_area_id.clone();
+    let source_typed = CorticalID::try_from_base_64(&source_id)
+        .map_err(|e| ApiError::invalid_input(e.to_string()))?;
+    let src_first_byte = source_typed.as_bytes()[0];
+    if src_first_byte != b'c' && src_first_byte != b'm' {
+        return Err(ApiError::invalid_input(format!(
+            "Cloning is only supported for custom ('c') and memory ('m') cortical areas (got prefix byte: {})",
+            src_first_byte
+        )));
+    }
+
+    // Fetch full source info (dimensions, neural params, properties, mappings).
+    let source_area = connectome_service
+        .get_cortical_area(&source_id)
+        .await
+        .map_err(|e| ApiError::not_found("CorticalArea", &e.to_string()))?;
+
+    // FEAGI is the source of truth for brain-region membership.
+    //
+    // Do NOT trust the client/UI to provide parent_region_id correctly, because FEAGI already
+    // knows the source area’s parent. We use FEAGI’s view of parent_region_id for persistence.
+    //
+    // If the client provides parent_region_id and it disagrees, fail fast to prevent ambiguity.
+    let source_parent_region_id = source_area
+        .parent_region_id
+        .clone()
+        .or_else(|| {
+            source_area
+                .properties
+                .get("parent_region_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+        .ok_or_else(|| {
+            ApiError::internal(format!(
+                "Source cortical area {} is missing parent_region_id; cannot determine region membership for clone",
+                source_id
+            ))
+        })?;
+
+    if let Some(client_parent_region_id) = request.parent_region_id.as_ref() {
+        if client_parent_region_id != &source_parent_region_id {
+            return Err(ApiError::invalid_input(format!(
+                "parent_region_id mismatch for clone request: client sent '{}', but FEAGI source area {} belongs to '{}'",
+                client_parent_region_id, source_id, source_parent_region_id
+            )));
+        }
+    }
+
+    // Extract outgoing mappings (we will apply them after creation, via update_cortical_mapping).
+    let outgoing_mapping_dst = source_area
+        .properties
+        .get("cortical_mapping_dst")
+        .and_then(|v| v.as_object())
+        .cloned();
+
+    // Generate unique cortical ID for the clone.
+    //
+    // Rules:
+    // - Byte 0 keeps the source type discriminator (b'c' or b'm')
+    // - Bytes 1-6 derived from new_name (alphanumeric/_ only)
+    // - Byte 7 timestamp lower byte for uniqueness
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| ApiError::internal(format!("System clock error: {}", e)))?
+        .as_millis() as u64;
+
+    let mut cortical_id_bytes = [0u8; 8];
+    cortical_id_bytes[0] = src_first_byte;
+
+    let name_bytes = request.new_name.as_bytes();
+    for i in 1..7 {
+        cortical_id_bytes[i] = if i - 1 < name_bytes.len() {
+            let c = name_bytes[i - 1];
+            if c.is_ascii_alphanumeric() || c == b'_' {
+                c
+            } else {
+                b'_'
+            }
+        } else {
+            b'_'
+        };
+    }
+    cortical_id_bytes[7] = (timestamp & 0xFF) as u8;
+
+    let new_area_id = general_purpose::STANDARD.encode(cortical_id_bytes);
+
+    // Clone properties, but do NOT carry over cortical mapping properties directly.
+    // Mappings must be created via update_cortical_mapping so synapses are regenerated.
+    let mut cloned_properties = source_area.properties.clone();
+    cloned_properties.remove("cortical_mapping_dst");
+
+    // Set parent region + 2D coordinate explicitly for the clone.
+    cloned_properties.insert(
+        "parent_region_id".to_string(),
+        Value::String(source_parent_region_id),
+    );
+    cloned_properties.insert(
+        "coordinate_2d".to_string(),
+        serde_json::json!([request.coordinates_2d[0], request.coordinates_2d[1]]),
+    );
+
+    let params = CreateCorticalAreaParams {
+        cortical_id: new_area_id.clone(),
+        name: request.new_name.clone(),
+        dimensions: source_area.dimensions,
+        position: (
+            request.coordinates_3d[0],
+            request.coordinates_3d[1],
+            request.coordinates_3d[2],
+        ),
+        area_type: source_area.area_type.clone(),
+        visible: Some(source_area.visible),
+        sub_group: source_area.sub_group.clone(),
+        neurons_per_voxel: Some(source_area.neurons_per_voxel),
+        postsynaptic_current: Some(source_area.postsynaptic_current),
+        plasticity_constant: Some(source_area.plasticity_constant),
+        degeneration: Some(source_area.degeneration),
+        psp_uniform_distribution: Some(source_area.psp_uniform_distribution),
+        // Note: FEAGI core currently accepts scalar firing_threshold_increment on create.
+        // We preserve full source properties above; the service layer remains authoritative.
+        firing_threshold_increment: None,
+        firing_threshold_limit: Some(source_area.firing_threshold_limit),
+        consecutive_fire_count: Some(source_area.consecutive_fire_count),
+        snooze_period: Some(source_area.snooze_period),
+        refractory_period: Some(source_area.refractory_period),
+        leak_coefficient: Some(source_area.leak_coefficient),
+        leak_variability: Some(source_area.leak_variability),
+        burst_engine_active: Some(source_area.burst_engine_active),
+        properties: Some(cloned_properties),
+    };
+
+    // Create the cloned area via GenomeService (proper flow: genome update → neuroembryogenesis → NPU).
+    let created_areas = genome_service
+        .create_cortical_areas(vec![params])
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to clone cortical area: {}", e)))?;
+
+    // DIAGNOSTIC: Log what coordinates were returned after creation
+    if let Some(created_area) = created_areas.first() {
+        tracing::info!(target: "feagi-api",
+            "Clone created area {} with position {:?} (requested {:?})",
+            new_area_id, created_area.position, request.coordinates_3d
+        );
+    }
+
+    // Optionally clone cortical mappings (AutoWiring).
+    if request.clone_cortical_mapping {
+        // 1) Outgoing mappings: source -> dst becomes new -> dst
+        if let Some(dst_map) = outgoing_mapping_dst {
+            for (dst_id, rules) in dst_map {
+                let dst_effective = if dst_id == source_id {
+                    // Self-loop on source should become self-loop on clone.
+                    new_area_id.clone()
+                } else {
+                    dst_id.clone()
+                };
+
+                let Some(rules_array) = rules.as_array() else {
+                    return Err(ApiError::invalid_input(format!(
+                        "Invalid cortical_mapping_dst value for dst '{}': expected array, got {}",
+                        dst_id, rules
+                    )));
+                };
+
+                connectome_service
+                    .update_cortical_mapping(
+                        new_area_id.clone(),
+                        dst_effective,
+                        rules_array.clone(),
+                    )
+                    .await
+                    .map_err(|e| {
+                        ApiError::internal(format!(
+                            "Failed to clone outgoing mapping from {}: {}",
+                            source_id, e
+                        ))
+                    })?;
+            }
+        }
+
+        // 2) Incoming mappings: any src -> source becomes src -> new
+        // We discover these by scanning all areas' cortical_mapping_dst maps.
+        let all_areas = connectome_service
+            .list_cortical_areas()
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
+
+        for area in all_areas {
+            // Skip the source area itself: source->* already handled by outgoing clone above.
+            if area.cortical_id == source_id {
+                continue;
+            }
+
+            let Some(dst_map) = area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+            else {
+                continue;
+            };
+
+            let Some(rules) = dst_map.get(&source_id) else {
+                continue;
+            };
+
+            let Some(rules_array) = rules.as_array() else {
+                return Err(ApiError::invalid_input(format!(
+                    "Invalid cortical_mapping_dst value for src '{}', dst '{}': expected array, got {}",
+                    area.cortical_id, source_id, rules
+                )));
+            };
+
+            connectome_service
+                .update_cortical_mapping(
+                    area.cortical_id.clone(),
+                    new_area_id.clone(),
+                    rules_array.clone(),
+                )
+                .await
+                .map_err(|e| {
+                    ApiError::internal(format!(
+                        "Failed to clone incoming mapping into {} from {}: {}",
+                        source_id, area.cortical_id, e
+                    ))
+                })?;
+        }
+    }
+
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Cortical area cloned".to_string()),
+        ("new_area_id".to_string(), new_area_id),
+    ])))
+}
+
+/// Request payload for POST /v1/cortical_area/clone
+#[derive(Debug, Clone, serde::Deserialize, utoipa::ToSchema)]
+pub struct CloneCorticalAreaRequest {
+    /// Base64 cortical area ID to clone.
+    pub source_area_id: String,
+    /// New cortical area name (display name).
+    pub new_name: String,
+    /// New 3D coordinates for placement.
+    pub coordinates_3d: [i32; 3],
+    /// New 2D coordinates for visualization placement.
+    pub coordinates_2d: [i32; 2],
+    /// Target parent brain region ID to attach the clone under.
+    ///
+    /// NOTE: FEAGI does NOT rely on the client for this value; it derives the parent from the
+    /// source area’s membership. If provided and mismatched, FEAGI rejects the request.
+    #[serde(default)]
+    pub parent_region_id: Option<String>,
+    /// If true, clones cortical mappings (incoming + outgoing) to reproduce wiring.
+    pub clone_cortical_mapping: bool,
 }
 
 /// Update properties of multiple cortical areas in a single request. (Not yet implemented)
@@ -1113,11 +1400,23 @@ pub async fn put_multi_cortical_area(
     // Remove cortical_id_list from changes (it's not a property to update)
     request.remove("cortical_id_list");
 
-    // Update each cortical area with the same properties
+    // Build shared properties (applies to all unless overridden per-id)
+    let mut shared_properties = request.clone();
+    for cortical_id in &cortical_ids {
+        shared_properties.remove(cortical_id);
+    }
+
+    // Update each cortical area, using per-id properties when provided
     for cortical_id in &cortical_ids {
         tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - updating area: {}", cortical_id);
+        let mut properties = shared_properties.clone();
+        if let Some(serde_json::Value::Object(per_id_map)) = request.get(cortical_id) {
+            for (key, value) in per_id_map {
+                properties.insert(key.clone(), value.clone());
+            }
+        }
         match genome_service
-            .update_cortical_area(cortical_id, request.clone())
+            .update_cortical_area(cortical_id, properties)
             .await
         {
             Ok(_) => {

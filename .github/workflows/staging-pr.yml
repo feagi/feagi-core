@@ -166,6 +166,7 @@ jobs:
         save-if: true
 
     - name: Compute and apply independent version bumps (CI-only)
+      id: version-bump
       shell: bash
       run: |
         set -euo pipefail
@@ -182,13 +183,138 @@ jobs:
           exit 1
         fi
 
+        CHANGED_CRATES_LINE="$(echo "${VERSION_OUTPUT}" | grep "^CHANGED_CRATES=" || true)"
+        if [ -n "${CHANGED_CRATES_LINE}" ]; then
+          CHANGED_CRATES="${CHANGED_CRATES_LINE#CHANGED_CRATES=}"
+          echo "changed_crates=${CHANGED_CRATES}" >> "${GITHUB_OUTPUT}"
+        else
+          echo "changed_crates=()" >> "${GITHUB_OUTPUT}"
+        fi
+
         export VERSIONS_FILE="${VERSIONS_FILE}"
         ./scripts/apply-version-bumps.sh
 
-    - name: Package and build published artifacts against local packaged dependencies
+    - name: Fast-fail dependency feature validation
+      if: ${{ steps.version-bump.outputs.changed_crates != '()' && steps.version-bump.outputs.changed_crates != '' }}
       shell: bash
       run: |
         set -euo pipefail
+        python3 - <<'PY'
+        from __future__ import annotations
+        
+        import re
+        from pathlib import Path
+        
+        
+        def load_manifest(path: Path) -> str:
+            return path.read_text(encoding="utf-8")
+        
+        
+        def parse_features(manifest: str) -> set[str]:
+            features: set[str] = set()
+            in_features = False
+            for line in manifest.splitlines():
+                if line.strip().startswith("[features]"):
+                    in_features = True
+                    continue
+                if in_features and line.strip().startswith("[") and line.strip().endswith("]"):
+                    break
+                if not in_features:
+                    continue
+                m = re.match(r'^([A-Za-z0-9_-]+)\s*=\s*\[', line.strip())
+                if m:
+                    features.add(m.group(1))
+            return features
+        
+        
+        def parse_dependencies_with_features(manifest: str) -> dict[str, list[str]]:
+            deps: dict[str, list[str]] = {}
+            in_deps = False
+            for line in manifest.splitlines():
+                if line.strip().startswith("[dependencies]"):
+                    in_deps = True
+                    continue
+                if in_deps and line.strip().startswith("[") and line.strip().endswith("]"):
+                    break
+                if not in_deps:
+                    continue
+                m = re.match(r'^([A-Za-z0-9_-]+)\s*=\s*\{([^}]*)\}', line.strip())
+                if not m:
+                    continue
+                dep = m.group(1)
+                body = m.group(2)
+                features_m = re.search(r'features\s*=\s*\[([^\]]*)\]', body)
+                if not features_m:
+                    continue
+                features_raw = features_m.group(1)
+                features_list = [
+                    f.strip().strip('"')
+                    for f in features_raw.split(",")
+                    if f.strip()
+                ]
+                if features_list:
+                    deps[dep] = features_list
+            return deps
+        
+        
+        def collect_manifests(root: Path) -> list[Path]:
+            manifests: list[Path] = [root / "Cargo.toml"]
+            manifests += sorted((root / "crates").glob("*/Cargo.toml"))
+            manifests += sorted((root / "crates" / "feagi-npu").glob("*/Cargo.toml"))
+            return [m for m in manifests if m.exists()]
+        
+        
+        def main() -> None:
+            root = Path.cwd()
+            manifests = collect_manifests(root)
+        
+            crate_features: dict[str, set[str]] = {}
+            for mf in manifests:
+                text = load_manifest(mf)
+                name_m = re.search(r'(?m)^name\s*=\s*"([^"]+)"', text)
+                if not name_m:
+                    continue
+                crate_features[name_m.group(1)] = parse_features(text)
+        
+            errors: list[str] = []
+            for mf in manifests:
+                text = load_manifest(mf)
+                name_m = re.search(r'(?m)^name\s*=\s*"([^"]+)"', text)
+                crate = name_m.group(1) if name_m else str(mf)
+                deps = parse_dependencies_with_features(text)
+                for dep, features in deps.items():
+                    available = crate_features.get(dep)
+                    if available is None:
+                        continue
+                    missing = [f for f in features if f not in available]
+                    if missing:
+                        errors.append(
+                            f"{crate} depends on {dep} with missing features: {', '.join(missing)}"
+                        )
+        
+            if errors:
+                print("Dependency feature validation failed:")
+                for err in errors:
+                    print(f"  - {err}")
+                raise SystemExit(1)
+        
+            print("Dependency feature validation passed.")
+        
+        
+        if __name__ == "__main__":
+            main()
+        PY
+    
+    - name: Package and build published artifacts against local packaged dependencies
+      if: ${{ steps.version-bump.outputs.changed_crates != '()' && steps.version-bump.outputs.changed_crates != '' }}
+      shell: bash
+      env:
+        CHANGED_CRATES: ${{ steps.version-bump.outputs.changed_crates }}
+      run: |
+        set -euo pipefail
+
+        CHANGED_SET="${CHANGED_CRATES:-()}"
+        echo "Changed crates: ${CHANGED_SET}"
 
         # This directory is created at runtime in CI only (not committed).
         ROOT="/tmp/feagi_local_publish_sim"
@@ -243,8 +369,24 @@ jobs:
           esac
         }
 
+        # 0) Patch crates.io to local workspace for packaging validation.
+        # This avoids crate resolution failures when new beta versions are not yet published.
+        mkdir -p ".cargo"
+        PATCH_LOCAL=".cargo/config.toml"
+        {
+          echo "[patch.crates-io]"
+          for crate in "${CRATE_ORDER[@]}"; do
+            path="$(crate_path_for "${crate}")" || continue
+            [ -f "${path}/Cargo.toml" ] || continue
+            echo "${crate} = { path = \"${GITHUB_WORKSPACE}/${path}\" }"
+          done
+        } > "${PATCH_LOCAL}"
+
         # 1) Produce .crate packages (manifest will be publish-style: no path/workspace deps).
         for crate in "${CRATE_ORDER[@]}"; do
+          if [[ " ${CHANGED_SET} " != *" ${crate} "* ]]; then
+            continue
+          fi
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${path}/Cargo.toml" ] || continue
           echo "📦 cargo package -p ${crate}"
@@ -258,10 +400,13 @@ jobs:
         } > "${PATCH_FILE}"
 
         for crate in "${CRATE_ORDER[@]}"; do
+          if [[ " ${CHANGED_SET} " != *" ${crate} "* ]]; then
+            continue
+          fi
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${path}/Cargo.toml" ] || continue
 
-          version="$(grep '^version = ' "${path}/Cargo.toml" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+          version="$(awk -F'"' '/^version = / { print $2; exit }' "${path}/Cargo.toml")"
           if [ -z "${version}" ]; then
             echo "❌ Failed to read version for ${crate} from ${path}/Cargo.toml"
             exit 1
@@ -297,11 +442,14 @@ jobs:
         cd "${DRIVER}"
 
         for crate in "${CRATE_ORDER[@]}"; do
+          if [[ " ${CHANGED_SET} " != *" ${crate} "* ]]; then
+            continue
+          fi
           # Find the extracted dir (we know the version from the repo Cargo.toml)
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${GITHUB_WORKSPACE}/${path}/Cargo.toml" ] || continue
 
-          version="$(grep '^version = ' "${GITHUB_WORKSPACE}/${path}/Cargo.toml" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+          version="$(awk -F'"' '/^version = / { print $2; exit }' "${GITHUB_WORKSPACE}/${path}/Cargo.toml")"
           manifest="${EXTRACTED}/${crate}-${version}/${crate}-${version}/Cargo.toml"
           if [ ! -f "${manifest}" ]; then
             echo "❌ Missing extracted manifest: ${manifest}"

@@ -544,6 +544,7 @@ use crate::{
             SaveGenomeResponse,
             ValidateGenomeRequest,
             ValidateGenomeResponse,
+            crate::endpoints::genome::GenomeFileUploadForm,
 
             // Neurons
             NeuronInfoResponse,
@@ -653,6 +654,21 @@ mod tests {
         let components = openapi.components.unwrap();
         assert!(components.schemas.contains_key("HealthCheckResponseV1"));
         assert!(components.schemas.contains_key("ApiError"));
+    }
+
+    #[test]
+    fn test_openapi_amalgamation_by_upload_is_multipart_form() {
+        let openapi = ApiDoc::openapi();
+        let json = serde_json::to_value(&openapi).expect("serialize openapi");
+
+        let content =
+            &json["paths"]["/v1/genome/amalgamation_by_upload"]["post"]["requestBody"]["content"];
+
+        assert!(
+            content.get("multipart/form-data").is_some(),
+            "Expected multipart/form-data content for /v1/genome/amalgamation_by_upload requestBody. Got: {}",
+            content
+        );
     }
 
     #[test]

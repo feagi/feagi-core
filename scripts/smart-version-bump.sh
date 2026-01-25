@@ -136,7 +136,7 @@ increment_beta_version() {
         local beta_number="${BASH_REMATCH[3]:-0}"
         
         # Query crates.io for highest beta for this base version
-        local highest_beta=0
+        local highest_beta=$beta_number
         local search_results=$(cargo search "$crate_name" --limit 100 2>/dev/null || echo "")
         
         if [ -n "$search_results" ]; then

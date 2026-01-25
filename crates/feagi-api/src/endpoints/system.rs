@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::amalgamation;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, State};
 
@@ -55,6 +56,21 @@ pub struct HealthCheckResponse {
     pub simulation_timestep: Option<f64>,
     pub memory_area_stats: Option<HashMap<String, HashMap<String, serde_json::Value>>>,
     pub amalgamation_pending: Option<HashMap<String, serde_json::Value>>,
+    /// Hash of brain regions (hierarchy, membership, and properties)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brain_regions_hash: Option<u64>,
+    /// Hash of cortical areas and properties (excluding mappings)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cortical_areas_hash: Option<u64>,
+    /// Hash of brain geometry (area positions/dimensions and 2D coordinates)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brain_geometry_hash: Option<u64>,
+    /// Hash of morphology registry
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub morphologies_hash: Option<u64>,
+    /// Hash of cortical mappings
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cortical_mappings_hash: Option<u64>,
     /// Root brain region ID (UUID string) for O(1) root lookup
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brain_regions_root: Option<String>,
@@ -88,11 +104,10 @@ pub async fn get_health_check(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get system health: {}", e)))?;
 
-    // Get runtime status if available
-    let burst_engine_active = state
-        .runtime_service
-        .get_status()
-        .await
+    // Get runtime status if available (source of truth for current burst frequency).
+    let runtime_status = state.runtime_service.get_status().await.ok();
+    let burst_engine_active = runtime_status
+        .as_ref()
         .map(|status| status.is_running)
         .unwrap_or(false);
 
@@ -132,7 +147,16 @@ pub async fn get_health_check(
     // Get genome info for simulation_timestep, genome_num, and genome_timestamp
     let genome_info = state.genome_service.get_genome_info().await.ok();
 
-    let simulation_timestep = genome_info.as_ref().map(|info| info.simulation_timestep);
+    // Prefer runtime frequency-derived timestep to reflect the active simulation rate.
+    let runtime_timestep = runtime_status.as_ref().map(|status| {
+        if status.frequency_hz > 0.0 {
+            1.0 / status.frequency_hz
+        } else {
+            0.0
+        }
+    });
+    let simulation_timestep =
+        runtime_timestep.or_else(|| genome_info.as_ref().map(|info| info.simulation_timestep));
     let genome_num = genome_info.as_ref().and_then(|info| info.genome_num);
     let genome_timestamp = genome_info.as_ref().and_then(|info| info.genome_timestamp);
 
@@ -207,7 +231,18 @@ pub async fn get_health_check(
     // Prefer the plasticity cache-derived total to avoid discrepancies.
     let memory_neuron_count = memory_neuron_count_from_cache.or(memory_neuron_count);
 
-    let amalgamation_pending = None; // TODO: Get from evolution/genome merging service
+    // BV expects `amalgamation_pending` to be a dict with:
+    // - amalgamation_id
+    // - genome_title
+    // - circuit_size
+    let amalgamation_pending = state.amalgamation_state.read().pending.as_ref().map(|p| {
+        let v = amalgamation::pending_summary_to_health_json(&p.summary);
+        v.as_object()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .collect::<HashMap<String, serde_json::Value>>()
+    });
 
     // Get root region ID from ConnectomeManager (only available when services feature is enabled)
     #[cfg(feature = "services")]
@@ -247,6 +282,24 @@ pub async fn get_health_check(
         None
     };
 
+    let (
+        brain_regions_hash,
+        cortical_areas_hash,
+        brain_geometry_hash,
+        morphologies_hash,
+        cortical_mappings_hash,
+    ) = {
+        let state_manager = feagi_state_manager::StateManager::instance();
+        let state_manager = state_manager.read();
+        (
+            Some(state_manager.get_brain_regions_hash()),
+            Some(state_manager.get_cortical_areas_hash()),
+            Some(state_manager.get_brain_geometry_hash()),
+            Some(state_manager.get_morphologies_hash()),
+            Some(state_manager.get_cortical_mappings_hash()),
+        )
+    };
+
     Ok(Json(HealthCheckResponse {
         burst_engine: burst_engine_active,
         connected_agents,
@@ -270,6 +323,11 @@ pub async fn get_health_check(
         simulation_timestep,
         memory_area_stats,
         amalgamation_pending,
+        brain_regions_hash,
+        cortical_areas_hash,
+        brain_geometry_hash,
+        morphologies_hash,
+        cortical_mappings_hash,
         brain_regions_root, // NEW: Root region ID for O(1) lookup
         fatigue,
     }))

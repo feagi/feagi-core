@@ -106,12 +106,8 @@ impl CorticalID {
     /// Extracts the data type configuration flag from bytes 4-5 (u16, little-endian)
     /// and converts it to an IOCorticalAreaDataFlag.
     ///
-    /// This is used internally for both BrainInput and BrainOutput cortical areas.
+    /// This is used for both BrainInput and BrainOutput cortical areas.
     #[inline]
-    /// Extract IO configuration flag from this cortical ID (bytes 4-5).
-    ///
-    /// This exposes the authoritative FDP encoding metadata (variant, frame handling,
-    /// and optional percentage positioning) as `IOCorticalAreaConfigurationFlag`.
     pub fn extract_io_data_flag(&self) -> Result<IOCorticalAreaConfigurationFlag, FeagiDataError> {
         let data_type_config = u16::from_le_bytes([self.bytes[4], self.bytes[5]]);
         IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(data_type_config)

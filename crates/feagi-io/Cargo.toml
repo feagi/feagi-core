@@ -1,6 +1,6 @@
 [package]
 name = "feagi-io"
-version = "0.0.1-beta.2"
+version = "0.0.1-beta.3"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -19,10 +19,10 @@ connectome-serialization = ["bincode", "connectome-compression"]  # Connectome f
 connectome-compression = []  # LZ4 compression for connectome files (lz4 already in dependencies)
 
 [dependencies]
-feagi-npu-burst-engine = { version = "0.0.1-beta.1", path = "../feagi-npu/burst-engine" }
-feagi-brain-development = { version = "0.0.1-beta.1", path = "../feagi-brain-development" }  # For CorticalAreaExt
-feagi-services = { version = "0.0.1-beta.1", path = "../feagi-services" }  # For GenomeService and ConnectomeService
-feagi-npu-neural = { version = "0.0.1-beta.1", path = "../feagi-npu/neural" }  # For types
+feagi-npu-burst-engine = { version = "0.0.1-beta.3", path = "../feagi-npu/burst-engine" }
+feagi-brain-development = { version = "0.0.1-beta.3", path = "../feagi-brain-development" }  # For CorticalAreaExt
+feagi-services = { version = "0.0.1-beta.3", path = "../feagi-services" }  # For GenomeService and ConnectomeService
+feagi-npu-neural = { version = "0.0.1-beta.3", path = "../feagi-npu/neural" }  # For types
 # FEAGI data structures and serialization (for binary XYZP format)
 feagi-structures.workspace = true
 feagi-serialization = { workspace = true }
@@ -38,6 +38,7 @@ ahash.workspace = true
 thiserror = "1.0"
 lz4 = "1.28"  # LZ4 compression (used by multiple transports)
 tracing = { workspace = true }  # Structured logging
+# url = "2.5.8" # for URL support
 
 # Connectome serialization dependencies (optional, behind feature)
 bincode = { version = "1.3", optional = true }  # Fast binary serialization

@@ -6,10 +6,13 @@ use std::fmt;
 
 pub type IOCorticalAreaConfigurationFlagBitmask = u16; // 16 Total bits
 
-// Bits 0-7 -> Enum
-// Bit 8 -> FrameChangeHandling
-// Bit 9 -> PercentageNeuronPositioning
-// Bit 10-15 -> RESERVED
+/// Define the indexes of various bit flags
+pub mod bit_indexes {
+    // Bits 0-7 -> Enum
+    pub const FRAME_CHANGE_HANDLING: usize = 8;
+    pub const PERCENTAGE_NEURON_POSITIONING: usize = 9;
+    // Bit 10-15 -> RESERVED
+}
 
 /// Different types of Input/Output cortical areas exist, and have their own nested configurations. This enum defines that
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize)]
@@ -32,8 +35,8 @@ impl IOCorticalAreaConfigurationFlag {
         value: IOCorticalAreaConfigurationFlagBitmask,
     ) -> Result<Self, FeagiDataError> {
         let variant = value & 0xFF; // Bits 0-7
-        let frame_handling = (value >> 8) & 0x01; // Bit 8
-        let positioning = (value >> 9) & 0x01; // Bit 9
+        let frame_handling = (value >> bit_indexes::FRAME_CHANGE_HANDLING) & 0x01;
+        let positioning = (value >> bit_indexes::PERCENTAGE_NEURON_POSITIONING) & 0x01;
 
         let frame_handling_enum = match frame_handling {
             0 => FrameChangeHandling::Absolute,

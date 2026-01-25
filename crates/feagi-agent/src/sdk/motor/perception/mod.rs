@@ -1,10 +1,7 @@
-// Copyright 2025 Neuraville Inc.
-// SPDX-License-Identifier: Apache-2.0
+//! Perception decoder for motor outputs.
 
-//! Perception decoding for FEAGI
-
-pub mod config;
-pub mod decoder;
+mod config;
+mod decoder;
 
 pub use config::PerceptionDecoderConfig;
-pub use decoder::{PerceptionDecoder, PerceptionFrame};
+pub use decoder::{OimgFrame, OsegFrame, PerceptionDecoder, PerceptionFrame};

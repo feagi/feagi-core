@@ -35,11 +35,17 @@ fn create_gaze(x: f32, y: f32, size: f32) -> GazeProperties {
     )
 }
 
+fn test_agent_descriptor() -> feagi_agent::sdk::AgentDescriptor {
+    feagi_agent::sdk::AgentDescriptor::new(1, "test", "connector", 1)
+        .expect("valid test AgentDescriptor")
+}
+
 //endregion
 
 #[cfg(test)]
 mod test_connector_cache_sensor_load_image {
     use crate::load_bird_image;
+    use crate::test_agent_descriptor;
     use feagi_sensorimotor::data_types::descriptors::{
         SegmentedImageFrameProperties, SegmentedXYImageResolutions,
     };
@@ -76,7 +82,7 @@ mod test_connector_cache_sensor_load_image {
         let initial_gaze =
             GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
@@ -121,7 +127,7 @@ mod test_connector_cache_sensor_load_image {
         let initial_gaze =
             GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
@@ -163,7 +169,7 @@ mod test_connector_cache_sensor_load_image {
         let bird_image = load_bird_image();
         let misc_data = MiscData::new_from_image_frame(&bird_image).unwrap();
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
@@ -236,7 +242,7 @@ mod test_connector_cache_sensor_load_image {
             data.fill(10.0);
         }
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
@@ -352,7 +358,7 @@ mod test_image_segmentation_basic {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -393,7 +399,7 @@ mod test_image_segmentation_basic {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -448,7 +454,7 @@ mod test_image_segmentation_basic {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -496,7 +502,7 @@ mod test_image_segmentation_gaze_positions {
         // Gaze towards top-left (negative eccentricity)
         let gaze = create_gaze(0.2, 0.8, 0.3);
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -539,7 +545,7 @@ mod test_image_segmentation_gaze_positions {
         // Gaze towards bottom-right
         let gaze = create_gaze(0.8, 0.2, 0.4);
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             dbg!("a");
@@ -583,7 +589,7 @@ mod test_image_segmentation_gaze_positions {
         // Very small modulation size (zoomed in)
         let gaze = create_gaze(0.5, 0.5, 0.1);
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -626,7 +632,7 @@ mod test_image_segmentation_gaze_positions {
         // Maximum modulation size (zoomed out)
         let gaze = create_gaze(0.5, 0.5, 1.0);
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -674,7 +680,7 @@ mod test_image_segmentation_color_channels {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -717,7 +723,7 @@ mod test_image_segmentation_color_channels {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -765,7 +771,7 @@ mod test_image_segmentation_multiple_channels {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -820,7 +826,7 @@ mod test_image_segmentation_multiple_channels {
         let gaze_left = create_gaze(0.2, 0.5, 0.3);
         let gaze_right = create_gaze(0.8, 0.5, 0.3);
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
 
@@ -900,7 +906,7 @@ mod test_image_segmentation_resolutions {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -942,7 +948,7 @@ mod test_image_segmentation_resolutions {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -984,7 +990,7 @@ mod test_image_segmentation_resolutions {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -1030,7 +1036,7 @@ mod test_image_segmentation_frame_change_handling {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new_empty(test_agent_descriptor());
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache

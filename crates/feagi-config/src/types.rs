@@ -637,6 +637,13 @@ impl Default for LoggingConfig {
 pub struct VisualizationConfig {
     pub enabled: bool,
     pub update_interval: u64,
+    /// Visualization transport selection.
+    ///
+    /// Allowed values:
+    /// - "auto": honor agent request (chosen_transport / shm_path)
+    /// - "websocket": never allocate/advertise SHM visualization paths
+    /// - "shm": always allocate/advertise SHM visualization paths when applicable
+    pub transport: String,
 }
 
 impl Default for VisualizationConfig {
@@ -644,6 +651,7 @@ impl Default for VisualizationConfig {
         Self {
             enabled: true,
             update_interval: 50,
+            transport: "auto".to_string(),
         }
     }
 }

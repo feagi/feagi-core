@@ -1,368 +1,349 @@
-// Copyright 2025 Neuraville Inc.
-// SPDX-License-Identifier: Apache-2.0
+//! Perception decoder implementation.
 
-//! Perception decoder implementation
+use std::path::PathBuf;
+use std::time::Instant;
 
-use crate::sdk::base::CorticalTopology;
-use crate::sdk::error::{Result, SdkError};
+use serde::Serialize;
+
+use crate::core::SdkError;
+use crate::sdk::base::{CorticalTopology, TopologyCache};
 use crate::sdk::motor::perception::config::PerceptionDecoderConfig;
 use crate::sdk::motor::traits::MotorDecoder;
-use feagi_sensorimotor::data_types::decode_token_id_from_xyzp_bitplanes;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use crate::sdk::types::{
+    ColorChannelLayout, ColorSpace, CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
+    FrameChangeHandling, ImageFrame, ImageFrameProperties, ImageXYResolution, MiscData,
+    MiscDataDimensions, MotorCorticalUnit,
+};
+use feagi_sensorimotor::caching::MotorDeviceCache;
+use feagi_sensorimotor::data_types::text_token::decode_token_id_from_misc_data_with_depth;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use serde::Serialize;
-use std::sync::atomic::{AtomicU64, Ordering};
-use tracing;
+use std::sync::Mutex;
 
-/// Perception frame output
+/// Semantic segmentation frame decoded from OSEG motor output.
+#[derive(Debug, Clone, Serialize)]
+pub struct OsegFrame {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+    pub channels: u32,
+    pub x: Vec<u32>,
+    pub y: Vec<u32>,
+    pub z: Vec<u32>,
+    pub p: Vec<f32>,
+}
+
+/// RGB image frame decoded from OIMG motor output.
+#[derive(Debug, Clone, Serialize)]
+pub struct OimgFrame {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+    pub channels: u32,
+    pub x: Vec<u32>,
+    pub y: Vec<u32>,
+    pub z: Vec<u32>,
+    pub p: Vec<u32>,
+}
+
+/// High-level perception frame returned to controllers/UI.
 #[derive(Debug, Clone, Serialize)]
 pub struct PerceptionFrame {
     pub timestamp_ms: u64,
-    pub oimg: Option<OimgData>,
-    pub oseg: Option<OsegData>,
+    pub source_width: Option<u32>,
+    pub source_height: Option<u32>,
+    pub oseg: Option<OsegFrame>,
+    pub oimg: Option<OimgFrame>,
     pub oten_text: Option<String>,
     pub oten_token_id: Option<u32>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct OimgData {
-    pub width: u32,
-    pub height: u32,
-    pub depth: u32,
-    pub channels: u32,
-    pub x: Vec<u32>,
-    pub y: Vec<u32>,
-    pub z: Vec<u32>,
-    pub p: Vec<f32>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct OsegData {
-    pub width: u32,
-    pub height: u32,
-    pub depth: u32,
-    pub channels: u32,
-    pub x: Vec<u32>,
-    pub y: Vec<u32>,
-    pub z: Vec<u32>,
-    pub p: Vec<f32>,
-}
-
-/// Perception decoder for motor data
+/// Decoder for FEAGI motor outputs into higher-level perception frames.
 pub struct PerceptionDecoder {
-    _config: PerceptionDecoderConfig,
-    cortical_ids: [CorticalID; 3],
-    topologies: [Option<CorticalTopology>; 3],
+    config: PerceptionDecoderConfig,
+    motor_cache: Mutex<MotorDeviceCache>,
+    oseg_topology: CorticalTopology,
+    oimg_topology: CorticalTopology,
+    oten_topology: CorticalTopology,
+    #[cfg(feature = "sdk-text")]
     tokenizer: Option<tokenizers::Tokenizer>,
 }
 
 impl PerceptionDecoder {
-    /// Create a new perception decoder
-    ///
-    /// This method attempts to fetch topologies for all three cortical areas (oseg, oimg, oten),
-    /// but will succeed even if some are missing. The decoder will only decode data for areas
-    /// that exist in the topology.
+    /// Create a new perception decoder (fetches required topologies).
     pub async fn new(
         config: PerceptionDecoderConfig,
-        topology_cache: &crate::sdk::base::TopologyCache,
-        tokenizer_path: Option<std::path::PathBuf>,
-    ) -> Result<Self> {
-        config.validate()?;
+        topology_cache: &TopologyCache,
+        tokenizer_path: Option<PathBuf>,
+    ) -> Result<Self, SdkError> {
+        let unit = CorticalUnitIndex::from(config.cortical_unit_id);
+        let frame = FrameChangeHandling::Absolute;
 
-        let cortical_ids = config.cortical_ids();
+        let oseg_id =
+            MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                frame, unit,
+            )[0];
+        let oimg_id =
+            MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+                frame, unit,
+            )[0];
+        let oten_id =
+            MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
+                frame, unit,
+            )[0];
 
-        // Fetch topologies individually - allow missing areas
-        // This allows the decoder to work with partial cortical area sets
-        let mut topologies: [Option<CorticalTopology>; 3] = [None, None, None];
+        let oseg_topology = topology_cache.get_topology(&oseg_id).await?;
+        let oimg_topology = topology_cache.get_topology(&oimg_id).await?;
+        let oten_topology = topology_cache.get_topology(&oten_id).await?;
 
-        for (idx, cortical_id) in cortical_ids.iter().enumerate() {
-            match topology_cache.get_topology(cortical_id).await {
-                Ok(topology) => {
-                    topologies[idx] = Some(topology);
-                }
-                Err(crate::sdk::error::SdkError::TopologyNotFound(_)) => {
-                    // Area doesn't exist - this is OK, decoder will skip it
-                    tracing::warn!(
-                        "Cortical area {} (idx {}) not found in topology - decoder will skip this area",
-                        cortical_id.as_base_64(),
-                        idx
-                    );
-                }
-                Err(e) => {
-                    // Other errors (network, etc.) are still failures
-                    return Err(e);
-                }
-            }
-        }
+        let mut motor_cache = MotorDeviceCache::new();
+        register_oseg(
+            &mut motor_cache,
+            unit,
+            oseg_topology,
+            FrameChangeHandling::Absolute,
+        )?;
+        register_oimg(
+            &mut motor_cache,
+            unit,
+            oimg_topology,
+            FrameChangeHandling::Absolute,
+        )?;
+        register_oten(
+            &mut motor_cache,
+            unit,
+            oten_topology,
+            FrameChangeHandling::Absolute,
+        )?;
 
-        // Check if at least one area exists
-        if topologies.iter().all(|t| t.is_none()) {
-            return Err(crate::sdk::error::SdkError::InvalidConfiguration(
-                "None of the required cortical areas (oseg, oimg, oten) exist in the topology"
-                    .to_string(),
-            ));
-        }
-
-        // Load tokenizer if path provided
-        let tokenizer = if let Some(path) = tokenizer_path {
-            if !path.exists() {
-                tracing::warn!(
-                    "[PERCEPTION-DECODER] Tokenizer path does not exist: {:?}. oten_text will not be decoded.",
-                    path
-                );
-                None
-            } else {
-                match tokenizers::Tokenizer::from_file(&path) {
-                    Ok(tok) => {
-                        let vocab_size = tok.get_vocab_size(true);
-                        tracing::info!(
-                            "[PERCEPTION-DECODER] ✅ Tokenizer loaded successfully from {:?}. Vocab size: {}",
-                            path,
-                            vocab_size
-                        );
-                        Some(tok)
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            "[PERCEPTION-DECODER] ❌ Failed to load tokenizer from {:?}: {}. oten_text will not be decoded.",
-                            path,
-                            e
-                        );
-                        return Err(SdkError::InvalidConfiguration(format!(
-                            "Failed to load tokenizer: {}",
-                            e
-                        )));
-                    }
-                }
-            }
-        } else {
-            tracing::warn!(
-                "[PERCEPTION-DECODER] No tokenizer path provided. oten_text will not be decoded (only oten_token_id will be available)."
-            );
-            None
+        #[cfg(feature = "sdk-text")]
+        let tokenizer = match tokenizer_path {
+            Some(path) => Some(
+                tokenizers::Tokenizer::from_file(path)
+                    .map_err(|e| SdkError::Other(format!("Tokenizer load failed: {e}")))?,
+            ),
+            None => None,
         };
 
         Ok(Self {
-            _config: config,
-            cortical_ids,
-            topologies,
+            config,
+            motor_cache: Mutex::new(motor_cache),
+            oseg_topology,
+            oimg_topology,
+            oten_topology,
+            #[cfg(feature = "sdk-text")]
             tokenizer,
         })
     }
 
-    /// Get which cortical areas are available
-    /// Returns a tuple of (oseg_available, oimg_available, oten_available)
+    /// Returns availability flags for (oseg, oimg, oten).
     pub fn available_areas(&self) -> (bool, bool, bool) {
         (
-            self.topologies[0].is_some(),
-            self.topologies[1].is_some(),
-            self.topologies[2].is_some(),
+            self.oseg_topology.width > 0,
+            self.oimg_topology.width > 0,
+            self.oten_topology.width > 0,
         )
+    }
+
+    fn decode_oseg(&self, unit: CorticalUnitIndex) -> Result<Option<OsegFrame>, SdkError> {
+        // TODO: Support multiple channels and channel-wise aggregation.
+        let channel = CorticalChannelIndex::from(0u32);
+        let wrapped = self
+            .motor_cache
+            .lock()
+            .map_err(|_| SdkError::Other("OSEG cache lock poisoned".to_string()))?
+            .object_segmentation_read_postprocessed_cache_value(unit, channel)
+            .map_err(|e| SdkError::Other(format!("OSEG read failed: {e}")))?;
+        let misc: MiscData = wrapped;
+        let dims = misc.get_dimensions();
+
+        let mut x = Vec::new();
+        let mut y = Vec::new();
+        let mut z = Vec::new();
+        let mut p = Vec::new();
+        for ((xi, yi, zi), val) in misc.get_internal_data().indexed_iter() {
+            if val.abs() <= f32::EPSILON {
+                continue;
+            }
+            x.push(xi as u32);
+            y.push(yi as u32);
+            z.push(zi as u32);
+            p.push(*val);
+        }
+
+        Ok(Some(OsegFrame {
+            width: dims.width,
+            height: dims.height,
+            depth: dims.depth,
+            channels: self.oseg_topology.channels.max(1),
+            x,
+            y,
+            z,
+            p,
+        }))
+    }
+
+    fn decode_oimg(&self, unit: CorticalUnitIndex) -> Result<Option<OimgFrame>, SdkError> {
+        // TODO: Support multiple channels and channel-wise aggregation.
+        let channel = CorticalChannelIndex::from(0u32);
+        let wrapped = self
+            .motor_cache
+            .lock()
+            .map_err(|_| SdkError::Other("OIMG cache lock poisoned".to_string()))?
+            .simple_vision_output_read_postprocessed_cache_value(unit, channel)
+            .map_err(|e| SdkError::Other(format!("OIMG read failed: {e}")))?;
+        let image: ImageFrame = wrapped;
+
+        let resolution = image.get_image_frame_properties().get_image_resolution();
+        let mut x = Vec::new();
+        let mut y = Vec::new();
+        let mut z = Vec::new();
+        let mut p = Vec::new();
+
+        let height = resolution.height;
+        for ((row, col, channel), val) in image.get_internal_data().indexed_iter() {
+            if *val == 0 {
+                continue;
+            }
+            x.push(col as u32);
+            y.push(height - 1 - (row as u32));
+            z.push(channel as u32);
+            p.push(*val as u32);
+        }
+
+        Ok(Some(OimgFrame {
+            width: resolution.width,
+            height: resolution.height,
+            depth: image
+                .get_image_frame_properties()
+                .get_color_channel_layout() as u32,
+            channels: self.oimg_topology.channels.max(1),
+            x,
+            y,
+            z,
+            p,
+        }))
+    }
+
+    fn decode_oten(
+        &self,
+        unit: CorticalUnitIndex,
+    ) -> Result<(Option<u32>, Option<String>), SdkError> {
+        let channel = CorticalChannelIndex::from(0u32);
+        let wrapped = self
+            .motor_cache
+            .lock()
+            .map_err(|_| SdkError::Other("OTEN cache lock poisoned".to_string()))?
+            .text_english_output_read_postprocessed_cache_value(unit, channel)
+            .map_err(|e| SdkError::Other(format!("OTEN read failed: {e}")))?;
+        let misc: MiscData = wrapped;
+        let token_id = decode_token_id_from_misc_data_with_depth(&misc, self.oten_topology.depth)
+            .map_err(|e| SdkError::Other(format!("OTEN token decode failed: {e}")))?;
+
+        #[cfg(feature = "sdk-text")]
+        let text = if let (Some(token_id), Some(tokenizer)) = (token_id, &self.tokenizer) {
+            tokenizer.decode(&[token_id], true).ok()
+        } else {
+            None
+        };
+
+        #[cfg(not(feature = "sdk-text"))]
+        let text: Option<String> = None;
+
+        Ok((token_id, text))
     }
 }
 
 impl MotorDecoder for PerceptionDecoder {
+    type Input = CorticalMappedXYZPNeuronVoxels;
     type Output = PerceptionFrame;
 
-    fn decode(&self, data: &CorticalMappedXYZPNeuronVoxels) -> Result<Self::Output> {
-        let now_ms = std::time::SystemTime::now()
+    fn decode(&self, input: &Self::Input) -> Result<Self::Output, SdkError> {
+        {
+            let mut cache = self
+                .motor_cache
+                .lock()
+                .map_err(|_| SdkError::Other("Motor cache lock poisoned".to_string()))?;
+            cache
+                .ingest_neuron_data_and_run_callbacks(input.clone(), Instant::now())
+                .map_err(|e| SdkError::Other(format!("Motor cache ingest failed: {e}")))?;
+        }
+
+        let unit = CorticalUnitIndex::from(self.config.cortical_unit_id);
+        let oseg = self.decode_oseg(unit)?;
+        let oimg = self.decode_oimg(unit)?;
+        let (oten_token_id, oten_text) = self.decode_oten(unit)?;
+
+        let timestamp_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
+            .map_err(|e| SdkError::Other(format!("Timestamp error: {e}")))?
             .as_millis() as u64;
 
-        // Decode oseg (only if topology exists)
-        let oseg = self.topologies[0].as_ref().and_then(|topo| {
-            data.mappings.get(&self.cortical_ids[0]).map(|voxels| {
-                let (x, y, z, p) = voxels.borrow_xyzp_vectors();
-                OsegData {
-                    width: topo.width,
-                    height: topo.height,
-                    depth: topo.depth,
-                    channels: topo.channels,
-                    x: x.clone(),
-                    y: y.clone(),
-                    z: z.clone(),
-                    p: p.clone(),
-                }
-            })
-        });
-
-        // Decode oimg (only if topology exists)
-        let oimg = self.topologies[1].as_ref().and_then(|topo| {
-            data.mappings.get(&self.cortical_ids[1]).map(|voxels| {
-                let (x, y, z, p) = voxels.borrow_xyzp_vectors();
-                OimgData {
-                    width: topo.width,
-                    height: topo.height,
-                    depth: topo.depth,
-                    channels: topo.channels,
-                    x: x.clone(),
-                    y: y.clone(),
-                    z: z.clone(),
-                    p: p.clone(),
-                }
-            })
-        });
-
-        // Decode oten (only if topology exists)
-        let oten_token_id = self.topologies[2].as_ref().and_then(|topo| {
-            data.mappings
-                .get(&self.cortical_ids[2])
-                .and_then(|voxels| {
-                    // Strategic debugging: summarize raw oten voxels and what the bitplane decoder
-                    // "would see" at (x=0,y=0). This helps distinguish:
-                    // - FEAGI motor payload not changing vs
-                    // - voxels present but not at x=0,y=0 (decoder ignores them).
-                    static OTEN_VOXEL_LOG_COUNT: AtomicU64 = AtomicU64::new(0);
-                    let log_n = OTEN_VOXEL_LOG_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
-                    if log_n <= 10 || log_n.is_multiple_of(100) {
-                        let (x, y, z, p) = voxels.borrow_xyzp_vectors();
-                        let depth = topo.depth;
-
-                        let total = x.len();
-                        let mut active_total: usize = 0;
-                        let mut active_xy00: usize = 0;
-                        let mut active_non_xy00: usize = 0;
-                        let mut active_z_out_of_range: usize = 0;
-                        let mut value_raw: u32 = 0;
-
-                        // Track min/max coords for quick sanity checks.
-                        let mut min_x: u32 = u32::MAX;
-                        let mut max_x: u32 = 0;
-                        let mut min_y: u32 = u32::MAX;
-                        let mut max_y: u32 = 0;
-
-                        for i in 0..x.len() {
-                            min_x = min_x.min(x[i]);
-                            max_x = max_x.max(x[i]);
-                            min_y = min_y.min(y[i]);
-                            max_y = max_y.max(y[i]);
-
-                            if p[i] <= 0.0 {
-                                continue;
-                            }
-                            active_total += 1;
-
-                            let zi = z[i];
-                            if zi >= depth {
-                                active_z_out_of_range += 1;
-                                continue;
-                            }
-
-                            if x[i] == 0 && y[i] == 0 {
-                                active_xy00 += 1;
-                                // z=0 is MSB.
-                                if depth <= 32 {
-                                    let weight = 1u32 << (depth - 1 - zi);
-                                    value_raw |= weight;
-                                }
-                            } else {
-                                active_non_xy00 += 1;
-                            }
-                        }
-
-                        // Interpret value using TextToken "offset encoding".
-                        let decoded_from_raw = if value_raw == 0 {
-                            None
-                        } else {
-                            Some(value_raw - 1)
-                        };
-
-                        tracing::info!(
-                            "[PERCEPTION-DECODER][OTEN] sample#{} total_voxels={} active_total={} active_xy00={} active_non_xy00={} active_z_out_of_range={} depth={} x_range=[{},{}] y_range=[{},{}] value_raw=0x{:X} decoded_from_raw={:?}",
-                            log_n,
-                            total,
-                            active_total,
-                            active_xy00,
-                            active_non_xy00,
-                            active_z_out_of_range,
-                            depth,
-                            if min_x == u32::MAX { 0 } else { min_x },
-                            max_x,
-                            if min_y == u32::MAX { 0 } else { min_y },
-                            max_y,
-                            value_raw,
-                            decoded_from_raw
-                        );
-                    }
-
-                    decode_token_id_from_xyzp_bitplanes(voxels, topo.depth)
-                        .ok()
-                        .flatten()
-                })
-        });
-
-        let oten_text = if let (Some(token_id), Some(ref tokenizer)) =
-            (oten_token_id, &self.tokenizer)
-        {
-            // Try decoding with skip_special_tokens=true first
-            let decoded = tokenizer.decode(std::slice::from_ref(&token_id), true).ok();
-
-            // Log decoding attempts for debugging (first few and every 100th)
-            static DECODE_COUNT: std::sync::atomic::AtomicU64 =
-                std::sync::atomic::AtomicU64::new(0);
-            let count = DECODE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-
-            if count <= 5 || count.is_multiple_of(100) {
-                match &decoded {
-                    Some(text) if !text.is_empty() => {
-                        tracing::info!(
-                            "[PERCEPTION-DECODER] Token ID {} decoded to: \"{}\"",
-                            token_id,
-                            text
-                        );
-                    }
-                    Some(text) if text.is_empty() => {
-                        // Try without skip_special_tokens to see what it actually is
-                        let decoded_with_special = tokenizer
-                            .decode(std::slice::from_ref(&token_id), false)
-                            .ok();
-                        tracing::warn!(
-                            "[PERCEPTION-DECODER] Token ID {} decoded to EMPTY string (skip_special=true). \
-                            Without skip_special: {:?}. This might be a control/padding token.",
-                            token_id,
-                            decoded_with_special
-                        );
-                    }
-                    None => {
-                        tracing::error!(
-                            "[PERCEPTION-DECODER] Token ID {} failed to decode! Tokenizer error.",
-                            token_id
-                        );
-                    }
-                    _ => {}
-                }
-            }
-
-            decoded.filter(|s| !s.is_empty())
-        } else {
-            // Log why tokenizer isn't being used
-            if self.tokenizer.is_none() {
-                if let Some(token_id) = oten_token_id {
-                    static WARNED_NO_TOKENIZER: std::sync::atomic::AtomicBool =
-                        std::sync::atomic::AtomicBool::new(false);
-                    if !WARNED_NO_TOKENIZER.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                        tracing::warn!(
-                            "[PERCEPTION-DECODER] Token ID {} received but tokenizer is not loaded! \
-                            oten_text will always be empty. Check tokenizer_path in controller initialization.",
-                            token_id
-                        );
-                    }
-                }
-            }
-            None
-        };
-
         Ok(PerceptionFrame {
-            timestamp_ms: now_ms,
+            timestamp_ms,
+            source_width: oimg.as_ref().map(|f| f.width),
+            source_height: oimg.as_ref().map(|f| f.height),
             oseg,
             oimg,
             oten_text,
             oten_token_id,
         })
     }
+}
 
-    fn cortical_ids(&self) -> &[CorticalID] {
-        &self.cortical_ids
-    }
+fn register_oseg(
+    motor_cache: &mut MotorDeviceCache,
+    unit: CorticalUnitIndex,
+    topology: CorticalTopology,
+    frame: FrameChangeHandling,
+) -> Result<(), SdkError> {
+    let channels = CorticalChannelCount::new(topology.channels)
+        .map_err(|e| SdkError::Other(format!("Invalid OSEG channel count: {e}")))?;
+    let dims = MiscDataDimensions::new(topology.width, topology.height, topology.depth)
+        .map_err(|e| SdkError::Other(format!("Invalid OSEG dimensions: {e}")))?;
+    motor_cache
+        .object_segmentation_register(unit, channels, frame, dims)
+        .map_err(|e| SdkError::Other(format!("OSEG register failed: {e}")))
+}
+
+fn register_oimg(
+    motor_cache: &mut MotorDeviceCache,
+    unit: CorticalUnitIndex,
+    topology: CorticalTopology,
+    frame: FrameChangeHandling,
+) -> Result<(), SdkError> {
+    let channels = CorticalChannelCount::new(topology.channels)
+        .map_err(|e| SdkError::Other(format!("Invalid OIMG channel count: {e}")))?;
+    let resolution = ImageXYResolution::new(topology.width, topology.height)
+        .map_err(|e| SdkError::Other(format!("Invalid OIMG resolution: {e}")))?;
+    let layout = match topology.depth {
+        1 => ColorChannelLayout::GrayScale,
+        3 => ColorChannelLayout::RGB,
+        _ => {
+            return Err(SdkError::Other(format!(
+                "Unsupported OIMG depth: {}",
+                topology.depth
+            )))
+        }
+    };
+    // TODO: allow caller-configurable ColorSpace.
+    let props = ImageFrameProperties::new(resolution, ColorSpace::Gamma, layout)
+        .map_err(|e| SdkError::Other(format!("OIMG properties error: {e}")))?;
+    motor_cache
+        .simple_vision_output_register(unit, channels, frame, props)
+        .map_err(|e| SdkError::Other(format!("OIMG register failed: {e}")))
+}
+
+fn register_oten(
+    motor_cache: &mut MotorDeviceCache,
+    unit: CorticalUnitIndex,
+    topology: CorticalTopology,
+    frame: FrameChangeHandling,
+) -> Result<(), SdkError> {
+    let channels = CorticalChannelCount::new(topology.channels)
+        .map_err(|e| SdkError::Other(format!("Invalid OTEN channel count: {e}")))?;
+    let dims = MiscDataDimensions::new(topology.width, topology.height, topology.depth)
+        .map_err(|e| SdkError::Other(format!("Invalid OTEN dimensions: {e}")))?;
+    motor_cache
+        .text_english_output_register(unit, channels, frame, dims)
+        .map_err(|e| SdkError::Other(format!("OTEN register failed: {e}")))
 }

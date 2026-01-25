@@ -101,13 +101,17 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
         let modularity_neuron_array =
             neurons_to_read.get_neurons_of(&self.cortical_modularity_read_target);
 
+        // IMPORTANT:
+        // FEAGI motor packets for gaze may arrive partially (e.g. only eccentricity OR only modulation),
+        // especially during area activation / warm-up. Treat missing cortical IDs as "no update"
+        // instead of panicking.
         if eccentricity_neuron_array.is_none() && modularity_neuron_array.is_none() {
             return Ok(());
         }
 
-        let eccentricity_neuron_array = eccentricity_neuron_array.unwrap();
-        let modularity_neuron_array = modularity_neuron_array.unwrap();
-        if eccentricity_neuron_array.is_empty() && modularity_neuron_array.is_empty() {
+        let has_any_data = eccentricity_neuron_array.is_some_and(|a| !a.is_empty())
+            || modularity_neuron_array.is_some_and(|a| !a.is_empty());
+        if !has_any_data {
             return Ok(());
         }
 
@@ -124,41 +128,55 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
         let modularity_z_depth: u32 = self.channel_modularity_dimensions.depth;
 
         // Collect eccentricity neuron data
-        for neuron in eccentricity_neuron_array.iter() {
-            if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
-                continue;
-            }
+        if let Some(eccentricity_neuron_array) = eccentricity_neuron_array {
+            for neuron in eccentricity_neuron_array.iter() {
+                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                    continue;
+                }
 
-            if neuron.neuron_voxel_coordinate.x >= (number_of_channels * ECCENTRICITY_CHANNEL_WIDTH)
-                || neuron.neuron_voxel_coordinate.z >= eccentricity_z_depth
-            {
-                continue;
-            }
+                if neuron.neuron_voxel_coordinate.x
+                    >= (number_of_channels * ECCENTRICITY_CHANNEL_WIDTH)
+                    || neuron.neuron_voxel_coordinate.z >= eccentricity_z_depth
+                {
+                    continue;
+                }
 
-            let z_row_vector = self
-                .z_depth_eccentricity_scratch_space
-                .get_mut(neuron.neuron_voxel_coordinate.x as usize)
-                .unwrap();
-            z_row_vector.push(neuron.neuron_voxel_coordinate.z);
+                let z_row_vector = self
+                    .z_depth_eccentricity_scratch_space
+                    .get_mut(neuron.neuron_voxel_coordinate.x as usize)
+                    .ok_or_else(|| {
+                        FeagiDataError::InternalError(
+                            "Eccentricity scratch space indexing error".into(),
+                        )
+                    })?;
+                z_row_vector.push(neuron.neuron_voxel_coordinate.z);
+            }
         }
 
         // Collect modularity neuron data
-        for neuron in modularity_neuron_array.iter() {
-            if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
-                continue;
-            }
+        if let Some(modularity_neuron_array) = modularity_neuron_array {
+            for neuron in modularity_neuron_array.iter() {
+                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                    continue;
+                }
 
-            if neuron.neuron_voxel_coordinate.x >= (number_of_channels * MODULARITY_CHANNEL_WIDTH)
-                || neuron.neuron_voxel_coordinate.z >= modularity_z_depth
-            {
-                continue;
-            }
+                if neuron.neuron_voxel_coordinate.x
+                    >= (number_of_channels * MODULARITY_CHANNEL_WIDTH)
+                    || neuron.neuron_voxel_coordinate.z >= modularity_z_depth
+                {
+                    continue;
+                }
 
-            let z_row_vector = self
-                .z_depth_modularity_scratch_space
-                .get_mut(neuron.neuron_voxel_coordinate.x as usize)
-                .unwrap();
-            z_row_vector.push(neuron.neuron_voxel_coordinate.z);
+                let z_row_vector = self
+                    .z_depth_modularity_scratch_space
+                    .get_mut(neuron.neuron_voxel_coordinate.x as usize)
+                    .ok_or_else(|| {
+                        FeagiDataError::InternalError(
+                            "Modularity scratch space indexing error".into(),
+                        )
+                    })?;
+                z_row_vector.push(neuron.neuron_voxel_coordinate.z);
+            }
         }
 
         // Decode into pipeline caches
@@ -175,15 +193,21 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
             let eccentricity_z_a_vector = self
                 .z_depth_eccentricity_scratch_space
                 .get(eccentricity_z_row_a_index)
-                .unwrap();
+                .ok_or_else(|| {
+                    FeagiDataError::InternalError("Eccentricity scratch space read error".into())
+                })?;
             let eccentricity_z_b_vector = self
                 .z_depth_eccentricity_scratch_space
                 .get(eccentricity_z_row_b_index)
-                .unwrap();
+                .ok_or_else(|| {
+                    FeagiDataError::InternalError("Eccentricity scratch space read error".into())
+                })?;
             let modularity_z_vector = self
                 .z_depth_modularity_scratch_space
                 .get(modularity_z_row_index)
-                .unwrap();
+                .ok_or_else(|| {
+                    FeagiDataError::InternalError("Modularity scratch space read error".into())
+                })?;
 
             if eccentricity_z_a_vector.is_empty()
                 && eccentricity_z_b_vector.is_empty()
@@ -244,5 +268,52 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use feagi_structures::genomic::cortical_area::CoreCorticalType;
+    use feagi_structures::neuron_voxels::xyzp::{
+        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+    };
+
+    /// Ensures partial gaze packets do not panic.
+    #[test]
+    fn gaze_decoder_does_not_panic_on_partial_gaze_packet() {
+        // This regression test ensures that when only ONE of the gaze cortical IDs
+        // is present in the motor packet (common during activation/warm-up),
+        // the decoder returns Ok(()) instead of panicking via unwrap().
+
+        // Minimal decoder: 1 channel, 1-depth each, linear interpolation.
+        let eccentricity_id = CoreCorticalType::Power.to_cortical_id();
+        let modularity_id = CoreCorticalType::Death.to_cortical_id();
+
+        let mut decoder = GazePropertiesNeuronVoxelXYZPDecoder::new_box(
+            eccentricity_id,
+            modularity_id,
+            NeuronDepth::new(1).unwrap(),
+            NeuronDepth::new(1).unwrap(),
+            CorticalChannelCount::new(1).unwrap(),
+            PercentageNeuronPositioning::Linear,
+        )
+        .unwrap();
+
+        // Motor packet contains ONLY eccentricity array, modularity missing.
+        let mut voxels = CorticalMappedXYZPNeuronVoxels::new();
+        let _ = voxels.insert(eccentricity_id, NeuronVoxelXYZPArrays::new());
+
+        let mut pipelines: Vec<MotorPipelineStageRunner> = Vec::new();
+        let mut changed: Vec<bool> = Vec::new();
+
+        // Should not panic; should return Ok.
+        let result = decoder.read_neuron_data_multi_channel_into_pipeline_input_cache(
+            &voxels,
+            Instant::now(),
+            &mut pipelines,
+            &mut changed,
+        );
+        assert!(result.is_ok());
     }
 }

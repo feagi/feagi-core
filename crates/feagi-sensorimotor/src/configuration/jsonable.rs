@@ -28,7 +28,6 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 /// Top level JSON representation of registered devices and feedbacks
@@ -98,14 +97,17 @@ impl JSONInputOutputDefinition {
         unit_definition: JSONUnitDefinition,
         decoder_properties: JSONDecoderProperties,
     ) {
-        match self.output_units_and_decoder_properties.entry(motor) {
-            Entry::Vacant(e) => {
-                e.insert(vec![(unit_definition, decoder_properties)]);
-            }
-            Entry::Occupied(mut e) => {
-                e.get_mut().push((unit_definition, decoder_properties));
-            }
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            self.output_units_and_decoder_properties.entry(motor)
+        {
+            entry.insert(vec![(unit_definition, decoder_properties)]);
+            return;
         }
+        let vec = self
+            .output_units_and_decoder_properties
+            .get_mut(&motor)
+            .unwrap();
+        vec.push((unit_definition, decoder_properties));
     }
 
     pub fn insert_sensor(
@@ -114,14 +116,17 @@ impl JSONInputOutputDefinition {
         unit_definition: JSONUnitDefinition,
         encoder_properties: JSONEncoderProperties,
     ) {
-        match self.input_units_and_encoder_properties.entry(sensor) {
-            Entry::Vacant(e) => {
-                e.insert(vec![(unit_definition, encoder_properties)]);
-            }
-            Entry::Occupied(mut e) => {
-                e.get_mut().push((unit_definition, encoder_properties));
-            }
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            self.input_units_and_encoder_properties.entry(sensor)
+        {
+            entry.insert(vec![(unit_definition, encoder_properties)]);
+            return;
         }
+        let vec = self
+            .input_units_and_encoder_properties
+            .get_mut(&sensor)
+            .unwrap();
+        vec.push((unit_definition, encoder_properties));
     }
 
     pub(crate) fn get_feedbacks(&self) -> &FeedbackRegistrar {

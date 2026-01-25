@@ -1,50 +1,18 @@
-// Copyright 2025 Neuraville Inc.
-// SPDX-License-Identifier: Apache-2.0
+//! Controller trait for SDK-based agents.
 
-//! Controller trait and base implementations
+use crate::core::SdkError;
 
-use crate::sdk::error::Result;
-use feagi_structures::genomic::cortical_area::CorticalID;
-
-/// Core controller trait
+/// Common lifecycle interface for SDK controllers.
 ///
-/// Implement this trait to create custom controllers that follow FEAGI conventions.
-///
-/// # Example
-/// ```ignore
-/// use feagi_agent::sdk::base::Controller;
-///
-/// struct MyController {
-///     // ... fields
-/// }
-///
-/// #[async_trait::async_trait]
-/// impl Controller for MyController {
-///     fn controller_type(&self) -> &str { "my-custom" }
-///     fn agent_id(&self) -> &str { &self.agent_id }
-///     async fn start(&mut self) -> Result<()> { /* ... */ }
-///     async fn stop(&mut self) -> Result<()> { /* ... */ }
-///     fn is_running(&self) -> bool { /* ... */ }
-///     fn cortical_ids(&self) -> &[CorticalID] { /* ... */ }
-/// }
-/// ```
-#[async_trait::async_trait]
-pub trait Controller: Send + Sync {
-    /// Controller type identifier (e.g., "video", "text", "audio")
-    fn controller_type(&self) -> &str;
+/// Controllers wrap higher-level behavior (sensing/actuation) on top of FEAGI
+/// networking and device registration.
+pub trait Controller {
+    /// Start the controller and any background loops.
+    fn start(&mut self) -> Result<(), SdkError>;
 
-    /// Get the agent ID this controller manages
-    fn agent_id(&self) -> &str;
+    /// Stop the controller and release resources.
+    fn stop(&mut self);
 
-    /// Start the controller (connect to FEAGI, begin operation)
-    async fn start(&mut self) -> Result<()>;
-
-    /// Stop the controller gracefully
-    async fn stop(&mut self) -> Result<()>;
-
-    /// Check if controller is currently running
+    /// Returns true if the controller is actively running.
     fn is_running(&self) -> bool;
-
-    /// Get cortical IDs this controller produces/consumes
-    fn cortical_ids(&self) -> &[CorticalID];
 }

@@ -69,6 +69,11 @@ feagi_services::types::RuntimeStatus
 
 ---
 
+## Benchmark Integrity Note
+
+- Never update benchmark baselines or thresholds just to make CI pass.
+- If perf regressions occur, investigate and fix the code or revert the change.
+
 ## 🎯 Next Steps to Fix Tests
 
 ### Step 1: Check Service Exports (5 min)
@@ -119,6 +124,22 @@ let state = ApiState {
     // runtime_service: None, // If optional in ApiState
 };
 ```
+
+---
+
+## Pending Test Work (Requires Follow-Up)
+
+### CUDA Tests (Hardware Required)
+- Location: `crates/feagi-npu/burst-engine/tests/cuda_*`
+- Status: intentionally ignored in standard runs
+- Reason: requires CUDA-capable hardware and drivers
+- Next step: gate with a `cuda` feature or run on CUDA-enabled CI runners
+
+### INT8 Quantization Accuracy Tests
+- Location: `crates/feagi-npu/neural/src/dynamics.rs`
+- Status: intentionally ignored in standard runs
+- Reason: current INT8 quantization accuracy does not meet expectations
+- Next step: improve INT8 quantization behavior and re-enable tests
 
 OR check if `ApiState` requires all services and what the actual fields are.
 

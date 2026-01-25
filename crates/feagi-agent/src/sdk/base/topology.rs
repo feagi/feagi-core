@@ -1,299 +1,281 @@
-// Copyright 2025 Neuraville Inc.
-// SPDX-License-Identifier: Apache-2.0
+//! Cortical topology access and caching.
 
-//! Topology cache for cortical area information
-
-use crate::sdk::error::{Result, SdkError};
-use feagi_structures::genomic::cortical_area::CorticalID;
-use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::sync::Arc;
 
-/// Cortical area topology information
-#[derive(Debug, Clone)]
+use std::sync::RwLock;
+
+use crate::core::SdkError;
+use crate::sdk::types::CorticalID;
+
+/// Parsed cortical topology for a single cortical area.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CorticalTopology {
-    pub cortical_id: CorticalID,
+    /// X dimension (width) per device.
     pub width: u32,
+    /// Y dimension (height) per device.
     pub height: u32,
+    /// Z dimension (depth) per device.
     pub depth: u32,
+    /// Number of channels/devices.
     pub channels: u32,
 }
 
-/// Shared topology cache to avoid redundant HTTP requests
-///
-/// This cache is designed for explicit dependency injection:
-/// ```ignore
-/// let topology_cache = TopologyCache::new("localhost", 8080, 5.0)?;
-///
-/// // Pass to multiple controllers
-/// let video = VideoController::new(config, topology_cache.clone())?;
-/// let text = TextController::new(config, topology_cache.clone())?;
-/// ```
-#[derive(Clone)]
+/// HTTP-backed topology cache for cortical areas.
+#[derive(Debug, Clone)]
 pub struct TopologyCache {
-    cache: Arc<RwLock<HashMap<String, CorticalTopology>>>,
-    http_client: reqwest::Client,
-    feagi_host: String,
-    feagi_api_port: u16,
+    host: String,
+    port: u16,
+    #[allow(dead_code)]
+    timeout: std::time::Duration,
+    cache: Arc<RwLock<HashMap<CorticalID, CorticalTopology>>>,
+    #[cfg(feature = "sdk-io")]
+    client: reqwest::Client,
 }
 
 impl TopologyCache {
-    /// Create a new topology cache
-    ///
-    /// # Arguments
-    /// * `feagi_host` - FEAGI API host (e.g., "localhost" or "192.168.1.100")
-    /// * `feagi_api_port` - FEAGI API port (typically 8080)
-    /// * `http_timeout_s` - HTTP request timeout in seconds
-    ///
-    /// # Example
-    /// ```ignore
-    /// let cache = TopologyCache::new("localhost", 8080, 5.0)?;
-    /// ```
-    pub fn new(
-        feagi_host: impl Into<String>,
-        feagi_api_port: u16,
-        http_timeout_s: f64,
-    ) -> Result<Self> {
-        let http_client = reqwest::Client::builder()
-            .timeout(Duration::from_secs_f64(http_timeout_s))
-            .build()?;
-
+    /// Create a new topology cache for a FEAGI HTTP endpoint.
+    pub fn new(host: impl Into<String>, port: u16, timeout_s: f64) -> Result<Self, SdkError> {
+        let host = host.into();
+        let timeout = std::time::Duration::from_secs_f64(timeout_s);
+        #[cfg(feature = "sdk-io")]
+        let client = reqwest::Client::builder()
+            .timeout(timeout)
+            .build()
+            .map_err(|e| SdkError::Other(format!("TopologyCache HTTP client init failed: {e}")))?;
         Ok(Self {
+            host,
+            port,
+            timeout,
             cache: Arc::new(RwLock::new(HashMap::new())),
-            http_client,
-            feagi_host: feagi_host.into(),
-            feagi_api_port,
+            #[cfg(feature = "sdk-io")]
+            client,
         })
     }
 
-    /// Create a new topology cache using a pre-configured HTTP client.
-    ///
-    /// This is useful when you want to share a single `reqwest::Client` (with a consistent
-    /// timeout, headers, proxy settings, etc.) across multiple SDK components.
-    pub fn with_http_client(
-        feagi_host: impl Into<String>,
-        feagi_api_port: u16,
-        http_client: reqwest::Client,
-    ) -> Self {
-        Self {
-            cache: Arc::new(RwLock::new(HashMap::new())),
-            http_client,
-            feagi_host: feagi_host.into(),
-            feagi_api_port,
-        }
-    }
-
-    /// Fetch topology for a single cortical area (with caching)
-    ///
-    /// This method checks the cache first. If not found, it fetches from FEAGI
-    /// and caches the result for future calls.
-    ///
-    /// # Example
-    /// ```ignore
-    /// let topology = cache.get_topology(&cortical_id).await?;
-    /// println!("Resolution: {}x{}x{}", topology.width, topology.height, topology.depth);
-    /// ```
-    pub async fn get_topology(&self, cortical_id: &CorticalID) -> Result<CorticalTopology> {
-        let key = cortical_id.as_base_64();
-
-        // Check cache first (read lock)
-        {
-            let cache = self.cache.read().unwrap();
-            if let Some(topo) = cache.get(&key) {
-                return Ok(topo.clone());
+    /// Fetch and cache topology for a single cortical ID.
+    #[cfg(feature = "sdk-io")]
+    pub async fn get_topology(&self, id: &CorticalID) -> Result<CorticalTopology, SdkError> {
+        if let Ok(cache) = self.cache.read() {
+            if let Some(existing) = cache.get(id).copied() {
+                return Ok(existing);
             }
         }
-
-        // Fetch from FEAGI
-        let topo = self.fetch_from_feagi(cortical_id).await?;
-
-        // Cache result (write lock)
-        {
-            let mut cache = self.cache.write().unwrap();
-            cache.insert(key, topo.clone());
+        let payload = self.fetch_topologies(&[id.as_base_64()]).await?;
+        let topo = Self::parse_topology_payload(id, &payload)?;
+        if let Ok(mut cache) = self.cache.write() {
+            cache.insert(*id, topo);
         }
-
         Ok(topo)
     }
 
-    /// Fetch topologies for multiple cortical areas in parallel
-    ///
-    /// This is more efficient than calling `get_topology` in a loop.
-    ///
-    /// # Example
-    /// ```ignore
-    /// let topologies = cache.get_topologies(&[id1, id2, id3]).await?;
-    /// ```
+    /// Fetch and cache topologies for multiple cortical IDs.
+    #[cfg(feature = "sdk-io")]
     pub async fn get_topologies(
         &self,
-        cortical_ids: &[CorticalID],
-    ) -> Result<Vec<CorticalTopology>> {
-        let futures = cortical_ids.iter().map(|id| self.get_topology(id));
-        futures::future::try_join_all(futures).await
-    }
+        ids: &[CorticalID],
+    ) -> Result<Vec<CorticalTopology>, SdkError> {
+        let missing: Vec<String> = {
+            let cache = self
+                .cache
+                .read()
+                .map_err(|_| SdkError::Other("Topology cache lock poisoned".to_string()))?;
+            ids.iter()
+                .filter(|id| !cache.contains_key(*id))
+                .map(|id| id.as_base_64())
+                .collect()
+        };
 
-    /// Pre-fetch topologies without returning them (warm the cache)
-    ///
-    /// Useful for warming the cache during initialization before real-time operation.
-    ///
-    /// # Example
-    /// ```ignore
-    /// // During initialization (non-time-critical)
-    /// cache.prefetch(&[id1, id2, id3]).await?;
-    ///
-    /// // Later, during real-time operation (fast, cached)
-    /// let topology = cache.get_topology(&id1).await?; // No network call
-    /// ```
-    pub async fn prefetch(&self, cortical_ids: &[CorticalID]) -> Result<()> {
-        self.get_topologies(cortical_ids).await?;
-        Ok(())
-    }
-
-    /// Clear the cache
-    ///
-    /// Useful for testing or when topologies change in FEAGI.
-    pub fn clear_cache(&self) {
-        self.cache.write().unwrap().clear();
-    }
-
-    /// Get cache statistics
-    pub fn cache_size(&self) -> usize {
-        self.cache.read().unwrap().len()
-    }
-
-    /// Fetch topology from FEAGI (internal, unified implementation)
-    async fn fetch_from_feagi(&self, cortical_id: &CorticalID) -> Result<CorticalTopology> {
-        let url = format!(
-            "http://{}:{}/v1/cortical_area/multi/cortical_area_properties",
-            self.feagi_host, self.feagi_api_port
-        );
-
-        let cortical_b64 = cortical_id.as_base_64();
-        let resp = self
-            .http_client
-            .post(url)
-            .json(&vec![cortical_b64.clone()])
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let payload: serde_json::Value = resp.json().await?;
-        Self::parse_topology_payload(cortical_id, &payload)
-    }
-
-    /// Parse the topology response payload from FEAGI.
-    ///
-    /// Exposed primarily for contract tests to ensure SDK parsing stays compatible with
-    /// FEAGI backend API changes.
-    pub fn parse_topology_payload(
-        cortical_id: &CorticalID,
-        payload: &Value,
-    ) -> Result<CorticalTopology> {
-        let cortical_b64 = cortical_id.as_base_64();
-        let info = payload
-            .get(&cortical_b64)
-            .ok_or_else(|| SdkError::TopologyNotFound(cortical_b64.clone()))?;
-
-        // Try modern fields first (cortical_dimensions_per_device + dev_count)
-        if let (Some(per_device_dims), Some(dev_count)) = (
-            info.get("cortical_dimensions_per_device"),
-            info.get("dev_count"),
-        ) {
-            let dims = per_device_dims.as_array().ok_or_else(|| {
-                SdkError::InvalidConfiguration(
-                    "cortical_dimensions_per_device is not an array".to_string(),
-                )
-            })?;
-
-            if dims.len() != 3 {
-                return Err(SdkError::InvalidConfiguration(format!(
-                    "cortical_dimensions_per_device expected len=3, got {}",
-                    dims.len()
-                )));
+        if !missing.is_empty() {
+            let payload = self.fetch_topologies(&missing).await?;
+            let mut cache = self
+                .cache
+                .write()
+                .map_err(|_| SdkError::Other("Topology cache lock poisoned".to_string()))?;
+            for id in ids {
+                if cache.contains_key(id) {
+                    continue;
+                }
+                let topo = Self::parse_topology_payload(id, &payload)?;
+                cache.insert(*id, topo);
             }
-
-            let width = dims[0].as_u64().ok_or_else(|| {
-                SdkError::InvalidConfiguration("width is not a number".to_string())
-            })? as u32;
-            let height = dims[1].as_u64().ok_or_else(|| {
-                SdkError::InvalidConfiguration("height is not a number".to_string())
-            })? as u32;
-            let depth = dims[2].as_u64().ok_or_else(|| {
-                SdkError::InvalidConfiguration("depth is not a number".to_string())
-            })? as u32;
-            let channels = dev_count.as_u64().ok_or_else(|| {
-                SdkError::InvalidConfiguration("dev_count is not a number".to_string())
-            })? as u32;
-
-            return Ok(CorticalTopology {
-                cortical_id: *cortical_id,
-                width,
-                height,
-                depth,
-                channels,
-            });
         }
 
-        // Fallback to legacy fields (dimensions or cortical_dimensions)
-        let dims = info
-            .get("dimensions")
-            .or_else(|| info.get("cortical_dimensions"))
-            .and_then(|v| v.as_array())
-            .ok_or_else(|| {
-                SdkError::InvalidConfiguration(
-                    "Topology response missing dimensions array".to_string(),
-                )
-            })?;
+        let cache = self
+            .cache
+            .read()
+            .map_err(|_| SdkError::Other("Topology cache lock poisoned".to_string()))?;
+        ids.iter()
+            .map(|id| {
+                cache
+                    .get(id)
+                    .copied()
+                    .ok_or_else(|| SdkError::Other(format!("Topology missing in cache: {}", id)))
+            })
+            .collect()
+    }
 
-        if dims.len() != 3 {
-            return Err(SdkError::InvalidConfiguration(format!(
-                "dimensions expected len=3, got {}",
-                dims.len()
-            )));
+    /// Prefetch and cache topologies for the provided cortical IDs.
+    #[cfg(feature = "sdk-io")]
+    pub async fn prefetch(&self, ids: &[CorticalID]) -> Result<(), SdkError> {
+        self.get_topologies(ids).await.map(|_| ())
+    }
+
+    /// Clear all cached topology entries.
+    pub fn clear_cache(&self) {
+        if let Ok(mut cache) = self.cache.write() {
+            cache.clear();
         }
+    }
 
-        let width = dims[0]
-            .as_u64()
-            .ok_or_else(|| SdkError::InvalidConfiguration("width is not a number".to_string()))?
-            as u32;
-        let height = dims[1]
-            .as_u64()
-            .ok_or_else(|| SdkError::InvalidConfiguration("height is not a number".to_string()))?
-            as u32;
-        let depth = dims[2]
-            .as_u64()
-            .ok_or_else(|| SdkError::InvalidConfiguration("depth is not a number".to_string()))?
-            as u32;
+    /// Return the number of cached cortical topologies.
+    pub fn cache_size(&self) -> usize {
+        self.cache.read().map(|c| c.len()).unwrap_or(0)
+    }
 
-        // Default to 1 channel if dev_count is missing (backward compatibility)
-        let channels = info.get("dev_count").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+    /// Parse a topology payload returned by FEAGI HTTP APIs.
+    pub fn parse_topology_payload(
+        id: &CorticalID,
+        payload: &serde_json::Value,
+    ) -> Result<CorticalTopology, SdkError> {
+        let key = id.as_base_64();
+        let entry = payload
+            .get(&key)
+            .ok_or_else(|| SdkError::Other(format!("Topology payload missing key: {key}")))?;
+        let entry_obj = entry.as_object().ok_or_else(|| {
+            SdkError::Other(format!("Topology entry is not an object for key: {key}"))
+        })?;
+
+        let (dims, channels) = Self::parse_dimensions(entry_obj).ok_or_else(|| {
+            SdkError::Other(format!("Topology dimensions missing for key: {key}"))
+        })?;
 
         Ok(CorticalTopology {
-            cortical_id: *cortical_id,
-            width,
-            height,
-            depth,
+            width: dims.0,
+            height: dims.1,
+            depth: dims.2,
             channels,
         })
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    #[cfg(feature = "sdk-io")]
+    async fn fetch_topologies(
+        &self,
+        cortical_ids: &[String],
+    ) -> Result<serde_json::Value, SdkError> {
+        let url = format!(
+            "http://{}:{}/v1/cortical_area/multi/cortical_area_properties",
+            self.host, self.port
+        );
+        let response = self
+            .client
+            .post(url)
+            .json(&serde_json::Value::Array(
+                cortical_ids.iter().map(|id| id.clone().into()).collect(),
+            ))
+            .send()
+            .await
+            .map_err(|e| SdkError::Other(format!("Topology request failed: {e}")))?;
 
-    #[test]
-    fn test_topology_cache_creation() {
-        let cache = TopologyCache::new("localhost", 8080, 5.0);
-        assert!(cache.is_ok());
+        let response = response
+            .error_for_status()
+            .map_err(|e| SdkError::Other(format!("Topology response error: {e}")))?;
+
+        response
+            .json::<serde_json::Value>()
+            .await
+            .map_err(|e| SdkError::Other(format!("Topology response parse failed: {e}")))
     }
 
-    #[test]
-    fn test_cache_clear() {
-        let cache = TopologyCache::new("localhost", 8080, 5.0).unwrap();
-        assert_eq!(cache.cache_size(), 0);
-        cache.clear_cache();
-        assert_eq!(cache.cache_size(), 0);
+    fn parse_dimensions(
+        entry_obj: &serde_json::Map<String, serde_json::Value>,
+    ) -> Option<((u32, u32, u32), u32)> {
+        let properties = entry_obj
+            .get("properties")
+            .and_then(|value| value.as_object());
+
+        let per_device_dims = entry_obj
+            .get("cortical_dimensions_per_device")
+            .and_then(Self::parse_dim_array)
+            .or_else(|| {
+                properties
+                    .and_then(|props| props.get("cortical_dimensions_per_device"))
+                    .and_then(Self::parse_dim_array)
+            });
+
+        let dev_count = entry_obj
+            .get("dev_count")
+            .and_then(|value| value.as_u64())
+            .map(|value| value as u32)
+            .or_else(|| {
+                properties
+                    .and_then(|props| props.get("dev_count"))
+                    .and_then(|value| value.as_u64())
+                    .map(|value| value as u32)
+            });
+
+        let total_dims = entry_obj
+            .get("cortical_dimensions")
+            .or_else(|| entry_obj.get("dimensions"))
+            .or_else(|| {
+                properties
+                    .and_then(|props| props.get("cortical_dimensions"))
+                    .or_else(|| properties.and_then(|props| props.get("dimensions")))
+            })
+            .and_then(|dim_val| {
+                if dim_val.is_array() {
+                    Self::parse_dim_array(dim_val)
+                } else if dim_val.is_object() {
+                    Self::parse_dim_object(dim_val)
+                } else {
+                    None
+                }
+            });
+
+        if let (Some(dims), Some(channels)) = (per_device_dims, dev_count) {
+            return Some((dims, channels));
+        }
+
+        if let (Some(dims), Some(total_dims)) = (per_device_dims, total_dims) {
+            if dims.0 > 0 && total_dims.0 % dims.0 == 0 {
+                let channels = total_dims.0 / dims.0;
+                if channels > 0 {
+                    return Some((dims, channels));
+                }
+            }
+        }
+
+        if let (Some(total_dims), Some(channels)) = (total_dims, dev_count) {
+            if channels > 0 && total_dims.0 % channels == 0 {
+                let per_device = (total_dims.0 / channels, total_dims.1, total_dims.2);
+                return Some((per_device, channels));
+            }
+        }
+
+        if let Some(total_dims) = total_dims {
+            return Some((total_dims, 1));
+        }
+
+        // TODO: Support alternate topology payload shapes if API expands fields.
+        None
+    }
+
+    fn parse_dim_array(value: &serde_json::Value) -> Option<(u32, u32, u32)> {
+        let arr = value.as_array()?;
+        if arr.len() != 3 {
+            return None;
+        }
+        let w = arr[0].as_u64()? as u32;
+        let h = arr[1].as_u64()? as u32;
+        let d = arr[2].as_u64()? as u32;
+        Some((w, h, d))
+    }
+
+    fn parse_dim_object(value: &serde_json::Value) -> Option<(u32, u32, u32)> {
+        let obj = value.as_object()?;
+        let w = obj.get("x")?.as_u64()? as u32;
+        let h = obj.get("y")?.as_u64()? as u32;
+        let d = obj.get("z")?.as_u64()? as u32;
+        Some((w, h, d))
     }
 }

@@ -23,6 +23,7 @@ use tower_http::{
 };
 use utoipa::OpenApi;
 
+use crate::amalgamation;
 #[cfg(feature = "http")]
 use crate::openapi::ApiDoc;
 #[cfg(feature = "services")]
@@ -48,12 +49,14 @@ pub struct ApiState {
     pub feagi_session_timestamp: i64,
     /// Memory area stats cache (updated by plasticity service, read by health check)
     pub memory_stats_cache: Option<feagi_npu_plasticity::MemoryStatsCache>,
+    /// In-memory amalgamation state (pending request + history), surfaced via health_check.
+    pub amalgamation_state: amalgamation::SharedAmalgamationState,
     /// Device registration connectors per agent (for export/import functionality)
     #[cfg(feature = "feagi-agent")]
     pub agent_connectors: Arc<
         parking_lot::RwLock<
             std::collections::HashMap<
-                String,
+                feagi_agent::sdk::AgentDescriptor,
                 Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
             >,
         >,
@@ -66,12 +69,17 @@ impl ApiState {
     pub fn init_agent_connectors() -> Arc<
         parking_lot::RwLock<
             std::collections::HashMap<
-                String,
+                feagi_agent::sdk::AgentDescriptor,
                 Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
             >,
         >,
     > {
         Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()))
+    }
+
+    /// Initialize amalgamation_state field (empty state).
+    pub fn init_amalgamation_state() -> amalgamation::SharedAmalgamationState {
+        amalgamation::new_shared_state()
     }
 }
 

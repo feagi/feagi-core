@@ -86,6 +86,18 @@ Your Application
     └────────────────────────┘
 ```
 
+### Agent Identifiers
+
+FEAGI 2.0 uses structured agent identifiers. Provide a base64-encoded
+`AgentDescriptor` (not a raw string) when configuring SDK clients.
+
+```rust
+use feagi_agent::sdk::AgentDescriptor;
+
+let descriptor = AgentDescriptor::new(1, "neuraville", "camera", 1)?;
+let agent_id_b64 = descriptor.to_base64();
+```
+
 ### Key Components
 
 #### 1. **Core Module** (Low-Level)
@@ -240,7 +252,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // 1. Configure the video encoder
     let encoder_config = VideoEncoderConfig {
-        agent_id: "video-camera-01".to_string(),
+        // agent_id must be a base64 AgentDescriptor (48-byte payload)
+        agent_id: "<agent_descriptor_b64>".to_string(),
         cortical_group_id: 0,
         encoding_strategy: VideoEncodingStrategy::SimpleVision,
         source_width: 640,
@@ -351,7 +364,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // 1. Configure text encoder
     let encoder_config = TextEncoderConfig {
-        agent_id: "text-input-01".to_string(),
+        // agent_id must be a base64 AgentDescriptor (48-byte payload)
+        agent_id: "<agent_descriptor_b64>".to_string(),
         cortical_group_id: 0,
         feagi_host: "localhost".to_string(),
         feagi_api_port: 8080,
@@ -422,7 +436,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // 1. Configure perception decoder
     let decoder_config = PerceptionDecoderConfig {
-        agent_id: "perception-inspector".to_string(),
+        // agent_id must be a base64 AgentDescriptor (48-byte payload)
+        agent_id: "<agent_descriptor_b64>".to_string(),
         cortical_group_id: 0,
         feagi_host: "localhost".to_string(),
         feagi_api_port: 8080,

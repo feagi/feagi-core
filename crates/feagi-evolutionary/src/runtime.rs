@@ -90,6 +90,13 @@ impl MorphologyRegistry {
         self.morphologies.keys().cloned().collect()
     }
 
+    /// Remove a morphology by ID.
+    ///
+    /// Returns true if the morphology existed and was removed.
+    pub fn remove_morphology(&mut self, id: &str) -> bool {
+        self.morphologies.remove(id).is_some()
+    }
+
     /// Get count of morphologies
     pub fn count(&self) -> usize {
         self.morphologies.len()

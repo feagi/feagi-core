@@ -1,25 +1,12 @@
-// Copyright 2025 Neuraville Inc.
-// SPDX-License-Identifier: Apache-2.0
-
-//! FEAGI Agent SDK
-//!
-//! High-level tools for building FEAGI controllers.
-
+mod agents;
 pub mod base;
-#[cfg(feature = "sdk-io")]
-pub mod connector;
-pub mod error;
+mod client;
+pub mod common;
 pub mod motor;
 pub mod registration;
 pub mod sensory;
-#[cfg(feature = "sdk-io")]
+mod server;
 pub mod types;
-pub mod util;
 
-// Re-export commonly used types
-pub use base::{Controller, CorticalTopology, TopologyCache};
-#[cfg(feature = "sdk-io")]
-pub use connector::ConnectorAgent;
-pub use error::{Result, SdkError};
-pub use motor::MotorDecoder;
-pub use sensory::SensoryEncoder;
+pub use agents::connector_agent::ConnectorAgent;
+pub use common::AgentDescriptor;

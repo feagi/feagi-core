@@ -95,10 +95,11 @@ pub fn process_neural_dynamics<T: NeuralValue>(
     neuron_array: &mut impl NeuronStorage<Value = T>,
     burst_count: u64,
 ) -> Result<DynamicsResult> {
-    let dynamics_start = std::time::Instant::now();
-    let candidates: Vec<_> = fcl.iter().collect();
+    let profile_enabled = tracing::enabled!(tracing::Level::DEBUG);
+    let dynamics_start = profile_enabled.then(std::time::Instant::now);
+    let candidate_count = fcl.len();
 
-    if candidates.is_empty() {
+    if candidate_count == 0 {
         let mut fire_queue = FireQueue::new();
         fire_queue.set_timestep(burst_count);
         return Ok(DynamicsResult {
@@ -116,34 +117,28 @@ pub fn process_neural_dynamics<T: NeuralValue>(
     // NOTE: Keep in sync with `feagi-npu/plasticity/src/neuron_id_manager.rs`.
     const MEMORY_NEURON_ID_START: u32 = 50_000_000;
 
-    let (fired_neurons, refractory_count): (Vec<_>, usize) = {
-        // For large candidate counts, use batch processing for better cache locality
-        // Threshold: 10k candidates (lowered from 50k based on profiling data)
-        // Profiling showed sequential path taking 2.67μs per candidate, making SIMD batching
-        // worthwhile even at lower counts. The gather/scatter overhead is offset by SIMD speedup.
-        const SIMD_BATCH_THRESHOLD: usize = 10_000;
+    let (fired_neurons, refractory_count): (Vec<_>, usize) = fcl.with_cached(|candidates| {
+            // For large candidate counts, use batch processing for better cache locality
+            // Threshold: 10k candidates (lowered from 50k based on profiling data)
+            // Profiling showed sequential path taking 2.67μs per candidate, making SIMD batching
+            // worthwhile even at lower counts. The gather/scatter overhead is offset by SIMD speedup.
+            const SIMD_BATCH_THRESHOLD: usize = 10_000;
 
-        if candidates.len() >= SIMD_BATCH_THRESHOLD {
-            // SIMD batch processing path
-            process_candidates_with_simd_batching(
-                &candidates,
-                memory_candidate_cortical_idx,
-                neuron_array,
-                burst_count,
-            )
-        } else {
-            // Sequential processing for small candidate counts (< 10k)
-            // Use batch processing in chunks for better cache locality even in sequential path
-            let sequential_start = std::time::Instant::now();
-            let mut results = Vec::with_capacity(candidates.len());
-            let mut refractory = 0;
-
-            // Process in batches for better cache locality (even for sequential path)
-            // Batch size chosen to fit in L1 cache (~32KB) - assuming ~100 bytes per candidate
-            const SEQUENTIAL_BATCH_SIZE: usize = 200; // Process 200 candidates at a time
-
-            for batch in candidates.chunks(SEQUENTIAL_BATCH_SIZE) {
-                for &(neuron_id, candidate_potential) in batch {
+            if candidates.len() >= SIMD_BATCH_THRESHOLD {
+                // SIMD batch processing path
+                process_candidates_with_simd_batching(
+                    candidates,
+                    memory_candidate_cortical_idx,
+                    neuron_array,
+                    burst_count,
+                )
+            } else {
+                // Sequential processing for small candidate counts (< 10k)
+                // Use batch processing in chunks for better cache locality even in sequential path
+                let sequential_start = profile_enabled.then(std::time::Instant::now);
+                let mut results = Vec::with_capacity(candidates.len());
+                let mut refractory = 0;
+                for &(neuron_id, candidate_potential) in candidates {
                     // Memory neurons are force-fired and do not use the regular neuron storage array.
                     if neuron_id.0 >= MEMORY_NEURON_ID_START {
                         let cortical_idx = match memory_candidate_cortical_idx
@@ -185,24 +180,24 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                         refractory += 1;
                     }
                 }
+
+                if let Some(sequential_start) = sequential_start {
+                    let sequential_duration = sequential_start.elapsed();
+                    // Log profiling for sequential path if slow
+                    if sequential_duration.as_millis() > 5 || candidate_count > 5_000 {
+                        tracing::debug!(
+                            "[PHASE2-PROFILE] Sequential processing: total={:.2}ms | candidates={} | fired={} | refractory={}",
+                            sequential_duration.as_secs_f64() * 1000.0,
+                            candidates.len(),
+                            results.len(),
+                            refractory
+                        );
+                    }
+                }
+
+                (results, refractory)
             }
-
-            let sequential_duration = sequential_start.elapsed();
-
-            // Log profiling for sequential path if slow
-            if sequential_duration.as_millis() > 5 || candidates.len() > 5_000 {
-                tracing::debug!(
-                    "[PHASE2-PROFILE] Sequential processing: total={:.2}ms | candidates={} | fired={} | refractory={}",
-                    sequential_duration.as_secs_f64() * 1000.0,
-                    candidates.len(),
-                    results.len(),
-                    refractory
-                );
-            }
-
-            (results, refractory)
-        }
-    };
+    });
 
     // Build Fire Queue
     let mut fire_queue = FireQueue::new();
@@ -211,21 +206,31 @@ pub fn process_neural_dynamics<T: NeuralValue>(
         fire_queue.add_neuron(neuron.clone());
     }
 
-    let dynamics_duration = dynamics_start.elapsed();
-
-    // Log if dynamics processing is slow (>20ms)
-    if dynamics_duration.as_millis() > 20 {
-        tracing::warn!(
-            "[PHASE2-DYNAMICS] Slow dynamics processing: {:.2}ms for {} candidates, {} fired",
-            dynamics_duration.as_secs_f64() * 1000.0,
-            candidates.len(),
-            fired_neurons.len()
-        );
+    if let Some(dynamics_start) = dynamics_start {
+        let dynamics_duration = dynamics_start.elapsed();
+        // Log dynamics processing timing only for extreme cases (>30 seconds)
+        // Batch processing with millions of candidates can legitimately take 5-10 seconds
+        if dynamics_duration.as_millis() > 30000 {
+            tracing::warn!(
+                "[PHASE2-DYNAMICS] Very slow dynamics processing: {:.2}ms for {} candidates, {} fired",
+                dynamics_duration.as_secs_f64() * 1000.0,
+                candidate_count,
+                fired_neurons.len()
+            );
+        } else if candidate_count > 1_000_000 {
+            // Info log for large batch processing
+            tracing::info!(
+                "[PHASE2-DYNAMICS] Batch processing: {:.2}ms for {} candidates, {} fired",
+                dynamics_duration.as_secs_f64() * 1000.0,
+                candidate_count,
+                fired_neurons.len()
+            );
+        }
     }
 
     Ok(DynamicsResult {
         fire_queue,
-        neurons_processed: candidates.len(),
+        neurons_processed: candidate_count,
         neurons_fired: fired_neurons.len(),
         neurons_in_refractory: refractory_count,
     })
@@ -250,12 +255,13 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
     const MEMORY_NEURON_ID_START: u32 = 50_000_000;
     const SIMD_BATCH_SIZE: usize = 10_000; // Process in chunks for cache locality and SIMD efficiency
 
-    let total_start = std::time::Instant::now();
+    let profile_enabled = tracing::enabled!(tracing::Level::DEBUG);
+    let total_start = profile_enabled.then(std::time::Instant::now);
     let mut results = Vec::with_capacity(candidates.len());
     let mut refractory = 0;
 
     // Separate candidates into categories
-    let separate_start = std::time::Instant::now();
+    let separate_start = profile_enabled.then(std::time::Instant::now);
     let mut memory_candidates = Vec::new();
     let mut simd_eligible = Vec::new(); // Not in refractory, can use SIMD for basic ops
     let mut sequential_only = Vec::new(); // In refractory or have complex constraints
@@ -284,7 +290,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
         // Only truly sequential cases (refractory) go to sequential_only
         simd_eligible.push((neuron_id, candidate_potential));
     }
-    let separate_duration = separate_start.elapsed();
+    let separate_duration = separate_start.map(|start| start.elapsed());
 
     // Capture lengths before vectors are moved in loops
     let memory_candidates_len = memory_candidates.len();
@@ -292,7 +298,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
     let simd_eligible_len = simd_eligible.len();
 
     // Handle memory neurons (force-fired)
-    let memory_start = std::time::Instant::now();
+    let memory_start = profile_enabled.then(std::time::Instant::now);
     for (neuron_id, candidate_potential) in memory_candidates {
         let cortical_idx =
             match memory_candidate_cortical_idx.and_then(|m| m.get(&neuron_id.0).copied()) {
@@ -309,7 +315,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             z: 0,
         });
     }
-    let memory_duration = memory_start.elapsed();
+    let memory_duration = memory_start.map(|start| start.elapsed());
 
     // Process SIMD-eligible candidates in batches with SIMD mask-based constraint handling
     let mut total_gather_time = std::time::Duration::ZERO;
@@ -323,7 +329,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
         let batch_size = batch.len();
 
         // Gather: Collect data into contiguous arrays (including constraint data)
-        let gather_start = std::time::Instant::now();
+        let gather_start = profile_enabled.then(std::time::Instant::now);
         let mut batch_mp = Vec::with_capacity(batch_size);
         let mut batch_thresholds = Vec::with_capacity(batch_size);
         let mut batch_threshold_limits = Vec::with_capacity(batch_size);
@@ -346,10 +352,12 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             batch_excitabilities.push(neuron_array.excitabilities()[idx]);
             batch_indices.push((neuron_id, idx));
         }
-        total_gather_time += gather_start.elapsed();
+        if let Some(gather_start) = gather_start {
+            total_gather_time += gather_start.elapsed();
+        }
 
         // Process: Use SIMD batch function for basic LIF operations
-        let lif_start = std::time::Instant::now();
+        let lif_start = profile_enabled.then(std::time::Instant::now);
         // IMPORTANT: `update_neurons_lif_batch` resets membrane potential to 0 for fired neurons
         // (matching LIF behavior). For downstream features (e.g., mp_driven_psp) and visualization,
         // we must preserve the *pre-reset* membrane potential at the moment of firing.
@@ -362,12 +370,14 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             &batch_candidates,
             &mut fired_mask,
         );
-        total_lif_time += lif_start.elapsed();
+        if let Some(lif_start) = lif_start {
+            total_lif_time += lif_start.elapsed();
+        }
 
         // Apply constraint masks: threshold_limit, consecutive_fire_limit, excitability
         // Approach 2: Batch constraint checks for better SIMD auto-vectorization
         // LLVM can auto-vectorize these loops if we structure them correctly
-        let constraint_start = std::time::Instant::now();
+        let constraint_start = profile_enabled.then(std::time::Instant::now);
         for i in 0..batch_size {
             if !fired_mask[i] {
                 continue; // Already determined not to fire by basic LIF
@@ -417,10 +427,12 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
                 }
             }
         }
-        total_constraint_time += constraint_start.elapsed();
+        if let Some(constraint_start) = constraint_start {
+            total_constraint_time += constraint_start.elapsed();
+        }
 
         // Scatter: Write results back and handle firing
-        let scatter_start = std::time::Instant::now();
+        let scatter_start = profile_enabled.then(std::time::Instant::now);
         for (i, (neuron_id, idx)) in batch_indices.iter().enumerate() {
             // Update membrane potential
             neuron_array.membrane_potentials_mut()[*idx] = batch_mp[i];
@@ -466,11 +478,13 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             }
             // If not fired, leak was already applied by update_neurons_lif_batch
         }
-        total_scatter_time += scatter_start.elapsed();
+        if let Some(scatter_start) = scatter_start {
+            total_scatter_time += scatter_start.elapsed();
+        }
     }
 
     // Process sequential-only candidates (refractory, complex constraints)
-    let sequential_start = std::time::Instant::now();
+    let sequential_start = profile_enabled.then(std::time::Instant::now);
     for (neuron_id, candidate_potential) in sequential_only {
         let candidate_potential_t = T::from_f32(candidate_potential);
         if let Some(neuron) =
@@ -479,28 +493,30 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             results.push(neuron);
         }
     }
-    let sequential_duration = sequential_start.elapsed();
-    let total_duration = total_start.elapsed();
+    let sequential_duration = sequential_start.map(|start| start.elapsed());
+    let total_duration = total_start.map(|start| start.elapsed());
 
     // Log detailed profiling if processing is slow or periodically.
     // Debug level by default to avoid log spam in normal operation.
-    if total_duration.as_millis() > 10 || candidates.len() > 30_000 {
-        tracing::debug!(
-            "[PHASE2-PROFILE] SIMD batching breakdown: total={:.2}ms | separate={:.2}ms | memory={:.2}ms | batches={} | gather={:.2}ms | lif={:.2}ms | constraint={:.2}ms | scatter={:.2}ms | sequential={:.2}ms | candidates={} | simd_eligible={} | sequential_only={} | memory={}",
-            total_duration.as_secs_f64() * 1000.0,
-            separate_duration.as_secs_f64() * 1000.0,
-            memory_duration.as_secs_f64() * 1000.0,
-            batch_count,
-            total_gather_time.as_secs_f64() * 1000.0,
-            total_lif_time.as_secs_f64() * 1000.0,
-            total_constraint_time.as_secs_f64() * 1000.0,
-            total_scatter_time.as_secs_f64() * 1000.0,
-            sequential_duration.as_secs_f64() * 1000.0,
-            candidates.len(),
-            simd_eligible_len,
-            sequential_only_len,
-            memory_candidates_len
-        );
+    if let Some(total_duration) = total_duration {
+        if total_duration.as_millis() > 10 || candidates.len() > 30_000 {
+            tracing::debug!(
+                "[PHASE2-PROFILE] SIMD batching breakdown: total={:.2}ms | separate={:.2}ms | memory={:.2}ms | batches={} | gather={:.2}ms | lif={:.2}ms | constraint={:.2}ms | scatter={:.2}ms | sequential={:.2}ms | candidates={} | simd_eligible={} | sequential_only={} | memory={}",
+                total_duration.as_secs_f64() * 1000.0,
+                separate_duration.unwrap_or_default().as_secs_f64() * 1000.0,
+                memory_duration.unwrap_or_default().as_secs_f64() * 1000.0,
+                batch_count,
+                total_gather_time.as_secs_f64() * 1000.0,
+                total_lif_time.as_secs_f64() * 1000.0,
+                total_constraint_time.as_secs_f64() * 1000.0,
+                total_scatter_time.as_secs_f64() * 1000.0,
+                sequential_duration.unwrap_or_default().as_secs_f64() * 1000.0,
+                candidates.len(),
+                simd_eligible_len,
+                sequential_only_len,
+                memory_candidates_len
+            );
+        }
     }
 
     (results, refractory)

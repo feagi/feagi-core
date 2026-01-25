@@ -1,10 +1,7 @@
-// Copyright 2025 Neuraville Inc.
-// SPDX-License-Identifier: Apache-2.0
+//! Text encoder implementation for FEAGI agents.
 
-//! Text encoding for FEAGI
-
-pub mod config;
-pub mod encoder;
+mod config;
+mod encoder;
 
 pub use config::TextEncoderConfig;
 pub use encoder::TextEncoder;

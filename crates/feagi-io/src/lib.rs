@@ -1,35 +1,10 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! FEAGI I/O System
-//!
-//! Handles all agent I/O: registration, ZMQ, SHM, heartbeat tracking.
-//!
-//! # Architecture
-//!
-//! This crate follows a hybrid module structure:
-//! - **`core/`**: Shared types, agent registry, configuration
-//! - **`blocking/`**: Infrastructure for blocking I/O transports (threads, channels, compression)
-//! - **`nonblocking/`**: Infrastructure for async/await transports (tokio, async channels)
-//! - **`transports/`**: Specific transport implementations (ZMQ, UDP, SHM, WebSocket, RTOS)
-//!
-//! # Example
-//!
-//! ```no_run
-//! use feagi_io::{IOSystem, IOConfig};
-//!
-//! let io_system = IOSystem::new().unwrap();
-//! io_system.start().unwrap();
-//!
-//! // Publish visualization data
-//! let data = vec![1, 2, 3];
-//! io_system.publish_visualization(&data).unwrap();
-//!
-//! io_system.stop().unwrap();
-//! ```
-
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub mod io_api;
 
 use feagi_structures::FeagiSignal;
 use parking_lot::{Mutex, RwLock};
@@ -1276,8 +1251,11 @@ impl IOSystem {
                     match ws_streams.start_data_streams() {
                         Ok(()) => {
                             info!("🦀 [PNS] ✅ WebSocket data streams started");
-                            info!("🦀 [PNS] 🌐 Brain Visualizer can now connect to: ws://{}:{}/visualization",
-                                  self.config.websocket.host, self.config.websocket.visualization_port);
+                            info!(
+                                "🦀 [PNS] 🌐 Brain Visualizer can now connect to: ws://{}:{}",
+                                self.config.websocket.host,
+                                self.config.websocket.visualization_port
+                            );
                         }
                         Err(e) => {
                             warn!(
@@ -1500,17 +1478,14 @@ impl IOSystem {
 
             if should_publish_ws {
                 if let Some(streams) = self.websocket_streams.lock().as_ref() {
-                    if streams.is_running() {
-                        match streams.publish_raw_fire_queue(fire_data.clone()) {
-                            Ok(()) => published_to.push("WebSocket"),
-                            Err(e) => errors.push(format!("WebSocket: {}", e)),
-                        }
-                    } else {
-                        if log_count.is_multiple_of(100) {
-                            warn!(
-                                "[PNS] ⚠️ WebSocket enabled but not running (servers not started)"
-                            );
-                        }
+                    // Publish regardless of the internal `running` flag.
+                    //
+                    // The WS visualization publisher may be started eagerly (for BV handshake)
+                    // before `start_data_streams()` is called. Gating on `is_running()` can
+                    // incorrectly suppress all WS visualization output.
+                    match streams.publish_raw_fire_queue(fire_data.clone()) {
+                        Ok(()) => published_to.push("WebSocket"),
+                        Err(e) => errors.push(format!("WebSocket: {}", e)),
                     }
                 } else {
                     if log_count.is_multiple_of(100) {
@@ -1574,11 +1549,11 @@ impl IOSystem {
         #[cfg(feature = "websocket-transport")]
         {
             if let Some(streams) = self.websocket_streams.lock().as_ref() {
-                if streams.is_running() {
-                    match streams.publish_motor(agent_id, data) {
-                        Ok(()) => published_to.push("WebSocket"),
-                        Err(e) => errors.push(format!("WebSocket: {}", e)),
-                    }
+                // Same rationale as visualization: WS publishers can be started before the
+                // data-stream lifecycle flips.
+                match streams.publish_motor(agent_id, data) {
+                    Ok(()) => published_to.push("WebSocket"),
+                    Err(e) => errors.push(format!("WebSocket: {}", e)),
                 }
             }
         }

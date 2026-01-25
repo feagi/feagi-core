@@ -36,6 +36,48 @@
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+// ---------------------------------------------------------------------------------------------
+// Simulation timestep (burst interval) telemetry support
+//
+// NOTE:
+// - FEAGI is used in both real-time and batch workloads; we must not hardcode 15Hz/30Hz timing
+//   assumptions into warning thresholds.
+// - The burst loop owns the authoritative runtime frequency (Hz). We snapshot the derived
+//   timestep (ns) into a single atomic so hot-path code (e.g., injection timing) can compare
+//   durations against the current simulation timestep without plumbing frequency everywhere.
+// ---------------------------------------------------------------------------------------------
+use core::sync::atomic::{AtomicU64, Ordering};
+use core::time::Duration;
+
+/// Current simulation timestep (burst interval) in nanoseconds.
+///
+/// Updated by the burst loop thread once per iteration (or when frequency changes).
+pub(crate) static SIM_TIMESTEP_NS: AtomicU64 = AtomicU64::new(0);
+
+/// Update the global simulation timestep snapshot from the configured runtime frequency (Hz).
+///
+/// # Panics
+/// Panics if `frequency_hz` is not positive. The burst loop uses this value for scheduling and
+/// would also fail if invalid.
+pub(crate) fn update_sim_timestep_from_hz(frequency_hz: f64) {
+    assert!(
+        frequency_hz.is_finite() && frequency_hz > 0.0,
+        "frequency_hz must be finite and > 0"
+    );
+    let timestep_ns = (1_000_000_000.0 / frequency_hz) as u64;
+    SIM_TIMESTEP_NS.store(timestep_ns, Ordering::Relaxed);
+}
+
+/// Get the current simulation timestep snapshot.
+///
+/// This is intended for logging thresholds (e.g., warn when injection exceeds timestep).
+pub(crate) fn sim_timestep() -> Duration {
+    let timestep_ns = SIM_TIMESTEP_NS.load(Ordering::Relaxed);
+    // If this is called before the burst loop initializes the value, return 0ns (no threshold).
+    // In normal operation, burst loop initializes this before the first burst.
+    Duration::from_nanos(timestep_ns)
+}
+
 #[cfg(any(feature = "async-tokio", feature = "wasm"))]
 pub mod async_burst_loop; // Pure Rust burst loop
 pub mod backend;

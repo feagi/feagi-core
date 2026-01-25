@@ -1,94 +1,25 @@
-// Copyright 2025 Neuraville Inc.
-// SPDX-License-Identifier: Apache-2.0
+//! Video encoder configuration.
 
-//! Video encoder configuration
+use crate::core::{AgentConfig, AgentType, SdkError};
+use feagi_io::{MotorUnit, SensoryUnit};
 
-use crate::core::{AgentConfig, AgentType};
-use crate::sdk::error::{Result, SdkError};
-use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
-use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::SensoryCorticalUnit;
-
-/// Video encoding strategy
+/// Video encoding strategy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoEncodingStrategy {
-    /// Simple full-frame vision (iimg cortical area)
+    /// Single-frame RGB vision stream.
     SimpleVision,
-    /// Segmented vision with gaze modulation (isvi cortical area, 9 segments)
+    /// Segmented vision stream (central + peripheral).
     SegmentedVision,
 }
 
-impl VideoEncodingStrategy {
-    /// Get cortical IDs for this encoding strategy
-    pub fn cortical_ids(&self, unit: CorticalUnitIndex) -> Vec<CorticalID> {
-        match self {
-            Self::SimpleVision => {
-                SensoryCorticalUnit::get_cortical_ids_array_for_vision_with_parameters(
-                    FrameChangeHandling::Absolute,
-                    unit,
-                )
-                .to_vec()
-            }
-            Self::SegmentedVision => {
-                SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
-                    FrameChangeHandling::Absolute,
-                    unit,
-                )
-                .to_vec()
-            }
-        }
-    }
-
-    /// Get expected number of cortical IDs
-    pub fn cortical_id_count(&self) -> usize {
-        match self {
-            Self::SimpleVision => 1,
-            Self::SegmentedVision => 9,
-        }
-    }
-}
-
-/// Video encoder configuration
-///
-/// # Example
-/// ```ignore
-/// use feagi_agent::sdk::sensory::video::{VideoEncoderConfig, VideoEncodingStrategy};
-///
-/// let config = VideoEncoderConfig {
-///     agent_id: "video-camera-01".to_string(),
-///     cortical_unit_id: 0,
-///     encoding_strategy: VideoEncodingStrategy::SimpleVision,
-///     source_width: 640,
-///     source_height: 480,
-///     feagi_host: "localhost".to_string(),
-///     feagi_api_port: 8080,
-///     feagi_zmq_registration_port: 30001,
-///     feagi_zmq_sensory_port: 5555,
-///     feagi_zmq_motor_port: 5564,
-///     feagi_tick_hz: 60,
-///     feagi_heartbeat_interval_s: 5.0,
-///     feagi_connection_timeout_ms: 5000,
-///     feagi_registration_retries: 3,
-///     diff_threshold: 10,
-///     brightness: 0,
-///     contrast: 1.0,
-/// };
-/// ```
+/// Configuration for the video encoder.
 #[derive(Debug, Clone)]
 pub struct VideoEncoderConfig {
-    // Identity
     pub agent_id: String,
-    pub cortical_unit_id: u8, // Cortical unit index (which unit of this type)
-
-    // Encoding strategy
+    pub cortical_unit_id: u8,
     pub encoding_strategy: VideoEncodingStrategy,
-
-    // Source frame properties
     pub source_width: u32,
     pub source_height: u32,
-
-    // FEAGI network configuration
     pub feagi_host: String,
     pub feagi_api_port: u16,
     pub feagi_zmq_registration_port: u16,
@@ -98,124 +29,62 @@ pub struct VideoEncoderConfig {
     pub feagi_heartbeat_interval_s: f64,
     pub feagi_connection_timeout_ms: u64,
     pub feagi_registration_retries: u32,
-
-    // Processing options
     pub diff_threshold: u8,
     pub brightness: i32,
     pub contrast: f32,
 }
 
 impl VideoEncoderConfig {
-    /// Convert to AgentConfig for core client
-    pub fn to_agent_config(&self) -> Result<AgentConfig> {
-        // Device registrations are handled separately via ConnectorAgent and
-        // device_registrations in capabilities.
-        let mut config = AgentConfig::new(self.agent_id.clone(), AgentType::Sensory)
-            .with_registration_endpoint(format!(
-                "tcp://{}:{}",
-                self.feagi_host, self.feagi_zmq_registration_port
-            ))
-            .with_sensory_endpoint(format!(
-                "tcp://{}:{}",
-                self.feagi_host, self.feagi_zmq_sensory_port
-            ))
+    /// Build an AgentConfig for this video encoder.
+    pub fn to_agent_config(&self) -> Result<AgentConfig, SdkError> {
+        let registration_endpoint = format!(
+            "tcp://{}:{}",
+            self.feagi_host, self.feagi_zmq_registration_port
+        );
+        let sensory_endpoint = format!("tcp://{}:{}", self.feagi_host, self.feagi_zmq_sensory_port);
+        let motor_endpoint = format!("tcp://{}:{}", self.feagi_host, self.feagi_zmq_motor_port);
+
+        let agent_type = AgentType::Sensory;
+        Ok(AgentConfig::new(self.agent_id.clone(), agent_type)
+            .with_vision_unit(
+                "vision",
+                (self.source_width as usize, self.source_height as usize),
+                3,
+                SensoryUnit::Vision,
+                self.cortical_unit_id,
+            )
+            .with_registration_endpoint(registration_endpoint)
+            .with_sensory_endpoint(sensory_endpoint)
+            .with_motor_endpoint(motor_endpoint)
             .with_heartbeat_interval(self.feagi_heartbeat_interval_s)
             .with_connection_timeout_ms(self.feagi_connection_timeout_ms)
-            .with_registration_retries(self.feagi_registration_retries)
-            .with_sensory_capability(self.feagi_tick_hz as f64, None);
-
-        // For segmented vision (9 areas), add semantic vision capability to auto-create areas.
-        // The sensory mappings are still used to register with burst engine; this is purely
-        // to let the backend create the right IPU areas without requiring string/byte IDs.
-        if matches!(
-            self.encoding_strategy,
-            VideoEncodingStrategy::SegmentedVision
-        ) {
-            let group = self.cortical_unit_id;
-
-            config = config.with_vision_unit(
-                "camera",
-                (self.source_width as usize, self.source_height as usize),
-                3, // RGB channels
-                feagi_io::SensoryUnit::SegmentedVision,
-                group,
-            );
-        }
-
-        Ok(config)
+            .with_registration_retries(self.feagi_registration_retries))
     }
 
-    /// Convert to an AgentConfig that can receive motor outputs (Motor→Sensory feedback loops).
-    ///
-    /// This sets agent type to `Both` and configures the motor endpoint so callers can poll
-    /// motor packets (e.g. gaze) and feed them back into sensory processing pipelines.
-    pub fn to_agent_config_with_motor_feedback(&self) -> Result<AgentConfig> {
-        let group = self.cortical_unit_id;
+    /// Build an AgentConfig that enables motor feedback for segmented vision.
+    pub fn to_agent_config_with_motor_feedback(&self) -> Result<AgentConfig, SdkError> {
+        let registration_endpoint = format!(
+            "tcp://{}:{}",
+            self.feagi_host, self.feagi_zmq_registration_port
+        );
+        let sensory_endpoint = format!("tcp://{}:{}", self.feagi_host, self.feagi_zmq_sensory_port);
+        let motor_endpoint = format!("tcp://{}:{}", self.feagi_host, self.feagi_zmq_motor_port);
 
-        let mut config = AgentConfig::new(self.agent_id.clone(), AgentType::Both)
-            .with_registration_endpoint(format!(
-                "tcp://{}:{}",
-                self.feagi_host, self.feagi_zmq_registration_port
-            ))
-            .with_sensory_endpoint(format!(
-                "tcp://{}:{}",
-                self.feagi_host, self.feagi_zmq_sensory_port
-            ))
-            .with_motor_endpoint(format!(
-                "tcp://{}:{}",
-                self.feagi_host, self.feagi_zmq_motor_port
-            ))
+        let agent_type = AgentType::Both;
+        Ok(AgentConfig::new(self.agent_id.clone(), agent_type)
+            .with_vision_unit(
+                "segmented-vision",
+                (self.source_width as usize, self.source_height as usize),
+                3,
+                SensoryUnit::SegmentedVision,
+                self.cortical_unit_id,
+            )
+            .with_motor_unit("gaze", 2, MotorUnit::Gaze, self.cortical_unit_id)
+            .with_registration_endpoint(registration_endpoint)
+            .with_sensory_endpoint(sensory_endpoint)
+            .with_motor_endpoint(motor_endpoint)
             .with_heartbeat_interval(self.feagi_heartbeat_interval_s)
             .with_connection_timeout_ms(self.feagi_connection_timeout_ms)
-            .with_registration_retries(self.feagi_registration_retries)
-            .with_sensory_capability(self.feagi_tick_hz as f64, None)
-            .with_motor_unit("gaze", 1, feagi_io::MotorUnit::Gaze, group);
-
-        // Keep the existing segmented-vision semantic capability so the backend can
-        // auto-create IPU areas. This is independent of motor feedback handling.
-        if matches!(
-            self.encoding_strategy,
-            VideoEncodingStrategy::SegmentedVision
-        ) {
-            config = config.with_vision_unit(
-                "camera",
-                (self.source_width as usize, self.source_height as usize),
-                3, // RGB channels
-                feagi_io::SensoryUnit::SegmentedVision,
-                group,
-            );
-        }
-
-        Ok(config)
-    }
-
-    /// Validate configuration
-    pub fn validate(&self) -> Result<()> {
-        if self.agent_id.is_empty() {
-            return Err(SdkError::InvalidConfiguration(
-                "agent_id cannot be empty".to_string(),
-            ));
-        }
-
-        if self.source_width == 0 || self.source_height == 0 {
-            return Err(SdkError::InvalidConfiguration(format!(
-                "Invalid source dimensions: {}x{}",
-                self.source_width, self.source_height
-            )));
-        }
-
-        if self.feagi_tick_hz == 0 {
-            return Err(SdkError::InvalidConfiguration(
-                "feagi_tick_hz must be > 0".to_string(),
-            ));
-        }
-
-        if self.feagi_zmq_motor_port == 0 {
-            return Err(SdkError::InvalidConfiguration(
-                "feagi_zmq_motor_port must be > 0".to_string(),
-            ));
-        }
-
-        Ok(())
+            .with_registration_retries(self.feagi_registration_retries))
     }
 }

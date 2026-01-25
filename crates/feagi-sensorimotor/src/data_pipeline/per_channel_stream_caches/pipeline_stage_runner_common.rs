@@ -119,6 +119,22 @@ pub(crate) trait PipelineStageRunner {
         Ok(())
     }
 
+    fn try_get_index_of_first_stage_property_of_type(
+        &self,
+        updated_properties: &PipelineStageProperties,
+    ) -> Result<PipelineStagePropertyIndex, FeagiDataError> {
+        let stages = self.get_all_stage_properties();
+        for (i, stage) in stages.iter().enumerate() {
+            if stage.variant_name() == updated_properties.variant_name() {
+                return Ok((i as u32).into());
+            }
+        }
+        Err(FeagiDataError::BadParameters(format!(
+            "No stage of type {} found!",
+            updated_properties.variant_name()
+        )))
+    }
+
     /// Updates the properties of all stages in the pipeline.
     ///
     /// Applies new properties to each existing stage in the pipeline. The number of

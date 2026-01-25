@@ -407,6 +407,19 @@ jobs:
           esac
         }
 
+        # 0) Patch crates.io to local workspace for packaging validation.
+        # This avoids crate resolution failures when new beta versions are not yet published.
+        mkdir -p ".cargo"
+        PATCH_LOCAL=".cargo/config.toml"
+        {
+          echo "[patch.crates-io]"
+          for crate in "${CRATE_ORDER[@]}"; do
+            path="$(crate_path_for "${crate}")" || continue
+            [ -f "${path}/Cargo.toml" ] || continue
+            echo "${crate} = { path = \"${GITHUB_WORKSPACE}/${path}\" }"
+          done
+        } > "${PATCH_LOCAL}"
+
         # 1) Produce .crate packages (manifest will be publish-style: no path/workspace deps).
         for crate in "${CRATE_ORDER[@]}"; do
           path="$(crate_path_for "${crate}")" || continue
@@ -425,7 +438,7 @@ jobs:
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${path}/Cargo.toml" ] || continue
 
-          version="$(grep '^version = ' "${path}/Cargo.toml" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+          version="$(awk -F'"' '/^version = / { print $2; exit }' "${path}/Cargo.toml")"
           if [ -z "${version}" ]; then
             echo "❌ Failed to read version for ${crate} from ${path}/Cargo.toml"
             exit 1
@@ -465,7 +478,7 @@ jobs:
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${GITHUB_WORKSPACE}/${path}/Cargo.toml" ] || continue
 
-          version="$(grep '^version = ' "${GITHUB_WORKSPACE}/${path}/Cargo.toml" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+          version="$(awk -F'"' '/^version = / { print $2; exit }' "${GITHUB_WORKSPACE}/${path}/Cargo.toml")"
           manifest="${EXTRACTED}/${crate}-${version}/${crate}-${version}/Cargo.toml"
           if [ ! -f "${manifest}" ]; then
             echo "❌ Missing extracted manifest: ${manifest}"

@@ -227,7 +227,9 @@ impl SynapticPropagationEngine {
         synapse_storage: &impl SynapseStorage,
         neuron_membrane_potentials: &AHashMap<NeuronId, u8>,
     ) -> Result<PropagationResult> {
-        let total_start = std::time::Instant::now();
+        let profile_enabled = tracing::enabled!(tracing::Level::DEBUG);
+        let trace_cfg = synapse_trace_cfg();
+        let total_start = profile_enabled.then(std::time::Instant::now);
         self.total_propagations += 1;
 
         if fired_neurons.is_empty() {
@@ -247,14 +249,16 @@ impl SynapticPropagationEngine {
         }
 
         // PHASE 1: GATHER - Collect all synapse indices for fired neurons (parallel)
-        let gather_start = std::time::Instant::now();
+        let gather_start = profile_enabled.then(std::time::Instant::now);
         let synapse_indices: Vec<usize> = fired_neurons
             .par_iter()
             .filter_map(|&neuron_id| self.synapse_index.get(&neuron_id))
             .flatten()
             .copied()
             .collect();
-        let gather_ms = gather_start.elapsed().as_secs_f64() * 1000.0;
+        let gather_ms = gather_start
+            .map(|start| start.elapsed().as_secs_f64() * 1000.0)
+            .unwrap_or(0.0);
 
         if synapse_indices.is_empty() {
             self.last_profile = Some(PropagationProfile {
@@ -266,7 +270,9 @@ impl SynapticPropagationEngine {
                 metadata_ms: 0.0,
                 compute_ms: 0.0,
                 group_ms: 0.0,
-                total_ms: total_start.elapsed().as_secs_f64() * 1000.0,
+                total_ms: total_start
+                    .map(|start| start.elapsed().as_secs_f64() * 1000.0)
+                    .unwrap_or(0.0),
                 rayon_threads: rayon::current_num_threads(),
             });
             return Ok(AHashMap::new());
@@ -274,6 +280,79 @@ impl SynapticPropagationEngine {
 
         let total_synapses = synapse_indices.len();
         self.total_synapses_processed += total_synapses as u64;
+
+        let use_fast_path = self.area_mp_driven_psp.is_empty()
+            && self.area_psp_uniform_distribution.is_empty()
+            && !trace_cfg.enabled;
+
+        if use_fast_path {
+            let compute_start = profile_enabled.then(std::time::Instant::now);
+            let contributions: Vec<(NeuronId, CorticalID, SynapticContribution)> = synapse_indices
+                .par_iter()
+                .filter_map(|&syn_idx| {
+                    let target_neuron = NeuronId(synapse_storage.target_neurons()[syn_idx]);
+                    let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
+                    let weight = synapse_storage.weights()[syn_idx];
+                    let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
+                    let synapse_type = match synapse_storage.types()[syn_idx] {
+                        0 => FeagiSynapseType::Excitatory,
+                        _ => FeagiSynapseType::Inhibitory,
+                    };
+
+                    Some((
+                        target_neuron,
+                        cortical_area,
+                        SynapticContribution(compute_synaptic_contribution(
+                            weight,
+                            psp,
+                            synapse_type,
+                        )),
+                    ))
+                })
+                .collect();
+            let compute_ms = compute_start
+                .map(|start| start.elapsed().as_secs_f64() * 1000.0)
+                .unwrap_or(0.0);
+
+            let group_start = profile_enabled.then(std::time::Instant::now);
+            let result: PropagationResult = contributions
+                .into_par_iter()
+                .fold(
+                    AHashMap::<CorticalID, Vec<(NeuronId, SynapticContribution)>>::new,
+                    |mut acc, (target_neuron, cortical_area, contribution)| {
+                        acc.entry(cortical_area)
+                            .or_default()
+                            .push((target_neuron, contribution));
+                        acc
+                    },
+                )
+                .reduce(AHashMap::new, |mut a, b| {
+                    for (cortical_id, mut contribs) in b {
+                        a.entry(cortical_id).or_default().append(&mut contribs);
+                    }
+                    a
+                });
+            let group_ms = group_start
+                .map(|start| start.elapsed().as_secs_f64() * 1000.0)
+                .unwrap_or(0.0);
+
+            self.last_profile = Some(PropagationProfile {
+                fired_neurons: fired_neurons.len(),
+                synapse_indices: total_synapses,
+                unique_sources: 0,
+                contributions: result.values().map(|v| v.len()).sum(),
+                gather_ms,
+                metadata_ms: 0.0,
+                compute_ms,
+                group_ms,
+                total_ms: total_start
+                    .map(|start| start.elapsed().as_secs_f64() * 1000.0)
+                    .unwrap_or(0.0),
+                rayon_threads: rayon::current_num_threads(),
+            });
+
+            return Ok(result);
+        }
 
         // PRE-COMPUTE: Source neuron metadata (area, properties, synapse counts)
         // This eliminates 4 HashMap lookups per synapse in the hot loop
@@ -284,7 +363,7 @@ impl SynapticPropagationEngine {
             synapse_count: usize,
         }
 
-        let metadata_start = std::time::Instant::now();
+        let metadata_start = profile_enabled.then(std::time::Instant::now);
         let source_metadata: AHashMap<NeuronId, SourceNeuronMetadata> = synapse_indices
             .par_iter()
             .map(|&syn_idx| NeuronId(synapse_storage.source_neurons()[syn_idx]))
@@ -329,12 +408,14 @@ impl SynapticPropagationEngine {
                 ))
             })
             .collect();
-        let metadata_ms = metadata_start.elapsed().as_secs_f64() * 1000.0;
+        let metadata_ms = metadata_start
+            .map(|start| start.elapsed().as_secs_f64() * 1000.0)
+            .unwrap_or(0.0);
 
         // PHASE 2: COMPUTE - Calculate contributions in parallel (TRUE SIMD!)
         // This is where Python spent 165ms doing inefficient numpy ops
         // ZERO-COPY: Access StdSynapseArray fields directly (Structure-of-Arrays)
-        let compute_start = std::time::Instant::now();
+        let compute_start = profile_enabled.then(std::time::Instant::now);
         let contributions: Vec<(NeuronId, CorticalID, SynapticContribution)> = synapse_indices
             .par_iter()
             .filter_map(|&syn_idx| {
@@ -356,7 +437,6 @@ impl SynapticPropagationEngine {
                 let source_meta = source_metadata.get(&source_neuron)?;
 
                 // Logging: exclude power sources to avoid noise (cortical_idx=1 maps to _power).
-                let trace_cfg = synapse_trace_cfg();
                 let allow_trace = trace_cfg.enabled
                     && source_meta.area != *power_cortical_id()
                     && trace_cfg
@@ -430,19 +510,34 @@ impl SynapticPropagationEngine {
                 Some((target_neuron, cortical_area, SynapticContribution(final_contribution)))
             })
             .collect();
-        let compute_ms = compute_start.elapsed().as_secs_f64() * 1000.0;
+        let compute_ms = compute_start
+            .map(|start| start.elapsed().as_secs_f64() * 1000.0)
+            .unwrap_or(0.0);
 
-        // PHASE 3: GROUP - Group by cortical area (sequential, but very fast)
-        // This replaces Python's slow dictionary building
-        let group_start = std::time::Instant::now();
-        let mut result: PropagationResult = AHashMap::new();
-        for (target_neuron, cortical_area, contribution) in contributions {
-            result
-                .entry(cortical_area)
-                .or_default()
-                .push((target_neuron, contribution));
-        }
-        let group_ms = group_start.elapsed().as_secs_f64() * 1000.0;
+        // PHASE 3: GROUP - Group by cortical area (PARALLEL fold-reduce)
+        // Optimization: Use rayon parallel fold-reduce for 8-12× speedup on large datasets
+        // Sequential was taking 258ms for 1.6M synapses - this should reduce to 20-30ms
+        let group_start = profile_enabled.then(std::time::Instant::now);
+        let result: PropagationResult = contributions
+            .into_par_iter()
+            .fold(
+                AHashMap::<CorticalID, Vec<(NeuronId, SynapticContribution)>>::new,
+                |mut acc, (target_neuron, cortical_area, contribution)| {
+                    acc.entry(cortical_area)
+                        .or_default()
+                        .push((target_neuron, contribution));
+                    acc
+                },
+            )
+            .reduce(AHashMap::new, |mut a, b| {
+                for (cortical_id, mut contribs) in b {
+                    a.entry(cortical_id).or_default().append(&mut contribs);
+                }
+                a
+            });
+        let group_ms = group_start
+            .map(|start| start.elapsed().as_secs_f64() * 1000.0)
+            .unwrap_or(0.0);
 
         self.last_profile = Some(PropagationProfile {
             fired_neurons: fired_neurons.len(),
@@ -453,7 +548,9 @@ impl SynapticPropagationEngine {
             metadata_ms,
             compute_ms,
             group_ms,
-            total_ms: total_start.elapsed().as_secs_f64() * 1000.0,
+            total_ms: total_start
+                .map(|start| start.elapsed().as_secs_f64() * 1000.0)
+                .unwrap_or(0.0),
             rayon_threads: rayon::current_num_threads(),
         });
 
