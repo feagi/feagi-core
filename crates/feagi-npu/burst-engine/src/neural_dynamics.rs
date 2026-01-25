@@ -69,7 +69,7 @@ fn dynamics_trace_cfg() -> &'static DynamicsTraceCfg {
 }
 
 thread_local! {
-    static CANDIDATE_SCRATCH: RefCell<Vec<(NeuronId, f32)>> = RefCell::new(Vec::new());
+    static CANDIDATE_SCRATCH: RefCell<Vec<(NeuronId, f32)>> = const { RefCell::new(Vec::new()) };
 }
 
 fn with_candidate_buffer<F, R>(fcl: &FireCandidateList, f: F) -> R
@@ -151,7 +151,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
             if candidates.len() >= SIMD_BATCH_THRESHOLD {
                 // SIMD batch processing path
                 process_candidates_with_simd_batching(
-                    &candidates,
+                    candidates,
                     memory_candidate_cortical_idx,
                     neuron_array,
                     burst_count,
