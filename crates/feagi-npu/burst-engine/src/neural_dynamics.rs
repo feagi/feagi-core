@@ -124,9 +124,9 @@ pub fn process_neural_dynamics<T: NeuralValue>(
         // worthwhile even at lower counts. The gather/scatter overhead is offset by SIMD speedup.
         const SIMD_BATCH_THRESHOLD: usize = 10_000;
 
-        if candidate_count >= SIMD_BATCH_THRESHOLD {
+        let candidates: Vec<_> = fcl.iter().collect();
+        if candidates.len() >= SIMD_BATCH_THRESHOLD {
             // SIMD batch processing path
-            let candidates: Vec<_> = fcl.iter().collect();
             process_candidates_with_simd_batching(
                 &candidates,
                 memory_candidate_cortical_idx,
@@ -137,9 +137,9 @@ pub fn process_neural_dynamics<T: NeuralValue>(
             // Sequential processing for small candidate counts (< 10k)
             // Use batch processing in chunks for better cache locality even in sequential path
             let sequential_start = profile_enabled.then(std::time::Instant::now);
-            let mut results = Vec::with_capacity(candidate_count);
+            let mut results = Vec::with_capacity(candidates.len());
             let mut refractory = 0;
-            for (neuron_id, candidate_potential) in fcl.iter() {
+            for &(neuron_id, candidate_potential) in &candidates {
                 // Memory neurons are force-fired and do not use the regular neuron storage array.
                 if neuron_id.0 >= MEMORY_NEURON_ID_START {
                     let cortical_idx = match memory_candidate_cortical_idx
@@ -187,7 +187,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                     tracing::debug!(
                         "[PHASE2-PROFILE] Sequential processing: total={:.2}ms | candidates={} | fired={} | refractory={}",
                         sequential_duration.as_secs_f64() * 1000.0,
-                        candidate_count,
+                        candidates.len(),
                         results.len(),
                         refractory
                     );
