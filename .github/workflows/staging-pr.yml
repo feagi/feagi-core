@@ -369,6 +369,19 @@ jobs:
           esac
         }
 
+        # 0) Patch crates.io to local workspace for packaging validation.
+        # This avoids crate resolution failures when new beta versions are not yet published.
+        mkdir -p ".cargo"
+        PATCH_LOCAL=".cargo/config.toml"
+        {
+          echo "[patch.crates-io]"
+          for crate in "${CRATE_ORDER[@]}"; do
+            path="$(crate_path_for "${crate}")" || continue
+            [ -f "${path}/Cargo.toml" ] || continue
+            echo "${crate} = { path = \"${GITHUB_WORKSPACE}/${path}\" }"
+          done
+        } > "${PATCH_LOCAL}"
+
         # 1) Produce .crate packages (manifest will be publish-style: no path/workspace deps).
         for crate in "${CRATE_ORDER[@]}"; do
           if [[ " ${CHANGED_SET} " != *" ${crate} "* ]]; then
