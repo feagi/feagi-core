@@ -1,6 +1,6 @@
 [package]
 name = "feagi-npu-neural"
-version = "0.0.1-beta.3"
+version = "0.0.1-beta.4"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
