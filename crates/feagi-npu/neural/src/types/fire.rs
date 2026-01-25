@@ -11,6 +11,8 @@ use super::ids::NeuronId;
 extern crate std;
 
 #[cfg(feature = "std")]
+use std::cell::{Cell, RefCell};
+#[cfg(feature = "std")]
 use std::vec::Vec;
 
 #[cfg(not(feature = "std"))]
@@ -21,6 +23,8 @@ use alloc::vec::Vec;
 #[derive(Debug, Clone)]
 pub struct FireCandidateList {
     candidates: ahash::AHashMap<u32, f32>,
+    cached: RefCell<Vec<(NeuronId, f32)>>,
+    cache_dirty: Cell<bool>,
 }
 
 #[cfg(feature = "std")]
@@ -28,6 +32,8 @@ impl Default for FireCandidateList {
     fn default() -> Self {
         Self {
             candidates: ahash::AHashMap::with_capacity(100_000),
+            cached: RefCell::new(Vec::new()),
+            cache_dirty: Cell::new(true),
         }
     }
 }
@@ -41,6 +47,7 @@ impl FireCandidateList {
     #[inline]
     pub fn add_candidate(&mut self, neuron_id: NeuronId, potential: f32) {
         *self.candidates.entry(neuron_id.0).or_insert(0.0) += potential;
+        self.cache_dirty.set(true);
     }
 
     /// Add multiple candidates in batch (more efficient for large batches)
@@ -61,15 +68,18 @@ impl FireCandidateList {
         for &(neuron_id, potential) in candidates {
             *self.candidates.entry(neuron_id.0).or_insert(0.0) += potential;
         }
+        self.cache_dirty.set(true);
     }
 
     /// Reserve capacity for expected number of candidates (call before batch insertion)
     pub fn reserve(&mut self, capacity: usize) {
         self.candidates.reserve(capacity);
+        self.cache_dirty.set(true);
     }
 
     pub fn clear(&mut self) {
         self.candidates.clear();
+        self.cache_dirty.set(true);
     }
 
     pub fn len(&self) -> usize {
@@ -88,6 +98,26 @@ impl FireCandidateList {
         self.candidates
             .iter()
             .map(|(&id, &pot)| (NeuronId(id), pot))
+    }
+
+    /// Provides a cached, contiguous view of candidates for fast iteration.
+    /// Cache is rebuilt only when the candidate set changes.
+    pub fn with_cached<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&[(NeuronId, f32)]) -> R,
+    {
+        if self.cache_dirty.get() {
+            let mut cached = self.cached.borrow_mut();
+            cached.clear();
+            cached.extend(
+                self.candidates
+                    .iter()
+                    .map(|(&id, &pot)| (NeuronId(id), pot)),
+            );
+            self.cache_dirty.set(false);
+        }
+        let cached = self.cached.borrow();
+        f(cached.as_slice())
     }
 }
 

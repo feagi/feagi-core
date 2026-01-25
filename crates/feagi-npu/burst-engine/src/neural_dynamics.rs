@@ -23,7 +23,6 @@
 use crate::fire_structures::{FireQueue, FiringNeuron};
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::NeuronStorage;
-use std::cell::RefCell;
 use std::sync::OnceLock;
 use tracing::trace;
 
@@ -65,27 +64,6 @@ fn dynamics_trace_cfg() -> &'static DynamicsTraceCfg {
             enabled,
             neuron_filter,
         }
-    })
-}
-
-thread_local! {
-    static CANDIDATE_SCRATCH: RefCell<Vec<(NeuronId, f32)>> = const { RefCell::new(Vec::new()) };
-}
-
-fn with_candidate_buffer<F, R>(fcl: &FireCandidateList, f: F) -> R
-where
-    F: FnOnce(&[(NeuronId, f32)]) -> R,
-{
-    CANDIDATE_SCRATCH.with(|scratch| {
-        let mut scratch = scratch.borrow_mut();
-        let needed = fcl.len();
-        let current_cap = scratch.capacity();
-        if current_cap < needed {
-            scratch.reserve(needed - current_cap);
-        }
-        scratch.clear();
-        scratch.extend(fcl.iter());
-        f(scratch.as_slice())
     })
 }
 
@@ -139,9 +117,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
     // NOTE: Keep in sync with `feagi-npu/plasticity/src/neuron_id_manager.rs`.
     const MEMORY_NEURON_ID_START: u32 = 50_000_000;
 
-    let (fired_neurons, refractory_count): (Vec<_>, usize) = with_candidate_buffer(
-        fcl,
-        |candidates| {
+    let (fired_neurons, refractory_count): (Vec<_>, usize) = fcl.with_cached(|candidates| {
             // For large candidate counts, use batch processing for better cache locality
             // Threshold: 10k candidates (lowered from 50k based on profiling data)
             // Profiling showed sequential path taking 2.67μs per candidate, making SIMD batching
@@ -221,8 +197,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
 
                 (results, refractory)
             }
-        },
-    );
+    });
 
     // Build Fire Queue
     let mut fire_queue = FireQueue::new();
