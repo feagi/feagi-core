@@ -400,9 +400,6 @@ jobs:
         } > "${PATCH_FILE}"
 
         for crate in "${CRATE_ORDER[@]}"; do
-          if [[ " ${CHANGED_SET} " != *" ${crate} "* ]]; then
-            continue
-          fi
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${path}/Cargo.toml" ] || continue
 
