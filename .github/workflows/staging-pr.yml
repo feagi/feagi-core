@@ -459,8 +459,11 @@ jobs:
             exit 1
           fi
 
+          # Generate a lockfile for deterministic builds from the extracted manifest.
+          cargo generate-lockfile --manifest-path "${manifest}"
+
           echo "🔨 Building packaged crate: ${crate} (${version})"
-          cargo build --manifest-path "${manifest}" --quiet
+          cargo build --manifest-path "${manifest}" --locked --quiet
         done
 
         echo ""
