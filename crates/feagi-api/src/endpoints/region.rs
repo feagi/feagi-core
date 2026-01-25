@@ -6,6 +6,8 @@
 // Removed - using crate::common::State instead
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, State};
+use feagi_services::types::CreateBrainRegionParams;
+use feagi_structures::genomic::brain_regions::RegionID;
 use std::collections::HashMap;
 
 /// GET /v1/region/regions_members
@@ -138,10 +140,145 @@ pub async fn get_regions_members(
 /// POST /v1/region/region
 #[utoipa::path(post, path = "/v1/region/region", tag = "region")]
 pub async fn post_region(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, serde_json::Value>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+    State(state): State<ApiState>,
+    Json(mut req): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let connectome_service = state.connectome_service.as_ref();
+
+    let title = req
+        .get("title")
+        .or_else(|| req.get("name"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::invalid_input("title required"))?
+        .to_string();
+    req.remove("title");
+    req.remove("name");
+
+    let region_id = match req.get("region_id").and_then(|v| v.as_str()) {
+        Some(value) if !value.trim().is_empty() => {
+            RegionID::from_string(value)
+                .map_err(|e| ApiError::invalid_input(format!("Invalid region_id: {}", e)))?
+                .to_string()
+        }
+        _ => RegionID::new().to_string(),
+    };
+    req.remove("region_id");
+
+    let parent_region_id = req
+        .get("parent_region_id")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    req.remove("parent_region_id");
+
+    let region_type = req
+        .get("region_type")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "Undefined".to_string());
+    req.remove("region_type");
+
+    let coordinate_2d_value = req
+        .get("coordinate_2d")
+        .or_else(|| req.get("coordinates_2d"))
+        .and_then(|v| v.as_array().cloned())
+        .ok_or_else(|| ApiError::invalid_input("coordinates_2d required"))?;
+    if coordinate_2d_value.len() != 2 {
+        return Err(ApiError::invalid_input(
+            "coordinates_2d must contain exactly 2 values",
+        ));
+    }
+    req.remove("coordinate_2d");
+    req.remove("coordinates_2d");
+
+    let coordinate_3d_value = req
+        .get("coordinate_3d")
+        .or_else(|| req.get("coordinates_3d"))
+        .and_then(|v| v.as_array().cloned())
+        .ok_or_else(|| ApiError::invalid_input("coordinates_3d required"))?;
+    if coordinate_3d_value.len() != 3 {
+        return Err(ApiError::invalid_input(
+            "coordinates_3d must contain exactly 3 values",
+        ));
+    }
+    req.remove("coordinate_3d");
+    req.remove("coordinates_3d");
+
+    let mut properties: HashMap<String, serde_json::Value> = HashMap::new();
+    properties.insert(
+        "coordinate_2d".to_string(),
+        serde_json::Value::Array(coordinate_2d_value),
+    );
+    properties.insert(
+        "coordinate_3d".to_string(),
+        serde_json::Value::Array(coordinate_3d_value),
+    );
+    if let Some(parent_region_id) = &parent_region_id {
+        properties.insert(
+            "parent_region_id".to_string(),
+            serde_json::json!(parent_region_id),
+        );
+    }
+    if let Some(areas) = req.remove("areas") {
+        properties.insert("areas".to_string(), areas);
+    }
+    if let Some(regions) = req.remove("regions") {
+        properties.insert("regions".to_string(), regions);
+    }
+    for (key, value) in req {
+        properties.insert(key, value);
+    }
+
+    let params = CreateBrainRegionParams {
+        region_id: region_id.clone(),
+        name: title.clone(),
+        region_type,
+        parent_id: parent_region_id.clone(),
+        properties: Some(properties),
+    };
+
+    let info = connectome_service
+        .create_brain_region(params)
+        .await
+        .map_err(ApiError::from)?;
+
+    let coordinate_2d = info
+        .properties
+        .get("coordinate_2d")
+        .cloned()
+        .ok_or_else(|| ApiError::internal("Missing coordinate_2d on created region"))?;
+    let coordinate_3d = info
+        .properties
+        .get("coordinate_3d")
+        .cloned()
+        .ok_or_else(|| ApiError::internal("Missing coordinate_3d on created region"))?;
+
+    let mut response = HashMap::from([
+        ("region_id".to_string(), serde_json::json!(info.region_id)),
+        ("title".to_string(), serde_json::json!(info.name)),
+        (
+            "parent_region_id".to_string(),
+            serde_json::json!(info.parent_id),
+        ),
+        ("coordinate_2d".to_string(), coordinate_2d),
+        ("coordinate_3d".to_string(), coordinate_3d),
+        ("areas".to_string(), serde_json::json!(info.cortical_areas)),
+        ("regions".to_string(), serde_json::json!(info.child_regions)),
+    ]);
+
+    if let Some(inputs) = info.properties.get("inputs") {
+        response.insert("inputs".to_string(), inputs.clone());
+    }
+    if let Some(outputs) = info.properties.get("outputs") {
+        response.insert("outputs".to_string(), outputs.clone());
+    }
+
+    Ok(Json(response))
 }
 
 /// PUT /v1/region/region
@@ -181,10 +318,28 @@ pub async fn put_region(
 /// DELETE /v1/region/region
 #[utoipa::path(delete, path = "/v1/region/region", tag = "region")]
 pub async fn delete_region(
-    State(_state): State<ApiState>,
-    Json(_req): Json<HashMap<String, String>>,
+    State(state): State<ApiState>,
+    Json(req): Json<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+    let connectome_service = state.connectome_service.as_ref();
+    let region_id = req
+        .get("region_id")
+        .or_else(|| req.get("id"))
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| ApiError::invalid_input("region_id required"))?
+        .to_string();
+
+    connectome_service
+        .delete_brain_region(&region_id)
+        .await
+        .map_err(ApiError::from)?;
+
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Brain region deleted".to_string()),
+        ("region_id".to_string(), region_id),
+    ])))
 }
 
 /// POST /v1/region/clone

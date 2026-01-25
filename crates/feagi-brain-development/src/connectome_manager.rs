@@ -1267,6 +1267,17 @@ impl ConnectomeManager {
         Ok(())
     }
 
+    /// Change the parent of an existing brain region.
+    pub fn change_brain_region_parent(
+        &mut self,
+        region_id: &str,
+        new_parent_id: &str,
+    ) -> BduResult<()> {
+        self.brain_regions.change_parent(region_id, new_parent_id)?;
+        self.refresh_brain_regions_hash();
+        Ok(())
+    }
+
     /// Get a brain region by ID
     pub fn get_brain_region(&self, region_id: &str) -> Option<&BrainRegion> {
         self.brain_regions.get_region(region_id)

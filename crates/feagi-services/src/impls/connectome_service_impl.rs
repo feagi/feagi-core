@@ -976,6 +976,56 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // Convert string to RegionType
         let region_type = Self::string_to_region_type(&params.region_type)?;
 
+        let (areas, child_regions, properties) = {
+            let mut properties = params.properties.clone().unwrap_or_default();
+            let area_values = properties
+                .remove("areas")
+                .or_else(|| properties.remove("cortical_areas"))
+                .map(|value| {
+                    value.as_array().cloned().ok_or_else(|| {
+                        ServiceError::InvalidInput(
+                            "areas must be an array of cortical area IDs".to_string(),
+                        )
+                    })
+                })
+                .transpose()?
+                .unwrap_or_default();
+            let child_values = properties
+                .remove("regions")
+                .or_else(|| properties.remove("child_regions"))
+                .map(|value| {
+                    value.as_array().cloned().ok_or_else(|| {
+                        ServiceError::InvalidInput(
+                            "regions must be an array of brain region IDs".to_string(),
+                        )
+                    })
+                })
+                .transpose()?
+                .unwrap_or_default();
+
+            let mut areas: Vec<String> = Vec::new();
+            for value in area_values {
+                let id = value.as_str().ok_or_else(|| {
+                    ServiceError::InvalidInput(
+                        "areas must be an array of cortical area IDs".to_string(),
+                    )
+                })?;
+                areas.push(id.to_string());
+            }
+
+            let mut child_regions: Vec<String> = Vec::new();
+            for value in child_values {
+                let id = value.as_str().ok_or_else(|| {
+                    ServiceError::InvalidInput(
+                        "regions must be an array of brain region IDs".to_string(),
+                    )
+                })?;
+                child_regions.push(id.to_string());
+            }
+
+            (areas, child_regions, properties)
+        };
+
         // Create BrainRegion
         let mut region = BrainRegion::new(
             RegionID::from_string(&params.region_id)
@@ -986,8 +1036,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
         .map_err(ServiceError::from)?;
 
         // Apply initial properties (persisted into ConnectomeManager and RuntimeGenome).
-        if let Some(props) = params.properties.clone() {
-            region = region.with_properties(props);
+        if !properties.is_empty() {
+            region = region.with_properties(properties);
         }
 
         // Add to connectome
@@ -1016,6 +1066,101 @@ impl ConnectomeService for ConnectomeServiceImpl {
             }
         }
 
+        // Reassign areas and child regions (if provided).
+        if !areas.is_empty() || !child_regions.is_empty() {
+            let mut manager = self.connectome.write();
+
+            for area_id in &areas {
+                let cortical_id = feagi_evolutionary::string_to_cortical_id(area_id).map_err(|e| {
+                    ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e))
+                })?;
+
+                if !manager.has_cortical_area(&cortical_id) {
+                    return Err(ServiceError::NotFound {
+                        resource: "CorticalArea".to_string(),
+                        id: area_id.clone(),
+                    });
+                }
+
+                if let Some(existing_parent) = manager.get_parent_region_id_for_area(&cortical_id) {
+                    if let Some(parent_region) = manager.get_brain_region_mut(&existing_parent) {
+                        parent_region.remove_area(&cortical_id);
+                    }
+                }
+
+                let Some(region) = manager.get_brain_region_mut(&params.region_id) else {
+                    return Err(ServiceError::NotFound {
+                        resource: "BrainRegion".to_string(),
+                        id: params.region_id.clone(),
+                    });
+                };
+                region.add_area(cortical_id);
+
+                if let Some(area) = manager.get_cortical_area_mut(&cortical_id) {
+                    area.properties.insert(
+                        "parent_region_id".to_string(),
+                        serde_json::json!(params.region_id),
+                    );
+                }
+            }
+
+            for child_id in &child_regions {
+                if manager.get_brain_region(child_id).is_none() {
+                    return Err(ServiceError::NotFound {
+                        resource: "BrainRegion".to_string(),
+                        id: child_id.clone(),
+                    });
+                }
+
+                manager
+                    .change_brain_region_parent(child_id, &params.region_id)
+                    .map_err(ServiceError::from)?;
+
+                if let Some(child_region) = manager.get_brain_region_mut(child_id) {
+                    child_region.add_property(
+                        "parent_region_id".to_string(),
+                        serde_json::json!(params.region_id),
+                    );
+                }
+            }
+        }
+
+        if !areas.is_empty() || !child_regions.is_empty() {
+            if let Some(genome) = self.current_genome.write().as_mut() {
+                for area_id in &areas {
+                    let Ok(cortical_id) = feagi_evolutionary::string_to_cortical_id(area_id) else {
+                        continue;
+                    };
+                    for region in genome.brain_regions.values_mut() {
+                        region.remove_area(&cortical_id);
+                    }
+                    if let Some(region) = genome.brain_regions.get_mut(&params.region_id) {
+                        region.add_area(cortical_id);
+                    }
+                    if let Some(area) = genome.cortical_areas.get_mut(&cortical_id) {
+                        area.properties.insert(
+                            "parent_region_id".to_string(),
+                            serde_json::json!(params.region_id),
+                        );
+                    }
+                }
+
+                for child_id in &child_regions {
+                    if let Some(child_region) = genome.brain_regions.get_mut(child_id) {
+                        child_region.add_property(
+                            "parent_region_id".to_string(),
+                            serde_json::json!(params.region_id),
+                        );
+                    }
+                }
+            } else {
+                warn!(
+                    target: "feagi-services",
+                    "[GENOME-UPDATE] No RuntimeGenome loaded - region membership updates will not persist to saved genome"
+                );
+            }
+        }
+
         // Return info
         self.get_brain_region(&params.region_id).await
     }
@@ -1023,10 +1168,72 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn delete_brain_region(&self, region_id: &str) -> ServiceResult<()> {
         info!(target: "feagi-services","Deleting brain region: {}", region_id);
 
-        self.connectome
-            .write()
-            .remove_brain_region(region_id)
-            .map_err(ServiceError::from)?;
+        let (region_ids, cortical_area_ids) = {
+            let manager = self.connectome.read();
+            if manager.get_brain_region(region_id).is_none() {
+                return Err(ServiceError::NotFound {
+                    resource: "BrainRegion".to_string(),
+                    id: region_id.to_string(),
+                });
+            }
+
+            let hierarchy = manager.get_brain_region_hierarchy();
+            let mut region_ids: Vec<String> = hierarchy
+                .get_all_descendants(region_id)
+                .into_iter()
+                .cloned()
+                .collect();
+            region_ids.push(region_id.to_string());
+
+            let mut region_ids_with_depth: Vec<(String, usize)> = Vec::new();
+            for region_id in &region_ids {
+                let mut depth = 0;
+                let mut current = region_id.as_str();
+                while let Some(parent) = hierarchy.get_parent(current) {
+                    depth += 1;
+                    current = parent;
+                }
+                region_ids_with_depth.push((region_id.clone(), depth));
+            }
+            region_ids_with_depth.sort_by(|(a_id, a_depth), (b_id, b_depth)| {
+                b_depth.cmp(a_depth).then_with(|| a_id.cmp(b_id))
+            });
+            let region_ids_sorted = region_ids_with_depth
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect::<Vec<String>>();
+
+            let cortical_area_ids = hierarchy
+                .get_all_areas_recursive(region_id)
+                .into_iter()
+                .collect::<Vec<String>>();
+
+            (region_ids_sorted, cortical_area_ids)
+        };
+
+        for cortical_id in cortical_area_ids {
+            self.delete_cortical_area(&cortical_id).await?;
+        }
+
+        {
+            let mut manager = self.connectome.write();
+            for region_id in &region_ids {
+                manager
+                    .remove_brain_region(region_id)
+                    .map_err(ServiceError::from)?;
+            }
+        }
+
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            for region_id in &region_ids {
+                genome.brain_regions.remove(region_id);
+            }
+        } else {
+            warn!(
+                target: "feagi-services",
+                "[GENOME-UPDATE] No RuntimeGenome loaded - brain region deletions will not persist to saved genome"
+            );
+        }
 
         Ok(())
     }
@@ -1690,6 +1897,118 @@ mod tests {
                 .get(&region_key)
                 .expect("region must exist in genome");
             assert!(!region.contains_area(&cortical_id));
+        }
+
+        Ok(())
+    }
+
+    /// Deleting a region should remove descendants, areas, and RuntimeGenome entries.
+    #[tokio::test]
+    async fn delete_brain_region_deletes_descendants_and_persists() -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::cortical_area::{
+            CoreCorticalType, CorticalArea, CorticalAreaDimensions,
+        };
+        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let connectome = Arc::new(RwLock::new(ConnectomeManager::new_for_testing()));
+
+        let root_id = RegionID::new();
+        let root_key = root_id.to_string();
+        let child_id = RegionID::new();
+        let child_key = child_id.to_string();
+        let grandchild_id = RegionID::new();
+        let grandchild_key = grandchild_id.to_string();
+
+        let power_id = CoreCorticalType::Power.to_cortical_id();
+        let death_id = CoreCorticalType::Death.to_cortical_id();
+
+        let power_area = CorticalArea::new(
+            power_id,
+            0,
+            "power_area".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1)?,
+            GenomeCoordinate3D::new(0, 0, 0),
+            power_id.as_cortical_type()?,
+        )?;
+        let death_area = CorticalArea::new(
+            death_id,
+            0,
+            "death_area".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1)?,
+            GenomeCoordinate3D::new(0, 0, 0),
+            death_id.as_cortical_type()?,
+        )?;
+
+        let root = BrainRegion::new(root_id, "root".to_string(), RegionType::Undefined)?;
+        let child = BrainRegion::new(child_id, "child".to_string(), RegionType::Undefined)?
+            .with_areas([power_id]);
+        let grandchild =
+            BrainRegion::new(grandchild_id, "grand".to_string(), RegionType::Undefined)?
+                .with_areas([death_id]);
+
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: "".to_string(),
+                version: "3.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: Some(root_key.clone()),
+            },
+            cortical_areas: HashMap::from([(power_id, power_area.clone()), (death_id, death_area.clone())]),
+            brain_regions: HashMap::from([
+                (root_key.clone(), root.clone()),
+                (child_key.clone(), child.clone()),
+                (grandchild_key.clone(), grandchild.clone()),
+            ]),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+        let current_genome = Arc::new(RwLock::new(Some(genome)));
+
+        {
+            let mut manager = connectome.write();
+            manager.add_brain_region(root, None)?;
+            manager.add_brain_region(child, Some(root_key.clone()))?;
+            manager.add_brain_region(grandchild, Some(child_key.clone()))?;
+            manager.add_cortical_area(power_area)?;
+            manager.add_cortical_area(death_area)?;
+        }
+
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+        svc.delete_brain_region(&child_key).await?;
+
+        {
+            let manager = connectome.read();
+            assert!(manager.get_brain_region(&child_key).is_none());
+            assert!(manager.get_brain_region(&grandchild_key).is_none());
+            assert!(manager.get_brain_region(&root_key).is_some());
+            assert!(!manager.has_cortical_area(&power_id));
+            assert!(!manager.has_cortical_area(&death_id));
+        }
+
+        {
+            let genome_guard = current_genome.read();
+            let genome = genome_guard.as_ref().expect("genome must exist");
+            assert!(!genome.brain_regions.contains_key(&child_key));
+            assert!(!genome.brain_regions.contains_key(&grandchild_key));
+            assert!(genome.brain_regions.contains_key(&root_key));
+            assert!(!genome.cortical_areas.contains_key(&power_id));
+            assert!(!genome.cortical_areas.contains_key(&death_id));
         }
 
         Ok(())

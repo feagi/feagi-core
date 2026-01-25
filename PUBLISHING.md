@@ -20,7 +20,7 @@
 ```toml
 # Different versions for different crates
 feagi-npu-neural:       version = "0.0.1-beta.5"
-feagi-npu-burst-engine: version = "0.0.1-beta.3"
+feagi-npu-burst-engine: version = "0.0.1-beta.4"
 feagi-io:               version = "0.0.1-beta.8"
 ```
 
@@ -207,14 +207,14 @@ Each crate version must be manually updated in its Cargo.toml:
 ```bash
 # Example: Bump feagi-npu-neural after bug fix
 vim crates/feagi-npu/neural/Cargo.toml
-# Change: version = "0.0.1-beta.1" → version = "0.0.1-beta.2"
+# Change: version = "0.0.1-beta.4" → version = "0.0.1-beta.5"
 
 # Publish
 cargo publish -p feagi-npu-neural
 ```
 
 ### When to Bump
-- **Bug fix**: Increment beta number (`0.0.1-beta.1` → `0.0.1-beta.2`)
+- **Bug fix**: Increment beta number (`0.0.1-beta.4` → `0.0.1-beta.5`)
 - **New feature**: Consider minor bump or beta increment
 - **Breaking change**: Increment minor (`0.0.1` → `0.1.0`) or major after 1.0
 

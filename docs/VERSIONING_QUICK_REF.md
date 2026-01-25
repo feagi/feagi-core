@@ -69,7 +69,7 @@ Time: ~2 min
 
 ### Scenario 2: Feature in `feagi-npu-neural`
 ```
-Changed: feagi-npu-neural (0.0.1-beta.3 → 0.0.1-beta.4)
+Changed: feagi-npu-neural (0.0.1-beta.4 → 0.0.1-beta.5)
 Propagated: 11+ dependent crates (see dependency graph)
 Published: ~12 crates
 Time: ~6 min
