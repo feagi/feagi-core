@@ -79,8 +79,9 @@ where
     CANDIDATE_SCRATCH.with(|scratch| {
         let mut scratch = scratch.borrow_mut();
         let needed = fcl.len();
-        if scratch.capacity() < needed {
-            scratch.reserve(needed - scratch.capacity());
+        let current_cap = scratch.capacity();
+        if current_cap < needed {
+            scratch.reserve(needed - current_cap);
         }
         scratch.clear();
         scratch.extend(fcl.iter());
@@ -161,7 +162,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                 let sequential_start = profile_enabled.then(std::time::Instant::now);
                 let mut results = Vec::with_capacity(candidates.len());
                 let mut refractory = 0;
-                for &(neuron_id, candidate_potential) in &candidates {
+                for &(neuron_id, candidate_potential) in candidates {
                     // Memory neurons are force-fired and do not use the regular neuron storage array.
                     if neuron_id.0 >= MEMORY_NEURON_ID_START {
                         let cortical_idx = match memory_candidate_cortical_idx
