@@ -847,6 +847,17 @@ impl ConnectomeManager {
         new_id: CorticalID,
         new_cortical_type: CorticalAreaType,
     ) -> BduResult<()> {
+        self.rename_cortical_area_id_with_options(old_id, new_id, new_cortical_type, true)
+    }
+
+    /// Update a cortical area ID without changing its cortical_idx, with optional NPU registry update.
+    pub fn rename_cortical_area_id_with_options(
+        &mut self,
+        old_id: &CorticalID,
+        new_id: CorticalID,
+        new_cortical_type: CorticalAreaType,
+        update_npu_registry: bool,
+    ) -> BduResult<()> {
         if !self.cortical_areas.contains_key(old_id) {
             return Err(BduError::InvalidArea(format!(
                 "Cortical area {} does not exist",
@@ -902,10 +913,12 @@ impl ConnectomeManager {
             }
         }
 
-        // Update NPU cortical_id registry
-        if let Some(ref npu) = self.npu {
-            if let Ok(mut npu_lock) = npu.lock() {
-                npu_lock.register_cortical_area(cortical_idx, new_id.as_base_64());
+        // Update NPU cortical_id registry if requested
+        if update_npu_registry {
+            if let Some(ref npu) = self.npu {
+                if let Ok(mut npu_lock) = npu.lock() {
+                    npu_lock.register_cortical_area(cortical_idx, new_id.as_base_64());
+                }
             }
         }
 

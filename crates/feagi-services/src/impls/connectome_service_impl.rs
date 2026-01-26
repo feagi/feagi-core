@@ -24,7 +24,7 @@ use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensi
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 // Note: decode_cortical_id removed - use feagi_structures::CorticalID directly
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{debug, info, trace, warn};
 
@@ -668,11 +668,6 @@ impl ConnectomeService for ConnectomeServiceImpl {
         } else {
             None
         };
-        let group_id = if is_io_area {
-            Some(cortical_bytes[7])
-        } else {
-            None
-        };
         let coding_signage = io_flag
             .as_ref()
             .map(|flag| signage_label_from_flag(flag).to_string());
@@ -713,6 +708,42 @@ impl ConnectomeService for ConnectomeServiceImpl {
         } else {
             area.name.clone()
         };
+
+        let mut filtered_properties = area.properties.clone();
+        let duplicate_keys: HashSet<&str> = [
+            "coordinates_3d",
+            "cortical_dimensions",
+            "cortical_dimensions_per_device",
+            "cortical_group",
+            "group_id",
+            "sub_group_id",
+            "neurons_per_voxel",
+            "firing_threshold",
+            "firing_threshold_increment_x",
+            "firing_threshold_increment_y",
+            "firing_threshold_increment_z",
+            "firing_threshold_limit",
+            "consecutive_fire_count",
+            "refractory_period",
+            "snooze_period",
+            "leak_coefficient",
+            "leak_variability",
+            "mp_charge_accumulation",
+            "mp_driven_psp",
+            "neuron_excitability",
+            "postsynaptic_current",
+            "postsynaptic_current_max",
+            "degeneration",
+            "plasticity_constant",
+            "psp_uniform_distribution",
+            "init_lifespan",
+            "lifespan_growth_rate",
+            "longterm_mem_threshold",
+            "visible",
+        ]
+        .into_iter()
+        .collect();
+        filtered_properties.retain(|key, _| !duplicate_keys.contains(key.as_str()));
 
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
@@ -778,13 +809,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
             lifespan_growth_rate: area.lifespan_growth_rate() as f64,
             longterm_mem_threshold: area.longterm_mem_threshold(),
             temporal_depth: memory_props.map(|p| p.temporal_depth.max(1)),
-            properties: area.properties.clone(),
+            properties: filtered_properties,
             // IPU/OPU-specific decoded fields (only populated for IPU/OPU areas)
             cortical_subtype,
             encoding_type: coding_behavior.clone(),
             encoding_format: coding_type.clone(),
             unit_id,
-            group_id,
+            group_id: None,
             coding_signage,
             coding_behavior,
             coding_type,
@@ -1105,6 +1136,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
             }
 
             for child_id in &child_regions {
+                if child_id == &params.region_id {
+                    return Err(ServiceError::InvalidInput(
+                        "regions cannot include the new region_id".to_string(),
+                    ));
+                }
+
                 if manager.get_brain_region(child_id).is_none() {
                     return Err(ServiceError::NotFound {
                         resource: "BrainRegion".to_string(),
@@ -1268,11 +1305,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         let hierarchy = manager.get_brain_region_hierarchy();
         let parent_id = hierarchy.get_parent(region_id).map(|s| s.to_string());
-        let child_regions: Vec<String> = hierarchy
+        let mut child_regions: Vec<String> = hierarchy
             .get_children(region_id)
             .into_iter()
             .cloned()
             .collect();
+        child_regions.retain(|child_id| child_id != region_id);
 
         Ok(BrainRegionInfo {
             region_id: region_id.to_string(),
