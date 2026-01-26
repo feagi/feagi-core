@@ -3316,13 +3316,57 @@ impl GenomeServiceImpl {
         }
 
         // Step 5: Rebuild outgoing synapses (this area -> others)
+        let outgoing_targets = {
+            let genome_guard = genome_store.read();
+            let genome = genome_guard.as_ref().ok_or_else(|| {
+                ServiceError::Backend("No genome loaded".to_string())
+            })?;
+            let area = genome.cortical_areas.get(&cortical_id_typed).ok_or_else(|| {
+                ServiceError::NotFound {
+                    resource: "CorticalArea".to_string(),
+                    id: cortical_id.to_string(),
+                }
+            })?;
+            let mut targets = Vec::new();
+            if let Some(mapping) = area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+            {
+                for key in mapping.keys() {
+                    match CorticalID::try_from_base_64(key) {
+                        Ok(dst_id) => targets.push(dst_id),
+                        Err(err) => warn!(
+                            target: "feagi-services",
+                            "Invalid cortical_mapping_dst ID '{}': {}",
+                            key,
+                            err
+                        ),
+                    }
+                }
+            }
+            targets
+        };
         let outgoing_synapses = {
             let mut manager = connectome.write();
-            manager
-                .apply_cortical_mapping(&cortical_id_typed)
-                .map_err(|e| {
-                    ServiceError::Backend(format!("Failed to rebuild outgoing synapses: {}", e))
-                })?
+            let mut total = 0u32;
+            for dst_id in outgoing_targets {
+                if dst_id == cortical_id_typed {
+                    continue;
+                }
+                let count = manager
+                    .regenerate_synapses_for_mapping(&cortical_id_typed, &dst_id)
+                    .map_err(|e| {
+                        ServiceError::Backend(format!(
+                            "Failed to rebuild outgoing synapses {} -> {}: {}",
+                            cortical_id,
+                            dst_id.as_base_64(),
+                            e
+                        ))
+                    })?;
+                total = total.saturating_add(count as u32);
+            }
+            total
         };
 
         info!(
@@ -3347,13 +3391,15 @@ impl GenomeServiceImpl {
                         if obj.contains_key(cortical_id) {
                             // This area has mappings to our target - rebuild them
                             let mut manager = connectome.write();
-                            let count = manager.apply_cortical_mapping(src_id).map_err(|e| {
+                            let count = manager
+                                .regenerate_synapses_for_mapping(src_id, &cortical_id_typed)
+                                .map_err(|e| {
                                 ServiceError::Backend(format!(
                                     "Failed to rebuild incoming synapses from {}: {}",
                                     src_id, e
                                 ))
                             })?;
-                            total += count;
+                            total = total.saturating_add(count as u32);
                             info!(
                                 "[STRUCTURAL-REBUILD] Rebuilt {} incoming synapses from {}",
                                 count, src_id
