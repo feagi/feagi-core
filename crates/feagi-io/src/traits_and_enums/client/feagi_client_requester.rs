@@ -1,5 +1,5 @@
-use crate::io_api::traits_and_enums::client::feagi_client::FeagiClient;
-use crate::io_api::FeagiNetworkError;
+use crate::FeagiNetworkError;
+use crate::traits_and_enums::client::FeagiClient;
 
 /// A client that sends requests and receives responses from a server.
 ///

@@ -1,5 +1,5 @@
-use crate::io_api::traits_and_enums::server::FeagiServer;
-use crate::io_api::FeagiNetworkError;
+use crate::FeagiNetworkError;
+use crate::traits_and_enums::server::FeagiServer;
 
 /// A server that broadcasts data to all connected subscribers.
 ///

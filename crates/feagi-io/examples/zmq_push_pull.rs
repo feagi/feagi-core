@@ -1,7 +1,7 @@
-//! ZMQ Push-Pull Example using FEAGI's `next` module implementations
+//! ZMQ Push-Pull Example using FEAGI's I/O module implementations
 //!
 //! This example demonstrates the push-pull pattern using the
-//! `FEAGIZMQClientPusher` (client) and `FEAGIZMQServerPuller` (server) from the `next` module.
+//! `FEAGIZMQClientPusher` (client) and `FEAGIZMQServerPuller` (server).
 //!
 //! In this pattern:
 //! - The **server** binds and waits to receive (pull) data
@@ -25,9 +25,9 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use feagi_io::io_api::implementations::zmq::{FEAGIZMQClientPusher, FEAGIZMQServerPuller};
-use feagi_io::io_api::traits_and_enums::client::{FeagiClient, FeagiClientPusher};
-use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerPuller};
+use feagi_io::implementations::zmq::{FEAGIZMQClientPusher, FEAGIZMQServerPuller};
+use feagi_io::traits_and_enums::client::{FeagiClient, FeagiClientPusher};
+use feagi_io::traits_and_enums::server::{FeagiServer, FeagiServerPuller};
 
 const ADDRESS: &str = "tcp://127.0.0.1:5556";
 
@@ -35,11 +35,9 @@ fn run_server() {
     println!("=== FEAGI ZMQ Server Puller Example ===\n");
     println!("Starting server (puller) on {}", ADDRESS);
 
-    let mut context = zmq::Context::new();
-
-    let mut server = FEAGIZMQServerPuller::new(&mut context, ADDRESS.to_string(), |state_change| {
+    let mut server = FEAGIZMQServerPuller::new(ADDRESS.to_string(), Box::new(|state_change| {
         println!("[SERVER] State changed: {:?}", state_change)
-    })
+    }))
     .expect("Failed to create server puller");
 
     server.start().expect("Failed to start server");
@@ -69,11 +67,9 @@ fn run_client() {
     println!("=== FEAGI ZMQ Client Pusher Example ===\n");
     println!("Connecting client (pusher) to {}", ADDRESS);
 
-    let mut context = zmq::Context::new();
-
-    let mut client = FEAGIZMQClientPusher::new(&mut context, ADDRESS.to_string(), |state_change| {
+    let mut client = FEAGIZMQClientPusher::new(ADDRESS.to_string(), Box::new(|state_change| {
         println!("[CLIENT] State changed: {:?}", state_change)
-    })
+    }))
     .expect("Failed to create client pusher");
 
     client.connect(ADDRESS).expect("Failed to connect");
@@ -100,7 +96,7 @@ fn main() {
 
     if args.len() < 2 {
         println!("FEAGI ZMQ Push-Pull Example");
-        println!("Using implementations from feagi_io::io_api module\n");
+        println!("Using implementations from feagi_io module\n");
         println!("Pattern: Client PUSHES data → Server PULLS/receives data\n");
         println!("Usage:");
         println!(

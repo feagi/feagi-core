@@ -1,7 +1,7 @@
-//! ZMQ Request-Reply Example using FEAGI's `next` module implementations
+//! ZMQ Request-Reply Example using FEAGI's I/O module implementations
 //!
 //! This example demonstrates the request-reply pattern using the
-//! `FEAGIZMQServerRouter` (server) and `FEAGIZMQClientRequester` (client) from the `next` module.
+//! `FEAGIZMQServerRouter` (server) and `FEAGIZMQClientRequester` (client).
 //!
 //! In this pattern:
 //! - The **client** sends a request and polls for a response
@@ -25,9 +25,9 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use feagi_io::io_api::implementations::zmq::{FEAGIZMQClientRequester, FEAGIZMQServerRouter};
-use feagi_io::io_api::traits_and_enums::client::{FeagiClient, FeagiClientRequester};
-use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerRouter};
+use feagi_io::implementations::zmq::{FEAGIZMQClientRequester, FEAGIZMQServerRouter};
+use feagi_io::traits_and_enums::client::{FeagiClient, FeagiClientRequester};
+use feagi_io::traits_and_enums::server::{FeagiServer, FeagiServerRouter};
 
 const ADDRESS: &str = "tcp://127.0.0.1:5557";
 
@@ -35,11 +35,9 @@ fn run_server() {
     println!("=== FEAGI ZMQ Server Router Example ===\n");
     println!("Starting server (router) on {}", ADDRESS);
 
-    let mut context = zmq::Context::new();
-
-    let mut server = FEAGIZMQServerRouter::new(&mut context, ADDRESS.to_string(), |state_change| {
+    let mut server = FEAGIZMQServerRouter::new(ADDRESS.to_string(), Box::new(|state_change| {
         println!("[SERVER] State changed: {:?}", state_change)
-    })
+    }))
     .expect("Failed to create server router");
 
     server.start().expect("Failed to start server");
@@ -85,13 +83,10 @@ fn run_client() {
     println!("=== FEAGI ZMQ Client Requester Example ===\n");
     println!("Connecting client (dealer) to {}", ADDRESS);
 
-    let mut context = zmq::Context::new();
-
-    let mut client =
-        FEAGIZMQClientRequester::new(&mut context, ADDRESS.to_string(), |state_change| {
-            println!("[CLIENT] State changed: {:?}", state_change)
-        })
-        .expect("Failed to create client requester");
+    let mut client = FEAGIZMQClientRequester::new(ADDRESS.to_string(), Box::new(|state_change| {
+        println!("[CLIENT] State changed: {:?}", state_change)
+    }))
+    .expect("Failed to create client requester");
 
     client.connect(ADDRESS).expect("Failed to connect");
     println!("Client connected successfully!\n");
@@ -138,7 +133,7 @@ fn main() {
 
     if args.len() < 2 {
         println!("FEAGI ZMQ Request-Reply Example");
-        println!("Using implementations from feagi_io::io_api module\n");
+        println!("Using implementations from feagi_io module\n");
         println!("Pattern: Client sends REQUEST → Server processes → Server sends REPLY\n");
         println!("Usage:");
         println!(

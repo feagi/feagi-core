@@ -1,10 +1,7 @@
-use crate::io_api::implementations::zmq::shared_functions::validate_zmq_url;
-use crate::io_api::traits_and_enums::client::client_shared::FeagiClientConnectionStateChange;
-use crate::io_api::traits_and_enums::client::{
-    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester,
-    FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties,
-};
-use crate::io_api::{FeagiClientConnectionState, FeagiNetworkError};
+use crate::FeagiNetworkError;
+use crate::implementations::zmq::shared_functions::validate_zmq_url;
+use crate::traits_and_enums::client::client_shared::{FeagiClientConnectionState, FeagiClientConnectionStateChange};
+use crate::traits_and_enums::client::{FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester, FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties};
 
 /// Type alias for the client state change callback.
 type StateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static>;
