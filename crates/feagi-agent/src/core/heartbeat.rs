@@ -11,16 +11,22 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 use tokio::time::timeout;
 use tracing::{debug, warn};
-use zeromq::{ReqSocket, SocketRecv, SocketSend, ZmqMessage};
+use zeromq::{DealerSocket, SocketRecv, SocketSend, ZmqMessage};
 use tokio::runtime::Handle;
 use tokio::task::block_in_place;
 use std::future::Future;
 
-fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+fn block_on_with<T>(
+    handle: &Handle,
+    runtime: Option<&Runtime>,
+    future: impl Future<Output = T>,
+) -> T {
     if Handle::try_current().is_ok() {
-        block_in_place(|| Handle::current().block_on(future))
-    } else {
+        block_in_place(|| handle.block_on(future))
+    } else if let Some(runtime) = runtime {
         runtime.block_on(future)
+    } else {
+        handle.block_on(future)
     }
 }
 
@@ -43,10 +49,13 @@ pub struct HeartbeatService {
     agent_id: String,
 
     /// ZMQ registration socket (shared with main client)
-    socket: Arc<Mutex<ReqSocket>>,
+    socket: Arc<Mutex<DealerSocket>>,
 
-    /// Runtime for zeromq operations
-    runtime: Arc<Runtime>,
+    /// Tokio runtime handle (ambient if available)
+    runtime_handle: Handle,
+
+    /// Owned runtime when created outside tokio
+    runtime: Option<Arc<Runtime>>,
 
     /// Heartbeat interval
     interval: Duration,
@@ -70,13 +79,15 @@ impl HeartbeatService {
     /// * `interval_secs` - Heartbeat interval in seconds
     pub fn new(
         agent_id: String,
-        socket: Arc<Mutex<ReqSocket>>,
-        runtime: Arc<Runtime>,
+        socket: Arc<Mutex<DealerSocket>>,
+        runtime_handle: Handle,
+        runtime: Option<Arc<Runtime>>,
         interval_secs: f64,
     ) -> Self {
         Self {
             agent_id,
             socket,
+            runtime_handle,
             runtime,
             interval: Duration::from_secs_f64(interval_secs),
             running: Arc::new(AtomicBool::new(false)),
@@ -106,7 +117,8 @@ impl HeartbeatService {
 
         let agent_id = self.agent_id.clone();
         let socket = Arc::clone(&self.socket);
-        let runtime = Arc::clone(&self.runtime);
+        let runtime_handle = self.runtime_handle.clone();
+        let runtime = self.runtime.clone();
         let interval = self.interval;
         let running = Arc::clone(&self.running);
         let reconnect = self.reconnect.clone();
@@ -123,9 +135,13 @@ impl HeartbeatService {
                 }
 
                 // Send heartbeat
-                if let Err(e) =
-                    Self::send_heartbeat(&agent_id, &socket, &runtime, reconnect.as_ref())
-                {
+                if let Err(e) = Self::send_heartbeat(
+                    &agent_id,
+                    &socket,
+                    &runtime_handle,
+                    runtime.as_deref(),
+                    reconnect.as_ref(),
+                ) {
                     warn!(
                         "[HEARTBEAT] Failed to send heartbeat for {}: {}",
                         agent_id, e
@@ -188,8 +204,9 @@ impl HeartbeatService {
     /// Send a single heartbeat message
     fn send_heartbeat(
         agent_id: &str,
-        socket: &Arc<Mutex<ReqSocket>>,
-        runtime: &Arc<Runtime>,
+        socket: &Arc<Mutex<DealerSocket>>,
+        runtime_handle: &Handle,
+        runtime: Option<&Runtime>,
         reconnect: Option<&ReconnectSpec>,
     ) -> Result<()> {
         let message = serde_json::json!({
@@ -210,11 +227,11 @@ impl HeartbeatService {
 
         // Send heartbeat request
         let message = ZmqMessage::from(message.to_string().into_bytes());
-        block_on_runtime(runtime.as_ref(), socket_guard.send(message))
+        block_on_with(runtime_handle, runtime, socket_guard.send(message))
             .map_err(SdkError::Zmq)?;
 
         // Wait for response (ROUTER replies may include empty delimiter)
-        let response = block_on_runtime(runtime.as_ref(), async {
+        let response = block_on_with(runtime_handle, runtime, async {
             timeout(Duration::from_millis(1000), socket_guard.recv()).await
         })
             .map_err(|_| SdkError::Timeout("Heartbeat response timeout".to_string()))?
@@ -244,7 +261,7 @@ impl HeartbeatService {
             warn!("[HEARTBEAT] ⚠ Heartbeat rejected: {:?}", response);
             if Self::is_agent_not_registered(&response) {
                 if let Some(spec) = reconnect {
-                    if Self::try_re_register(spec, socket, runtime).is_ok() {
+                    if Self::try_re_register(spec, socket, runtime_handle, runtime).is_ok() {
                         debug!(
                             "[HEARTBEAT] ✓ Auto re-registered agent after heartbeat rejection: {}",
                             agent_id
@@ -277,8 +294,9 @@ impl HeartbeatService {
     /// Attempt to re-register the agent (used after FEAGI restarts).
     fn try_re_register(
         spec: &ReconnectSpec,
-        socket: &Arc<Mutex<ReqSocket>>,
-        runtime: &Arc<Runtime>,
+        socket: &Arc<Mutex<DealerSocket>>,
+        runtime_handle: &Handle,
+        runtime: Option<&Runtime>,
     ) -> Result<()> {
         let registration_msg = serde_json::json!({
             "method": "POST",
@@ -298,8 +316,8 @@ impl HeartbeatService {
                 .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
 
             let message = ZmqMessage::from(registration_msg.to_string().into_bytes());
-            block_on_runtime(runtime.as_ref(), socket.send(message)).map_err(SdkError::Zmq)?;
-            let response = block_on_runtime(runtime.as_ref(), async {
+            block_on_with(runtime_handle, runtime, socket.send(message)).map_err(SdkError::Zmq)?;
+            let response = block_on_with(runtime_handle, runtime, async {
                 timeout(Duration::from_millis(1000), socket.recv()).await
             })
                 .map_err(|_| SdkError::Timeout("Registration response timeout".to_string()))?

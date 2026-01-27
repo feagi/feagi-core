@@ -5,7 +5,7 @@
 
 mod api_control;
 mod motor;
-mod rest;
+pub mod rest;
 mod sensory;
 mod visualization;
 

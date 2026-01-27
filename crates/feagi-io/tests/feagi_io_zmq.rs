@@ -20,10 +20,14 @@ use feagi_io::transports::core::traits::{
 };
 use feagi_io::transports::core::zmq::client::{dealer::ZmqDealer, push::ZmqPush, sub::ZmqSub};
 use feagi_io::transports::core::zmq::server::{ZmqPub, ZmqPull, ZmqRouter};
+use feagi_io::core::{AgentRegistry, RegistrationHandler};
+use parking_lot::RwLock;
 use std::net::TcpListener;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
+use tokio::time::timeout;
+use zeromq::{DealerSocket, Socket, SocketRecv, SocketSend, ZmqMessage};
 
 /// Read the ZMQ host for tests from environment variables.
 fn test_zmq_host() -> String {
@@ -46,6 +50,18 @@ fn bind_address(host: &str) -> String {
     } else {
         format!("{host}:0")
     }
+}
+
+fn reserve_tcp_port(host: &str) -> u16 {
+    let listener = TcpListener::bind(bind_address(host)).unwrap_or_else(|e| {
+        panic!("Failed to reserve a TCP port for ZMQ tests on host {host}: {e}");
+    });
+    let port = listener
+        .local_addr()
+        .unwrap_or_else(|e| panic!("Failed to read reserved port for ZMQ tests: {e}"))
+        .port();
+    drop(listener);
+    port
 }
 
 /// Build a unique TCP endpoint for test isolation.
@@ -92,6 +108,26 @@ where
         }
         std::thread::sleep(interval);
     }
+}
+
+fn send_rest_request(
+    runtime: &Runtime,
+    dealer: &mut DealerSocket,
+    timeout_window: Duration,
+    request: serde_json::Value,
+) -> serde_json::Value {
+    let message = ZmqMessage::from(request.to_string().into_bytes());
+    runtime
+        .block_on(dealer.send(message))
+        .expect("Failed to send REST request");
+
+    let response = runtime
+        .block_on(async { timeout(timeout_window, dealer.recv()).await })
+        .expect("Timed out waiting for REST response")
+        .expect("Failed to receive REST response");
+    let frames = response.into_vec();
+    let payload = frames.last().expect("REST response had no payload");
+    serde_json::from_slice(payload).expect("Failed to parse REST response JSON")
 }
 
 /// Validate core PUB/SUB roundtrip over ZMQ.
@@ -231,6 +267,140 @@ fn core_zmq_router_dealer_roundtrip() {
     router.stop().expect("Failed to stop ZmqRouter");
 }
 
+/// Validate ZMQ REST registration over ROUTER/DEALER.
+#[test]
+fn zmq_rest_registration_roundtrip() {
+    let runtime = Arc::new(Runtime::new().expect("Failed to create runtime"));
+    let host = test_zmq_host();
+    let endpoint = tcp_endpoint();
+    let timeout_window = default_timeout();
+
+    let registration_port = reserve_tcp_port(&host);
+    let sensory_port = reserve_tcp_port(&host);
+    let motor_port = reserve_tcp_port(&host);
+    let viz_port = reserve_tcp_port(&host);
+
+    let registry = Arc::new(RwLock::new(AgentRegistry::new(100, 50)));
+    let mut handler =
+        RegistrationHandler::new(registry, registration_port, sensory_port, motor_port, viz_port);
+    handler.set_auto_create_missing_areas(false);
+
+    let mut rest_stream =
+        feagi_io::transports::zmq::rest::RestStream::new(runtime.clone(), &endpoint)
+            .expect("Failed to create ZMQ REST stream");
+    rest_stream.set_registration_handler(Arc::new(parking_lot::Mutex::new(handler)));
+    rest_stream.start().expect("Failed to start ZMQ REST stream");
+
+    let mut dealer = DealerSocket::new();
+    runtime
+        .block_on(dealer.connect(&endpoint))
+        .expect("Failed to connect Dealer socket");
+
+    let mut capabilities_struct = feagi_io::core::AgentCapabilities::default();
+    capabilities_struct.sensory = Some(feagi_io::core::SensoryCapability {
+        rate_hz: 1.0,
+        shm_path: None,
+    });
+    let capabilities = serde_json::to_value(capabilities_struct)
+        .expect("Failed to serialize AgentCapabilities");
+    let request = serde_json::json!({
+        "method": "POST",
+        "path": "/v1/agent/register",
+        "body": {
+            "agent_id": "test-agent",
+            "agent_type": "sensory",
+            "capabilities": capabilities
+        }
+    });
+    let response_json = send_rest_request(runtime.as_ref(), &mut dealer, timeout_window, request);
+    if response_json["status"] != 200 {
+        panic!("Unexpected registration response: {response_json}");
+    }
+    assert_eq!(response_json["body"]["status"], "success");
+
+    rest_stream.stop().expect("Failed to stop ZMQ REST stream");
+}
+
+/// Validate registration + heartbeat + deregistration over ZMQ REST.
+#[test]
+fn zmq_rest_heartbeat_and_deregister_roundtrip() {
+    let runtime = Arc::new(Runtime::new().expect("Failed to create runtime"));
+    let host = test_zmq_host();
+    let endpoint = tcp_endpoint();
+    let timeout_window = default_timeout();
+
+    let registration_port = reserve_tcp_port(&host);
+    let sensory_port = reserve_tcp_port(&host);
+    let motor_port = reserve_tcp_port(&host);
+    let viz_port = reserve_tcp_port(&host);
+
+    let registry = Arc::new(RwLock::new(AgentRegistry::new(100, 50)));
+    let mut handler =
+        RegistrationHandler::new(registry, registration_port, sensory_port, motor_port, viz_port);
+    handler.set_auto_create_missing_areas(false);
+
+    let mut rest_stream =
+        feagi_io::transports::zmq::rest::RestStream::new(runtime.clone(), &endpoint)
+            .expect("Failed to create ZMQ REST stream");
+    rest_stream.set_registration_handler(Arc::new(parking_lot::Mutex::new(handler)));
+    rest_stream.start().expect("Failed to start ZMQ REST stream");
+
+    let mut dealer = DealerSocket::new();
+    runtime
+        .block_on(dealer.connect(&endpoint))
+        .expect("Failed to connect Dealer socket");
+
+    let mut capabilities_struct = feagi_io::core::AgentCapabilities::default();
+    capabilities_struct.sensory = Some(feagi_io::core::SensoryCapability {
+        rate_hz: 1.0,
+        shm_path: None,
+    });
+    let capabilities = serde_json::to_value(capabilities_struct)
+        .expect("Failed to serialize AgentCapabilities");
+
+    let register_request = serde_json::json!({
+        "method": "POST",
+        "path": "/v1/agent/register",
+        "body": {
+            "agent_id": "test-agent-heartbeat",
+            "agent_type": "sensory",
+            "capabilities": capabilities
+        }
+    });
+    let register_response =
+        send_rest_request(runtime.as_ref(), &mut dealer, timeout_window, register_request);
+    if register_response["status"] != 200 {
+        panic!("Unexpected registration response: {register_response}");
+    }
+
+    let heartbeat_request = serde_json::json!({
+        "method": "POST",
+        "path": "/v1/agent/heartbeat",
+        "body": {
+            "agent_id": "test-agent-heartbeat"
+        }
+    });
+    let heartbeat_response =
+        send_rest_request(runtime.as_ref(), &mut dealer, timeout_window, heartbeat_request);
+    if heartbeat_response["status"] != 200 {
+        panic!("Unexpected heartbeat response: {heartbeat_response}");
+    }
+
+    let deregister_request = serde_json::json!({
+        "method": "DELETE",
+        "path": "/v1/agent/deregister",
+        "body": {
+            "agent_id": "test-agent-heartbeat"
+        }
+    });
+    let deregister_response =
+        send_rest_request(runtime.as_ref(), &mut dealer, timeout_window, deregister_request);
+    if deregister_response["status"] != 200 {
+        panic!("Unexpected deregistration response: {deregister_response}");
+    }
+
+    rest_stream.stop().expect("Failed to stop ZMQ REST stream");
+}
 /// Validate io_api PUB/SUB roundtrip over ZMQ.
 #[test]
 fn io_api_zmq_pub_sub_roundtrip() {
