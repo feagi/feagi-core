@@ -328,6 +328,23 @@ impl AgentClient {
         Ok(())
     }
 
+    /// Reconnect data sockets (sensory/motor/viz) using configured retry/backoff.
+    pub fn reconnect_data_streams(&mut self) -> Result<()> {
+        if !self.registered {
+            return Err(SdkError::NotRegistered);
+        }
+
+        let mut data_socket_strategy = ReconnectionStrategy::new(
+            self.config.retry_backoff_ms,
+            self.config.registration_retries,
+        );
+        retry_with_backoff(
+            || self.connect_data_sockets(),
+            &mut data_socket_strategy,
+            "Data socket reconnection",
+        )
+    }
+
     fn wait_for_tcp_endpoint(&self, label: &str, endpoint: &str) -> Result<()> {
         let address = endpoint
             .strip_prefix("tcp://")
