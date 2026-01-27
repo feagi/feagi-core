@@ -64,7 +64,6 @@ pub struct RegistrationResponse {
     pub status: String,
     pub message: Option<String>,
     pub shm_paths: Option<HashMap<String, String>>, // capability_type -> shm_path
-    pub zmq_ports: Option<HashMap<String, u16>>,    // ZMQ port mappings
     pub transports: Option<Vec<TransportConfig>>,   // Available transports with their configs
     pub recommended_transport: Option<String>,      // "zmq" or "websocket"
     /// Cortical area availability status for agent operations

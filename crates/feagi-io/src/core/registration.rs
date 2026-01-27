@@ -1705,12 +1705,6 @@ impl RegistrationHandler {
             } else {
                 Some(shm_paths)
             },
-            zmq_ports: Some(HashMap::from([
-                ("registration".to_string(), self.registration_port),
-                ("sensory".to_string(), self.sensory_port),
-                ("motor".to_string(), self.motor_port),
-                ("visualization".to_string(), self.viz_port),
-            ])),
             transports: Some(transports),
             recommended_transport: Some("zmq".to_string()), // ZMQ is default for now
             cortical_areas: cortical_areas_availability,
