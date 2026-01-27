@@ -29,6 +29,9 @@ pub struct VideoEncoderConfig {
     pub feagi_heartbeat_interval_s: f64,
     pub feagi_connection_timeout_ms: u64,
     pub feagi_registration_retries: u32,
+    pub sensory_send_hwm: i32,
+    pub sensory_linger_ms: i32,
+    pub sensory_immediate: bool,
     pub diff_threshold: u8,
     pub brightness: i32,
     pub contrast: f32,
@@ -52,6 +55,11 @@ impl VideoEncoderConfig {
                 3,
                 SensoryUnit::Vision,
                 self.cortical_unit_id,
+            )
+            .with_sensory_socket_config(
+                self.sensory_send_hwm,
+                self.sensory_linger_ms,
+                self.sensory_immediate,
             )
             .with_registration_endpoint(registration_endpoint)
             .with_sensory_endpoint(sensory_endpoint)
@@ -80,6 +88,11 @@ impl VideoEncoderConfig {
                 self.cortical_unit_id,
             )
             .with_motor_unit("gaze", 2, MotorUnit::Gaze, self.cortical_unit_id)
+            .with_sensory_socket_config(
+                self.sensory_send_hwm,
+                self.sensory_linger_ms,
+                self.sensory_immediate,
+            )
             .with_registration_endpoint(registration_endpoint)
             .with_sensory_endpoint(sensory_endpoint)
             .with_motor_endpoint(motor_endpoint)

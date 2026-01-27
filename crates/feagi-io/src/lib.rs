@@ -6,7 +6,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod io_api;
 
-use feagi_structures::FeagiSignal;
+use feagi_structures::{FeagiDataError, FeagiSignal};
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 
@@ -51,6 +51,8 @@ struct IOSystemForCallbacks {
     sensory_stream_state: Arc<Mutex<StreamState>>,
     motor_stream_state: Arc<Mutex<StreamState>>,
     viz_stream_state: Arc<Mutex<StreamState>>,
+    stream_wait_poll_ms: u64,
+    stream_wait_timeout_ms: u64,
 }
 
 impl IOSystemForCallbacks {
@@ -72,6 +74,45 @@ impl IOSystemForCallbacks {
 
     fn should_viz_stream_run(&self) -> bool {
         self.is_genome_loaded() && self.agent_registry.read().has_visualization_agents()
+    }
+
+    fn wait_for_streams_ready(
+        &self,
+        capabilities: &AgentCapabilities,
+    ) -> std::result::Result<(), FeagiDataError> {
+        let needs_sensory =
+            capabilities.sensory.is_some() || capabilities.vision.is_some();
+        let needs_motor = capabilities.motor.is_some();
+        let needs_viz = capabilities.visualization.is_some();
+
+        if !needs_sensory && !needs_motor && !needs_viz {
+            return Ok(());
+        }
+
+        let start = std::time::Instant::now();
+        let timeout = std::time::Duration::from_millis(self.stream_wait_timeout_ms);
+        let poll = std::time::Duration::from_millis(self.stream_wait_poll_ms);
+
+        loop {
+            let sensory_ready = !needs_sensory
+                || *self.sensory_stream_state.lock() == StreamState::Running;
+            let motor_ready = !needs_motor
+                || *self.motor_stream_state.lock() == StreamState::Running;
+            let viz_ready = !needs_viz
+                || *self.viz_stream_state.lock() == StreamState::Running;
+
+            if sensory_ready && motor_ready && viz_ready {
+                return Ok(());
+            }
+
+            if start.elapsed() >= timeout {
+                return Err(FeagiDataError::BadParameters(
+                    "Requested streams not ready before registration acknowledgement".to_string(),
+                ));
+            }
+
+            std::thread::sleep(poll);
+        }
     }
 
     fn get_active_viz_transports(&self) -> Vec<String> {
@@ -1169,6 +1210,13 @@ impl IOSystem {
                 pns_self.on_agent_deregistered_dynamic(&agent_id);
             });
 
+        let pns_self = self.clone_for_callbacks();
+        self.registration_handler
+            .lock()
+            .set_on_agent_registered_stream_ready(move |capabilities| {
+                pns_self.wait_for_streams_ready(capabilities)
+            });
+
         info!("🦀 [PNS] ✅ Dynamic gating callbacks wired");
         info!("🦀 [PNS] ✅ Control streams started - ready for agent registration");
         info!("🦀 [PNS] ⏸️  Data streams (sensory/motor/viz) will start dynamically when conditions are met");
@@ -1178,6 +1226,16 @@ impl IOSystem {
 
     /// Clone PNS for callbacks (only clone the Arc fields needed)
     fn clone_for_callbacks(&self) -> IOSystemForCallbacks {
+        #[cfg(feature = "zmq-transport")]
+        let stream_wait_poll_ms = self.config.sensory_stream.poll_timeout_ms as u64;
+        #[cfg(feature = "zmq-transport")]
+        let stream_wait_timeout_ms = self.config.sensory_stream.startup_drain_timeout_ms;
+
+        #[cfg(not(feature = "zmq-transport"))]
+        let stream_wait_poll_ms = self.config.websocket.ping_interval_ms;
+        #[cfg(not(feature = "zmq-transport"))]
+        let stream_wait_timeout_ms = self.config.websocket.connection_timeout_ms;
+
         IOSystemForCallbacks {
             npu_ref: Arc::clone(&self.npu_ref),
             agent_registry: Arc::clone(&self.agent_registry),
@@ -1190,6 +1248,8 @@ impl IOSystem {
             sensory_stream_state: Arc::clone(&self.sensory_stream_state),
             motor_stream_state: Arc::clone(&self.motor_stream_state),
             viz_stream_state: Arc::clone(&self.viz_stream_state),
+            stream_wait_poll_ms,
+            stream_wait_timeout_ms,
         }
     }
 

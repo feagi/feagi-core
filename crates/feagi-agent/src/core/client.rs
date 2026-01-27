@@ -10,7 +10,7 @@ use crate::core::reconnect::{retry_with_backoff, ReconnectionStrategy};
 use feagi_io::AgentType;
 use futures::FutureExt;
 use std::net::{TcpStream, ToSocketAddrs};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use std::time::Duration;
@@ -97,6 +97,9 @@ pub struct AgentClient {
     /// Last reconnect attempt timestamp (ms since UNIX epoch)
     last_reconnect_attempt_ms: AtomicU64,
 
+    /// Sensory socket has completed at least one successful send
+    sensory_connected: AtomicBool,
+
     /// Last successful registration response body (JSON) returned by FEAGI.
     ///
     /// FEAGI registration is performed via "REST over ZMQ" and returns a wrapper:
@@ -139,6 +142,7 @@ impl AgentClient {
             registered: false,
             last_registration_body: None,
             last_reconnect_attempt_ms: AtomicU64::new(0),
+            sensory_connected: AtomicBool::new(false),
         })
     }
 
@@ -265,6 +269,7 @@ impl AgentClient {
     /// Connect data sockets (sensory/motor/viz) after registration
     fn connect_data_sockets(&mut self) -> Result<()> {
         // Sensory socket (PUSH - for sending data to FEAGI)
+        self.sensory_connected.store(false, Ordering::Relaxed);
         self.wait_for_tcp_endpoint("sensory", &self.config.sensory_endpoint)?;
         let mut sensory_socket = PushSocket::new();
         self.block_on(sensory_socket.connect(&self.config.sensory_endpoint))
@@ -364,6 +369,7 @@ impl AgentClient {
     }
 
     fn close_data_sockets(&mut self) {
+        self.sensory_connected.store(false, Ordering::Relaxed);
         if let Some(socket) = self.sensory_socket.take() {
             if let Ok(socket) = Arc::try_unwrap(socket) {
                 match socket.into_inner() {
@@ -952,9 +958,31 @@ impl AgentClient {
             .lock()
             .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
         let message = ZmqMessage::from(bytes.to_vec());
-        let send_result = self.block_on(async {
-            socket.send(message).now_or_never()
-        });
+
+        if !self.sensory_connected.load(Ordering::Relaxed) {
+            let timeout_ms = self.config.connection_timeout_ms;
+            let send_result = self.block_on(async {
+                timeout(std::time::Duration::from_millis(timeout_ms), socket.send(message)).await
+            });
+            match send_result {
+                Ok(Ok(())) => {
+                    self.sensory_connected.store(true, Ordering::Relaxed);
+                    debug!("[CLIENT] Sensory socket connected (first send)");
+                    return Ok(true);
+                }
+                Ok(Err(ZmqError::BufferFull(_))) => return Ok(false),
+                Ok(Err(e)) => {
+                    let message = e.to_string();
+                    if message.contains("Not connected to peers") {
+                        return Ok(false);
+                    }
+                    return Err(SdkError::Zmq(e));
+                }
+                Err(_) => return Ok(false),
+            }
+        }
+
+        let send_result = self.block_on(async { socket.send(message).now_or_never() });
         match send_result {
             Some(Ok(())) => {
                 debug!("[CLIENT] Sent {} bytes sensory (raw)", bytes.len());

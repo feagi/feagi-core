@@ -35,6 +35,9 @@ pub type DeregistrationCallback =
     Arc<parking_lot::Mutex<Option<Box<dyn Fn(String) + Send + Sync>>>>;
 /// Type alias for dynamic gating callbacks
 pub type DynamicGatingCallback = Arc<parking_lot::Mutex<Option<Box<dyn Fn(String) + Send + Sync>>>>;
+/// Type alias for stream readiness callbacks (blocks until streams are ready)
+pub type StreamReadyCallback =
+    Arc<parking_lot::Mutex<Option<Box<dyn Fn(&AgentCapabilities) -> Result<(), FeagiDataError> + Send + Sync>>>>;
 
 /// Policy for whether FEAGI should advertise/allocate visualization SHM paths during registration.
 ///
@@ -97,6 +100,8 @@ pub struct RegistrationHandler {
     /// Callbacks for dynamic stream gating
     on_agent_registered_dynamic: DynamicGatingCallback,
     on_agent_deregistered_dynamic: DynamicGatingCallback,
+    /// Callback to wait for requested streams before ack
+    on_agent_registered_stream_ready: StreamReadyCallback,
 }
 
 impl RegistrationHandler {
@@ -130,6 +135,7 @@ impl RegistrationHandler {
             on_agent_deregistered: Arc::new(parking_lot::Mutex::new(None)),
             on_agent_registered_dynamic: Arc::new(parking_lot::Mutex::new(None)),
             on_agent_deregistered_dynamic: Arc::new(parking_lot::Mutex::new(None)),
+            on_agent_registered_stream_ready: Arc::new(parking_lot::Mutex::new(None)),
         }
     }
 
@@ -243,6 +249,15 @@ impl RegistrationHandler {
     {
         *self.on_agent_deregistered_dynamic.lock() = Some(Box::new(callback));
         info!("🦀 [REGISTRATION] Dynamic gating deregistration callback set");
+    }
+
+    /// Set callback to wait for requested streams to be running before returning success.
+    pub fn set_on_agent_registered_stream_ready<F>(&self, callback: F)
+    where
+        F: Fn(&AgentCapabilities) -> Result<(), FeagiDataError> + Send + Sync + 'static,
+    {
+        *self.on_agent_registered_stream_ready.lock() = Some(Box::new(callback));
+        info!("🦀 [REGISTRATION] Stream readiness callback set");
     }
 
     /// Convert area name to CorticalID base64 string
@@ -1207,7 +1222,7 @@ impl RegistrationHandler {
         let mut agent_info = AgentInfo::new(
             request.agent_id.clone(),
             agent_type_enum,
-            allocated_capabilities,
+            allocated_capabilities.clone(),
             transport,
         );
 
@@ -1645,6 +1660,15 @@ impl RegistrationHandler {
             callback(request.agent_id.clone());
         } else {
             warn!("⚠️  [REGISTRATION] No dynamic gating callback set - streams won't auto-start!");
+        }
+
+        // Wait for requested streams to be running before returning success
+        if let Some(ref callback) = *self.on_agent_registered_stream_ready.lock() {
+            info!(
+                "🦀 [REGISTRATION] Waiting for requested streams to be ready for agent: {}",
+                request.agent_id
+            );
+            callback(&allocated_capabilities)?;
         }
 
         // Build transport configurations
