@@ -7,37 +7,75 @@
 //! can handle multiple clients concurrently. Each client is identified by a unique
 //! identity frame, allowing the server to route replies back to the correct client.
 
-use crate::transports::core::common::{ReplyHandle, ServerConfig, TransportError, TransportResult};
+use crate::transports::core::common::{
+    ReplyHandle, ServerConfig, TransportConfig, TransportError, TransportResult,
+};
 use crate::transports::core::traits::{RequestReplyServer, Transport};
+use futures_util::FutureExt;
 use parking_lot::Mutex;
 use std::sync::Arc;
+use tokio::runtime::Runtime;
+use tokio::time::timeout;
 use tracing::info;
+use zeromq::{RouterSocket, Socket, SocketRecv, SocketSend, ZmqMessage};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 /// ZMQ ROUTER socket implementation (server-side)
 pub struct ZmqRouter {
-    context: Arc<zmq::Context>,
+    runtime: Arc<Runtime>,
     config: ServerConfig,
-    socket: Arc<Mutex<Option<zmq::Socket>>>,
+    socket: Arc<Mutex<Option<RouterSocket>>>,
     running: Arc<Mutex<bool>>,
+    pending_request: Arc<Mutex<Option<(Vec<u8>, Vec<u8>)>>>,
 }
 
 impl ZmqRouter {
     /// Create a new ROUTER socket
-    pub fn new(context: Arc<zmq::Context>, config: ServerConfig) -> TransportResult<Self> {
+    pub fn new(runtime: Arc<Runtime>, config: ServerConfig) -> TransportResult<Self> {
         config.base.validate()?;
 
         Ok(Self {
-            context,
+            runtime,
             config,
             socket: Arc::new(Mutex::new(None)),
             running: Arc::new(Mutex::new(false)),
+            pending_request: Arc::new(Mutex::new(None)),
         })
     }
 
     /// Create with default context
     pub fn with_address(address: impl Into<String>) -> TransportResult<Self> {
-        let context = Arc::new(zmq::Context::new());
         let config = ServerConfig::new(address);
-        Self::new(context, config)
+        let runtime = Arc::new(
+            Runtime::new()
+                .map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
+        );
+        Self::new(runtime, config)
+    }
+
+    fn ensure_supported_options(&self) -> TransportResult<()> {
+        let defaults = TransportConfig::default();
+        if self.config.base.send_hwm != defaults.send_hwm
+            || self.config.base.recv_hwm != defaults.recv_hwm
+            || self.config.base.linger != defaults.linger
+        {
+            return Err(TransportError::InvalidConfig(format!(
+                "zeromq transport does not support custom socket options (send_hwm={}, recv_hwm={}, linger={:?})",
+                self.config.base.send_hwm,
+                self.config.base.recv_hwm,
+                self.config.base.linger
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -47,23 +85,13 @@ impl Transport for ZmqRouter {
             return Err(TransportError::AlreadyRunning);
         }
 
+        self.ensure_supported_options()?;
+
         // Create ROUTER socket
-        let socket = self.context.socket(zmq::ROUTER)?;
-
-        // Set socket options
-        if let Some(linger) = self.config.base.linger {
-            socket.set_linger(linger.as_millis() as i32)?;
-        } else {
-            socket.set_linger(0)?;
-        }
-
-        socket.set_router_mandatory(false)?;
-        socket.set_rcvhwm(self.config.base.recv_hwm as i32)?;
-        socket.set_sndhwm(self.config.base.send_hwm as i32)?;
+        let mut socket = RouterSocket::new();
 
         // Bind socket
-        socket
-            .bind(&self.config.base.address)
+        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.config.base.address))
             .map_err(|e| TransportError::BindFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
@@ -95,76 +123,124 @@ impl RequestReplyServer for ZmqRouter {
     }
 
     fn receive_timeout(&self, timeout_ms: u64) -> TransportResult<(Vec<u8>, Box<dyn ReplyHandle>)> {
-        let sock_guard = self.socket.lock();
-        let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
-
-        // Poll for messages
-        if timeout_ms > 0 {
-            let poll_items = &mut [sock.as_poll_item(zmq::POLLIN)];
-            zmq::poll(poll_items, timeout_ms as i64)?;
-
-            if !poll_items[0].is_readable() {
-                return Err(TransportError::Timeout);
-            }
+        if let Some((request_data, identity)) = self.pending_request.lock().take() {
+            let reply = ZmqRouterReplyHandle {
+                socket: Arc::clone(&self.socket),
+                identity,
+                runtime: Arc::clone(&self.runtime),
+            };
+            return Ok((request_data, Box::new(reply)));
         }
 
-        // Receive multipart message: [identity, delimiter, request_data]
-        let mut msg_parts = Vec::new();
-        let mut more = true;
+        let mut sock_guard = self.socket.lock();
+        let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
 
-        while more {
-            let mut msg = zmq::Message::new();
-            sock.recv(&mut msg, 0)?;
-            msg_parts.push(msg.to_vec());
-            more = sock.get_rcvmore()?;
+        let recv_future = sock.recv();
+        let message = if timeout_ms == 0 {
+            block_on_runtime(self.runtime.as_ref(), recv_future)
+                .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
+        } else {
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(std::time::Duration::from_millis(timeout_ms), recv_future).await
+            })
+                .map_err(|_| TransportError::Timeout)?
+                .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
+        };
+
+        let mut frames = message.into_vec();
+        if frames.is_empty() {
+            return Err(TransportError::InvalidMessage(
+                "Empty router message".to_string(),
+            ));
         }
 
-        if msg_parts.len() < 3 {
+        let identity = frames.remove(0).to_vec();
+        if frames.first().map(|frame| frame.is_empty()).unwrap_or(false) {
+            frames.remove(0);
+        }
+
+        if frames.len() != 1 {
             return Err(TransportError::InvalidMessage(format!(
-                "Expected at least 3 parts, got {}",
-                msg_parts.len()
+                "Expected single-frame payload, got {} frames",
+                frames.len()
             )));
         }
 
-        // Extract identity and request data
-        let identity = msg_parts[0].clone();
-        let request_data = msg_parts[2].clone();
+        let request_data = frames.remove(0).to_vec();
 
         // Create reply handle
         let reply = ZmqRouterReplyHandle {
             socket: Arc::clone(&self.socket),
             identity,
+            runtime: Arc::clone(&self.runtime),
         };
 
         Ok((request_data, Box::new(reply)))
     }
 
     fn poll(&self, timeout_ms: u64) -> TransportResult<bool> {
-        let sock_guard = self.socket.lock();
-        let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
+        if self.pending_request.lock().is_some() {
+            return Ok(true);
+        }
 
-        let poll_items = &mut [sock.as_poll_item(zmq::POLLIN)];
-        zmq::poll(poll_items, timeout_ms as i64)?;
+        let mut sock_guard = self.socket.lock();
+        let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
 
-        Ok(poll_items[0].is_readable())
+        let recv_future = sock.recv();
+        let message = if timeout_ms == 0 {
+            match block_on_runtime(self.runtime.as_ref(), async { recv_future.now_or_never() }) {
+                None => return Ok(false),
+                Some(result) => result.map_err(|e| TransportError::ReceiveFailed(e.to_string()))?,
+            }
+        } else {
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(std::time::Duration::from_millis(timeout_ms), recv_future).await
+            })
+                .map_err(|_| TransportError::Timeout)?
+                .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
+        };
+
+        let mut frames = message.into_vec();
+        if frames.is_empty() {
+            return Err(TransportError::InvalidMessage(
+                "Empty router message".to_string(),
+            ));
+        }
+
+        let identity = frames.remove(0).to_vec();
+        if frames.first().map(|frame| frame.is_empty()).unwrap_or(false) {
+            frames.remove(0);
+        }
+        if frames.len() != 1 {
+            return Err(TransportError::InvalidMessage(
+                "Unexpected multipart request payload".to_string(),
+            ));
+        }
+
+        let request_data = frames.remove(0).to_vec();
+        *self.pending_request.lock() = Some((request_data, identity));
+        Ok(true)
     }
 }
 
 /// Reply handle for ROUTER socket
 struct ZmqRouterReplyHandle {
-    socket: Arc<Mutex<Option<zmq::Socket>>>,
+    socket: Arc<Mutex<Option<RouterSocket>>>,
     identity: Vec<u8>,
+    runtime: Arc<Runtime>,
 }
 
 impl ReplyHandle for ZmqRouterReplyHandle {
     fn send(&self, data: &[u8]) -> TransportResult<()> {
-        let sock_guard = self.socket.lock();
-        let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
+        let mut sock_guard = self.socket.lock();
+        let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
 
-        // Send multipart reply: [identity, delimiter, response_data]
-        sock.send(&self.identity, zmq::SNDMORE)?;
-        sock.send(Vec::<u8>::new(), zmq::SNDMORE)?;
-        sock.send(data, 0)?;
+        let mut message = ZmqMessage::from(data.to_vec());
+        message.prepend(&ZmqMessage::from(Vec::new()));
+        message.prepend(&ZmqMessage::from(self.identity.clone()));
+
+        block_on_runtime(self.runtime.as_ref(), sock.send(message))
+            .map_err(|e| TransportError::SendFailed(e.to_string()))?;
 
         Ok(())
     }
@@ -176,9 +252,9 @@ mod tests {
 
     #[test]
     fn test_router_creation() {
-        let context = Arc::new(zmq::Context::new());
+        let runtime = Arc::new(Runtime::new().unwrap());
         let config = ServerConfig::new("tcp://127.0.0.1:30000");
-        let router = ZmqRouter::new(context, config);
+        let router = ZmqRouter::new(runtime, config);
         assert!(router.is_ok());
     }
 

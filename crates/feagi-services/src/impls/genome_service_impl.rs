@@ -808,6 +808,25 @@ impl GenomeService for GenomeServiceImpl {
             }
         }
 
+        let mut changes = changes;
+        let mut effective_cortical_id = cortical_id_typed;
+        let mut effective_cortical_id_str = cortical_id.to_string();
+
+        if changes.contains_key("group_id") {
+            let new_id = self.apply_unit_index_update(
+                &effective_cortical_id,
+                &effective_cortical_id_str,
+                &changes,
+            )?;
+            effective_cortical_id = new_id;
+            effective_cortical_id_str = new_id.as_base_64();
+            self.regenerate_mappings_for_area(&effective_cortical_id)?;
+            changes.remove("group_id");
+            if changes.is_empty() {
+                return self.get_cortical_area_info(&effective_cortical_id_str).await;
+            }
+        }
+
         // Classify changes for intelligent routing
         let change_type = CorticalChangeClassifier::classify_changes(&changes);
         CorticalChangeClassifier::log_classification_result(&changes, change_type);
@@ -816,15 +835,17 @@ impl GenomeService for GenomeServiceImpl {
         match change_type {
             ChangeType::Parameter => {
                 // Fast path: Direct neuron updates (~2-5ms, NO synapse rebuild)
-                self.update_parameters_only(cortical_id, changes).await
+                self.update_parameters_only(&effective_cortical_id_str, changes)
+                    .await
             }
             ChangeType::Metadata => {
                 // Fastest path: Metadata updates only (~1ms)
-                self.update_metadata_only(cortical_id, changes).await
+                self.update_metadata_only(&effective_cortical_id_str, changes)
+                    .await
             }
             ChangeType::Structural => {
                 // Structural path: Requires synapse rebuild (~100-200ms)
-                self.update_with_localized_rebuild(cortical_id, changes)
+                self.update_with_localized_rebuild(&effective_cortical_id_str, changes)
                     .await
             }
             ChangeType::Hybrid => {
@@ -834,27 +855,36 @@ impl GenomeService for GenomeServiceImpl {
                 // Process in order: metadata first, then parameters, then structural
                 if let Some(metadata_changes) = separated.get(&ChangeType::Metadata) {
                     if !metadata_changes.is_empty() {
-                        self.update_metadata_only(cortical_id, metadata_changes.clone())
+                        self.update_metadata_only(
+                            &effective_cortical_id_str,
+                            metadata_changes.clone(),
+                        )
                             .await?;
                     }
                 }
 
                 if let Some(param_changes) = separated.get(&ChangeType::Parameter) {
                     if !param_changes.is_empty() {
-                        self.update_parameters_only(cortical_id, param_changes.clone())
+                        self.update_parameters_only(
+                            &effective_cortical_id_str,
+                            param_changes.clone(),
+                        )
                             .await?;
                     }
                 }
 
                 if let Some(struct_changes) = separated.get(&ChangeType::Structural) {
                     if !struct_changes.is_empty() {
-                        self.update_with_localized_rebuild(cortical_id, struct_changes.clone())
+                        self.update_with_localized_rebuild(
+                            &effective_cortical_id_str,
+                            struct_changes.clone(),
+                        )
                             .await?;
                     }
                 }
 
                 // Return updated info
-                self.get_cortical_area_info(cortical_id).await
+                self.get_cortical_area_info(&effective_cortical_id_str).await
             }
         }
     }
@@ -2152,16 +2182,255 @@ impl GenomeServiceImpl {
             }
         }
 
-        // Update ConnectomeManager (runtime + NPU mappings)
+        // Update ConnectomeManager (runtime only; keep NPU registry unchanged)
         {
             let mut manager = self.connectome.write();
-            manager.rename_cortical_area_id(cortical_id, computed_id, new_cortical_type)?;
+            manager.rename_cortical_area_id_with_options(
+                cortical_id,
+                computed_id,
+                new_cortical_type,
+                false,
+            )?;
         }
 
         // Refresh burst runner cache to propagate updated cortical_id mapping.
         self.refresh_burst_runner_cache();
 
         Ok(computed_id)
+    }
+
+    /// Update the unit index (group_id) for an IO cortical area and remap the cortical ID.
+    ///
+    /// This updates both RuntimeGenome and ConnectomeManager, preserving cortical_idx.
+    fn apply_unit_index_update(
+        &self,
+        cortical_id: &CorticalID,
+        cortical_id_str: &str,
+        changes: &HashMap<String, Value>,
+    ) -> ServiceResult<CorticalID> {
+        let new_group_id_value = changes
+            .get("group_id")
+            .ok_or_else(|| {
+                ServiceError::InvalidInput("group_id is required for unit index update".to_string())
+            })?;
+        let new_group_id = if let Some(value) = new_group_id_value.as_u64() {
+            value
+                .try_into()
+                .map_err(|_| ServiceError::InvalidInput("group_id out of range".to_string()))?
+        } else if let Some(value) = new_group_id_value.as_f64() {
+            if value.fract() != 0.0 {
+                return Err(ServiceError::InvalidInput(
+                    "group_id must be an integer".to_string(),
+                ));
+            }
+            let as_u64 = value as u64;
+            as_u64
+                .try_into()
+                .map_err(|_| ServiceError::InvalidInput("group_id out of range".to_string()))?
+        } else if let Some(raw) = new_group_id_value.as_str() {
+            raw.parse::<u8>().map_err(|_| {
+                ServiceError::InvalidInput("group_id must be an integer".to_string())
+            })?
+        } else {
+            return Err(ServiceError::InvalidInput(
+                "group_id must be an integer".to_string(),
+            ));
+        };
+
+        let bytes = cortical_id.as_bytes();
+        let is_input = bytes[0] == b'i';
+        let is_output = bytes[0] == b'o';
+        if !is_input && !is_output {
+            return Err(ServiceError::InvalidInput(
+                "Unit index updates only apply to IPU/OPU cortical areas".to_string(),
+            ));
+        }
+
+        let current_flag = cortical_id.extract_io_data_flag().map_err(|e| {
+            ServiceError::InvalidInput(format!(
+                "Unable to decode IO configuration from cortical ID '{}': {}",
+                cortical_id_str, e
+            ))
+        })?;
+        let unit_identifier = [bytes[1], bytes[2], bytes[3]];
+        let cortical_subunit_index = CorticalSubUnitIndex::from(bytes[6]);
+        let cortical_unit_index = CorticalUnitIndex::from(new_group_id);
+        let computed_id = current_flag.as_io_cortical_id(
+            is_input,
+            unit_identifier,
+            cortical_unit_index,
+            cortical_subunit_index,
+        );
+
+        let new_cortical_type = if is_input {
+            CorticalAreaType::BrainInput(current_flag)
+        } else {
+            CorticalAreaType::BrainOutput(current_flag)
+        };
+
+        if &computed_id == cortical_id {
+            if let Some(genome) = self.current_genome.write().as_mut() {
+                if let Some(area) = genome.cortical_areas.get_mut(cortical_id) {
+                    area.properties
+                        .insert("group_id".to_string(), serde_json::json!(new_group_id));
+                }
+            }
+            let mut manager = self.connectome.write();
+            if let Some(area) = manager.get_cortical_area_mut(cortical_id) {
+                area.properties
+                    .insert("group_id".to_string(), serde_json::json!(new_group_id));
+            }
+            return Ok(*cortical_id);
+        }
+
+        info!(
+            target: "feagi-services",
+            "[UNIT-INDEX] Remapping cortical ID {} -> {}",
+            cortical_id.as_base_64(),
+            computed_id.as_base_64()
+        );
+
+        // Update RuntimeGenome if available
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            let mut area = genome.cortical_areas.remove(cortical_id).ok_or_else(|| {
+                ServiceError::NotFound {
+                    resource: "CorticalArea".to_string(),
+                    id: cortical_id.as_base_64(),
+                }
+            })?;
+            area.cortical_id = computed_id;
+            area.cortical_type = new_cortical_type;
+            area.properties
+                .insert("group_id".to_string(), serde_json::json!(new_group_id));
+            genome.cortical_areas.insert(computed_id, area);
+
+            for region in genome.brain_regions.values_mut() {
+                if region.cortical_areas.remove(cortical_id) {
+                    region.cortical_areas.insert(computed_id);
+                }
+            }
+
+            let old_id_str = cortical_id.as_base_64();
+            let new_id_str = computed_id.as_base_64();
+            for area in genome.cortical_areas.values_mut() {
+                if let Some(mapping) = area
+                    .properties
+                    .get_mut("cortical_mapping_dst")
+                    .and_then(|v| v.as_object_mut())
+                {
+                    if let Some(value) = mapping.remove(&old_id_str) {
+                        mapping.insert(new_id_str.clone(), value);
+                    }
+                }
+            }
+        }
+
+        // Update ConnectomeManager (runtime only; keep NPU registry unchanged)
+        {
+            let mut manager = self.connectome.write();
+            manager.rename_cortical_area_id_with_options(
+                cortical_id,
+                computed_id,
+                new_cortical_type,
+                false,
+            )?;
+            if let Some(area) = manager.get_cortical_area_mut(&computed_id) {
+                area.properties
+                    .insert("group_id".to_string(), serde_json::json!(new_group_id));
+            }
+        }
+
+        // Refresh burst runner cache to propagate updated cortical_id mapping.
+        self.refresh_burst_runner_cache();
+
+        Ok(computed_id)
+    }
+
+    /// Regenerate incoming/outgoing synapses for a cortical area without rebuilding neurons.
+    fn regenerate_mappings_for_area(&self, cortical_id: &CorticalID) -> ServiceResult<()> {
+        let mut manager = self.connectome.write();
+        let cortical_id_str = cortical_id.as_base_64();
+
+        let outgoing_targets = {
+            let Some(area) = manager.get_cortical_area(cortical_id) else {
+                return Err(ServiceError::NotFound {
+                    resource: "CorticalArea".to_string(),
+                    id: cortical_id_str.clone(),
+                });
+            };
+            let mut targets = Vec::new();
+            if let Some(mapping) = area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+            {
+                for key in mapping.keys() {
+                    match CorticalID::try_from_base_64(key) {
+                        Ok(dst_id) => targets.push(dst_id),
+                        Err(err) => warn!(
+                            target: "feagi-services",
+                            "Invalid cortical_mapping_dst ID '{}': {}",
+                            key,
+                            err
+                        ),
+                    }
+                }
+            }
+            targets
+        };
+
+        let incoming_sources = {
+            let mut sources = Vec::new();
+            for src_id in manager.get_all_cortical_ids() {
+                if src_id == *cortical_id {
+                    continue;
+                }
+                let Some(src_area) = manager.get_cortical_area(&src_id) else {
+                    continue;
+                };
+                if let Some(mapping) = src_area
+                    .properties
+                    .get("cortical_mapping_dst")
+                    .and_then(|v| v.as_object())
+                {
+                    if mapping.contains_key(&cortical_id_str) {
+                        sources.push(src_id);
+                    }
+                }
+            }
+            sources
+        };
+
+        for dst_id in outgoing_targets {
+            if dst_id == *cortical_id {
+                continue;
+            }
+            manager
+                .regenerate_synapses_for_mapping(cortical_id, &dst_id)
+                .map_err(|e| {
+                    ServiceError::Backend(format!(
+                        "Failed to regenerate outgoing synapses {} -> {}: {}",
+                        cortical_id.as_base_64(),
+                        dst_id.as_base_64(),
+                        e
+                    ))
+                })?;
+        }
+
+        for src_id in incoming_sources {
+            manager
+                .regenerate_synapses_for_mapping(&src_id, cortical_id)
+                .map_err(|e| {
+                    ServiceError::Backend(format!(
+                        "Failed to regenerate incoming synapses {} -> {}: {}",
+                        src_id.as_base_64(),
+                        cortical_id.as_base_64(),
+                        e
+                    ))
+                })?;
+        }
+
+        Ok(())
     }
 
     /// Fastest path: Update only metadata without affecting neurons/synapses
@@ -2457,6 +2726,12 @@ impl GenomeServiceImpl {
         // Validate cortical ID format
         let _cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+
+        if changes.contains_key("group_id") && changes.len() == 1 {
+            let new_id = self.apply_unit_index_update(&_cortical_id_typed, cortical_id, &changes)?;
+            self.regenerate_mappings_for_area(&new_id)?;
+            return self.get_cortical_area_info(&new_id.as_base_64()).await;
+        }
 
         // Must run on blocking thread due to heavy ConnectomeManager operations
         let connectome = Arc::clone(&self.connectome);
@@ -3041,13 +3316,57 @@ impl GenomeServiceImpl {
         }
 
         // Step 5: Rebuild outgoing synapses (this area -> others)
+        let outgoing_targets = {
+            let genome_guard = genome_store.read();
+            let genome = genome_guard.as_ref().ok_or_else(|| {
+                ServiceError::Backend("No genome loaded".to_string())
+            })?;
+            let area = genome.cortical_areas.get(&cortical_id_typed).ok_or_else(|| {
+                ServiceError::NotFound {
+                    resource: "CorticalArea".to_string(),
+                    id: cortical_id.to_string(),
+                }
+            })?;
+            let mut targets = Vec::new();
+            if let Some(mapping) = area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+            {
+                for key in mapping.keys() {
+                    match CorticalID::try_from_base_64(key) {
+                        Ok(dst_id) => targets.push(dst_id),
+                        Err(err) => warn!(
+                            target: "feagi-services",
+                            "Invalid cortical_mapping_dst ID '{}': {}",
+                            key,
+                            err
+                        ),
+                    }
+                }
+            }
+            targets
+        };
         let outgoing_synapses = {
             let mut manager = connectome.write();
-            manager
-                .apply_cortical_mapping(&cortical_id_typed)
-                .map_err(|e| {
-                    ServiceError::Backend(format!("Failed to rebuild outgoing synapses: {}", e))
-                })?
+            let mut total = 0u32;
+            for dst_id in outgoing_targets {
+                if dst_id == cortical_id_typed {
+                    continue;
+                }
+                let count = manager
+                    .regenerate_synapses_for_mapping(&cortical_id_typed, &dst_id)
+                    .map_err(|e| {
+                        ServiceError::Backend(format!(
+                            "Failed to rebuild outgoing synapses {} -> {}: {}",
+                            cortical_id,
+                            dst_id.as_base_64(),
+                            e
+                        ))
+                    })?;
+                total = total.saturating_add(count as u32);
+            }
+            total
         };
 
         info!(
@@ -3072,13 +3391,15 @@ impl GenomeServiceImpl {
                         if obj.contains_key(cortical_id) {
                             // This area has mappings to our target - rebuild them
                             let mut manager = connectome.write();
-                            let count = manager.apply_cortical_mapping(src_id).map_err(|e| {
+                            let count = manager
+                                .regenerate_synapses_for_mapping(src_id, &cortical_id_typed)
+                                .map_err(|e| {
                                 ServiceError::Backend(format!(
                                     "Failed to rebuild incoming synapses from {}: {}",
                                     src_id, e
                                 ))
                             })?;
-                            total += count;
+                            total = total.saturating_add(count as u32);
                             info!(
                                 "[STRUCTURAL-REBUILD] Rebuilt {} incoming synapses from {}",
                                 count, src_id

@@ -1,7 +1,7 @@
-//! ZMQ Publisher-Subscriber Example using FEAGI's I/O module implementations
+//! ZMQ Publisher-Subscriber Example using FEAGI's `next` module implementations
 //!
 //! This example demonstrates the publish-subscribe pattern using the
-//! `FEAGIZMQServerPublisher` and `FEAGIZMQClientSubscriber`.
+//! `FEAGIZMQServerPublisher` and `FEAGIZMQClientSubscriber` from the `next` module.
 //!
 //! # Usage
 //!
@@ -19,9 +19,9 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use feagi_io::implementations::zmq::{FEAGIZMQClientSubscriber, FEAGIZMQServerPublisher};
-use feagi_io::traits_and_enums::client::FeagiClient;
-use feagi_io::traits_and_enums::server::{FeagiServer, FeagiServerPublisher};
+use feagi_io::io_api::implementations::zmq::{FEAGIZMQClientSubscriber, FEAGIZMQServerPublisher};
+use feagi_io::io_api::traits_and_enums::client::FeagiClient;
+use feagi_io::io_api::traits_and_enums::server::{FeagiServer, FeagiServerPublisher};
 
 const ADDRESS: &str = "tcp://127.0.0.1:5555";
 
@@ -29,9 +29,12 @@ fn run_publisher() {
     println!("=== FEAGI ZMQ Publisher Example ===\n");
     println!("Starting publisher on {}", ADDRESS);
 
-    let mut publisher = FEAGIZMQServerPublisher::new(ADDRESS.to_string(), Box::new(|state_change| {
-        println!("[PUB] State changed: {:?}", state_change)
-    }))
+    let mut publisher = FEAGIZMQServerPublisher::new(
+        ADDRESS.to_string(),
+        Box::new(|state_change| {
+            println!("[PUB] State changed: {:?}", state_change)
+        }),
+    )
     .expect("Failed to create publisher");
 
     publisher.start().expect("Failed to start publisher");
@@ -62,9 +65,12 @@ fn run_subscriber() {
     println!("=== FEAGI ZMQ Subscriber Example ===\n");
     println!("Connecting subscriber to {}", ADDRESS);
 
-    let mut subscriber = FEAGIZMQClientSubscriber::new(ADDRESS.to_string(), Box::new(|state_change| {
-        println!("[SUB] State changed: {:?}", state_change)
-    }))
+    let mut subscriber = FEAGIZMQClientSubscriber::new(
+        ADDRESS.to_string(),
+        Box::new(|state_change| {
+            println!("[SUB] State changed: {:?}", state_change)
+        }),
+    )
     .expect("Failed to create subscriber");
 
     subscriber.connect(ADDRESS).expect("Failed to connect");
@@ -93,7 +99,7 @@ fn main() {
 
     if args.len() < 2 {
         println!("FEAGI ZMQ Publisher-Subscriber Example");
-        println!("Using implementations from feagi_io module\n");
+        println!("Using implementations from feagi_io::io_api module\n");
         println!("Usage:");
         println!(
             "  {} publisher   - Start the publisher (sends messages)",

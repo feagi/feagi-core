@@ -15,10 +15,7 @@ use tracing::{error, info, warn};
 use crate::traits::agent_service::*;
 use crate::traits::registration_handler::RegistrationHandlerTrait;
 use crate::traits::RuntimeService as RuntimeServiceTrait;
-use crate::types::agent_registry::{
-    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
-    SensoryCapability, VisualizationCapability,
-};
+use crate::types::agent_registry::AgentRegistry;
 use crate::types::registration::RegistrationRequest;
 use feagi_brain_development::ConnectomeManager;
 use feagi_structures::genomic::cortical_area::CorticalID;
@@ -83,116 +80,6 @@ impl AgentService for AgentServiceImpl {
             registration.agent_id, registration.agent_type
         );
 
-        // Parse agent type
-        let agent_type = match registration.agent_type.as_str() {
-            "visualization" | "brain_visualizer" => AgentType::Visualization,
-            "sensory" | "video_agent" | "camera_agent" => AgentType::Sensory,
-            "motor" | "motor_agent" => AgentType::Motor,
-            "both" | "sensorimotor" => AgentType::Both,
-            "infrastructure" | "bridge" | "proxy" => AgentType::Infrastructure,
-            other => {
-                warn!("Unknown agent type '{}', defaulting to Sensory", other);
-                AgentType::Sensory
-            }
-        };
-
-        // Convert capabilities to PNS format
-        let mut capabilities = AgentCapabilities::default();
-
-        // Populate structured capabilities based on agent type to satisfy validation
-        match agent_type {
-            AgentType::Visualization => {
-                // Brain Visualizer requires visualization capability
-                capabilities.visualization = Some(VisualizationCapability {
-                    visualization_type: "3d_brain".to_string(),
-                    resolution: None,
-                    refresh_rate: None,
-                    bridge_proxy: false,
-                });
-            }
-            AgentType::Sensory => {
-                // Sensory agents require sensory capability
-                capabilities.sensory = Some(SensoryCapability {
-                    rate_hz: 30.0,
-                    shm_path: None,
-                });
-            }
-            AgentType::Motor => {
-                // Motor agents require motor capability
-                capabilities.motor = Some(MotorCapability {
-                    modality: "generic".to_string(),
-                    output_count: 0,
-                    source_cortical_areas: vec![],
-                    unit: None,
-                    group: None,
-                    source_units: None,
-                });
-            }
-            AgentType::Both => {
-                // Sensorimotor agents need both sensory and motor capabilities
-                capabilities.sensory = Some(SensoryCapability {
-                    rate_hz: 30.0,
-                    shm_path: None,
-                });
-                capabilities.motor = Some(MotorCapability {
-                    modality: "generic".to_string(),
-                    output_count: 0,
-                    source_cortical_areas: vec![],
-                    unit: None,
-                    group: None,
-                    source_units: None,
-                });
-            }
-            AgentType::Infrastructure => {
-                // Infrastructure agents can proxy any type, use visualization as default
-                capabilities.visualization = Some(VisualizationCapability {
-                    visualization_type: "bridge".to_string(),
-                    resolution: None,
-                    refresh_rate: None,
-                    bridge_proxy: true,
-                });
-            }
-        }
-
-        // Store all raw capabilities in custom field
-        capabilities.custom = registration
-            .capabilities
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-
-        // Create agent info
-        let mut agent_info = AgentInfo::new(
-            registration.agent_id.clone(),
-            agent_type,
-            capabilities,
-            AgentTransport::Zmq, // Default to ZMQ
-        );
-
-        // Store metadata
-        if let Some(meta) = registration.metadata {
-            agent_info
-                .metadata
-                .extend(meta.iter().map(|(k, v)| (k.clone(), v.clone())));
-        }
-        if let Some(ip) = registration.agent_ip {
-            agent_info
-                .metadata
-                .insert("agent_ip".to_string(), serde_json::json!(ip));
-        }
-        agent_info.metadata.insert(
-            "agent_data_port".to_string(),
-            serde_json::json!(registration.agent_data_port),
-        );
-        agent_info.metadata.insert(
-            "agent_version".to_string(),
-            serde_json::json!(registration.agent_version),
-        );
-        agent_info.metadata.insert(
-            "controller_version".to_string(),
-            serde_json::json!(registration.controller_version),
-        );
-
         // If we have a registration handler, use it (gets full transport info)
         if let Some(handler) = &self.registration_handler {
             info!(
@@ -252,36 +139,11 @@ impl AgentService for AgentServiceImpl {
                 rates: None,
                 transports,
                 recommended_transport: pns_response.recommended_transport,
-                zmq_ports: pns_response.zmq_ports,
                 shm_paths: pns_response.shm_paths,
                 cortical_areas: cortical_areas_json,
             });
         }
 
-        // Fallback: Register directly in registry (legacy path without transport info)
-        warn!(
-            "⚠️ [AGENT-SERVICE] No registration handler - using fallback path (no transport info)"
-        );
-        info!(
-            "📝 [AGENT-SERVICE] Registering in AgentRegistry: {}",
-            registration.agent_id
-        );
-        self.agent_registry
-            .write()
-            .register(agent_info)
-            .map_err(|e| {
-                error!("❌ [AGENT-SERVICE] Registration failed: {}", e);
-                AgentError::RegistrationFailed(e)
-            })?;
-
-        // Verify registration worked
-        let count = self.agent_registry.read().get_all().len();
-        info!(
-            "✅ [AGENT-SERVICE] Agent '{}' registered successfully (total agents: {})",
-            registration.agent_id, count
-        );
-
-        // Fallback path not supported in FEAGI 2.0 - registration handler is required
         return Err(AgentError::RegistrationFailed(
             "Registration handler not available - required for FEAGI 2.0".to_string(),
         ));

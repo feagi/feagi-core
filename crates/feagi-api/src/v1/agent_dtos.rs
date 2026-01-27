@@ -71,9 +71,6 @@ pub struct AgentRegistrationResponse {
     pub recommended_transport: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub zmq_ports: Option<HashMap<String, u16>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub shm_paths: Option<HashMap<String, String>>,
 
     /// Cortical area availability status for agent operations

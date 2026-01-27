@@ -5,10 +5,25 @@
 // Uses PULL socket pattern for receiving data from multiple agents (agents use PUSH)
 
 use feagi_structures::FeagiDataError;
+use futures_util::FutureExt;
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use std::thread;
+use tokio::runtime::Runtime;
+use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
+use zeromq::{PullSocket, Socket, SocketRecv};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 
 /// Runtime configuration for the ZMQ sensory receiver.
 #[derive(Clone, Debug)]
@@ -61,9 +76,9 @@ impl SensoryReceiveConfig {
 /// Sensory stream for receiving sensory data from agents
 #[derive(Clone)]
 pub struct SensoryStream {
-    context: Arc<zmq::Context>,
+    runtime: Arc<Runtime>,
     bind_address: String,
-    socket: Arc<Mutex<Option<zmq::Socket>>>,
+    socket: Arc<Mutex<Option<PullSocket>>>,
     running: Arc<Mutex<bool>>,
     config: SensoryReceiveConfig,
     /// Reference to Rust NPU for direct injection (no FFI overhead!)
@@ -85,13 +100,13 @@ pub struct SensoryStream {
 impl SensoryStream {
     /// Create a new sensory stream
     pub fn new(
-        context: Arc<zmq::Context>,
+        runtime: Arc<Runtime>,
         bind_address: &str,
         config: SensoryReceiveConfig,
     ) -> Result<Self, FeagiDataError> {
         config.validate()?;
         Ok(Self {
-            context,
+            runtime,
             bind_address: bind_address.to_string(),
             socket: Arc::new(Mutex::new(None)),
             running: Arc::new(Mutex::new(false)),
@@ -128,27 +143,22 @@ impl SensoryStream {
             ));
         }
 
+        let defaults = SensoryReceiveConfig::default();
+        if self.config.receive_high_water_mark != defaults.receive_high_water_mark
+            || self.config.linger_ms != defaults.linger_ms
+            || self.config.immediate != defaults.immediate
+        {
+            return Err(FeagiDataError::BadParameters(format!(
+                "zeromq transport does not support custom socket options (receive_high_water_mark={}, linger_ms={}, immediate={})",
+                self.config.receive_high_water_mark,
+                self.config.linger_ms,
+                self.config.immediate
+            )));
+        }
+
         // Create PULL socket for receiving sensory data
-        let socket = self.context.socket(zmq::PULL).map_err(|e| {
-            FeagiDataError::InternalError(format!("Failed to create ZMQ PULL socket: {}", e))
-        })?;
-
-        // Set socket options
-        socket
-            .set_linger(self.config.linger_ms)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set linger: {}", e)))?;
-        socket
-            .set_rcvhwm(self.config.receive_high_water_mark)
-            .map_err(|e| {
-                FeagiDataError::InternalError(format!("Failed to set receive HWM: {}", e))
-            })?;
-        socket.set_immediate(self.config.immediate).map_err(|e| {
-            FeagiDataError::InternalError(format!("Failed to set immediate: {}", e))
-        })?;
-
-        // Bind socket
-        socket
-            .bind(&self.bind_address)
+        let mut socket = PullSocket::new();
+        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.bind_address))
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
@@ -198,8 +208,8 @@ impl SensoryStream {
             self.config.startup_drain_timeout_ms
         );
 
-        let sock_guard = self.socket.lock();
-        let sock = match sock_guard.as_ref() {
+        let mut sock_guard = self.socket.lock();
+        let sock = match sock_guard.as_mut() {
             Some(s) => s,
             None => {
                 warn!("🦀 [ZMQ-SENSORY] [ERR] Cannot drain - socket not initialized");
@@ -214,18 +224,13 @@ impl SensoryStream {
                 break;
             }
 
-            // Non-blocking receive (DONTWAIT flag)
-            let mut msg = zmq::Message::new();
-            match sock.recv(&mut msg, zmq::DONTWAIT) {
-                Ok(()) => {
+            let result = block_on_runtime(self.runtime.as_ref(), async { sock.recv().now_or_never() });
+            match result {
+                None => break,
+                Some(Ok(_)) => {
                     drained_count += 1;
-                    // Message discarded - we don't process stale data
                 }
-                Err(zmq::Error::EAGAIN) => {
-                    // No more messages available - buffer is empty
-                    break;
-                }
-                Err(e) => {
+                Some(Err(e)) => {
                     error!("🦀 [ZMQ-SENSORY] [ERR] Drain error: {}", e);
                     break;
                 }
@@ -256,6 +261,7 @@ impl SensoryStream {
         let rejected_no_genome = Arc::clone(&self.rejected_no_genome);
         let rejected_no_agents = Arc::clone(&self.rejected_no_agents);
         let config = self.config.clone();
+        let runtime = Arc::clone(&self.runtime);
 
         thread::spawn(move || {
             info!("🦀 [ZMQ-SENSORY] Processing loop started");
@@ -263,8 +269,8 @@ impl SensoryStream {
             let mut message_count = 0u64;
 
             while *running.lock() {
-                let sock_guard = socket.lock();
-                let sock = match sock_guard.as_ref() {
+                let mut sock_guard = socket.lock();
+                let sock = match sock_guard.as_mut() {
                     Some(s) => s,
                     None => {
                         drop(sock_guard);
@@ -273,124 +279,132 @@ impl SensoryStream {
                     }
                 };
 
-                // Poll for messages with timeout
-                let poll_items = &mut [sock.as_poll_item(zmq::POLLIN)];
-                if let Err(e) = zmq::poll(poll_items, config.poll_timeout_ms) {
-                    error!("🦀 [ZMQ-SENSORY] [ERR] Poll error: {}", e);
-                    continue;
-                }
+                let recv_result = block_on_runtime(runtime.as_ref(), async {
+                    timeout(
+                        std::time::Duration::from_millis(config.poll_timeout_ms as u64),
+                        sock.recv(),
+                    )
+                    .await
+                });
 
-                if !poll_items[0].is_readable() {
-                    // Log periodically that we're polling but no messages
-                    if message_count == 0 || message_count.is_multiple_of(1000) {
-                        debug!("🦀 [ZMQ-SENSORY] 🔍 Polling for messages (no data yet, message_count: {})", message_count);
+                let message = match recv_result {
+                    Ok(Ok(message)) => message,
+                    Ok(Err(e)) => {
+                        error!("🦀 [ZMQ-SENSORY] [ERR] Receive error: {}", e);
+                        drop(sock_guard);
+                        continue;
                     }
-                    drop(sock_guard);
-                    continue;
-                }
+                    Err(_) => {
+                        if message_count == 0 || message_count.is_multiple_of(1000) {
+                            debug!(
+                                "🦀 [ZMQ-SENSORY] 🔍 Polling for messages (no data yet, message_count: {})",
+                                message_count
+                            );
+                        }
+                        drop(sock_guard);
+                        continue;
+                    }
+                };
 
-                // Receive message
-                let mut msg = zmq::Message::new();
-                match sock.recv(&mut msg, 0) {
-                    Ok(()) => {
-                        // REAL-TIME SEMANTICS:
-                        // Even with RCVHWM=1, under load FEAGI can momentarily process an older message
-                        // while a newer one arrives. Drain any queued messages and process only the newest
-                        // payload to prevent drift that looks like buffering.
-                        let mut newest_bytes: Vec<u8> = msg.to_vec();
-                        let mut drained_newer: u64 = 0;
-                        loop {
-                            let mut next = zmq::Message::new();
-                            match sock.recv(&mut next, zmq::DONTWAIT) {
-                                Ok(()) => {
-                                    newest_bytes = next.to_vec();
-                                    drained_newer += 1;
-                                }
-                                Err(zmq::Error::EAGAIN) => break,
-                                Err(e) => {
-                                    warn!("🦀 [ZMQ-SENSORY] [WARN] Drain recv error: {}", e);
-                                    break;
-                                }
+                let mut newest_bytes = match message.into_vec().into_iter().next() {
+                    Some(frame) => frame.to_vec(),
+                    None => {
+                        drop(sock_guard);
+                        continue;
+                    }
+                };
+
+                let mut drained_newer: u64 = 0;
+                loop {
+                    let drain_result =
+                        block_on_runtime(runtime.as_ref(), async { sock.recv().now_or_never() });
+                    match drain_result {
+                        Some(Ok(next_message)) => {
+                            if let Some(frame) = next_message.into_vec().into_iter().next() {
+                                newest_bytes = frame.to_vec();
+                                drained_newer += 1;
                             }
                         }
+                        Some(Err(e)) => {
+                            warn!("🦀 [ZMQ-SENSORY] [WARN] Drain recv error: {}", e);
+                            break;
+                        }
+                        None => break,
+                    }
+                }
 
-                        drop(sock_guard); // Release lock before processing
+                drop(sock_guard); // Release lock before processing
 
-                        *total_messages.lock() += 1;
-                        message_count += 1;
+                *total_messages.lock() += 1;
+                message_count += 1;
 
-                        // Process the binary data
-                        let message_bytes: &[u8] = newest_bytes.as_slice();
-                        let t_zmq_receive_start = std::time::Instant::now();
-                        let receive_timestamp = std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_millis() as u64;
-                        debug!(
-                            "🦀 [ZMQ-SENSORY] 📥 Received message #{}: {} bytes, timestamp: {}",
-                            message_count,
-                            message_bytes.len(),
-                            receive_timestamp
-                        );
+                // Process the binary data
+                let message_bytes: &[u8] = newest_bytes.as_slice();
+                let t_zmq_receive_start = std::time::Instant::now();
+                let receive_timestamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                debug!(
+                    "🦀 [ZMQ-SENSORY] 📥 Received message #{}: {} bytes, timestamp: {}",
+                    message_count,
+                    message_bytes.len(),
+                    receive_timestamp
+                );
 
-                        // Try to deserialize as binary XYZP data (using feagi-data-processing)
-                        let t_deserialize_start = std::time::Instant::now();
-                        match Self::deserialize_and_inject_xyzp(
-                            message_bytes,
-                            &npu,
-                            &agent_registry,
-                            &rejected_no_genome,
-                            &rejected_no_agents,
-                        ) {
-                            Ok(neuron_count) => {
-                                *total_neurons.lock() += neuron_count as u64;
-                                let t_deserialize_ms =
-                                    t_deserialize_start.elapsed().as_secs_f64() * 1000.0;
-                                let t_zmq_total = t_zmq_receive_start.elapsed();
-                                let processing_time_ms = t_zmq_total.as_secs_f64() * 1000.0;
+                // Try to deserialize as binary XYZP data (using feagi-data-processing)
+                let t_deserialize_start = std::time::Instant::now();
+                match Self::deserialize_and_inject_xyzp(
+                    message_bytes,
+                    &npu,
+                    &agent_registry,
+                    &rejected_no_genome,
+                    &rejected_no_agents,
+                ) {
+                    Ok(neuron_count) => {
+                        *total_neurons.lock() += neuron_count as u64;
+                        let t_deserialize_ms =
+                            t_deserialize_start.elapsed().as_secs_f64() * 1000.0;
+                        let t_zmq_total = t_zmq_receive_start.elapsed();
+                        let processing_time_ms = t_zmq_total.as_secs_f64() * 1000.0;
 
-                                // Log detailed performance metrics (first 10, then every 50th for better visibility)
-                                if message_count <= 10 || message_count.is_multiple_of(50) {
-                                    let total_msg = *total_messages.lock();
-                                    let total_n = *total_neurons.lock();
-                                    let avg_neurons_per_msg = if total_msg > 0 {
-                                        total_n / total_msg
-                                    } else {
-                                        0
-                                    };
-                                    info!(
-                                        "[PERF][FEAGI-ZMQ] Message #{}: {} bytes → {} neurons, deserialize+inject={:.2}ms, total={:.2}ms, avg_neurons={}, drained_newer={}",
-                                        message_count, message_bytes.len(), neuron_count, t_deserialize_ms, processing_time_ms, avg_neurons_per_msg, drained_newer
-                                    );
-                                }
+                        // Log detailed performance metrics (first 10, then every 50th for better visibility)
+                        if message_count <= 10 || message_count.is_multiple_of(50) {
+                            let total_msg = *total_messages.lock();
+                            let total_n = *total_neurons.lock();
+                            let avg_neurons_per_msg = if total_msg > 0 {
+                                total_n / total_msg
+                            } else {
+                                0
+                            };
+                            info!(
+                                "[PERF][FEAGI-ZMQ] Message #{}: {} bytes → {} neurons, deserialize+inject={:.2}ms, total={:.2}ms, avg_neurons={}, drained_newer={}",
+                                message_count, message_bytes.len(), neuron_count, t_deserialize_ms, processing_time_ms, avg_neurons_per_msg, drained_newer
+                            );
+                        }
 
-                                // Log performance warning if processing takes too long (affects frame rate)
-                                if processing_time_ms > 33.0
-                                    && (message_count <= 10 || message_count.is_multiple_of(100))
-                                {
-                                    warn!(
-                                        "[PERF][FEAGI-ZMQ] ⚠️ Slow processing: {:.2}ms for {} neurons (target: <33ms for 30fps)",
-                                        processing_time_ms, neuron_count
-                                    );
-                                }
-                            }
-                            Err(e) => {
-                                // Always log first few errors, then periodically
-                                if message_count <= 10 || message_count.is_multiple_of(100) {
-                                    error!(
-                                        "🦀 [ZMQ-SENSORY] [ERR] Failed to process sensory data (message #{}): {}",
-                                        message_count, e
-                                    );
-                                    warn!(
-                                        "🦀 [ZMQ-SENSORY] Message size: {} bytes",
-                                        message_bytes.len()
-                                    );
-                                }
-                            }
+                        // Log performance warning if processing takes too long (affects frame rate)
+                        if processing_time_ms > 33.0
+                            && (message_count <= 10 || message_count.is_multiple_of(100))
+                        {
+                            warn!(
+                                "[PERF][FEAGI-ZMQ] ⚠️ Slow processing: {:.2}ms for {} neurons (target: <33ms for 30fps)",
+                                processing_time_ms, neuron_count
+                            );
                         }
                     }
                     Err(e) => {
-                        error!("🦀 [ZMQ-SENSORY] [ERR] Receive error: {}", e);
+                        // Always log first few errors, then periodically
+                        if message_count <= 10 || message_count.is_multiple_of(100) {
+                            error!(
+                                "🦀 [ZMQ-SENSORY] [ERR] Failed to process sensory data (message #{}): {}",
+                                message_count, e
+                            );
+                            warn!(
+                                "🦀 [ZMQ-SENSORY] Message size: {} bytes",
+                                message_bytes.len()
+                            );
+                        }
                     }
                 }
             }
@@ -738,15 +752,18 @@ mod tests {
 
     #[test]
     fn test_sensory_stream_creation() {
-        let ctx = Arc::new(zmq::Context::new());
-        let stream =
-            SensoryStream::new(ctx, "tcp://127.0.0.1:5558", SensoryReceiveConfig::default());
+        let runtime = Arc::new(Runtime::new().unwrap());
+        let stream = SensoryStream::new(
+            runtime,
+            "tcp://127.0.0.1:5558",
+            SensoryReceiveConfig::default(),
+        );
         assert!(stream.is_ok());
     }
 
     #[test]
     fn test_sensory_stream_applies_socket_config() {
-        let ctx = Arc::new(zmq::Context::new());
+        let runtime = Arc::new(Runtime::new().unwrap());
         let config = SensoryReceiveConfig {
             receive_high_water_mark: 3,
             linger_ms: 0,
@@ -756,18 +773,7 @@ mod tests {
         };
 
         let stream =
-            SensoryStream::new(Arc::clone(&ctx), "tcp://127.0.0.1:5568", config.clone()).unwrap();
-        stream.start().unwrap();
-
-        {
-            let socket_guard = stream.socket.lock();
-            let socket = socket_guard.as_ref().expect("socket must be initialized");
-            assert_eq!(socket.get_rcvhwm().unwrap(), config.receive_high_water_mark);
-            assert_eq!(socket.get_linger().unwrap(), config.linger_ms);
-            // Note: get_immediate() may not be available in all zmq versions
-            // assert_eq!(socket.get_immediate().unwrap(), config.immediate);
-        }
-
-        stream.stop().unwrap();
+            SensoryStream::new(runtime, "tcp://127.0.0.1:5568", config.clone()).unwrap();
+        assert!(stream.start().is_err());
     }
 }

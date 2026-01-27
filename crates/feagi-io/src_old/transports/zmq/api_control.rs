@@ -13,6 +13,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::thread;
+use tokio::runtime::Runtime;
 use tracing::{error, info};
 
 /// API request from FastAPI process
@@ -55,21 +56,11 @@ pub struct ApiControlStream {
 
 impl ApiControlStream {
     /// Create a new API control stream
-    pub fn new(context: Arc<zmq::Context>, bind_address: &str) -> Result<Self, FeagiDataError> {
-        // Create transport config
-        let config = ServerConfig::new(bind_address)
-            .base
-            .with_recv_hwm(10000)
-            .with_send_hwm(10000);
-
-        let server_config = ServerConfig {
-            base: config,
-            max_connections: 0,
-            track_connections: true,
-        };
+    pub fn new(runtime: Arc<Runtime>, bind_address: &str) -> Result<Self, FeagiDataError> {
+        let server_config = ServerConfig::new(bind_address);
 
         // Create ZMQ router using internal transport primitives
-        let router = ZmqRouter::new(context, server_config).map_err(|e| {
+        let router = ZmqRouter::new(runtime, server_config).map_err(|e| {
             FeagiDataError::InternalError(format!("Failed to create router: {}", e))
         })?;
 

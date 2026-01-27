@@ -1,17 +1,52 @@
-use crate::FeagiNetworkError;
-use crate::implementations::zmq::shared_functions::validate_zmq_url;
-use crate::traits_and_enums::client::client_shared::{FeagiClientConnectionState, FeagiClientConnectionStateChange};
-use crate::traits_and_enums::client::{FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester, FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties};
+use crate::io_api::implementations::zmq::shared_functions::validate_zmq_url;
+use crate::io_api::traits_and_enums::client::client_shared::FeagiClientConnectionStateChange;
+use crate::io_api::traits_and_enums::client::{
+    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester,
+    FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties,
+};
+use crate::io_api::{FeagiClientConnectionState, FeagiNetworkError};
+use futures_util::FutureExt;
+use std::future::Future;
+use parking_lot::Mutex;
+use tokio::runtime::{Handle, Runtime};
+use tokio::task::block_in_place;
+use zeromq::{DealerSocket, PushSocket, Socket, SocketRecv, SocketSend, SubSocket, ZmqMessage};
 
 /// Type alias for the client state change callback.
 type StateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static>;
+
+fn build_runtime() -> Result<Runtime, FeagiNetworkError> {
+    Runtime::new().map_err(|e| FeagiNetworkError::GeneralFailure(e.to_string()))
+}
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
+
+fn message_to_single_frame(message: ZmqMessage) -> Result<Vec<u8>, FeagiNetworkError> {
+    let mut frames = message.into_vec();
+    let frame = frames.pop().ok_or_else(|| {
+        FeagiNetworkError::ReceiveFailed("Empty ZMQ message received".to_string())
+    })?;
+    if !frames.is_empty() {
+        return Err(FeagiNetworkError::ReceiveFailed(
+            "Unexpected multipart message for single-frame socket".to_string(),
+        ));
+    }
+    Ok(frame.to_vec())
+}
 
 //region Subscriber
 
 pub struct FEAGIZMQClientSubscriber {
     server_address: String,
     current_state: FeagiClientConnectionState,
-    socket: zmq::Socket,
+    socket: SubSocket,
+    runtime: Runtime,
     state_change_callback: StateChangeCallback,
     cached_data: Vec<u8>,
     // Configuration options (applied on connect)
@@ -28,14 +63,13 @@ impl FEAGIZMQClientSubscriber {
         state_change_callback: StateChangeCallback,
     ) -> Result<Self, FeagiNetworkError> {
         validate_zmq_url(&server_address)?;
-        let context = zmq::Context::new();
-        let socket = context
-            .socket(zmq::SUB)
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        let runtime = build_runtime()?;
+        let socket = SubSocket::new();
         Ok(Self {
             server_address,
             current_state: FeagiClientConnectionState::Disconnected,
             socket,
+            runtime,
             state_change_callback,
             cached_data: Vec::new(),
             linger: Self::DEFAULT_LINGER,
@@ -51,6 +85,12 @@ impl FEAGIZMQClientSubscriber {
                 "Cannot change configuration while connected".to_string(),
             ));
         }
+        if linger != Self::DEFAULT_LINGER {
+            return Err(FeagiNetworkError::GeneralFailure(format!(
+                "zeromq transport does not support custom linger (requested: {})",
+                linger
+            )));
+        }
         self.linger = linger;
         Ok(())
     }
@@ -63,43 +103,47 @@ impl FEAGIZMQClientSubscriber {
                 "Cannot change configuration while connected".to_string(),
             ));
         }
+        if rcvhwm != Self::DEFAULT_RCVHWM {
+            return Err(FeagiNetworkError::GeneralFailure(format!(
+                "zeromq transport does not support custom rcvhwm (requested: {})",
+                rcvhwm
+            )));
+        }
         self.rcvhwm = rcvhwm;
+        Ok(())
+    }
+
+    fn ensure_supported_options(&self) -> Result<(), FeagiNetworkError> {
+        if self.linger != Self::DEFAULT_LINGER || self.rcvhwm != Self::DEFAULT_RCVHWM {
+            return Err(FeagiNetworkError::GeneralFailure(format!(
+                "zeromq transport does not support custom socket options (linger={}, rcvhwm={})",
+                self.linger, self.rcvhwm
+            )));
+        }
         Ok(())
     }
 
     /// Poll for incoming subscription data.
     /// Returns `Ok(Some(data))` if data was received, `Ok(None)` if no data available.
     pub fn try_poll_receive(&mut self) -> Result<Option<&[u8]>, FeagiNetworkError> {
-        match self.socket.recv_bytes(0) {
-            Ok(data) => {
-                self.cached_data = data;
+        let result = block_on_runtime(&self.runtime, async { self.socket.recv().now_or_never() });
+        match result {
+            None => Ok(None),
+            Some(Ok(message)) => {
+                self.cached_data = message_to_single_frame(message)?;
                 Ok(Some(&self.cached_data))
             }
-            Err(zmq::Error::EAGAIN) => Ok(None), // No data available
-            Err(e) => Err(FeagiNetworkError::ReceiveFailed(e.to_string())),
+            Some(Err(e)) => Err(FeagiNetworkError::ReceiveFailed(e.to_string())),
         }
     }
 }
 
 impl FeagiClient for FEAGIZMQClientSubscriber {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
-        // Apply configuration options
-        self.socket
-            .set_linger(self.linger)
+        self.ensure_supported_options()?;
+        block_on_runtime(&self.runtime, self.socket.subscribe(""))
             .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
-        self.socket
-            .set_rcvhwm(self.rcvhwm)
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
-        // Subscribe to all messages by default
-        self.socket
-            .set_subscribe(b"")
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
-        // Set socket to non-blocking mode for polling
-        self.socket
-            .set_rcvtimeo(0)
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
-        self.socket
-            .connect(host)
+        block_on_runtime(&self.runtime, self.socket.connect(host))
             .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
         self.server_address = host.to_string(); // Store for disconnect
@@ -113,9 +157,8 @@ impl FeagiClient for FEAGIZMQClientSubscriber {
     }
 
     fn disconnect(&mut self) -> Result<(), FeagiNetworkError> {
-        self.socket
-            .disconnect(&self.server_address)
-            .map_err(|e| FeagiNetworkError::CannotDisconnect(e.to_string()))?;
+        let socket = std::mem::replace(&mut self.socket, SubSocket::new());
+        let _ = block_on_runtime(&self.runtime, socket.close());
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Disconnected;
         (self.state_change_callback)(FeagiClientConnectionStateChange::new(
@@ -141,7 +184,8 @@ impl FeagiClientSubscriber for FEAGIZMQClientSubscriber {
 pub struct FEAGIZMQClientPusher {
     server_address: String,
     current_state: FeagiClientConnectionState,
-    socket: zmq::Socket,
+    socket: Mutex<PushSocket>,
+    runtime: Runtime,
     state_change_callback: StateChangeCallback,
     // Configuration options (applied on connect)
     linger: i32,
@@ -157,14 +201,13 @@ impl FEAGIZMQClientPusher {
         state_change_callback: StateChangeCallback,
     ) -> Result<Self, FeagiNetworkError> {
         validate_zmq_url(&server_address)?;
-        let context = zmq::Context::new();
-        let socket = context
-            .socket(zmq::PUSH)
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        let runtime = build_runtime()?;
+        let socket = Mutex::new(PushSocket::new());
         Ok(Self {
             server_address,
             current_state: FeagiClientConnectionState::Disconnected,
             socket,
+            runtime,
             state_change_callback,
             linger: Self::DEFAULT_LINGER,
             sndhwm: Self::DEFAULT_SNDHWM,
@@ -179,6 +222,12 @@ impl FEAGIZMQClientPusher {
                 "Cannot change configuration while connected".to_string(),
             ));
         }
+        if linger != Self::DEFAULT_LINGER {
+            return Err(FeagiNetworkError::GeneralFailure(format!(
+                "zeromq transport does not support custom linger (requested: {})",
+                linger
+            )));
+        }
         self.linger = linger;
         Ok(())
     }
@@ -191,22 +240,31 @@ impl FEAGIZMQClientPusher {
                 "Cannot change configuration while connected".to_string(),
             ));
         }
+        if sndhwm != Self::DEFAULT_SNDHWM {
+            return Err(FeagiNetworkError::GeneralFailure(format!(
+                "zeromq transport does not support custom sndhwm (requested: {})",
+                sndhwm
+            )));
+        }
         self.sndhwm = sndhwm;
+        Ok(())
+    }
+
+    fn ensure_supported_options(&self) -> Result<(), FeagiNetworkError> {
+        if self.linger != Self::DEFAULT_LINGER || self.sndhwm != Self::DEFAULT_SNDHWM {
+            return Err(FeagiNetworkError::GeneralFailure(format!(
+                "zeromq transport does not support custom socket options (linger={}, sndhwm={})",
+                self.linger, self.sndhwm
+            )));
+        }
         Ok(())
     }
 }
 
 impl FeagiClient for FEAGIZMQClientPusher {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
-        // Apply configuration options
-        self.socket
-            .set_linger(self.linger)
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
-        self.socket
-            .set_sndhwm(self.sndhwm)
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
-        self.socket
-            .connect(host)
+        self.ensure_supported_options()?;
+        block_on_runtime(&self.runtime, self.socket.lock().connect(host))
             .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
         self.server_address = host.to_string(); // Store for disconnect
@@ -220,9 +278,9 @@ impl FeagiClient for FEAGIZMQClientPusher {
     }
 
     fn disconnect(&mut self) -> Result<(), FeagiNetworkError> {
-        self.socket
-            .disconnect(&self.server_address)
-            .map_err(|e| FeagiNetworkError::CannotDisconnect(e.to_string()))?;
+        let socket = std::mem::replace(&mut self.socket, Mutex::new(PushSocket::new()));
+        let socket = socket.into_inner();
+        let _ = block_on_runtime(&self.runtime, socket.close());
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Disconnected;
         (self.state_change_callback)(FeagiClientConnectionStateChange::new(
@@ -239,8 +297,8 @@ impl FeagiClient for FEAGIZMQClientPusher {
 
 impl FeagiClientPusher for FEAGIZMQClientPusher {
     fn push_data(&self, data: &[u8]) {
-        // TODO: Return Result in state changes if theres an error
-        let _ = self.socket.send(data, 0);
+        let message = ZmqMessage::from(data.to_vec());
+        let _ = block_on_runtime(&self.runtime, self.socket.lock().send(message));
     }
 }
 
@@ -251,13 +309,14 @@ impl FeagiClientPusher for FEAGIZMQClientPusher {
 pub struct FEAGIZMQClientRequester {
     server_address: String,
     current_state: FeagiClientConnectionState,
-    socket: zmq::Socket,
+    socket: Mutex<DealerSocket>,
     state_change_callback: StateChangeCallback,
     cached_response_data: Vec<u8>,
     // Configuration options (applied on connect)
     linger: i32,
     rcvhwm: i32,
     sndhwm: i32,
+    runtime: Runtime,
 }
 
 impl FEAGIZMQClientRequester {
@@ -270,10 +329,8 @@ impl FEAGIZMQClientRequester {
         state_change_callback: StateChangeCallback,
     ) -> Result<Self, FeagiNetworkError> {
         validate_zmq_url(&server_address)?;
-        let context = zmq::Context::new();
-        let socket = context
-            .socket(zmq::DEALER)
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
+        let runtime = build_runtime()?;
+        let socket = Mutex::new(DealerSocket::new());
         Ok(Self {
             server_address,
             current_state: FeagiClientConnectionState::Disconnected,
@@ -283,6 +340,7 @@ impl FEAGIZMQClientRequester {
             linger: Self::DEFAULT_LINGER,
             rcvhwm: Self::DEFAULT_RCVHWM,
             sndhwm: Self::DEFAULT_SNDHWM,
+            runtime,
         })
     }
 
@@ -293,6 +351,12 @@ impl FEAGIZMQClientRequester {
             return Err(FeagiNetworkError::GeneralFailure(
                 "Cannot change configuration while connected".to_string(),
             ));
+        }
+        if linger != Self::DEFAULT_LINGER {
+            return Err(FeagiNetworkError::GeneralFailure(format!(
+                "zeromq transport does not support custom linger (requested: {})",
+                linger
+            )));
         }
         self.linger = linger;
         Ok(())
@@ -306,6 +370,12 @@ impl FEAGIZMQClientRequester {
                 "Cannot change configuration while connected".to_string(),
             ));
         }
+        if rcvhwm != Self::DEFAULT_RCVHWM {
+            return Err(FeagiNetworkError::GeneralFailure(format!(
+                "zeromq transport does not support custom rcvhwm (requested: {})",
+                rcvhwm
+            )));
+        }
         self.rcvhwm = rcvhwm;
         Ok(())
     }
@@ -318,29 +388,34 @@ impl FEAGIZMQClientRequester {
                 "Cannot change configuration while connected".to_string(),
             ));
         }
+        if sndhwm != Self::DEFAULT_SNDHWM {
+            return Err(FeagiNetworkError::GeneralFailure(format!(
+                "zeromq transport does not support custom sndhwm (requested: {})",
+                sndhwm
+            )));
+        }
         self.sndhwm = sndhwm;
+        Ok(())
+    }
+
+    fn ensure_supported_options(&self) -> Result<(), FeagiNetworkError> {
+        if self.linger != Self::DEFAULT_LINGER
+            || self.rcvhwm != Self::DEFAULT_RCVHWM
+            || self.sndhwm != Self::DEFAULT_SNDHWM
+        {
+            return Err(FeagiNetworkError::GeneralFailure(format!(
+                "zeromq transport does not support custom socket options (linger={}, rcvhwm={}, sndhwm={})",
+                self.linger, self.rcvhwm, self.sndhwm
+            )));
+        }
         Ok(())
     }
 }
 
 impl FeagiClient for FEAGIZMQClientRequester {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
-        // Apply configuration options
-        self.socket
-            .set_linger(self.linger)
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
-        self.socket
-            .set_rcvhwm(self.rcvhwm)
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
-        self.socket
-            .set_sndhwm(self.sndhwm)
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
-        // Set socket to non-blocking mode for try_poll_receive
-        self.socket
-            .set_rcvtimeo(0)
-            .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
-        self.socket
-            .connect(host)
+        self.ensure_supported_options()?;
+        block_on_runtime(&self.runtime, self.socket.lock().connect(host))
             .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
         self.server_address = host.to_string(); // Store for disconnect
@@ -354,9 +429,9 @@ impl FeagiClient for FEAGIZMQClientRequester {
     }
 
     fn disconnect(&mut self) -> Result<(), FeagiNetworkError> {
-        self.socket
-            .disconnect(&self.server_address)
-            .map_err(|e| FeagiNetworkError::CannotDisconnect(e.to_string()))?;
+        let socket = std::mem::replace(&mut self.socket, Mutex::new(DealerSocket::new()));
+        let socket = socket.into_inner();
+        let _ = block_on_runtime(&self.runtime, socket.close());
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Disconnected;
         (self.state_change_callback)(FeagiClientConnectionStateChange::new(
@@ -373,37 +448,35 @@ impl FeagiClient for FEAGIZMQClientRequester {
 
 impl FeagiClientRequester for FEAGIZMQClientRequester {
     fn send_request(&self, request: &[u8]) -> Result<(), FeagiNetworkError> {
-        // DEALER/ROUTER protocol: send empty delimiter frame first, then request
-        self.socket
-            .send(zmq::Message::new(), zmq::SNDMORE)
-            .map_err(|e| {
-                FeagiNetworkError::SendFailed(format!("Failed to send delimiter: {}", e))
-            })?;
-        self.socket
-            .send(request, 0)
+        let mut message = ZmqMessage::from(request.to_vec());
+        message.prepend(&ZmqMessage::from(Vec::new()));
+        block_on_runtime(&self.runtime, self.socket.lock().send(message))
             .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
         Ok(())
     }
 
     fn try_poll_receive(&mut self) -> Result<Option<&[u8]>, FeagiNetworkError> {
-        // Response format: [empty_delimiter, response_data]
-        // First, try to receive the empty delimiter frame
-        match self.socket.recv_bytes(0) {
-            Ok(_delimiter) => {
-                // Delimiter received, now get the actual response
-            }
-            Err(zmq::Error::EAGAIN) => return Ok(None), // No data available
-            Err(e) => return Err(FeagiNetworkError::ReceiveFailed(e.to_string())),
+        let result =
+            block_on_runtime(&self.runtime, async { self.socket.lock().recv().now_or_never() });
+        let message = match result {
+            None => return Ok(None),
+            Some(Ok(message)) => message,
+            Some(Err(e)) => return Err(FeagiNetworkError::ReceiveFailed(e.to_string())),
+        };
+
+        let mut frames = message.into_vec();
+        if frames.first().map(|frame| frame.is_empty()).unwrap_or(false) {
+            frames.remove(0);
         }
 
-        // Receive actual response data
-        match self.socket.recv_bytes(0) {
-            Ok(data) => {
-                self.cached_response_data = data;
-                Ok(Some(&self.cached_response_data))
-            }
-            Err(e) => Err(FeagiNetworkError::ReceiveFailed(e.to_string())),
+        if frames.len() != 1 {
+            return Err(FeagiNetworkError::ReceiveFailed(
+                "Unexpected multipart response payload".to_string(),
+            ));
         }
+
+        self.cached_response_data = frames.remove(0).to_vec();
+        Ok(Some(&self.cached_response_data))
     }
 }
 
@@ -455,8 +528,12 @@ impl FeagiClientSubscriberProperties for FEAGIZMQClientSubscriberProperties {
             FEAGIZMQClientSubscriber::new(self.server_address, state_change_callback)
                 .expect("Failed to create ZMQ subscriber");
 
-        let _ = subscriber.set_linger(self.linger);
-        let _ = subscriber.set_rcvhwm(self.rcvhwm);
+        subscriber
+            .set_linger(self.linger)
+            .expect("Unsupported subscriber linger configuration");
+        subscriber
+            .set_rcvhwm(self.rcvhwm)
+            .expect("Unsupported subscriber rcvhwm configuration");
 
         Box::new(subscriber)
     }
@@ -507,8 +584,12 @@ impl FeagiClientPusherProperties for FEAGIZMQClientPusherProperties {
         let mut pusher = FEAGIZMQClientPusher::new(self.server_address, state_change_callback)
             .expect("Failed to create ZMQ pusher");
 
-        let _ = pusher.set_linger(self.linger);
-        let _ = pusher.set_sndhwm(self.sndhwm);
+        pusher
+            .set_linger(self.linger)
+            .expect("Unsupported pusher linger configuration");
+        pusher
+            .set_sndhwm(self.sndhwm)
+            .expect("Unsupported pusher sndhwm configuration");
 
         Box::new(pusher)
     }
@@ -569,9 +650,15 @@ impl FeagiClientRequesterProperties for FEAGIZMQClientRequesterProperties {
             FEAGIZMQClientRequester::new(self.server_address, state_change_callback)
                 .expect("Failed to create ZMQ requester");
 
-        let _ = requester.set_linger(self.linger);
-        let _ = requester.set_rcvhwm(self.rcvhwm);
-        let _ = requester.set_sndhwm(self.sndhwm);
+        requester
+            .set_linger(self.linger)
+            .expect("Unsupported requester linger configuration");
+        requester
+            .set_rcvhwm(self.rcvhwm)
+            .expect("Unsupported requester rcvhwm configuration");
+        requester
+            .set_sndhwm(self.sndhwm)
+            .expect("Unsupported requester sndhwm configuration");
 
         Box::new(requester)
     }

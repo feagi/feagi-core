@@ -8,10 +8,35 @@ use crate::core::error::{Result, SdkError};
 use crate::core::heartbeat::HeartbeatService;
 use crate::core::reconnect::{retry_with_backoff, ReconnectionStrategy};
 use feagi_io::AgentType;
+use futures::FutureExt;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
+use std::time::Duration;
+use tokio::runtime::Runtime;
+use tokio::time::timeout;
 use tracing::{debug, error, info, trace, warn};
+use zeromq::{
+    DealerSocket, PushSocket, Socket, SocketRecv, SocketSend, SubSocket, ZmqError, ZmqMessage,
+};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_with<T>(
+    handle: &Handle,
+    runtime: Option<&Runtime>,
+    future: impl Future<Output = T>,
+) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| handle.block_on(future))
+    } else if let Some(runtime) = runtime {
+        runtime.block_on(future)
+    } else {
+        handle.block_on(future)
+    }
+}
 
 /// Main FEAGI Agent Client
 ///
@@ -42,23 +67,26 @@ pub struct AgentClient {
     /// Configuration
     config: AgentConfig,
 
-    /// ZMQ context
-    context: zmq::Context,
+    /// Tokio runtime handle (ambient if available)
+    runtime_handle: Handle,
 
-    /// Registration socket (ZMQ REQ - shared with heartbeat)
-    registration_socket: Option<Arc<Mutex<zmq::Socket>>>,
+    /// Owned runtime when created outside tokio
+    runtime: Option<Arc<Runtime>>,
+
+    /// Registration socket (ZMQ DEALER - shared with heartbeat)
+    registration_socket: Option<Arc<Mutex<DealerSocket>>>,
 
     /// Sensory data socket (ZMQ PUSH)
-    sensory_socket: Option<zmq::Socket>,
+    sensory_socket: Option<Arc<Mutex<PushSocket>>>,
 
     /// Motor data socket (ZMQ SUB)
-    motor_socket: Option<zmq::Socket>,
+    motor_socket: Option<Arc<Mutex<SubSocket>>>,
 
     /// Visualization stream socket (ZMQ SUB)
-    viz_socket: Option<zmq::Socket>,
+    viz_socket: Option<Arc<Mutex<SubSocket>>>,
 
-    /// Control/API socket (ZMQ REQ - REST over ZMQ)
-    control_socket: Option<zmq::Socket>,
+    /// Control/API socket (ZMQ DEALER - REST over ZMQ)
+    control_socket: Option<Arc<Mutex<DealerSocket>>>,
 
     /// Heartbeat service
     heartbeat: Option<HeartbeatService>,
@@ -81,15 +109,24 @@ impl AgentClient {
     ///
     /// # Arguments
     /// * `config` - Agent configuration
+    ///
     pub fn new(config: AgentConfig) -> Result<Self> {
         // Validate configuration
         config.validate()?;
 
-        let context = zmq::Context::new();
+        let (runtime_handle, runtime) = if let Ok(handle) = Handle::try_current() {
+            (handle, None)
+        } else {
+            let runtime = Runtime::new()
+                .map_err(|e| SdkError::Other(format!("Failed to create runtime: {}", e)))?;
+            let handle = runtime.handle().clone();
+            (handle, Some(Arc::new(runtime)))
+        };
 
         Ok(Self {
             config,
-            context,
+            runtime_handle,
+            runtime,
             registration_socket: None,
             sensory_socket: None,
             motor_socket: None,
@@ -111,24 +148,30 @@ impl AgentClient {
     /// Connect to FEAGI and register the agent
     ///
     /// This will:
-    /// 1. Create ZMQ sockets
+    /// 1. Create ZMQ control sockets (registration/control)
     /// 2. Register with FEAGI
-    /// 3. Start heartbeat service (ONLY after successful registration)
+    /// 3. Create ZMQ data sockets (sensory/motor/viz)
+    /// 4. Start heartbeat service (ONLY after successful registration)
     ///
     /// IMPORTANT: Background threads are ONLY started AFTER successful registration.
     /// This prevents thread interference with GUI event loops (e.g., MuJoCo, Godot).
     /// If registration fails, NO threads are spawned.
+    ///
+    /// TIMING: FEAGI starts its ZMQ data stream services asynchronously after processing
+    /// the registration message. Data socket connection uses retry/backoff to handle
+    /// stream readiness delays.
     pub fn connect(&mut self) -> Result<()> {
         if self.registered {
             return Err(SdkError::AlreadyConnected);
         }
 
         info!(
-            "[CLIENT] Connecting to FEAGI: {}",
+            "[CLIENT] Step 0: starting connection sequence to FEAGI: {}",
             self.config.registration_endpoint
         );
 
-        // Step 1: Create sockets with retry
+        // Step 1: Create control sockets with retry (registration/control only)
+        info!("[CLIENT] Step 1: creating control sockets (registration)...");
         let mut socket_strategy = ReconnectionStrategy::new(
             self.config.retry_backoff_ms,
             self.config.registration_retries,
@@ -138,51 +181,91 @@ impl AgentClient {
             &mut socket_strategy,
             "Socket creation",
         )?;
+        info!("[CLIENT] Step 1: control sockets created");
 
         // Step 2: Register with FEAGI with retry
+        info!("[CLIENT] Step 2: registering with FEAGI...");
         let mut reg_strategy = ReconnectionStrategy::new(
             self.config.retry_backoff_ms,
             self.config.registration_retries,
         );
         retry_with_backoff(|| self.register(), &mut reg_strategy, "Registration")?;
+        info!("[CLIENT] Step 2: registration successful");
 
-        // Step 3: Start heartbeat service (ONLY after successful registration)
-        // This is critical: threads are only spawned AFTER we know FEAGI is reachable
+        // Step 3: Create data sockets with retry (sensory/motor/viz)
+        //
+        // Retry strategy: FEAGI may start streams asynchronously, so we retry with backoff.
+        info!("[CLIENT] Step 3: connecting to data streams with retry...");
+        info!(
+            "[CLIENT]   sensory endpoint: {}",
+            self.config.sensory_endpoint
+        );
+        if matches!(self.config.agent_type, AgentType::Motor | AgentType::Both) {
+            info!(
+                "[CLIENT]   motor endpoint: {}",
+                self.config.motor_endpoint
+            );
+        }
+        let mut data_socket_strategy = ReconnectionStrategy::new(
+            self.config.retry_backoff_ms,
+            self.config.registration_retries,
+        );
+        retry_with_backoff(
+            || self.connect_data_sockets(),
+            &mut data_socket_strategy,
+            "Data socket creation",
+        )?;
+        info!("[CLIENT] Step 3: data sockets connected");
+
+        // Step 4: Start heartbeat service (ONLY after successful registration)
+        info!("[CLIENT] Step 4: starting heartbeat service...");
         if self.config.heartbeat_interval > 0.0 {
-            debug!("[CLIENT] Starting heartbeat service (post-registration)");
             self.start_heartbeat()?;
+            info!("[CLIENT] Step 4: heartbeat service started");
         } else {
-            debug!("[CLIENT] Heartbeat disabled (interval = 0)");
+            info!("[CLIENT] Step 4: heartbeat disabled (interval = 0)");
         }
 
         info!(
-            "[CLIENT] ✓ Connected and registered as: {}",
+            "[CLIENT] fully connected to FEAGI as agent: {}",
             self.config.agent_id
         );
         Ok(())
     }
 
+    fn block_on<T>(&self, future: impl Future<Output = T>) -> T {
+        block_on_with(&self.runtime_handle, self.runtime.as_deref(), future)
+    }
+
     /// Create ZMQ sockets
     fn create_sockets(&mut self) -> Result<()> {
-        // Registration socket (REQ - for registration and heartbeat)
-        let reg_socket = self.context.socket(zmq::REQ)?;
-        reg_socket.set_rcvtimeo(self.config.connection_timeout_ms as i32)?;
-        reg_socket.set_sndtimeo(self.config.connection_timeout_ms as i32)?;
-        // @architecture:acceptable - compatibility with FEAGI ZMQ-REST ROUTER behavior
-        // Heartbeat uses the same REQ socket as registration. If FEAGI delays a reply,
-        // strict REQ state can raise EFSM on subsequent sends. Relaxed mode prevents
-        // heartbeat from breaking the socket state machine deterministically.
-        let _ = reg_socket.set_req_relaxed(true);
-        reg_socket.connect(&self.config.registration_endpoint)?;
+        // Registration socket (DEALER - for registration and heartbeat)
+        let mut reg_socket = DealerSocket::new();
+        self.block_on(reg_socket.connect(&self.config.registration_endpoint))
+            .map_err(SdkError::Zmq)?;
         self.registration_socket = Some(Arc::new(Mutex::new(reg_socket)));
 
+        // Control socket (REQ - for REST API requests over ZMQ)
+        if matches!(self.config.agent_type, AgentType::Infrastructure) {
+            let mut control_socket = DealerSocket::new();
+            self.block_on(control_socket.connect(&self.config.control_endpoint))
+                .map_err(SdkError::Zmq)?;
+            self.control_socket = Some(Arc::new(Mutex::new(control_socket)));
+            debug!("[CLIENT] ✓ Control/API socket created");
+        }
+
+        debug!("[CLIENT] ✓ ZMQ control sockets created");
+        Ok(())
+    }
+
+    /// Connect data sockets (sensory/motor/viz) after registration
+    fn connect_data_sockets(&mut self) -> Result<()> {
         // Sensory socket (PUSH - for sending data to FEAGI)
-        let sensory_socket = self.context.socket(zmq::PUSH)?;
-        sensory_socket.set_sndhwm(self.config.sensory_send_hwm)?;
-        sensory_socket.set_linger(self.config.sensory_linger_ms)?;
-        sensory_socket.set_immediate(self.config.sensory_immediate)?;
-        sensory_socket.connect(&self.config.sensory_endpoint)?;
-        self.sensory_socket = Some(sensory_socket);
+        self.wait_for_tcp_endpoint("sensory", &self.config.sensory_endpoint)?;
+        let mut sensory_socket = PushSocket::new();
+        self.block_on(sensory_socket.connect(&self.config.sensory_endpoint))
+            .map_err(SdkError::Zmq)?;
+        self.sensory_socket = Some(Arc::new(Mutex::new(sensory_socket)));
 
         // Motor socket (SUB - for receiving motor commands from FEAGI)
         if matches!(self.config.agent_type, AgentType::Motor | AgentType::Both) {
@@ -195,8 +278,10 @@ impl AgentClient {
                 self.config.motor_endpoint
             );
 
-            let motor_socket = self.context.socket(zmq::SUB)?;
-            motor_socket.connect(&self.config.motor_endpoint)?;
+            self.wait_for_tcp_endpoint("motor", &self.config.motor_endpoint)?;
+            let mut motor_socket = SubSocket::new();
+            self.block_on(motor_socket.connect(&self.config.motor_endpoint))
+                .map_err(SdkError::Zmq)?;
             info!("[SDK-CONNECT] ✅ Motor socket connected");
 
             // Subscribe to all motor messages.
@@ -209,10 +294,11 @@ impl AgentClient {
             // and also breaks if the publisher uses an empty topic. We subscribe to all, then
             // filter by topic in receive_motor_data().
             info!("[SDK-CONNECT] 🎮 Subscribing to all motor topics");
-            motor_socket.set_subscribe(b"")?;
+            self.block_on(motor_socket.subscribe(""))
+                .map_err(SdkError::Zmq)?;
             info!("[SDK-CONNECT] ✅ Motor subscription set (all topics)");
 
-            self.motor_socket = Some(motor_socket);
+            self.motor_socket = Some(Arc::new(Mutex::new(motor_socket)));
             info!("[SDK-CONNECT] ✅ Motor socket initialized successfully");
         } else {
             info!(
@@ -226,27 +312,117 @@ impl AgentClient {
             self.config.agent_type,
             AgentType::Visualization | AgentType::Infrastructure
         ) {
-            let viz_socket = self.context.socket(zmq::SUB)?;
-            viz_socket.connect(&self.config.visualization_endpoint)?;
+            self.wait_for_tcp_endpoint("visualization", &self.config.visualization_endpoint)?;
+            let mut viz_socket = SubSocket::new();
+            self.block_on(viz_socket.connect(&self.config.visualization_endpoint))
+                .map_err(SdkError::Zmq)?;
 
             // Subscribe to all visualization messages
-            viz_socket.set_subscribe(b"")?;
-            self.viz_socket = Some(viz_socket);
+            self.block_on(viz_socket.subscribe(""))
+                .map_err(SdkError::Zmq)?;
+            self.viz_socket = Some(Arc::new(Mutex::new(viz_socket)));
             debug!("[CLIENT] ✓ Visualization socket created");
         }
 
-        // Control socket (REQ - for REST API requests over ZMQ)
-        if matches!(self.config.agent_type, AgentType::Infrastructure) {
-            let control_socket = self.context.socket(zmq::REQ)?;
-            control_socket.set_rcvtimeo(self.config.connection_timeout_ms as i32)?;
-            control_socket.set_sndtimeo(self.config.connection_timeout_ms as i32)?;
-            control_socket.connect(&self.config.control_endpoint)?;
-            self.control_socket = Some(control_socket);
-            debug!("[CLIENT] ✓ Control/API socket created");
+        debug!("[CLIENT] ✓ ZMQ data sockets created");
+        Ok(())
+    }
+
+    /// Reconnect data sockets (sensory/motor/viz) using configured retry/backoff.
+    pub fn reconnect_data_streams(&mut self) -> Result<()> {
+        if !self.registered {
+            return Err(SdkError::NotRegistered);
         }
 
-        debug!("[CLIENT] ✓ ZMQ sockets created");
-        Ok(())
+        let mut data_socket_strategy = ReconnectionStrategy::new(
+            self.config.retry_backoff_ms,
+            self.config.registration_retries,
+        );
+        retry_with_backoff(
+            || self.connect_data_sockets(),
+            &mut data_socket_strategy,
+            "Data socket reconnection",
+        )
+    }
+
+    fn wait_for_tcp_endpoint(&self, label: &str, endpoint: &str) -> Result<()> {
+        let address = endpoint
+            .strip_prefix("tcp://")
+            .ok_or_else(|| {
+                SdkError::InvalidConfig(format!("Invalid {} endpoint: {}", label, endpoint))
+            })?
+            .to_string();
+        let timeout = Duration::from_millis(self.config.connection_timeout_ms);
+
+        info!("[CLIENT] checking {} endpoint: {}", label, endpoint);
+        let mut strategy = ReconnectionStrategy::new(
+            self.config.retry_backoff_ms,
+            self.config.registration_retries,
+        );
+        retry_with_backoff(
+            || {
+                let mut addrs = address
+                    .to_socket_addrs()
+                    .map_err(|e| {
+                        SdkError::InvalidConfig(format!(
+                            "Failed to resolve {} endpoint {}: {}",
+                            label, endpoint, e
+                        ))
+                    })?;
+                let addr = addrs.next().ok_or_else(|| {
+                    SdkError::InvalidConfig(format!(
+                        "No resolved addresses for {} endpoint {}",
+                        label, endpoint
+                    ))
+                })?;
+                TcpStream::connect_timeout(&addr, timeout).map_err(|e| {
+                    SdkError::Timeout(format!(
+                        "{} endpoint {} not reachable: {}",
+                        label, endpoint, e
+                    ))
+                })?;
+                info!("[CLIENT] ✅ {} endpoint is reachable", label);
+                Ok(())
+            },
+            &mut strategy,
+            &format!("{} endpoint availability", label),
+        )
+    }
+
+    fn send_request(
+        &self,
+        socket: &Arc<Mutex<DealerSocket>>,
+        request: &serde_json::Value,
+    ) -> Result<serde_json::Value> {
+        let mut socket = socket
+            .lock()
+            .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
+
+        let message = ZmqMessage::from(request.to_string().into_bytes());
+        self.block_on(socket.send(message)).map_err(SdkError::Zmq)?;
+
+        let timeout_ms = self.config.connection_timeout_ms;
+        let recv_result = if timeout_ms > 0 {
+            self.block_on(async {
+                timeout(std::time::Duration::from_millis(timeout_ms), socket.recv()).await
+            })
+                .map_err(|_| {
+                    SdkError::Timeout(format!(
+                        "Request timed out after {}ms",
+                        timeout_ms
+                    ))
+                })?
+                .map_err(SdkError::Zmq)?
+        } else {
+            self.block_on(socket.recv()).map_err(SdkError::Zmq)?
+        };
+
+        let frames = recv_result.into_vec();
+        let payload = frames
+            .last()
+            .ok_or_else(|| SdkError::Other("Response was empty".to_string()))?;
+        let response: serde_json::Value = serde_json::from_slice(payload)?;
+        Ok(response)
     }
 
     /// Register with FEAGI
@@ -272,22 +448,11 @@ impl AgentClient {
             .as_ref()
             .ok_or_else(|| SdkError::Other("Registration socket not initialized".to_string()))?;
 
-        // Send registration request and get response
-        let response = {
-            let socket = socket
-                .lock()
-                .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
-
-            debug!(
-                "[CLIENT] Sending registration request for: {}",
-                self.config.agent_id
-            );
-            socket.send(registration_msg.to_string().as_bytes(), 0)?;
-
-            // Wait for response
-            let response_bytes = socket.recv_bytes(0)?;
-            serde_json::from_slice::<serde_json::Value>(&response_bytes)?
-        }; // Lock is dropped here
+        debug!(
+            "[CLIENT] Sending registration request for: {}",
+            self.config.agent_id
+        );
+        let response = self.send_request(socket, &registration_msg)?;
 
         // Check response status (REST format: {"status": 200, "body": {...}})
         let status_code = response
@@ -353,22 +518,11 @@ impl AgentClient {
             .as_ref()
             .ok_or_else(|| SdkError::Other("Registration socket not initialized".to_string()))?;
 
-        // Send registration request and get response
-        let response = {
-            let socket = socket
-                .lock()
-                .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
-
-            debug!(
-                "[CLIENT] Sending registration request (retry) for: {}",
-                self.config.agent_id
-            );
-            socket.send(registration_msg.to_string().as_bytes(), 0)?;
-
-            // Wait for response
-            let response_bytes = socket.recv_bytes(0)?;
-            serde_json::from_slice::<serde_json::Value>(&response_bytes)?
-        }; // Lock is dropped here
+        debug!(
+            "[CLIENT] Sending registration request (retry) for: {}",
+            self.config.agent_id
+        );
+        let response = self.send_request(socket, &registration_msg)?;
 
         // Check response status
         let status_code = response
@@ -416,21 +570,9 @@ impl AgentClient {
         });
 
         if let Some(socket) = &self.registration_socket {
-            let socket = socket
-                .lock()
-                .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
-
-            // Send deregistration request
-            if let Err(e) = socket.send(deregistration_msg.to_string().as_bytes(), 0) {
-                warn!("[CLIENT] ⚠ Failed to send deregistration: {}", e);
-                return Ok(()); // Don't fail on deregistration error
-            }
-
-            // Wait for response (with timeout)
-            match socket.recv_bytes(0) {
-                Ok(response_bytes) => {
-                    let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
-                    if response.get("status").and_then(|s| s.as_str()) == Some("success") {
+            match self.send_request(socket, &deregistration_msg) {
+                Ok(response) => {
+                    if response.get("status").and_then(|s| s.as_u64()) == Some(200) {
                         info!("[CLIENT] ✓ Deregistration successful");
                     } else {
                         warn!("[CLIENT] ⚠ Deregistration returned: {:?}", response);
@@ -439,7 +581,7 @@ impl AgentClient {
                 Err(e) => {
                     warn!("[CLIENT] ⚠ Deregistration timeout/error: {}", e);
                 }
-            }
+            };
         }
 
         self.registered = false;
@@ -479,6 +621,8 @@ impl AgentClient {
         let mut heartbeat = HeartbeatService::new(
             self.config.agent_id.clone(),
             Arc::clone(socket),
+            self.runtime_handle.clone(),
+            self.runtime.clone(),
             self.config.heartbeat_interval,
         )
         .with_reconnect_spec(reconnect_spec);
@@ -704,7 +848,11 @@ impl AgentClient {
         let buffer = byte_container.get_byte_ref().to_vec();
 
         // Send binary XYZP data (version 2 container format)
-        socket.send(&buffer, 0)?;
+        let mut socket = socket
+            .lock()
+            .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
+        let message = ZmqMessage::from(buffer.clone());
+        self.block_on(socket.send(message)).map_err(SdkError::Zmq)?;
 
         debug!(
             "[CLIENT] Sent {} bytes XYZP binary to {}",
@@ -743,12 +891,19 @@ impl AgentClient {
             .as_ref()
             .ok_or_else(|| SdkError::Other("Sensory socket not initialized".to_string()))?;
 
-        match socket.send(bytes, zmq::DONTWAIT) {
-            Ok(()) => {
+        let mut socket = socket
+            .lock()
+            .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
+        let message = ZmqMessage::from(bytes.to_vec());
+        let send_result = self.block_on(async {
+            socket.send(message).now_or_never()
+        });
+        match send_result {
+            Some(Ok(())) => {
                 debug!("[CLIENT] Sent {} bytes sensory (raw)", bytes.len());
                 Ok(true)
             }
-            Err(zmq::Error::EAGAIN) => {
+            None | Some(Err(ZmqError::BufferFull(_))) => {
                 // REAL-TIME: Drop on pressure (do not block and do not buffer history)
                 static DROPPED: AtomicU64 = AtomicU64::new(0);
                 static LAST_LOG_MS: AtomicU64 = AtomicU64::new(0);
@@ -775,7 +930,7 @@ impl AgentClient {
 
                 Ok(false)
             }
-            Err(e) => Err(SdkError::Zmq(e)),
+            Some(Err(e)) => Err(SdkError::Zmq(e)),
         }
     }
 
@@ -809,103 +964,88 @@ impl AgentClient {
             SdkError::Other("Motor socket not initialized (not a motor agent?)".to_string())
         })?;
 
+        let mut socket = socket
+            .lock()
+            .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
+        let recv_result = self.block_on(async { socket.recv().now_or_never() });
+        let message = match recv_result {
+            None => return Ok(None),
+            Some(Ok(message)) => message,
+            Some(Err(e)) => return Err(SdkError::Zmq(e)),
+        };
+
         // Non-blocking receive:
         // - preferred multipart: [topic, data]
         // - legacy single-part: [data]
-        match socket.recv_bytes(zmq::DONTWAIT) {
-            Ok(first_frame) => {
-                trace!(
-                    "[CLIENT] Received first motor frame: {} bytes",
-                    first_frame.len()
-                );
-
-                // Check if more frames are available (multipart)
-                let (_topic_opt, data) = if socket.get_rcvmore().map_err(SdkError::Zmq)? {
-                    // First frame is the topic, second frame is the motor data
-                    let topic = first_frame;
-                    trace!(
-                        "[CLIENT] Motor multipart topic: '{}'",
-                        String::from_utf8_lossy(&topic)
-                    );
-                    trace!("[CLIENT] Receiving second frame (motor data)");
-                    let data = socket.recv_bytes(0).map_err(|e| {
-                        error!("[CLIENT] Failed to receive second frame: {}", e);
-                        SdkError::Zmq(e)
-                    })?;
-                    trace!("[CLIENT] Received motor data frame: {} bytes", data.len());
-                    (Some(topic), data)
-                } else {
-                    // Legacy single-part format: treat first frame as data
-                    (None, first_frame)
-                };
-
-                // Do not filter by topic here.
-                //
-                // FEAGI publishers have historically used different topic conventions
-                // (agent_id, empty topic, or other routing keys). Since we subscribe to all topics,
-                // the safest approach is to accept the motor payload regardless of topic and let
-                // higher layers decide what to do with it.
-
-                // ARCHITECTURE COMPLIANCE: Deserialize binary XYZP motor data using FeagiByteContainer
-                let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
-                let mut data_vec = data.to_vec();
-
-                // Load bytes into container
-                byte_container
-                    .try_write_data_to_container_and_verify(&mut |bytes| {
-                        std::mem::swap(bytes, &mut data_vec);
-                        Ok(())
-                    })
-                    .map_err(|e| {
-                        SdkError::Other(format!("Failed to load motor data bytes: {:?}", e))
-                    })?;
-
-                // Get number of structures (should be 1 for motor data)
-                let num_structures = byte_container
-                    .try_get_number_contained_structures()
-                    .map_err(|e| {
-                        SdkError::Other(format!("Failed to get structure count: {:?}", e))
-                    })?;
-
-                if num_structures == 0 {
-                    return Ok(None);
-                }
-
-                // Extract first structure
-                let boxed_struct =
-                    byte_container
-                        .try_create_new_struct_from_index(0)
-                        .map_err(|e| {
-                            SdkError::Other(format!("Failed to extract motor structure: {:?}", e))
-                        })?;
-
-                // Downcast to CorticalMappedXYZPNeuronVoxels
-                let motor_data = boxed_struct
-                    .as_any()
-                    .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()
-                    .ok_or_else(|| {
-                        SdkError::Other(
-                            "Motor data is not CorticalMappedXYZPNeuronVoxels".to_string(),
-                        )
-                    })?
-                    .clone();
-
-                debug!(
-                    "[CLIENT] ✓ Received motor data ({} bytes, {} areas)",
-                    data.len(),
-                    motor_data.len()
-                );
-                Ok(Some(motor_data))
-            }
-            Err(zmq::Error::EAGAIN) => {
-                // No data available (FEAGI not publishing OR slow joiner syndrome)
-                Ok(None)
-            }
-            Err(e) => {
-                error!("[CLIENT] ❌ ZMQ error on motor receive: {}", e);
-                Err(SdkError::Zmq(e))
-            }
+        let mut frames = message.into_vec();
+        if frames.is_empty() {
+            return Ok(None);
         }
+        let (_topic_opt, data) = if frames.len() == 2 {
+            let topic = frames.remove(0).to_vec();
+            trace!(
+                "[CLIENT] Motor multipart topic: '{}'",
+                String::from_utf8_lossy(&topic)
+            );
+            let data = frames.remove(0).to_vec();
+            trace!("[CLIENT] Received motor data frame: {} bytes", data.len());
+            (Some(topic), data)
+        } else if frames.len() == 1 {
+            (None, frames.remove(0).to_vec())
+        } else {
+            return Err(SdkError::Other(
+                "Unexpected multipart motor payload".to_string(),
+            ));
+        };
+
+        // Do not filter by topic here.
+        //
+        // FEAGI publishers have historically used different topic conventions
+        // (agent_id, empty topic, or other routing keys). Since we subscribe to all topics,
+        // the safest approach is to accept the motor payload regardless of topic and let
+        // higher layers decide what to do with it.
+
+        // ARCHITECTURE COMPLIANCE: Deserialize binary XYZP motor data using FeagiByteContainer
+        let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
+        let mut data_vec = data.to_vec();
+
+        // Load bytes into container
+        byte_container
+            .try_write_data_to_container_and_verify(&mut |bytes| {
+                std::mem::swap(bytes, &mut data_vec);
+                Ok(())
+            })
+            .map_err(|e| SdkError::Other(format!("Failed to load motor data bytes: {:?}", e)))?;
+
+        // Get number of structures (should be 1 for motor data)
+        let num_structures = byte_container
+            .try_get_number_contained_structures()
+            .map_err(|e| SdkError::Other(format!("Failed to get structure count: {:?}", e)))?;
+
+        if num_structures == 0 {
+            return Ok(None);
+        }
+
+        // Extract first structure
+        let boxed_struct = byte_container
+            .try_create_new_struct_from_index(0)
+            .map_err(|e| SdkError::Other(format!("Failed to extract motor structure: {:?}", e)))?;
+
+        // Downcast to CorticalMappedXYZPNeuronVoxels
+        let motor_data = boxed_struct
+            .as_any()
+            .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()
+            .ok_or_else(|| {
+                SdkError::Other("Motor data is not CorticalMappedXYZPNeuronVoxels".to_string())
+            })?
+            .clone();
+
+        debug!(
+            "[CLIENT] ✓ Received motor data ({} bytes, {} areas)",
+            data.len(),
+            motor_data.len()
+        );
+        Ok(Some(motor_data))
     }
 
     /// Receive visualization data from FEAGI (non-blocking)
@@ -931,17 +1071,25 @@ impl AgentClient {
             )
         })?;
 
-        // Non-blocking receive
-        match socket.recv_bytes(zmq::DONTWAIT) {
-            Ok(data) => {
+        let mut socket = socket
+            .lock()
+            .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
+        let recv_result = self.block_on(async { socket.recv().now_or_never() });
+        match recv_result {
+            None => Ok(None),
+            Some(Ok(message)) => {
+                let mut frames = message.into_vec();
+                if frames.is_empty() {
+                    return Ok(None);
+                }
+                let data = frames.pop().unwrap().to_vec();
                 debug!(
                     "[CLIENT] ✓ Received visualization data ({} bytes)",
                     data.len()
                 );
                 Ok(Some(data))
             }
-            Err(zmq::Error::EAGAIN) => Ok(None), // No data available
-            Err(e) => Err(SdkError::Zmq(e)),
+            Some(Err(e)) => Err(SdkError::Zmq(e)),
         }
     }
 
@@ -988,13 +1136,7 @@ impl AgentClient {
             request["body"] = body;
         }
 
-        // Send request
-        socket.send(request.to_string().as_bytes(), 0)?;
-
-        // Wait for response
-        let response_bytes = socket.recv_bytes(0)?;
-        let response: serde_json::Value = serde_json::from_slice(&response_bytes)?;
-
+        let response = self.send_request(socket, &request)?;
         debug!("[CLIENT] ✓ Control request {} {} completed", method, route);
         Ok(response)
     }

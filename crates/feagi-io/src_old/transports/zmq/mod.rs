@@ -5,7 +5,7 @@
 
 mod api_control;
 mod motor;
-mod rest;
+pub mod rest;
 mod sensory;
 mod visualization;
 
@@ -20,6 +20,7 @@ pub use visualization::{
 use crate::core::{AgentRegistry, IOError, RegistrationHandler};
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
+use tokio::runtime::Runtime;
 use tracing::{debug, info};
 
 /// ZMQ Streams coordinator
@@ -44,26 +45,29 @@ impl ZmqStreams {
         viz_config: VisualizationSendConfig,
         sensory_config: SensoryReceiveConfig,
     ) -> Result<Self, IOError> {
-        let context = Arc::new(zmq::Context::new());
+        let runtime = build_runtime()?;
 
-        let mut rest_stream = RestStream::new(Arc::clone(&context), rest_address)
+        let mut rest_stream = RestStream::new(Arc::clone(&runtime), rest_address)
             .map_err(|e| IOError::Zmq(format!("REST stream: {}", e)))?;
 
         // Set registration handler
         rest_stream.set_registration_handler(registration_handler);
 
-        let api_control_stream = ApiControlStream::new(Arc::clone(&context), api_control_address)
+        let api_control_stream = ApiControlStream::new(Arc::clone(&runtime), api_control_address)
             .map_err(|e| IOError::Zmq(format!("API control stream: {}", e)))?;
 
-        let motor_stream = MotorStream::new(Arc::clone(&context), motor_address)
+        let motor_stream = MotorStream::new(Arc::clone(&runtime), motor_address)
             .map_err(|e| IOError::Zmq(format!("Motor stream: {}", e)))?;
 
-        let viz_stream = VisualizationStream::new(Arc::clone(&context), viz_address, viz_config)
+        let viz_stream = VisualizationStream::new(Arc::clone(&runtime), viz_address, viz_config)
             .map_err(|e| IOError::Zmq(format!("Viz stream: {}", e)))?;
 
-        let sensory_stream =
-            SensoryStream::new(Arc::clone(&context), sensory_address, sensory_config)
-                .map_err(|e| IOError::Zmq(format!("Sensory stream: {}", e)))?;
+        let sensory_stream = SensoryStream::new(
+            Arc::clone(&runtime),
+            sensory_address,
+            sensory_config,
+        )
+        .map_err(|e| IOError::Zmq(format!("Sensory stream: {}", e)))?;
 
         // Wire up agent registry for security gating
         sensory_stream.set_agent_registry(Arc::clone(&agent_registry));
@@ -218,4 +222,10 @@ impl ZmqStreams {
             .publish_with_topic(agent_id.as_bytes(), data)
             .map_err(|e| IOError::Zmq(format!("Motor publish: {}", e)))
     }
+}
+
+fn build_runtime() -> Result<Arc<Runtime>, IOError> {
+    Runtime::new()
+        .map(Arc::new)
+        .map_err(|e| IOError::Zmq(format!("Failed to create ZMQ runtime: {}", e)))
 }

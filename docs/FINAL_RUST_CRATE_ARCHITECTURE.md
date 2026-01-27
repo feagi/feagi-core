@@ -299,7 +299,7 @@ no_std = []
 [dependencies]
 feagi-npu = { path = "../feagi-npu" }
 feagi-state = { path = "../feagi-state" }
-zmq = "0.10"
+zeromq = "0.4.1"
 tokio-tungstenite = "0.21"  # WebSocket
 ```
 

@@ -8,7 +8,7 @@
 //!
 //! Available transports:
 //! - core: Low-level transport primitives (ZMQ, WebSocket, UDP, SHM) [internal]
-//! - zmq: ZeroMQ domain-specific wrappers (blocking, TCP-based, reliable) [feature: zmq-transport]
+//! - zmq: ZeroMQ domain-specific wrappers (async-native, pure Rust) [feature: zmq-transport]
 //! - udp: User Datagram Protocol (nonblocking, best-effort, high-throughput) [feature: udp-transport]
 //! - websocket: WebSocket domain-specific wrappers (nonblocking only) [feature: websocket-transport]
 //! - shm: Shared Memory (blocking only, future) [feature: shm-transport]

@@ -692,7 +692,6 @@ pub async fn register_agent(
                 rates: response.rates,
                 transports,
                 recommended_transport: response.recommended_transport,
-                zmq_ports: response.zmq_ports,
                 shm_paths: response.shm_paths,
                 cortical_areas: response.cortical_areas,
             }))

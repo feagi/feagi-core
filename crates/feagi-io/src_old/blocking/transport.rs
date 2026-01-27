@@ -25,7 +25,7 @@ use crate::core::{Result, SharedFBC};
 /// use feagi_io::core::{Result, SharedFBC, StreamType};
 ///
 /// struct ZmqTransport {
-///     context: zmq::Context,
+///     runtime: tokio::runtime::Runtime,
 ///     // ... sockets, workers, etc.
 /// }
 ///

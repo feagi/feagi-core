@@ -80,9 +80,16 @@ impl BrainRegionHierarchy {
     ///
     pub fn add_region(&mut self, region: BrainRegion, parent_id: Option<String>) -> BduResult<()> {
         let region_id = region.region_id;
+        let region_id_str = region_id.to_string();
+
+        if parent_id.as_deref() == Some(region_id_str.as_str()) {
+            return Err(BduError::InvalidArea(
+                "Region cannot be its own parent".to_string(),
+            ));
+        }
 
         // Check if region already exists
-        if self.regions.contains_key(&region_id.to_string()) {
+        if self.regions.contains_key(&region_id_str) {
             return Err(BduError::InvalidArea(format!(
                 "Region {} already exists",
                 region_id
@@ -100,7 +107,6 @@ impl BrainRegionHierarchy {
         }
 
         // Add region
-        let region_id_str = region_id.to_string();
         self.regions.insert(region_id_str.clone(), region);
 
         // Update parent/child maps
@@ -189,6 +195,12 @@ impl BrainRegionHierarchy {
     /// - Would create a cycle
     ///
     pub fn change_parent(&mut self, region_id: &str, new_parent_id: &str) -> BduResult<()> {
+        if region_id == new_parent_id {
+            return Err(BduError::InvalidArea(
+                "Region cannot be its own parent".to_string(),
+            ));
+        }
+
         // Validate both exist
         if !self.regions.contains_key(region_id) {
             return Err(BduError::InvalidArea(format!(
