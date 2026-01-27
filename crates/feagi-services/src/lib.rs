@@ -91,6 +91,8 @@ Licensed under the Apache License, Version 2.0
 pub mod genome;
 #[cfg(feature = "std")]
 pub mod impls;
+#[cfg(feature = "connectome-serialization")]
+pub mod connectome;
 pub mod traits;
 pub mod types;
 

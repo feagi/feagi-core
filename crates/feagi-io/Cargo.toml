@@ -15,13 +15,12 @@ udp-transport = ["dep:tokio", "dep:async-trait", "dep:num_cpus"]  # Async, best-
 shm-transport = []                            # Shared memory (no extra deps, future)
 websocket-transport = ["udp-transport", "dep:tokio-tungstenite", "dep:futures-util"]  # WebSocket requires tokio, tungstenite, futures
 all-transports = ["zmq-transport", "udp-transport", "shm-transport", "websocket-transport"]
-connectome-serialization = ["bincode", "connectome-compression"]  # Connectome file I/O (types in feagi-npu-neural)
-connectome-compression = []  # LZ4 compression for connectome files (lz4 already in dependencies)
+connectome-serialization = ["feagi-services/connectome-serialization"]  # Connectome file I/O via service layer
+connectome-compression = ["feagi-services/connectome-compression"]  # LZ4 compression for connectome files
 
 [dependencies]
 feagi-npu-burst-engine = { version = "0.0.1-beta.4", path = "../feagi-npu/burst-engine" }
 feagi-services = { version = "0.0.1-beta.4", path = "../feagi-services" }  # For services and CorticalAreaExt
-feagi-npu-neural = { version = "0.0.1-beta.4", path = "../feagi-npu/neural" }  # For types
 # FEAGI data structures and serialization (for binary XYZP format)
 feagi-structures.workspace = true
 feagi-serialization = { workspace = true }
@@ -38,9 +37,6 @@ thiserror = "1.0"
 lz4 = "1.28"  # LZ4 compression (used by multiple transports)
 tracing = { workspace = true }  # Structured logging
 # url = "2.5.8" # for URL support
-
-# Connectome serialization dependencies (optional, behind feature)
-bincode = { version = "1.3", optional = true }  # Fast binary serialization
 
 # Optional transport-specific dependencies (consolidated from feagi-transports)
 zeromq = { version = "0.4.1", optional = true }  # Pure Rust ZeroMQ (async-native)

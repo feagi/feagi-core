@@ -34,6 +34,8 @@ parking_lot = "0.12"
 # Serialization (for DTOs)
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+bincode = { version = "1.3", optional = true }  # Connectome serialization
+lz4 = { version = "1.28", optional = true }  # Connectome compression
 
 # Observability
 feagi-observability = { workspace = true }
@@ -55,9 +57,13 @@ std = ["tokio", "feagi-brain-development/async-tokio", "feagi-npu-burst-engine/a
 no_std = []      # Disable async for embedded/RTOS
 wasm = ["feagi-brain-development/wasm", "feagi-npu-burst-engine/wasm"]  # WASM builds without tokio
 connectome-io = ["feagi-npu-burst-engine/connectome-io"]  # Connectome export/import functionality (types in feagi-npu-neural)
+connectome-serialization = ["bincode", "connectome-compression"]  # Connectome file I/O
+connectome-compression = ["lz4"]  # LZ4 compression for connectome files
 plasticity = ["feagi-brain-development/plasticity", "dep:feagi-npu-plasticity"]  # Enable plasticity features (memory neurons, STDP)
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
 feagi-npu-runtime = { path = "../feagi-npu/runtime" }
+ahash = { workspace = true }
+tempfile = "3.8"
 
