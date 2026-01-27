@@ -94,6 +94,9 @@ pub struct AgentClient {
     /// Registration state
     registered: bool,
 
+    /// Last reconnect attempt timestamp (ms since UNIX epoch)
+    last_reconnect_attempt_ms: AtomicU64,
+
     /// Last successful registration response body (JSON) returned by FEAGI.
     ///
     /// FEAGI registration is performed via "REST over ZMQ" and returns a wrapper:
@@ -135,6 +138,7 @@ impl AgentClient {
             heartbeat: None,
             registered: false,
             last_registration_body: None,
+            last_reconnect_attempt_ms: AtomicU64::new(0),
         })
     }
 
@@ -334,6 +338,20 @@ impl AgentClient {
             return Err(SdkError::NotRegistered);
         }
 
+        let now_ms = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let last_ms = self.last_reconnect_attempt_ms.load(Ordering::Relaxed);
+        let min_interval_ms = self.config.retry_backoff_ms.max(1);
+        if now_ms.saturating_sub(last_ms) < min_interval_ms {
+            return Ok(());
+        }
+        self.last_reconnect_attempt_ms
+            .store(now_ms, Ordering::Relaxed);
+
+        self.close_data_sockets();
+
         let mut data_socket_strategy = ReconnectionStrategy::new(
             self.config.retry_backoff_ms,
             self.config.registration_retries,
@@ -343,6 +361,45 @@ impl AgentClient {
             &mut data_socket_strategy,
             "Data socket reconnection",
         )
+    }
+
+    fn close_data_sockets(&mut self) {
+        if let Some(socket) = self.sensory_socket.take() {
+            if let Ok(socket) = Arc::try_unwrap(socket) {
+                match socket.into_inner() {
+                    Ok(socket) => {
+                        let _ = self.block_on(socket.close());
+                    }
+                    Err(poisoned) => {
+                        let _ = self.block_on(poisoned.into_inner().close());
+                    }
+                }
+            }
+        }
+        if let Some(socket) = self.motor_socket.take() {
+            if let Ok(socket) = Arc::try_unwrap(socket) {
+                match socket.into_inner() {
+                    Ok(socket) => {
+                        let _ = self.block_on(socket.close());
+                    }
+                    Err(poisoned) => {
+                        let _ = self.block_on(poisoned.into_inner().close());
+                    }
+                }
+            }
+        }
+        if let Some(socket) = self.viz_socket.take() {
+            if let Ok(socket) = Arc::try_unwrap(socket) {
+                match socket.into_inner() {
+                    Ok(socket) => {
+                        let _ = self.block_on(socket.close());
+                    }
+                    Err(poisoned) => {
+                        let _ = self.block_on(poisoned.into_inner().close());
+                    }
+                }
+            }
+        }
     }
 
     fn wait_for_tcp_endpoint(&self, label: &str, endpoint: &str) -> Result<()> {
@@ -930,7 +987,36 @@ impl AgentClient {
 
                 Ok(false)
             }
-            Some(Err(e)) => Err(SdkError::Zmq(e)),
+            Some(Err(e)) => {
+                let message = e.to_string();
+                if message.contains("Not connected to peers") {
+                    static DROPPED: AtomicU64 = AtomicU64::new(0);
+                    static LAST_LOG_MS: AtomicU64 = AtomicU64::new(0);
+
+                    let dropped = DROPPED.fetch_add(1, Ordering::Relaxed) + 1;
+                    let now_ms = SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64;
+
+                    let last_ms = LAST_LOG_MS.load(Ordering::Relaxed);
+                    if now_ms.saturating_sub(last_ms) >= 5_000
+                        && LAST_LOG_MS
+                            .compare_exchange(last_ms, now_ms, Ordering::Relaxed, Ordering::Relaxed)
+                            .is_ok()
+                    {
+                        warn!(
+                            "[CLIENT] Sensory not connected: dropped_messages={} last_payload_bytes={}",
+                            dropped,
+                            bytes.len()
+                        );
+                    }
+
+                    return Ok(false);
+                }
+
+                Err(SdkError::Zmq(e))
+            }
         }
     }
 

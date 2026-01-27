@@ -133,6 +133,9 @@ pub use types::{
     UpdateCorticalAreaParams,
 };
 
+// Re-export cortical area helpers for adapter crates.
+pub use feagi_brain_development::models::CorticalAreaExt;
+
 // Re-export implementations (optional - adapters can use their own)
 #[cfg(feature = "std")]
 pub use impls::{
