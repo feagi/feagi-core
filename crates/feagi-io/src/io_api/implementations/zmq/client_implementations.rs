@@ -6,8 +6,10 @@ use crate::io_api::traits_and_enums::client::{
 };
 use crate::io_api::{FeagiClientConnectionState, FeagiNetworkError};
 use futures_util::FutureExt;
+use std::future::Future;
 use parking_lot::Mutex;
-use tokio::runtime::Runtime;
+use tokio::runtime::{Handle, Runtime};
+use tokio::task::block_in_place;
 use zeromq::{DealerSocket, PushSocket, Socket, SocketRecv, SocketSend, SubSocket, ZmqMessage};
 
 /// Type alias for the client state change callback.
@@ -15,6 +17,14 @@ type StateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange) + Send +
 
 fn build_runtime() -> Result<Runtime, FeagiNetworkError> {
     Runtime::new().map_err(|e| FeagiNetworkError::GeneralFailure(e.to_string()))
+}
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
 }
 
 fn message_to_single_frame(message: ZmqMessage) -> Result<Vec<u8>, FeagiNetworkError> {
@@ -116,7 +126,7 @@ impl FEAGIZMQClientSubscriber {
     /// Poll for incoming subscription data.
     /// Returns `Ok(Some(data))` if data was received, `Ok(None)` if no data available.
     pub fn try_poll_receive(&mut self) -> Result<Option<&[u8]>, FeagiNetworkError> {
-        let result = self.runtime.block_on(async { self.socket.recv().now_or_never() });
+        let result = block_on_runtime(&self.runtime, async { self.socket.recv().now_or_never() });
         match result {
             None => Ok(None),
             Some(Ok(message)) => {
@@ -131,11 +141,9 @@ impl FEAGIZMQClientSubscriber {
 impl FeagiClient for FEAGIZMQClientSubscriber {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
         self.ensure_supported_options()?;
-        self.runtime
-            .block_on(self.socket.subscribe(""))
+        block_on_runtime(&self.runtime, self.socket.subscribe(""))
             .map_err(|e| FeagiNetworkError::SocketCreationFailed(e.to_string()))?;
-        self.runtime
-            .block_on(self.socket.connect(host))
+        block_on_runtime(&self.runtime, self.socket.connect(host))
             .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
         self.server_address = host.to_string(); // Store for disconnect
@@ -149,8 +157,8 @@ impl FeagiClient for FEAGIZMQClientSubscriber {
     }
 
     fn disconnect(&mut self) -> Result<(), FeagiNetworkError> {
-        let mut socket = std::mem::replace(&mut self.socket, SubSocket::new());
-        let _ = self.runtime.block_on(socket.close());
+        let socket = std::mem::replace(&mut self.socket, SubSocket::new());
+        let _ = block_on_runtime(&self.runtime, socket.close());
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Disconnected;
         (self.state_change_callback)(FeagiClientConnectionStateChange::new(
@@ -256,8 +264,7 @@ impl FEAGIZMQClientPusher {
 impl FeagiClient for FEAGIZMQClientPusher {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
         self.ensure_supported_options()?;
-        self.runtime
-            .block_on(self.socket.lock().connect(host))
+        block_on_runtime(&self.runtime, self.socket.lock().connect(host))
             .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
         self.server_address = host.to_string(); // Store for disconnect
@@ -271,9 +278,9 @@ impl FeagiClient for FEAGIZMQClientPusher {
     }
 
     fn disconnect(&mut self) -> Result<(), FeagiNetworkError> {
-        let mut socket = std::mem::replace(&mut self.socket, Mutex::new(PushSocket::new()));
-        let mut socket = socket.into_inner();
-        let _ = self.runtime.block_on(socket.close());
+        let socket = std::mem::replace(&mut self.socket, Mutex::new(PushSocket::new()));
+        let socket = socket.into_inner();
+        let _ = block_on_runtime(&self.runtime, socket.close());
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Disconnected;
         (self.state_change_callback)(FeagiClientConnectionStateChange::new(
@@ -291,7 +298,7 @@ impl FeagiClient for FEAGIZMQClientPusher {
 impl FeagiClientPusher for FEAGIZMQClientPusher {
     fn push_data(&self, data: &[u8]) {
         let message = ZmqMessage::from(data.to_vec());
-        let _ = self.runtime.block_on(self.socket.lock().send(message));
+        let _ = block_on_runtime(&self.runtime, self.socket.lock().send(message));
     }
 }
 
@@ -408,8 +415,7 @@ impl FEAGIZMQClientRequester {
 impl FeagiClient for FEAGIZMQClientRequester {
     fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
         self.ensure_supported_options()?;
-        self.runtime
-            .block_on(self.socket.lock().connect(host))
+        block_on_runtime(&self.runtime, self.socket.lock().connect(host))
             .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
         self.server_address = host.to_string(); // Store for disconnect
@@ -423,9 +429,9 @@ impl FeagiClient for FEAGIZMQClientRequester {
     }
 
     fn disconnect(&mut self) -> Result<(), FeagiNetworkError> {
-        let mut socket = std::mem::replace(&mut self.socket, Mutex::new(DealerSocket::new()));
-        let mut socket = socket.into_inner();
-        let _ = self.runtime.block_on(socket.close());
+        let socket = std::mem::replace(&mut self.socket, Mutex::new(DealerSocket::new()));
+        let socket = socket.into_inner();
+        let _ = block_on_runtime(&self.runtime, socket.close());
         let previous = self.current_state;
         self.current_state = FeagiClientConnectionState::Disconnected;
         (self.state_change_callback)(FeagiClientConnectionStateChange::new(
@@ -444,16 +450,14 @@ impl FeagiClientRequester for FEAGIZMQClientRequester {
     fn send_request(&self, request: &[u8]) -> Result<(), FeagiNetworkError> {
         let mut message = ZmqMessage::from(request.to_vec());
         message.prepend(&ZmqMessage::from(Vec::new()));
-        self.runtime
-            .block_on(self.socket.lock().send(message))
+        block_on_runtime(&self.runtime, self.socket.lock().send(message))
             .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
         Ok(())
     }
 
     fn try_poll_receive(&mut self) -> Result<Option<&[u8]>, FeagiNetworkError> {
-        let result = self
-            .runtime
-            .block_on(async { self.socket.lock().recv().now_or_never() });
+        let result =
+            block_on_runtime(&self.runtime, async { self.socket.lock().recv().now_or_never() });
         let message = match result {
             None => return Ok(None),
             Some(Ok(message)) => message,

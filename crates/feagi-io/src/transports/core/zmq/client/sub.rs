@@ -14,6 +14,17 @@ use tokio::runtime::Runtime;
 use tokio::time::timeout;
 use tracing::info;
 use zeromq::{Socket, SocketRecv, SubSocket};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 /// ZMQ SUB socket implementation (subscriber)
 pub struct ZmqSub {
     runtime: Arc<Runtime>,
@@ -74,8 +85,7 @@ impl Transport for ZmqSub {
         let mut socket = SubSocket::new();
 
         // Connect socket
-        self.runtime
-            .block_on(socket.connect(&self.config.base.address))
+        block_on_runtime(self.runtime.as_ref(), socket.connect(&self.config.base.address))
             .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
@@ -107,8 +117,7 @@ impl Subscriber for ZmqSub {
         let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
         let topic = std::str::from_utf8(topic)
             .map_err(|e| TransportError::InvalidMessage(e.to_string()))?;
-        self.runtime
-            .block_on(sock.subscribe(topic))
+        block_on_runtime(self.runtime.as_ref(), sock.subscribe(topic))
             .map_err(|e| TransportError::Other(e.to_string()))?;
 
         Ok(())
@@ -119,8 +128,7 @@ impl Subscriber for ZmqSub {
         let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
         let topic = std::str::from_utf8(topic)
             .map_err(|e| TransportError::InvalidMessage(e.to_string()))?;
-        self.runtime
-            .block_on(sock.unsubscribe(topic))
+        block_on_runtime(self.runtime.as_ref(), sock.unsubscribe(topic))
             .map_err(|e| TransportError::Other(e.to_string()))?;
 
         Ok(())
@@ -136,15 +144,12 @@ impl Subscriber for ZmqSub {
 
         let recv_future = sock.recv();
         let message = if timeout_ms == 0 {
-            self.runtime
-                .block_on(recv_future)
+            block_on_runtime(self.runtime.as_ref(), recv_future)
                 .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         } else {
-            self.runtime
-                .block_on(timeout(
-                    std::time::Duration::from_millis(timeout_ms),
-                    recv_future,
-                ))
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(std::time::Duration::from_millis(timeout_ms), recv_future).await
+            })
                 .map_err(|_| TransportError::Timeout)?
                 .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         };

@@ -12,6 +12,17 @@ use tokio::runtime::Runtime;
 use tokio::time::timeout;
 use tracing::{debug, warn};
 use zeromq::{ReqSocket, SocketRecv, SocketSend, ZmqMessage};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 
 /// Registration payload used to re-register an agent after FEAGI restarts.
 ///
@@ -199,13 +210,13 @@ impl HeartbeatService {
 
         // Send heartbeat request
         let message = ZmqMessage::from(message.to_string().into_bytes());
-        runtime
-            .block_on(socket_guard.send(message))
+        block_on_runtime(runtime.as_ref(), socket_guard.send(message))
             .map_err(SdkError::Zmq)?;
 
         // Wait for response (ROUTER replies may include empty delimiter)
-        let response = runtime
-            .block_on(timeout(Duration::from_millis(1000), socket_guard.recv()))
+        let response = block_on_runtime(runtime.as_ref(), async {
+            timeout(Duration::from_millis(1000), socket_guard.recv()).await
+        })
             .map_err(|_| SdkError::Timeout("Heartbeat response timeout".to_string()))?
             .map_err(SdkError::Zmq)?;
         let frames = response.into_vec();
@@ -287,9 +298,10 @@ impl HeartbeatService {
                 .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
 
             let message = ZmqMessage::from(registration_msg.to_string().into_bytes());
-            runtime.block_on(socket.send(message)).map_err(SdkError::Zmq)?;
-            let response = runtime
-                .block_on(timeout(Duration::from_millis(1000), socket.recv()))
+            block_on_runtime(runtime.as_ref(), socket.send(message)).map_err(SdkError::Zmq)?;
+            let response = block_on_runtime(runtime.as_ref(), async {
+                timeout(Duration::from_millis(1000), socket.recv()).await
+            })
                 .map_err(|_| SdkError::Timeout("Registration response timeout".to_string()))?
                 .map_err(SdkError::Zmq)?;
             let frames = response.into_vec();

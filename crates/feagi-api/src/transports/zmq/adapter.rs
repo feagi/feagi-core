@@ -35,18 +35,7 @@ impl ZmqApiAdapter {
         bind_address: &str,
         state: ApiState,
     ) -> Result<Self, String> {
-        // Create transport config
-        let config = ServerConfig::new(bind_address)
-            .base
-            .with_recv_hwm(10000)
-            .with_send_hwm(10000)
-            .with_linger(std::time::Duration::from_secs(1));
-
-        let server_config = ServerConfig {
-            base: config,
-            max_connections: 0,
-            track_connections: true,
-        };
+        let server_config = ServerConfig::new(bind_address);
 
         // Create ZMQ router using feagi-io transport primitives
         let router = ZmqRouter::new(runtime, server_config)

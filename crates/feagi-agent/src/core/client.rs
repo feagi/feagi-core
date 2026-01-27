@@ -8,7 +8,7 @@ use crate::core::error::{Result, SdkError};
 use crate::core::heartbeat::HeartbeatService;
 use crate::core::reconnect::{retry_with_backoff, ReconnectionStrategy};
 use feagi_io::AgentType;
-use futures_util::FutureExt;
+use futures::FutureExt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
@@ -18,6 +18,17 @@ use tracing::{debug, error, info, trace, warn};
 use zeromq::{
     PushSocket, ReqSocket, Socket, SocketRecv, SocketSend, SubSocket, ZmqError, ZmqMessage,
 };
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 
 /// Main FEAGI Agent Client
 ///
@@ -270,15 +281,13 @@ impl AgentClient {
             .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
 
         let message = ZmqMessage::from(request.to_string().into_bytes());
-        self.runtime.block_on(socket.send(message)).map_err(SdkError::Zmq)?;
+        block_on_runtime(self.runtime.as_ref(), socket.send(message)).map_err(SdkError::Zmq)?;
 
         let timeout_ms = self.config.connection_timeout_ms;
         let recv_result = if timeout_ms > 0 {
-            self.runtime
-                .block_on(timeout(
-                    std::time::Duration::from_millis(timeout_ms),
-                    socket.recv(),
-                ))
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(std::time::Duration::from_millis(timeout_ms), socket.recv()).await
+            })
                 .map_err(|_| {
                     SdkError::Timeout(format!(
                         "Request timed out after {}ms",
@@ -287,7 +296,7 @@ impl AgentClient {
                 })?
                 .map_err(SdkError::Zmq)?
         } else {
-            self.runtime.block_on(socket.recv()).map_err(SdkError::Zmq)?
+            block_on_runtime(self.runtime.as_ref(), socket.recv()).map_err(SdkError::Zmq)?
         };
 
         let frames = recv_result.into_vec();
@@ -724,7 +733,7 @@ impl AgentClient {
             .lock()
             .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
         let message = ZmqMessage::from(buffer.clone());
-        self.runtime.block_on(socket.send(message)).map_err(SdkError::Zmq)?;
+        block_on_runtime(self.runtime.as_ref(), socket.send(message)).map_err(SdkError::Zmq)?;
 
         debug!(
             "[CLIENT] Sent {} bytes XYZP binary to {}",
@@ -767,9 +776,9 @@ impl AgentClient {
             .lock()
             .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
         let message = ZmqMessage::from(bytes.to_vec());
-        let send_result = self
-            .runtime
-            .block_on(async { socket.send(message).now_or_never() });
+        let send_result = block_on_runtime(self.runtime.as_ref(), async {
+            socket.send(message).now_or_never()
+        });
         match send_result {
             Some(Ok(())) => {
                 debug!("[CLIENT] Sent {} bytes sensory (raw)", bytes.len());
@@ -839,9 +848,8 @@ impl AgentClient {
         let mut socket = socket
             .lock()
             .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
-        let recv_result = self
-            .runtime
-            .block_on(async { socket.recv().now_or_never() });
+        let recv_result =
+            block_on_runtime(self.runtime.as_ref(), async { socket.recv().now_or_never() });
         let message = match recv_result {
             None => return Ok(None),
             Some(Ok(message)) => message,
@@ -948,9 +956,8 @@ impl AgentClient {
         let mut socket = socket
             .lock()
             .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
-        let recv_result = self
-            .runtime
-            .block_on(async { socket.recv().now_or_never() });
+        let recv_result =
+            block_on_runtime(self.runtime.as_ref(), async { socket.recv().now_or_never() });
         match recv_result {
             None => Ok(None),
             Some(Ok(message)) => {

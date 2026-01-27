@@ -14,6 +14,17 @@ use tokio::runtime::Runtime;
 use tokio::time::timeout;
 use tracing::info;
 use zeromq::{PullSocket, Socket, SocketRecv};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 /// ZMQ PULL socket implementation (receiver)
 pub struct ZmqPull {
     runtime: Arc<Runtime>,
@@ -74,8 +85,7 @@ impl Transport for ZmqPull {
         let mut socket = PullSocket::new();
 
         // Bind socket
-        self.runtime
-            .block_on(socket.bind(&self.config.base.address))
+        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.config.base.address))
             .map_err(|e| TransportError::BindFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
@@ -108,19 +118,16 @@ impl Pull for ZmqPull {
 
     fn pull_timeout(&self, timeout_ms: u64) -> TransportResult<Vec<u8>> {
         let mut sock_guard = self.socket.lock();
-        let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
+        let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
 
         let recv_future = sock.recv();
         let message = if timeout_ms == 0 {
-            self.runtime
-                .block_on(recv_future)
+            block_on_runtime(self.runtime.as_ref(), recv_future)
                 .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         } else {
-            self.runtime
-                .block_on(timeout(
-                    std::time::Duration::from_millis(timeout_ms),
-                    recv_future,
-                ))
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(std::time::Duration::from_millis(timeout_ms), recv_future).await
+            })
                 .map_err(|_| TransportError::Timeout)?
                 .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         };

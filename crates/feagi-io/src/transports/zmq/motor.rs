@@ -10,6 +10,17 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 use tracing::{debug, error, info};
 use zeromq::{PubSocket, Socket, SocketSend, ZmqMessage};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 
 /// Motor stream for publishing motor commands
 #[derive(Clone)]
@@ -41,8 +52,7 @@ impl MotorStream {
 
         // Create PUB socket for broadcasting motor data
         let mut socket = PubSocket::new();
-        self.runtime
-            .block_on(socket.bind(&self.bind_address))
+        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.bind_address))
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
@@ -79,8 +89,7 @@ impl MotorStream {
         };
 
         let message = ZmqMessage::from(data.to_vec());
-        self.runtime
-            .block_on(sock.send(message))
+        block_on_runtime(self.runtime.as_ref(), sock.send(message))
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to send motor data: {}", e)))?;
 
         Ok(())
@@ -113,7 +122,7 @@ impl MotorStream {
 
         let mut message = ZmqMessage::from(data.to_vec());
         message.prepend(&ZmqMessage::from(topic.to_vec()));
-        self.runtime.block_on(sock.send(message)).map_err(|e| {
+        block_on_runtime(self.runtime.as_ref(), sock.send(message)).map_err(|e| {
             error!("[MOTOR-STREAM] ❌ send failed: {}", e);
             FeagiDataError::InternalError(format!("Failed to send multipart motor data: {}", e))
         })?;

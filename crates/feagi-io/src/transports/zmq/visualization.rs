@@ -15,6 +15,17 @@ use tokio::runtime::Runtime;
 use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
 use zeromq::{PubSocket, Socket, SocketSend, ZmqError, ZmqMessage};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 
 /// Overflow handling strategy when the visualization queue is saturated.
 #[derive(Clone, Copy, Debug, Default)]
@@ -167,8 +178,7 @@ impl VisualizationStream {
         while self.queue.pop().is_some() {}
 
         let mut socket = PubSocket::new();
-        self.runtime
-            .block_on(socket.bind(&self.bind_address))
+        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.bind_address))
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
@@ -466,14 +476,18 @@ impl VisualizationStream {
             message.prepend(&ZmqMessage::from(item.topic.clone()));
 
             let send_result = if send_timeout_ms < 0 {
-                runtime.block_on(sock.send(message))
+                block_on_runtime(runtime.as_ref(), sock.send(message))
             } else {
-                runtime
-                    .block_on(timeout(
+                match block_on_runtime(runtime.as_ref(), async {
+                    timeout(
                         Duration::from_millis(send_timeout_ms as u64),
                         sock.send(message),
-                    ))
-                    .map_err(|_| ZmqError::BufferFull("Send timeout"))?
+                    )
+                    .await
+                }) {
+                    Ok(result) => result,
+                    Err(_) => Err(ZmqError::BufferFull("Send timeout")),
+                }
             };
 
             match send_result {

@@ -14,6 +14,17 @@ use tokio::runtime::Runtime;
 use tokio::time::timeout;
 use tracing::info;
 use zeromq::{DealerSocket, Socket, SocketRecv, SocketSend, ZmqMessage};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 /// ZMQ DEALER socket implementation (client-side)
 pub struct ZmqDealer {
     runtime: Arc<Runtime>,
@@ -74,8 +85,7 @@ impl Transport for ZmqDealer {
         let mut socket = DealerSocket::new();
 
         // Connect socket
-        self.runtime
-            .block_on(socket.connect(&self.config.base.address))
+        block_on_runtime(self.runtime.as_ref(), socket.connect(&self.config.base.address))
             .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
@@ -123,22 +133,18 @@ impl RequestReplyClient for ZmqDealer {
         // Send request: [delimiter, request_data]
         let mut message = ZmqMessage::from(data.to_vec());
         message.prepend(&ZmqMessage::from(Vec::new()));
-        self.runtime
-            .block_on(sock.send(message))
+        block_on_runtime(self.runtime.as_ref(), sock.send(message))
             .map_err(|e| TransportError::SendFailed(e.to_string()))?;
 
         // Receive reply
         let recv_future = sock.recv();
         let reply = if timeout_ms == 0 {
-            self.runtime
-                .block_on(recv_future)
+            block_on_runtime(self.runtime.as_ref(), recv_future)
                 .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         } else {
-            self.runtime
-                .block_on(timeout(
-                    std::time::Duration::from_millis(timeout_ms),
-                    recv_future,
-                ))
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(std::time::Duration::from_millis(timeout_ms), recv_future).await
+            })
                 .map_err(|_| TransportError::Timeout)?
                 .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         };
@@ -164,8 +170,7 @@ impl RequestReplyClient for ZmqDealer {
         // Send without waiting for reply
         let mut message = ZmqMessage::from(data.to_vec());
         message.prepend(&ZmqMessage::from(Vec::new()));
-        self.runtime
-            .block_on(sock.send(message))
+        block_on_runtime(self.runtime.as_ref(), sock.send(message))
             .map_err(|e| TransportError::SendFailed(e.to_string()))?;
 
         Ok(())

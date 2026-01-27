@@ -14,6 +14,17 @@ use tokio::runtime::Runtime;
 use tokio::time::timeout;
 use tracing::{debug, error, info};
 use zeromq::{RouterSocket, Socket, SocketRecv, SocketSend, ZmqMessage};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 
 /// REST request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,8 +79,7 @@ impl RestStream {
 
         // Create ROUTER socket
         let mut socket = RouterSocket::new();
-        self.runtime
-            .block_on(socket.bind(&self.bind_address))
+        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.bind_address))
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
@@ -101,8 +111,8 @@ impl RestStream {
             info!("🦀 [ZMQ-REST] Processing loop started");
 
             while *running.lock() {
-                let sock_guard = socket.lock();
-                let sock = match sock_guard.as_ref() {
+                let mut sock_guard = socket.lock();
+                let sock = match sock_guard.as_mut() {
                     Some(s) => s,
                     None => {
                         drop(sock_guard);
@@ -111,10 +121,9 @@ impl RestStream {
                     }
                 };
 
-                let recv_result = runtime.block_on(timeout(
-                    std::time::Duration::from_millis(100),
-                    sock.recv(),
-                ));
+                let recv_result = block_on_runtime(runtime.as_ref(), async {
+                    timeout(std::time::Duration::from_millis(100), sock.recv()).await
+                });
 
                 let message = match recv_result {
                     Ok(Ok(message)) => message,
@@ -343,8 +352,7 @@ impl RestStream {
         let mut message = ZmqMessage::from(response_json.into_bytes());
         message.prepend(&ZmqMessage::from(Vec::new()));
         message.prepend(&ZmqMessage::from(identity));
-        runtime
-            .block_on(sock.send(message))
+        block_on_runtime(runtime.as_ref(), sock.send(message))
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to send response: {}", e)))?;
 
         Ok(())

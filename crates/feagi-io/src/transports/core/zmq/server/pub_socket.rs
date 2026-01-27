@@ -15,6 +15,17 @@ use tokio::runtime::Runtime;
 use tokio::time::timeout;
 use tracing::info;
 use zeromq::{PubSocket, Socket, SocketSend, ZmqMessage};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 /// ZMQ PUB socket implementation (publisher)
 pub struct ZmqPub {
     runtime: Arc<Runtime>,
@@ -75,8 +86,7 @@ impl Transport for ZmqPub {
         let mut socket = PubSocket::new();
 
         // Bind socket
-        self.runtime
-            .block_on(socket.bind(&self.config.base.address))
+        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.config.base.address))
             .map_err(|e| TransportError::BindFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
@@ -105,7 +115,7 @@ impl Transport for ZmqPub {
 impl Publisher for ZmqPub {
     fn publish(&self, topic: &[u8], data: &[u8]) -> TransportResult<()> {
         let mut sock_guard = self.socket.lock();
-        let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
+        let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
 
         // Check message size
         if let Some(max_size) = self.config.base.max_message_size {
@@ -121,13 +131,13 @@ impl Publisher for ZmqPub {
         let mut message = ZmqMessage::from(data.to_vec());
         message.prepend(&ZmqMessage::from(topic.to_vec()));
         if let Some(timeout_duration) = self.config.base.timeout {
-            self.runtime
-                .block_on(timeout(timeout_duration, sock.send(message)))
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(timeout_duration, sock.send(message)).await
+            })
                 .map_err(|_| TransportError::Timeout)?
                 .map_err(|e| TransportError::SendFailed(e.to_string()))?;
         } else {
-            self.runtime
-                .block_on(sock.send(message))
+            block_on_runtime(self.runtime.as_ref(), sock.send(message))
                 .map_err(|e| TransportError::SendFailed(e.to_string()))?;
         }
 
@@ -136,7 +146,7 @@ impl Publisher for ZmqPub {
 
     fn publish_simple(&self, data: &[u8]) -> TransportResult<()> {
         let mut sock_guard = self.socket.lock();
-        let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
+        let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
 
         // Check message size
         if let Some(max_size) = self.config.base.max_message_size {
@@ -150,13 +160,13 @@ impl Publisher for ZmqPub {
 
         let message = ZmqMessage::from(data.to_vec());
         if let Some(timeout_duration) = self.config.base.timeout {
-            self.runtime
-                .block_on(timeout(timeout_duration, sock.send(message)))
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(timeout_duration, sock.send(message)).await
+            })
                 .map_err(|_| TransportError::Timeout)?
                 .map_err(|e| TransportError::SendFailed(e.to_string()))?;
         } else {
-            self.runtime
-                .block_on(sock.send(message))
+            block_on_runtime(self.runtime.as_ref(), sock.send(message))
                 .map_err(|e| TransportError::SendFailed(e.to_string()))?;
         }
 

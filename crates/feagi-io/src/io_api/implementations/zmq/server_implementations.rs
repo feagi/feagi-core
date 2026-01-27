@@ -10,7 +10,9 @@ use crate::io_api::traits_and_enums::server::{
 };
 use crate::io_api::{FeagiNetworkError, FeagiServerBindState};
 use futures_util::FutureExt;
-use tokio::runtime::Runtime;
+use std::future::Future;
+use tokio::runtime::{Handle, Runtime};
+use tokio::task::block_in_place;
 use zeromq::{
     Endpoint, PubSocket, PullSocket, RouterSocket, Socket, SocketRecv, SocketSend, ZmqMessage,
 };
@@ -20,6 +22,14 @@ type StateChangeCallback = Box<dyn Fn(FeagiServerBindStateChange) + Send + Sync 
 
 fn build_runtime() -> Result<Runtime, FeagiNetworkError> {
     Runtime::new().map_err(|e| FeagiNetworkError::GeneralFailure(e.to_string()))
+}
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
 }
 
 fn message_to_single_frame(message: ZmqMessage) -> Result<Vec<u8>, FeagiNetworkError> {
@@ -121,9 +131,10 @@ impl FEAGIZMQServerPublisher {
 impl FeagiServer for FEAGIZMQServerPublisher {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         self.ensure_supported_options()?;
-        let endpoint = self
-            .runtime
-            .block_on(self.socket.bind(&self.server_bind_address))
+        let endpoint = block_on_runtime(
+            &self.runtime,
+            self.socket.bind(&self.server_bind_address),
+        )
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.bound_endpoint = Some(endpoint);
         self.current_state = FeagiServerBindState::Active;
@@ -136,8 +147,7 @@ impl FeagiServer for FEAGIZMQServerPublisher {
 
     fn stop(&mut self) -> Result<(), FeagiNetworkError> {
         if let Some(endpoint) = self.bound_endpoint.take() {
-            self.runtime
-                .block_on(self.socket.unbind(endpoint))
+            block_on_runtime(&self.runtime, self.socket.unbind(endpoint))
                 .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
         }
         self.current_state = FeagiServerBindState::Inactive;
@@ -161,8 +171,7 @@ impl FeagiServerPublisher for FEAGIZMQServerPublisher {
 
     fn publish(&mut self, buffered_data_to_send: &[u8]) -> Result<(), FeagiNetworkError> {
         let message = ZmqMessage::from(buffered_data_to_send.to_vec());
-        self.runtime
-            .block_on(self.socket.send(message))
+        block_on_runtime(&self.runtime, self.socket.send(message))
             .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
         Ok(())
     }
@@ -282,9 +291,10 @@ impl FEAGIZMQServerPuller {
 impl FeagiServer for FEAGIZMQServerPuller {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         self.ensure_supported_options()?;
-        let endpoint = self
-            .runtime
-            .block_on(self.socket.bind(&self.server_bind_address))
+        let endpoint = block_on_runtime(
+            &self.runtime,
+            self.socket.bind(&self.server_bind_address),
+        )
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.bound_endpoint = Some(endpoint);
         self.current_state = FeagiServerBindState::Active;
@@ -297,8 +307,7 @@ impl FeagiServer for FEAGIZMQServerPuller {
 
     fn stop(&mut self) -> Result<(), FeagiNetworkError> {
         if let Some(endpoint) = self.bound_endpoint.take() {
-            self.runtime
-                .block_on(self.socket.unbind(endpoint))
+            block_on_runtime(&self.runtime, self.socket.unbind(endpoint))
                 .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
         }
         self.current_state = FeagiServerBindState::Inactive;
@@ -316,7 +325,7 @@ impl FeagiServer for FEAGIZMQServerPuller {
 
 impl FeagiServerPuller for FEAGIZMQServerPuller {
     fn try_poll_receive(&mut self) -> Result<Option<&[u8]>, FeagiNetworkError> {
-        let result = self.runtime.block_on(async { self.socket.recv().now_or_never() });
+        let result = block_on_runtime(&self.runtime, async { self.socket.recv().now_or_never() });
         match result {
             None => Ok(None),
             Some(Ok(message)) => {
@@ -488,9 +497,10 @@ impl FEAGIZMQServerRouter {
 impl FeagiServer for FEAGIZMQServerRouter {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         self.ensure_supported_options()?;
-        let endpoint = self
-            .runtime
-            .block_on(self.socket.bind(&self.server_bind_address))
+        let endpoint = block_on_runtime(
+            &self.runtime,
+            self.socket.bind(&self.server_bind_address),
+        )
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.bound_endpoint = Some(endpoint);
         self.current_state = FeagiServerBindState::Active;
@@ -503,8 +513,7 @@ impl FeagiServer for FEAGIZMQServerRouter {
 
     fn stop(&mut self) -> Result<(), FeagiNetworkError> {
         if let Some(endpoint) = self.bound_endpoint.take() {
-            self.runtime
-                .block_on(self.socket.unbind(endpoint))
+            block_on_runtime(&self.runtime, self.socket.unbind(endpoint))
                 .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
         }
         // Clear client mappings when stopping
@@ -529,7 +538,7 @@ impl FeagiServer for FEAGIZMQServerRouter {
 
 impl FeagiServerRouter for FEAGIZMQServerRouter {
     fn try_poll_receive(&mut self) -> Result<Option<(ClientId, &[u8])>, FeagiNetworkError> {
-        let result = self.runtime.block_on(async { self.socket.recv().now_or_never() });
+        let result = block_on_runtime(&self.runtime, async { self.socket.recv().now_or_never() });
         let message = match result {
             None => return Ok(None),
             Some(Ok(message)) => message,
@@ -574,8 +583,7 @@ impl FeagiServerRouter for FEAGIZMQServerRouter {
         let mut message = ZmqMessage::from(response.to_vec());
         message.prepend(&ZmqMessage::from(Vec::new()));
         message.prepend(&ZmqMessage::from(identity.clone()));
-        self.runtime
-            .block_on(self.socket.send(message))
+        block_on_runtime(&self.runtime, self.socket.send(message))
             .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
         Ok(())
     }

@@ -18,6 +18,17 @@ use tokio::runtime::Runtime;
 use tokio::time::timeout;
 use tracing::info;
 use zeromq::{RouterSocket, Socket, SocketRecv, SocketSend, ZmqMessage};
+use tokio::runtime::Handle;
+use tokio::task::block_in_place;
+use std::future::Future;
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 /// ZMQ ROUTER socket implementation (server-side)
 pub struct ZmqRouter {
     runtime: Arc<Runtime>,
@@ -80,8 +91,7 @@ impl Transport for ZmqRouter {
         let mut socket = RouterSocket::new();
 
         // Bind socket
-        self.runtime
-            .block_on(socket.bind(&self.config.base.address))
+        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.config.base.address))
             .map_err(|e| TransportError::BindFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
@@ -127,15 +137,12 @@ impl RequestReplyServer for ZmqRouter {
 
         let recv_future = sock.recv();
         let message = if timeout_ms == 0 {
-            self.runtime
-                .block_on(recv_future)
+            block_on_runtime(self.runtime.as_ref(), recv_future)
                 .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         } else {
-            self.runtime
-                .block_on(timeout(
-                    std::time::Duration::from_millis(timeout_ms),
-                    recv_future,
-                ))
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(std::time::Duration::from_millis(timeout_ms), recv_future).await
+            })
                 .map_err(|_| TransportError::Timeout)?
                 .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         };
@@ -181,16 +188,14 @@ impl RequestReplyServer for ZmqRouter {
 
         let recv_future = sock.recv();
         let message = if timeout_ms == 0 {
-            match self.runtime.block_on(async { recv_future.now_or_never() }) {
+            match block_on_runtime(self.runtime.as_ref(), async { recv_future.now_or_never() }) {
                 None => return Ok(false),
                 Some(result) => result.map_err(|e| TransportError::ReceiveFailed(e.to_string()))?,
             }
         } else {
-            self.runtime
-                .block_on(timeout(
-                    std::time::Duration::from_millis(timeout_ms),
-                    recv_future,
-                ))
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(std::time::Duration::from_millis(timeout_ms), recv_future).await
+            })
                 .map_err(|_| TransportError::Timeout)?
                 .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         };
@@ -234,8 +239,7 @@ impl ReplyHandle for ZmqRouterReplyHandle {
         message.prepend(&ZmqMessage::from(Vec::new()));
         message.prepend(&ZmqMessage::from(self.identity.clone()));
 
-        self.runtime
-            .block_on(sock.send(message))
+        block_on_runtime(self.runtime.as_ref(), sock.send(message))
             .map_err(|e| TransportError::SendFailed(e.to_string()))?;
 
         Ok(())

@@ -57,17 +57,7 @@ pub struct ApiControlStream {
 impl ApiControlStream {
     /// Create a new API control stream
     pub fn new(runtime: Arc<Runtime>, bind_address: &str) -> Result<Self, FeagiDataError> {
-        // Create transport config
-        let config = ServerConfig::new(bind_address)
-            .base
-            .with_recv_hwm(10000)
-            .with_send_hwm(10000);
-
-        let server_config = ServerConfig {
-            base: config,
-            max_connections: 0,
-            track_connections: true,
-        };
+        let server_config = ServerConfig::new(bind_address);
 
         // Create ZMQ router using internal transport primitives
         let router = ZmqRouter::new(runtime, server_config).map_err(|e| {
