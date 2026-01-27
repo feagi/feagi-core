@@ -66,7 +66,7 @@ pub fn validate_sensory_compatibility(
     area: &CorticalArea,
 ) -> ValidationResult {
     // Check if area is an input area
-    use feagi_brain_development::models::CorticalAreaExt;
+    use feagi_services::CorticalAreaExt;
     if !area.is_input_area() {
         return ValidationResult::incompatible(format!(
             "Agent {} (modality: {}) trying to connect to non-IPU area {}",
@@ -118,7 +118,7 @@ pub fn validate_motor_compatibility(
     area: &CorticalArea,
 ) -> ValidationResult {
     // Check if area is an output area
-    use feagi_brain_development::models::CorticalAreaExt;
+    use feagi_services::CorticalAreaExt;
     if !area.is_output_area() {
         return ValidationResult::incompatible(format!(
             "Agent {} (modality: {}) trying to connect to non-OPU area {}",

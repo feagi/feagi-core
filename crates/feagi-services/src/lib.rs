@@ -91,6 +91,8 @@ Licensed under the Apache License, Version 2.0
 pub mod genome;
 #[cfg(feature = "std")]
 pub mod impls;
+#[cfg(feature = "connectome-serialization")]
+pub mod connectome;
 pub mod traits;
 pub mod types;
 
@@ -132,6 +134,9 @@ pub use types::{
     SystemHealth,
     UpdateCorticalAreaParams,
 };
+
+// Re-export cortical area helpers for adapter crates.
+pub use feagi_brain_development::models::CorticalAreaExt;
 
 // Re-export implementations (optional - adapters can use their own)
 #[cfg(feature = "std")]
