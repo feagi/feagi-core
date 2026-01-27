@@ -29,10 +29,8 @@ fn run_publisher() {
     println!("=== FEAGI ZMQ Publisher Example ===\n");
     println!("Starting publisher on {}", ADDRESS);
 
-    let mut context = zmq::Context::new();
-
     let mut publisher =
-        FEAGIZMQServerPublisher::new(&mut context, ADDRESS.to_string(), |state_change| {
+        FEAGIZMQServerPublisher::new(ADDRESS.to_string(), |state_change| {
             println!("[PUB] State changed: {:?}", state_change)
         })
         .expect("Failed to create publisher");
@@ -65,10 +63,8 @@ fn run_subscriber() {
     println!("=== FEAGI ZMQ Subscriber Example ===\n");
     println!("Connecting subscriber to {}", ADDRESS);
 
-    let mut context = zmq::Context::new();
-
     let mut subscriber =
-        FEAGIZMQClientSubscriber::new(&mut context, ADDRESS.to_string(), |state_change| {
+        FEAGIZMQClientSubscriber::new(ADDRESS.to_string(), |state_change| {
             println!("[SUB] State changed: {:?}", state_change)
         })
         .expect("Failed to create subscriber");

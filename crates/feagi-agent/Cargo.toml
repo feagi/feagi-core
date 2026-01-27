@@ -15,14 +15,14 @@ feagi-observability = { workspace = true }
 tracing = "0.1"  # Required for tracing macros
 
 # Core dependencies (always included)
-zmq = "0.10"
+zeromq = "0.4.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"  # Still needed for registration/heartbeat messages
 thiserror = "1.0"
 base64 = "0.22"
 
 # Async runtime
-tokio = { version = "1.0", features = ["full"], optional = true }
+tokio = { version = "1.0", features = ["full"] }
 async-trait = { version = "0.1", optional = true }
 
 # FEAGI internal crates (core)
@@ -48,7 +48,7 @@ feagi-sensorimotor = { version = "0.0.1-beta.4", path = "../feagi-sensorimotor" 
 default = ["sdk"]
 
 # Async support
-async = ["tokio", "async-trait", "futures"]
+async = ["async-trait", "futures"]
 
 # SDK features
 sdk = ["sdk-video", "sdk-text", "async", "anyhow"]

@@ -6,26 +6,29 @@
 //! SUB sockets are used for receiving broadcast messages from PUB servers.
 //! Subscribers can filter messages by topic.
 
-use crate::transports::core::common::{ClientConfig, TransportError, TransportResult};
+use crate::transports::core::common::{ClientConfig, TransportConfig, TransportError, TransportResult};
 use crate::transports::core::traits::{Subscriber, Transport};
 use parking_lot::Mutex;
 use std::sync::Arc;
+use tokio::runtime::Runtime;
+use tokio::time::timeout;
 use tracing::info;
+use zeromq::{Socket, SocketRecv, SubSocket};
 /// ZMQ SUB socket implementation (subscriber)
 pub struct ZmqSub {
-    context: Arc<zmq::Context>,
+    runtime: Arc<Runtime>,
     config: ClientConfig,
-    socket: Arc<Mutex<Option<zmq::Socket>>>,
+    socket: Arc<Mutex<Option<SubSocket>>>,
     running: Arc<Mutex<bool>>,
 }
 
 impl ZmqSub {
     /// Create a new SUB socket
-    pub fn new(context: Arc<zmq::Context>, config: ClientConfig) -> TransportResult<Self> {
+    pub fn new(runtime: Arc<Runtime>, config: ClientConfig) -> TransportResult<Self> {
         config.base.validate()?;
 
         Ok(Self {
-            context,
+            runtime,
             config,
             socket: Arc::new(Mutex::new(None)),
             running: Arc::new(Mutex::new(false)),
@@ -34,9 +37,28 @@ impl ZmqSub {
 
     /// Create with default context
     pub fn with_address(address: impl Into<String>) -> TransportResult<Self> {
-        let context = Arc::new(zmq::Context::new());
         let config = ClientConfig::new(address);
-        Self::new(context, config)
+        let runtime = Arc::new(
+            Runtime::new()
+                .map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
+        );
+        Self::new(runtime, config)
+    }
+
+    fn ensure_supported_options(&self) -> TransportResult<()> {
+        let defaults = TransportConfig::default();
+        if self.config.base.send_hwm != defaults.send_hwm
+            || self.config.base.recv_hwm != defaults.recv_hwm
+            || self.config.base.linger != defaults.linger
+        {
+            return Err(TransportError::InvalidConfig(format!(
+                "zeromq transport does not support custom socket options (send_hwm={}, recv_hwm={}, linger={:?})",
+                self.config.base.send_hwm,
+                self.config.base.recv_hwm,
+                self.config.base.linger
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -46,17 +68,14 @@ impl Transport for ZmqSub {
             return Err(TransportError::AlreadyRunning);
         }
 
-        // Create SUB socket
-        let socket = self.context.socket(zmq::SUB)?;
+        self.ensure_supported_options()?;
 
-        // Set socket options
-        socket.set_linger(0)?;
-        socket.set_rcvhwm(self.config.base.recv_hwm as i32)?;
-        socket.set_conflate(false)?; // Keep all messages
+        // Create SUB socket
+        let mut socket = SubSocket::new();
 
         // Connect socket
-        socket
-            .connect(&self.config.base.address)
+        self.runtime
+            .block_on(socket.connect(&self.config.base.address))
             .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
@@ -84,19 +103,25 @@ impl Transport for ZmqSub {
 
 impl Subscriber for ZmqSub {
     fn subscribe(&mut self, topic: &[u8]) -> TransportResult<()> {
-        let sock_guard = self.socket.lock();
-        let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
-
-        sock.set_subscribe(topic)?;
+        let mut sock_guard = self.socket.lock();
+        let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
+        let topic = std::str::from_utf8(topic)
+            .map_err(|e| TransportError::InvalidMessage(e.to_string()))?;
+        self.runtime
+            .block_on(sock.subscribe(topic))
+            .map_err(|e| TransportError::Other(e.to_string()))?;
 
         Ok(())
     }
 
     fn unsubscribe(&mut self, topic: &[u8]) -> TransportResult<()> {
-        let sock_guard = self.socket.lock();
-        let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
-
-        sock.set_unsubscribe(topic)?;
+        let mut sock_guard = self.socket.lock();
+        let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
+        let topic = std::str::from_utf8(topic)
+            .map_err(|e| TransportError::InvalidMessage(e.to_string()))?;
+        self.runtime
+            .block_on(sock.unsubscribe(topic))
+            .map_err(|e| TransportError::Other(e.to_string()))?;
 
         Ok(())
     }
@@ -106,36 +131,35 @@ impl Subscriber for ZmqSub {
     }
 
     fn receive_timeout(&self, timeout_ms: u64) -> TransportResult<(Vec<u8>, Vec<u8>)> {
-        let sock_guard = self.socket.lock();
-        let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
+        let mut sock_guard = self.socket.lock();
+        let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
 
-        // Poll for messages if timeout specified
-        if timeout_ms > 0 {
-            let poll_items = &mut [sock.as_poll_item(zmq::POLLIN)];
-            zmq::poll(poll_items, timeout_ms as i64)?;
+        let recv_future = sock.recv();
+        let message = if timeout_ms == 0 {
+            self.runtime
+                .block_on(recv_future)
+                .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
+        } else {
+            self.runtime
+                .block_on(timeout(
+                    std::time::Duration::from_millis(timeout_ms),
+                    recv_future,
+                ))
+                .map_err(|_| TransportError::Timeout)?
+                .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
+        };
 
-            if !poll_items[0].is_readable() {
-                return Err(TransportError::Timeout);
-            }
+        let mut frames = message.into_vec();
+        if frames.len() == 1 {
+            return Ok((Vec::new(), frames.remove(0).to_vec()));
+        }
+        if frames.len() == 2 {
+            return Ok((frames.remove(0).to_vec(), frames.remove(0).to_vec()));
         }
 
-        // Receive multipart message: [topic, data]
-        let mut topic_msg = zmq::Message::new();
-        sock.recv(&mut topic_msg, 0)
-            .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?;
-
-        let has_more = sock.get_rcvmore()?;
-
-        if !has_more {
-            // Single-part message (no topic separator)
-            return Ok((Vec::new(), topic_msg.to_vec()));
-        }
-
-        let mut data_msg = zmq::Message::new();
-        sock.recv(&mut data_msg, 0)
-            .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?;
-
-        Ok((topic_msg.to_vec(), data_msg.to_vec()))
+        Err(TransportError::InvalidMessage(
+            "Unexpected multipart subscription payload".to_string(),
+        ))
     }
 }
 
@@ -145,9 +169,9 @@ mod tests {
 
     #[test]
     fn test_sub_creation() {
-        let context = Arc::new(zmq::Context::new());
+        let runtime = Arc::new(Runtime::new().unwrap());
         let config = ClientConfig::new("tcp://127.0.0.1:30010");
-        let sub = ZmqSub::new(context, config);
+        let sub = ZmqSub::new(runtime, config);
         assert!(sub.is_ok());
     }
 

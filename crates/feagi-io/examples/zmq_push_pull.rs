@@ -35,9 +35,7 @@ fn run_server() {
     println!("=== FEAGI ZMQ Server Puller Example ===\n");
     println!("Starting server (puller) on {}", ADDRESS);
 
-    let mut context = zmq::Context::new();
-
-    let mut server = FEAGIZMQServerPuller::new(&mut context, ADDRESS.to_string(), |state_change| {
+    let mut server = FEAGIZMQServerPuller::new(ADDRESS.to_string(), |state_change| {
         println!("[SERVER] State changed: {:?}", state_change)
     })
     .expect("Failed to create server puller");
@@ -69,9 +67,7 @@ fn run_client() {
     println!("=== FEAGI ZMQ Client Pusher Example ===\n");
     println!("Connecting client (pusher) to {}", ADDRESS);
 
-    let mut context = zmq::Context::new();
-
-    let mut client = FEAGIZMQClientPusher::new(&mut context, ADDRESS.to_string(), |state_change| {
+    let mut client = FEAGIZMQClientPusher::new(ADDRESS.to_string(), |state_change| {
         println!("[CLIENT] State changed: {:?}", state_change)
     })
     .expect("Failed to create client pusher");

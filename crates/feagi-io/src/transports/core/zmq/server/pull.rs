@@ -6,26 +6,29 @@
 //! PULL sockets are used for receiving data from multiple PUSH clients.
 //! Messages are load-balanced across connected clients.
 
-use crate::transports::core::common::{ServerConfig, TransportError, TransportResult};
+use crate::transports::core::common::{ServerConfig, TransportConfig, TransportError, TransportResult};
 use crate::transports::core::traits::{Pull, Transport};
 use parking_lot::Mutex;
 use std::sync::Arc;
+use tokio::runtime::Runtime;
+use tokio::time::timeout;
 use tracing::info;
+use zeromq::{PullSocket, Socket, SocketRecv};
 /// ZMQ PULL socket implementation (receiver)
 pub struct ZmqPull {
-    context: Arc<zmq::Context>,
+    runtime: Arc<Runtime>,
     config: ServerConfig,
-    socket: Arc<Mutex<Option<zmq::Socket>>>,
+    socket: Arc<Mutex<Option<PullSocket>>>,
     running: Arc<Mutex<bool>>,
 }
 
 impl ZmqPull {
     /// Create a new PULL socket
-    pub fn new(context: Arc<zmq::Context>, config: ServerConfig) -> TransportResult<Self> {
+    pub fn new(runtime: Arc<Runtime>, config: ServerConfig) -> TransportResult<Self> {
         config.base.validate()?;
 
         Ok(Self {
-            context,
+            runtime,
             config,
             socket: Arc::new(Mutex::new(None)),
             running: Arc::new(Mutex::new(false)),
@@ -34,9 +37,28 @@ impl ZmqPull {
 
     /// Create with default context
     pub fn with_address(address: impl Into<String>) -> TransportResult<Self> {
-        let context = Arc::new(zmq::Context::new());
         let config = ServerConfig::new(address);
-        Self::new(context, config)
+        let runtime = Arc::new(
+            Runtime::new()
+                .map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
+        );
+        Self::new(runtime, config)
+    }
+
+    fn ensure_supported_options(&self) -> TransportResult<()> {
+        let defaults = TransportConfig::default();
+        if self.config.base.send_hwm != defaults.send_hwm
+            || self.config.base.recv_hwm != defaults.recv_hwm
+            || self.config.base.linger != defaults.linger
+        {
+            return Err(TransportError::InvalidConfig(format!(
+                "zeromq transport does not support custom socket options (send_hwm={}, recv_hwm={}, linger={:?})",
+                self.config.base.send_hwm,
+                self.config.base.recv_hwm,
+                self.config.base.linger
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -46,17 +68,14 @@ impl Transport for ZmqPull {
             return Err(TransportError::AlreadyRunning);
         }
 
-        // Create PULL socket
-        let socket = self.context.socket(zmq::PULL)?;
+        self.ensure_supported_options()?;
 
-        // Set socket options
-        socket.set_linger(0)?;
-        socket.set_rcvhwm(self.config.base.recv_hwm as i32)?;
-        socket.set_immediate(false)?;
+        // Create PULL socket
+        let mut socket = PullSocket::new();
 
         // Bind socket
-        socket
-            .bind(&self.config.base.address)
+        self.runtime
+            .block_on(socket.bind(&self.config.base.address))
             .map_err(|e| TransportError::BindFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
@@ -88,25 +107,31 @@ impl Pull for ZmqPull {
     }
 
     fn pull_timeout(&self, timeout_ms: u64) -> TransportResult<Vec<u8>> {
-        let sock_guard = self.socket.lock();
+        let mut sock_guard = self.socket.lock();
         let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
 
-        // Poll for messages if timeout specified
-        if timeout_ms > 0 {
-            let poll_items = &mut [sock.as_poll_item(zmq::POLLIN)];
-            zmq::poll(poll_items, timeout_ms as i64)?;
+        let recv_future = sock.recv();
+        let message = if timeout_ms == 0 {
+            self.runtime
+                .block_on(recv_future)
+                .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
+        } else {
+            self.runtime
+                .block_on(timeout(
+                    std::time::Duration::from_millis(timeout_ms),
+                    recv_future,
+                ))
+                .map_err(|_| TransportError::Timeout)?
+                .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
+        };
 
-            if !poll_items[0].is_readable() {
-                return Err(TransportError::Timeout);
-            }
+        let mut frames = message.into_vec();
+        if frames.len() != 1 {
+            return Err(TransportError::InvalidMessage(
+                "Unexpected multipart pull payload".to_string(),
+            ));
         }
-
-        // Receive message
-        let mut msg = zmq::Message::new();
-        sock.recv(&mut msg, 0)
-            .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?;
-
-        Ok(msg.to_vec())
+        Ok(frames.remove(0).to_vec())
     }
 }
 
@@ -116,9 +141,9 @@ mod tests {
 
     #[test]
     fn test_pull_creation() {
-        let context = Arc::new(zmq::Context::new());
+        let runtime = Arc::new(Runtime::new().unwrap());
         let config = ServerConfig::new("tcp://127.0.0.1:30020");
-        let pull = ZmqPull::new(context, config);
+        let pull = ZmqPull::new(runtime, config);
         assert!(pull.is_ok());
     }
 

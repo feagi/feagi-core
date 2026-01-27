@@ -52,7 +52,7 @@ pub enum TransportError {
 
     /// Transport-specific error
     #[cfg(feature = "zmq-transport")]
-    Zmq(zmq::Error),
+    Zmq(zeromq::ZmqError),
 
     /// I/O error
     Io(std::io::Error),
@@ -103,10 +103,10 @@ impl std::error::Error for TransportError {
 }
 
 #[cfg(feature = "zmq-transport")]
-impl From<zmq::Error> for TransportError {
-    fn from(err: zmq::Error) -> Self {
+impl From<zeromq::ZmqError> for TransportError {
+    fn from(err: zeromq::ZmqError) -> Self {
         match err {
-            zmq::Error::EAGAIN => Self::Timeout,
+            zeromq::ZmqError::NoMessage => Self::NoData,
             _ => Self::Zmq(err),
         }
     }

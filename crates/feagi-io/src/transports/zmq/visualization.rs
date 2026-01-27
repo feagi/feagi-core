@@ -11,7 +11,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+use tokio::runtime::Runtime;
+use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
+use zeromq::{PubSocket, Socket, SocketSend, ZmqError, ZmqMessage};
 
 /// Overflow handling strategy when the visualization queue is saturated.
 #[derive(Clone, Copy, Debug, Default)]
@@ -120,9 +123,9 @@ impl VisualizationQueueStats {
 /// Visualization stream for publishing neuron activity.
 #[derive(Clone)]
 pub struct VisualizationStream {
-    context: Arc<zmq::Context>,
+    runtime: Arc<Runtime>,
     bind_address: String,
-    socket: Arc<Mutex<Option<zmq::Socket>>>,
+    socket: Arc<Mutex<Option<PubSocket>>>,
     running: Arc<Mutex<bool>>,
     send_config: VisualizationSendConfig,
     queue: Arc<ArrayQueue<VisualizationQueueItem>>,
@@ -134,14 +137,14 @@ pub struct VisualizationStream {
 impl VisualizationStream {
     /// Create a new visualization stream
     pub fn new(
-        context: Arc<zmq::Context>,
+        runtime: Arc<Runtime>,
         bind_address: &str,
         config: VisualizationSendConfig,
     ) -> Result<Self, FeagiDataError> {
         config.validate()?;
 
         Ok(Self {
-            context,
+            runtime,
             bind_address: bind_address.to_string(),
             socket: Arc::new(Mutex::new(None)),
             running: Arc::new(Mutex::new(false)),
@@ -163,31 +166,9 @@ impl VisualizationStream {
 
         while self.queue.pop().is_some() {}
 
-        let socket = self.context.socket(zmq::PUB).map_err(|e| {
-            FeagiDataError::InternalError(format!("Failed to create ZMQ PUB socket: {}", e))
-        })?;
-
-        socket
-            .set_linger(0)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set linger: {}", e)))?;
-        // REAL-TIME: HWM=1 ensures only latest visualization is kept
-        // Brain Visualizer should show current activity, not buffered history
-        socket
-            .set_sndhwm(1)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set send HWM: {}", e)))?;
-        // REAL-TIME: conflate=true enables "last value caching" - keeps only newest message
-        // This is critical for PUB/SUB pattern to drop intermediate frames
-        socket
-            .set_conflate(true)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set conflate: {}", e)))?;
-        socket
-            .set_sndtimeo(self.send_config.send_timeout_ms)
-            .map_err(|e| {
-                FeagiDataError::InternalError(format!("Failed to set send timeout: {}", e))
-            })?;
-
-        socket
-            .bind(&self.bind_address)
+        let mut socket = PubSocket::new();
+        self.runtime
+            .block_on(socket.bind(&self.bind_address))
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
@@ -307,17 +288,27 @@ impl VisualizationStream {
     fn spawn_worker(&self) {
         let queue = Arc::clone(&self.queue);
         let socket = Arc::clone(&self.socket);
+        let runtime = Arc::clone(&self.runtime);
         let shutdown = Arc::clone(&self.shutdown);
         let stats = Arc::clone(&self.stats);
         let idle_sleep = Duration::from_millis(self.send_config.idle_sleep_ms);
         let send_retry_sleep = Duration::from_millis(self.send_config.backpressure_sleep_ms);
+        let send_timeout_ms = self.send_config.send_timeout_ms;
 
         let handle = thread::Builder::new()
             .name("feagi-viz-sender".to_string())
             .spawn(move || {
                 while !shutdown.load(Ordering::Relaxed) {
                     if let Some(item) = queue.pop() {
-                        Self::send_item(&socket, item, &stats, &shutdown, send_retry_sleep);
+                        Self::send_item(
+                            &socket,
+                            &runtime,
+                            item,
+                            &stats,
+                            &shutdown,
+                            send_retry_sleep,
+                            send_timeout_ms,
+                        );
                         continue;
                     }
 
@@ -325,7 +316,15 @@ impl VisualizationStream {
                 }
 
                 while let Some(item) = queue.pop() {
-                    Self::send_item(&socket, item, &stats, &shutdown, send_retry_sleep);
+                    Self::send_item(
+                        &socket,
+                        &runtime,
+                        item,
+                        &stats,
+                        &shutdown,
+                        send_retry_sleep,
+                        send_timeout_ms,
+                    );
                 }
             })
             .expect("Failed to spawn visualization sender thread");
@@ -385,11 +384,13 @@ impl VisualizationStream {
     }
 
     fn send_item(
-        socket: &Arc<Mutex<Option<zmq::Socket>>>,
+        socket: &Arc<Mutex<Option<PubSocket>>>,
+        runtime: &Arc<Runtime>,
         item: VisualizationQueueItem,
         stats: &VisualizationQueueStats,
         shutdown: &Arc<AtomicBool>,
         retry_sleep: Duration,
+        send_timeout_ms: i32,
     ) {
         // Step 1: Serialize raw fire queue data on this worker thread (OFF BURST THREAD!)
         let payload = if let Some(pre_serialized) = item.pre_serialized_payload {
@@ -461,19 +462,25 @@ impl VisualizationStream {
         };
 
         loop {
-            if let Err(e) = sock.send(&item.topic, zmq::SNDMORE) {
-                error!("❌ [ZMQ-VIZ] Topic send failed: {}", e);
-                stats.record_send_failure();
-                return;
-            }
+            let mut message = ZmqMessage::from(compressed.clone());
+            message.prepend(&ZmqMessage::from(item.topic.clone()));
 
-            match sock.send(&compressed, 0) {
+            let send_result = if send_timeout_ms < 0 {
+                runtime.block_on(sock.send(message))
+            } else {
+                runtime
+                    .block_on(timeout(
+                        Duration::from_millis(send_timeout_ms as u64),
+                        sock.send(message),
+                    ))
+                    .map_err(|_| ZmqError::BufferFull("Send timeout"))?
+            };
+
+            match send_result {
                 Ok(()) => {
-                    // DIAGNOSTIC: Track actual ZMQ send rate
                     static SEND_COUNTER: AtomicU64 = AtomicU64::new(0);
                     let count = SEND_COUNTER.fetch_add(1, Ordering::Relaxed);
                     if count.is_multiple_of(30) {
-                        // Log every 30 sends
                         debug!(
                             "[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)",
                             count,
@@ -482,7 +489,7 @@ impl VisualizationStream {
                     }
                     break;
                 }
-                Err(zmq::Error::EAGAIN) => {
+                Err(ZmqError::BufferFull(_)) => {
                     let waits = stats.record_backpressure_wait();
                     if waits == 1 || waits.is_multiple_of(100) {
                         warn!(
@@ -532,9 +539,9 @@ mod tests {
 
     #[test]
     fn test_viz_stream_creation() {
-        let ctx = Arc::new(zmq::Context::new());
+        let runtime = Arc::new(Runtime::new().unwrap());
         let stream = VisualizationStream::new(
-            ctx,
+            runtime,
             "tcp://127.0.0.1:30010",
             VisualizationSendConfig::default(),
         );
