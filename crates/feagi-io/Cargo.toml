@@ -10,7 +10,7 @@ description = "FEAGI I/O System"
 
 [features]
 default = ["zmq-transport"]
-zmq-transport = ["dep:zmq"] # Blocking, TCP-based transport
+zmq-transport = ["dep:zeromq"] # Blocking, TCP-based transport
 ws-transport = ["dep:tokio-tungstenite"] # Non-wasm WebSocket implementation
 ws-transport-wasm = [] # WASM WebSocket implementation
 udp-transport = []
@@ -57,7 +57,8 @@ feagi-serialization = { workspace = true }
 
 # Specific Dependencies
 #ZMQ
-zmq = { version = "0.10.0", optional = true }  # ZMQ transport
+
+zeromq = { version = "0.4.1", optional = true }  # ZMQ transport
 
 # Websocket (nonwasm)
 tokio-tungstenite = { version = "0.28", optional = true }  # WebSocket transport

@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use crate::FeagiNetworkError;
 use crate::traits_and_enums::client::FeagiClient;
 
@@ -13,7 +15,8 @@ pub trait FeagiClientRequester: FeagiClient {
     ///
     /// # Errors
     /// Returns an error if the request cannot be sent.
-    fn send_request(&self, request: &[u8]) -> Result<(), FeagiNetworkError>;
+    fn send_request(&self, request: &[u8]) -> impl Future<Output = Result<(), FeagiNetworkError>>;
 
-    fn try_poll_receive(&mut self) -> Result<Option<&[u8]>, FeagiNetworkError>;
+    /// Poll after sending a request to get the response
+    fn get_response(&mut self) -> impl Future<Output = Result<&[u8], FeagiNetworkError>>;
 }

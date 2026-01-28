@@ -1,16 +1,8 @@
-use crate::io_api::implementations::zmq::shared_functions::validate_zmq_url;
-use crate::io_api::traits_and_enums::client::client_shared::FeagiClientConnectionStateChange;
-use crate::io_api::traits_and_enums::client::{
-    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester,
-    FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties,
-};
-use crate::io_api::{FeagiClientConnectionState, FeagiNetworkError};
-use futures_util::FutureExt;
 use std::future::Future;
-use parking_lot::Mutex;
-use tokio::runtime::{Handle, Runtime};
-use tokio::task::block_in_place;
-use zeromq::{DealerSocket, PushSocket, Socket, SocketRecv, SocketSend, SubSocket, ZmqMessage};
+use crate::FeagiNetworkError;
+use crate::implementations::zmq::shared_functions::validate_zmq_url;
+use crate::traits_and_enums::client::client_shared::{FeagiClientConnectionState, FeagiClientConnectionStateChange};
+use crate::traits_and_enums::client::{FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester, FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties};
 
 /// Type alias for the client state change callback.
 type StateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static>;

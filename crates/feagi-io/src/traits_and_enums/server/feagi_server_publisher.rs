@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use crate::FeagiNetworkError;
 use crate::traits_and_enums::server::FeagiServer;
 
@@ -15,7 +17,7 @@ pub trait FeagiServerPublisher: FeagiServer {
     ///
     /// # Errors
     /// Returns an error if the polling operation fails.
-    fn poll(&mut self) -> Result<(), FeagiNetworkError>;
+    fn poll(&mut self) -> impl Future<Output = Result<(), FeagiNetworkError>>;
 
     /// Broadcasts data to all connected subscribers.
     ///
@@ -24,5 +26,5 @@ pub trait FeagiServerPublisher: FeagiServer {
     ///
     /// # Errors
     /// Returns [`FeagiNetworkError::SendFailed`] if the data cannot be sent.
-    fn publish(&mut self, buffered_data_to_send: &[u8]) -> Result<(), FeagiNetworkError>;
+    fn publish(&mut self, buffered_data_to_send: &[u8]) -> impl Future<Output = Result<(), FeagiNetworkError>>;
 }

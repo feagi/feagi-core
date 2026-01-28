@@ -1,9 +1,12 @@
+
+/// Describes if a server socket is actively bound or not
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum FeagiServerBindState {
     Inactive,
     Active,
 }
 
+/// Describes the previous and now current server socket bind state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FeagiServerBindStateChange {
     previous: FeagiServerBindState,
