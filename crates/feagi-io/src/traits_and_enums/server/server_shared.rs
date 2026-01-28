@@ -24,5 +24,3 @@ impl FeagiServerBindStateChange {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ClientId(pub u64);
