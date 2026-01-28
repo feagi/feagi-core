@@ -101,6 +101,7 @@ pub struct AgentListResponse {
 /// Agent properties response
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AgentPropertiesResponse {
+    pub agent_name: String,
     pub agent_type: String,
     pub agent_ip: String,
     pub agent_data_port: u16,
@@ -115,6 +116,7 @@ pub struct AgentPropertiesResponse {
 /// Agent capabilities summary (optionally includes device registrations)
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AgentCapabilitiesSummary {
+    pub agent_name: String,
     pub capabilities: HashMap<String, serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub device_registrations: Option<serde_json::Value>,

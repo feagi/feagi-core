@@ -71,6 +71,9 @@ pub struct HealthCheckResponse {
     /// Hash of cortical mappings
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_mappings_hash: Option<u64>,
+    /// Hash of agent data (ids, capabilities, connection properties)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_data_hash: Option<u64>,
     /// Root brain region ID (UUID string) for O(1) root lookup
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brain_regions_root: Option<String>,
@@ -123,6 +126,7 @@ pub async fn get_health_check(
     } else {
         None
     };
+
 
     // Get total synapse count from analytics service
     let synapse_count = analytics_service
@@ -288,6 +292,7 @@ pub async fn get_health_check(
         brain_geometry_hash,
         morphologies_hash,
         cortical_mappings_hash,
+        agent_data_hash,
     ) = {
         let state_manager = feagi_state_manager::StateManager::instance();
         let state_manager = state_manager.read();
@@ -297,6 +302,7 @@ pub async fn get_health_check(
             Some(state_manager.get_brain_geometry_hash()),
             Some(state_manager.get_morphologies_hash()),
             Some(state_manager.get_cortical_mappings_hash()),
+            Some(state_manager.get_agent_data_hash()),
         )
     };
 
@@ -328,6 +334,7 @@ pub async fn get_health_check(
         brain_geometry_hash,
         morphologies_hash,
         cortical_mappings_hash,
+        agent_data_hash,
         brain_regions_root, // NEW: Root region ID for O(1) lookup
         fatigue,
     }))

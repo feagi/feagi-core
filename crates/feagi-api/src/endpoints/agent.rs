@@ -46,6 +46,27 @@ fn parse_agent_descriptor(agent_id: &str) -> ApiResult<AgentDescriptor> {
     })
 }
 
+fn get_agent_name_from_id(agent_id: &str) -> ApiResult<String> {
+    #[cfg(feature = "feagi-agent")]
+    {
+        let descriptor = parse_agent_descriptor(agent_id)?;
+        let agent_name = descriptor.agent_name().to_string();
+        if agent_name.is_empty() {
+            return Err(ApiError::invalid_input(format!(
+                "Agent '{}' does not contain a readable name",
+                agent_id
+            )));
+        }
+        return Ok(agent_name);
+    }
+    #[cfg(not(feature = "feagi-agent"))]
+    {
+        Err(ApiError::internal(
+            "Agent name requires feagi-agent feature".to_string(),
+        ))
+    }
+}
+
 #[cfg(feature = "feagi-agent")]
 async fn auto_create_cortical_areas_from_device_registrations(
     state: &ApiState,
@@ -795,8 +816,10 @@ pub async fn get_agent_properties(
         .as_ref()
         .ok_or_else(|| ApiError::internal("Agent service not available"))?;
 
+    let agent_name = get_agent_name_from_id(agent_id)?;
     match agent_service.get_agent_properties(agent_id).await {
         Ok(properties) => Ok(Json(AgentPropertiesResponse {
+            agent_name,
             agent_type: properties.agent_type,
             agent_ip: properties.agent_ip,
             agent_data_port: properties.agent_data_port,
@@ -1140,6 +1163,7 @@ pub async fn get_all_agent_capabilities(
     let mut response: HashMap<String, AgentCapabilitiesSummary> = HashMap::new();
 
     for agent_id in agent_ids {
+        let agent_name = get_agent_name_from_id(&agent_id)?;
         let properties = match agent_service.get_agent_properties(&agent_id).await {
             Ok(props) => props,
             Err(_) => continue,
@@ -1172,10 +1196,10 @@ pub async fn get_all_agent_capabilities(
         } else {
             None
         };
-
         response.insert(
             agent_id,
             AgentCapabilitiesSummary {
+                agent_name,
                 capabilities: properties.capabilities,
                 device_registrations,
             },
@@ -1244,6 +1268,10 @@ pub async fn get_agent_info(
     let mut response = HashMap::new();
     response.insert("agent_id".to_string(), serde_json::json!(agent_id));
     response.insert(
+        "agent_name".to_string(),
+        serde_json::json!(get_agent_name_from_id(&agent_id)?),
+    );
+    response.insert(
         "agent_type".to_string(),
         serde_json::json!(properties.agent_type),
     );
@@ -1300,6 +1328,7 @@ pub async fn get_agent_properties_path(
 
     match agent_service.get_agent_properties(&agent_id).await {
         Ok(properties) => Ok(Json(AgentPropertiesResponse {
+            agent_name: get_agent_name_from_id(&agent_id)?,
             agent_type: properties.agent_type,
             agent_ip: properties.agent_ip,
             agent_data_port: properties.agent_data_port,

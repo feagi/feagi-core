@@ -2028,11 +2028,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
- "bincode",
  "crossbeam",
- "feagi-brain-development",
  "feagi-npu-burst-engine",
- "feagi-npu-neural",
  "feagi-serialization",
  "feagi-services",
  "feagi-structures",
@@ -2168,7 +2165,9 @@ dependencies = [
 name = "feagi-services"
 version = "0.0.1-beta.4"
 dependencies = [
+ "ahash",
  "async-trait",
+ "bincode",
  "chrono",
  "feagi-brain-development",
  "feagi-evolutionary",
@@ -2179,9 +2178,11 @@ dependencies = [
  "feagi-observability",
  "feagi-state-manager",
  "feagi-structures",
+ "lz4",
  "parking_lot",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tracing",

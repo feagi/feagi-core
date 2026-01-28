@@ -266,6 +266,16 @@ impl StateManager {
         self.hash_state.set_cortical_mappings_hash(value)
     }
 
+    /// Get agent data hash.
+    pub fn get_agent_data_hash(&self) -> u64 {
+        self.hash_state.get_agent_data_hash()
+    }
+
+    /// Set agent data hash.
+    pub fn set_agent_data_hash(&self, value: u64) {
+        self.hash_state.set_agent_data_hash(value)
+    }
+
     // ===== Agent Management =====
 
     /// Register a new agent
