@@ -536,6 +536,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        let deleted_id_base64 = cortical_id_typed.as_base_64();
+        let deleted_cortical_idx = {
+            let manager = self.connectome.read();
+            manager.get_cortical_idx(&cortical_id_typed)
+        };
+        let mut region_io: Option<std::collections::HashMap<String, (Vec<String>, Vec<String>)>> =
+            None;
+        let mut removed_mapping_count = 0usize;
+        let mut removed_upstream_count = 0usize;
 
         // Remove from the live connectome, and also scrub from brain-region membership
         // so UI + region-based operations don't keep referencing a deleted area.
@@ -558,6 +567,57 @@ impl ConnectomeService for ConnectomeServiceImpl {
             manager
                 .remove_cortical_area(&cortical_id_typed)
                 .map_err(ServiceError::from)?;
+
+            // Scrub any remaining mappings that target the deleted area to avoid stale UI state.
+            let cortical_ids: Vec<CorticalID> = manager
+                .get_cortical_area_ids()
+                .into_iter()
+                .cloned()
+                .collect();
+            for src_id in cortical_ids {
+                let has_mapping = manager
+                    .get_cortical_area(&src_id)
+                    .and_then(|area| area.properties.get("cortical_mapping_dst"))
+                    .and_then(|value| value.as_object())
+                    .map(|mapping| mapping.contains_key(&deleted_id_base64))
+                    .unwrap_or(false);
+                if has_mapping {
+                    manager
+                        .update_cortical_mapping(&src_id, &cortical_id_typed, Vec::new())
+                        .map_err(ServiceError::from)?;
+                    removed_mapping_count += 1;
+                }
+
+                if let Some(deleted_idx) = deleted_cortical_idx {
+                    if let Some(area) = manager.get_cortical_area_mut(&src_id) {
+                        if let Some(upstream) = area
+                            .properties
+                            .get_mut("upstream_cortical_areas")
+                            .and_then(|value| value.as_array_mut())
+                        {
+                            let before = upstream.len();
+                            upstream.retain(|value| {
+                                value
+                                    .as_u64()
+                                    .map(|id| id != deleted_idx as u64)
+                                    .unwrap_or(true)
+                            });
+                            if upstream.len() != before {
+                                removed_upstream_count += before - upstream.len();
+                            }
+                        }
+                    }
+                }
+            }
+
+            region_io = Some(
+                manager.recompute_brain_region_io_registry().map_err(|e| {
+                    ServiceError::Backend(format!(
+                        "Failed to recompute region IO registry: {}",
+                        e
+                    ))
+                })?,
+            );
         }
 
         // CRITICAL: Persist deletion into RuntimeGenome (source of truth for save/export).
@@ -565,6 +625,54 @@ impl ConnectomeService for ConnectomeServiceImpl {
             let removed = genome.cortical_areas.remove(&cortical_id_typed).is_some();
             for region in genome.brain_regions.values_mut() {
                 region.remove_area(&cortical_id_typed);
+            }
+            for area in genome.cortical_areas.values_mut() {
+                update_cortical_mapping_dst_in_properties(
+                    &mut area.properties,
+                    &deleted_id_base64,
+                    &[],
+                )?;
+                if let Some(deleted_idx) = deleted_cortical_idx {
+                    if let Some(upstream) = area
+                        .properties
+                        .get_mut("upstream_cortical_areas")
+                        .and_then(|value| value.as_array_mut())
+                    {
+                        upstream.retain(|value| {
+                            value
+                                .as_u64()
+                                .map(|id| id != deleted_idx as u64)
+                                .unwrap_or(true)
+                        });
+                    }
+                }
+            }
+            if let Some(region_io) = region_io {
+                for (region_id, (inputs, outputs)) in region_io {
+                    if let Some(region) = genome.brain_regions.get_mut(&region_id) {
+                        if inputs.is_empty() {
+                            region.properties.remove("inputs");
+                        } else {
+                            region
+                                .properties
+                                .insert("inputs".to_string(), serde_json::json!(inputs));
+                        }
+
+                        if outputs.is_empty() {
+                            region.properties.remove("outputs");
+                        } else {
+                            region
+                                .properties
+                                .insert("outputs".to_string(), serde_json::json!(outputs));
+                        }
+                    } else {
+                        warn!(
+                            target: "feagi-services",
+                            "Region '{}' not found in RuntimeGenome while persisting IO registry",
+                            region_id
+                        );
+                    }
+                }
             }
 
             if removed {
@@ -584,6 +692,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
             warn!(
                 target: "feagi-services",
                 "[GENOME-UPDATE] No RuntimeGenome loaded - deletion will not persist to saved genome"
+            );
+        }
+        if removed_mapping_count > 0 || removed_upstream_count > 0 {
+            info!(
+                target: "feagi-services",
+                "Deleted area cleanup: {} mapping references removed, {} upstream references pruned",
+                removed_mapping_count,
+                removed_upstream_count
             );
         }
 

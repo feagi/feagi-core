@@ -112,6 +112,28 @@ pub struct AgentPropertiesResponse {
     pub chosen_transport: Option<String>,
 }
 
+/// Agent capabilities summary (optionally includes device registrations)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AgentCapabilitiesSummary {
+    pub capabilities: HashMap<String, serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_registrations: Option<serde_json::Value>,
+}
+
+/// Query parameters for bulk agent capabilities lookup
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AgentCapabilitiesAllQuery {
+    /// Filter by agent type (exact match)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_type: Option<String>,
+    /// Filter by capability key(s), comma-separated
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capability: Option<String>,
+    /// Include device registration payloads per agent
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_device_registrations: Option<bool>,
+}
+
 /// Agent deregistration request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AgentDeregistrationRequest {
