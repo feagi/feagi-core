@@ -800,6 +800,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
             &CorticalID::try_from_base_64(cortical_id)
                 .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
         );
+        let incoming_synapse_count =
+            manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
 
         // Get cortical_group from the area (uses cortical_type_new if available)
         let cortical_group = area.get_cortical_group();
@@ -939,6 +941,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
             },
             neuron_count,
             synapse_count,
+            incoming_synapse_count,
+            outgoing_synapse_count: synapse_count,
             // All neural parameters come from the actual CorticalArea struct
             visible: area.visible(),
             sub_group: area.sub_group(),

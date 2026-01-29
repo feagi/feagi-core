@@ -3358,6 +3358,36 @@ impl ConnectomeManager {
             .unwrap_or(0)
     }
 
+    /// Get total incoming synapse count for a specific cortical area.
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - The cortical area ID
+    ///
+    /// # Returns
+    ///
+    /// Total number of incoming synapses targeting neurons in this area.
+    pub fn get_incoming_synapse_count_in_area(&self, cortical_id: &CorticalID) -> usize {
+        let cortical_idx = match self.cortical_id_to_idx.get(cortical_id) {
+            Some(idx) => *idx,
+            None => return 0,
+        };
+
+        let Some(ref npu) = self.npu else {
+            return 0;
+        };
+
+        let Ok(npu_lock) = npu.lock() else {
+            return 0;
+        };
+
+        let neuron_ids = npu_lock.get_neurons_in_cortical_area(cortical_idx);
+        neuron_ids
+            .iter()
+            .map(|neuron_id| npu_lock.get_incoming_synapses(*neuron_id).len())
+            .sum()
+    }
+
     /// Check if two neurons are connected (source → target)
     ///
     /// # Arguments
