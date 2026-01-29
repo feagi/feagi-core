@@ -3,7 +3,7 @@ use zeromq::{Endpoint, PubSocket, PullSocket, RouterSocket, Socket, SocketRecv, 
 use feagi_serialization::SessionID;
 use crate::FeagiNetworkError;
 use crate::implementations::zmq::shared_functions::validate_zmq_url;
-use crate::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouter, FeagiServerRouterProperties};
+use crate::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
 use crate::traits_and_enums::server::server_shared::{FeagiServerBindState, FeagiServerBindStateChange};
 
 /// Type alias for the server state change callback.
@@ -315,97 +315,3 @@ impl FeagiServerRouter for FEAGIZMQServerRouter {
 
 //endregion
 
-//region Properties
-
-//region Publisher Properties
-
-/// Properties for configuring and building a ZMQ Server Publisher.
-pub struct FEAGIZMQServerPublisherProperties {
-    server_bind_address: String,
-}
-
-impl FEAGIZMQServerPublisherProperties {
-    /// Create new properties with the given bind address.
-    pub fn new(server_bind_address: String) -> Self {
-        Self {
-            server_bind_address,
-        }
-    }
-}
-
-impl FeagiServerPublisherProperties for FEAGIZMQServerPublisherProperties {
-    fn build(
-        self: Box<Self>,
-        state_change_callback: StateChangeCallback,
-    ) -> Box<dyn FeagiServerPublisher> {
-        let publisher =
-            FEAGIZMQServerPublisher::new(self.server_bind_address, state_change_callback)
-                .expect("Failed to create ZMQ publisher");
-
-        Box::new(publisher)
-    }
-}
-
-//endregion
-
-//region Puller Properties
-
-/// Properties for configuring and building a ZMQ Server Puller.
-pub struct FEAGIZMQServerPullerProperties {
-    server_bind_address: String,
-}
-
-impl FEAGIZMQServerPullerProperties {
-    /// Create new properties with the given bind address.
-    pub fn new(server_bind_address: String) -> Self {
-        Self {
-            server_bind_address,
-        }
-    }
-}
-
-impl FeagiServerPullerProperties for FEAGIZMQServerPullerProperties {
-    fn build(
-        self: Box<Self>,
-        state_change_callback: StateChangeCallback,
-    ) -> Box<dyn FeagiServerPuller> {
-        let puller = FEAGIZMQServerPuller::new(self.server_bind_address, state_change_callback)
-            .expect("Failed to create ZMQ puller");
-
-        Box::new(puller)
-    }
-}
-
-//endregion
-
-//region Router Properties
-
-/// Properties for configuring and building a ZMQ Server Router.
-pub struct FEAGIZMQServerRouterProperties {
-    server_bind_address: String,
-}
-
-impl FEAGIZMQServerRouterProperties {
-    /// Create new properties with the given bind address.
-    pub fn new(server_bind_address: String) -> Self {
-        Self {
-            server_bind_address,
-        }
-    }
-}
-
-impl FeagiServerRouterProperties for FEAGIZMQServerRouterProperties {
-    fn build(
-        self: Box<Self>,
-        state_change_callback: StateChangeCallback,
-    ) -> Box<dyn FeagiServerRouter> {
-        let router = FEAGIZMQServerRouter::new(self.server_bind_address, state_change_callback)
-            .expect("Failed to create ZMQ router");
-
-        Box::new(router)
-    }
-}
-
-//endregion
-
-//endregion
