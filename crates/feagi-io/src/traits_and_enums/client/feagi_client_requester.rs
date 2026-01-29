@@ -15,7 +15,7 @@ pub trait FeagiClientRequester: FeagiClient {
     ///
     /// # Errors
     /// Returns an error if the request cannot be sent.
-    fn send_request(&self, request: &[u8]) -> impl Future<Output = Result<(), FeagiNetworkError>>;
+    fn send_request(&mut self, request: &[u8]) -> impl Future<Output = Result<(), FeagiNetworkError>>;
 
     /// Poll after sending a request to get the response
     fn get_response(&mut self) -> impl Future<Output = Result<&[u8], FeagiNetworkError>>;

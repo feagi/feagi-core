@@ -119,7 +119,7 @@ impl FEAGIZMQClientPusher {
 
 impl FeagiClient for FEAGIZMQClientPusher {
     async fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
-        self.socket.await.connect(host).await
+        self.socket.connect(host).await
             .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
         self.server_address = host.to_string();
@@ -189,7 +189,7 @@ impl FEAGIZMQClientRequester {
 
 impl FeagiClient for FEAGIZMQClientRequester {
     async fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
-        self.socket.await.connect(host).await
+        self.socket.connect(host).await
             .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
         self.server_address = host.to_string();

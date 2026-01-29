@@ -3,11 +3,10 @@ mod server_implementations;
 mod shared_functions;
 
 pub use client_implementations::{
-    FEAGIZMQClientPusher, FEAGIZMQClientPusherProperties, FEAGIZMQClientRequester,
-    FEAGIZMQClientRequesterProperties, FEAGIZMQClientSubscriber,
-    FEAGIZMQClientSubscriberProperties,
+    FEAGIZMQClientPusher, FEAGIZMQClientRequester,
+    FEAGIZMQClientSubscriber,
 };
 pub use server_implementations::{
-    FEAGIZMQServerPublisher, FEAGIZMQServerPublisherProperties, FEAGIZMQServerPuller,
-    FEAGIZMQServerPullerProperties, FEAGIZMQServerRouter, FEAGIZMQServerRouterProperties,
+    FEAGIZMQServerPublisher, FEAGIZMQServerPuller,
+    FEAGIZMQServerRouter,
 };
