@@ -1,3 +1,4 @@
+use feagi_io::traits_and_enums::server::FeagiServerRouter;
 use feagi_serialization::SessionID;
 
 pub struct AgentRegistry {
@@ -9,7 +10,7 @@ impl AgentRegistry {
         todo!()
     }
 
-    pub fn set_registry_endpoint(&mut self) {
+    pub fn set_registry_endpoint(&mut self, router: Box<dyn FeagiServerRouter>) {
         todo!()
     }
 
