@@ -1,4 +1,4 @@
-use std::future::Future;
+use async_trait::async_trait;
 
 use crate::FeagiNetworkError;
 use crate::traits_and_enums::client::FeagiClient;
@@ -7,6 +7,7 @@ use crate::traits_and_enums::client::FeagiClient;
 ///
 /// Implements the request-reply pattern where the client sends a request
 /// and waits for (or polls for) a response from the server.
+#[async_trait]
 pub trait FeagiClientRequester: FeagiClient {
     /// Send a request to the server.
     ///
@@ -15,8 +16,10 @@ pub trait FeagiClientRequester: FeagiClient {
     ///
     /// # Errors
     /// Returns an error if the request cannot be sent.
-    fn send_request(&mut self, request: &[u8]) -> impl Future<Output = Result<(), FeagiNetworkError>>;
+    async fn send_request(&mut self, request: &[u8]) -> Result<(), FeagiNetworkError>;
 
-    /// Poll after sending a request to get the response
-    fn get_response(&mut self) -> impl Future<Output = Result<&[u8], FeagiNetworkError>>;
+    /// Poll after sending a request to get the response.
+    ///
+    /// Returns owned data (`Vec<u8>`) to ensure object-safety with `dyn` trait objects.
+    async fn get_response(&mut self) -> Result<Vec<u8>, FeagiNetworkError>;
 }

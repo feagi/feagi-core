@@ -1,10 +1,13 @@
 use std::collections::HashMap;
-use zeromq::{Endpoint, PubSocket, PullSocket, RouterSocket, Socket, SocketRecv, SocketSend, ZmqMessage};
+
+use async_trait::async_trait;
 use feagi_serialization::SessionID;
+use zeromq::{Endpoint, PubSocket, PullSocket, RouterSocket, Socket, SocketRecv, SocketSend, ZmqMessage};
+
 use crate::FeagiNetworkError;
 use crate::implementations::zmq::shared_functions::validate_zmq_url;
-use crate::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
 use crate::traits_and_enums::server::server_shared::{FeagiServerBindState, FeagiServerBindStateChange};
+use crate::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
 
 /// Type alias for the server state change callback.
 type StateChangeCallback = Box<dyn Fn(FeagiServerBindStateChange) + Send + Sync + 'static>;
@@ -23,6 +26,7 @@ fn message_to_single_frame(message: ZmqMessage) -> Result<Vec<u8>, FeagiNetworkE
 }
 
 //region Publisher
+
 pub struct FEAGIZMQServerPublisher {
     server_bind_address: String,
     current_state: FeagiServerBindState,
@@ -32,7 +36,6 @@ pub struct FEAGIZMQServerPublisher {
 }
 
 impl FEAGIZMQServerPublisher {
-
     pub fn new(
         server_bind_address: String,
         state_change_callback: StateChangeCallback,
@@ -49,9 +52,13 @@ impl FEAGIZMQServerPublisher {
     }
 }
 
+#[async_trait]
 impl FeagiServer for FEAGIZMQServerPublisher {
     async fn start(&mut self) -> Result<(), FeagiNetworkError> {
-        let endpoint = self.socket.bind(&self.server_bind_address).await
+        let endpoint = self
+            .socket
+            .bind(&self.server_bind_address)
+            .await
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.bound_endpoint = Some(endpoint);
         self.current_state = FeagiServerBindState::Active;
@@ -64,7 +71,9 @@ impl FeagiServer for FEAGIZMQServerPublisher {
 
     async fn stop(&mut self) -> Result<(), FeagiNetworkError> {
         if let Some(endpoint) = self.bound_endpoint.take() {
-            self.socket.unbind(endpoint).await
+            self.socket
+                .unbind(endpoint)
+                .await
                 .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
         }
         self.current_state = FeagiServerBindState::Inactive;
@@ -80,6 +89,7 @@ impl FeagiServer for FEAGIZMQServerPublisher {
     }
 }
 
+#[async_trait]
 impl FeagiServerPublisher for FEAGIZMQServerPublisher {
     async fn poll(&mut self) -> Result<(), FeagiNetworkError> {
         // ZMQ handles connections internally - no-op
@@ -88,11 +98,14 @@ impl FeagiServerPublisher for FEAGIZMQServerPublisher {
 
     async fn publish(&mut self, buffered_data_to_send: &[u8]) -> Result<(), FeagiNetworkError> {
         let message = ZmqMessage::from(buffered_data_to_send.to_vec());
-        self.socket.send(message).await
+        self.socket
+            .send(message)
+            .await
             .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
         Ok(())
     }
 }
+
 //endregion
 
 //region Puller
@@ -103,7 +116,6 @@ pub struct FEAGIZMQServerPuller {
     state_change_callback: StateChangeCallback,
     socket: PullSocket,
     bound_endpoint: Option<Endpoint>,
-    cached_data: Vec<u8>,
 }
 
 impl FEAGIZMQServerPuller {
@@ -119,14 +131,17 @@ impl FEAGIZMQServerPuller {
             state_change_callback,
             socket: PullSocket::new(),
             bound_endpoint: None,
-            cached_data: Vec::new(),
         })
     }
 }
 
+#[async_trait]
 impl FeagiServer for FEAGIZMQServerPuller {
     async fn start(&mut self) -> Result<(), FeagiNetworkError> {
-        let endpoint = self.socket.bind(&self.server_bind_address).await
+        let endpoint = self
+            .socket
+            .bind(&self.server_bind_address)
+            .await
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.bound_endpoint = Some(endpoint);
         self.current_state = FeagiServerBindState::Active;
@@ -139,7 +154,9 @@ impl FeagiServer for FEAGIZMQServerPuller {
 
     async fn stop(&mut self) -> Result<(), FeagiNetworkError> {
         if let Some(endpoint) = self.bound_endpoint.take() {
-            self.socket.unbind(endpoint).await
+            self.socket
+                .unbind(endpoint)
+                .await
                 .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
         }
         self.current_state = FeagiServerBindState::Inactive;
@@ -155,13 +172,11 @@ impl FeagiServer for FEAGIZMQServerPuller {
     }
 }
 
+#[async_trait]
 impl FeagiServerPuller for FEAGIZMQServerPuller {
-    async fn try_poll_receive(&mut self) -> Result<&[u8], FeagiNetworkError> {
+    async fn try_poll_receive(&mut self) -> Result<Vec<u8>, FeagiNetworkError> {
         match self.socket.recv().await {
-            Ok(message) => {
-                self.cached_data = message_to_single_frame(message)?;
-                Ok(&self.cached_data)
-            }
+            Ok(message) => message_to_single_frame(message),
             Err(e) => Err(FeagiNetworkError::ReceiveFailed(e.to_string())),
         }
     }
@@ -182,9 +197,6 @@ pub struct FEAGIZMQServerRouter {
     // Bidirectional mapping between SessionID and ZMQ identity
     identity_to_session: HashMap<Vec<u8>, SessionID>,
     session_to_identity: HashMap<[u8; SessionID::NUMBER_BYTES], Vec<u8>>,
-    // Cached request data
-    cached_request_data: Vec<u8>,
-    last_session_id: Option<SessionID>,
 }
 
 impl FEAGIZMQServerRouter {
@@ -203,8 +215,6 @@ impl FEAGIZMQServerRouter {
             next_client_id: 1, // Start from 1, reserve 0 for "no client"
             identity_to_session: HashMap::new(),
             session_to_identity: HashMap::new(),
-            cached_request_data: Vec::new(),
-            last_session_id: None,
         })
     }
 
@@ -224,9 +234,13 @@ impl FEAGIZMQServerRouter {
     }
 }
 
+#[async_trait]
 impl FeagiServer for FEAGIZMQServerRouter {
     async fn start(&mut self) -> Result<(), FeagiNetworkError> {
-        let endpoint = self.socket.bind(&self.server_bind_address).await
+        let endpoint = self
+            .socket
+            .bind(&self.server_bind_address)
+            .await
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.bound_endpoint = Some(endpoint);
         self.current_state = FeagiServerBindState::Active;
@@ -239,14 +253,15 @@ impl FeagiServer for FEAGIZMQServerRouter {
 
     async fn stop(&mut self) -> Result<(), FeagiNetworkError> {
         if let Some(endpoint) = self.bound_endpoint.take() {
-            self.socket.unbind(endpoint).await
+            self.socket
+                .unbind(endpoint)
+                .await
                 .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
         }
         // Clear session mappings when stopping
         self.identity_to_session.clear();
         self.session_to_identity.clear();
         self.next_client_id = 1;
-        self.last_session_id = None;
 
         self.current_state = FeagiServerBindState::Inactive;
         (self.state_change_callback)(FeagiServerBindStateChange::new(
@@ -262,8 +277,9 @@ impl FeagiServer for FEAGIZMQServerRouter {
     }
 }
 
+#[async_trait]
 impl FeagiServerRouter for FEAGIZMQServerRouter {
-    async fn try_poll_receive(&mut self) -> Result<(SessionID, &[u8]), FeagiNetworkError> {
+    async fn try_poll_receive(&mut self) -> Result<(SessionID, Vec<u8>), FeagiNetworkError> {
         let message = match self.socket.recv().await {
             Ok(message) => message,
             Err(e) => return Err(FeagiNetworkError::ReceiveFailed(e.to_string())),
@@ -278,7 +294,11 @@ impl FeagiServerRouter for FEAGIZMQServerRouter {
 
         let identity = frames.remove(0).to_vec();
         let mut payload_frames = frames;
-        if payload_frames.first().map(|frame| frame.is_empty()).unwrap_or(false) {
+        if payload_frames
+            .first()
+            .map(|frame| frame.is_empty())
+            .unwrap_or(false)
+        {
             payload_frames.remove(0);
         }
 
@@ -289,9 +309,8 @@ impl FeagiServerRouter for FEAGIZMQServerRouter {
         }
 
         let session_id = self.get_or_create_session_id(identity);
-        self.last_session_id = Some(session_id);
-        self.cached_request_data = payload_frames.remove(0).to_vec();
-        Ok((session_id, &self.cached_request_data))
+        let data = payload_frames.remove(0).to_vec();
+        Ok((session_id, data))
     }
 
     async fn send_response(
@@ -300,18 +319,22 @@ impl FeagiServerRouter for FEAGIZMQServerRouter {
         response: &[u8],
     ) -> Result<(), FeagiNetworkError> {
         // Look up the ZMQ identity for this SessionID
-        let identity = self.session_to_identity.get(client.bytes()).ok_or_else(|| {
-            FeagiNetworkError::SendFailed(format!("Unknown session ID: {:?}", client))
-        })?;
+        let identity = self
+            .session_to_identity
+            .get(client.bytes())
+            .ok_or_else(|| {
+                FeagiNetworkError::SendFailed(format!("Unknown session ID: {:?}", client))
+            })?;
 
         let mut message = ZmqMessage::from(response.to_vec());
         message.prepend(&ZmqMessage::from(Vec::new()));
         message.prepend(&ZmqMessage::from(identity.clone()));
-        self.socket.send(message).await
+        self.socket
+            .send(message)
+            .await
             .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
         Ok(())
     }
 }
 
 //endregion
-

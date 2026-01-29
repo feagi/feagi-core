@@ -1,12 +1,14 @@
 //! WebSocket client implementations for FEAGI network traits.
+//!
+//! Uses `async-tungstenite` with `async-net` for runtime-agnostic async WebSocket communication.
 
-use async_tungstenite::tokio::connect_async;
+use async_net::TcpStream;
+use async_trait::async_trait;
 use async_tungstenite::tungstenite::Message;
-use async_tungstenite::WebSocketStream;
+use async_tungstenite::{client_async, WebSocketStream};
 use futures_util::{SinkExt, StreamExt};
-use tokio::net::TcpStream;
-use tokio_tungstenite::MaybeTlsStream;
 
+use super::shared_functions::{extract_host_port, normalize_ws_url};
 use crate::traits_and_enums::client::client_shared::{
     FeagiClientConnectionState, FeagiClientConnectionStateChange,
 };
@@ -18,8 +20,8 @@ use crate::FeagiNetworkError;
 /// Type alias for the client state change callback.
 type StateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static>;
 
-/// Type alias for the WebSocket stream (handles both plain and TLS connections).
-type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
+/// Type alias for the WebSocket stream using async-net's TcpStream.
+type WsStream = WebSocketStream<TcpStream>;
 
 //region Subscriber
 
@@ -29,7 +31,6 @@ pub struct FEAGIWebSocketClientSubscriber {
     current_state: FeagiClientConnectionState,
     state_change_callback: StateChangeCallback,
     socket: Option<WsStream>,
-    cached_data: Vec<u8>,
 }
 
 impl FEAGIWebSocketClientSubscriber {
@@ -42,20 +43,23 @@ impl FEAGIWebSocketClientSubscriber {
             current_state: FeagiClientConnectionState::Disconnected,
             state_change_callback,
             socket: None,
-            cached_data: Vec::new(),
         })
     }
 }
 
+#[async_trait]
 impl FeagiClient for FEAGIWebSocketClientSubscriber {
     async fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
-        let url = if host.starts_with("ws://") || host.starts_with("wss://") {
-            host.to_string()
-        } else {
-            format!("ws://{}", host)
-        };
+        let url = normalize_ws_url(host);
+        let host_port = extract_host_port(&url)?;
 
-        let (ws_stream, _response) = connect_async(&url)
+        // Connect TCP stream using async-net (runtime-agnostic)
+        let tcp_stream = TcpStream::connect(&host_port)
+            .await
+            .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
+
+        // Perform WebSocket handshake
+        let (ws_stream, _response) = client_async(&url, tcp_stream)
             .await
             .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
@@ -88,8 +92,9 @@ impl FeagiClient for FEAGIWebSocketClientSubscriber {
     }
 }
 
+#[async_trait]
 impl FeagiClientSubscriber for FEAGIWebSocketClientSubscriber {
-    async fn get_subscribed_data(&mut self) -> Result<&[u8], FeagiNetworkError> {
+    async fn get_subscribed_data(&mut self) -> Result<Vec<u8>, FeagiNetworkError> {
         let socket = self
             .socket
             .as_mut()
@@ -98,12 +103,10 @@ impl FeagiClientSubscriber for FEAGIWebSocketClientSubscriber {
         loop {
             match socket.next().await {
                 Some(Ok(Message::Binary(data))) => {
-                    self.cached_data = data;
-                    return Ok(&self.cached_data);
+                    return Ok(data);
                 }
                 Some(Ok(Message::Text(text))) => {
-                    self.cached_data = text.into_bytes();
-                    return Ok(&self.cached_data);
+                    return Ok(text.into_bytes());
                 }
                 Some(Ok(Message::Close(_))) => {
                     let previous = self.current_state;
@@ -165,15 +168,17 @@ impl FEAGIWebSocketClientPusher {
     }
 }
 
+#[async_trait]
 impl FeagiClient for FEAGIWebSocketClientPusher {
     async fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
-        let url = if host.starts_with("ws://") || host.starts_with("wss://") {
-            host.to_string()
-        } else {
-            format!("ws://{}", host)
-        };
+        let url = normalize_ws_url(host);
+        let host_port = extract_host_port(&url)?;
 
-        let (ws_stream, _response) = connect_async(&url)
+        let tcp_stream = TcpStream::connect(&host_port)
+            .await
+            .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
+
+        let (ws_stream, _response) = client_async(&url, tcp_stream)
             .await
             .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
@@ -206,6 +211,7 @@ impl FeagiClient for FEAGIWebSocketClientPusher {
     }
 }
 
+#[async_trait]
 impl FeagiClientPusher for FEAGIWebSocketClientPusher {
     async fn push_data(&mut self, data: &[u8]) -> Result<(), FeagiNetworkError> {
         let socket = self
@@ -233,7 +239,6 @@ pub struct FEAGIWebSocketClientRequester {
     current_state: FeagiClientConnectionState,
     state_change_callback: StateChangeCallback,
     socket: Option<WsStream>,
-    cached_response_data: Vec<u8>,
 }
 
 impl FEAGIWebSocketClientRequester {
@@ -246,20 +251,21 @@ impl FEAGIWebSocketClientRequester {
             current_state: FeagiClientConnectionState::Disconnected,
             state_change_callback,
             socket: None,
-            cached_response_data: Vec::new(),
         })
     }
 }
 
+#[async_trait]
 impl FeagiClient for FEAGIWebSocketClientRequester {
     async fn connect(&mut self, host: &str) -> Result<(), FeagiNetworkError> {
-        let url = if host.starts_with("ws://") || host.starts_with("wss://") {
-            host.to_string()
-        } else {
-            format!("ws://{}", host)
-        };
+        let url = normalize_ws_url(host);
+        let host_port = extract_host_port(&url)?;
 
-        let (ws_stream, _response) = connect_async(&url)
+        let tcp_stream = TcpStream::connect(&host_port)
+            .await
+            .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
+
+        let (ws_stream, _response) = client_async(&url, tcp_stream)
             .await
             .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
@@ -292,6 +298,7 @@ impl FeagiClient for FEAGIWebSocketClientRequester {
     }
 }
 
+#[async_trait]
 impl FeagiClientRequester for FEAGIWebSocketClientRequester {
     async fn send_request(&mut self, request: &[u8]) -> Result<(), FeagiNetworkError> {
         let socket = self
@@ -308,7 +315,7 @@ impl FeagiClientRequester for FEAGIWebSocketClientRequester {
         Ok(())
     }
 
-    async fn get_response(&mut self) -> Result<&[u8], FeagiNetworkError> {
+    async fn get_response(&mut self) -> Result<Vec<u8>, FeagiNetworkError> {
         let socket = self
             .socket
             .as_mut()
@@ -317,12 +324,10 @@ impl FeagiClientRequester for FEAGIWebSocketClientRequester {
         loop {
             match socket.next().await {
                 Some(Ok(Message::Binary(data))) => {
-                    self.cached_response_data = data;
-                    return Ok(&self.cached_response_data);
+                    return Ok(data);
                 }
                 Some(Ok(Message::Text(text))) => {
-                    self.cached_response_data = text.into_bytes();
-                    return Ok(&self.cached_response_data);
+                    return Ok(text.into_bytes());
                 }
                 Some(Ok(Message::Close(_))) => {
                     let previous = self.current_state;

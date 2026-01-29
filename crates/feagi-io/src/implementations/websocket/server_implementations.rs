@@ -1,15 +1,15 @@
 //! WebSocket server implementations for FEAGI network traits.
 //!
-//! Uses `async-tungstenite` with tokio for async WebSocket communication.
+//! Uses `async-tungstenite` with `async-net` for runtime-agnostic async WebSocket communication.
 
 use std::collections::HashMap;
 
-use async_tungstenite::tokio::accept_async;
+use async_net::{TcpListener, TcpStream};
+use async_trait::async_trait;
 use async_tungstenite::tungstenite::Message;
-use async_tungstenite::WebSocketStream;
+use async_tungstenite::{accept_async, WebSocketStream};
 use feagi_serialization::SessionID;
 use futures_util::{SinkExt, StreamExt};
-use tokio::net::{TcpListener, TcpStream};
 
 use crate::traits_and_enums::server::server_shared::{
     FeagiServerBindState, FeagiServerBindStateChange,
@@ -22,6 +22,9 @@ use crate::FeagiNetworkError;
 /// Type alias for the server state change callback.
 type StateChangeCallback = Box<dyn Fn(FeagiServerBindStateChange) + Send + Sync + 'static>;
 
+/// Type alias for the WebSocket stream using async-net's TcpStream.
+type WsStream = WebSocketStream<TcpStream>;
+
 //region Publisher
 
 /// WebSocket server that broadcasts messages to all connected clients.
@@ -30,7 +33,7 @@ pub struct FEAGIWebSocketServerPublisher {
     current_state: FeagiServerBindState,
     state_change_callback: StateChangeCallback,
     listener: Option<TcpListener>,
-    clients: Vec<WebSocketStream<TcpStream>>,
+    clients: Vec<WsStream>,
 }
 
 impl FEAGIWebSocketServerPublisher {
@@ -52,7 +55,7 @@ impl FEAGIWebSocketServerPublisher {
         self.clients.len()
     }
 
-    /// Accept any pending connections (non-blocking via try_accept).
+    /// Accept any pending connections (non-blocking check).
     async fn accept_pending_connections(&mut self) -> Result<usize, FeagiNetworkError> {
         let listener = match &self.listener {
             Some(l) => l,
@@ -60,21 +63,25 @@ impl FEAGIWebSocketServerPublisher {
         };
 
         let mut accepted = 0;
+        // Try to accept connections in a non-blocking manner
         loop {
-            match listener.try_accept() {
-                Ok((stream, _addr)) => match accept_async(stream).await {
-                    Ok(ws) => {
-                        self.clients.push(ws);
-                        accepted += 1;
+            // Use poll-like behavior with incoming()
+            match futures_util::poll!(Box::pin(listener.accept())) {
+                std::task::Poll::Ready(Ok((stream, _addr))) => {
+                    match accept_async(stream).await {
+                        Ok(ws) => {
+                            self.clients.push(ws);
+                            accepted += 1;
+                        }
+                        Err(e) => {
+                            eprintln!("WebSocket handshake failed: {}", e);
+                        }
                     }
-                    Err(e) => {
-                        eprintln!("WebSocket handshake failed: {}", e);
-                    }
-                },
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                }
+                std::task::Poll::Ready(Err(_)) => {
                     break;
                 }
-                Err(_) => {
+                std::task::Poll::Pending => {
                     break;
                 }
             }
@@ -83,6 +90,7 @@ impl FEAGIWebSocketServerPublisher {
     }
 }
 
+#[async_trait]
 impl FeagiServer for FEAGIWebSocketServerPublisher {
     async fn start(&mut self) -> Result<(), FeagiNetworkError> {
         let listener = TcpListener::bind(&self.bind_address)
@@ -119,6 +127,7 @@ impl FeagiServer for FEAGIWebSocketServerPublisher {
     }
 }
 
+#[async_trait]
 impl FeagiServerPublisher for FEAGIWebSocketServerPublisher {
     async fn poll(&mut self) -> Result<(), FeagiNetworkError> {
         self.accept_pending_connections().await?;
@@ -155,10 +164,7 @@ pub struct FEAGIWebSocketServerPuller {
     current_state: FeagiServerBindState,
     state_change_callback: StateChangeCallback,
     listener: Option<TcpListener>,
-    clients: Vec<WebSocketStream<TcpStream>>,
-    cached_data: Vec<u8>,
-    /// Index of the client we're currently reading from (round-robin style)
-    current_client_index: usize,
+    clients: Vec<WsStream>,
 }
 
 impl FEAGIWebSocketServerPuller {
@@ -172,12 +178,10 @@ impl FEAGIWebSocketServerPuller {
             state_change_callback,
             listener: None,
             clients: Vec::new(),
-            cached_data: Vec::new(),
-            current_client_index: 0,
         })
     }
 
-    /// Accept any pending connections (non-blocking via try_accept).
+    /// Accept any pending connections.
     async fn accept_pending_connections(&mut self) -> Result<usize, FeagiNetworkError> {
         let listener = match &self.listener {
             Some(l) => l,
@@ -186,28 +190,27 @@ impl FEAGIWebSocketServerPuller {
 
         let mut accepted = 0;
         loop {
-            match listener.try_accept() {
-                Ok((stream, _addr)) => match accept_async(stream).await {
-                    Ok(ws) => {
-                        self.clients.push(ws);
-                        accepted += 1;
+            match futures_util::poll!(Box::pin(listener.accept())) {
+                std::task::Poll::Ready(Ok((stream, _addr))) => {
+                    match accept_async(stream).await {
+                        Ok(ws) => {
+                            self.clients.push(ws);
+                            accepted += 1;
+                        }
+                        Err(e) => {
+                            eprintln!("WebSocket handshake failed: {}", e);
+                        }
                     }
-                    Err(e) => {
-                        eprintln!("WebSocket handshake failed: {}", e);
-                    }
-                },
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    break;
                 }
-                Err(_) => {
-                    break;
-                }
+                std::task::Poll::Ready(Err(_)) => break,
+                std::task::Poll::Pending => break,
             }
         }
         Ok(accepted)
     }
 }
 
+#[async_trait]
 impl FeagiServer for FEAGIWebSocketServerPuller {
     async fn start(&mut self) -> Result<(), FeagiNetworkError> {
         let listener = TcpListener::bind(&self.bind_address)
@@ -243,8 +246,9 @@ impl FeagiServer for FEAGIWebSocketServerPuller {
     }
 }
 
+#[async_trait]
 impl FeagiServerPuller for FEAGIWebSocketServerPuller {
-    async fn try_poll_receive(&mut self) -> Result<&[u8], FeagiNetworkError> {
+    async fn try_poll_receive(&mut self) -> Result<Vec<u8>, FeagiNetworkError> {
         // Accept any pending connections first
         self.accept_pending_connections().await?;
 
@@ -254,29 +258,23 @@ impl FeagiServerPuller for FEAGIWebSocketServerPuller {
             ));
         }
 
-        // Use select to wait for data from any client
-        // For simplicity, we'll iterate through clients and await on each
-        // A more sophisticated approach would use futures::select_all
-        
         let mut failed_indices = Vec::new();
 
         for (i, client) in self.clients.iter_mut().enumerate() {
             loop {
                 match client.next().await {
                     Some(Ok(Message::Binary(data))) => {
-                        self.cached_data = data;
                         // Remove failed clients before returning
                         for idx in failed_indices.into_iter().rev() {
                             self.clients.remove(idx);
                         }
-                        return Ok(&self.cached_data);
+                        return Ok(data);
                     }
                     Some(Ok(Message::Text(text))) => {
-                        self.cached_data = text.into_bytes();
                         for idx in failed_indices.into_iter().rev() {
                             self.clients.remove(idx);
                         }
-                        return Ok(&self.cached_data);
+                        return Ok(text.into_bytes());
                     }
                     Some(Ok(Message::Close(_))) => {
                         failed_indices.push(i);
@@ -319,13 +317,11 @@ pub struct FEAGIWebSocketServerRouter {
     current_state: FeagiServerBindState,
     state_change_callback: StateChangeCallback,
     listener: Option<TcpListener>,
-    clients: Vec<WebSocketStream<TcpStream>>,
+    clients: Vec<WsStream>,
     // Client ID tracking - map client index to SessionID
     next_client_id: u64,
     index_to_session: HashMap<usize, SessionID>,
     session_to_index: HashMap<SessionID, usize>,
-    // Cached request data
-    cached_request_data: Vec<u8>,
 }
 
 impl FEAGIWebSocketServerRouter {
@@ -342,7 +338,6 @@ impl FEAGIWebSocketServerRouter {
             next_client_id: 1,
             index_to_session: HashMap::new(),
             session_to_index: HashMap::new(),
-            cached_request_data: Vec::new(),
         })
     }
 
@@ -353,7 +348,7 @@ impl FEAGIWebSocketServerRouter {
         SessionID::new(id.to_le_bytes())
     }
 
-    /// Accept any pending connections (non-blocking via try_accept).
+    /// Accept any pending connections.
     async fn accept_pending_connections(&mut self) -> Result<usize, FeagiNetworkError> {
         let listener = match &self.listener {
             Some(l) => l,
@@ -362,27 +357,25 @@ impl FEAGIWebSocketServerRouter {
 
         let mut accepted = 0;
         loop {
-            match listener.try_accept() {
-                Ok((stream, _addr)) => match accept_async(stream).await {
-                    Ok(ws) => {
-                        let index = self.clients.len();
-                        let session_id = self.generate_session_id();
+            match futures_util::poll!(Box::pin(listener.accept())) {
+                std::task::Poll::Ready(Ok((stream, _addr))) => {
+                    match accept_async(stream).await {
+                        Ok(ws) => {
+                            let index = self.clients.len();
+                            let session_id = self.generate_session_id();
 
-                        self.clients.push(ws);
-                        self.index_to_session.insert(index, session_id);
-                        self.session_to_index.insert(session_id, index);
-                        accepted += 1;
+                            self.clients.push(ws);
+                            self.index_to_session.insert(index, session_id);
+                            self.session_to_index.insert(session_id, index);
+                            accepted += 1;
+                        }
+                        Err(e) => {
+                            eprintln!("WebSocket handshake failed: {}", e);
+                        }
                     }
-                    Err(e) => {
-                        eprintln!("WebSocket handshake failed: {}", e);
-                    }
-                },
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    break;
                 }
-                Err(_) => {
-                    break;
-                }
+                std::task::Poll::Ready(Err(_)) => break,
+                std::task::Poll::Pending => break,
             }
         }
         Ok(accepted)
@@ -414,6 +407,7 @@ impl FEAGIWebSocketServerRouter {
     }
 }
 
+#[async_trait]
 impl FeagiServer for FEAGIWebSocketServerRouter {
     async fn start(&mut self) -> Result<(), FeagiNetworkError> {
         let listener = TcpListener::bind(&self.bind_address)
@@ -451,8 +445,9 @@ impl FeagiServer for FEAGIWebSocketServerRouter {
     }
 }
 
+#[async_trait]
 impl FeagiServerRouter for FEAGIWebSocketServerRouter {
-    async fn try_poll_receive(&mut self) -> Result<(SessionID, &[u8]), FeagiNetworkError> {
+    async fn try_poll_receive(&mut self) -> Result<(SessionID, Vec<u8>), FeagiNetworkError> {
         // Accept any pending connections first
         self.accept_pending_connections().await?;
 
@@ -468,22 +463,20 @@ impl FeagiServerRouter for FEAGIWebSocketServerRouter {
             loop {
                 match client.next().await {
                     Some(Ok(Message::Binary(data))) => {
-                        self.cached_request_data = data;
                         if let Some(&session_id) = self.index_to_session.get(&i) {
                             // Remove failed clients before returning
                             for idx in failed_indices.into_iter().rev() {
                                 self.remove_client(idx);
                             }
-                            return Ok((session_id, &self.cached_request_data));
+                            return Ok((session_id, data));
                         }
                     }
                     Some(Ok(Message::Text(text))) => {
-                        self.cached_request_data = text.into_bytes();
                         if let Some(&session_id) = self.index_to_session.get(&i) {
                             for idx in failed_indices.into_iter().rev() {
                                 self.remove_client(idx);
                             }
-                            return Ok((session_id, &self.cached_request_data));
+                            return Ok((session_id, text.into_bytes()));
                         }
                     }
                     Some(Ok(Message::Close(_))) => {

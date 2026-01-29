@@ -25,3 +25,6 @@ impl FeagiClientConnectionStateChange {
         self.now
     }
 }
+
+/// Type alias for the client state change callback.
+pub type StateChangeCallback = Box<dyn Fn(FeagiClientConnectionStateChange) + Send + Sync + 'static>;

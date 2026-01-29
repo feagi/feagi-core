@@ -1,4 +1,4 @@
-use std::future::Future;
+use async_trait::async_trait;
 
 use crate::FeagiNetworkError;
 use crate::traits_and_enums::server::server_shared::FeagiServerBindState;
@@ -10,18 +10,19 @@ use crate::traits_and_enums::server::server_shared::FeagiServerBindState;
 ///
 /// All specialized server traits ([`super::FeagiServerPublisher`],
 /// [`super::FeagiServerPuller`], [`super::FeagiServerRouter`]) extend this trait.
-pub trait FeagiServer {
+#[async_trait]
+pub trait FeagiServer: Send + Sync {
     /// Binds the server socket to the configured address and starts listening.
     ///
     /// # Errors
     /// Returns [`FeagiNetworkError::CannotBind`] if the socket cannot bind to the address.
-    fn start(&mut self) -> impl Future<Output = Result<(), FeagiNetworkError>>;
+    async fn start(&mut self) -> Result<(), FeagiNetworkError>;
 
     /// Unbinds the server socket from the address and stops listening.
     ///
     /// # Errors
     /// Returns [`FeagiNetworkError::CannotUnbind`] if the socket cannot be unbound.
-    fn stop(&mut self) -> impl Future<Output = Result<(), FeagiNetworkError>>;
+    async fn stop(&mut self) -> Result<(), FeagiNetworkError>;
 
     /// Returns the current bind state of the server.
     fn get_current_state(&self) -> FeagiServerBindState;

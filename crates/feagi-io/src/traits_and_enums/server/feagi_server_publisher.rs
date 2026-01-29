@@ -1,4 +1,4 @@
-use std::future::Future;
+use async_trait::async_trait;
 
 use crate::FeagiNetworkError;
 use crate::traits_and_enums::server::FeagiServer;
@@ -8,6 +8,7 @@ use crate::traits_and_enums::server::FeagiServer;
 /// Implements the publish-subscribe pattern where the server pushes data
 /// to any number of subscribed clients. Clients receive data passively
 /// without sending requests.
+#[async_trait]
 pub trait FeagiServerPublisher: FeagiServer {
     /// Perform maintenance polling (e.g., accept new connections).
     ///
@@ -17,7 +18,7 @@ pub trait FeagiServerPublisher: FeagiServer {
     ///
     /// # Errors
     /// Returns an error if the polling operation fails.
-    fn poll(&mut self) -> impl Future<Output = Result<(), FeagiNetworkError>>;
+    async fn poll(&mut self) -> Result<(), FeagiNetworkError>;
 
     /// Broadcasts data to all connected subscribers.
     ///
@@ -26,5 +27,5 @@ pub trait FeagiServerPublisher: FeagiServer {
     ///
     /// # Errors
     /// Returns [`FeagiNetworkError::SendFailed`] if the data cannot be sent.
-    fn publish(&mut self, buffered_data_to_send: &[u8]) -> impl Future<Output = Result<(), FeagiNetworkError>>;
+    async fn publish(&mut self, buffered_data_to_send: &[u8]) -> Result<(), FeagiNetworkError>;
 }
