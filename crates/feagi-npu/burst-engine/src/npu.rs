@@ -1378,6 +1378,12 @@ impl<
         potential: f32,
     ) {
         let mut fire_structures = self.fire_structures.lock().unwrap();
+        tracing::debug!(
+            "[NPU] Staging memory injection: neuron_id={} area_idx={} potential={}",
+            neuron_id,
+            cortical_idx,
+            potential
+        );
         fire_structures.pending_memory_injections.push((
             NeuronId(neuron_id),
             cortical_idx,
@@ -1450,6 +1456,13 @@ impl<
             &mut pending_memory,
             &mut fire_structures.pending_memory_injections,
         );
+        if !pending_memory.is_empty() {
+            tracing::debug!(
+                "[NPU] Drained {} pending memory injections for burst {}",
+                pending_memory.len(),
+                burst_count
+            );
+        }
 
         let phase1_start = std::time::Instant::now();
         let injection_result = {
@@ -1475,6 +1488,7 @@ impl<
         // Apply memory neuron injections after Phase 1 (so they’re not affected by Phase 1 staging logic).
         // These become candidates for Phase 2 and will be force-fired by the dynamics layer.
         fire_structures.memory_candidate_cortical_idx.clear();
+        let mut memory_candidate_count = 0usize;
         for (neuron_id, cortical_idx, potential) in pending_memory.drain(..) {
             fire_structures
                 .memory_candidate_cortical_idx
@@ -1482,6 +1496,14 @@ impl<
             fire_structures
                 .fire_candidate_list
                 .add_candidate(neuron_id, potential);
+            memory_candidate_count += 1;
+        }
+        if memory_candidate_count > 0 {
+            tracing::debug!(
+                "[NPU] Applied {} memory candidates for burst {}",
+                memory_candidate_count,
+                burst_count
+            );
         }
         // Restore vector back (empty, but preserves capacity for future injections).
         fire_structures.pending_memory_injections = pending_memory;

@@ -138,6 +138,8 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                 let sequential_start = profile_enabled.then(std::time::Instant::now);
                 let mut results = Vec::with_capacity(candidates.len());
                 let mut refractory = 0;
+                let mut memory_fired = 0usize;
+                let mut memory_missing_meta = 0usize;
                 for &(neuron_id, candidate_potential) in candidates {
                     // Memory neurons are force-fired and do not use the regular neuron storage array.
                     if neuron_id.0 >= MEMORY_NEURON_ID_START {
@@ -145,7 +147,10 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                             .and_then(|m| m.get(&neuron_id.0).copied())
                         {
                             Some(idx) => idx,
-                            None => continue, // No metadata for this memory neuron candidate
+                            None => {
+                                memory_missing_meta += 1;
+                                continue; // No metadata for this memory neuron candidate
+                            }
                         };
 
                         results.push(FiringNeuron {
@@ -156,6 +161,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                             y: 0,
                             z: 0,
                         });
+                        memory_fired += 1;
                         continue;
                     }
 
@@ -179,6 +185,14 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                     {
                         refractory += 1;
                     }
+                }
+
+                if memory_fired > 0 || memory_missing_meta > 0 {
+                    tracing::debug!(
+                        "[PHASE2] Memory candidates: fired={} missing_meta={}",
+                        memory_fired,
+                        memory_missing_meta
+                    );
                 }
 
                 if let Some(sequential_start) = sequential_start {
@@ -259,6 +273,8 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
     let total_start = profile_enabled.then(std::time::Instant::now);
     let mut results = Vec::with_capacity(candidates.len());
     let mut refractory = 0;
+    let mut memory_fired = 0usize;
+    let mut memory_missing_meta = 0usize;
 
     // Separate candidates into categories
     let separate_start = profile_enabled.then(std::time::Instant::now);
@@ -303,7 +319,10 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
         let cortical_idx =
             match memory_candidate_cortical_idx.and_then(|m| m.get(&neuron_id.0).copied()) {
                 Some(idx) => idx,
-                None => continue,
+                None => {
+                    memory_missing_meta += 1;
+                    continue;
+                }
             };
 
         results.push(FiringNeuron {
@@ -314,6 +333,14 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             y: 0,
             z: 0,
         });
+        memory_fired += 1;
+    }
+    if memory_fired > 0 || memory_missing_meta > 0 {
+        tracing::debug!(
+            "[PHASE2] Memory candidates: fired={} missing_meta={}",
+            memory_fired,
+            memory_missing_meta
+        );
     }
     let memory_duration = memory_start.map(|start| start.elapsed());
 

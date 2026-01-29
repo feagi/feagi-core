@@ -14,16 +14,20 @@ use async_trait::async_trait;
 use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::BurstLoopRunner;
+use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
 use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag;
-use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions};
+use feagi_structures::genomic::cortical_area::{
+    CorticalArea, CorticalAreaDimensions, CorticalAreaType,
+};
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 // Note: decode_cortical_id removed - use feagi_structures::CorticalID directly
 use parking_lot::RwLock;
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{debug, info, trace, warn};
@@ -82,6 +86,38 @@ fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
     }
 
     None
+}
+
+/// Merge default template and memory properties into provided values.
+/// Existing values always override defaults.
+fn merge_memory_area_properties(
+    base: HashMap<String, Value>,
+    extra: Option<&HashMap<String, Value>>,
+) -> HashMap<String, Value> {
+    let mut defaults = get_default_neural_properties();
+    let memory_defaults = MemoryAreaProperties::default();
+    defaults.entry("cortical_group".to_string()).or_insert(Value::from("MEMORY"));
+    defaults
+        .entry("is_mem_type".to_string())
+        .or_insert(Value::from(true));
+    defaults
+        .entry("temporal_depth".to_string())
+        .or_insert(Value::from(memory_defaults.temporal_depth));
+    defaults
+        .entry("longterm_mem_threshold".to_string())
+        .or_insert(Value::from(memory_defaults.longterm_threshold));
+    defaults
+        .entry("lifespan_growth_rate".to_string())
+        .or_insert(Value::from(memory_defaults.lifespan_growth_rate));
+    defaults
+        .entry("init_lifespan".to_string())
+        .or_insert(Value::from(memory_defaults.init_lifespan));
+
+    defaults.extend(base);
+    if let Some(extra_props) = extra {
+        defaults.extend(extra_props.clone());
+    }
+    defaults
 }
 
 fn frame_handling_label(frame: FrameChangeHandling) -> &'static str {
@@ -495,7 +531,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        if let Some(properties) = params.properties {
+        let is_memory_area = matches!(area_type, CorticalAreaType::Memory(_));
+        if is_memory_area {
+            let merged = merge_memory_area_properties(
+                area.properties.clone(),
+                params.properties.as_ref(),
+            );
+            area.properties = merged;
+        } else if let Some(properties) = params.properties {
             area.properties = properties;
         }
 

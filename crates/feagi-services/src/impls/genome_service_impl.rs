@@ -11,6 +11,7 @@ Licensed under the Apache License, Version 2.0
 use crate::traits::GenomeService;
 use crate::types::*;
 use async_trait::async_trait;
+use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
 use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::neuroembryogenesis::Neuroembryogenesis;
 use feagi_brain_development::ConnectomeManager;
@@ -62,6 +63,38 @@ fn signage_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static s
         IOCorticalAreaConfigurationFlag::Misc(..) => "Misc",
         IOCorticalAreaConfigurationFlag::Boolean => "Boolean",
     }
+}
+
+/// Merge default template and memory properties into provided values.
+/// Existing values always override defaults.
+fn merge_memory_area_properties(
+    base: HashMap<String, Value>,
+    extra: Option<&HashMap<String, Value>>,
+) -> HashMap<String, Value> {
+    let mut defaults = get_default_neural_properties();
+    let memory_defaults = MemoryAreaProperties::default();
+    defaults.entry("cortical_group".to_string()).or_insert(Value::from("MEMORY"));
+    defaults
+        .entry("is_mem_type".to_string())
+        .or_insert(Value::from(true));
+    defaults
+        .entry("temporal_depth".to_string())
+        .or_insert(Value::from(memory_defaults.temporal_depth));
+    defaults
+        .entry("longterm_mem_threshold".to_string())
+        .or_insert(Value::from(memory_defaults.longterm_threshold));
+    defaults
+        .entry("lifespan_growth_rate".to_string())
+        .or_insert(Value::from(memory_defaults.lifespan_growth_rate));
+    defaults
+        .entry("init_lifespan".to_string())
+        .or_insert(Value::from(memory_defaults.init_lifespan));
+
+    defaults.extend(base);
+    if let Some(extra_props) = extra {
+        defaults.extend(extra_props.clone());
+    }
+    defaults
 }
 
 fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
@@ -706,7 +739,13 @@ impl GenomeService for GenomeServiceImpl {
                     serde_json::json!(burst_engine_active),
                 );
             }
-            if let Some(properties) = &param.properties {
+            if matches!(area_type, CorticalAreaType::Memory(_)) {
+                let merged = merge_memory_area_properties(
+                    area.properties.clone(),
+                    param.properties.as_ref(),
+                );
+                area.properties = merged;
+            } else if let Some(properties) = &param.properties {
                 area.properties = properties.clone();
             }
 

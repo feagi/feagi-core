@@ -109,6 +109,9 @@ pub struct BurstLoopRunner {
     /// Callback receives the current burst/timestep number
     /// Uses Fn trait object to avoid circular dependency with plasticity crate
     plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>,
+    /// Optional post-burst callback invoked after NPU lock release
+    /// Use for external integrations that must run outside the NPU lock
+    post_burst_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>,
     /// Cached cortical_idx -> cortical_id mappings (from ConnectomeManager, not NPU)
     /// Refreshed periodically to avoid ConnectomeManager lock contention
     /// This eliminates NPU lock acquisitions that were causing 1-3s delays!
@@ -320,6 +323,7 @@ impl BurstLoopRunner {
             cached_fire_queue: Arc::new(Mutex::new(None)), // Cached fire queue for API (Arc-wrapped to avoid cloning)
             parameter_queue: ParameterUpdateQueue::new(),
             plasticity_notify: None, // Initialized later via set_plasticity_notify_callback
+            post_burst_callback: None, // Initialized later via set_post_burst_callback
         }
     }
 
@@ -331,6 +335,20 @@ impl BurstLoopRunner {
     {
         self.plasticity_notify = Some(Arc::new(callback));
         info!("[BURST-RUNNER] Plasticity notification callback attached");
+    }
+
+    /// Set a post-burst callback that runs after the NPU lock is released.
+    pub fn set_post_burst_callback<F>(&mut self, callback: F)
+    where
+        F: Fn(u64) + Send + Sync + 'static,
+    {
+        self.post_burst_callback = Some(Arc::new(callback));
+        info!("[BURST-RUNNER] Post-burst callback attached");
+    }
+
+    /// Return true if a post-burst callback is configured.
+    pub fn has_post_burst_callback(&self) -> bool {
+        self.post_burst_callback.is_some()
     }
 
     /// Attach visualization SHM writer (called from Python after registration)
@@ -429,6 +447,7 @@ impl BurstLoopRunner {
         let cached_fire_queue = self.cached_fire_queue.clone(); // For caching fire queue data
         let param_queue = self.parameter_queue.clone(); // Parameter update queue
         let plasticity_notify = self.plasticity_notify.clone(); // Clone Arc for thread
+        let post_burst_callback = self.post_burst_callback.clone(); // Clone Arc for thread
         let cached_cortical_id_mappings = self.cached_cortical_id_mappings.clone();
         let last_cortical_id_refresh = self.last_cortical_id_refresh.clone();
         let cached_visualization_granularities = self.cached_visualization_granularities.clone();
@@ -450,6 +469,7 @@ impl BurstLoopRunner {
                         cached_fire_queue,
                         param_queue,
                         plasticity_notify,
+                        post_burst_callback,
                         cached_cortical_id_mappings,
                         last_cortical_id_refresh,
                         cached_visualization_granularities,
@@ -942,6 +962,7 @@ fn burst_loop(
     cached_fire_queue: Arc<Mutex<Option<Arc<FireQueueSample>>>>, // For caching fire queue data (Arc-wrapped to avoid cloning)
     parameter_queue: ParameterUpdateQueue, // Asynchronous parameter update queue
     plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Plasticity notification callback
+    post_burst_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Post-burst callback
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>, // Cached cortical_idx -> cortical_id
     _last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
     cached_visualization_granularities: Arc<Mutex<VisualizationGranularityCache>>, // Cached cortical_idx -> visualization_granularity
@@ -1024,6 +1045,8 @@ fn burst_loop(
         static LAST_LOCK_RELEASE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
         #[allow(dead_code)]
         static LAST_BURST_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+        static POST_BURST_MISSING_LOGGED: std::sync::atomic::AtomicBool =
+            std::sync::atomic::AtomicBool::new(false);
 
         let lock_start = Instant::now();
         if let Ok(last_release) = LAST_LOCK_RELEASE.lock() {
@@ -1103,6 +1126,7 @@ fn burst_loop(
             }
 
             // Check flag again after acquiring lock (in case shutdown happened during lock wait)
+            let mut burst_after = npu_lock.get_burst_count();
             let should_exit = if !running.load(Ordering::Relaxed) {
                 true // Signal to exit
             } else {
@@ -1378,6 +1402,7 @@ fn burst_loop(
                             );
                         }
 
+                        burst_after = current_burst;
                         false // Continue processing
                     }
                     Err(e) => {
@@ -1386,16 +1411,17 @@ fn burst_loop(
                             "[{}] [BURST-LOOP] ❌ Burst processing error: {}",
                             timestamp, e
                         );
+                        burst_after = npu_lock.get_burst_count();
                         false // Continue despite error
                     }
                 }
             };
 
-            // Return both should_exit and lock_acquired time
-            (should_exit, acquired)
+            // Return should_exit, lock_acquired time, and burst count
+            (should_exit, acquired, burst_after)
         };
 
-        let (should_exit, lock_acquired) = lock_acquired;
+        let (should_exit, lock_acquired, burst_after) = lock_acquired;
         let npu_lock_release_time = Instant::now();
         let release_thread_id = std::thread::current().id();
 
@@ -1416,15 +1442,25 @@ fn burst_loop(
             );
         }
 
-        // Exit if shutdown was requested
-        if should_exit || !running.load(Ordering::Relaxed) {
-            break;
+        if let Some(ref callback) = post_burst_callback {
+            tracing::debug!(
+                "[BURST-LOOP] Post-burst callback invoked for burst {}",
+                burst_after
+            );
+            callback(burst_after);
+        } else if !POST_BURST_MISSING_LOGGED.swap(true, Ordering::Relaxed) {
+            tracing::debug!("[BURST-LOOP] Post-burst callback not configured");
         }
+
+            // Exit if shutdown was requested
+            if should_exit || !running.load(Ordering::Relaxed) {
+                break;
+            }
 
         burst_num += 1;
         // Note: NPU.process_burst() already incremented its internal burst_count
 
-        let post_burst_start = Instant::now();
+            let post_burst_start = Instant::now();
         let time_between_npu_release_and_post_burst =
             post_burst_start.duration_since(npu_lock_release_time);
         if time_between_npu_release_and_post_burst.as_millis() > 10 {

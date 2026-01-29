@@ -644,6 +644,8 @@ impl PlasticityService {
         upstream_areas: Vec<u32>,
         lifecycle_config: Option<MemoryNeuronLifecycleConfig>,
     ) -> bool {
+        let upstream_len = upstream_areas.len();
+        let upstream_clone = upstream_areas.clone();
         let mut areas = self.memory_areas.lock().unwrap();
         areas.insert(
             area_idx,
@@ -661,8 +663,47 @@ impl PlasticityService {
             configs.insert(area_idx, config);
         }
 
+        // Ensure FireLedger tracks upstream areas for the requested temporal depth.
+        if let Ok(mut npu) = self.npu.lock() {
+            let desired = temporal_depth as usize;
+            let existing_configs = npu.get_all_fire_ledger_configs();
+            for upstream_idx in upstream_clone {
+                let existing = existing_configs
+                    .iter()
+                    .find(|(idx, _)| *idx == upstream_idx)
+                    .map(|(_, w)| *w)
+                    .unwrap_or(0);
+                let resolved = existing.max(desired);
+                if resolved != existing {
+                    if let Err(e) = npu.configure_fire_ledger_window(upstream_idx, resolved) {
+                        tracing::warn!(
+                            target: "plasticity",
+                            "[PLASTICITY] Failed to configure FireLedger window for upstream {} (requested={}): {}",
+                            upstream_idx,
+                            resolved,
+                            e
+                        );
+                    }
+                }
+            }
+        } else {
+            tracing::warn!(
+                target: "plasticity",
+                "[PLASTICITY] Failed to lock NPU for FireLedger configuration"
+            );
+        }
+
         // Initialize cache entry for this area
         memory_stats_cache::init_memory_area(&self.memory_stats_cache, &area_name);
+
+        tracing::info!(
+            target: "plasticity",
+            "[PLASTICITY] Registered memory area: idx={} name={} depth={} upstream={}",
+            area_idx,
+            area_name,
+            temporal_depth,
+            upstream_len
+        );
 
         true
     }

@@ -1161,7 +1161,11 @@ impl IOSystem {
                 self.config.sensory_stream.clone(),
             )?;
 
-            zmq_streams.start_control_streams()?;
+            if let Err(e) = zmq_streams.start_control_streams() {
+                // Drop ZmqStreams on a non-async thread to avoid Tokio runtime shutdown panic.
+                std::thread::spawn(move || drop(zmq_streams));
+                return Err(e);
+            }
             *self.zmq_streams.lock() = Some(zmq_streams);
         }
 

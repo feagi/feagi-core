@@ -1621,6 +1621,14 @@ impl ConnectomeManager {
                 if let Some(dst_area) = self.cortical_areas.get(dst_area_id) {
                     if let Some(mem_props) = extract_memory_properties(&dst_area.properties) {
                         let upstream_areas = self.get_upstream_cortical_areas(dst_area_id);
+                        debug!(
+                            target: "feagi-bdu",
+                            "Registering memory area idx={} id={} upstream={} depth={}",
+                            dst_area.cortical_idx,
+                            dst_area_id.as_base_64(),
+                            upstream_areas.len(),
+                            mem_props.temporal_depth
+                        );
 
                         // Ensure FireLedger tracks the upstream areas with at least the required temporal depth.
                         // Dense, burst-aligned tracking is required for correct memory pattern hashing.
@@ -1677,12 +1685,22 @@ impl ConnectomeManager {
                         } else {
                             warn!(target: "feagi-bdu", "Failed to lock PlasticityExecutor");
                         }
+                    } else {
+                        debug!(
+                            target: "feagi-bdu",
+                            "Skipping plasticity registration: no memory properties for area {}",
+                            dst_area_id.as_base_64()
+                        );
                     }
                 } else {
                     warn!(target: "feagi-bdu", "Destination area {} not found in cortical_areas", dst_area_id.as_base_64());
                 }
             } else {
-                info!(target: "feagi-bdu", "PlasticityExecutor not available (feature disabled or not initialized)");
+                warn!(
+                    target: "feagi-bdu",
+                    "PlasticityExecutor not available; memory area {} not registered",
+                    dst_area_id.as_base_64()
+                );
             }
 
             #[cfg(not(feature = "plasticity"))]
