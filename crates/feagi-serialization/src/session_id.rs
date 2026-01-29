@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 
 /// Used to identify a connected client to the server. A random identifier
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SessionID {
     bytes: [u8; SessionID::NUMBER_BYTES],
 }

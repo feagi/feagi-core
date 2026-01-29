@@ -224,7 +224,7 @@ impl FEAGIZMQServerRouter {
             session_id
         } else {
             // Generate SessionID bytes from the counter (u64 -> [u8; 8])
-            let id_bytes = self.next_client_id.to_le_bytes();
+            let id_bytes = self.next_client_id.to_le_bytes(); // TODO use random here instead
             self.next_client_id += 1;
             let session_id = SessionID::new(id_bytes);
             self.identity_to_session.insert(identity.clone(), session_id);

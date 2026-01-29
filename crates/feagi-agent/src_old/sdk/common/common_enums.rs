@@ -26,15 +26,7 @@ impl AgentConnectionState {
     }
 }
 
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AgentCapabilities {
-    SendSensorData,
-    ReceiveMotorData,
-    ReceiveNeuronVisualizations,
-}
 
 #[derive(Debug, Clone, PartialOrd, PartialEq, Eq)]
 pub enum FeagiConnectionConfiguration {

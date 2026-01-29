@@ -2228,6 +2228,7 @@ dependencies = [
  "byteorder",
  "feagi-structures",
  "getrandom 0.2.16",
+ "serde",
  "serde_json",
 ]
 

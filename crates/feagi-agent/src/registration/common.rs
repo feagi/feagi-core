@@ -1,8 +1,16 @@
-//! Authentication token for secure service access.
-
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+//region Connection Protocol
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub enum ConnectionProtocol {
+    ZMQ,
+    WebSocket,
+}
+
+//endregion
+
+//region Auth Token
 /// Fixed length for authentication tokens (32 bytes = 256 bits)
 pub const AUTH_TOKEN_LENGTH: usize = 32;
 
@@ -18,23 +26,6 @@ impl AuthToken {
     /// Create a new auth token from a fixed-length byte array.
     pub fn new(value: [u8; AUTH_TOKEN_LENGTH]) -> Self {
         Self { value }
-    }
-
-    /// Create a token from a hex string (64 characters for 32 bytes).
-    ///
-    /// # Errors
-    /// Returns `None` if the string is not valid hex or wrong length.
-    pub fn from_hex(hex: &str) -> Option<Self> {
-        if hex.len() != AUTH_TOKEN_LENGTH * 2 {
-            return None;
-        }
-
-        let mut value = [0u8; AUTH_TOKEN_LENGTH];
-        for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
-            let hex_byte = std::str::from_utf8(chunk).ok()?;
-            value[i] = u8::from_str_radix(hex_byte, 16).ok()?;
-        }
-        Some(Self { value })
     }
 
     /// Create a token from a base64 string.
@@ -59,11 +50,6 @@ impl AuthToken {
         &self.value
     }
 
-    /// Convert to hex string (64 characters).
-    pub fn to_hex(&self) -> String {
-        self.value.iter().map(|b| format!("{:02x}", b)).collect()
-    }
-
     /// Convert to base64 string.
     pub fn to_base64(&self) -> String {
         use base64::Engine;
@@ -83,7 +69,21 @@ impl fmt::Debug for AuthToken {
 // Display shows a masked representation
 impl fmt::Display for AuthToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let hex = self.to_hex();
-        write!(f, "{}...{}", &hex[..4], &hex[hex.len() - 4..])
+        let base64 = self.to_base64();
+        write!(f, "{}...{}", &base64[..4], &base64[base64.len() - 4..])
     }
 }
+
+//endregion
+
+//region Agent Capabilities
+
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentCapabilities {
+    SendSensorData,
+    ReceiveMotorData,
+    ReceiveNeuronVisualizations,
+}
+
+//endregion
