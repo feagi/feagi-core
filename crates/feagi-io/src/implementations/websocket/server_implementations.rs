@@ -341,13 +341,6 @@ impl FEAGIWebSocketServerRouter {
         })
     }
 
-    /// Generate a new SessionID from the counter.
-    fn generate_session_id(&mut self) -> SessionID {
-        let id = self.next_client_id;
-        self.next_client_id += 1;
-        SessionID::new(id.to_le_bytes())
-    }
-
     /// Accept any pending connections.
     async fn accept_pending_connections(&mut self) -> Result<usize, FeagiNetworkError> {
         let listener = match &self.listener {
@@ -362,7 +355,7 @@ impl FEAGIWebSocketServerRouter {
                     match accept_async(stream).await {
                         Ok(ws) => {
                             let index = self.clients.len();
-                            let session_id = self.generate_session_id();
+                            let session_id = SessionID::new_random();
 
                             self.clients.push(ws);
                             self.index_to_session.insert(index, session_id);

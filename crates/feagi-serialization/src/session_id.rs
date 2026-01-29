@@ -17,7 +17,9 @@ impl SessionID {
     }
 
     pub fn new_random() -> Self {
-        todo!()
+        let mut bytes = [0u8; SessionID::NUMBER_BYTES];
+        getrandom::getrandom(&mut bytes).expect("Failed to generate random bytes");
+        Self { bytes }
     }
 
     pub fn is_blank(&self) -> bool {

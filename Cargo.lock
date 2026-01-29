@@ -2227,6 +2227,7 @@ version = "0.0.1-beta.4"
 dependencies = [
  "byteorder",
  "feagi-structures",
+ "getrandom 0.2.16",
  "serde_json",
 ]
 
