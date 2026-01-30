@@ -12,6 +12,10 @@ pub enum FeagiAgentError {
     AuthenticationFailed(String),
     /// General failure (deserialization, parsing, validation, etc.)
     GeneralFailure(String),
+    /// Server failed to send data
+    ServerFailedToSendData(String),
+    /// Server failed to send data
+    ServerFailedToGetData(String),
 }
 
 impl Display for FeagiAgentError {
@@ -25,6 +29,12 @@ impl Display for FeagiAgentError {
             }
             FeagiAgentError::GeneralFailure(msg) => {
                 write!(f, "FeagiAgentError: {}", msg)
+            }
+            FeagiAgentError::ServerFailedToSendData(msg) => {
+                write!(f, "FeagiAgentError: Server failed to send data: {}", msg)
+            }
+            FeagiAgentError::ServerFailedToGetData(msg) => {
+                write!(f, "FeagiAgentError: Server failed to get data: {}", msg)
             }
         }
     }
