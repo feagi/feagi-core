@@ -1767,11 +1767,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 synapse_count
             );
 
-            // Refresh burst-runner caches so newly created twin areas are visualized immediately.
-            self.refresh_burst_runner_cache();
-
             (synapse_count, region_io)
         };
+
+        // Refresh burst-runner caches so newly created twin areas are visualized immediately.
+        // IMPORTANT: Call this after releasing the connectome write lock to avoid deadlocks.
+        self.refresh_burst_runner_cache();
 
         // Persist updated region IO into RuntimeGenome so genome save/export stays consistent.
         if let Some(genome) = self.current_genome.write().as_mut() {

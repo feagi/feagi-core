@@ -1448,6 +1448,8 @@ impl ConnectomeManager {
         })];
         self.update_cortical_mapping(memory_area_id, twin_id, mapping_data)?;
         let _ = self.regenerate_synapses_for_mapping(memory_area_id, twin_id)?;
+        // Update cortical area hash so BV refreshes area details (outgoing mappings).
+        self.refresh_cortical_area_hashes(true, false);
         Ok(())
     }
 
