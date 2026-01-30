@@ -1071,6 +1071,9 @@ fn burst_loop(
             );
         }
 
+        let mut last_process_duration: Option<std::time::Duration> = None;
+        let mut last_burst_stats: Option<(usize, usize, usize, usize, usize)> = None;
+
         // Track lock acquisition time outside block scope for diagnostics
         let lock_acquired = {
             // Log lock attempt with timestamp for correlation
@@ -1354,6 +1357,14 @@ fn burst_loop(
                     Ok(mut result) => {
                         let process_done = Instant::now();
                         let duration = process_done.duration_since(process_start);
+                        last_process_duration = Some(duration);
+                        last_burst_stats = Some((
+                            result.neuron_count,
+                            result.power_injections,
+                            result.synaptic_injections,
+                            result.neurons_processed,
+                            result.neurons_in_refractory,
+                        ));
 
                         if burst_num < 5 || burst_num.is_multiple_of(100) {
                             trace!(
@@ -1422,6 +1433,7 @@ fn burst_loop(
         };
 
         let (should_exit, lock_acquired, burst_after) = lock_acquired;
+        let lock_wait_duration = lock_acquired.duration_since(lock_start);
         let npu_lock_release_time = Instant::now();
         let release_thread_id = std::thread::current().id();
 
@@ -1432,6 +1444,39 @@ fn burst_loop(
 
         // Log lock release timing for diagnostics
         let lock_hold_duration = npu_lock_release_time.duration_since(lock_acquired);
+        if lock_wait_duration.as_millis() > 50 {
+            warn!(
+                "[NPU-LOCK] Burst {} waited {:.2}ms to acquire lock",
+                burst_num,
+                lock_wait_duration.as_secs_f64() * 1000.0
+            );
+        }
+        if lock_hold_duration.as_millis() > 50 {
+            if let Some((fired, power, synaptic, processed, refractory)) = last_burst_stats {
+                warn!(
+                    "[NPU-LOCK] Burst {} held lock {:.2}ms | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
+                    burst_num,
+                    lock_hold_duration.as_secs_f64() * 1000.0,
+                    last_process_duration
+                        .map(|d| d.as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0),
+                    fired,
+                    power,
+                    synaptic,
+                    processed,
+                    refractory
+                );
+            } else {
+                warn!(
+                    "[NPU-LOCK] Burst {} held lock {:.2}ms | process_burst {:.2}ms",
+                    burst_num,
+                    lock_hold_duration.as_secs_f64() * 1000.0,
+                    last_process_duration
+                        .map(|d| d.as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0)
+                );
+            }
+        }
         if lock_hold_duration.as_millis() > 5 || burst_num < 5 || burst_num.is_multiple_of(100) {
             debug!(
                 "[NPU-LOCK] Burst {} (thread={:?}): Lock RELEASED (held for {:.2}ms, total from acquisition: {:.2}ms)",
@@ -2144,13 +2189,22 @@ fn burst_loop(
             // Note: process_burst_duration is only available in the NPU lock scope, so we approximate
             // The actual breakdown will be logged in the next iteration when we have all timings
             warn!(
-                    "[BURST-LOOP] ⚠️ Slow burst iteration: {:.2}ms total (burst {}) | breakdown: gap_before_post={:.2}ms, post_burst={:.2}ms, stats={:.2}ms, unaccounted={:.2}ms",
+                    "[BURST-LOOP] ⚠️ Slow burst iteration: {:.2}ms total (burst {}) | breakdown: gap_before_post={:.2}ms, post_burst={:.2}ms, stats={:.2}ms, unaccounted={:.2}ms | process_burst_ms={:.2} fired={} power_inj={} syn_inj={} processed={} refractory={} lock_wait_ms={:.2}",
                     iteration_duration.as_secs_f64() * 1000.0,
                     burst_num,
                     time_between_npu_release_and_post_burst.as_secs_f64() * 1000.0,
                     post_burst_duration.as_secs_f64() * 1000.0,
                     stats_duration.as_secs_f64() * 1000.0,
-                iteration_duration.as_secs_f64() * 1000.0 - time_between_npu_release_and_post_burst.as_secs_f64() * 1000.0 - post_burst_duration.as_secs_f64() * 1000.0 - stats_duration.as_secs_f64() * 1000.0
+                iteration_duration.as_secs_f64() * 1000.0 - time_between_npu_release_and_post_burst.as_secs_f64() * 1000.0 - post_burst_duration.as_secs_f64() * 1000.0 - stats_duration.as_secs_f64() * 1000.0,
+                last_process_duration
+                    .map(|d| d.as_secs_f64() * 1000.0)
+                    .unwrap_or(0.0),
+                last_burst_stats.map(|s| s.0).unwrap_or(0),
+                last_burst_stats.map(|s| s.1).unwrap_or(0),
+                last_burst_stats.map(|s| s.2).unwrap_or(0),
+                last_burst_stats.map(|s| s.3).unwrap_or(0),
+                last_burst_stats.map(|s| s.4).unwrap_or(0),
+                lock_wait_duration.as_secs_f64() * 1000.0
             );
         }
 

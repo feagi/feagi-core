@@ -55,6 +55,8 @@ use once_cell::sync::Lazy;
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
 #[cfg(feature = "std")]
+use ahash::AHashMap;
+#[cfg(feature = "std")]
 use std::sync::Arc;
 
 /// Crate version from Cargo.toml
@@ -145,6 +147,173 @@ impl From<std::io::Error> for StateError {
 
 pub type Result<T> = std::result::Result<T, StateError>;
 
+// ===== Cortical Area Stats (std only) =====
+
+#[cfg(feature = "std")]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CorticalAreaStatsSnapshot {
+    pub neuron_count: usize,
+    pub incoming_synapse_count: usize,
+    pub outgoing_synapse_count: usize,
+}
+
+#[cfg(feature = "std")]
+struct CorticalAreaStats {
+    neuron_count: std::sync::atomic::AtomicUsize,
+    incoming_synapse_count: std::sync::atomic::AtomicUsize,
+    outgoing_synapse_count: std::sync::atomic::AtomicUsize,
+}
+
+#[cfg(feature = "std")]
+impl CorticalAreaStats {
+    fn new() -> Self {
+        Self {
+            neuron_count: std::sync::atomic::AtomicUsize::new(0),
+            incoming_synapse_count: std::sync::atomic::AtomicUsize::new(0),
+            outgoing_synapse_count: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+struct CorticalAreaStatsRegistry {
+    // @cursor:critical-path - BV queries read from this cache to avoid NPU locks.
+    stats: RwLock<AHashMap<String, CorticalAreaStats>>,
+}
+
+#[cfg(feature = "std")]
+impl CorticalAreaStatsRegistry {
+    fn new() -> Self {
+        Self {
+            stats: RwLock::new(AHashMap::new()),
+        }
+    }
+
+    fn reset_area(&self, cortical_id: &str) {
+        let mut stats = self.stats.write();
+        stats.insert(cortical_id.to_string(), CorticalAreaStats::new());
+    }
+
+    fn set_neuron_count(&self, cortical_id: &str, count: usize) {
+        let mut stats = self.stats.write();
+        let entry = stats
+            .entry(cortical_id.to_string())
+            .or_insert_with(CorticalAreaStats::new);
+        entry
+            .neuron_count
+            .store(count, std::sync::atomic::Ordering::Release);
+    }
+
+    fn add_neuron_count(&self, cortical_id: &str, delta: usize) {
+        let mut stats = self.stats.write();
+        let entry = stats
+            .entry(cortical_id.to_string())
+            .or_insert_with(CorticalAreaStats::new);
+        entry
+            .neuron_count
+            .fetch_add(delta, std::sync::atomic::Ordering::AcqRel);
+    }
+
+    fn subtract_neuron_count(&self, cortical_id: &str, delta: usize) {
+        let mut stats = self.stats.write();
+        let entry = stats
+            .entry(cortical_id.to_string())
+            .or_insert_with(CorticalAreaStats::new);
+        let mut current = entry.neuron_count.load(std::sync::atomic::Ordering::Relaxed);
+        loop {
+            let next = current.saturating_sub(delta);
+            match entry.neuron_count.compare_exchange(
+                current,
+                next,
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(v) => current = v,
+            }
+        }
+    }
+
+    fn add_outgoing_synapses(&self, cortical_id: &str, delta: usize) {
+        let mut stats = self.stats.write();
+        let entry = stats
+            .entry(cortical_id.to_string())
+            .or_insert_with(CorticalAreaStats::new);
+        entry
+            .outgoing_synapse_count
+            .fetch_add(delta, std::sync::atomic::Ordering::AcqRel);
+    }
+
+    fn subtract_outgoing_synapses(&self, cortical_id: &str, delta: usize) {
+        let mut stats = self.stats.write();
+        let entry = stats
+            .entry(cortical_id.to_string())
+            .or_insert_with(CorticalAreaStats::new);
+        let mut current = entry
+            .outgoing_synapse_count
+            .load(std::sync::atomic::Ordering::Relaxed);
+        loop {
+            let next = current.saturating_sub(delta);
+            match entry.outgoing_synapse_count.compare_exchange(
+                current,
+                next,
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(v) => current = v,
+            }
+        }
+    }
+
+    fn add_incoming_synapses(&self, cortical_id: &str, delta: usize) {
+        let mut stats = self.stats.write();
+        let entry = stats
+            .entry(cortical_id.to_string())
+            .or_insert_with(CorticalAreaStats::new);
+        entry
+            .incoming_synapse_count
+            .fetch_add(delta, std::sync::atomic::Ordering::AcqRel);
+    }
+
+    fn subtract_incoming_synapses(&self, cortical_id: &str, delta: usize) {
+        let mut stats = self.stats.write();
+        let entry = stats
+            .entry(cortical_id.to_string())
+            .or_insert_with(CorticalAreaStats::new);
+        let mut current = entry
+            .incoming_synapse_count
+            .load(std::sync::atomic::Ordering::Relaxed);
+        loop {
+            let next = current.saturating_sub(delta);
+            match entry.incoming_synapse_count.compare_exchange(
+                current,
+                next,
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(v) => current = v,
+            }
+        }
+    }
+
+    fn get_stats(&self, cortical_id: &str) -> Option<CorticalAreaStatsSnapshot> {
+        let stats = self.stats.read();
+        stats.get(cortical_id).map(|entry| CorticalAreaStatsSnapshot {
+            neuron_count: entry
+                .neuron_count
+                .load(std::sync::atomic::Ordering::Acquire),
+            incoming_synapse_count: entry
+                .incoming_synapse_count
+                .load(std::sync::atomic::Ordering::Acquire),
+            outgoing_synapse_count: entry
+                .outgoing_synapse_count
+                .load(std::sync::atomic::Ordering::Acquire),
+        })
+    }
+}
+
 /// Main state manager - coordinates all state subsystems
 #[cfg(feature = "std")]
 pub struct StateManager {
@@ -159,6 +328,9 @@ pub struct StateManager {
 
     /// FCL window size cache
     fcl_cache: std::sync::Arc<FCLWindowCache>,
+
+    /// Per-area neuron/synapse counts (query-safe, no NPU lock)
+    cortical_area_stats: std::sync::Arc<CorticalAreaStatsRegistry>,
 
     /// Event-driven data hashes for health check change detection
     hash_state: HashState,
@@ -178,6 +350,7 @@ impl StateManager {
             agent_registry: std::sync::Arc::new(AgentRegistry::new()),
             cortical_locks: std::sync::Arc::new(CorticalLockManager::new()),
             fcl_cache: std::sync::Arc::new(FCLWindowCache::new(fcl_window)),
+            cortical_area_stats: std::sync::Arc::new(CorticalAreaStatsRegistry::new()),
             hash_state: HashState::new(),
         })
     }
@@ -324,6 +497,59 @@ impl StateManager {
     /// Set FCL window size for cortical area
     pub fn set_fcl_window(&self, cortical_area: u32, window_size: usize) {
         self.fcl_cache.set(cortical_area, window_size)
+    }
+
+    // ===== Cortical Area Stats =====
+
+    /// Initialize a cortical area stats entry with zeroed counts.
+    pub fn init_cortical_area_stats(&self, cortical_id: &str) {
+        self.cortical_area_stats.reset_area(cortical_id);
+    }
+
+    /// Set neuron count for a cortical area.
+    pub fn set_cortical_area_neuron_count(&self, cortical_id: &str, count: usize) {
+        self.cortical_area_stats.set_neuron_count(cortical_id, count);
+    }
+
+    /// Increment neuron count for a cortical area.
+    pub fn add_cortical_area_neuron_count(&self, cortical_id: &str, delta: usize) {
+        self.cortical_area_stats
+            .add_neuron_count(cortical_id, delta);
+    }
+
+    /// Decrement neuron count for a cortical area.
+    pub fn subtract_cortical_area_neuron_count(&self, cortical_id: &str, delta: usize) {
+        self.cortical_area_stats
+            .subtract_neuron_count(cortical_id, delta);
+    }
+
+    /// Increment outgoing synapse count for a cortical area.
+    pub fn add_cortical_area_outgoing_synapses(&self, cortical_id: &str, delta: usize) {
+        self.cortical_area_stats
+            .add_outgoing_synapses(cortical_id, delta);
+    }
+
+    /// Decrement outgoing synapse count for a cortical area.
+    pub fn subtract_cortical_area_outgoing_synapses(&self, cortical_id: &str, delta: usize) {
+        self.cortical_area_stats
+            .subtract_outgoing_synapses(cortical_id, delta);
+    }
+
+    /// Increment incoming synapse count for a cortical area.
+    pub fn add_cortical_area_incoming_synapses(&self, cortical_id: &str, delta: usize) {
+        self.cortical_area_stats
+            .add_incoming_synapses(cortical_id, delta);
+    }
+
+    /// Decrement incoming synapse count for a cortical area.
+    pub fn subtract_cortical_area_incoming_synapses(&self, cortical_id: &str, delta: usize) {
+        self.cortical_area_stats
+            .subtract_incoming_synapses(cortical_id, delta);
+    }
+
+    /// Get cached cortical area stats, if present.
+    pub fn get_cortical_area_stats(&self, cortical_id: &str) -> Option<CorticalAreaStatsSnapshot> {
+        self.cortical_area_stats.get_stats(cortical_id)
     }
 
     /// Get reference to core state (for direct access to atomic operations)

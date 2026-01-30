@@ -784,6 +784,10 @@ impl ConnectomeManager {
             let mut synapse_cache = self.cached_synapse_counts_per_area.write();
             synapse_cache.insert(cortical_id, AtomicUsize::new(0));
         }
+        // @cursor:critical-path - BV pulls per-area stats from StateManager without NPU lock.
+        if let Some(state_manager) = StateManager::instance().try_read() {
+            state_manager.init_cortical_area_stats(&cortical_id.as_base_64());
+        }
 
         // CRITICAL: Register cortical area in NPU during corticogenesis
         // This must happen BEFORE neurogenesis so neurons can look up their cortical IDs
@@ -1499,7 +1503,16 @@ impl ConnectomeManager {
         // caches are stale (e.g., in tests or during partial initialization). If either side is empty,
         // pruning is a no-op anyway.
         let (sources, targets) = {
+            let lock_start = std::time::Instant::now();
             let npu = npu_arc.lock().unwrap();
+            let lock_wait = lock_start.elapsed();
+            tracing::debug!(
+                target: "feagi-bdu",
+                "[NPU-LOCK] prune list lock wait {:.2}ms for {} -> {}",
+                lock_wait.as_secs_f64() * 1000.0,
+                src_area_id,
+                dst_area_id
+            );
             let sources: Vec<NeuronId> = npu
                 .get_neurons_in_cortical_area(src_idx)
                 .into_iter()
@@ -1523,7 +1536,16 @@ impl ConnectomeManager {
         if !sources.is_empty() && !targets.is_empty() {
             let remove_start = Instant::now();
             pruned_synapse_count = {
+                let lock_start = std::time::Instant::now();
                 let mut npu = npu_arc.lock().unwrap();
+                let lock_wait = lock_start.elapsed();
+                tracing::debug!(
+                    target: "feagi-bdu",
+                    "[NPU-LOCK] prune remove lock wait {:.2}ms for {} -> {}",
+                    lock_wait.as_secs_f64() * 1000.0,
+                    src_area_id,
+                    dst_area_id
+                );
                 npu.remove_synapses_from_sources_to_targets(sources, targets)
             };
             let remove_time = remove_start.elapsed();
@@ -1550,6 +1572,14 @@ impl ConnectomeManager {
                 if let Some(state_manager) = StateManager::instance().try_read() {
                     let core_state = state_manager.get_core_state();
                     core_state.subtract_synapse_count(pruned_u32);
+                    state_manager.subtract_cortical_area_outgoing_synapses(
+                        &src_area_id.as_base_64(),
+                        pruned_synapse_count,
+                    );
+                    state_manager.subtract_cortical_area_incoming_synapses(
+                        &dst_area_id.as_base_64(),
+                        pruned_synapse_count,
+                    );
                 }
 
                 // Best-effort: adjust per-area outgoing synapse count cache for the source area.
@@ -1615,6 +1645,14 @@ impl ConnectomeManager {
             if let Some(state_manager) = StateManager::instance().try_read() {
                 let core_state = state_manager.get_core_state();
                 core_state.add_synapse_count(created_u32);
+                state_manager.add_cortical_area_outgoing_synapses(
+                    &src_area_id.as_base_64(),
+                    synapse_count,
+                );
+                state_manager.add_cortical_area_incoming_synapses(
+                    &dst_area_id.as_base_64(),
+                    synapse_count,
+                );
             }
         }
 
@@ -2236,7 +2274,17 @@ impl ConnectomeManager {
 
         // Apply morphology based on type
         if let Some(ref npu_arc) = self.npu {
+            let lock_start = std::time::Instant::now();
             let mut npu = npu_arc.lock().unwrap();
+            let lock_wait = lock_start.elapsed();
+            tracing::debug!(
+                target: "feagi-bdu",
+                "[NPU-LOCK] synaptogenesis lock wait {:.2}ms for {} -> {} (morphology={})",
+                lock_wait.as_secs_f64() * 1000.0,
+                src_area_id,
+                dst_area_id,
+                morphology_id
+            );
 
             // Get source area to access PSP property
             let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
@@ -2383,10 +2431,86 @@ impl ConnectomeManager {
                     }
                 }
                 feagi_evolutionary::MorphologyType::Patterns => {
-                    use tracing::debug;
-                    // Patterns morphology requires Pattern3D conversion - complex, skip for now
-                    debug!(target: "feagi-bdu", "Pattern morphology {} - conversion not yet implemented", morphology_id);
-                    Ok(0)
+                    use crate::connectivity::core_morphologies::apply_patterns_morphology;
+                    use crate::connectivity::rules::patterns::{
+                        Pattern3D, PatternElement as RulePatternElement,
+                    };
+                    use feagi_evolutionary::PatternElement as EvoPatternElement;
+
+                    let feagi_evolutionary::MorphologyParameters::Patterns { ref patterns } =
+                        morphology.parameters
+                    else {
+                        return Ok(0);
+                    };
+
+                    let convert_element =
+                        |element: &EvoPatternElement|
+                         -> crate::types::BduResult<RulePatternElement> {
+                            match element {
+                                EvoPatternElement::Value(value) => {
+                                    if *value < 0 {
+                                        return Err(crate::types::BduError::InvalidMorphology(
+                                            format!(
+                                                "Pattern morphology {} contains negative voxel coordinate {}",
+                                                morphology_id, value
+                                            ),
+                                        ));
+                                    }
+                                    Ok(RulePatternElement::Exact(*value))
+                                }
+                                EvoPatternElement::Wildcard => Ok(RulePatternElement::Wildcard),
+                                EvoPatternElement::Skip => Ok(RulePatternElement::Skip),
+                                EvoPatternElement::Exclude => Ok(RulePatternElement::Exclude),
+                            }
+                        };
+
+                    let mut converted_patterns = Vec::with_capacity(patterns.len());
+                    for pattern_pair in patterns {
+                        if pattern_pair.len() != 2 {
+                            return Err(crate::types::BduError::InvalidMorphology(format!(
+                                "Pattern morphology {} must contain [src, dst] pairs",
+                                morphology_id
+                            )));
+                        }
+
+                        let src_pattern = &pattern_pair[0];
+                        let dst_pattern = &pattern_pair[1];
+
+                        if src_pattern.len() != 3 || dst_pattern.len() != 3 {
+                            return Err(crate::types::BduError::InvalidMorphology(format!(
+                                "Pattern morphology {} requires 3-axis patterns",
+                                morphology_id
+                            )));
+                        }
+
+                        let src: Pattern3D = (
+                            convert_element(&src_pattern[0])?,
+                            convert_element(&src_pattern[1])?,
+                            convert_element(&src_pattern[2])?,
+                        );
+                        let dst: Pattern3D = (
+                            convert_element(&dst_pattern[0])?,
+                            convert_element(&dst_pattern[1])?,
+                            convert_element(&dst_pattern[2])?,
+                        );
+
+                        converted_patterns.push((src, dst));
+                    }
+
+                    let count = apply_patterns_morphology(
+                        &mut npu,
+                        *src_idx,
+                        *dst_idx,
+                        converted_patterns,
+                        weight,
+                        conductance,
+                        synapse_attractivity,
+                        synapse_type,
+                    )?;
+                    if count > 0 {
+                        npu.rebuild_synapse_index();
+                    }
+                    Ok(count as usize)
                 }
                 _ => {
                     use tracing::debug;
@@ -2809,6 +2933,14 @@ impl ConnectomeManager {
                 .store(neuron_count as usize, Ordering::Relaxed);
         }
 
+        // @cursor:critical-path - Keep BV-facing stats in StateManager.
+        if let Some(state_manager) = StateManager::instance().try_read() {
+            state_manager.set_cortical_area_neuron_count(
+                &cortical_id.as_base_64(),
+                neuron_count as usize,
+            );
+        }
+
         // Update total neuron count cache
         self.cached_neuron_count
             .fetch_add(neuron_count as usize, Ordering::Relaxed);
@@ -2927,6 +3059,7 @@ impl ConnectomeManager {
         if let Some(state_manager) = StateManager::instance().try_read() {
             let core_state = state_manager.get_core_state();
             core_state.add_neuron_count(1);
+            state_manager.add_cortical_area_neuron_count(&cortical_id.as_base_64(), 1);
         }
 
         Ok(neuron_id.0 as u64)
@@ -2953,6 +3086,9 @@ impl ConnectomeManager {
             .lock()
             .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
 
+        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
+        let cortical_id = self.cortical_idx_to_id.get(&cortical_idx).cloned();
+
         let deleted = npu_lock.delete_neuron(neuron_id as u32);
 
         if deleted {
@@ -2962,6 +3098,10 @@ impl ConnectomeManager {
             if let Some(state_manager) = StateManager::instance().try_read() {
                 let core_state = state_manager.get_core_state();
                 core_state.subtract_neuron_count(1);
+                if let Some(cortical_id) = cortical_id {
+                    state_manager
+                        .subtract_cortical_area_neuron_count(&cortical_id.as_base_64(), 1);
+                }
             }
 
             // Trigger fatigue index recalculation after neuron deletion
@@ -3159,6 +3299,11 @@ impl ConnectomeManager {
             .entry(*cortical_id)
             .or_insert_with(|| AtomicUsize::new(0))
             .store(count, Ordering::Relaxed);
+
+        // @cursor:critical-path - Keep BV-facing stats in StateManager.
+        if let Some(state_manager) = StateManager::instance().try_read() {
+            state_manager.set_cortical_area_neuron_count(&cortical_id.as_base_64(), count);
+        }
 
         self.update_cached_neuron_count();
 
@@ -3439,24 +3584,17 @@ impl ConnectomeManager {
     ///
     /// Total number of incoming synapses targeting neurons in this area.
     pub fn get_incoming_synapse_count_in_area(&self, cortical_id: &CorticalID) -> usize {
-        let cortical_idx = match self.cortical_id_to_idx.get(cortical_id) {
-            Some(idx) => *idx,
-            None => return 0,
-        };
-
-        let Some(ref npu) = self.npu else {
+        if !self.cortical_id_to_idx.contains_key(cortical_id) {
             return 0;
-        };
+        }
 
-        let Ok(npu_lock) = npu.lock() else {
-            return 0;
-        };
+        if let Some(state_manager) = StateManager::instance().try_read() {
+            if let Some(stats) = state_manager.get_cortical_area_stats(&cortical_id.as_base_64()) {
+                return stats.incoming_synapse_count;
+            }
+        }
 
-        let neuron_ids = npu_lock.get_neurons_in_cortical_area(cortical_idx);
-        neuron_ids
-            .iter()
-            .map(|neuron_id| npu_lock.get_incoming_synapses(*neuron_id).len())
-            .sum()
+        0
     }
 
     /// Get total outgoing synapse count for a specific cortical area.
@@ -3469,24 +3607,17 @@ impl ConnectomeManager {
     ///
     /// Total number of outgoing synapses originating from neurons in this area.
     pub fn get_outgoing_synapse_count_in_area(&self, cortical_id: &CorticalID) -> usize {
-        let cortical_idx = match self.cortical_id_to_idx.get(cortical_id) {
-            Some(idx) => *idx,
-            None => return 0,
-        };
-
-        let Some(ref npu) = self.npu else {
+        if !self.cortical_id_to_idx.contains_key(cortical_id) {
             return 0;
-        };
+        }
 
-        let Ok(npu_lock) = npu.lock() else {
-            return 0;
-        };
+        if let Some(state_manager) = StateManager::instance().try_read() {
+            if let Some(stats) = state_manager.get_cortical_area_stats(&cortical_id.as_base_64()) {
+                return stats.outgoing_synapse_count;
+            }
+        }
 
-        let neuron_ids = npu_lock.get_neurons_in_cortical_area(cortical_idx);
-        neuron_ids
-            .iter()
-            .map(|neuron_id| npu_lock.get_outgoing_synapses(*neuron_id).len())
-            .sum()
+        0
     }
 
     /// Check if two neurons are connected (source → target)
@@ -4056,6 +4187,22 @@ impl ConnectomeManager {
         debug!(target: "feagi-bdu", "Created synapse: {} -> {} (weight: {}, conductance: {}, type: {}, idx: {})",
             source_neuron_id, target_neuron_id, weight, conductance, synapse_type, synapse_idx);
 
+        let source_cortical_idx = npu_lock.get_neuron_cortical_area(source_neuron_id as u32);
+        let target_cortical_idx = npu_lock.get_neuron_cortical_area(target_neuron_id as u32);
+        let source_cortical_id = self.cortical_idx_to_id.get(&source_cortical_idx).cloned();
+        let target_cortical_id = self.cortical_idx_to_id.get(&target_cortical_idx).cloned();
+
+        if let Some(state_manager) = StateManager::instance().try_read() {
+            let core_state = state_manager.get_core_state();
+            core_state.add_synapse_count(1);
+            if let Some(cortical_id) = source_cortical_id {
+                state_manager.add_cortical_area_outgoing_synapses(&cortical_id.as_base_64(), 1);
+            }
+            if let Some(cortical_id) = target_cortical_id {
+                state_manager.add_cortical_area_incoming_synapses(&cortical_id.as_base_64(), 1);
+            }
+        }
+
         // Trigger fatigue index recalculation after synapse creation
         // NOTE: Disabled during genome loading to prevent blocking
         // let _ = self.update_fatigue_index();
@@ -4209,6 +4356,11 @@ impl ConnectomeManager {
             .lock()
             .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
 
+        let source_cortical_idx = npu_lock.get_neuron_cortical_area(source_neuron_id as u32);
+        let target_cortical_idx = npu_lock.get_neuron_cortical_area(target_neuron_id as u32);
+        let source_cortical_id = self.cortical_idx_to_id.get(&source_cortical_idx).cloned();
+        let target_cortical_id = self.cortical_idx_to_id.get(&target_cortical_idx).cloned();
+
         // Remove synapse via NPU
         let removed = npu_lock.remove_synapse(
             NeuronId(source_neuron_id as u32),
@@ -4222,6 +4374,14 @@ impl ConnectomeManager {
             if let Some(state_manager) = StateManager::instance().try_read() {
                 let core_state = state_manager.get_core_state();
                 core_state.subtract_synapse_count(1);
+                if let Some(cortical_id) = source_cortical_id {
+                    state_manager
+                        .subtract_cortical_area_outgoing_synapses(&cortical_id.as_base_64(), 1);
+                }
+                if let Some(cortical_id) = target_cortical_id {
+                    state_manager
+                        .subtract_cortical_area_incoming_synapses(&cortical_id.as_base_64(), 1);
+                }
             }
         }
 
@@ -4355,6 +4515,16 @@ impl ConnectomeManager {
         if let Some(state_manager) = StateManager::instance().try_read() {
             let core_state = state_manager.get_core_state();
             core_state.add_neuron_count(neurons_created);
+            state_manager.add_cortical_area_neuron_count(&cortical_id.as_base_64(), count);
+        }
+
+        // Best-effort: keep per-area cache in sync for lock-free reads.
+        {
+            let mut cache = self.cached_neuron_counts_per_area.write();
+            cache
+                .entry(*cortical_id)
+                .or_insert_with(|| AtomicUsize::new(0))
+                .fetch_add(count, Ordering::Relaxed);
         }
 
         Ok(neuron_ids)
@@ -4382,12 +4552,21 @@ impl ConnectomeManager {
             .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
 
         let mut deleted_count = 0;
+        let mut per_area_deleted: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
 
         // Delete each neuron
         // Note: Could be optimized with a batch delete method in NPU if needed
         for neuron_id in neuron_ids {
+            let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
+            let cortical_id = self.cortical_idx_to_id.get(&cortical_idx).cloned();
+
             if npu_lock.delete_neuron(neuron_id as u32) {
                 deleted_count += 1;
+                if let Some(cortical_id) = cortical_id {
+                    let key = cortical_id.as_base_64();
+                    *per_area_deleted.entry(key).or_insert(0) += 1;
+                }
             }
         }
 
@@ -4398,6 +4577,9 @@ impl ConnectomeManager {
             if let Some(state_manager) = StateManager::instance().try_read() {
                 let core_state = state_manager.get_core_state();
                 core_state.subtract_neuron_count(deleted_count as u32);
+                for (cortical_id, count) in per_area_deleted {
+                    state_manager.subtract_cortical_area_neuron_count(&cortical_id, count);
+                }
             }
         }
 

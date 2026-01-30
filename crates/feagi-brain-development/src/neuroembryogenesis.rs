@@ -109,6 +109,46 @@ impl Neuroembryogenesis {
         self.progress.read().clone()
     }
 
+    /// Sync existing core neuron parameters with cortical area properties.
+    ///
+    /// This updates neuron parameters in-place without creating new neurons.
+    fn sync_core_neuron_params(&self, cortical_idx: u32, area: &CorticalArea) -> BduResult<()> {
+        use crate::models::CorticalAreaExt;
+
+        let npu_arc = {
+            let manager = self.connectome_manager.read();
+            manager
+                .get_npu()
+                .cloned()
+                .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?
+        };
+
+        let mut npu_lock = npu_arc
+            .lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+
+        npu_lock.update_cortical_area_threshold_with_gradient(
+            cortical_idx,
+            area.firing_threshold(),
+            area.firing_threshold_increment_x(),
+            area.firing_threshold_increment_y(),
+            area.firing_threshold_increment_z(),
+        );
+        npu_lock.update_cortical_area_threshold_limit(cortical_idx, area.firing_threshold_limit());
+        npu_lock.update_cortical_area_leak(cortical_idx, area.leak_coefficient());
+        npu_lock.update_cortical_area_excitability(cortical_idx, area.neuron_excitability());
+        npu_lock.update_cortical_area_refractory_period(cortical_idx, area.refractory_period());
+        npu_lock.update_cortical_area_consecutive_fire_limit(
+            cortical_idx,
+            area.consecutive_fire_count() as u16,
+        );
+        npu_lock.update_cortical_area_snooze_period(cortical_idx, area.snooze_period());
+        npu_lock
+            .update_cortical_area_mp_charge_accumulation(cortical_idx, area.mp_charge_accumulation());
+
+        Ok(())
+    }
+
     /// Incrementally add cortical areas to an existing connectome
     ///
     /// This is for adding new cortical areas after the initial genome has been loaded.
@@ -185,6 +225,7 @@ impl Neuroembryogenesis {
                 };
 
                 if existing_core_neurons > 0 {
+                    self.sync_core_neuron_params(*core_idx as u32, area)?;
                     let refreshed = {
                         let manager = self.connectome_manager.read();
                         manager.refresh_neuron_count_for_area(&area.cortical_id)
@@ -787,6 +828,7 @@ impl Neuroembryogenesis {
             };
 
             if existing_core_neurons > 0 {
+                self.sync_core_neuron_params(*core_idx as u32, area)?;
                 let refreshed = {
                     let manager = self.connectome_manager.read();
                     manager.refresh_neuron_count_for_area(cortical_id)

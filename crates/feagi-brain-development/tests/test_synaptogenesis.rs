@@ -258,6 +258,77 @@ fn test_inhibitory_mapping_creates_inhibitory_synapses() {
 }
 
 // ============================================================================
+// TEST 1c: Pattern morphology (0-0-0_to_all) creates expected synapses
+// ============================================================================
+/// Validate that pattern morphology connects origin to all destinations.
+#[test]
+fn test_pattern_morphology_origin_to_all() {
+    let mut manager = create_test_manager();
+
+    // Create source + destination areas (small, deterministic)
+    let (src_area, src_id) = create_test_area("src_pat", 2, 2, 1, 0);
+    manager
+        .add_cortical_area(src_area)
+        .expect("Failed to add source area");
+
+    let (dst_area, dst_id) = create_test_area("dst_pat", 2, 2, 1, 1);
+    manager
+        .add_cortical_area(dst_area)
+        .expect("Failed to add destination area");
+
+    // Create neurons in both areas
+    let src_neurons = create_grid_neurons(&mut manager, &src_id, 2, 2, 1);
+    let dst_neurons = create_grid_neurons(&mut manager, &dst_id, 2, 2, 1);
+
+    // Pattern morphology: origin -> all
+    let rule = json!({
+        "morphology_id": "0-0-0_to_all",
+        "postSynapticCurrent_multiplier": 1.0,
+        "synapse_attractivity": 100
+    });
+
+    manager
+        .update_cortical_mapping(&src_id, &dst_id, vec![rule])
+        .expect("Failed to update cortical mapping");
+
+    let synapse_count = manager
+        .apply_cortical_mapping(&src_id)
+        .expect("Failed to apply cortical mapping");
+
+    assert_eq!(
+        synapse_count,
+        dst_neurons.len(),
+        "Expected one synapse from origin to each destination neuron"
+    );
+
+    let Some(npu_arc) = manager.get_npu() else {
+        panic!("Test manager must have an attached NPU");
+    };
+    let origin_src = src_neurons[0] as u32;
+    let mut npu_guard = npu_arc.lock().unwrap();
+    match *npu_guard {
+        DynamicNPU::F32(ref mut npu) => {
+            let outgoing = npu.get_outgoing_synapses(origin_src);
+            assert_eq!(
+                outgoing.len(),
+                dst_neurons.len(),
+                "Origin neuron should connect to all destination neurons"
+            );
+        }
+        DynamicNPU::INT8(ref mut npu) => {
+            let outgoing = npu.get_outgoing_synapses(origin_src);
+            assert_eq!(
+                outgoing.len(),
+                dst_neurons.len(),
+                "Origin neuron should connect to all destination neurons"
+            );
+        }
+    }
+
+    println!("✅ Test 1c: Pattern morphology origin to all - PASSED");
+}
+
+// ============================================================================
 // TEST 2: Block-to-Block Morphology - Basic Functionality
 // ============================================================================
 

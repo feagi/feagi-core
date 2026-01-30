@@ -41,6 +41,7 @@ pub fn apply_block_connection_morphology_batched(
     // CRITICAL: Do NOT call get_neurons_in_cortical_area - iterate through coordinate space instead
     // Step 1: Pre-compute all synapse operations by iterating coordinate space (NO LOCK)
     let mut synapse_ops: Vec<(u32, u32)> = Vec::new();
+    let mut seen_ops: std::collections::HashSet<(u32, u32)> = std::collections::HashSet::new();
 
     // Iterate through coordinate space instead of neurons
     for x in 0..src_dimensions.0 {
@@ -61,11 +62,13 @@ pub fn apply_block_connection_morphology_batched(
                     Err(_) => continue,
                 };
 
-                // Store operation (will look up neurons later in batches)
-                synapse_ops.push((
-                    src_pos.0 << 16 | src_pos.1 << 8 | src_pos.2,
-                    dst_pos.0 << 16 | dst_pos.1 << 8 | dst_pos.2,
-                ));
+                // Store operation (will look up neurons later in batches).
+                // Deduplicate coordinate pairs to prevent duplicate synapses.
+                let src_key = src_pos.0 << 16 | src_pos.1 << 8 | src_pos.2;
+                let dst_key = dst_pos.0 << 16 | dst_pos.1 << 8 | dst_pos.2;
+                if seen_ops.insert((src_key, dst_key)) {
+                    synapse_ops.push((src_key, dst_key));
+                }
             }
         }
     }
@@ -405,10 +408,16 @@ pub fn apply_block_connection_morphology(
     // Create synapses for matched pairs
     let mut synapse_count = 0u32;
     let mut found_dest_count = 0;
+    let mut created_pairs: std::collections::HashSet<(u32, u32)> =
+        std::collections::HashSet::new();
 
     for (src_nid, dst_pos) in src_to_dst_map {
         if let Some(dst_nid) = dst_coord_to_neuron.get(&dst_pos) {
             found_dest_count += 1;
+            let pair_key = (src_nid.0, dst_nid.0);
+            if !created_pairs.insert(pair_key) {
+                continue;
+            }
             if rng.gen_range(0..100) < synapse_attractivity
                 && npu
                     .add_synapse(

@@ -175,9 +175,11 @@ pub struct RustNPU<
 
     // Fatigue state (atomic for lock-free reads during burst injection)
     fatigue_active: std::sync::atomic::AtomicBool,
-    // REMOVED: power_neuron_cache - no longer needed with deterministic IDs
-    // Power neuron is always neuron ID 1 (area 1 → neuron 1), so we can access it directly
+    /// Cached power neuron ID (core area 1). Updated during neurogenesis.
+    power_neuron_id: std::sync::atomic::AtomicU32,
 }
+
+const POWER_NEURON_UNSET: u32 = u32::MAX;
 
 /// Fire-related structures grouped together for single mutex
 pub(crate) struct FireStructures {
@@ -260,7 +262,7 @@ impl<
             burst_count: std::sync::atomic::AtomicU64::new(0),
             power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
             fatigue_active: std::sync::atomic::AtomicBool::new(false),
-            // No power neuron cache needed - using deterministic ID (neuron 1)
+            power_neuron_id: std::sync::atomic::AtomicU32::new(POWER_NEURON_UNSET),
         })
     }
 }
@@ -460,9 +462,34 @@ impl<
             .neuron_to_area
             .insert(neuron_id, cortical_id);
 
-        // No cache needed - power neuron is always neuron ID 1 (deterministic)
+        if cortical_area == 1 {
+            self.update_power_neuron_cache(neuron_id);
+        }
 
         Ok(neuron_id)
+    }
+
+    fn update_power_neuron_cache(&self, neuron_id: NeuronId) {
+        use std::sync::atomic::Ordering;
+        let new_id = neuron_id.0;
+        let mut current = self.power_neuron_id.load(Ordering::Relaxed);
+        loop {
+            let next = if current == POWER_NEURON_UNSET || new_id < current {
+                new_id
+            } else {
+                current
+            };
+            if next == current {
+                break;
+            }
+            match self
+                .power_neuron_id
+                .compare_exchange(current, next, Ordering::Release, Ordering::Relaxed)
+            {
+                Ok(_) => break,
+                Err(observed) => current = observed,
+            }
+        }
     }
 
     /// Batch add neurons (optimized for neurogenesis)
@@ -574,12 +601,20 @@ impl<
                     "[PROP-ENGINE] Neuron-to-area mapping updated"
                 );
 
-                // CRITICAL PERFORMANCE: Cache power neurons (cortical_area = 1) to avoid scanning all neurons
-                // This is especially important for large neuron counts (3M+) where scanning is expensive
-                // No cache needed - power neuron is always neuron ID 1 (deterministic)
-
-                // NOTE: Cache will be built lazily on first access to get_neurons_in_cortical_area
-                // To optimize further, call prepopulate_cortical_area_cache() after genome load
+                // Cache power neuron ID (cortical_area = 1) for O(1) injection access.
+                let mut power_candidate: Option<u32> = None;
+                for (i, area_id) in cortical_areas.iter().enumerate() {
+                    if *area_id == 1 {
+                        let neuron_id = (start_idx + i) as u32;
+                        power_candidate = Some(match power_candidate {
+                            Some(current) => current.min(neuron_id),
+                            None => neuron_id,
+                        });
+                    }
+                }
+                if let Some(power_id) = power_candidate {
+                    self.update_power_neuron_cache(NeuronId(power_id));
+                }
 
                 // ✅ ARCHITECTURE FIX: Return only success COUNT, not full Vec<u32> of IDs
                 // Python doesn't need IDs - Rust owns all neuron data!
@@ -1470,7 +1505,9 @@ impl<
             let fatigue_active = self
                 .fatigue_active
                 .load(std::sync::atomic::Ordering::Acquire);
-            // No cache needed - directly access neuron 1 (deterministic ID)
+            let power_neuron_id = self
+                .power_neuron_id
+                .load(std::sync::atomic::Ordering::Acquire);
             phase1_injection_with_synapses(
                 &mut fire_structures.fire_candidate_list,
                 &mut *neuron_storage,
@@ -1480,6 +1517,7 @@ impl<
                 &*synapse_storage,
                 &pending_mutex,
                 fatigue_active,
+                power_neuron_id,
             )?
         };
         let phase1_duration = phase1_start.elapsed();
@@ -1653,6 +1691,27 @@ impl<
                 true
             };
             drop(neuron_storage);
+
+            if area_id == 1 && !needs_creation {
+                use std::sync::atomic::Ordering;
+                let neuron_storage = self.neuron_storage.read().unwrap();
+                if neuron_idx < neuron_storage.count()
+                    && neuron_storage
+                        .valid_mask()
+                        .get(neuron_idx)
+                        .copied()
+                        .unwrap_or(false)
+                    && neuron_storage.cortical_areas().get(neuron_idx).copied() == Some(area_id)
+                {
+                    self.power_neuron_id
+                        .store(neuron_id.0, Ordering::Release);
+                } else if let Some(&first_idx) =
+                    neuron_storage.get_neurons_in_cortical_area(1).first()
+                {
+                    self.power_neuron_id
+                        .store(first_idx as u32, Ordering::Release);
+                }
+            }
 
             if needs_creation {
                 // Ensure previous core area neurons exist (must be created in order: 0, then 1, then 2)
@@ -2375,6 +2434,8 @@ impl<
             backend: std::sync::Mutex::new(backend),
             burst_count: std::sync::atomic::AtomicU64::new(snapshot.burst_count),
             power_amount: std::sync::atomic::AtomicU32::new(snapshot.power_amount.to_bits()),
+            fatigue_active: std::sync::atomic::AtomicBool::new(false),
+            power_neuron_id: std::sync::atomic::AtomicU32::new(POWER_NEURON_UNSET),
         }
     }
     END COMMENTED OUT */
@@ -3115,7 +3176,11 @@ impl<
 
         // CRITICAL PERFORMANCE: Remove from power neuron cache if it was a power neuron
         if is_power {
-            // No cache needed - power neuron is always neuron ID 1 (deterministic)
+            use std::sync::atomic::Ordering;
+            if self.power_neuron_id.load(Ordering::Relaxed) == neuron_id {
+                self.power_neuron_id
+                    .store(POWER_NEURON_UNSET, Ordering::Release);
+            }
         }
 
         true
@@ -3128,36 +3193,39 @@ impl<
         idx < neuron_storage.count() && neuron_storage.valid_mask()[idx]
     }
 
-    /// Check if power neuron exists (using deterministic ID: neuron 1)
+    /// Check if power neuron exists (cached power neuron ID)
     ///
-    /// This is O(1) - no scanning needed since power neuron is always neuron ID 1
+    /// This is O(1) - no scanning needed.
     pub fn check_power_neuron_exists(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        let power_id = self.power_neuron_id.load(Ordering::Acquire);
+        if power_id == POWER_NEURON_UNSET {
+            return false;
+        }
         let neuron_storage = self.neuron_storage.read().unwrap();
         let count = neuron_storage.count();
 
-        // Direct O(1) access to neuron 1 (deterministic ID)
-        if 1 < count {
-            let is_valid = neuron_storage.valid_mask()[1];
-            let cortical_area = neuron_storage.cortical_areas()[1];
+        let idx = power_id as usize;
+        if idx < count {
+            let is_valid = neuron_storage.valid_mask()[idx];
+            let cortical_area = neuron_storage.cortical_areas()[idx];
             is_valid && cortical_area == 1
         } else {
             false
         }
     }
 
-    /// Rebuild power neuron cache (no-op - kept for API compatibility)
-    ///
-    /// ARCHITECTURE: Core areas have deterministic neuron IDs:
-    /// - Area 0 (_death) → neuron ID 0
-    /// - Area 1 (_power) → neuron ID 1
-    /// - Area 2 (_fatigue) → neuron ID 2
-    ///
-    /// This eliminates the need to scan all neurons (O(1) instead of O(n))
-    /// Power injection now uses direct O(1) access to neuron 1 - no cache needed!
+    /// Rebuild power neuron cache by scanning cortical area 1 once.
     pub fn rebuild_power_neuron_cache(&mut self) {
-        // No-op: Power neuron is always neuron ID 1 (deterministic), no cache needed
-        // This function is kept for API compatibility but does nothing
-        // Power injection now uses direct O(1) access to neuron 1 in phase1_injection_with_synapses
+        use std::sync::atomic::Ordering;
+        let neuron_storage = self.neuron_storage.read().unwrap();
+        let power_neurons = neuron_storage.get_neurons_in_cortical_area(1);
+        if let Some(&first_idx) = power_neurons.first() {
+            self.power_neuron_id
+                .store(first_idx as u32, Ordering::Release);
+        } else {
+            self.power_neuron_id.store(POWER_NEURON_UNSET, Ordering::Release);
+        }
     }
 
     /// Get neuron coordinates (x, y, z)
@@ -3511,6 +3579,7 @@ fn phase1_injection_with_synapses<
     synapse_storage: &S,
     pending_sensory: &std::sync::Mutex<Vec<(NeuronId, f32)>>,
     fatigue_active: bool,
+    power_neuron_id: u32,
 ) -> Result<InjectionResult> {
     // Clear FCL from previous burst
     fcl.clear();
@@ -3560,13 +3629,12 @@ fn phase1_injection_with_synapses<
     }
 
     // 1. Power Injection + Membrane Potential Reset - OPTIMIZED FOR LARGE COUNTS
-    // CRITICAL PERFORMANCE FIX: Direct O(1) access to power neuron (neuron ID 1, deterministic)
-    // No cache needed - power neuron is always neuron ID 1
+    // O(1) access to cached power neuron ID (core area 1).
     static FIRST_LOG: std::sync::Once = std::sync::Once::new();
     FIRST_LOG.call_once(|| {
         info!("╔══════════════════════════════════════════════════════════════");
-        info!("║ [POWER-INJECTION] 🔋 DIRECT ACCESS TO NEURON 1 (DETERMINISTIC ID)");
-        info!("║ Power neuron is always neuron ID 1 - O(1) access, no cache needed!");
+        info!("║ [POWER-INJECTION] 🔋 DIRECT ACCESS TO CACHED POWER NEURON");
+        info!("║ Power neuron is injected via cached ID - O(1) access");
         info!("╚══════════════════════════════════════════════════════════════");
     });
 
@@ -3578,13 +3646,15 @@ fn phase1_injection_with_synapses<
     let power_start = std::time::Instant::now();
 
     if should_do_full_scan {
-        // Small neuron count: Direct O(1) access to power neuron (neuron ID 1, deterministic)
-        if 1 < neuron_count
-            && neuron_storage.valid_mask()[1]
-            && neuron_storage.cortical_areas()[1] == 1
-        {
-            fcl.add_candidate(NeuronId(1), power_amount);
-            power_count += 1;
+        if power_neuron_id != POWER_NEURON_UNSET {
+            let idx = power_neuron_id as usize;
+            if idx < neuron_count
+                && neuron_storage.valid_mask()[idx]
+                && neuron_storage.cortical_areas()[idx] == 1
+            {
+                fcl.add_candidate(NeuronId(power_neuron_id), power_amount);
+                power_count += 1;
+            }
         }
 
         // Reset membrane potential for non-accumulating neurons
@@ -3608,14 +3678,15 @@ fn phase1_injection_with_synapses<
             }
         }
 
-        // 2. Direct access to power neuron (neuron ID 1, deterministic) - O(1)!
-        // No cache needed - power neuron is always neuron ID 1
-        if 1 < neuron_count
-            && neuron_storage.valid_mask()[1]
-            && neuron_storage.cortical_areas()[1] == 1
-        {
-            fcl.add_candidate(NeuronId(1), power_amount);
-            power_count += 1;
+        if power_neuron_id != POWER_NEURON_UNSET {
+            let idx = power_neuron_id as usize;
+            if idx < neuron_count
+                && neuron_storage.valid_mask()[idx]
+                && neuron_storage.cortical_areas()[idx] == 1
+            {
+                fcl.add_candidate(NeuronId(power_neuron_id), power_amount);
+                power_count += 1;
+            }
         }
     }
 
