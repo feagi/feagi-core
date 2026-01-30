@@ -3729,9 +3729,11 @@ impl GenomeServiceImpl {
             })?;
 
         let neuron_count = manager.get_neuron_count_in_area(&cortical_id_typed);
-        let synapse_count = manager.get_synapse_count_in_area(&cortical_id_typed);
+        let outgoing_synapse_count =
+            manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
         let incoming_synapse_count =
             manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
+        let synapse_count = outgoing_synapse_count;
 
         let cortical_group = area.get_cortical_group();
         let cortical_bytes = cortical_id_typed.as_bytes();
@@ -3809,7 +3811,7 @@ impl GenomeServiceImpl {
             neuron_count,
             synapse_count,
             incoming_synapse_count,
-            outgoing_synapse_count: synapse_count,
+            outgoing_synapse_count,
             visible: area.visible(),
             sub_group: area.sub_group(),
             neurons_per_voxel: area.neurons_per_voxel(),
@@ -3919,9 +3921,11 @@ impl GenomeServiceImpl {
             })?;
 
         let neuron_count = manager.get_neuron_count_in_area(&cortical_id_typed);
-        let synapse_count = manager.get_synapse_count_in_area(&cortical_id_typed);
+        let outgoing_synapse_count =
+            manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
         let incoming_synapse_count =
             manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
+        let synapse_count = outgoing_synapse_count;
 
         // Get cortical_group from the area (uses cortical_type_new if available)
         let cortical_group = area.get_cortical_group();
@@ -4000,7 +4004,7 @@ impl GenomeServiceImpl {
             neuron_count,
             synapse_count,
             incoming_synapse_count,
-            outgoing_synapse_count: synapse_count,
+            outgoing_synapse_count,
             visible: area.visible(),
             sub_group: area.sub_group(),
             neurons_per_voxel: area.neurons_per_voxel(),

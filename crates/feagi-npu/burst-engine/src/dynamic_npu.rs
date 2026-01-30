@@ -662,13 +662,11 @@ where
     }
 
     pub fn get_incoming_synapses(&self, _neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
-        // This method doesn't exist in RustNPU - return empty for now
-        Vec::new()
+        dispatch!(self, get_incoming_synapses(_neuron_id))
     }
 
     pub fn get_outgoing_synapses(&self, _neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
-        // This method doesn't exist in RustNPU - return empty for now
-        Vec::new()
+        dispatch!(self, get_outgoing_synapses(_neuron_id))
     }
 
     pub fn get_cortical_area_name(&self, area_id: u32) -> Option<String> {

@@ -1445,6 +1445,23 @@ impl ConnectomeManager {
 
         info!(target: "feagi-bdu", "Regenerating synapses: {} -> {}", src_area_id, dst_area_id);
 
+        let mapping_rules_len = self
+            .cortical_areas
+            .get(src_area_id)
+            .and_then(|area| area.properties.get("cortical_mapping_dst"))
+            .and_then(|v| v.as_object())
+            .and_then(|map| map.get(&dst_area_id.as_base_64()))
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.len())
+            .unwrap_or(0);
+        tracing::debug!(
+            target: "feagi-bdu",
+            "Mapping rules for {} -> {}: {}",
+            src_area_id,
+            dst_area_id,
+            mapping_rules_len
+        );
+
         // If NPU is available, regenerate synapses
         let Some(npu_arc) = self.npu.clone() else {
             info!(target: "feagi-bdu", "NPU not available - skipping synapse regeneration");
@@ -1495,6 +1512,13 @@ impl ConnectomeManager {
                 .collect();
             (sources, targets)
         };
+
+        tracing::debug!(
+            target: "feagi-bdu",
+            "Prune synapses: {} sources, {} targets",
+            sources.len(),
+            targets.len()
+        );
 
         if !sources.is_empty() && !targets.is_empty() {
             let remove_start = Instant::now();
@@ -1560,6 +1584,13 @@ impl ConnectomeManager {
         // - `apply_cortical_mapping_for_pair()` returns the created synapse count but does not update
         //   StateManager/caches; we do that immediately after the call.
         let synapse_count = self.apply_cortical_mapping_for_pair(src_area_id, dst_area_id)?;
+        tracing::debug!(
+            target: "feagi-bdu",
+            "Synaptogenesis created {} synapses for {} -> {}",
+            synapse_count,
+            src_area_id,
+            dst_area_id
+        );
 
         // Update synapse count caches and StateManager based on synapses created.
         // NOTE: apply_cortical_mapping_for_pair() does not touch caches/StateManager.
@@ -1904,6 +1935,13 @@ impl ConnectomeManager {
             .ok_or_else(|| crate::types::BduError::Internal("NPU not connected".to_string()))?
             .clone();
 
+        tracing::debug!(
+            target: "feagi-bdu",
+            "Applying {} mapping rule(s) for {} -> {}",
+            rules.len(),
+            src_area_id,
+            dst_area_id
+        );
         // Apply each morphology rule
         let mut total_synapses = 0;
         for rule in &rules {
@@ -1932,6 +1970,18 @@ impl ConnectomeManager {
             let synapse_count =
                 self.apply_single_morphology_rule(src_area_id, dst_area_id, rule)?;
             total_synapses += synapse_count;
+            let morphology_id = rule_obj
+                .get("morphology_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            tracing::debug!(
+                target: "feagi-bdu",
+                "Rule {} created {} synapses for {} -> {}",
+                morphology_id,
+                synapse_count,
+                src_area_id,
+                dst_area_id
+            );
         }
 
         Ok(total_synapses)
@@ -3094,6 +3144,27 @@ impl ConnectomeManager {
         }
     }
 
+    /// Refresh cached neuron count for a single cortical area from the NPU.
+    ///
+    /// Returns the refreshed count if successful.
+    pub fn refresh_neuron_count_for_area(&self, cortical_id: &CorticalID) -> Option<usize> {
+        let npu = self.npu.as_ref()?;
+        let cortical_idx = *self.cortical_id_to_idx.get(cortical_id)?;
+        let npu_lock = npu.lock().ok()?;
+        let count = npu_lock.get_neurons_in_cortical_area(cortical_idx).len();
+        drop(npu_lock);
+
+        let mut cache = self.cached_neuron_counts_per_area.write();
+        cache
+            .entry(*cortical_id)
+            .or_insert_with(|| AtomicUsize::new(0))
+            .store(count, Ordering::Relaxed);
+
+        self.update_cached_neuron_count();
+
+        Some(count)
+    }
+
     /// Get total number of synapses (lock-free cached read with opportunistic update)
     ///
     /// # Returns
@@ -3385,6 +3456,36 @@ impl ConnectomeManager {
         neuron_ids
             .iter()
             .map(|neuron_id| npu_lock.get_incoming_synapses(*neuron_id).len())
+            .sum()
+    }
+
+    /// Get total outgoing synapse count for a specific cortical area.
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - The cortical area ID
+    ///
+    /// # Returns
+    ///
+    /// Total number of outgoing synapses originating from neurons in this area.
+    pub fn get_outgoing_synapse_count_in_area(&self, cortical_id: &CorticalID) -> usize {
+        let cortical_idx = match self.cortical_id_to_idx.get(cortical_id) {
+            Some(idx) => *idx,
+            None => return 0,
+        };
+
+        let Some(ref npu) = self.npu else {
+            return 0;
+        };
+
+        let Ok(npu_lock) = npu.lock() else {
+            return 0;
+        };
+
+        let neuron_ids = npu_lock.get_neurons_in_cortical_area(cortical_idx);
+        neuron_ids
+            .iter()
+            .map(|neuron_id| npu_lock.get_outgoing_synapses(*neuron_id).len())
             .sum()
     }
 

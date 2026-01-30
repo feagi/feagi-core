@@ -228,8 +228,13 @@ pub async fn put_mapping_properties(
         .and_then(|v| v.as_array())
         .ok_or_else(|| ApiError::invalid_input("Missing mapping_string"))?;
 
-    info!(target: "feagi-api", "PUT cortical mapping: {} -> {} with {} connections",
-          src_area, dst_area, mapping_string.len());
+    info!(
+        target: "feagi-api",
+        "PUT cortical mapping: {} -> {} with {} connections",
+        src_area,
+        dst_area,
+        mapping_string.len()
+    );
     debug!(target: "feagi-api", "Mapping data: {:?}", mapping_string);
 
     let connectome_service = state.connectome_service.as_ref();

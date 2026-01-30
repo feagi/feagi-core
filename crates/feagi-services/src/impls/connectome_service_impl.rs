@@ -324,6 +324,18 @@ fn update_cortical_mapping_dst_in_properties(
     Ok(())
 }
 
+fn get_cortical_mapping_dst_from_properties(
+    properties: &HashMap<String, serde_json::Value>,
+    dst_area_id: &str,
+) -> Option<Vec<serde_json::Value>> {
+    properties
+        .get("cortical_mapping_dst")
+        .and_then(|value| value.as_object())
+        .and_then(|mapping_dst| mapping_dst.get(dst_area_id))
+        .and_then(|value| value.as_array())
+        .map(|rules| rules.to_vec())
+}
+
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
@@ -796,12 +808,11 @@ impl ConnectomeService for ConnectomeServiceImpl {
             &CorticalID::try_from_base_64(cortical_id)
                 .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
         );
-        let synapse_count = manager.get_synapse_count_in_area(
-            &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
-        );
+        let outgoing_synapse_count =
+            manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
         let incoming_synapse_count =
             manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
+        let synapse_count = outgoing_synapse_count;
 
         // Get cortical_group from the area (uses cortical_type_new if available)
         let cortical_group = area.get_cortical_group();
@@ -942,7 +953,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             neuron_count,
             synapse_count,
             incoming_synapse_count,
-            outgoing_synapse_count: synapse_count,
+            outgoing_synapse_count,
             // All neural parameters come from the actual CorticalArea struct
             visible: area.visible(),
             sub_group: area.sub_group(),
@@ -1679,6 +1690,37 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let dst_id = CorticalID::try_from_base_64(&dst_area_id).map_err(|e| {
             ServiceError::InvalidInput(format!("Invalid destination cortical ID: {}", e))
         })?;
+
+        let existing_mapping = {
+            let manager = self.connectome.read();
+            manager
+                .get_cortical_area(&src_id)
+                .and_then(|area| {
+                    get_cortical_mapping_dst_from_properties(&area.properties, &dst_area_id)
+                })
+        };
+
+        debug!(
+            target: "feagi-services",
+            "Mapping update request: {} -> {} (existing_rules={}, new_rules={})",
+            src_area_id,
+            dst_area_id,
+            existing_mapping.as_ref().map(|rules| rules.len()).unwrap_or(0),
+            mapping_data.len()
+        );
+
+        if existing_mapping
+            .as_ref()
+            .is_some_and(|rules| rules == &mapping_data)
+        {
+            info!(
+                target: "feagi-services",
+                "Mapping unchanged for {} -> {}; skipping regeneration",
+                src_area_id,
+                dst_area_id
+            );
+            return Ok(0);
+        }
 
         // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
         if let Some(genome) = self.current_genome.write().as_mut() {

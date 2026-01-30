@@ -167,6 +167,39 @@ impl Neuroembryogenesis {
         if !core_areas.is_empty() {
             info!(target: "feagi-bdu", "  🎯 Creating core area neurons FIRST ({} areas) for deterministic IDs", core_areas.len());
             for (core_idx, area) in &core_areas {
+                let existing_core_neurons = {
+                    let manager = self.connectome_manager.read();
+                    let npu = manager.get_npu();
+                    match npu {
+                        Some(npu_arc) => {
+                            let npu_lock = npu_arc.lock();
+                            match npu_lock {
+                                Ok(npu_guard) => {
+                                    npu_guard.get_neurons_in_cortical_area(*core_idx).len()
+                                }
+                                Err(_) => 0,
+                            }
+                        }
+                        None => 0,
+                    }
+                };
+
+                if existing_core_neurons > 0 {
+                    let refreshed = {
+                        let manager = self.connectome_manager.read();
+                        manager.refresh_neuron_count_for_area(&area.cortical_id)
+                    };
+                    let count = refreshed.unwrap_or(existing_core_neurons);
+                    total_neurons += count;
+                    info!(
+                        target: "feagi-bdu",
+                        "  ↪ Skipping core neuron creation for {} (existing={}, idx={})",
+                        area.cortical_id.as_base_64(),
+                        count,
+                        core_idx
+                    );
+                    continue;
+                }
                 let neurons_created = {
                     let mut manager = self.connectome_manager.write();
                     manager.create_neurons_for_area(&area.cortical_id)
@@ -736,6 +769,45 @@ impl Neuroembryogenesis {
 
         // STEP 1: Create core area neurons FIRST (in order: 0, 1, 2)
         for (core_idx, cortical_id, area) in &core_areas {
+            let existing_core_neurons = {
+                let manager = self.connectome_manager.read();
+                let npu = manager.get_npu();
+                match npu {
+                    Some(npu_arc) => {
+                        let npu_lock = npu_arc.lock();
+                        match npu_lock {
+                            Ok(npu_guard) => {
+                                npu_guard.get_neurons_in_cortical_area(*core_idx).len()
+                            }
+                            Err(_) => 0,
+                        }
+                    }
+                    None => 0,
+                }
+            };
+
+            if existing_core_neurons > 0 {
+                let refreshed = {
+                    let manager = self.connectome_manager.read();
+                    manager.refresh_neuron_count_for_area(cortical_id)
+                };
+                let count = refreshed.unwrap_or(existing_core_neurons);
+                total_neurons_created += count;
+                info!(
+                    target: "feagi-bdu",
+                    "  ↪ Skipping core neuron creation for {} (existing={}, idx={})",
+                    cortical_id.as_base_64(),
+                    count,
+                    core_idx
+                );
+                processed_count += 1;
+                let progress_pct = (processed_count * 100 / total_areas.max(1)) as u8;
+                self.update_progress(|p| {
+                    p.neurons_created = total_neurons_created;
+                    p.progress = progress_pct;
+                });
+                continue;
+            }
             let per_voxel_count = area
                 .properties
                 .get("neurons_per_voxel")
