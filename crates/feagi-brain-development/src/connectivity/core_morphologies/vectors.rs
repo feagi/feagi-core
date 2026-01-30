@@ -55,7 +55,7 @@ pub fn apply_vectors_morphology_with_dimensions(
 
         // Apply all vectors
         for &vector in &vectors {
-            if let Ok(dst_pos) = apply_vector_offset(src_pos, vector, 1.0, dst_dimensions) {
+            if let Some(dst_pos) = apply_vector_offset(src_pos, vector, 1.0, dst_dimensions) {
                 // Note: Cannot collapse this if in Rust 2021 (let chains require Rust 2024)
                 #[allow(clippy::collapsible_if)]
                 if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
