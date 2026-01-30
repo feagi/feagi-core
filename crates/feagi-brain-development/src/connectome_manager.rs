@@ -1324,7 +1324,7 @@ impl ConnectomeManager {
 
         let twin_name = format!("{}_twin", upstream_area.name.replace(' ', "_"));
         let twin_type = CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire);
-        let twin_position = self.build_memory_twin_position(upstream_area);
+        let twin_position = self.build_memory_twin_position(memory_area, upstream_area);
         let mut twin_area = CorticalArea::new(
             twin_id,
             0,
@@ -1334,6 +1334,7 @@ impl ConnectomeManager {
             twin_type,
         )?;
         twin_area.properties = self.build_memory_twin_properties(
+            memory_area,
             upstream_area,
             memory_area_id,
             upstream_area_id,
@@ -1348,7 +1349,30 @@ impl ConnectomeManager {
         Ok(twin_id)
     }
 
-    fn build_memory_twin_position(&self, upstream_area: &CorticalArea) -> GenomeCoordinate3D {
+    fn build_memory_twin_position(
+        &self,
+        memory_area: &CorticalArea,
+        upstream_area: &CorticalArea,
+    ) -> GenomeCoordinate3D {
+        let memory_parent = memory_area
+            .properties
+            .get("parent_region_id")
+            .and_then(|v| v.as_str());
+        let upstream_parent = upstream_area
+            .properties
+            .get("parent_region_id")
+            .and_then(|v| v.as_str());
+        let same_region =
+            memory_parent.is_some() && memory_parent == upstream_parent;
+
+        if !same_region {
+            return GenomeCoordinate3D::new(
+                memory_area.position.x + 20,
+                memory_area.position.y,
+                memory_area.position.z,
+            );
+        }
+
         let width = upstream_area.dimensions.width as f32;
         let margin = (width * 0.25).ceil() as i32;
         let offset = upstream_area.dimensions.width as i32 + margin;
@@ -1377,6 +1401,7 @@ impl ConnectomeManager {
 
     fn build_memory_twin_properties(
         &self,
+        memory_area: &CorticalArea,
         upstream_area: &CorticalArea,
         memory_area_id: &CorticalID,
         upstream_area_id: &CorticalID,
@@ -1384,6 +1409,7 @@ impl ConnectomeManager {
         let mut props = upstream_area.properties.clone();
         props.remove("cortical_mapping_dst");
         props.remove("upstream_cortical_areas");
+        props.remove("parent_region_id");
         props.insert("cortical_group".to_string(), serde_json::json!("CUSTOM"));
         props.insert("is_mem_type".to_string(), serde_json::json!(false));
         props.insert(
@@ -1394,7 +1420,7 @@ impl ConnectomeManager {
             "memory_twin_for".to_string(),
             serde_json::json!(memory_area_id.as_base_64()),
         );
-        if let Some(parent_region_id) = upstream_area
+        if let Some(parent_region_id) = memory_area
             .properties
             .get("parent_region_id")
             .and_then(|v| v.as_str())

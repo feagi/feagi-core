@@ -71,6 +71,7 @@ pub fn on_neuron_created(cache: &MemoryStatsCache, area_name: &str) {
     if let Some(state_manager) = StateManager::instance().try_read() {
         // @cursor:critical-path - Keep per-area neuron count synced for BV reads.
         state_manager.add_cortical_area_neuron_count(area_name, 1);
+        state_manager.get_core_state().add_neuron_count(1);
         state_manager.get_core_state().add_memory_neuron_count(1);
     }
 }
@@ -91,6 +92,7 @@ pub fn on_neuron_deleted(cache: &MemoryStatsCache, area_name: &str) {
     if let Some(state_manager) = StateManager::instance().try_read() {
         // @cursor:critical-path - Keep per-area neuron count synced for BV reads.
         state_manager.subtract_cortical_area_neuron_count(area_name, 1);
+        state_manager.get_core_state().subtract_neuron_count(1);
         state_manager.get_core_state().subtract_memory_neuron_count(1);
     }
 }
@@ -163,5 +165,24 @@ mod tests {
         remove_memory_area(&cache, "mem_00");
 
         assert!(get_area_stats(&cache, "mem_00").is_none());
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_memory_stats_updates_core_state_counts() {
+        let cache = create_memory_stats_cache();
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        let core_state = state_manager.get_core_state();
+        let start_total = core_state.get_neuron_count();
+        let start_memory = core_state.get_memory_neuron_count();
+
+        on_neuron_created(&cache, "mem_00");
+        assert_eq!(core_state.get_neuron_count(), start_total + 1);
+        assert_eq!(core_state.get_memory_neuron_count(), start_memory + 1);
+
+        on_neuron_deleted(&cache, "mem_00");
+        assert_eq!(core_state.get_neuron_count(), start_total);
+        assert_eq!(core_state.get_memory_neuron_count(), start_memory);
     }
 }
