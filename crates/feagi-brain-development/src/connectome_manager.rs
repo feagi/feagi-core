@@ -1350,7 +1350,7 @@ impl ConnectomeManager {
 
     fn build_memory_twin_position(&self, upstream_area: &CorticalArea) -> GenomeCoordinate3D {
         let width = upstream_area.dimensions.width as f32;
-        let margin = (width * 0.1).ceil() as i32;
+        let margin = (width * 0.25).ceil() as i32;
         let offset = upstream_area.dimensions.width as i32 + margin;
         GenomeCoordinate3D::new(
             upstream_area.position.x + offset,
