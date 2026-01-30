@@ -251,6 +251,46 @@ impl MemoryNeuronArray {
         converted_indices
     }
 
+    /// Check for neurons ready for long-term conversion using per-area thresholds.
+    ///
+    /// Areas without an explicit lifecycle config use `default_threshold`.
+    pub fn check_longterm_conversion_by_area(
+        &mut self,
+        lifecycle_configs: &HashMap<u32, MemoryNeuronLifecycleConfig>,
+        default_threshold: u32,
+    ) -> Vec<usize> {
+        let n = self.next_available_index;
+        if n == 0 {
+            return Vec::new();
+        }
+
+        let area_indices: Vec<(u32, Vec<usize>)> = self
+            .area_neuron_indices
+            .iter()
+            .map(|(&area, indices)| (area, indices.iter().copied().collect()))
+            .collect();
+
+        let mut converted_indices = Vec::new();
+        for (area_id, indices) in area_indices {
+            let threshold = lifecycle_configs
+                .get(&area_id)
+                .map(|config| config.longterm_threshold)
+                .unwrap_or(default_threshold);
+
+            for neuron_idx in indices {
+                if self.is_active[neuron_idx]
+                    && !self.is_longterm_memory[neuron_idx]
+                    && self.lifespan_current[neuron_idx] >= threshold
+                {
+                    self.is_longterm_memory[neuron_idx] = true;
+                    converted_indices.push(neuron_idx);
+                }
+            }
+        }
+
+        converted_indices
+    }
+
     /// Get all active neuron IDs for a cortical area
     pub fn get_active_neurons_by_area(&self, cortical_area_id: u32) -> Vec<u32> {
         if let Some(indices) = self.area_neuron_indices.get(&cortical_area_id) {

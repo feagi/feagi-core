@@ -503,7 +503,7 @@ impl Default for MemoryConfig {
         Self {
             lookback_steps: 50,
             pattern_duration: 10,
-            min_activation_count: 3,
+            min_activation_count: 1,
             default_temporal_depth: 3,
             pattern_cache_size: 10000,
             array_capacity: 50000,

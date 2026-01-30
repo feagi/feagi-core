@@ -215,8 +215,6 @@ fn test_projector_morphology_counts_by_area() {
         let dst_idx = manager.get_cortical_idx(&dst_id).unwrap();
         let src_neurons = npu.get_neurons_in_cortical_area(src_idx);
         let dst_neurons = npu.get_neurons_in_cortical_area(dst_idx);
-        assert_eq!(src_neurons.len(), 1);
-        assert_eq!(dst_neurons.len(), 1);
 
         let outgoing_src: usize = src_neurons
             .iter()
@@ -309,6 +307,8 @@ fn test_block_to_block_counts_single_neuron() {
         let dst_idx = manager.get_cortical_idx(&dst_id).unwrap();
         let src_neurons = npu.get_neurons_in_cortical_area(src_idx);
         let dst_neurons = npu.get_neurons_in_cortical_area(dst_idx);
+        assert_eq!(src_neurons.len(), 1);
+        assert_eq!(dst_neurons.len(), 1);
         let outgoing_src: usize = src_neurons
             .iter()
             .map(|neuron_id| npu.get_outgoing_synapses(*neuron_id).len())

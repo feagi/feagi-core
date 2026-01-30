@@ -91,6 +91,7 @@ pub enum PlasticityCommand {
         membrane_potential: f32,
         pattern_hash: u64,
         is_reactivation: bool,
+        replay_frames: Vec<ReplayFrame>,
     },
 
     /// Update state counters
@@ -100,6 +101,14 @@ pub enum PlasticityCommand {
         area_idx: u32,
         neuron_id: u32,
     },
+}
+
+/// Replay frame describing a single temporal slice for an upstream area.
+#[derive(Debug, Clone)]
+pub struct ReplayFrame {
+    pub offset: u32,
+    pub upstream_area_idx: u32,
+    pub coords: Vec<(u32, u32, u32)>,
 }
 
 /// Memory area configuration
@@ -301,8 +310,13 @@ impl PlasticityService {
         // Rationale:
         // If a neuron’s lifespan is already at/above the long-term threshold (e.g., init=100, threshold=100),
         // we must convert it before decrementing lifespan; otherwise it becomes 99 and never qualifies.
-        let converted_neurons =
-            array.check_longterm_conversion(config.memory_lifecycle_config.longterm_threshold);
+        let converted_neurons = {
+            let lifecycle_configs = memory_lifecycle_configs.lock().unwrap();
+            array.check_longterm_conversion_by_area(
+                &lifecycle_configs,
+                config.memory_lifecycle_config.longterm_threshold,
+            )
+        };
         if !converted_neurons.is_empty() {
             let mut s = stats.lock().unwrap();
             s.memory_neurons_converted_ltm += converted_neurons.len();
@@ -352,7 +366,7 @@ impl PlasticityService {
                 current_timestep,
                 memory_area_idx
             );
-            let timestep_bitmaps: Vec<HashSet<u32>> = {
+            let (timestep_bitmaps, windows) = {
                 let temporal_depth = area_config.temporal_depth as usize;
 
                 // Brief lock to query FireLedger - data is already CPU-resident from burst processing
@@ -371,7 +385,7 @@ impl PlasticityService {
                 );
 
                 let result = if temporal_depth == 0 || area_config.upstream_areas.is_empty() {
-                    Vec::new()
+                    (Vec::new(), Vec::new())
                 } else {
                     // Deterministic: upstream areas are processed in sorted order so hashing is stable.
                     let mut upstream_sorted = area_config.upstream_areas.clone();
@@ -408,7 +422,7 @@ impl PlasticityService {
                     }
 
                     if !windows_ok || windows.is_empty() {
-                        Vec::new()
+                        (Vec::new(), Vec::new())
                     } else {
                         // Validate alignment: all upstream windows must share the same timesteps.
                         let reference_timesteps: Vec<u64> =
@@ -427,7 +441,7 @@ impl PlasticityService {
                         }
 
                         if !aligned {
-                            Vec::new()
+                            (Vec::new(), Vec::new())
                         } else {
                             // Flatten as: for each timestep (oldest->newest), for each upstream area (sorted),
                             // append that area's fired-neuron set at that timestep.
@@ -441,7 +455,7 @@ impl PlasticityService {
                                     out.push(neuron_set);
                                 }
                             }
-                            out
+                            (out, windows)
                         }
                     }
                 };
@@ -487,6 +501,7 @@ impl PlasticityService {
                 timestep_bitmaps,
                 Some(area_config.temporal_depth),
             ) {
+                let replay_frames = Self::build_replay_frames(npu, &windows);
                 let mut s = stats.lock().unwrap();
                 s.memory_patterns_detected += 1;
                 drop(s);
@@ -517,6 +532,7 @@ impl PlasticityService {
                             membrane_potential: 1.5,
                             pattern_hash: pattern.pattern_hash,
                             is_reactivation: true,
+                            replay_frames: replay_frames.clone(),
                         });
 
                         let total_memory = array.get_stats().active_neurons;
@@ -584,6 +600,7 @@ impl PlasticityService {
                             membrane_potential: 1.5,
                             pattern_hash: pattern.pattern_hash,
                             is_reactivation: false,
+                            replay_frames,
                         });
 
                         commands.push(PlasticityCommand::UpdateStateCounters {
@@ -633,6 +650,43 @@ impl PlasticityService {
                 s.plasticity_commands_dropped += cmd_count;
             }
         }
+    }
+
+    /// Build replay frames from dense upstream windows for pattern reconstruction.
+    fn build_replay_frames(
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        windows: &[(u32, Vec<(u64, roaring::RoaringBitmap)>)],
+    ) -> Vec<ReplayFrame> {
+        if windows.is_empty() {
+            return Vec::new();
+        }
+
+        let npu_lock = npu.lock().unwrap();
+        let mut frames = Vec::new();
+        for (upstream_area_idx, window) in windows {
+            for (offset, (_timestep, bitmap)) in window.iter().enumerate() {
+                if bitmap.is_empty() {
+                    continue;
+                }
+
+                let mut coords: Vec<(u32, u32, u32)> = bitmap
+                    .iter()
+                    .filter_map(|neuron_id| npu_lock.get_neuron_coordinates(neuron_id))
+                    .collect();
+                if coords.is_empty() {
+                    continue;
+                }
+                coords.sort_unstable();
+
+                frames.push(ReplayFrame {
+                    offset: offset as u32,
+                    upstream_area_idx: *upstream_area_idx,
+                    coords,
+                });
+            }
+        }
+
+        frames
     }
 
     /// Register a memory area for pattern detection

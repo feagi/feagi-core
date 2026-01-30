@@ -8,6 +8,7 @@ Implements biological learning mechanisms:
 - STDP (Spike-Timing-Dependent Plasticity)
 - Temporal pattern detection
 - Memory neuron management
+- Memory pattern replay to twin cortical areas
 - Weight update rules
 
 ## Installation

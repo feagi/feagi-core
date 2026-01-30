@@ -252,6 +252,7 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         "block_to_block",
         "projector",
         "memory",
+        "memory_replay",
         "all_to_0-0-0",
         "0-0-0_to_all",
         "lateral_+x",
@@ -306,6 +307,16 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
     // memory - Function-based morphology
     registry.add_morphology(
         "memory".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // memory_replay - Function-based morphology
+    registry.add_morphology(
+        "memory_replay".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},

@@ -46,6 +46,7 @@ pub fn apply_vectors_morphology_with_dimensions(
     }
 
     let mut synapse_count = 0u32;
+    let mut seen_pairs: std::collections::HashSet<(u32, u32)> = std::collections::HashSet::new();
 
     for src_nid in src_neurons {
         let Some(src_pos) = npu.get_neuron_coordinates(src_nid) else {
@@ -58,6 +59,16 @@ pub fn apply_vectors_morphology_with_dimensions(
                 // Note: Cannot collapse this if in Rust 2021 (let chains require Rust 2024)
                 #[allow(clippy::collapsible_if)]
                 if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
+                    if !seen_pairs.insert((src_nid, dst_nid)) {
+                        continue;
+                    }
+                    if npu
+                        .get_outgoing_synapses(src_nid)
+                        .iter()
+                        .any(|(target, _, _, _)| *target == dst_nid)
+                    {
+                        continue;
+                    }
                     if rng.gen_range(0..100) < synapse_attractivity
                         && npu
                             .add_synapse(

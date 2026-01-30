@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+#[cfg(feature = "std")]
+use feagi_state_manager::StateManager;
+
 /// Statistics for a single memory cortical area
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryAreaStats {
@@ -63,6 +66,13 @@ pub fn on_neuron_created(cache: &MemoryStatsCache, area_name: &str) {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
+
+    #[cfg(feature = "std")]
+    if let Some(state_manager) = StateManager::instance().try_read() {
+        // @cursor:critical-path - Keep per-area neuron count synced for BV reads.
+        state_manager.add_cortical_area_neuron_count(area_name, 1);
+        state_manager.get_core_state().add_memory_neuron_count(1);
+    }
 }
 
 /// Update stats when a neuron is deleted/expired
@@ -76,12 +86,25 @@ pub fn on_neuron_deleted(cache: &MemoryStatsCache, area_name: &str) {
             .unwrap()
             .as_millis() as u64;
     }
+
+    #[cfg(feature = "std")]
+    if let Some(state_manager) = StateManager::instance().try_read() {
+        // @cursor:critical-path - Keep per-area neuron count synced for BV reads.
+        state_manager.subtract_cortical_area_neuron_count(area_name, 1);
+        state_manager.get_core_state().subtract_memory_neuron_count(1);
+    }
 }
 
 /// Initialize stats for a new memory area
 pub fn init_memory_area(cache: &MemoryStatsCache, area_name: &str) {
     let mut stats = cache.write();
     stats.entry(area_name.to_string()).or_default();
+
+    #[cfg(feature = "std")]
+    if let Some(state_manager) = StateManager::instance().try_read() {
+        // @cursor:critical-path - Memory areas start with zero neurons/synapses.
+        state_manager.init_cortical_area_stats(area_name);
+    }
 }
 
 /// Remove stats for a deleted memory area

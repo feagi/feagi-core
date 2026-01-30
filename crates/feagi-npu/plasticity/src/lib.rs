@@ -45,5 +45,5 @@ pub use memory_stats_cache::{
 };
 pub use neuron_id_manager::{AllocationStats, NeuronIdManager, NeuronType};
 pub use pattern_detector::{BatchPatternDetector, PatternConfig, PatternDetector, TemporalPattern};
-pub use service::{PlasticityCommand, PlasticityConfig, PlasticityService};
+pub use service::{PlasticityCommand, PlasticityConfig, PlasticityService, ReplayFrame};
 pub use stdp::{compute_activity_factors, compute_timing_factors, STDPConfig};

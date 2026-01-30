@@ -596,8 +596,6 @@ impl ConnectomeService for ConnectomeServiceImpl {
             let manager = self.connectome.read();
             manager.get_cortical_idx(&cortical_id_typed)
         };
-        let mut region_io: Option<std::collections::HashMap<String, (Vec<String>, Vec<String>)>> =
-            None;
         let mut removed_mapping_count = 0usize;
         let mut removed_upstream_count = 0usize;
 
@@ -606,7 +604,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         //
         // Note: ConnectomeManager::remove_cortical_area currently does NOT remove the
         // ID from brain regions, so we do it explicitly here.
-        {
+        let region_io = {
             let mut manager = self.connectome.write();
             let region_ids: Vec<String> = manager
                 .get_brain_region_ids()
@@ -665,15 +663,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 }
             }
 
-            region_io = Some(
+            Some(
                 manager.recompute_brain_region_io_registry().map_err(|e| {
                     ServiceError::Backend(format!(
                         "Failed to recompute region IO registry: {}",
                         e
                     ))
                 })?,
-            );
-        }
+            )
+        };
 
         // CRITICAL: Persist deletion into RuntimeGenome (source of truth for save/export).
         if let Some(genome) = self.current_genome.write().as_mut() {
@@ -1769,6 +1767,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 synapse_count
             );
 
+            // Refresh burst-runner caches so newly created twin areas are visualized immediately.
+            self.refresh_burst_runner_cache();
+
             (synapse_count, region_io)
         };
 
@@ -1797,6 +1798,48 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         "Region '{}' not found in RuntimeGenome while persisting IO registry",
                         region_id
                     );
+                }
+            }
+
+            let manager = self.connectome.read();
+            if let Some(memory_area) = manager.get_cortical_area(&dst_id) {
+                if let Some(twin_map) = memory_area
+                    .properties
+                    .get("memory_twin_areas")
+                    .and_then(|v| v.as_object())
+                {
+                    if let Some(genome_area) = genome.cortical_areas.get_mut(&dst_id) {
+                        genome_area
+                            .properties
+                            .insert("memory_twin_areas".to_string(), serde_json::json!(twin_map));
+                        if let Some(mapping) = memory_area.properties.get("cortical_mapping_dst") {
+                            genome_area
+                                .properties
+                                .insert("cortical_mapping_dst".to_string(), mapping.clone());
+                        }
+                    }
+                    for twin_id_str in twin_map.values().filter_map(|v| v.as_str()) {
+                        let Ok(twin_id) = CorticalID::try_from_base_64(twin_id_str) else {
+                            continue;
+                        };
+                        if genome.cortical_areas.contains_key(&twin_id) {
+                            continue;
+                        }
+                        if let Some(twin_area) = manager.get_cortical_area(&twin_id) {
+                            genome.cortical_areas.insert(twin_id, twin_area.clone());
+                            if let Some(parent_region_id) = twin_area
+                                .properties
+                                .get("parent_region_id")
+                                .and_then(|v| v.as_str())
+                            {
+                                if let Some(region) =
+                                    genome.brain_regions.get_mut(parent_region_id)
+                                {
+                                    region.add_area(twin_id);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

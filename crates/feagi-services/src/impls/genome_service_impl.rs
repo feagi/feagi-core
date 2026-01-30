@@ -303,8 +303,16 @@ impl GenomeService for GenomeServiceImpl {
         info!(target: "feagi-services", "Loading genome from JSON");
 
         // Parse genome using feagi-evo (this is CPU-bound, but relatively fast)
-        let genome = feagi_evolutionary::load_genome_from_json(&params.json_str)
+        let mut genome = feagi_evolutionary::load_genome_from_json(&params.json_str)
             .map_err(|e| ServiceError::InvalidInput(format!("Failed to parse genome: {}", e)))?;
+        let (_areas_added, morphs_added) = feagi_evolutionary::ensure_core_components(&mut genome);
+        if morphs_added > 0 {
+            info!(
+                target: "feagi-services",
+                "Added {} missing core morphologies during genome load",
+                morphs_added
+            );
+        }
 
         // Extract simulation_timestep from genome physiology (will be returned in GenomeInfo)
         let simulation_timestep = genome.physiology.simulation_timestep;

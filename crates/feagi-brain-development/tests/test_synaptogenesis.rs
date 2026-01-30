@@ -151,7 +151,7 @@ fn test_projector_morphology_basic() {
 
     // Apply cortical mapping
     let synapse_count = manager
-        .apply_cortical_mapping(&src_id)
+        .regenerate_synapses_for_mapping(&src_id, &dst_id)
         .expect("Failed to apply cortical mapping");
 
     println!(
@@ -295,9 +295,10 @@ fn test_pattern_morphology_origin_to_all() {
         .apply_cortical_mapping(&src_id)
         .expect("Failed to apply cortical mapping");
 
+    let expected_count = u32::try_from(dst_neurons.len()).expect("Neuron count overflow");
     assert_eq!(
         synapse_count,
-        dst_neurons.len(),
+        expected_count,
         "Expected one synapse from origin to each destination neuron"
     );
 
