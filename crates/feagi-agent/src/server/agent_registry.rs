@@ -1,6 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::future::Future;
-use futures::SinkExt;
 use feagi_io::implementations::zmq::{FEAGIZMQServerPublisher, FEAGIZMQServerPuller};
 use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
 use feagi_serialization::{FeagiByteContainer, SessionID};
@@ -28,15 +26,15 @@ impl AgentRegistry {
         let motor_server = MotorServer::new(
             Box::new(FEAGIZMQServerPublisher::new(
                 MOTOR_ENDPOINT.to_string(),
-                |_|,
-            ))
+                Box::new(|_| {}),
+            ).unwrap())
         ).await.unwrap();
 
         let sensory_server = SensoryServer::new(
             Box::new(FEAGIZMQServerPuller::new(
                 SENSORY_ENDPOINT.to_string(),
-                |_|
-            ))
+                Box::new(|_| {}),
+            ).unwrap())
         ).await.unwrap();
 
         AgentRegistry {
@@ -109,10 +107,9 @@ impl AgentRegistry {
                 // Some implementations return errors when no data is available
                 let err_str = e.to_string();
                 if !err_str.contains("No clients") && !err_str.contains("No data") {
-                    Err(FeagiAgentError::GeneralFailure("[SERVER] Error polling: {}".to_string()))
-
-                }
-                // you should await here
+                    return Err(FeagiAgentError::GeneralFailure("[SERVER] Error polling: {}".to_string()))
+                };
+                Ok(())
             }
         }
     }
@@ -120,6 +117,7 @@ impl AgentRegistry {
     /// Poll motor socket. Some implementations this does nothing, but others need to do this to stay alive
     pub async fn poll_motor_endpoints(&mut self)  -> Result<(), FeagiAgentError> {
         self.motor_server.poll().await?;
+        Ok(())
     }
 
     /// Send motor data to motor socket
@@ -147,7 +145,8 @@ impl AgentRegistry {
         }
         let server: &mut Box<dyn FeagiServerRouter> = self.io_server.as_mut().unwrap();
 
-        let json_bytes: Vec<u8> = registration_response.into();
+        let json_bytes = serde_json::to_vec(&registration_response)
+            .map_err(|e| FeagiAgentError::GeneralFailure(format!("Failed to serialize response: {}", e)))?;
         server.send_response(session_id, &json_bytes)
             .await.map_err(|e| FeagiAgentError::GeneralFailure(format!("{:?}", e)))?;
         Ok(())

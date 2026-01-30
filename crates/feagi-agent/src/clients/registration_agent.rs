@@ -44,10 +44,13 @@ impl RegistrationAgent {
 
         match response {
             RegistrationResponse::FailedInvalidRequest => Err(FeagiAgentError::ConnectionFailed(
-                "Failed invalid request!".to_string()
+                "Server rejected request as invalid!".to_string()
             )),
             RegistrationResponse::FailedInvalidAuth => Err(FeagiAgentError::ConnectionFailed(
-                "Failed invalid auth!".to_string()
+                "Server rejected authentication!".to_string()
+            )),
+            RegistrationResponse::AlreadyRegistered => Err(FeagiAgentError::ConnectionFailed(
+                "Agent is already registered with this server!".to_string()
             )),
             RegistrationResponse::Success(session_id, mapped_capabilities) => {
                 Ok((session_id, mapped_capabilities))
@@ -55,8 +58,12 @@ impl RegistrationAgent {
         }
     }
 
-
-
+    /// Disconnect from the registration server.
+    /// Call this after registration is complete or if registration fails.
+    pub async fn disconnect(&mut self) -> Result<(), FeagiAgentError> {
+        self.io_client.disconnect().await
+            .map_err(|e| FeagiAgentError::ConnectionFailed(e.to_string()))
+    }
 
 
 
