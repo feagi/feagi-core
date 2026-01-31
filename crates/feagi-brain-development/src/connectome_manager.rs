@@ -1202,6 +1202,22 @@ impl ConnectomeManager {
         Vec::new()
     }
 
+    /// Filter upstream cortical indices to exclude memory areas.
+    pub fn filter_non_memory_upstream_areas(&self, upstream: &[u32]) -> Vec<u32> {
+        upstream
+            .iter()
+            .filter_map(|idx| {
+                let cortical_id = self.cortical_idx_to_id.get(idx)?;
+                let area = self.cortical_areas.get(cortical_id)?;
+                if matches!(area.cortical_type, CorticalAreaType::Memory(_)) {
+                    None
+                } else {
+                    Some(*idx)
+                }
+            })
+            .collect()
+    }
+
     /// Recompute and persist upstream_cortical_areas for a target area from mapping properties.
     ///
     /// This is a recovery path for stale upstream tracking (e.g., bidirectional mappings
@@ -1211,11 +1227,8 @@ impl ConnectomeManager {
         target_cortical_id: &CorticalID,
     ) -> Vec<u32> {
         use std::collections::HashSet;
-        use tracing::debug;
-
         let target_id_str = target_cortical_id.as_base_64();
         let mut upstream_idxs = HashSet::new();
-        let mut upstream_sources = Vec::new();
         for (src_id, src_area) in &self.cortical_areas {
             if src_id == target_cortical_id {
                 continue;
@@ -1227,7 +1240,6 @@ impl ConnectomeManager {
             {
                 if mapping.contains_key(&target_id_str) {
                     upstream_idxs.insert(src_area.cortical_idx);
-                    upstream_sources.push(src_id.as_base_64());
                 }
             }
         }
@@ -1241,14 +1253,6 @@ impl ConnectomeManager {
                 serde_json::json!(upstream_list),
             );
         }
-
-        debug!(
-            target: "feagi-bdu",
-            "Refreshed upstreams for {}: upstream_idxs={:?} sources={:?}",
-            target_id_str,
-            upstream_list,
-            upstream_sources
-        );
 
         self.get_upstream_cortical_areas(target_cortical_id)
     }
@@ -2084,6 +2088,8 @@ impl ConnectomeManager {
                 if let Some(dst_area) = self.cortical_areas.get(dst_area_id) {
                     if let Some(mem_props) = extract_memory_properties(&dst_area.properties) {
                         let upstream_areas = self.get_upstream_cortical_areas(dst_area_id);
+                        let upstream_non_memory =
+                            self.filter_non_memory_upstream_areas(&upstream_areas);
                         debug!(
                             target: "feagi-bdu",
                             "Registering memory area idx={} id={} upstream={} depth={}",
@@ -2142,7 +2148,7 @@ impl ConnectomeManager {
                                 dst_area.cortical_idx,
                                 dst_area_id.as_base_64(),
                                 mem_props.temporal_depth,
-                                upstream_areas.clone(),
+                                upstream_non_memory,
                                 Some(lifecycle_config),
                             );
                         } else {
