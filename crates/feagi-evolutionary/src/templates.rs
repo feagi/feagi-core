@@ -251,9 +251,9 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
     let required_morphologies = vec![
         "block_to_block",
         "projector",
-        "memory",
+        "episodic_memory",
         "memory_replay",
-        "bi_directional_stdp",
+        "associative_memory",
         "all_to_0-0-0",
         "0-0-0_to_all",
         "lateral_+x",
@@ -305,9 +305,9 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
         },
     );
 
-    // memory - Function-based morphology
+    // episodic_memory - Function-based morphology
     registry.add_morphology(
-        "memory".to_string(),
+        "episodic_memory".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},
@@ -325,9 +325,9 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
         },
     );
 
-    // bi_directional_stdp - Function-based morphology
+    // associative_memory (bi-directional STDP) - Function-based morphology
     registry.add_morphology(
-        "bi_directional_stdp".to_string(),
+        "associative_memory".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},

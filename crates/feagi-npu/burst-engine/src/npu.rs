@@ -38,6 +38,8 @@ use crate::synaptic_propagation::SynapticPropagationEngine;
 use ahash::AHashMap;
 use ahash::AHashSet;
 use feagi_npu_neural::types::*;
+use std::sync::atomic::AtomicU8;
+use std::time::{SystemTime, UNIX_EPOCH};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use roaring::RoaringBitmap;
 use tracing::{debug, error, info, trace, warn};
@@ -183,6 +185,33 @@ pub struct RustNPU<
 }
 
 const POWER_NEURON_UNSET: u32 = u32::MAX;
+
+static BURST_PHASE: AtomicU8 = AtomicU8::new(0);
+static BURST_PHASE_BURST: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+static BURST_PHASE_TS_MS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+pub(crate) fn update_burst_phase(phase: u8, burst: u64) {
+    BURST_PHASE.store(phase, std::sync::atomic::Ordering::Relaxed);
+    BURST_PHASE_BURST.store(burst, std::sync::atomic::Ordering::Relaxed);
+    BURST_PHASE_TS_MS.store(now_millis(), std::sync::atomic::Ordering::Relaxed);
+}
+
+pub(crate) fn get_burst_phase_snapshot() -> (u64, u8, u64) {
+    (
+        BURST_PHASE_BURST.load(std::sync::atomic::Ordering::Relaxed),
+        BURST_PHASE.load(std::sync::atomic::Ordering::Relaxed),
+        BURST_PHASE_TS_MS.load(std::sync::atomic::Ordering::Relaxed),
+    )
+}
 
 /// Fire-related structures grouped together for single mutex
 pub(crate) struct FireStructures {
@@ -1459,6 +1488,13 @@ impl<
         let burst_count = self.increment_burst_count();
         let power_amount = self.get_power_amount();
         let burst_start = std::time::Instant::now();
+        update_burst_phase(1, burst_count);
+        tracing::debug!(
+            target: "feagi-burst-engine",
+            "[BURST] Starting burst {} (power_amount={})",
+            burst_count,
+            power_amount
+        );
 
         // Lock neuron/synapse arrays for reading (allows concurrent sensory injection to fire_structures)
         let lock_start = std::time::Instant::now();
@@ -1494,6 +1530,12 @@ impl<
             &mut pending_memory,
             &mut fire_structures.pending_memory_injections,
         );
+        tracing::debug!(
+            target: "feagi-burst-engine",
+            "[BURST] Pending injections: sensory={}, memory={}",
+            pending_mutex.lock().map(|p| p.len()).unwrap_or(0),
+            pending_memory.len()
+        );
         if !pending_memory.is_empty() {
             tracing::debug!(
                 "[NPU] Drained {} pending memory injections for burst {}",
@@ -1525,6 +1567,15 @@ impl<
         };
         let phase1_duration = phase1_start.elapsed();
         fire_structures.pending_sensory_injections = pending_mutex.into_inner().unwrap();
+        update_burst_phase(2, burst_count);
+        tracing::debug!(
+            target: "feagi-burst-engine",
+            "[BURST] Phase1 complete (duration_ms={:.3}, sensory_injections={}, synaptic_injections={}, power_injections={})",
+            phase1_duration.as_secs_f64() * 1000.0,
+            injection_result.sensory_injections,
+            injection_result.synaptic_injections,
+            injection_result.power_injections
+        );
 
         // Apply memory neuron injections after Phase 1 (so they’re not affected by Phase 1 staging logic).
         // These become candidates for Phase 2 and will be force-fired by the dynamics layer.
@@ -1558,6 +1609,13 @@ impl<
             burst_count,
         )?;
         let phase2_duration = phase2_start.elapsed();
+        update_burst_phase(3, burst_count);
+        tracing::debug!(
+            target: "feagi-burst-engine",
+            "[BURST] Phase2 complete (duration_ms={:.3}, fired={})",
+            phase2_duration.as_secs_f64() * 1000.0,
+            dynamics_result.fire_queue.total_neurons()
+        );
 
         // Release neuron/synapse locks before plasticity updates to avoid lock contention.
         drop(propagation_engine);
@@ -1572,8 +1630,23 @@ impl<
 
         // Phase 3.5: Synaptic Plasticity (STDP-like) updates
         // Uses FireLedger window ending at this burst and applies weight updates to affect burst t+1.
-        self.apply_stdp_updates_for_burst(burst_count, &fire_structures.fire_ledger)?;
+        self.apply_stdp_updates_for_burst(burst_count, &fire_structures.fire_ledger)
+            .map_err(|e| {
+                tracing::error!(
+                    target: "feagi-burst-engine",
+                    "[BURST] STDP update failed at burst {}: {}",
+                    burst_count,
+                    e
+                );
+                e
+            })?;
         let phase3_duration = phase3_start.elapsed();
+        update_burst_phase(4, burst_count);
+        tracing::debug!(
+            target: "feagi-burst-engine",
+            "[BURST] Phase3 complete (duration_ms={:.3})",
+            phase3_duration.as_secs_f64() * 1000.0
+        );
 
         // Phase 4: Swap fire queues (current becomes previous for next burst)
         let phase4_start = std::time::Instant::now();

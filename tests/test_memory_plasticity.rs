@@ -667,7 +667,7 @@ fn test_memory_replay_injects_twin_area() {
     manager.add_cortical_area(mem_area).unwrap();
 
     let mapping_data = vec![serde_json::json!({
-        "morphology_id": "memory",
+        "morphology_id": "episodic_memory",
         "morphology_scalar": 1,
         "postSynapticCurrent_multiplier": 1.0,
     })];

@@ -1861,9 +1861,20 @@ impl GenomeServiceImpl {
                 use feagi_evolutionary::extract_memory_properties;
                 use feagi_npu_plasticity::{MemoryNeuronLifecycleConfig, PlasticityExecutor};
 
-                let manager = self.connectome.read();
+                let mut manager = self.connectome.write();
                 if let Some(area) = manager.get_cortical_area(&cortical_id_typed) {
                     if let Some(mem_props) = extract_memory_properties(&area.properties) {
+                        // Ensure upstream tracking is consistent with current mappings before re-registering.
+                        let upstream_after_refresh = manager
+                            .refresh_upstream_cortical_areas_from_mappings(&cortical_id_typed);
+                        tracing::debug!(
+                            target: "feagi-services",
+                            "[FAST-UPDATE] Memory params refresh for {}: upstream_count={} upstream_idxs={:?}",
+                            cortical_id,
+                            upstream_after_refresh.len(),
+                            upstream_after_refresh
+                        );
+
                         // Update FireLedger upstream tracking for this memory area (monotonic-increase).
                         // Note: FireLedger track_area is an *exact* setting; this uses max(existing, desired)
                         // to avoid shrinking windows that may be required elsewhere (e.g., other memory areas).

@@ -68,7 +68,73 @@ pub fn migrate_genome(genome_json: &Value) -> EvoResult<MigrationResult> {
     // Step 4: Migrate cortical_mapping_dst references
     migrate_cortical_mappings(&mut result)?;
 
+    // Step 5: Migrate legacy morphology IDs
+    migrate_morphology_ids(&mut result)?;
+
     Ok(result)
+}
+
+fn migrate_morphology_ids(result: &mut MigrationResult) -> EvoResult<()> {
+    let replacements: HashMap<&str, &str> = HashMap::from([
+        ("memory", "episodic_memory"),
+        ("bi_directional_stdp", "associative_memory"),
+    ]);
+    let mut replaced_count: usize = 0;
+
+    let genome = result
+        .genome
+        .as_object_mut()
+        .ok_or_else(|| EvoError::InvalidGenome("Genome is not an object".to_string()))?;
+
+    for section_key in ["morphologies", "neuron_morphologies"] {
+        if let Some(Value::Object(section)) = genome.get_mut(section_key) {
+            for (old_id, new_id) in &replacements {
+                if let Some(value) = section.remove(*old_id) {
+                    section.insert((*new_id).to_string(), value);
+                    replaced_count += 1;
+                }
+            }
+        }
+    }
+
+    fn update_morphology_id_fields(
+        value: &mut Value,
+        replacements: &HashMap<&str, &str>,
+        replaced_count: &mut usize,
+    ) {
+        match value {
+            Value::Object(obj) => {
+                if let Some(morphology_id) = obj.get_mut("morphology_id") {
+                    if let Some(old_id) = morphology_id.as_str() {
+                        if let Some(new_id) = replacements.get(old_id) {
+                            *morphology_id = Value::String((*new_id).to_string());
+                            *replaced_count += 1;
+                        }
+                    }
+                }
+                for child in obj.values_mut() {
+                    update_morphology_id_fields(child, replacements, replaced_count);
+                }
+            }
+            Value::Array(arr) => {
+                for child in arr.iter_mut() {
+                    update_morphology_id_fields(child, replacements, replaced_count);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    update_morphology_id_fields(&mut result.genome, &replacements, &mut replaced_count);
+
+    if replaced_count > 0 {
+        result.warnings.push(format!(
+            "Migrated {} legacy morphology ID reference(s) to episodic/associative naming",
+            replaced_count
+        ));
+    }
+
+    Ok(())
 }
 
 /// Build mapping from old cortical IDs to new template-compliant IDs

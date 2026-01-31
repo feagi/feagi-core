@@ -478,6 +478,45 @@ impl BurstLoopRunner {
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
         );
 
+        let running_watchdog = self.running.clone();
+        let watchdog_frequency = current_freq;
+        let _watchdog_handle = thread::Builder::new()
+            .name("feagi-burst-watchdog".to_string())
+            .spawn(move || {
+                let base_interval_ms = (1000.0 / watchdog_frequency.max(1.0)).max(1.0);
+                let interval = std::time::Duration::from_millis(base_interval_ms as u64);
+                let stall_threshold_ms = (base_interval_ms * 10.0) as u64;
+                let mut last_burst = 0;
+                while running_watchdog.load(Ordering::Acquire) {
+                    std::thread::sleep(interval);
+                    let (burst, phase, ts_ms) = crate::npu::get_burst_phase_snapshot();
+                    let now_ms = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64;
+                    let age_ms = now_ms.saturating_sub(ts_ms);
+                    if age_ms > stall_threshold_ms && burst >= last_burst {
+                        let phase_label = match phase {
+                            1 => "start",
+                            2 => "after_phase1",
+                            3 => "after_phase2",
+                            4 => "after_phase3",
+                            _ => "unknown",
+                        };
+                        warn!(
+                            target: "feagi-burst-engine",
+                            "[BURST-WATCH] No phase update for {}ms (burst={}, phase={} {})",
+                            age_ms,
+                            burst,
+                            phase,
+                            phase_label
+                        );
+                        last_burst = burst;
+                    }
+                }
+            })
+            .map_err(|e| format!("Failed to spawn burst watchdog thread: {}", e))?;
+
         info!("[BURST-RUNNER] ✅ Burst loop started successfully");
         Ok(())
     }
@@ -1353,8 +1392,12 @@ fn burst_loop(
                 let process_start = Instant::now();
                 debug!("[BURST-TIMING] Starting process_burst()...");
 
-                match npu_lock.process_burst() {
-                    Ok(mut result) => {
+                let burst_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    npu_lock.process_burst()
+                }));
+
+                match burst_result {
+                    Ok(Ok(mut result)) => {
                         let process_done = Instant::now();
                         let duration = process_done.duration_since(process_start);
                         last_process_duration = Some(duration);
@@ -1416,7 +1459,7 @@ fn burst_loop(
                         burst_after = current_burst;
                         false // Continue processing
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         let timestamp = get_timestamp();
                         error!(
                             "[{}] [BURST-LOOP] ❌ Burst processing error: {}",
@@ -1424,6 +1467,12 @@ fn burst_loop(
                         );
                         burst_after = npu_lock.get_burst_count();
                         false // Continue despite error
+                    }
+                    Err(panic_payload) => {
+                        error!(
+                            "[BURST-LOOP] ❌ process_burst() panicked; rethrowing to preserve crash"
+                        );
+                        std::panic::resume_unwind(panic_payload);
                     }
                 }
             };
@@ -1487,14 +1536,40 @@ fn burst_loop(
             );
         }
 
+        tracing::debug!(
+            target: "feagi-burst-engine",
+            "[BURST-LOOP] Post-burst section start for burst {}",
+            burst_after
+        );
         if let Some(ref callback) = post_burst_callback {
+            let callback_start = Instant::now();
             tracing::debug!(
+                target: "feagi-burst-engine",
                 "[BURST-LOOP] Post-burst callback invoked for burst {}",
                 burst_after
             );
             callback(burst_after);
+            let callback_duration = callback_start.elapsed();
+            if callback_duration.as_millis() > 10 {
+                warn!(
+                    target: "feagi-burst-engine",
+                    "[BURST-LOOP] Slow post-burst callback: {:.2}ms (burst {})",
+                    callback_duration.as_secs_f64() * 1000.0,
+                    burst_after
+                );
+            } else {
+                debug!(
+                    target: "feagi-burst-engine",
+                    "[BURST-LOOP] Post-burst callback completed in {:.2}ms (burst {})",
+                    callback_duration.as_secs_f64() * 1000.0,
+                    burst_after
+                );
+            }
         } else if !POST_BURST_MISSING_LOGGED.swap(true, Ordering::Relaxed) {
-            tracing::debug!("[BURST-LOOP] Post-burst callback not configured");
+            tracing::debug!(
+                target: "feagi-burst-engine",
+                "[BURST-LOOP] Post-burst callback not configured"
+            );
         }
 
             // Exit if shutdown was requested
@@ -1842,13 +1917,35 @@ fn burst_loop(
                     // If SHM is attached, we write to SHM and skip publisher handoff to avoid doing
                     // two independent serialization paths (maintenance + performance nightmare).
                     if has_shm_writer {
+                        let encode_start = Instant::now();
                         match encode_fire_data_to_xyzp(raw_snapshot, None) {
                             Ok(buffer) => {
+                                let encode_duration = encode_start.elapsed();
+                                debug!(
+                                    "[BURST-LOOP] SHM encode completed in {:.2}ms (burst {})",
+                                    encode_duration.as_secs_f64() * 1000.0,
+                                    burst_num
+                                );
+                                let write_start = Instant::now();
                                 let mut viz_writer_lock = viz_shm_writer.lock().unwrap();
                                 if let Some(writer) = viz_writer_lock.as_mut() {
                                     if let Err(e) = writer.write_payload(&buffer) {
                                         error!("[BURST-LOOP] ❌ Failed to write viz SHM: {}", e);
                                     }
+                                }
+                                let write_duration = write_start.elapsed();
+                                if write_duration.as_millis() > 10 {
+                                    warn!(
+                                        "[BURST-LOOP] Slow SHM write: {:.2}ms (burst {})",
+                                        write_duration.as_secs_f64() * 1000.0,
+                                        burst_num
+                                    );
+                                } else {
+                                    debug!(
+                                        "[BURST-LOOP] SHM write completed in {:.2}ms (burst {})",
+                                        write_duration.as_secs_f64() * 1000.0,
+                                        burst_num
+                                    );
                                 }
                             }
                             Err(e) => {
@@ -1885,6 +1982,12 @@ fn burst_loop(
                                     publish_duration.as_secs_f64() * 1000.0,
                                     burst_num
                                 );
+                            } else {
+                                debug!(
+                                    "[BURST-LOOP] Viz publish handoff completed in {:.2}ms (burst {})",
+                                    publish_duration.as_secs_f64() * 1000.0,
+                                    burst_num
+                                );
                             }
                         }
                     }
@@ -1912,6 +2015,7 @@ fn burst_loop(
         }
 
         if needs_motor {
+            let motor_build_start = Instant::now();
             debug!("[BURST-LOOP] 🎮 MOTOR: Starting motor output generation (shared_fire_data available={})", shared_fire_data_opt.is_some());
 
             // Use shared fire data from above (Arc - zero cost!)
@@ -1993,9 +2097,11 @@ fn burst_loop(
                     );
                 }
 
+                let motor_build_duration = motor_build_start.elapsed();
                 debug!(
-                    "[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas",
-                    motor_snapshot.len()
+                    "[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas in {:.2}ms",
+                    motor_snapshot.len(),
+                    motor_build_duration.as_secs_f64() * 1000.0
                 );
 
                 // Get motor subscriptions
@@ -2076,12 +2182,16 @@ fn burst_loop(
 
                                 // Publish via ZMQ to agent
                                 if let Some(ref publisher) = motor_publisher {
+                                    let publish_start = Instant::now();
                                     match publisher.publish_motor(agent_id, &motor_bytes) {
                                         Ok(_) => {
+                                            let publish_duration = publish_start.elapsed();
                                             // Log every motor send (not just first) for debugging
                                             debug!(
-                                                "[BURST-LOOP] ✅ PUBLISHED motor data to agent '{}': {} bytes",
-                                                agent_id, motor_bytes.len()
+                                                "[BURST-LOOP] ✅ PUBLISHED motor data to agent '{}': {} bytes ({}ms)",
+                                                agent_id,
+                                                motor_bytes.len(),
+                                                publish_duration.as_secs_f64() * 1000.0
                                             );
                                         }
                                         Err(e) => {

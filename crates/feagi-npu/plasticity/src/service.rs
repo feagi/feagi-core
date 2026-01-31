@@ -815,6 +815,11 @@ impl PlasticityService {
         drained
     }
 
+    pub fn enqueue_commands_for_test(&self, commands: Vec<PlasticityCommand>) {
+        let mut queue = self.command_queue.lock().unwrap();
+        queue.extend(commands);
+    }
+
     /// Get memory neuron array reference
     pub fn get_memory_neuron_array(&self) -> Arc<Mutex<MemoryNeuronArray>> {
         Arc::clone(&self.memory_neuron_array)

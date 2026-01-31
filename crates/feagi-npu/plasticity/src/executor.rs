@@ -113,6 +113,15 @@ impl AsyncPlasticityExecutor {
     pub fn get_memory_stats_cache(&self) -> MemoryStatsCache {
         self.memory_stats_cache.clone()
     }
+
+    pub fn enqueue_commands_for_test(
+        &self,
+        commands: Vec<crate::PlasticityCommand>,
+    ) {
+        if let Some(service) = self.service.lock().unwrap().as_ref() {
+            service.enqueue_commands_for_test(commands);
+        }
+    }
 }
 
 impl PlasticityExecutor for AsyncPlasticityExecutor {
