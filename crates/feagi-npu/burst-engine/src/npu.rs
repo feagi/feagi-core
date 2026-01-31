@@ -3440,6 +3440,7 @@ impl<
         burst_timestep: u64,
         fire_ledger: &crate::fire_ledger::FireLedger,
     ) -> Result<()> {
+        const MEMORY_NEURON_ID_START: u32 = 50_000_000;
         let mappings = self.stdp_mappings.read().unwrap().clone();
         if mappings.is_empty() {
             return Ok(());
@@ -3498,6 +3499,19 @@ impl<
                 dst_any |= &bm;
                 dst_all &= &bm;
             }
+
+            let src_any = RoaringBitmap::from_iter(
+                src_any.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+            );
+            let src_all = RoaringBitmap::from_iter(
+                src_all.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+            );
+            let dst_any = RoaringBitmap::from_iter(
+                dst_any.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+            );
+            let dst_all = RoaringBitmap::from_iter(
+                dst_all.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+            );
 
             activity_sets.insert(
                 *key,

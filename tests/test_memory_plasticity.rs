@@ -144,6 +144,7 @@ fn apply_plasticity_commands(npu: &Arc<TracingMutex<DynamicNPU>>, commands: &[Pl
     for command in commands {
         match command {
             PlasticityCommand::RegisterMemoryNeuron { .. } => {}
+            PlasticityCommand::MemoryNeuronConvertedToLtm { .. } => {}
             PlasticityCommand::InjectMemoryNeuronToFCL {
                 neuron_id,
                 area_idx,

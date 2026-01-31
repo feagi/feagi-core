@@ -330,6 +330,10 @@ impl MemoryNeuronArray {
         }
     }
 
+    pub fn get_pattern_hash(&self, neuron_idx: usize) -> Option<u64> {
+        self.index_to_pattern_hash.get(&neuron_idx).copied()
+    }
+
     /// Get comprehensive statistics
     pub fn get_stats(&self) -> MemoryNeuronStats {
         let n = self.next_available_index;

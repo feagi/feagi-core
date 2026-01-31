@@ -83,6 +83,14 @@ pub enum PlasticityCommand {
         membrane_potential: f32,
     },
 
+    /// Notification that a memory neuron has converted to long-term memory (LTM).
+    /// Used to create a persistent associative twin in the standard neuron array.
+    MemoryNeuronConvertedToLtm {
+        neuron_id: u32,
+        area_idx: u32,
+        pattern_hash: u64,
+    },
+
     /// Inject memory neuron to Fire Candidate List for immediate firing
     /// Memory neurons bypass threshold checks and fire when their pattern is detected
     InjectMemoryNeuronToFCL {
@@ -320,6 +328,28 @@ impl PlasticityService {
         if !converted_neurons.is_empty() {
             let mut s = stats.lock().unwrap();
             s.memory_neurons_converted_ltm += converted_neurons.len();
+            drop(s);
+
+            for neuron_idx in converted_neurons {
+                let neuron_id = array.get_neuron_id(neuron_idx);
+                let area_idx = array.get_cortical_area_id(neuron_idx);
+                let pattern_hash = array.get_pattern_hash(neuron_idx);
+                if let (Some(neuron_id), Some(area_idx), Some(pattern_hash)) =
+                    (neuron_id, area_idx, pattern_hash)
+                {
+                    commands.push(PlasticityCommand::MemoryNeuronConvertedToLtm {
+                        neuron_id,
+                        area_idx,
+                        pattern_hash,
+                    });
+                } else {
+                    tracing::warn!(
+                        target: "plasticity",
+                        "[PLASTICITY] LTM conversion missing metadata for idx={}",
+                        neuron_idx
+                    );
+                }
+            }
         }
 
         // Step 2: Age all memory neurons (non-long-term only)

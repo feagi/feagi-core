@@ -116,6 +116,10 @@ fn process_plasticity_commands(&self, commands: Vec<PlasticityCommand>) -> Resul
                 // Register memory neuron in NPU's neuron array
                 npu.register_neuron(neuron_id, area_idx, threshold, membrane_potential)?;
             }
+
+            PlasticityCommand::MemoryNeuronConvertedToLtm { .. } => {
+                // Optional: create an associative twin neuron for LTM (design-dependent)
+            }
             
             PlasticityCommand::InjectMemoryNeuronToFCL {
                 neuron_id,
