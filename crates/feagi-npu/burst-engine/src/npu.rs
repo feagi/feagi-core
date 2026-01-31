@@ -1559,6 +1559,10 @@ impl<
         )?;
         let phase2_duration = phase2_start.elapsed();
 
+        // Release neuron/synapse locks before plasticity updates to avoid lock contention.
+        drop(propagation_engine);
+        drop(neuron_storage);
+
         // Phase 3: Archival (ZERO-COPY archive to Fire Ledger)
         let phase3_start = std::time::Instant::now();
         fire_structures
@@ -1620,7 +1624,7 @@ impl<
         let is_slow = total_duration.as_millis() > 200;
 
         if is_slow {
-            let neuron_count = neuron_storage.count();
+            let neuron_count = self.neuron_storage.read().unwrap().count();
             warn!(
                 "[BURST-TIMING] Burst {}: total={:.2}ms | locks={:.2}ms | phase1={:.2}ms | phase2={:.2}ms | phase3={:.2}ms | phase4={:.2}ms | neurons={} | fired={} | candidates={}",
                 burst_count,
@@ -3391,7 +3395,7 @@ impl<
         self.stdp_mappings.write().unwrap().remove(&key).is_some()
     }
 
-    fn rebuild_stdp_mapping_index(&mut self) {
+    fn rebuild_stdp_mapping_index(&self) {
         let mappings = self.stdp_mappings.read().unwrap().clone();
         if mappings.is_empty() {
             *self.stdp_mapping_index.write().unwrap() = AHashMap::new();
@@ -3442,7 +3446,8 @@ impl<
         }
 
         let mapping_index = self.stdp_mapping_index.read().unwrap().clone();
-        if mapping_index.is_empty() {
+        let has_bidirectional = mappings.values().any(|params| params.bidirectional_stdp);
+        if mapping_index.is_empty() && !has_bidirectional {
             return Ok(());
         }
 
@@ -3471,31 +3476,27 @@ impl<
                 };
 
             let mut src_any = RoaringBitmap::new();
-            let mut src_all = RoaringBitmap::new();
             let mut src_iter = src_window.into_iter();
-            if let Some((_t, first)) = src_iter.next() {
-                src_any |= &first;
-                src_all = first;
-                for (_t, bm) in src_iter {
-                    src_any |= &bm;
-                    src_all &= &bm;
-                }
-            } else {
+            let Some((_t, first)) = src_iter.next() else {
                 continue;
+            };
+            let mut src_all = first.clone();
+            src_any |= &first;
+            for (_t, bm) in src_iter {
+                src_any |= &bm;
+                src_all &= &bm;
             }
 
             let mut dst_any = RoaringBitmap::new();
-            let mut dst_all = RoaringBitmap::new();
             let mut dst_iter = dst_window.into_iter();
-            if let Some((_t, first)) = dst_iter.next() {
-                dst_any |= &first;
-                dst_all = first;
-                for (_t, bm) in dst_iter {
-                    dst_any |= &bm;
-                    dst_all &= &bm;
-                }
-            } else {
+            let Some((_t, first)) = dst_iter.next() else {
                 continue;
+            };
+            let mut dst_all = first.clone();
+            dst_any |= &first;
+            for (_t, bm) in dst_iter {
+                dst_any |= &bm;
+                dst_all &= &bm;
             }
 
             activity_sets.insert(
@@ -3565,7 +3566,7 @@ impl<
 
         // Create new synapses for bidirectional STDP mappings based on synchronized activity.
         let mut created_synapses = false;
-        for (key @ (src_area, dst_area), params) in &mappings {
+        for (key @ (_src_area, dst_area), params) in &mappings {
             if !params.bidirectional_stdp {
                 continue;
             }
@@ -3625,13 +3626,30 @@ impl<
             }
 
             if !new_sources.is_empty() {
-                self.add_synapses_batch(new_sources, new_targets, new_weights, new_psps, new_types)?;
+                let source_ids: Vec<u32> = new_sources.iter().map(|n| n.0).collect();
+                let target_ids: Vec<u32> = new_targets.iter().map(|n| n.0).collect();
+                let weight_vals: Vec<u8> = new_weights.iter().map(|w| w.0).collect();
+                let psp_vals: Vec<u8> = new_psps.iter().map(|c| c.0).collect();
+                let type_vals: Vec<u8> = new_types.iter().map(|t| *t as u8).collect();
+
+                self.synapse_storage
+                    .write()
+                    .unwrap()
+                    .add_synapses_batch(&source_ids, &target_ids, &weight_vals, &psp_vals, &type_vals)
+                    .map_err(|e| {
+                        FeagiError::RuntimeError(format!("Failed to add synapses batch: {:?}", e))
+                    })?;
                 created_synapses = true;
             }
         }
 
         if created_synapses {
-            self.rebuild_synapse_index();
+            let synapse_storage = self.synapse_storage.read().unwrap();
+            let mut prop_engine = self.propagation_engine.write().unwrap();
+            prop_engine.build_synapse_index(&*synapse_storage);
+            drop(prop_engine);
+            drop(synapse_storage);
+            self.rebuild_stdp_mapping_index();
         }
 
         Ok(())
