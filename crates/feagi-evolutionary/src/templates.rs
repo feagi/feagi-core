@@ -253,6 +253,7 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         "projector",
         "memory",
         "memory_replay",
+        "bi_directional_stdp",
         "all_to_0-0-0",
         "0-0-0_to_all",
         "lateral_+x",
@@ -317,6 +318,16 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
     // memory_replay - Function-based morphology
     registry.add_morphology(
         "memory_replay".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // bi_directional_stdp - Function-based morphology
+    registry.add_morphology(
+        "bi_directional_stdp".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},

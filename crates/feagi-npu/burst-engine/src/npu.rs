@@ -64,6 +64,9 @@ pub struct StdpMappingParams {
     pub plasticity_constant: i64,
     pub ltp_multiplier: i64,
     pub ltd_multiplier: i64,
+    pub bidirectional_stdp: bool,
+    pub synapse_conductance: u8,
+    pub synapse_type: SynapseType,
 }
 
 impl StdpMappingParams {
@@ -3443,8 +3446,15 @@ impl<
             return Ok(());
         }
 
+        struct StdpActivityWindow {
+            src_any: RoaringBitmap,
+            dst_any: RoaringBitmap,
+            src_all: RoaringBitmap,
+            dst_all: RoaringBitmap,
+        }
+
         // Precompute window activity sets per mapping.
-        let mut activity_sets: AHashMap<CorticalMappingKey, (RoaringBitmap, RoaringBitmap)> =
+        let mut activity_sets: AHashMap<CorticalMappingKey, StdpActivityWindow> =
             AHashMap::with_capacity(mappings.len());
 
         for (key @ (src_area, dst_area), params) in &mappings {
@@ -3460,60 +3470,168 @@ impl<
                     Err(_) => continue,
                 };
 
-            let mut src_active = RoaringBitmap::new();
-            for (_t, bm) in src_window {
-                src_active |= bm;
-            }
-            let mut dst_active = RoaringBitmap::new();
-            for (_t, bm) in dst_window {
-                dst_active |= bm;
+            let mut src_any = RoaringBitmap::new();
+            let mut src_all = RoaringBitmap::new();
+            let mut src_iter = src_window.into_iter();
+            if let Some((_t, first)) = src_iter.next() {
+                src_any |= &first;
+                src_all = first;
+                for (_t, bm) in src_iter {
+                    src_any |= &bm;
+                    src_all &= &bm;
+                }
+            } else {
+                continue;
             }
 
-            activity_sets.insert(*key, (src_active, dst_active));
+            let mut dst_any = RoaringBitmap::new();
+            let mut dst_all = RoaringBitmap::new();
+            let mut dst_iter = dst_window.into_iter();
+            if let Some((_t, first)) = dst_iter.next() {
+                dst_any |= &first;
+                dst_all = first;
+                for (_t, bm) in dst_iter {
+                    dst_any |= &bm;
+                    dst_all &= &bm;
+                }
+            } else {
+                continue;
+            }
+
+            activity_sets.insert(
+                *key,
+                StdpActivityWindow {
+                    src_any,
+                    dst_any,
+                    src_all,
+                    dst_all,
+                },
+            );
         }
 
         if activity_sets.is_empty() {
             return Ok(());
         }
 
-        // Apply weight updates.
-        let mut synapse_storage = self.synapse_storage.write().unwrap();
+        // Apply weight updates to existing synapses.
+        {
+            let mut synapse_storage = self.synapse_storage.write().unwrap();
 
-        for (key, params) in mappings {
-            let Some((src_active, dst_active)) = activity_sets.get(&key) else {
+            for (key, params) in &mappings {
+                let Some(activity) = activity_sets.get(key) else {
+                    continue;
+                };
+                let Some(syn_indices) = mapping_index.get(key) else {
+                    continue;
+                };
+
+                let delta_plus = params.delta_plus_u8();
+                let delta_minus = params.delta_minus_u8();
+                if delta_plus == 0 && delta_minus == 0 {
+                    continue;
+                }
+
+                for &syn_idx in syn_indices {
+                    if syn_idx >= synapse_storage.count()
+                        || !synapse_storage.valid_mask()[syn_idx]
+                    {
+                        continue;
+                    }
+
+                    let src_neuron = synapse_storage.source_neurons()[syn_idx];
+                    let dst_neuron = synapse_storage.target_neurons()[syn_idx];
+
+                    let src_any_present = activity.src_any.contains(src_neuron);
+                    let dst_any_present = activity.dst_any.contains(dst_neuron);
+                    if !src_any_present && !dst_any_present {
+                        continue;
+                    }
+
+                    let src_all_present = activity.src_all.contains(src_neuron);
+                    let dst_all_present = activity.dst_all.contains(dst_neuron);
+
+                    if src_all_present && dst_all_present {
+                        let old = synapse_storage.weights()[syn_idx];
+                        let new_w = old.saturating_add(delta_plus);
+                        synapse_storage.weights_mut()[syn_idx] = new_w;
+                    } else if delta_minus > 0 {
+                        let old = synapse_storage.weights()[syn_idx];
+                        let new_w = old.saturating_sub(delta_minus);
+                        synapse_storage.weights_mut()[syn_idx] = new_w;
+                    }
+                }
+            }
+        }
+
+        // Create new synapses for bidirectional STDP mappings based on synchronized activity.
+        let mut created_synapses = false;
+        for (key @ (src_area, dst_area), params) in &mappings {
+            if !params.bidirectional_stdp {
                 continue;
-            };
-            let Some(syn_indices) = mapping_index.get(&key) else {
+            }
+            let Some(activity) = activity_sets.get(key) else {
                 continue;
             };
 
             let delta_plus = params.delta_plus_u8();
-            let delta_minus = params.delta_minus_u8();
-            if delta_plus == 0 && delta_minus == 0 {
+            if delta_plus == 0 || activity.src_all.is_empty() || activity.dst_all.is_empty() {
                 continue;
             }
 
-            for &syn_idx in syn_indices {
-                if syn_idx >= synapse_storage.count() || !synapse_storage.valid_mask()[syn_idx] {
-                    continue;
-                }
+            let mut new_sources = Vec::new();
+            let mut new_targets = Vec::new();
+            let mut new_weights = Vec::new();
+            let mut new_psps = Vec::new();
+            let mut new_types = Vec::new();
 
-                let src_neuron = synapse_storage.source_neurons()[syn_idx];
-                let dst_neuron = synapse_storage.target_neurons()[syn_idx];
+            {
+                let prop_engine = self.propagation_engine.read().unwrap();
+                let synapse_storage = self.synapse_storage.read().unwrap();
+                let neuron_storage = self.neuron_storage.read().unwrap();
+                let neuron_count = neuron_storage.count();
 
-                let src_present = src_active.contains(src_neuron);
-                let dst_present = dst_active.contains(dst_neuron);
+                for src_neuron in activity.src_all.iter() {
+                    let source = NeuronId(src_neuron);
+                    let mut existing_targets = AHashSet::new();
+                    if let Some(indices) = prop_engine.synapse_index.get(&source) {
+                        for &syn_idx in indices {
+                            if syn_idx >= synapse_storage.count()
+                                || !synapse_storage.valid_mask()[syn_idx]
+                            {
+                                continue;
+                            }
+                            let target = synapse_storage.target_neurons()[syn_idx];
+                            let target_idx = target as usize;
+                            if target_idx >= neuron_count || !neuron_storage.valid_mask()[target_idx] {
+                                continue;
+                            }
+                            if neuron_storage.cortical_areas()[target_idx] == *dst_area {
+                                existing_targets.insert(target);
+                            }
+                        }
+                    }
 
-                if src_present && dst_present {
-                    let old = synapse_storage.weights()[syn_idx];
-                    let new_w = old.saturating_add(delta_plus);
-                    synapse_storage.weights_mut()[syn_idx] = new_w;
-                } else if src_present ^ dst_present {
-                    let old = synapse_storage.weights()[syn_idx];
-                    let new_w = old.saturating_sub(delta_minus);
-                    synapse_storage.weights_mut()[syn_idx] = new_w;
+                    for dst_neuron in activity.dst_all.iter() {
+                        if existing_targets.contains(&dst_neuron) {
+                            continue;
+                        }
+                        new_sources.push(NeuronId(src_neuron));
+                        new_targets.push(NeuronId(dst_neuron));
+                        new_weights.push(SynapticWeight(delta_plus));
+                        new_psps.push(SynapticConductance(params.synapse_conductance));
+                        new_types.push(params.synapse_type);
+                    }
                 }
             }
+
+            if !new_sources.is_empty() {
+                self.add_synapses_batch(new_sources, new_targets, new_weights, new_psps, new_types)?;
+                created_synapses = true;
+            }
+        }
+
+        if created_synapses {
+            self.rebuild_synapse_index();
         }
 
         Ok(())

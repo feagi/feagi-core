@@ -2102,6 +2102,9 @@ impl ConnectomeManager {
         src_cortical_idx: u32,
         dst_cortical_idx: u32,
         rule_obj: &serde_json::Map<String, serde_json::Value>,
+        bidirectional_stdp: bool,
+        synapse_conductance: u8,
+        synapse_type: feagi_npu_neural::SynapseType,
     ) -> BduResult<()> {
         let plasticity_window = rule_obj
             .get("plasticity_window")
@@ -2145,6 +2148,9 @@ impl ConnectomeManager {
             plasticity_constant,
             ltp_multiplier,
             ltd_multiplier,
+            bidirectional_stdp,
+            synapse_conductance,
+            synapse_type,
         };
 
         trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: attempting NPU lock");
@@ -2184,6 +2190,80 @@ impl ConnectomeManager {
         }
 
         Ok(())
+    }
+
+    /// Resolve synapse weight, conductance, and type from a mapping rule.
+    fn resolve_synapse_params_for_rule(
+        &self,
+        src_area_id: &CorticalID,
+        rule: &serde_json::Value,
+    ) -> BduResult<(u8, u8, feagi_npu_neural::SynapseType)> {
+        // Get source area to access PSP property
+        let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+            crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+        })?;
+
+        // Extract weight from rule (postSynapticCurrent_multiplier)
+        //
+        // IMPORTANT:
+        // - This value represents the synapse "weight" stored in the NPU (u8: 0..255).
+        // - Do NOT scale by 255 here. A multiplier of 1.0 should remain weight=1 (not 255).
+        let (weight, synapse_type) = {
+            // Accept either integer or whole-number float inputs for compatibility with older clients/tests.
+            let parse_i64 = |v: &serde_json::Value| -> Option<i64> {
+                if let Some(i) = v.as_i64() {
+                    return Some(i);
+                }
+                let f = v.as_f64()?;
+                if f.fract() == 0.0 {
+                    Some(f as i64)
+                } else {
+                    None
+                }
+            };
+
+            let multiplier_i64: i64 = if let Some(obj) = rule.as_object() {
+                obj.get("postSynapticCurrent_multiplier")
+                    .and_then(parse_i64)
+                    .unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
+            } else if let Some(arr) = rule.as_array() {
+                // Array format: [morphology_id, scalar, multiplier, ...]
+                arr.get(2).and_then(parse_i64).unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
+            } else {
+                128 // @architecture:acceptable - emergency fallback for malformed rule
+            };
+
+            if multiplier_i64 < 0 {
+                let abs = if multiplier_i64 == i64::MIN {
+                    i64::MAX
+                } else {
+                    multiplier_i64.abs()
+                };
+                (
+                    abs.clamp(0, 255) as u8,
+                    feagi_npu_neural::SynapseType::Inhibitory,
+                )
+            } else {
+                (
+                    multiplier_i64.clamp(0, 255) as u8,
+                    feagi_npu_neural::SynapseType::Excitatory,
+                )
+            }
+        };
+
+        // Get PSP (conductance) from source cortical area.
+        //
+        // IMPORTANT:
+        // - This value represents the synapse "conductance" stored in the NPU (u8: 0..255).
+        // - Treat `postsynaptic_current` as an absolute value in 0..255 units.
+        // - Do NOT scale by 255 here. A PSP of 1.0 should remain conductance=1 (not 255).
+        let conductance = {
+            use crate::models::cortical_area::CorticalAreaExt;
+            let psp_f32 = src_area.postsynaptic_current();
+            psp_f32.clamp(0.0, 255.0) as u8
+        };
+
+        Ok((weight, conductance, synapse_type))
     }
 
     /// Apply cortical mapping for a specific area pair
@@ -2256,6 +2336,10 @@ impl ConnectomeManager {
                 Some(obj) => obj,
                 None => continue,
             };
+            let morphology_id = rule_obj
+                .get("morphology_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
 
             // Handle STDP/plasticity configuration if needed
             let plasticity_flag = rule_obj
@@ -2263,6 +2347,9 @@ impl ConnectomeManager {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
             if plasticity_flag {
+                let (_weight, conductance, synapse_type) =
+                    self.resolve_synapse_params_for_rule(src_area_id, rule)?;
+                let bidirectional_stdp = morphology_id == "bi_directional_stdp";
                 Self::register_stdp_mapping_for_rule(
                     &npu_arc,
                     src_area_id,
@@ -2270,6 +2357,9 @@ impl ConnectomeManager {
                     src_cortical_idx,
                     dst_cortical_idx,
                     rule_obj,
+                    bidirectional_stdp,
+                    conductance,
+                    synapse_type,
                 )?;
             }
 
@@ -2277,10 +2367,6 @@ impl ConnectomeManager {
             let synapse_count =
                 self.apply_single_morphology_rule(src_area_id, dst_area_id, rule)?;
             total_synapses += synapse_count;
-            let morphology_id = rule_obj
-                .get("morphology_id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
             tracing::debug!(
                 target: "feagi-bdu",
                 "Rule {} created {} synapses for {} -> {}",
@@ -2385,6 +2471,16 @@ impl ConnectomeManager {
                 trace!(
                     target: "feagi-bdu",
                     "Memory replay morphology: {} -> {} (no physical synapses)",
+                    src_idx, dst_idx
+                );
+                Ok(0)
+            }
+            "bi_directional_stdp" => {
+                // Bi-directional STDP mapping: no initial synapses
+                use tracing::trace;
+                trace!(
+                    target: "feagi-bdu",
+                    "Bi-directional STDP morphology: {} -> {} (no physical synapses)",
                     src_idx, dst_idx
                 );
                 Ok(0)
@@ -2565,73 +2661,8 @@ impl ConnectomeManager {
                 morphology_id
             );
 
-            // Get source area to access PSP property
-            let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
-                crate::types::BduError::InvalidArea(format!(
-                    "Source area not found: {}",
-                    src_area_id
-                ))
-            })?;
-
-            // Extract weight from rule (postSynapticCurrent_multiplier)
-            //
-            // IMPORTANT:
-            // - This value represents the synapse "weight" stored in the NPU (u8: 0..255).
-            // - Do NOT scale by 255 here. A multiplier of 1.0 should remain weight=1 (not 255).
-            let (weight, synapse_type) = {
-                // Accept either integer or whole-number float inputs for compatibility with older clients/tests.
-                let parse_i64 = |v: &serde_json::Value| -> Option<i64> {
-                    if let Some(i) = v.as_i64() {
-                        return Some(i);
-                    }
-                    let f = v.as_f64()?;
-                    if f.fract() == 0.0 {
-                        Some(f as i64)
-                    } else {
-                        None
-                    }
-                };
-
-                let multiplier_i64: i64 = if let Some(obj) = rule.as_object() {
-                    obj.get("postSynapticCurrent_multiplier")
-                        .and_then(parse_i64)
-                        .unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
-                } else if let Some(arr) = rule.as_array() {
-                    // Array format: [morphology_id, scalar, multiplier, ...]
-                    arr.get(2).and_then(parse_i64).unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
-                } else {
-                    128 // @architecture:acceptable - emergency fallback for malformed rule
-                };
-
-                if multiplier_i64 < 0 {
-                    let abs = if multiplier_i64 == i64::MIN {
-                        i64::MAX
-                    } else {
-                        multiplier_i64.abs()
-                    };
-                    (
-                        abs.clamp(0, 255) as u8,
-                        feagi_npu_neural::SynapseType::Inhibitory,
-                    )
-                } else {
-                    (
-                        multiplier_i64.clamp(0, 255) as u8,
-                        feagi_npu_neural::SynapseType::Excitatory,
-                    )
-                }
-            };
-
-            // Get PSP (conductance) from source cortical area.
-            //
-            // IMPORTANT:
-            // - This value represents the synapse "conductance" stored in the NPU (u8: 0..255).
-            // - Treat `postsynaptic_current` as an absolute value in 0..255 units.
-            // - Do NOT scale by 255 here. A PSP of 1.0 should remain conductance=1 (not 255).
-            let conductance = {
-                use crate::models::cortical_area::CorticalAreaExt;
-                let psp_f32 = src_area.postsynaptic_current();
-                psp_f32.clamp(0.0, 255.0) as u8
-            };
+            let (weight, conductance, synapse_type) =
+                self.resolve_synapse_params_for_rule(src_area_id, rule)?;
 
             // Extract synapse_attractivity from rule (probability 0-100)
             let synapse_attractivity = if let Some(obj) = rule.as_object() {
