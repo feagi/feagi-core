@@ -1636,44 +1636,120 @@ impl ConnectomeManager {
 
         info!(target: "feagi-bdu", "Updating cortical mapping: {} -> {}", src_area_id, dst_area_id);
 
-        // Get source area (must exist)
-        let src_area = self.cortical_areas.get_mut(src_area_id).ok_or_else(|| {
-            crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
-        })?;
+        // Helper: detect bi_directional_stdp in a mapping payload
+        let mapping_has_bidirectional_stdp = |rules: &[serde_json::Value]| -> bool {
+            for rule in rules {
+                if let Some(obj) = rule.as_object() {
+                    if let Some(morphology_id) = obj.get("morphology_id").and_then(|v| v.as_str())
+                    {
+                        if morphology_id == "bi_directional_stdp" {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        };
 
-        // Get or create cortical_mapping_dst property
-        let cortical_mapping_dst =
-            if let Some(existing) = src_area.properties.get_mut("cortical_mapping_dst") {
-                existing.as_object_mut().ok_or_else(|| {
-                    crate::types::BduError::InvalidMorphology(
-                        "cortical_mapping_dst is not an object".to_string(),
-                    )
-                })?
+        let requested_bidirectional = mapping_has_bidirectional_stdp(&mapping_data);
+        let existing_bidirectional = self
+            .cortical_areas
+            .get(src_area_id)
+            .and_then(|area| area.properties.get("cortical_mapping_dst"))
+            .and_then(|v| v.as_object())
+            .and_then(|map| map.get(&dst_area_id.as_base_64()))
+            .and_then(|v| v.as_array())
+            .map(|arr| mapping_has_bidirectional_stdp(arr))
+            .unwrap_or(false);
+        let mut should_apply_bidirectional = requested_bidirectional || existing_bidirectional;
+
+        {
+            // Get source area (must exist)
+            let src_area = self.cortical_areas.get_mut(src_area_id).ok_or_else(|| {
+                crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+            })?;
+
+            // Get or create cortical_mapping_dst property
+            let cortical_mapping_dst =
+                if let Some(existing) = src_area.properties.get_mut("cortical_mapping_dst") {
+                    existing.as_object_mut().ok_or_else(|| {
+                        crate::types::BduError::InvalidMorphology(
+                            "cortical_mapping_dst is not an object".to_string(),
+                        )
+                    })?
+                } else {
+                    // Create new cortical_mapping_dst
+                    src_area
+                        .properties
+                        .insert("cortical_mapping_dst".to_string(), serde_json::json!({}));
+                    src_area
+                        .properties
+                        .get_mut("cortical_mapping_dst")
+                        .unwrap()
+                        .as_object_mut()
+                        .unwrap()
+                };
+
+            // Update or add the mapping for this destination
+            if mapping_data.is_empty() {
+                // Empty mapping_data = delete the connection
+                cortical_mapping_dst.remove(&dst_area_id.as_base_64());
+                info!(target: "feagi-bdu", "Removed mapping from {} to {}", src_area_id, dst_area_id);
             } else {
-                // Create new cortical_mapping_dst
-                src_area
-                    .properties
-                    .insert("cortical_mapping_dst".to_string(), serde_json::json!({}));
-                src_area
-                    .properties
-                    .get_mut("cortical_mapping_dst")
-                    .unwrap()
-                    .as_object_mut()
-                    .unwrap()
-            };
+                cortical_mapping_dst.insert(
+                    dst_area_id.as_base_64(),
+                    serde_json::Value::Array(mapping_data.clone()),
+                );
+                info!(target: "feagi-bdu", "Updated mapping from {} to {} with {} connections",
+                      src_area_id, dst_area_id, mapping_data.len());
+            }
+        }
 
-        // Update or add the mapping for this destination
-        if mapping_data.is_empty() {
-            // Empty mapping_data = delete the connection
-            cortical_mapping_dst.remove(&dst_area_id.as_base_64());
-            info!(target: "feagi-bdu", "Removed mapping from {} to {}", src_area_id, dst_area_id);
-        } else {
-            cortical_mapping_dst.insert(
-                dst_area_id.as_base_64(),
-                serde_json::Value::Array(mapping_data.clone()),
-            );
-            info!(target: "feagi-bdu", "Updated mapping from {} to {} with {} connections",
-                  src_area_id, dst_area_id, mapping_data.len());
+        // Bi-directional STDP: mirror the mapping on the reverse pair
+        if should_apply_bidirectional {
+            let dst_area = self.cortical_areas.get_mut(dst_area_id).ok_or_else(|| {
+                crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_area_id))
+            })?;
+            let dst_mapping_dst =
+                if let Some(existing) = dst_area.properties.get_mut("cortical_mapping_dst") {
+                    existing.as_object_mut().ok_or_else(|| {
+                        crate::types::BduError::InvalidMorphology(
+                            "cortical_mapping_dst is not an object".to_string(),
+                        )
+                    })?
+                } else {
+                    dst_area
+                        .properties
+                        .insert("cortical_mapping_dst".to_string(), serde_json::json!({}));
+                    dst_area
+                        .properties
+                        .get_mut("cortical_mapping_dst")
+                        .unwrap()
+                        .as_object_mut()
+                        .unwrap()
+                };
+
+            if mapping_data.is_empty() {
+                dst_mapping_dst.remove(&src_area_id.as_base_64());
+                info!(
+                    target: "feagi-bdu",
+                    "Removed bi-directional STDP mirror mapping from {} to {}",
+                    dst_area_id,
+                    src_area_id
+                );
+            } else {
+                dst_mapping_dst.insert(
+                    src_area_id.as_base_64(),
+                    serde_json::Value::Array(mapping_data.clone()),
+                );
+                info!(
+                    target: "feagi-bdu",
+                    "Updated bi-directional STDP mirror mapping from {} to {} with {} connections",
+                    dst_area_id,
+                    src_area_id,
+                    mapping_data.len()
+                );
+            }
         }
 
         self.refresh_cortical_mappings_hash();
@@ -2342,10 +2418,13 @@ impl ConnectomeManager {
                 .unwrap_or("unknown");
 
             // Handle STDP/plasticity configuration if needed
-            let plasticity_flag = rule_obj
+            let mut plasticity_flag = rule_obj
                 .get("plasticity_flag")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
+            if morphology_id == "bi_directional_stdp" {
+                plasticity_flag = true;
+            }
             if plasticity_flag {
                 let (_weight, conductance, synapse_type) =
                     self.resolve_synapse_params_for_rule(src_area_id, rule)?;
