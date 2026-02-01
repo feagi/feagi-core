@@ -51,7 +51,7 @@ fn stdp_params(
     ltp_multiplier: i64,
     ltd_multiplier: i64,
     bidirectional_stdp: bool,
-    synapse_conductance: u8,
+    synapse_psp: u8,
     synapse_type: SynapseType,
 ) -> StdpMappingParams {
     StdpMappingParams {
@@ -60,7 +60,7 @@ fn stdp_params(
         ltp_multiplier,
         ltd_multiplier,
         bidirectional_stdp,
-        synapse_conductance,
+        synapse_psp,
         synapse_type,
     }
 }

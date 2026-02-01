@@ -65,7 +65,7 @@ pub struct StdpMappingParams {
     pub ltp_multiplier: i64,
     pub ltd_multiplier: i64,
     pub bidirectional_stdp: bool,
-    pub synapse_conductance: u8,
+    pub synapse_psp: u8,
     pub synapse_type: SynapseType,
 }
 
@@ -943,7 +943,7 @@ impl<
         source: NeuronId,
         target: NeuronId,
         weight: SynapticWeight,
-        conductance: SynapticConductance,
+        psp: SynapticConductance,
         synapse_type: SynapseType,
     ) -> Result<usize> {
         let result = self
@@ -954,7 +954,7 @@ impl<
                 source.0,
                 target.0,
                 weight.0,
-                conductance.0,
+                psp.0,
                 synapse_type as u8,
             )
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapse: {:?}", e)))?;
@@ -3101,7 +3101,7 @@ impl<
         updated_count
     }
 
-    /// Update postsynaptic potential (PSP / conductance) for all **existing outgoing synapses**
+    /// Update postsynaptic potential (PSP) for all **existing outgoing synapses**
     /// from neurons in the specified cortical area.
     ///
     /// @cursor:critical-path
@@ -3329,7 +3329,7 @@ impl<
     }
 
     /// Get incoming synapses for a neuron (neuron is the target)
-    /// Returns Vec<(source_neuron_id, weight, conductance, synapse_type)>
+    /// Returns Vec<(source_neuron_id, weight, psp, synapse_type)>
     pub fn get_incoming_synapses(&self, target_neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
         let mut synapses = Vec::new();
 
@@ -3607,7 +3607,7 @@ impl<
                 }
                 tracing::info!(
                     target: "feagi-burst-engine",
-                    "associative-stdp burst={} mapping=({}->{}) synapses={} delta_plus={} delta_minus={} src_all={} dst_all={} conductance={}",
+                    "associative-stdp burst={} mapping=({}->{}) synapses={} delta_plus={} delta_minus={} src_all={} dst_all={} psp={}",
                     burst_timestep,
                     key.0,
                     key.1,
@@ -3616,7 +3616,7 @@ impl<
                     delta_minus,
                     activity.src_all.len(),
                     activity.dst_all.len(),
-                    params.synapse_conductance
+                    params.synapse_psp
                 );
 
                 for &syn_idx in syn_indices {
@@ -3638,13 +3638,13 @@ impl<
                             && neuron_storage.valid_mask()[dst_idx]
                         {
                             let weight = synapse_storage.weights()[syn_idx];
-                            let conductance =
+                            let psp =
                                 synapse_storage.postsynaptic_potentials()[syn_idx];
                             let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
                             let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
                             tracing::info!(
                                 target: "feagi-burst-engine",
-                                "associative-stdp synapse burst={} mapping=({}->{}) synapse_idx={} src_neuron={} dst_neuron={} weight={} conductance={} src_threshold={} dst_threshold={}",
+                                "associative-stdp synapse burst={} mapping=({}->{}) synapse_idx={} src_neuron={} dst_neuron={} weight={} psp={} src_threshold={} dst_threshold={}",
                                 burst_timestep,
                                 key.0,
                                 key.1,
@@ -3652,7 +3652,7 @@ impl<
                                 src_neuron,
                                 dst_neuron,
                                 weight,
-                                conductance,
+                                psp,
                                 src_threshold,
                                 dst_threshold
                             );
@@ -3740,14 +3740,14 @@ impl<
                             let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
                             tracing::info!(
                                 target: "feagi-burst-engine",
-                                "associative-stdp LTP new synapse burst={} mapping=({}->{}) src_neuron={} dst_neuron={} weight={} conductance={} src_threshold={} dst_threshold={}",
+                                "associative-stdp LTP new synapse burst={} mapping=({}->{}) src_neuron={} dst_neuron={} weight={} psp={} src_threshold={} dst_threshold={}",
                                 burst_timestep,
                                 key.0,
                                 key.1,
                                 src_neuron,
                                 dst_neuron,
                                 delta_plus,
-                                params.synapse_conductance,
+                                params.synapse_psp,
                                 src_threshold,
                                 dst_threshold
                             );
@@ -3755,7 +3755,7 @@ impl<
                         new_sources.push(NeuronId(src_neuron));
                         new_targets.push(NeuronId(dst_neuron));
                         new_weights.push(SynapticWeight(delta_plus));
-                        new_psps.push(SynapticConductance(params.synapse_conductance));
+                        new_psps.push(SynapticConductance(params.synapse_psp));
                         new_types.push(params.synapse_type);
                     }
                 }
@@ -4062,7 +4062,7 @@ fn phase1_injection_with_synapses<
         // - FireQueue stores the membrane potential captured at the moment of firing.
         //
         // Conversion contract:
-        // - Synaptic propagation expects a u8 conductance (0..=255).
+        // - Synaptic propagation expects a u8 PSP (0..=255).
         //
         // IMPORTANT:
         // This conversion must be monotonic. A previous heuristic attempted to "downscale"
@@ -4932,13 +4932,13 @@ mod tests {
             )
             .unwrap();
 
-        // Connect A → B with conductance=1.0 (PSP)
-        // CRITICAL: Using weight=1, conductance=1 → PSP = 1×1 = 1.0
+        // Connect A → B with PSP=1.0
+        // CRITICAL: Using weight=1, PSP=1 → PSP = 1×1 = 1.0
         npu.add_synapse(
             neuron_a,
             neuron_b,
             SynapticWeight(1),       // weight = 1
-            SynapticConductance(1),  // conductance = 1 → PSP = 1×1 = 1.0
+            SynapticConductance(1),  // PSP = 1 → PSP = 1×1 = 1.0
             SynapseType::Excitatory, // synapse_type (excitatory)
         )
         .unwrap();
@@ -5063,7 +5063,7 @@ mod tests {
             .unwrap();
 
         // Target neuron in cortical_area=4. Threshold=100 so it will fire only if it receives
-        // a conductance roughly >= 100 from mp_driven_psp propagation.
+        // a PSP roughly >= 100 from mp_driven_psp propagation.
         let neuron_dst = npu
             .add_neuron(
                 100.0,    // threshold
@@ -5083,7 +5083,7 @@ mod tests {
             )
             .unwrap();
 
-        // Connect src → dst. With mp_driven_psp enabled, the synapse conductance is ignored
+        // Connect src → dst. With mp_driven_psp enabled, the synapse PSP is ignored
         // and replaced by the source neuron's MP (converted to u8).
         npu.add_synapse(
             neuron_src,

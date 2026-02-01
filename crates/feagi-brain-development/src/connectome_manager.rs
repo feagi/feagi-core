@@ -2245,7 +2245,7 @@ impl ConnectomeManager {
         dst_cortical_idx: u32,
         rule_obj: &serde_json::Map<String, serde_json::Value>,
         bidirectional_stdp: bool,
-        synapse_conductance: u8,
+        synapse_psp: u8,
         synapse_type: feagi_npu_neural::SynapseType,
     ) -> BduResult<()> {
         let plasticity_window = rule_obj
@@ -2291,7 +2291,7 @@ impl ConnectomeManager {
             ltp_multiplier,
             ltd_multiplier,
             bidirectional_stdp,
-            synapse_conductance,
+            synapse_psp,
             synapse_type,
         };
 
@@ -2334,7 +2334,7 @@ impl ConnectomeManager {
         Ok(())
     }
 
-    /// Resolve synapse weight, conductance, and type from a mapping rule.
+    /// Resolve synapse weight, PSP, and type from a mapping rule.
     fn resolve_synapse_params_for_rule(
         &self,
         src_area_id: &CorticalID,
@@ -2393,19 +2393,19 @@ impl ConnectomeManager {
             }
         };
 
-        // Get PSP (conductance) from source cortical area.
+        // Get PSP from source cortical area.
         //
         // IMPORTANT:
-        // - This value represents the synapse "conductance" stored in the NPU (u8: 0..255).
+        // - This value represents the synapse PSP stored in the NPU (u8: 0..255).
         // - Treat `postsynaptic_current` as an absolute value in 0..255 units.
-        // - Do NOT scale by 255 here. A PSP of 1.0 should remain conductance=1 (not 255).
-        let conductance = {
+        // - Do NOT scale by 255 here. A PSP of 1.0 should remain PSP=1 (not 255).
+        let psp = {
             use crate::models::cortical_area::CorticalAreaExt;
             let psp_f32 = src_area.postsynaptic_current();
             psp_f32.clamp(0.0, 255.0) as u8
         };
 
-        Ok((weight, conductance, synapse_type))
+        Ok((weight, psp, synapse_type))
     }
 
     /// Apply cortical mapping for a specific area pair
@@ -2494,7 +2494,7 @@ impl ConnectomeManager {
                 plasticity_flag = true;
             }
             if plasticity_flag {
-                let (_weight, conductance, synapse_type) =
+                let (_weight, psp, synapse_type) =
                     self.resolve_synapse_params_for_rule(src_area_id, rule)?;
                 let bidirectional_stdp = morphology_id == "associative_memory";
                 if let Err(e) = Self::register_stdp_mapping_for_rule(
@@ -2505,7 +2505,7 @@ impl ConnectomeManager {
                     dst_cortical_idx,
                     rule_obj,
                     bidirectional_stdp,
-                    conductance,
+                    psp,
                     synapse_type,
                 ) {
                     tracing::error!(
@@ -2564,7 +2564,7 @@ impl ConnectomeManager {
     /// * `npu` - Locked NPU reference
     /// * `src_area_id`, `dst_area_id` - Source and destination area IDs
     /// * `src_idx`, `dst_idx` - Source and destination area indices
-    /// * `weight`, `conductance`, `synapse_attractivity` - Synapse parameters
+    /// * `weight`, `psp`, `synapse_attractivity` - Synapse parameters
     #[allow(clippy::too_many_arguments)]
     fn apply_function_morphology(
         &self,
@@ -2577,7 +2577,7 @@ impl ConnectomeManager {
         src_idx: u32,
         dst_idx: u32,
         weight: u8,
-        conductance: u8,
+        psp: u8,
         synapse_attractivity: u8,
         synapse_type: feagi_npu_neural::SynapseType,
     ) -> BduResult<usize> {
@@ -2618,7 +2618,7 @@ impl ConnectomeManager {
                     None, // transpose
                     None, // project_last_layer_of
                     weight,
-                    conductance,
+                    psp,
                     synapse_attractivity,
                     synapse_type,
                 )?;
@@ -2687,7 +2687,7 @@ impl ConnectomeManager {
                         None,
                         None,
                         weight,
-                        conductance,
+                        psp,
                         synapse_attractivity,
                         synapse_type,
                     )?;
@@ -2761,7 +2761,7 @@ impl ConnectomeManager {
                         dst_dimensions,
                         scalar, // scaling_factor
                         weight,
-                        conductance,
+                        psp,
                         synapse_attractivity,
                         synapse_type,
                     )? as usize
@@ -2781,7 +2781,7 @@ impl ConnectomeManager {
                             dst_dimensions,
                             scalar, // scaling_factor
                             weight,
-                            conductance,
+                            psp,
                             synapse_attractivity,
                             synapse_type,
                         )? as usize;
@@ -2873,7 +2873,7 @@ impl ConnectomeManager {
                 morphology_id
             );
 
-            let (weight, conductance, synapse_type) =
+            let (weight, psp, synapse_type) =
                 self.resolve_synapse_params_for_rule(src_area_id, rule)?;
 
             // Extract synapse_attractivity from rule (probability 0-100)
@@ -2904,7 +2904,7 @@ impl ConnectomeManager {
                         *src_idx,
                         *dst_idx,
                         weight,
-                        conductance,
+                        psp,
                         synapse_attractivity,
                         synapse_type,
                     )
@@ -2940,7 +2940,7 @@ impl ConnectomeManager {
                             vectors_tuples,
                             dst_dimensions,
                             weight,               // From rule, not hardcoded
-                            conductance,          // PSP from source area, NOT hardcoded!
+                            psp,                  // PSP from source area, NOT hardcoded!
                             synapse_attractivity, // From rule, not hardcoded
                             synapse_type,
                         )?;
@@ -3025,7 +3025,7 @@ impl ConnectomeManager {
                         *dst_idx,
                         converted_patterns,
                         weight,
-                        conductance,
+                        psp,
                         synapse_attractivity,
                         synapse_type,
                     )?;
@@ -3972,7 +3972,7 @@ impl ConnectomeManager {
     ///
     /// # Returns
     ///
-    /// Vec of (target_neuron_id, weight, conductance, synapse_type), or empty if NPU not connected
+    /// Vec of (target_neuron_id, weight, psp, synapse_type), or empty if NPU not connected
     ///
     pub fn get_outgoing_synapses(&self, source_neuron_id: u64) -> Vec<(u32, u8, u8, u8)> {
         if let Some(ref npu) = self.npu {
@@ -3994,7 +3994,7 @@ impl ConnectomeManager {
     ///
     /// # Returns
     ///
-    /// Vec of (source_neuron_id, weight, conductance, synapse_type), or empty if NPU not connected
+    /// Vec of (source_neuron_id, weight, psp, synapse_type), or empty if NPU not connected
     ///
     pub fn get_incoming_synapses(&self, target_neuron_id: u64) -> Vec<(u32, u8, u8, u8)> {
         if let Some(ref npu) = self.npu {
@@ -4667,7 +4667,7 @@ impl ConnectomeManager {
     /// * `source_neuron_id` - Source neuron ID
     /// * `target_neuron_id` - Target neuron ID
     /// * `weight` - Synapse weight (0-255)
-    /// * `conductance` - Synapse conductance (0-255)
+    /// * `psp` - Synapse PSP (0-255)
     /// * `synapse_type` - Synapse type (0=excitatory, 1=inhibitory)
     ///
     /// # Returns
@@ -4679,7 +4679,7 @@ impl ConnectomeManager {
         source_neuron_id: u64,
         target_neuron_id: u64,
         weight: u8,
-        conductance: u8,
+        psp: u8,
         synapse_type: u8,
     ) -> BduResult<()> {
         // Get NPU
@@ -4721,13 +4721,13 @@ impl ConnectomeManager {
                 NeuronId(source_neuron_id as u32),
                 NeuronId(target_neuron_id as u32),
                 feagi_npu_neural::types::SynapticWeight(weight),
-                feagi_npu_neural::types::SynapticConductance(conductance),
+                feagi_npu_neural::types::SynapticConductance(psp),
                 syn_type,
             )
             .map_err(|e| BduError::Internal(format!("Failed to create synapse: {}", e)))?;
 
-        debug!(target: "feagi-bdu", "Created synapse: {} -> {} (weight: {}, conductance: {}, type: {}, idx: {})",
-            source_neuron_id, target_neuron_id, weight, conductance, synapse_type, synapse_idx);
+        debug!(target: "feagi-bdu", "Created synapse: {} -> {} (weight: {}, psp: {}, type: {}, idx: {})",
+            source_neuron_id, target_neuron_id, weight, psp, synapse_type, synapse_idx);
 
         let source_cortical_idx = npu_lock.get_neuron_cortical_area(source_neuron_id as u32);
         let target_cortical_idx = npu_lock.get_neuron_cortical_area(target_neuron_id as u32);
@@ -4801,7 +4801,7 @@ impl ConnectomeManager {
     ///
     /// # Returns
     ///
-    /// `Some((weight, conductance, type))` if synapse exists, `None` otherwise
+    /// `Some((weight, psp, type))` if synapse exists, `None` otherwise
     ///
     pub fn get_synapse(
         &self,
@@ -4817,9 +4817,9 @@ impl ConnectomeManager {
         let incoming = npu_lock.get_incoming_synapses(target_neuron_id as u32);
 
         // Find the synapse from our specific source
-        for (source_id, weight, conductance, synapse_type) in incoming {
+        for (source_id, weight, psp, synapse_type) in incoming {
             if source_id == source_neuron_id as u32 {
-                return Some((weight, conductance, synapse_type));
+                return Some((weight, psp, synapse_type));
             }
         }
 
@@ -6355,7 +6355,7 @@ mod tests {
         manager
             .create_synapse(
                 neuron1_id, neuron2_id, 128, // weight
-                64,  // conductance
+                64,  // psp
                 0,   // excitatory
             )
             .unwrap();

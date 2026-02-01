@@ -1276,7 +1276,7 @@ fn burst_loop(
                             }
                             "postsynaptic_current" | "neuron_post_synaptic_potential" => {
                                 if let Some(psp) = update.value.as_f64() {
-                                    // PSP is stored in the NPU as u8 conductance (0..=255).
+                                    // PSP is stored in the NPU as u8 (0..=255).
                                     // Clamp deterministically (matches synaptogenesis behavior).
                                     let psp_u8 = psp.clamp(0.0, 255.0) as u8;
                                     npu_lock.update_cortical_area_postsynaptic_current(
