@@ -22,11 +22,11 @@ pub enum SynapseType {
 /// Calculate synaptic contribution (platform-agnostic)
 ///
 /// This is the core formula for synaptic transmission:
-/// `contribution = weight × conductance × sign`
+/// `contribution = weight × psp × sign`
 ///
 /// Where:
 /// - `weight`: Synaptic strength (0-255, direct cast to float, NO normalization)
-/// - `conductance`: Post-synaptic potential (0-255, direct cast to float, NO normalization)
+/// - `psp`: Post-synaptic potential (0-255, direct cast to float, NO normalization)
 /// - `sign`: +1.0 for excitatory, -1.0 for inhibitory
 ///
 /// CRITICAL: This matches FEAGI's Python behavior - direct cast with NO division by 255.
@@ -34,7 +34,7 @@ pub enum SynapseType {
 ///
 /// # Arguments
 /// * `weight` - Synaptic weight (0-255)
-/// * `conductance` - Postsynaptic conductance (0-255)
+/// * `psp` - Postsynaptic potential (0-255)
 /// * `synapse_type` - Excitatory or inhibitory
 ///
 /// # Returns
@@ -53,12 +53,12 @@ pub enum SynapseType {
 #[inline]
 pub fn compute_synaptic_contribution(
     weight: u8,
-    conductance: u8,
+    psp: u8,
     synapse_type: SynapseType,
 ) -> f32 {
     // CRITICAL: Direct cast, NO normalization (matches Python .astype(np.float32))
     let w = weight as f32;
-    let c = conductance as f32;
+    let c = psp as f32;
     let sign = match synapse_type {
         SynapseType::Excitatory => 1.0,
         SynapseType::Inhibitory => -1.0,
@@ -72,7 +72,7 @@ pub fn compute_synaptic_contribution(
 ///
 /// # Arguments
 /// * `weights` - Slice of synaptic weights (0-255)
-/// * `conductances` - Slice of conductances (0-255)
+/// * `psps` - Slice of PSP values (0-255)
 /// * `types` - Slice of synapse types (0=excitatory, 1=inhibitory)
 /// * `contributions` - Output slice (mutable)
 ///
@@ -84,11 +84,11 @@ pub fn compute_synaptic_contribution(
 /// use feagi_npu_neural::synapse::compute_synaptic_contributions_batch;
 ///
 /// let weights = [255, 128, 200];
-/// let conductances = [255, 255, 200];
+/// let psps = [255, 255, 200];
 /// let types = [0, 1, 0]; // excitatory, inhibitory, excitatory
 /// let mut contributions = [0.0; 3];
 ///
-/// compute_synaptic_contributions_batch(&weights, &conductances, &types, &mut contributions);
+/// compute_synaptic_contributions_batch(&weights, &psps, &types, &mut contributions);
 ///
 /// assert!(contributions[0] > 0.0); // Excitatory
 /// assert!(contributions[1] < 0.0); // Inhibitory
@@ -97,12 +97,12 @@ pub fn compute_synaptic_contribution(
 #[inline]
 pub fn compute_synaptic_contributions_batch(
     weights: &[u8],
-    conductances: &[u8],
+    psps: &[u8],
     types: &[u8],
     contributions: &mut [f32],
 ) {
     let count = weights.len();
-    debug_assert_eq!(conductances.len(), count);
+    debug_assert_eq!(psps.len(), count);
     debug_assert_eq!(types.len(), count);
     debug_assert_eq!(contributions.len(), count);
 
@@ -112,7 +112,7 @@ pub fn compute_synaptic_contributions_batch(
         } else {
             SynapseType::Inhibitory
         };
-        contributions[i] = compute_synaptic_contribution(weights[i], conductances[i], synapse_type);
+        contributions[i] = compute_synaptic_contribution(weights[i], psps[i], synapse_type);
     }
 }
 
@@ -139,7 +139,7 @@ mod tests {
     }
 
     #[test]
-    fn test_partial_conductance() {
+    fn test_partial_psp() {
         let contribution = compute_synaptic_contribution(255, 128, SynapseType::Excitatory);
         assert_eq!(contribution, 255.0 * 128.0); // Direct multiplication
     }
@@ -147,11 +147,11 @@ mod tests {
     #[test]
     fn test_batch_computation() {
         let weights = [255, 128, 200];
-        let conductances = [255, 255, 200];
+        let psps = [255, 255, 200];
         let types = [0, 1, 0];
         let mut contributions = [0.0; 3];
 
-        compute_synaptic_contributions_batch(&weights, &conductances, &types, &mut contributions);
+        compute_synaptic_contributions_batch(&weights, &psps, &types, &mut contributions);
 
         assert!(contributions[0] > 0.0); // Excitatory
         assert!(contributions[1] < 0.0); // Inhibitory

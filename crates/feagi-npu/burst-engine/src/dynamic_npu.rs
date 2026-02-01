@@ -232,12 +232,12 @@ where
         source: NeuronId,
         target: NeuronId,
         weight: SynapticWeight,
-        conductance: SynapticConductance,
+        psp: SynapticPsp,
         synapse_type: SynapseType,
     ) -> Result<usize> {
         dispatch_mut!(
             self,
-            add_synapse(source, target, weight, conductance, synapse_type)
+            add_synapse(source, target, weight, psp, synapse_type)
         )
     }
 
@@ -751,7 +751,7 @@ where
         )
     }
 
-    /// Update postsynaptic potential (PSP / conductance) for all existing outgoing synapses
+    /// Update postsynaptic potential (PSP) for all existing outgoing synapses
     /// from neurons in a given cortical area.
     ///
     /// Returns number of synapses updated.
@@ -763,6 +763,17 @@ where
         dispatch_mut!(
             self,
             update_cortical_area_postsynaptic_current(cortical_area, postsynaptic_potential)
+        )
+    }
+
+    pub fn update_stdp_mapping_psp_for_source(
+        &mut self,
+        src_cortical_idx: u32,
+        new_psp: u8,
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            update_stdp_mapping_psp_for_source(src_cortical_idx, new_psp)
         )
     }
 

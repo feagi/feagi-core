@@ -47,7 +47,7 @@
 
 use ahash::AHashMap;
 use feagi_npu_burst_engine::{backend::CPUBackend, RustNPU};
-use feagi_npu_neural::{NeuronId, SynapseType, SynapticConductance, SynapticWeight};
+use feagi_npu_neural::{NeuronId, SynapseType, SynapticPsp, SynapticWeight};
 use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
 
@@ -109,10 +109,10 @@ fn add_test_synapse(
     source: NeuronId,
     target: NeuronId,
     weight: SynapticWeight,
-    conductance: SynapticConductance,
+    psp: SynapticPsp,
     synapse_type: SynapseType,
 ) {
-    npu.add_synapse(source, target, weight, conductance, synapse_type)
+    npu.add_synapse(source, target, weight, psp, synapse_type)
         .unwrap();
     npu.rebuild_synapse_index();
 }
@@ -131,13 +131,13 @@ fn test_psp_below_threshold_no_fire() {
     // Target neuron: threshold 1.1 (HIGHER than PSP)
     let target = add_test_neuron(&mut npu, 1.1, 0.0, false, 0, 11, 0);
 
-    // Synapse with PSP = 1.0 (weight=1 × conductance=1)
+    // Synapse with PSP = 1.0 (weight=1 × psp=1)
     add_test_synapse(
         &mut npu,
         source,
         target,
         SynapticWeight(1),
-        SynapticConductance(1),
+        SynapticPsp(1),
         SynapseType::Excitatory,
     );
     // Burst 1: Fire source
@@ -165,13 +165,13 @@ fn test_psp_update_rewrites_existing_outgoing_synapses() {
     // Target neuron in area 11 requires PSP >= 10 to fire.
     let target = add_test_neuron(&mut npu, 10.0, 0.0, false, 0, 11, 0);
 
-    // Start with low PSP (conductance=1) so the target will not fire.
+    // Start with low PSP (psp=1) so the target will not fire.
     add_test_synapse(
         &mut npu,
         source,
         target,
         SynapticWeight(1),
-        SynapticConductance(1),
+        SynapticPsp(1),
         SynapseType::Excitatory,
     );
 
@@ -221,13 +221,13 @@ fn test_psp_equals_threshold_fires() {
     let source = add_test_neuron(&mut npu, 1.0, 0.0, false, 0, 10, 0);
     let target = add_test_neuron(&mut npu, 100.0, 0.0, false, 0, 11, 0);
 
-    // Synapse with PSP = 100 (weight=10 × conductance=10)
+    // Synapse with PSP = 100 (weight=10 × psp=10)
     add_test_synapse(
         &mut npu,
         source,
         target,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     // Burst 1: Fire source
@@ -250,13 +250,13 @@ fn test_psp_above_threshold_fires() {
     let source = add_test_neuron(&mut npu, 1.0, 0.0, false, 0, 1, 0);
     let target = add_test_neuron(&mut npu, 50.0, 0.0, false, 0, 2, 0);
 
-    // Synapse with PSP = 100 (weight=10 × conductance=10)
+    // Synapse with PSP = 100 (weight=10 × psp=10)
     add_test_synapse(
         &mut npu,
         source,
         target,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     // Burst 1: Fire source
@@ -287,7 +287,7 @@ fn test_mp_accumulation_false_resets_each_burst() {
         source,
         target,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     // Burst 1: Fire source
@@ -322,7 +322,7 @@ fn test_mp_accumulation_true_accumulates_across_bursts() {
         source,
         target,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     // Burst 1: Fire source
@@ -428,13 +428,13 @@ fn test_psp_uniformity_false_divides_among_synapses() {
     let target1 = add_test_neuron(&mut npu, 50.0, 0.0, false, 0, 2, 0);
     let target2 = add_test_neuron(&mut npu, 50.0, 0.0, false, 0, 2, 1);
 
-    // Two synapses with conductance=10 each
+    // Two synapses with psp=10 each
     add_test_synapse(
         &mut npu,
         source,
         target1,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     add_test_synapse(
@@ -442,7 +442,7 @@ fn test_psp_uniformity_false_divides_among_synapses() {
         source,
         target2,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
 
@@ -471,13 +471,13 @@ fn test_psp_uniformity_true_full_to_each_synapse() {
     let target1 = add_test_neuron(&mut npu, 100.0, 0.0, false, 0, 2, 0);
     let target2 = add_test_neuron(&mut npu, 100.0, 0.0, false, 0, 2, 1);
 
-    // Two synapses with conductance=10 each
+    // Two synapses with psp=10 each
     add_test_synapse(
         &mut npu,
         source,
         target1,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     add_test_synapse(
@@ -485,7 +485,7 @@ fn test_psp_uniformity_true_full_to_each_synapse() {
         source,
         target2,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
 
@@ -536,7 +536,7 @@ fn test_multiple_synapses_from_same_source() {
         source,
         target,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     add_test_synapse(
@@ -544,7 +544,7 @@ fn test_multiple_synapses_from_same_source() {
         source,
         target,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
 
@@ -573,7 +573,7 @@ fn test_multiple_synapses_from_different_sources() {
         source1,
         target,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     add_test_synapse(
@@ -581,7 +581,7 @@ fn test_multiple_synapses_from_different_sources() {
         source2,
         target,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
 
@@ -612,7 +612,7 @@ fn test_excitatory_synapse_increases_potential() {
         source,
         target,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
 
@@ -641,7 +641,7 @@ fn test_inhibitory_synapse_decreases_potential() {
         excitatory,
         target,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     add_test_synapse(
@@ -649,7 +649,7 @@ fn test_inhibitory_synapse_decreases_potential() {
         inhibitory,
         target,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Inhibitory,
     );
 
@@ -678,7 +678,7 @@ fn test_mixed_excitatory_inhibitory_net_effect() {
         excitatory,
         target,
         SynapticWeight(20),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     add_test_synapse(
@@ -686,7 +686,7 @@ fn test_mixed_excitatory_inhibitory_net_effect() {
         inhibitory,
         target,
         SynapticWeight(5),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Inhibitory,
     );
 
@@ -751,7 +751,7 @@ fn test_chain_propagation_with_delay() {
         n1,
         n2,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     add_test_synapse(
@@ -759,7 +759,7 @@ fn test_chain_propagation_with_delay() {
         n2,
         n3,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
 
@@ -799,7 +799,7 @@ fn test_zero_weight_no_propagation() {
         source,
         target,
         SynapticWeight(0),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
 
@@ -826,7 +826,7 @@ fn test_maximum_psp_saturates() {
         source,
         target,
         SynapticWeight(255),
-        SynapticConductance(255),
+        SynapticPsp(255),
         SynapseType::Excitatory,
     );
 
@@ -910,7 +910,7 @@ fn test_complex_network_convergence_divergence() {
         s1,
         hub,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     add_test_synapse(
@@ -918,7 +918,7 @@ fn test_complex_network_convergence_divergence() {
         s2,
         hub,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
 
@@ -928,7 +928,7 @@ fn test_complex_network_convergence_divergence() {
         hub,
         t1,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     add_test_synapse(
@@ -936,7 +936,7 @@ fn test_complex_network_convergence_divergence() {
         hub,
         t2,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
 
@@ -978,7 +978,7 @@ fn test_feedback_loop_with_refractory() {
         n1,
         n2,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
     add_test_synapse(
@@ -986,7 +986,7 @@ fn test_feedback_loop_with_refractory() {
         n2,
         n1,
         SynapticWeight(10),
-        SynapticConductance(10),
+        SynapticPsp(10),
         SynapseType::Excitatory,
     );
 

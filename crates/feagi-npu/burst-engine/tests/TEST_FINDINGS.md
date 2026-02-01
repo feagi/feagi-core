@@ -132,7 +132,7 @@ The pattern of failures suggests **the synaptic propagation PSP delivery is the 
 
 **Hypothesis:** The issue is in how PSP values are stored/retrieved:
 - Genome stores PSP as f32 (e.g., 1.0)
-- Code expects u8 values for weight and conductance
+- Code expects u8 values for weight and PSP
 - Conversion between these might be incorrect
 - OR: PSP uniformity division is happening when it shouldn't
 
@@ -154,7 +154,7 @@ The pattern of failures suggests **the synaptic propagation PSP delivery is the 
 ### Testing Strategy
 1. Run individual failing tests with `--nocapture` to see debug output
 2. Add print statements in synaptic_propagation.rs to trace PSP
-3. Verify synapse creation is storing correct weight/conductance values
+3. Verify synapse creation is storing correct weight/PSP values
 
 ### Long-term
 1. Add unit tests for PSP calculation formula

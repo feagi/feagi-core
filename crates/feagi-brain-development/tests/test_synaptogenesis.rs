@@ -8,7 +8,7 @@ Tests the synaptogenesis process through ConnectomeManager, covering:
 - Core morphology applications (projector, block_to_block, vectors, patterns, expander)
 - Integration path (apply_cortical_mapping -> apply_cortical_mapping_for_pair -> apply_single_morphology_rule)
 - Edge cases (empty areas, no neurons, dimensions mismatch)
-- Parameter validation (weight, conductance, synapse_attractivity)
+- Parameter validation (weight, psp, synapse_attractivity)
 
 NOTE: These tests require morphologies to be registered in the morphology registry.
 Morphologies are typically loaded from genome files. For these tests to work, morphologies

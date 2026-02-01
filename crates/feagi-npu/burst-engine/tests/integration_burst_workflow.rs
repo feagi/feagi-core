@@ -19,7 +19,7 @@
 
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::RustNPU;
-use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
+use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
@@ -77,7 +77,7 @@ fn create_simple_network() -> RustNPU<StdRuntime, f32, CPUBackend> {
                 NeuronId(input),
                 NeuronId(hidden),
                 SynapticWeight(200),
-                SynapticConductance(255),
+                SynapticPsp(255),
                 SynapseType::Excitatory,
             )
             .unwrap();
@@ -91,7 +91,7 @@ fn create_simple_network() -> RustNPU<StdRuntime, f32, CPUBackend> {
                 NeuronId(hidden),
                 NeuronId(output),
                 SynapticWeight(200),
-                SynapticConductance(255),
+                SynapticPsp(255),
                 SynapseType::Excitatory,
             )
             .unwrap();
@@ -218,7 +218,7 @@ fn test_multi_burst_chain_propagation() {
         n1,
         n2,
         SynapticWeight(255),
-        SynapticConductance(255),
+        SynapticPsp(255),
         SynapseType::Excitatory,
     )
     .unwrap();
@@ -226,7 +226,7 @@ fn test_multi_burst_chain_propagation() {
         n2,
         n3,
         SynapticWeight(255),
-        SynapticConductance(255),
+        SynapticPsp(255),
         SynapseType::Excitatory,
     )
     .unwrap();
@@ -234,7 +234,7 @@ fn test_multi_burst_chain_propagation() {
         n3,
         n4,
         SynapticWeight(255),
-        SynapticConductance(255),
+        SynapticPsp(255),
         SynapseType::Excitatory,
     )
     .unwrap();
@@ -310,7 +310,7 @@ fn test_mixed_excitatory_inhibitory_network() {
         excitatory,
         target,
         SynapticWeight(128),
-        SynapticConductance(255),
+        SynapticPsp(255),
         SynapseType::Excitatory,
     )
     .unwrap();
@@ -318,7 +318,7 @@ fn test_mixed_excitatory_inhibitory_network() {
         inhibitory,
         target,
         SynapticWeight(128),
-        SynapticConductance(255),
+        SynapticPsp(255),
         SynapseType::Inhibitory,
     )
     .unwrap();

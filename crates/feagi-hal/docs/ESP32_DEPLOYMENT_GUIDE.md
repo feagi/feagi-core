@@ -244,7 +244,7 @@ fn build_reflex_arc(
                 i as u16,     // source
                 j as u16,     // target
                 128,          // weight (50% strength)
-                0,            // conductance
+                0,            // psp
                 0,            // type
             ).ok_or_else(|| anyhow::anyhow!("Failed to add synapse"))?;
         }

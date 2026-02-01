@@ -386,7 +386,7 @@ impl WGPUBackend {
         // ═══════════════════════════════════════════════════════════
         // 1. CONSOLIDATE SYNAPSE DATA (stride=3)
         // Format: [source_id, target_id, packed_params] per synapse
-        // packed_params = (type << 16) | (conductance << 8) | weight
+        // packed_params = (type << 16) | (psp << 8) | weight
         // ═══════════════════════════════════════════════════════════
 
         let mut synapse_data = Vec::with_capacity(synapse_count * 3);

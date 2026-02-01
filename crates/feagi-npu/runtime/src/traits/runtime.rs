@@ -312,7 +312,7 @@ pub trait SynapseStorage: Send + Sync {
     /// Synaptic weights slice (0-255, stored as u8)
     fn weights(&self) -> &[u8];
 
-    /// Postsynaptic potentials slice (conductances, 0-255)
+    /// Postsynaptic potentials slice (0-255)
     fn postsynaptic_potentials(&self) -> &[u8];
 
     /// Synapse types slice (0=excitatory, 1=inhibitory)

@@ -319,7 +319,7 @@ pub struct SynapseInfo {
     pub source_neuron: u64,
     pub target_neuron: u64,
     pub weight: u8,
-    pub conductance: u8,
+    pub psp: u8,
     pub synapse_type: String, // "Excitatory" or "Inhibitory"
 }
 
@@ -329,7 +329,7 @@ pub struct CreateSynapseParams {
     pub source_neuron: u64,
     pub target_neuron: u64,
     pub weight: u8,
-    pub conductance: u8,
+    pub psp: u8,
     pub synapse_type: String,
 }
 

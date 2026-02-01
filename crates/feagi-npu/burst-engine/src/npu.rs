@@ -943,7 +943,7 @@ impl<
         source: NeuronId,
         target: NeuronId,
         weight: SynapticWeight,
-        psp: SynapticConductance,
+        psp: SynapticPsp,
         synapse_type: SynapseType,
     ) -> Result<usize> {
         let result = self
@@ -982,7 +982,7 @@ impl<
         sources: Vec<NeuronId>,
         targets: Vec<NeuronId>,
         weights: Vec<SynapticWeight>,
-        postsynaptic_potentials: Vec<SynapticConductance>, // TODO: Rename type to SynapticPSP
+        postsynaptic_potentials: Vec<SynapticPsp>,
         synapse_types: Vec<SynapseType>,
     ) -> Result<()> {
         // Convert NeuronId/Weight types to raw u32/u8 for SynapseArray
@@ -2307,7 +2307,7 @@ impl<
             source_neurons,
             target_neurons: synapse_storage.target_neurons().to_vec(),
             weights: synapse_storage.weights().to_vec(),
-            conductances: synapse_storage.postsynaptic_potentials().to_vec(),
+            postsynaptic_potentials: synapse_storage.postsynaptic_potentials().to_vec(),
             types: synapse_storage.types().to_vec(),
             valid_mask: synapse_storage.valid_mask().to_vec(),
             source_index,
@@ -2390,7 +2390,7 @@ impl<
         synapse_storage.source_neurons() = snapshot.synapses.source_neurons;
         synapse_storage.target_neurons() = snapshot.synapses.target_neurons;
         synapse_storage.weights() = snapshot.synapses.weights;
-        synapse_storage.postsynaptic_potentials() = snapshot.synapses.conductances;  // TODO: Rename field in snapshot
+        synapse_storage.postsynaptic_potentials() = snapshot.synapses.postsynaptic_potentials;
         synapse_storage.types() = snapshot.synapses.types;
         synapse_storage.valid_mask() = snapshot.synapses.valid_mask;
         synapse_storage.source_index = snapshot.synapses.source_index;
@@ -3774,7 +3774,7 @@ impl<
                         new_sources.push(NeuronId(src_neuron));
                         new_targets.push(NeuronId(dst_neuron));
                         new_weights.push(SynapticWeight(delta_plus));
-                        new_psps.push(SynapticConductance(params.synapse_psp));
+                        new_psps.push(SynapticPsp(params.synapse_psp));
                         new_types.push(params.synapse_type);
                     }
                 }
@@ -4653,7 +4653,7 @@ mod tests {
             n1,
             n2,
             SynapticWeight(128),
-            SynapticConductance(255),
+            SynapticPsp(255),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -4683,7 +4683,7 @@ mod tests {
             n1,
             n2,
             SynapticWeight(128),
-            SynapticConductance(255),
+            SynapticPsp(255),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -4691,7 +4691,7 @@ mod tests {
             n1,
             n3,
             SynapticWeight(64),
-            SynapticConductance(128),
+            SynapticPsp(128),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -4699,7 +4699,7 @@ mod tests {
             n2,
             n3,
             SynapticWeight(32),
-            SynapticConductance(64),
+            SynapticPsp(64),
             SynapseType::Inhibitory,
         )
         .unwrap();
@@ -4726,7 +4726,7 @@ mod tests {
             n1,
             n2,
             SynapticWeight(128),
-            SynapticConductance(255),
+            SynapticPsp(255),
             SynapseType::Inhibitory,
         )
         .unwrap();
@@ -4753,7 +4753,7 @@ mod tests {
             n1,
             n2,
             SynapticWeight(128),
-            SynapticConductance(255),
+            SynapticPsp(255),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -4898,7 +4898,7 @@ mod tests {
 
     #[test]
     fn test_mp_charge_accumulation_false_respects_threshold() {
-        use feagi_npu_neural::{SynapseType, SynapticConductance, SynapticWeight};
+        use feagi_npu_neural::{SynapseType, SynapticPsp, SynapticWeight};
 
         // REGRESSION TEST: Verify that neurons with mp_charge_accumulation=false
         // do NOT fire when PSP < threshold, even if they had residual potential
@@ -4957,7 +4957,7 @@ mod tests {
             neuron_a,
             neuron_b,
             SynapticWeight(1),       // weight = 1
-            SynapticConductance(1),  // PSP = 1 → PSP = 1×1 = 1.0
+            SynapticPsp(1),  // PSP = 1 → PSP = 1×1 = 1.0
             SynapseType::Excitatory, // synapse_type (excitatory)
         )
         .unwrap();
@@ -5046,7 +5046,7 @@ mod tests {
 
     #[test]
     fn test_mp_driven_psp_uses_firing_time_membrane_potential() {
-        use feagi_npu_neural::{SynapseType, SynapticConductance, SynapticWeight};
+        use feagi_npu_neural::{SynapseType, SynapticPsp, SynapticWeight};
 
         // REGRESSION TEST:
         // mp_driven_psp must use the firing-time MP captured in FireQueue, NOT neuron_storage MP
@@ -5108,7 +5108,7 @@ mod tests {
             neuron_src,
             neuron_dst,
             SynapticWeight(1),
-            SynapticConductance(1),
+            SynapticPsp(1),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -5486,7 +5486,7 @@ mod tests {
             n1,
             nonexistent,
             SynapticWeight(128),
-            SynapticConductance(255),
+            SynapticPsp(255),
             SynapseType::Excitatory,
         );
 
@@ -5993,7 +5993,7 @@ macro_rules! dispatch {
 //         source: NeuronId,
 //         target: NeuronId,
 //         weight: feagi_types::SynapticWeight,
-//         postsynaptic_potential: feagi_types::SynapticConductance,
+//         postsynaptic_potential: feagi_types::SynapticPsp,
 //         synapse_type: feagi_types::SynapseType,
 //     ) -> Result<usize> {
 //         dispatch_mut!(self, add_synapse(source, target, weight, postsynaptic_potential, synapse_type))
@@ -6005,7 +6005,7 @@ macro_rules! dispatch {
 //         source_neurons: Vec<NeuronId>,
 //         target_neurons: Vec<NeuronId>,
 //         weights: Vec<feagi_types::SynapticWeight>,
-//         postsynaptic_potentials: Vec<feagi_types::SynapticConductance>,
+//         postsynaptic_potentials: Vec<feagi_types::SynapticPsp>,
 //         synapse_types: Vec<feagi_types::SynapseType>,
 //     ) -> (usize, Vec<usize>) {
 //         dispatch_mut!(self, add_synapses_batch(source_neurons, target_neurons, weights, postsynaptic_potentials, synapse_types))

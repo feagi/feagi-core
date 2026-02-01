@@ -8,7 +8,7 @@
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::npu::RustNPU;
 use feagi_npu_neural::synapse::SynapseType;
-use feagi_npu_neural::types::{SynapticConductance, SynapticWeight};
+use feagi_npu_neural::types::{SynapticPsp, SynapticWeight};
 use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
 
@@ -67,19 +67,19 @@ fn test_projector_psp_division_issue() {
     }
 
     // Create synapses: neuron_a → all 10 neurons in B
-    // Using weight=1, conductance=1 (PSP = 1×1 = 1)
+    // Using weight=1, psp=1 (PSP = 1×1 = 1)
     println!("\n=== Creating Synapses ===");
     for (i, &target) in neurons_b.iter().enumerate() {
         npu.add_synapse(
             neuron_a,
             target,
             SynapticWeight(1),      // weight = 1
-            SynapticConductance(1), // conductance = 1
+            SynapticPsp(1), // PSP = 1
             SynapseType::Excitatory,
         )
         .unwrap();
         println!(
-            "Synapse {}: {} -> {} (weight=1, conductance=1)",
+            "Synapse {}: {} -> {} (weight=1, psp=1)",
             i, neuron_a.0, target.0
         );
     }

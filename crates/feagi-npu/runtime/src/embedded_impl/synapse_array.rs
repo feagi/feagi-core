@@ -32,7 +32,7 @@ pub struct SynapseArray<const N: usize> {
     /// Synaptic weights (0-255)
     pub weights: [u8; N],
 
-    /// Postsynaptic potentials / Conductances (0-255)
+    /// Postsynaptic potentials (0-255)
     pub postsynaptic_potentials: [u8; N],
 
     /// Synapse types (0=excitatory, 1=inhibitory)
@@ -72,7 +72,7 @@ impl<const N: usize> SynapseArray<N> {
         source: u32,
         target: u32,
         weight: u8,
-        conductance: u8,
+        psp: u8,
         synapse_type: SynapseType,
     ) -> bool {
         SynapseStorage::add_synapse(
@@ -80,7 +80,7 @@ impl<const N: usize> SynapseArray<N> {
             source,
             target,
             weight,
-            conductance,
+            psp,
             synapse_type as u8,
         )
         .is_ok()

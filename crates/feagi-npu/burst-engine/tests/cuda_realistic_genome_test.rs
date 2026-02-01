@@ -306,10 +306,10 @@ mod cuda_realistic_genome_tests {
             .iter()
             .map(|&w| feagi_types::SynapticWeight(w))
             .collect();
-        let psps: Vec<feagi_types::SynapticConductance> = synapse_array.postsynaptic_potentials
+        let psps: Vec<feagi_types::SynapticPsp> = synapse_array.postsynaptic_potentials
             [..synapse_array.count]
             .iter()
-            .map(|&psp| feagi_types::SynapticConductance(psp))
+            .map(|&psp| feagi_types::SynapticPsp(psp))
             .collect();
         let synapse_types: Vec<feagi_types::SynapseType> = synapse_array.types
             [..synapse_array.count]

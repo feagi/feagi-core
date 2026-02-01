@@ -4721,7 +4721,7 @@ impl ConnectomeManager {
                 NeuronId(source_neuron_id as u32),
                 NeuronId(target_neuron_id as u32),
                 feagi_npu_neural::types::SynapticWeight(weight),
-                feagi_npu_neural::types::SynapticConductance(psp),
+                feagi_npu_neural::types::SynapticPsp(psp),
                 syn_type,
             )
             .map_err(|e| BduError::Internal(format!("Failed to create synapse: {}", e)))?;

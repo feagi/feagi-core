@@ -10,7 +10,7 @@ Supports both regular and batched versions for performance optimization.
 
 use crate::connectivity::rules::syn_block_connection;
 use crate::types::BduResult;
-use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
+use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 use std::sync::Arc;
 
@@ -27,7 +27,7 @@ pub fn apply_block_connection_morphology_batched(
     dst_dimensions: (usize, usize, usize),
     scaling_factor: u32,
     weight: u8,
-    conductance: u8,
+    psp: u8,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -143,7 +143,7 @@ pub fn apply_block_connection_morphology_batched(
                     NeuronId(src_nid),
                     NeuronId(dst_nid),
                     SynapticWeight(weight),
-                    SynapticConductance(conductance),
+                SynapticPsp(psp),
                     synapse_type,
                 )
                 .is_ok()
@@ -184,7 +184,7 @@ pub fn apply_block_connection_morphology(
     dst_dimensions: (usize, usize, usize),
     scaling_factor: u32,
     weight: u8,
-    conductance: u8,
+    psp: u8,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -424,7 +424,7 @@ pub fn apply_block_connection_morphology(
                         src_nid,
                         *dst_nid,
                         SynapticWeight(weight),
-                        SynapticConductance(conductance),
+                        SynapticPsp(psp),
                         synapse_type,
                     )
                     .is_ok()

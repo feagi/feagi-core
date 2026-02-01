@@ -5,7 +5,7 @@
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::npu::StdpMappingParams;
 use feagi_npu_burst_engine::RustNPU;
-use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
+use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
@@ -73,6 +73,34 @@ fn process_burst_with_injection(
     npu.inject_sensory_with_potentials(neurons);
     let result = npu.process_burst().unwrap();
     result.burst
+}
+
+/// STDP requires the same neuron(s) to fire across the full window.
+#[test]
+fn test_bidirectional_stdp_requires_consistent_neurons_across_window() {
+    let (mut npu, src_neurons, dst_neurons) = create_stdp_network();
+
+    npu.configure_fire_ledger_window(10, 3).unwrap();
+    npu.configure_fire_ledger_window(11, 3).unwrap();
+
+    let params = stdp_params(3, 1, 5, 0, true, 10, SynapseType::Excitatory);
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    // Burst 1: fire src0/dst0
+    process_burst_with_injection(&mut npu, &[(src_neurons[0], 128.0), (dst_neurons[0], 128.0)]);
+    // Burst 2: fire src1/dst1
+    process_burst_with_injection(&mut npu, &[(src_neurons[1], 128.0), (dst_neurons[1], 128.0)]);
+    // Burst 3: fire src2/dst2
+    process_burst_with_injection(&mut npu, &[(src_neurons[2], 128.0), (dst_neurons[2], 128.0)]);
+
+    // No synapse should form because no single neuron is present in all bursts.
+    for src in &src_neurons {
+        assert!(
+            npu.get_outgoing_synapses(src.0).is_empty(),
+            "Unexpected synapse creation for src neuron {}",
+            src.0
+        );
+    }
 }
 
 /// Assert that the given neuron fired in the specified burst for the cortical area.
@@ -178,7 +206,7 @@ fn test_classic_plasticity_updates_existing_synapses_only() {
         src,
         dst,
         SynapticWeight(9),
-        SynapticConductance(100),
+        SynapticPsp(100),
         SynapseType::Excitatory,
     )
     .unwrap();
@@ -221,7 +249,7 @@ fn test_ltd_reduces_to_zero_and_marks_prunable() {
         src,
         dst,
         SynapticWeight(1),
-        SynapticConductance(100),
+        SynapticPsp(100),
         SynapseType::Excitatory,
     )
     .unwrap();

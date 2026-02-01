@@ -27,7 +27,7 @@ pub mod synapse_types;
 pub use ids::{NeuronId, SynapseId};
 pub use numeric::{INT8LeakCoefficient, INT8Value, NeuralValue, Precision, QuantizationSpec};
 pub use spatial::Position;
-pub use synapse_types::{Synapse, SynapticConductance, SynapticContribution, SynapticWeight};
+pub use synapse_types::{Synapse, SynapticContribution, SynapticPsp, SynapticWeight};
 // Dimensions moved to feagi_structures::genomic::cortical_area::CorticalAreaDimensions
 pub use error::{Error, FeagiError, Result};
 pub use fire::{FireCandidateList, FireQueue};

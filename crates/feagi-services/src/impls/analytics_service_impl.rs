@@ -169,7 +169,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
             // Get outgoing synapses from this neuron
             let outgoing = manager.get_outgoing_synapses(source_neuron_id);
 
-            for (target_neuron_id, weight, _conductance, synapse_type) in outgoing {
+            for (target_neuron_id, weight, _psp, synapse_type) in outgoing {
                 // Check if target neuron is in target area
                 if let Some(target_cortical_id) =
                     manager.get_neuron_cortical_id(target_neuron_id as u64)

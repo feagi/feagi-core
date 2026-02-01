@@ -203,7 +203,7 @@ fn test_create_and_query_synapses() {
     manager
         .create_synapse(
             neuron1, neuron2, 128, // weight
-            200, // conductance
+            200, // psp
             0,   // excitatory
         )
         .expect("Failed to create synapse");
@@ -213,9 +213,9 @@ fn test_create_and_query_synapses() {
         .get_synapse(neuron1, neuron2)
         .expect("Synapse should exist");
 
-    let (weight, conductance, syn_type) = synapse;
+    let (weight, psp, syn_type) = synapse;
     assert_eq!(weight, 128);
-    assert_eq!(conductance, 200);
+    assert_eq!(psp, 200);
     assert_eq!(syn_type, 0);
 
     // Update synapse weight

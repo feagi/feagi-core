@@ -10,6 +10,8 @@ These tests validate:
 - Memory neuron allocation behavior is correct and deterministic
 */
 
+use feagi_brain_development::{ConnectomeManager, Neuroembryogenesis};
+use feagi_evolutionary::load_genome_from_file;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
 use feagi_npu_neural::types::NeuronId;
@@ -18,7 +20,10 @@ use feagi_npu_plasticity::{
     PlasticityCommand, PlasticityConfig, PlasticityService,
 };
 use feagi_npu_runtime::StdRuntime;
+use feagi_structures::genomic::cortical_area::CorticalID;
+use parking_lot::RwLock;
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::Arc;
 
 fn build_npu(tag: &'static str) -> Arc<TracingMutex<DynamicNPU>> {
@@ -123,6 +128,117 @@ fn wait_for_commands(service: &PlasticityService) -> Vec<PlasticityCommand> {
         std::thread::yield_now();
     }
     commands
+}
+
+fn cortical_id_by_name(genome: &feagi_evolutionary::RuntimeGenome, name: &str) -> CorticalID {
+    genome
+        .cortical_areas
+        .iter()
+        .find(|(_, area)| area.name == name)
+        .map(|(id, _)| id.clone())
+        .unwrap_or_else(|| panic!("Missing cortical area named '{}'", name))
+}
+
+#[test]
+fn test_associative_mem_genome_l1_l2_do_not_drive_m1_m2_firing() {
+    let genome_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../feagi-rs/genomes/associative_mem_genome.json");
+    let genome = load_genome_from_file(&genome_path)
+        .expect("Failed to load associative_mem_genome.json");
+
+    let runtime = StdRuntime::new();
+    let backend = CPUBackend::new();
+    let npu = Arc::new(TracingMutex::new(
+        DynamicNPU::new_f32(runtime, backend, 100_000, 100_000, 10)
+            .expect("Failed to create NPU"),
+        "associative_mem_genome_test",
+    ));
+
+    let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+        Arc::clone(&npu),
+    )));
+    {
+        let mut manager_write = manager.write();
+        manager_write.setup_core_morphologies_for_testing();
+    }
+
+    let mut neuroembryogenesis = Neuroembryogenesis::new(manager.clone());
+    neuroembryogenesis
+        .develop_from_genome(&genome)
+        .expect("Failed to develop from associative_mem_genome.json");
+
+    let l1_id = cortical_id_by_name(&genome, "l1");
+    let l2_id = cortical_id_by_name(&genome, "l2");
+    let m1_id = cortical_id_by_name(&genome, "m1");
+    let m2_id = cortical_id_by_name(&genome, "m2");
+
+    let manager_read = manager.read();
+    let l1_idx = manager_read
+        .get_cortical_idx(&l1_id)
+        .expect("Missing l1 cortical idx");
+    let l2_idx = manager_read
+        .get_cortical_idx(&l2_id)
+        .expect("Missing l2 cortical idx");
+    let m1_idx = manager_read
+        .get_cortical_idx(&m1_id)
+        .expect("Missing m1 cortical idx");
+    let m2_idx = manager_read
+        .get_cortical_idx(&m2_id)
+        .expect("Missing m2 cortical idx");
+    drop(manager_read);
+
+    let mut npu_lock = npu.lock().unwrap();
+    let l1_neurons = npu_lock.get_neurons_in_cortical_area(l1_idx);
+    let l2_neurons = npu_lock.get_neurons_in_cortical_area(l2_idx);
+    let m1_neurons = npu_lock.get_neurons_in_cortical_area(m1_idx);
+    let m2_neurons = npu_lock.get_neurons_in_cortical_area(m2_idx);
+
+    assert_eq!(l1_neurons.len(), 1, "Expected 1 neuron in l1");
+    assert_eq!(l2_neurons.len(), 1, "Expected 1 neuron in l2");
+    assert_eq!(m1_neurons.len(), 1, "Expected 1 neuron in m1");
+    assert_eq!(m2_neurons.len(), 1, "Expected 1 neuron in m2");
+
+    // Episodic memory mappings do not create physical synapses from l1/l2 to m1/m2.
+    assert!(
+        npu_lock.get_outgoing_synapses(l1_neurons[0]).is_empty(),
+        "l1 should not have physical synapses to m1 (episodic_memory is semantic-only)"
+    );
+    assert!(
+        npu_lock.get_outgoing_synapses(l2_neurons[0]).is_empty(),
+        "l2 should not have physical synapses to m2 (episodic_memory is semantic-only)"
+    );
+
+    npu_lock
+        .configure_fire_ledger_window(m1_idx, 3)
+        .expect("Failed to configure FireLedger for m1");
+    npu_lock
+        .configure_fire_ledger_window(m2_idx, 3)
+        .expect("Failed to configure FireLedger for m2");
+
+    let mut last_burst = 0;
+    for _ in 0..3 {
+        npu_lock.inject_sensory_with_potentials(&[
+            (NeuronId(l1_neurons[0]), 10.0),
+            (NeuronId(l2_neurons[0]), 10.0),
+        ]);
+        last_burst = npu_lock.process_burst().expect("Burst failed").burst;
+    }
+
+    let m1_window = npu_lock
+        .get_fire_ledger_dense_window_bitmaps(m1_idx, last_burst, 3)
+        .expect("Missing FireLedger window for m1");
+    let m2_window = npu_lock
+        .get_fire_ledger_dense_window_bitmaps(m2_idx, last_burst, 3)
+        .expect("Missing FireLedger window for m2");
+
+    assert!(
+        m1_window.iter().all(|(_, bm)| bm.is_empty()),
+        "m1 neurons should not fire when only l1 is driven (episodic_memory is semantic-only)"
+    );
+    assert!(
+        m2_window.iter().all(|(_, bm)| bm.is_empty()),
+        "m2 neurons should not fire when only l2 is driven (episodic_memory is semantic-only)"
+    );
 }
 
 fn wait_for_memory_neurons(service: &PlasticityService, expected_count: usize) -> bool {

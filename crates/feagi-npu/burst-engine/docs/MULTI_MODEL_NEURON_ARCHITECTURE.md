@@ -688,7 +688,7 @@ pub struct SynapseArray {
     pub source_neurons: Vec<u32>,       // Global IDs
     pub target_neurons: Vec<u32>,       // Global IDs
     pub weights: Vec<u8>,
-    pub conductances: Vec<u8>,          // Renamed to 'postsynaptic_potentials'
+    pub postsynaptic_potentials: Vec<u8>,          // PSP values (u8)
     pub types: Vec<u8>,
     
     /// Index: source_global_id → Vec<synapse_indices>
@@ -714,7 +714,7 @@ impl RustNPU {
                 for &syn_idx in synapse_indices {
                     let target_global_id = self.synapse_array.target_neurons[syn_idx];
                     let weight = self.synapse_array.weights[syn_idx];
-                    let psp = self.synapse_array.conductances[syn_idx];  // PSP, not conductance
+                    let psp = self.synapse_array.postsynaptic_potentials[syn_idx];
                     
                     // Calculate contribution (model-agnostic, canonical absolute-u8 contract)
                     // contribution = weight × psp  (both are absolute u8 units 0..255)
@@ -846,7 +846,7 @@ let contribution = weight * psp;  // Both absolute u8 units (0..255), direct-cas
 
 **OLD (incorrect neuroscience term)**:
 ```rust
-pub conductances: Vec<u8>;  // ❌ Wrong term
+pub postsynaptic_potentials: Vec<u8>;  // ✅ PSP values
 ```
 
 **NEW (correct FEAGI term)**:
@@ -854,7 +854,7 @@ pub conductances: Vec<u8>;  // ❌ Wrong term
 pub postsynaptic_potentials: Vec<u8>;  // ✅ Correct (psp or pstcr_)
 ```
 
-**Rationale**: In FEAGI, this represents postsynaptic current (pstcr_), not conductance.
+**Rationale**: In FEAGI, this represents postsynaptic current (pstcr_), not a separate parameter.
 
 ---
 

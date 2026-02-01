@@ -9,7 +9,7 @@ Creates synapses based on vector offsets from source neurons.
 
 use crate::connectivity::rules::apply_vector_offset;
 use crate::types::BduResult;
-use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
+use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 
 /// Apply vector offset morphology directly on NPU with explicit dimensions
@@ -21,7 +21,7 @@ pub fn apply_vectors_morphology_with_dimensions(
     vectors: Vec<(i32, i32, i32)>,
     dst_dimensions: (usize, usize, usize),
     weight: u8,
-    conductance: u8,
+    psp: u8,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -75,7 +75,7 @@ pub fn apply_vectors_morphology_with_dimensions(
                                 NeuronId(src_nid),
                                 NeuronId(dst_nid),
                                 SynapticWeight(weight),
-                                SynapticConductance(conductance),
+                                SynapticPsp(psp),
                                 synapse_type,
                             )
                             .is_ok()
@@ -102,7 +102,7 @@ pub fn apply_vectors_morphology(
     dst_area_id: u32,
     vectors: Vec<(i32, i32, i32)>,
     weight: u8,
-    conductance: u8,
+    psp: u8,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -115,7 +115,7 @@ pub fn apply_vectors_morphology(
         vectors,
         dst_dimensions,
         weight,
-        conductance,
+        psp,
         synapse_attractivity,
         synapse_type,
     )

@@ -19,11 +19,11 @@ impl SynapticWeight {
     }
 }
 
-/// Synaptic conductance (0-255, stored as u8)
+/// Synaptic PSP (0-255, stored as u8)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SynapticConductance(pub u8);
+pub struct SynapticPsp(pub u8);
 
-impl SynapticConductance {
+impl SynapticPsp {
     #[inline(always)]
     pub fn to_float(self) -> f32 {
         self.0 as f32
@@ -35,7 +35,7 @@ impl SynapticConductance {
     }
 }
 
-/// Synaptic contribution (weight × conductance × sign)
+/// Synaptic contribution (weight × PSP × sign)
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SynapticContribution(pub f32);
 
@@ -46,7 +46,7 @@ pub struct Synapse {
     pub source_neuron: super::NeuronId,
     pub target_neuron: super::NeuronId,
     pub weight: SynapticWeight,
-    pub conductance: SynapticConductance,
+    pub psp: SynapticPsp,
     pub synapse_type: crate::synapse::SynapseType,
     pub valid: bool,
 }
@@ -58,12 +58,12 @@ impl Synapse {
             return SynapticContribution(0.0);
         }
         let weight = self.weight.to_float();
-        let conductance = self.conductance.to_float();
+        let psp = self.psp.to_float();
         let sign = match self.synapse_type {
             crate::synapse::SynapseType::Excitatory => 1.0,
             crate::synapse::SynapseType::Inhibitory => -1.0,
         };
-        SynapticContribution(weight * conductance * sign)
+        SynapticContribution(weight * psp * sign)
     }
 }
 
