@@ -1047,7 +1047,7 @@ pub async fn post_custom_cortical_area(
         visible: Some(true),
         sub_group: cortical_sub_group,
         neurons_per_voxel: Some(1),
-        postsynaptic_current: Some(0.0),
+        postsynaptic_current: None,
         plasticity_constant: Some(0.0),
         degeneration: Some(0.0),
         psp_uniform_distribution: Some(false),

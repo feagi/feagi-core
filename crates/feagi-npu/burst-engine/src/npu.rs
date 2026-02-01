@@ -3455,6 +3455,53 @@ impl<
             return Ok(());
         }
 
+        if has_bidirectional {
+            let neuron_storage = self.neuron_storage.read().unwrap();
+            let synapse_storage = self.synapse_storage.read().unwrap();
+            for (key, params) in &mappings {
+                if !params.bidirectional_stdp {
+                    continue;
+                }
+                let Some(syn_indices) = mapping_index.get(key) else {
+                    continue;
+                };
+                for &syn_idx in syn_indices {
+                    if syn_idx >= synapse_storage.count()
+                        || !synapse_storage.valid_mask()[syn_idx]
+                    {
+                        continue;
+                    }
+                    let src_neuron = synapse_storage.source_neurons()[syn_idx];
+                    let dst_neuron = synapse_storage.target_neurons()[syn_idx];
+                    let src_idx = src_neuron as usize;
+                    let dst_idx = dst_neuron as usize;
+                    if src_idx >= neuron_storage.count()
+                        || dst_idx >= neuron_storage.count()
+                        || !neuron_storage.valid_mask()[src_idx]
+                        || !neuron_storage.valid_mask()[dst_idx]
+                    {
+                        continue;
+                    }
+                    let weight = synapse_storage.weights()[syn_idx];
+                    let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
+                    let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
+                    tracing::info!(
+                        target: "feagi-burst-engine",
+                        "associative-stdp synapse burst={} mapping=({}->{}) synapse_idx={} src_neuron={} dst_neuron={} weight={} src_threshold={} dst_threshold={}",
+                        burst_timestep,
+                        key.0,
+                        key.1,
+                        syn_idx,
+                        src_neuron,
+                        dst_neuron,
+                        weight,
+                        src_threshold,
+                        dst_threshold
+                    );
+                }
+            }
+        }
+
         if has_bidirectional && mapping_index.is_empty() {
             tracing::info!(
                 target: "feagi-burst-engine",
@@ -3558,6 +3605,19 @@ impl<
                 if delta_plus == 0 && delta_minus == 0 {
                     continue;
                 }
+                tracing::info!(
+                    target: "feagi-burst-engine",
+                    "associative-stdp burst={} mapping=({}->{}) synapses={} delta_plus={} delta_minus={} src_all={} dst_all={} conductance={}",
+                    burst_timestep,
+                    key.0,
+                    key.1,
+                    syn_indices.len(),
+                    delta_plus,
+                    delta_minus,
+                    activity.src_all.len(),
+                    activity.dst_all.len(),
+                    params.synapse_conductance
+                );
 
                 for &syn_idx in syn_indices {
                     if syn_idx >= synapse_storage.count()
@@ -3578,11 +3638,13 @@ impl<
                             && neuron_storage.valid_mask()[dst_idx]
                         {
                             let weight = synapse_storage.weights()[syn_idx];
+                            let conductance =
+                                synapse_storage.postsynaptic_potentials()[syn_idx];
                             let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
                             let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
                             tracing::info!(
                                 target: "feagi-burst-engine",
-                                "associative-stdp synapse burst={} mapping=({}->{}) synapse_idx={} src_neuron={} dst_neuron={} weight={} src_threshold={} dst_threshold={}",
+                                "associative-stdp synapse burst={} mapping=({}->{}) synapse_idx={} src_neuron={} dst_neuron={} weight={} conductance={} src_threshold={} dst_threshold={}",
                                 burst_timestep,
                                 key.0,
                                 key.1,
@@ -3590,6 +3652,7 @@ impl<
                                 src_neuron,
                                 dst_neuron,
                                 weight,
+                                conductance,
                                 src_threshold,
                                 dst_threshold
                             );
@@ -3669,6 +3732,25 @@ impl<
                     for dst_neuron in activity.dst_all.iter() {
                         if existing_targets.contains(&dst_neuron) {
                             continue;
+                        }
+                        let src_idx = src_neuron as usize;
+                        let dst_idx = dst_neuron as usize;
+                        if src_idx < neuron_count && dst_idx < neuron_count {
+                            let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
+                            let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
+                            tracing::info!(
+                                target: "feagi-burst-engine",
+                                "associative-stdp LTP new synapse burst={} mapping=({}->{}) src_neuron={} dst_neuron={} weight={} conductance={} src_threshold={} dst_threshold={}",
+                                burst_timestep,
+                                key.0,
+                                key.1,
+                                src_neuron,
+                                dst_neuron,
+                                delta_plus,
+                                params.synapse_conductance,
+                                src_threshold,
+                                dst_threshold
+                            );
                         }
                         new_sources.push(NeuronId(src_neuron));
                         new_targets.push(NeuronId(dst_neuron));
