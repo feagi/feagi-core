@@ -247,7 +247,12 @@ pub async fn put_mapping_properties(
             mapping_string.clone(),
         )
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to update cortical mapping: {}", e)))?;
+        .map_err(|e| match e {
+            feagi_services::types::ServiceError::InvalidInput(msg) => {
+                ApiError::invalid_input(msg)
+            }
+            _ => ApiError::internal(format!("Failed to update cortical mapping: {}", e)),
+        })?;
 
     info!(target: "feagi-api", "Cortical mapping updated successfully: {} synapses created", synapse_count);
 

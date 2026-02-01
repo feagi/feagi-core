@@ -1008,6 +1008,12 @@ impl Neuroembryogenesis {
             let synapses_created = {
                 let manager_arc = self.connectome_manager.clone();
                 let mut manager = manager_arc.write();
+                if let Some(dstmap) = src_area.properties.get("cortical_mapping_dst") {
+                    if let Some(area) = manager.get_cortical_area_mut(src_cortical_id) {
+                        area.properties
+                            .insert("cortical_mapping_dst".to_string(), dstmap.clone());
+                    }
+                }
                 manager.apply_cortical_mapping(src_cortical_id)
             }; // Lock released immediately
 

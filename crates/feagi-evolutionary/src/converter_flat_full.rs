@@ -63,6 +63,7 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     ("tmpdpt-i", "temporal_depth"),
     ("excite-f", "neuron_excitability"),
     ("devcnt-i", "dev_count"),
+    ("twinrf-t", "memory_twin_of"),
 ];
 
 /// Build property mapping lookup table
@@ -569,10 +570,11 @@ mod tests {
     #[test]
     fn test_property_map_completeness() {
         let map = build_property_map();
-        assert_eq!(map.len(), 39); // All 39 property mappings
+        assert_eq!(map.len(), 40); // All 40 property mappings
         assert!(map.contains_key("__name-t"));
         assert!(map.contains_key("dstmap-d"));
         assert!(map.contains_key("fire_t-f"));
+        assert!(map.contains_key("twinrf-t"));
     }
 
     #[test]

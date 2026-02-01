@@ -1716,18 +1716,86 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .as_ref()
                 .is_some_and(|rules| mapping_has_associative_memory(rules));
 
+        let mut existing_plasticity_by_morphology: HashMap<String, serde_json::Map<String, serde_json::Value>> =
+            HashMap::new();
+        if let Some(existing_rules) = existing_mapping.as_ref() {
+            for rule in existing_rules {
+                if let Some(obj) = rule.as_object() {
+                    if let Some(morphology_id) = obj.get("morphology_id").and_then(|v| v.as_str())
+                    {
+                        existing_plasticity_by_morphology
+                            .insert(morphology_id.to_string(), obj.clone());
+                    }
+                }
+            }
+        }
+
+        let mut normalized_mapping_data = Vec::with_capacity(mapping_data.len());
+        for rule in &mapping_data {
+            if let Some(obj) = rule.as_object() {
+                let mut normalized = obj.clone();
+                let morphology_id = normalized
+                    .get("morphology_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let is_associative = morphology_id == "associative_memory";
+                let mut plasticity_flag = normalized
+                    .get("plasticity_flag")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                if is_associative {
+                    normalized.insert("plasticity_flag".to_string(), serde_json::json!(true));
+                    plasticity_flag = true;
+                }
+                if plasticity_flag || is_associative {
+                    let required = [
+                        "plasticity_constant",
+                        "ltp_multiplier",
+                        "ltd_multiplier",
+                        "plasticity_window",
+                    ];
+                    if let Some(existing) =
+                        existing_plasticity_by_morphology.get(&morphology_id)
+                    {
+                        for key in required {
+                            if !normalized.contains_key(key) && existing.contains_key(key) {
+                                if let Some(value) = existing.get(key) {
+                                    normalized.insert(key.to_string(), value.clone());
+                                }
+                            }
+                        }
+                    }
+                    let missing: Vec<&str> = required
+                        .iter()
+                        .copied()
+                        .filter(|key| !normalized.contains_key(*key))
+                        .collect();
+                    if !missing.is_empty() {
+                        return Err(ServiceError::InvalidInput(format!(
+                            "Associative memory mapping for {} is missing required plasticity keys {:?}",
+                            morphology_id, missing
+                        )));
+                    }
+                }
+                normalized_mapping_data.push(serde_json::Value::Object(normalized));
+            } else {
+                normalized_mapping_data.push(rule.clone());
+            }
+        }
+
         debug!(
             target: "feagi-services",
             "Mapping update request: {} -> {} (existing_rules={}, new_rules={})",
             src_area_id,
             dst_area_id,
             existing_mapping.as_ref().map(|rules| rules.len()).unwrap_or(0),
-            mapping_data.len()
+            normalized_mapping_data.len()
         );
 
         if existing_mapping
             .as_ref()
-            .is_some_and(|rules| rules == &mapping_data)
+            .is_some_and(|rules| rules == &normalized_mapping_data)
         {
             info!(
                 target: "feagi-services",
@@ -1744,14 +1812,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 update_cortical_mapping_dst_in_properties(
                     &mut src_area.properties,
                     &dst_area_id,
-                    &mapping_data,
+                    &normalized_mapping_data,
                 )?;
                 info!(
                     target: "feagi-services",
                     "[GENOME-UPDATE] Updated cortical_mapping_dst for {} -> {} (connections={})",
                     src_area_id,
                     dst_area_id,
-                    mapping_data.len()
+                    normalized_mapping_data.len()
                 );
             } else {
                 warn!(target: "feagi-services", "[GENOME-UPDATE] Source area {} not found in RuntimeGenome", src_area_id);
@@ -1764,7 +1832,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let region_io = {
             let mut manager = self.connectome.write();
             manager
-                .update_cortical_mapping(&src_id, &dst_id, mapping_data.clone())
+                .update_cortical_mapping(&src_id, &dst_id, normalized_mapping_data.clone())
                 .map_err(|e| ServiceError::Backend(format!("Failed to update mapping: {}", e)))?;
 
             // Regenerate synapses for this mapping
@@ -2116,6 +2184,129 @@ mod tests {
             let mgr = connectome.read();
             assert!(!mgr.get_morphologies().contains(&morph_id));
         }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn associative_memory_missing_window_is_filled_from_existing_mapping() -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let connectome = Arc::new(RwLock::new(
+            feagi_brain_development::ConnectomeManager::new_for_testing(),
+        ));
+
+        let src_id = CorticalID::try_from_bytes(b"csrc0003").unwrap();
+        let dst_id = CorticalID::try_from_bytes(b"csrc0004").unwrap();
+
+        let mut src_area = CorticalArea::new(
+            src_id,
+            0,
+            "Source".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(
+                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+            ),
+        )
+        .unwrap();
+        let dst_area = CorticalArea::new(
+            dst_id,
+            0,
+            "Target".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(
+                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+            ),
+        )
+        .unwrap();
+
+        src_area.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                dst_id.as_base_64(): [{
+                    "morphology_id": "associative_memory",
+                    "morphology_scalar": 1,
+                    "postSynapticCurrent_multiplier": 1.0,
+                    "plasticity_flag": true,
+                    "plasticity_constant": 1,
+                    "ltp_multiplier": 1,
+                    "ltd_multiplier": 1,
+                    "plasticity_window": 5
+                }]
+            }),
+        );
+
+        {
+            let mut manager = connectome.write();
+            manager.add_cortical_area(src_area.clone())?;
+            manager.add_cortical_area(dst_area.clone())?;
+        }
+
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: "".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(src_id, src_area), (dst_id, dst_area)]),
+            brain_regions: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+        let current_genome = Arc::new(RwLock::new(Some(genome)));
+
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+
+        let mapping_data = vec![serde_json::json!({
+            "morphology_id": "associative_memory",
+            "morphology_scalar": 1,
+            "postSynapticCurrent_multiplier": 1.0,
+            "plasticity_flag": true,
+            "plasticity_constant": 1,
+            "ltp_multiplier": 1,
+            "ltd_multiplier": 1
+        })];
+
+        svc.update_cortical_mapping(
+            src_id.as_base_64(),
+            dst_id.as_base_64(),
+            mapping_data,
+        )
+        .await?;
+
+        let genome_guard = current_genome.read();
+        let genome = genome_guard.as_ref().expect("genome must exist");
+        let updated = genome
+            .cortical_areas
+            .get(&src_id)
+            .and_then(|area| area.properties.get("cortical_mapping_dst"))
+            .and_then(|v| v.as_object())
+            .and_then(|map| map.get(&dst_id.as_base_64()))
+            .and_then(|v| v.as_array())
+            .and_then(|rules| rules.first())
+            .and_then(|v| v.as_object())
+            .and_then(|obj| obj.get("plasticity_window"))
+            .and_then(|v| v.as_i64());
+        assert_eq!(updated, Some(5));
 
         Ok(())
     }

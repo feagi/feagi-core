@@ -3455,6 +3455,15 @@ impl<
             return Ok(());
         }
 
+        if has_bidirectional && mapping_index.is_empty() {
+            tracing::info!(
+                target: "feagi-burst-engine",
+                "associative-stdp synapse burst={} bidirectional_mappings={} synapses=0",
+                burst_timestep,
+                mappings.values().filter(|params| params.bidirectional_stdp).count()
+            );
+        }
+
         struct StdpActivityWindow {
             src_any: RoaringBitmap,
             dst_any: RoaringBitmap,
@@ -3533,6 +3542,7 @@ impl<
 
         // Apply weight updates to existing synapses.
         {
+            let neuron_storage = self.neuron_storage.read().unwrap();
             let mut synapse_storage = self.synapse_storage.write().unwrap();
 
             for (key, params) in &mappings {
@@ -3558,6 +3568,33 @@ impl<
 
                     let src_neuron = synapse_storage.source_neurons()[syn_idx];
                     let dst_neuron = synapse_storage.target_neurons()[syn_idx];
+
+                    if params.bidirectional_stdp {
+                        let src_idx = src_neuron as usize;
+                        let dst_idx = dst_neuron as usize;
+                        if src_idx < neuron_storage.count()
+                            && dst_idx < neuron_storage.count()
+                            && neuron_storage.valid_mask()[src_idx]
+                            && neuron_storage.valid_mask()[dst_idx]
+                        {
+                            let weight = synapse_storage.weights()[syn_idx];
+                            let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
+                            let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
+                            tracing::info!(
+                                target: "feagi-burst-engine",
+                                "associative-stdp synapse burst={} mapping=({}->{}) synapse_idx={} src_neuron={} dst_neuron={} weight={} src_threshold={} dst_threshold={}",
+                                burst_timestep,
+                                key.0,
+                                key.1,
+                                syn_idx,
+                                src_neuron,
+                                dst_neuron,
+                                weight,
+                                src_threshold,
+                                dst_threshold
+                            );
+                        }
+                    }
 
                     let src_any_present = activity.src_any.contains(src_neuron);
                     let dst_any_present = activity.dst_any.contains(dst_neuron);

@@ -55,6 +55,7 @@ pub fn get_default_neural_properties() -> HashMap<String, Value> {
     props.insert("mp_driven_psp".to_string(), Value::from(false));
     props.insert("neuron_excitability".to_string(), Value::from(1.0));
     props.insert("visualization".to_string(), Value::from(true));
+    props.insert("memory_twin_of".to_string(), Value::Null);
     props.insert(
         "cortical_mapping_dst".to_string(),
         Value::Object(serde_json::Map::new()),
