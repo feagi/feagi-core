@@ -170,6 +170,13 @@ pub struct RustNPU<
     #[allow(dead_code)]
     pub(crate) backend: std::sync::Mutex<B>,
 
+    // Memory replay: neuron -> replay frames (per memory neuron)
+    pub(crate) memory_replay_frames:
+        std::sync::RwLock<AHashMap<u32, std::sync::Arc<Vec<MemoryReplayFrame>>>>,
+    // Memory replay: (memory area idx, upstream area idx) -> twin area + potential
+    pub(crate) memory_replay_twin_map:
+        std::sync::RwLock<AHashMap<(u32, u32), MemoryReplayTarget>>,
+
     // Atomic stats (lock-free reads)
     burst_count: std::sync::atomic::AtomicU64,
 
@@ -202,6 +209,30 @@ pub(crate) struct FireStructures {
     /// Populated during Phase 1 from `pending_memory_injections` and cleared each burst.
     pub(crate) memory_candidate_cortical_idx: AHashMap<u32, u32>,
     pub(crate) last_fcl_snapshot: Vec<(NeuronId, f32)>,
+    /// Scheduled replay injections (burst target -> twin area coords).
+    pub(crate) pending_replay_injections: Vec<ReplayInjection>,
+}
+
+/// Replay frame captured from upstream activity for memory replay.
+#[derive(Debug, Clone)]
+pub struct MemoryReplayFrame {
+    pub offset: u32,
+    pub upstream_area_idx: u32,
+    pub coords: Vec<(u32, u32, u32)>,
+}
+
+#[derive(Debug, Clone)]
+struct MemoryReplayTarget {
+    twin_area_idx: u32,
+    potential: f32,
+}
+
+#[derive(Debug, Clone)]
+struct ReplayInjection {
+    target_burst: u64,
+    twin_area_idx: u32,
+    coords: Vec<(u32, u32, u32)>,
+    potential: f32,
 }
 
 impl<
@@ -256,12 +287,15 @@ impl<
                 pending_memory_injections: Vec::with_capacity(1024),
                 memory_candidate_cortical_idx: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
+                pending_replay_injections: Vec::new(),
             }),
             area_id_to_name: std::sync::RwLock::new(AHashMap::new()),
             propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
             stdp_mappings: std::sync::RwLock::new(AHashMap::new()),
             stdp_mapping_index: std::sync::RwLock::new(AHashMap::new()),
             backend: std::sync::Mutex::new(backend),
+            memory_replay_frames: std::sync::RwLock::new(AHashMap::new()),
+            memory_replay_twin_map: std::sync::RwLock::new(AHashMap::new()),
             burst_count: std::sync::atomic::AtomicU64::new(0),
             power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
             fatigue_active: std::sync::atomic::AtomicBool::new(false),
@@ -1439,6 +1473,92 @@ impl<
             .insert(NeuronId(neuron_id), cortical_id);
     }
 
+    /// Register replay frames for a memory neuron.
+    ///
+    /// The replay frames are used to drive the twin cortical area when the memory neuron fires.
+    pub fn register_memory_replay_frames(
+        &mut self,
+        neuron_id: u32,
+        frames: Vec<MemoryReplayFrame>,
+    ) {
+        let mut replay_frames = self.memory_replay_frames.write().unwrap();
+        replay_frames.insert(neuron_id, std::sync::Arc::new(frames));
+    }
+
+    /// Register the twin cortical area for replay from a memory area and upstream area.
+    pub fn register_memory_twin_mapping(
+        &mut self,
+        memory_area_idx: u32,
+        upstream_area_idx: u32,
+        twin_area_idx: u32,
+        potential: f32,
+    ) {
+        let mut map = self.memory_replay_twin_map.write().unwrap();
+        map.insert(
+            (memory_area_idx, upstream_area_idx),
+            MemoryReplayTarget {
+                twin_area_idx,
+                potential,
+            },
+        );
+    }
+
+    fn schedule_memory_replay_from_fire_queue(
+        &self,
+        fire_queue: &FireQueue,
+        burst_count: u64,
+        fire_structures: &mut FireStructures,
+    ) {
+        if fire_queue.is_empty() {
+            return;
+        }
+        let replay_frames = self.memory_replay_frames.read().unwrap();
+        if replay_frames.is_empty() {
+            return;
+        }
+        let twin_map = self.memory_replay_twin_map.read().unwrap();
+        if twin_map.is_empty() {
+            return;
+        }
+
+        let mut scheduled = 0usize;
+        for (cortical_idx, neurons) in &fire_queue.neurons_by_area {
+            for neuron in neurons {
+                let neuron_id = neuron.neuron_id.0;
+                let frames = match replay_frames.get(&neuron_id) {
+                    Some(frames) => frames,
+                    None => continue,
+                };
+                for frame in frames.iter() {
+                    let key = (*cortical_idx, frame.upstream_area_idx);
+                    let Some(target) = twin_map.get(&key) else {
+                        tracing::debug!(
+                            "[NPU] Missing twin mapping for memory_area={} upstream_area={} (neuron_id={})",
+                            cortical_idx,
+                            frame.upstream_area_idx,
+                            neuron_id
+                        );
+                        continue;
+                    };
+                    fire_structures.pending_replay_injections.push(ReplayInjection {
+                        target_burst: burst_count + frame.offset as u64 + 1,
+                        twin_area_idx: target.twin_area_idx,
+                        coords: frame.coords.clone(),
+                        potential: target.potential,
+                    });
+                    scheduled += 1;
+                }
+            }
+        }
+        if scheduled > 0 {
+            tracing::debug!(
+                "[NPU] Scheduled {} replay injections from memory firing at burst {}",
+                scheduled,
+                burst_count
+            );
+        }
+    }
+
     // ===== POWER INJECTION =====
     // Power neurons are identified by cortical_idx = 1 in the neuron array
     // No separate list needed - single source of truth!
@@ -1487,6 +1607,45 @@ impl<
             &mut fire_structures.pending_sensory_injections,
         );
         let pending_mutex = std::sync::Mutex::new(pending_sensory);
+
+        // Drain scheduled replay injections for this burst (t+offset semantics)
+        let mut replay_due = Vec::new();
+        if !fire_structures.pending_replay_injections.is_empty() {
+            let mut remaining = Vec::with_capacity(fire_structures.pending_replay_injections.len());
+            for replay in fire_structures.pending_replay_injections.drain(..) {
+                if replay.target_burst == burst_count {
+                    replay_due.push(replay);
+                } else if replay.target_burst < burst_count {
+                    tracing::warn!(
+                        "[NPU] Dropping overdue replay injection scheduled for burst {} (current={})",
+                        replay.target_burst,
+                        burst_count
+                    );
+                } else {
+                    remaining.push(replay);
+                }
+            }
+            fire_structures.pending_replay_injections = remaining;
+        }
+        if !replay_due.is_empty() {
+            let mut staged = pending_mutex.lock().unwrap();
+            let mut total_replay_candidates = 0usize;
+            for replay in replay_due.into_iter() {
+                let neuron_ids = neuron_storage
+                    .batch_coordinate_lookup(replay.twin_area_idx, &replay.coords);
+                for opt_idx in neuron_ids.into_iter() {
+                    if let Some(idx) = opt_idx {
+                        staged.push((NeuronId(idx as u32), replay.potential));
+                        total_replay_candidates += 1;
+                    }
+                }
+            }
+            tracing::debug!(
+                "[NPU] Staged {} replay candidates for burst {}",
+                total_replay_candidates,
+                burst_count
+            );
+        }
 
         // Drain staged memory neuron injections (t+1 semantics)
         let mut pending_memory = Vec::new();
@@ -1546,6 +1705,46 @@ impl<
                 burst_count
             );
         }
+        // Resolve memory neuron candidates sourced via synaptic propagation.
+        // Memory neurons can be targets of associative synapses; ensure they have cortical metadata.
+        const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+        let mut unresolved_memory_candidates = 0usize;
+        let mut resolved_memory_candidates = 0usize;
+        let memory_candidates: Vec<NeuronId> = fire_structures
+            .fire_candidate_list
+            .iter()
+            .filter_map(|(neuron_id, _)| {
+                (neuron_id.0 >= MEMORY_NEURON_ID_START).then_some(neuron_id)
+            })
+            .collect();
+        for neuron_id in memory_candidates {
+            if fire_structures
+                .memory_candidate_cortical_idx
+                .contains_key(&neuron_id.0)
+            {
+                continue;
+            }
+            let cortical_id = propagation_engine.neuron_to_area.get(&neuron_id);
+            let cortical_idx = cortical_id
+                .and_then(|id| self.get_cortical_area_id(&id.to_string()))
+                .or_else(|| cortical_id.and_then(|id| self.get_cortical_area_id(&id.as_base_64())));
+            if let Some(cortical_idx) = cortical_idx {
+                fire_structures
+                    .memory_candidate_cortical_idx
+                    .insert(neuron_id.0, cortical_idx);
+                resolved_memory_candidates += 1;
+            } else {
+                unresolved_memory_candidates += 1;
+            }
+        }
+        if resolved_memory_candidates > 0 || unresolved_memory_candidates > 0 {
+            tracing::debug!(
+                "[NPU] Memory candidates resolved={} unresolved={} burst={}",
+                resolved_memory_candidates,
+                unresolved_memory_candidates,
+                burst_count
+            );
+        }
         // Restore vector back (empty, but preserves capacity for future injections).
         fire_structures.pending_memory_injections = pending_memory;
 
@@ -1558,6 +1757,13 @@ impl<
             burst_count,
         )?;
         let phase2_duration = phase2_start.elapsed();
+
+        // Schedule replay injections based on memory neuron firing in this burst.
+        self.schedule_memory_replay_from_fire_queue(
+            &dynamics_result.fire_queue,
+            burst_count,
+            &mut fire_structures,
+        );
 
         // Release neuron/synapse locks before plasticity updates to avoid lock contention.
         drop(propagation_engine);
@@ -2435,13 +2641,18 @@ impl<
                 fire_ledger: FireLedger::new(snapshot.fire_ledger_window),
                 fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
                 pending_sensory_injections: Vec::with_capacity(10000),
+                pending_memory_injections: Vec::with_capacity(1024),
+                memory_candidate_cortical_idx: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
+                pending_replay_injections: Vec::new(),
             }),
             area_id_to_name: std::sync::RwLock::new(snapshot.cortical_area_names),
             propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
             stdp_mappings: std::sync::RwLock::new(AHashMap::new()),
             stdp_mapping_index: std::sync::RwLock::new(AHashMap::new()),
             backend: std::sync::Mutex::new(backend),
+            memory_replay_frames: std::sync::RwLock::new(AHashMap::new()),
+            memory_replay_twin_map: std::sync::RwLock::new(AHashMap::new()),
             burst_count: std::sync::atomic::AtomicU64::new(snapshot.burst_count),
             power_amount: std::sync::atomic::AtomicU32::new(snapshot.power_amount.to_bits()),
             fatigue_active: std::sync::atomic::AtomicBool::new(false),
@@ -3578,18 +3789,25 @@ impl<
                 dst_all &= &bm;
             }
 
-            let src_any = RoaringBitmap::from_iter(
-                src_any.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
-            );
-            let src_all = RoaringBitmap::from_iter(
-                src_all.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
-            );
-            let dst_any = RoaringBitmap::from_iter(
-                dst_any.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
-            );
-            let dst_all = RoaringBitmap::from_iter(
-                dst_all.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
-            );
+            let (src_any, src_all, dst_any, dst_all) = if params.bidirectional_stdp {
+                // Associative memory uses dynamic memory neuron IDs, keep them in the window.
+                (src_any, src_all, dst_any, dst_all)
+            } else {
+                (
+                    RoaringBitmap::from_iter(
+                        src_any.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+                    ),
+                    RoaringBitmap::from_iter(
+                        src_all.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+                    ),
+                    RoaringBitmap::from_iter(
+                        dst_any.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+                    ),
+                    RoaringBitmap::from_iter(
+                        dst_all.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+                    ),
+                )
+            };
 
             activity_sets.insert(
                 *key,

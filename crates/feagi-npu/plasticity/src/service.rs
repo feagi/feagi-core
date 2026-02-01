@@ -440,13 +440,18 @@ impl PlasticityService {
                                 break;
                             }
                         };
+                        let frame_counts: Vec<u64> =
+                            window.iter().map(|(_, bm)| bm.len()).collect();
+                        let total_fired: u64 = frame_counts.iter().sum();
                         tracing::debug!(target: "plasticity",
-                            "[PLASTICITY-DEBUG] Burst {} - Upstream area {} window covers {}..{} ({} frames)",
+                            "[PLASTICITY-DEBUG] Burst {} - Upstream area {} window covers {}..{} ({} frames) fired_counts={:?} total_fired={}",
                             current_timestep,
                             upstream_area_idx,
                             window.first().map(|(t, _)| *t).unwrap_or(0),
                             window.last().map(|(t, _)| *t).unwrap_or(0),
-                            window.len()
+                            window.len(),
+                            frame_counts,
+                            total_fired
                         );
                         windows.push((upstream_area_idx, window));
                     }
@@ -532,6 +537,15 @@ impl PlasticityService {
                 Some(area_config.temporal_depth),
             ) {
                 let replay_frames = Self::build_replay_frames(npu, &windows);
+                tracing::debug!(
+                    target: "plasticity",
+                    "[PLASTICITY] Burst {} pattern detected area={} hash={} upstream={} replay_frames={}",
+                    current_timestep,
+                    memory_area_idx,
+                    pattern.pattern_hash,
+                    area_config.upstream_areas.len(),
+                    replay_frames.len()
+                );
                 let mut s = stats.lock().unwrap();
                 s.memory_patterns_detected += 1;
                 drop(s);
@@ -556,6 +570,15 @@ impl PlasticityService {
                             membrane_potential: 0.0,
                         });
 
+                        if replay_frames.is_empty() {
+                            tracing::warn!(
+                                target: "plasticity",
+                                "[PLASTICITY] Burst {} reactivation area={} neuron_id={} has empty replay frames",
+                                current_timestep,
+                                memory_area_idx,
+                                neuron_id
+                            );
+                        }
                         commands.push(PlasticityCommand::InjectMemoryNeuronToFCL {
                             neuron_id,
                             area_idx: *memory_area_idx,
@@ -624,6 +647,15 @@ impl PlasticityService {
                             membrane_potential: 0.0,
                         });
 
+                        if replay_frames.is_empty() {
+                            tracing::warn!(
+                                target: "plasticity",
+                                "[PLASTICITY] Burst {} new memory neuron area={} neuron_id={} has empty replay frames",
+                                current_timestep,
+                                memory_area_idx,
+                                neuron_id
+                            );
+                        }
                         commands.push(PlasticityCommand::InjectMemoryNeuronToFCL {
                             neuron_id,
                             area_idx: *memory_area_idx,
@@ -693,9 +725,12 @@ impl PlasticityService {
 
         let npu_lock = npu.lock().unwrap();
         let mut frames = Vec::new();
+        let mut empty_bitmaps = 0usize;
+        let mut missing_coords = 0usize;
         for (upstream_area_idx, window) in windows {
             for (offset, (_timestep, bitmap)) in window.iter().enumerate() {
                 if bitmap.is_empty() {
+                    empty_bitmaps += 1;
                     continue;
                 }
 
@@ -704,6 +739,7 @@ impl PlasticityService {
                     .filter_map(|neuron_id| npu_lock.get_neuron_coordinates(neuron_id))
                     .collect();
                 if coords.is_empty() {
+                    missing_coords += 1;
                     continue;
                 }
                 coords.sort_unstable();
@@ -715,6 +751,13 @@ impl PlasticityService {
                 });
             }
         }
+        tracing::debug!(
+            target: "plasticity",
+            "[PLASTICITY] Replay frames built frames={} empty_bitmaps={} missing_coords={}",
+            frames.len(),
+            empty_bitmaps,
+            missing_coords
+        );
 
         frames
     }
@@ -810,7 +853,61 @@ impl PlasticityService {
         let mut queue = self.command_queue.lock().unwrap();
         let drained = queue.drain(..).collect::<Vec<_>>();
         if !drained.is_empty() {
-            // trace!("[PLASTICITY-SVC] 📤 Draining {} command(s) for execution", drained.len());
+            tracing::debug!(
+                target: "plasticity",
+                "[PLASTICITY-SVC] Drained {} command(s) for execution",
+                drained.len()
+            );
+            for command in &drained {
+                match command {
+                    PlasticityCommand::RegisterMemoryNeuron {
+                        neuron_id, area_idx, ..
+                    } => {
+                        tracing::debug!(
+                            target: "plasticity",
+                            "[PLASTICITY-SVC] RegisterMemoryNeuron area={} neuron_id={}",
+                            area_idx,
+                            neuron_id
+                        );
+                    }
+                    PlasticityCommand::MemoryNeuronConvertedToLtm {
+                        neuron_id, area_idx, ..
+                    } => {
+                        tracing::info!(
+                            target: "plasticity",
+                            "[PLASTICITY-SVC] MemoryNeuronConvertedToLtm area={} neuron_id={}",
+                            area_idx,
+                            neuron_id
+                        );
+                    }
+                    PlasticityCommand::InjectMemoryNeuronToFCL {
+                        neuron_id,
+                        area_idx,
+                        is_reactivation,
+                        replay_frames,
+                        ..
+                    } => {
+                        tracing::debug!(
+                            target: "plasticity",
+                            "[PLASTICITY-SVC] InjectMemoryNeuronToFCL area={} neuron_id={} reactivation={} replay_frames={}",
+                            area_idx,
+                            neuron_id,
+                            is_reactivation,
+                            replay_frames.len()
+                        );
+                        if replay_frames.is_empty() {
+                            tracing::warn!(
+                                target: "plasticity",
+                                "[PLASTICITY-SVC] InjectMemoryNeuronToFCL area={} neuron_id={} has empty replay frames",
+                                area_idx,
+                                neuron_id
+                            );
+                        }
+                    }
+                    PlasticityCommand::UpdateWeightsDelta { .. } => {}
+                    PlasticityCommand::UpdateStateCounters { .. } => {}
+                }
+            }
         }
         drained
     }

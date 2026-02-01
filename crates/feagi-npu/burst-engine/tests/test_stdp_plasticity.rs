@@ -158,6 +158,41 @@ fn test_bidirectional_stdp_creates_synapse_after_full_window() {
 }
 
 #[test]
+fn test_bidirectional_stdp_with_memory_neuron_ids() {
+    const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+    let (mut npu, _src_neurons, _dst_neurons) = create_stdp_network();
+
+    npu.configure_fire_ledger_window(10, 2).unwrap();
+    npu.configure_fire_ledger_window(11, 2).unwrap();
+
+    let params = stdp_params(2, 1, 5, 0, true, 200, SynapseType::Excitatory);
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    let src = NeuronId(MEMORY_NEURON_ID_START);
+    let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
+
+    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
+    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    let burst = npu.process_burst().unwrap().burst;
+    assert_neuron_fired(&npu, 10, burst, src);
+    assert_neuron_fired(&npu, 11, burst, dst);
+    assert!(
+        npu.get_outgoing_synapses(src.0).is_empty(),
+        "No synapse should form until the full window is observed"
+    );
+
+    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
+    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    let burst = npu.process_burst().unwrap().burst;
+    assert_neuron_fired(&npu, 10, burst, src);
+    assert_neuron_fired(&npu, 11, burst, dst);
+
+    let outgoing = npu.get_outgoing_synapses(src.0);
+    assert_eq!(outgoing.len(), 1, "Synapse should be created after full window");
+    assert_eq!(outgoing[0].0, dst.0);
+}
+
+#[test]
 fn test_bidirectional_stdp_ltp_accumulates_on_sync() {
     let (mut npu, src_neurons, dst_neurons) = create_stdp_network();
 

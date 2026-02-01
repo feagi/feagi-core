@@ -11,18 +11,20 @@ These tests validate:
 */
 
 use feagi_brain_development::{ConnectomeManager, Neuroembryogenesis};
+use feagi_brain_development::models::CorticalAreaExt;
 use feagi_evolutionary::load_genome_from_file;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
+use feagi_npu_burst_engine::npu::MemoryReplayFrame;
 use feagi_npu_neural::types::NeuronId;
 use feagi_npu_plasticity::{
     MemoryNeuronArray, MemoryNeuronLifecycleConfig, PatternConfig, PatternDetector,
-    PlasticityCommand, PlasticityConfig, PlasticityService,
+    PlasticityCommand, PlasticityConfig, PlasticityService, ReplayFrame,
 };
 use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -241,6 +243,310 @@ fn test_associative_mem_genome_l1_l2_do_not_drive_m1_m2_firing() {
     );
 }
 
+/// End-to-end associative memory flow for the reference genome.
+#[test]
+fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
+    let genome_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../feagi-rs/genomes/associative_mem_genome.json");
+    let genome = load_genome_from_file(&genome_path)
+        .expect("Failed to load associative_mem_genome.json");
+
+    let runtime = StdRuntime::new();
+    let backend = CPUBackend::new();
+    let npu = Arc::new(TracingMutex::new(
+        DynamicNPU::new_f32(runtime, backend, 100_000, 100_000, 10)
+            .expect("Failed to create NPU"),
+        "associative_mem_genome_synapse_test",
+    ));
+
+    let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
+        Arc::clone(&npu),
+    )));
+    {
+        let mut manager_write = manager.write();
+        manager_write.setup_core_morphologies_for_testing();
+    }
+
+    let mut neuroembryogenesis = Neuroembryogenesis::new(manager.clone());
+    neuroembryogenesis
+        .develop_from_genome(&genome)
+        .expect("Failed to develop from associative_mem_genome.json");
+
+    let l1_id = cortical_id_by_name(&genome, "l1");
+    let l2_id = cortical_id_by_name(&genome, "l2");
+    let m1_id = cortical_id_by_name(&genome, "m1");
+    let m2_id = cortical_id_by_name(&genome, "m2");
+
+    let manager_read = manager.read();
+    let l1_idx = manager_read
+        .get_cortical_idx(&l1_id)
+        .expect("Missing l1 cortical idx");
+    let l2_idx = manager_read
+        .get_cortical_idx(&l2_id)
+        .expect("Missing l2 cortical idx");
+    let m1_idx = manager_read
+        .get_cortical_idx(&m1_id)
+        .expect("Missing m1 cortical idx");
+    let m2_idx = manager_read
+        .get_cortical_idx(&m2_id)
+        .expect("Missing m2 cortical idx");
+
+    let m1_area = manager_read
+        .get_cortical_area(&m1_id)
+        .expect("Missing m1 cortical area");
+    let m2_area = manager_read
+        .get_cortical_area(&m2_id)
+        .expect("Missing m2 cortical area");
+
+    let m1_temporal_depth = m1_area
+        .properties
+        .get("temporal_depth")
+        .or_else(|| m1_area.properties.get("tmpdpt"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or_else(|| panic!("Missing m1 temporal depth"));
+    let m2_temporal_depth = m2_area
+        .properties
+        .get("temporal_depth")
+        .or_else(|| m2_area.properties.get("tmpdpt"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or_else(|| panic!("Missing m2 temporal depth"));
+
+    let m1_upstream = manager_read.get_upstream_cortical_areas(&m1_id);
+    let m2_upstream = manager_read.get_upstream_cortical_areas(&m2_id);
+    assert!(
+        m1_upstream.contains(&l1_idx),
+        "Expected l1 to be an upstream area for m1"
+    );
+    assert!(
+        m2_upstream.contains(&l2_idx),
+        "Expected l2 to be an upstream area for m2"
+    );
+    drop(manager_read);
+
+    let service = PlasticityService::new(
+        PlasticityConfig::default(),
+        feagi_npu_plasticity::create_memory_stats_cache(),
+        npu.clone(),
+    );
+    service.start();
+    service.register_memory_area(
+        m1_idx,
+        "m1".to_string(),
+        m1_temporal_depth as u32,
+        m1_upstream,
+        None,
+    );
+    service.register_memory_area(
+        m2_idx,
+        "m2".to_string(),
+        m2_temporal_depth as u32,
+        m2_upstream,
+        None,
+    );
+
+    let (l1_neuron, l2_neuron) = {
+        let npu_lock = npu.lock().unwrap();
+        let l1_neurons = npu_lock.get_neurons_in_cortical_area(l1_idx);
+        let l2_neurons = npu_lock.get_neurons_in_cortical_area(l2_idx);
+        (l1_neurons[0], l2_neurons[0])
+    };
+
+    let mut memory_neuron_ids = HashMap::new();
+    let mut replay_frames_by_area: HashMap<u32, Vec<ReplayFrame>> = HashMap::new();
+    let mut synapse_created = false;
+
+    for _ in 0..5 {
+        let burst = {
+            let mut npu_lock = npu.lock().unwrap();
+            npu_lock.inject_sensory_with_potentials(&[
+                (NeuronId(l1_neuron), 10.0),
+                (NeuronId(l2_neuron), 10.0),
+            ]);
+            npu_lock.process_burst().expect("Burst failed").burst
+        };
+        service.notify_burst(burst);
+        let commands = wait_for_commands(&service);
+        for command in &commands {
+            if let PlasticityCommand::InjectMemoryNeuronToFCL {
+                area_idx,
+                replay_frames,
+                ..
+            } = command
+            {
+                if !replay_frames.is_empty() {
+                    replay_frames_by_area.insert(*area_idx, replay_frames.clone());
+                }
+            }
+        }
+        apply_plasticity_commands_with_manager(
+            &npu,
+            &manager,
+            &commands,
+            &mut memory_neuron_ids,
+        );
+
+        let memory_burst = {
+            let npu_lock = npu.lock().unwrap();
+            npu_lock.process_burst().expect("Burst failed").burst
+        };
+
+        if let (Some(&m1_mem), Some(&m2_mem)) =
+            (memory_neuron_ids.get(&m1_idx), memory_neuron_ids.get(&m2_idx))
+        {
+            let m1_window = npu
+                .lock()
+                .unwrap()
+                .get_fire_ledger_dense_window_bitmaps(m1_idx, memory_burst, 1)
+                .expect("Missing FireLedger window for m1");
+            let m2_window = npu
+                .lock()
+                .unwrap()
+                .get_fire_ledger_dense_window_bitmaps(m2_idx, memory_burst, 1)
+                .expect("Missing FireLedger window for m2");
+            assert!(
+                m1_window
+                    .iter()
+                    .any(|(_, bm)| bm.contains(m1_mem)),
+                "Expected m1 memory neuron to fire"
+            );
+            assert!(
+                m2_window
+                    .iter()
+                    .any(|(_, bm)| bm.contains(m2_mem)),
+                "Expected m2 memory neuron to fire"
+            );
+
+            let outgoing = npu.lock().unwrap().get_outgoing_synapses(m1_mem);
+            synapse_created = outgoing.iter().any(|(target, _, _, _)| *target == m2_mem);
+            if synapse_created {
+                break;
+            }
+        }
+    }
+
+    assert!(
+        memory_neuron_ids.contains_key(&m1_idx),
+        "Expected memory neuron creation for m1"
+    );
+    assert!(
+        memory_neuron_ids.contains_key(&m2_idx),
+        "Expected memory neuron creation for m2"
+    );
+    assert!(
+        synapse_created,
+        "Expected associative synapse between m1 and m2 memory neurons"
+    );
+
+    let l2_twin_id = manager
+        .read()
+        .get_memory_twin_for_upstream_idx(m2_idx, l2_idx)
+        .expect("Missing l2 twin for m2");
+    let l2_twin_idx = manager
+        .read()
+        .get_cortical_idx(&l2_twin_id)
+        .expect("Missing l2 twin cortical idx");
+
+    let l1_only_burst = {
+        let mut npu_lock = npu.lock().unwrap();
+        npu_lock.inject_sensory_with_potentials(&[(NeuronId(l1_neuron), 10.0)]);
+        npu_lock.process_burst().expect("Burst failed").burst
+    };
+    service.notify_burst(l1_only_burst);
+    let l1_only_commands = wait_for_commands(&service);
+    for command in &l1_only_commands {
+        if let PlasticityCommand::InjectMemoryNeuronToFCL {
+            area_idx,
+            replay_frames,
+            ..
+        } = command
+        {
+            if !replay_frames.is_empty() {
+                replay_frames_by_area.insert(*area_idx, replay_frames.clone());
+            }
+        }
+    }
+    apply_plasticity_commands_with_manager(
+        &npu,
+        &manager,
+        &l1_only_commands,
+        &mut memory_neuron_ids,
+    );
+
+    let m1_mem = *memory_neuron_ids
+        .get(&m1_idx)
+        .expect("Missing m1 memory neuron id");
+    let m2_mem = *memory_neuron_ids
+        .get(&m2_idx)
+        .expect("Missing m2 memory neuron id");
+
+    let m1_fire_burst = {
+        let npu_lock = npu.lock().unwrap();
+        npu_lock.process_burst().expect("Burst failed").burst
+    };
+    let m1_window = npu
+        .lock()
+        .unwrap()
+        .get_fire_ledger_dense_window_bitmaps(m1_idx, m1_fire_burst, 1)
+        .expect("Missing FireLedger window for m1 after l1-only");
+    assert!(
+        m1_window
+            .iter()
+            .any(|(_, bm)| bm.contains(m1_mem)),
+        "Expected l1-only to activate m1 memory neuron"
+    );
+
+    let m2_fire_burst = {
+        let npu_lock = npu.lock().unwrap();
+        npu_lock.process_burst().expect("Burst failed").burst
+    };
+    let m2_window = npu
+        .lock()
+        .unwrap()
+        .get_fire_ledger_dense_window_bitmaps(m2_idx, m2_fire_burst, 1)
+        .expect("Missing FireLedger window for m2 after m1 activation");
+    assert!(
+        m2_window
+            .iter()
+            .any(|(_, bm)| bm.contains(m2_mem)),
+        "Expected associative synapse to activate m2 memory neuron"
+    );
+
+    let replay_frames = replay_frames_by_area
+        .get(&m2_idx)
+        .expect("Missing replay frames for m2");
+    assert!(
+        !replay_frames.is_empty(),
+        "Expected replay frames for m2 to be non-empty"
+    );
+    let max_offset = replay_frames
+        .iter()
+        .map(|frame| frame.offset)
+        .max()
+        .expect("Missing replay frame offsets for m2");
+    let mut l2_twin_fired = false;
+    for offset in 0..=max_offset {
+        let mut npu_lock = npu.lock().unwrap();
+        let result = npu_lock.process_burst().expect("Burst failed");
+        if result
+            .fired_neurons
+            .iter()
+            .any(|id| npu_lock.get_neuron_cortical_area(id.0) == l2_twin_idx)
+        {
+            l2_twin_fired = true;
+        }
+        tracing::debug!(
+            "[TEST] Replay burst offset={} l2_twin_fired={}",
+            offset,
+            l2_twin_fired
+        );
+    }
+
+    assert!(
+        l2_twin_fired,
+        "Expected m2 memory activation to replay into l2 twin"
+    );
+}
+
 fn wait_for_memory_neurons(service: &PlasticityService, expected_count: usize) -> bool {
     for _ in 0..10_000 {
         let stats = service.get_stats();
@@ -265,9 +571,72 @@ fn apply_plasticity_commands(npu: &Arc<TracingMutex<DynamicNPU>>, commands: &[Pl
                 neuron_id,
                 area_idx,
                 membrane_potential,
+                replay_frames,
                 ..
             } => {
                 npu_lock.inject_memory_neuron_to_fcl(*neuron_id, *area_idx, *membrane_potential);
+                if !replay_frames.is_empty() {
+                    let frames: Vec<MemoryReplayFrame> = replay_frames
+                        .iter()
+                        .map(|frame| MemoryReplayFrame {
+                            offset: frame.offset,
+                            upstream_area_idx: frame.upstream_area_idx,
+                            coords: frame.coords.clone(),
+                        })
+                        .collect();
+                    npu_lock.register_memory_replay_frames(*neuron_id, frames);
+                }
+            }
+            PlasticityCommand::UpdateWeightsDelta { .. } => {}
+            PlasticityCommand::UpdateStateCounters { .. } => {}
+        }
+    }
+}
+
+/// Apply plasticity commands and register memory neuron mappings in the NPU.
+fn apply_plasticity_commands_with_manager(
+    npu: &Arc<TracingMutex<DynamicNPU>>,
+    manager: &Arc<RwLock<ConnectomeManager>>,
+    commands: &[PlasticityCommand],
+    memory_neuron_ids: &mut HashMap<u32, u32>,
+) {
+    if commands.is_empty() {
+        return;
+    }
+    let mut npu_lock = npu.lock().unwrap();
+    for command in commands {
+        match command {
+            PlasticityCommand::RegisterMemoryNeuron {
+                neuron_id, area_idx, ..
+            } => {
+                let cortical_id = manager
+                    .read()
+                    .get_cortical_id(*area_idx)
+                    .unwrap_or_else(|| panic!("Missing cortical ID for area {}", area_idx))
+                    .clone();
+                npu_lock.register_dynamic_neuron_mapping(*neuron_id, cortical_id);
+                memory_neuron_ids.insert(*area_idx, *neuron_id);
+            }
+            PlasticityCommand::MemoryNeuronConvertedToLtm { .. } => {}
+            PlasticityCommand::InjectMemoryNeuronToFCL {
+                neuron_id,
+                area_idx,
+                membrane_potential,
+                replay_frames,
+                ..
+            } => {
+                npu_lock.inject_memory_neuron_to_fcl(*neuron_id, *area_idx, *membrane_potential);
+                if !replay_frames.is_empty() {
+                    let frames: Vec<MemoryReplayFrame> = replay_frames
+                        .iter()
+                        .map(|frame| MemoryReplayFrame {
+                            offset: frame.offset,
+                            upstream_area_idx: frame.upstream_area_idx,
+                            coords: frame.coords.clone(),
+                        })
+                        .collect();
+                    npu_lock.register_memory_replay_frames(*neuron_id, frames);
+                }
             }
             PlasticityCommand::UpdateWeightsDelta { .. } => {}
             PlasticityCommand::UpdateStateCounters { .. } => {}

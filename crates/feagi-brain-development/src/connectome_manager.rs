@@ -1309,6 +1309,56 @@ impl ConnectomeManager {
         memory_area_id: &CorticalID,
         upstream_area_id: &CorticalID,
     ) -> BduResult<CorticalID> {
+        use crate::models::CorticalAreaExt;
+
+        let register_replay_mapping = |manager: &mut ConnectomeManager,
+                                       twin_id: &CorticalID|
+         -> BduResult<()> {
+            let Some(npu) = manager.npu.as_ref() else {
+                return Ok(());
+            };
+            let memory_area_idx = *manager
+                .cortical_id_to_idx
+                .get(memory_area_id)
+                .ok_or_else(|| {
+                    BduError::InvalidArea(format!(
+                        "Memory area idx missing for {}",
+                        memory_area_id.as_base_64()
+                    ))
+                })?;
+            let upstream_area_idx = *manager
+                .cortical_id_to_idx
+                .get(upstream_area_id)
+                .ok_or_else(|| {
+                    BduError::InvalidArea(format!(
+                        "Upstream area idx missing for {}",
+                        upstream_area_id.as_base_64()
+                    ))
+                })?;
+            let twin_area_idx = *manager.cortical_id_to_idx.get(twin_id).ok_or_else(|| {
+                BduError::InvalidArea(format!(
+                    "Twin area idx missing for {}",
+                    twin_id.as_base_64()
+                ))
+            })?;
+            let twin_area = manager.cortical_areas.get(twin_id).ok_or_else(|| {
+                BduError::InvalidArea(format!(
+                    "Twin area {} not found",
+                    twin_id.as_base_64()
+                ))
+            })?;
+            let potential = twin_area.firing_threshold() + twin_area.firing_threshold_increment();
+            if let Ok(mut npu_lock) = npu.lock() {
+                npu_lock.register_memory_twin_mapping(
+                    memory_area_idx,
+                    upstream_area_idx,
+                    twin_area_idx,
+                    potential,
+                );
+            }
+            Ok(())
+        };
+
         let memory_area = self
             .cortical_areas
             .get(memory_area_id)
@@ -1344,6 +1394,7 @@ impl ConnectomeManager {
             .and_then(|s| CorticalID::try_from_base_64(s).ok())
         {
             self.ensure_memory_replay_mapping(memory_area_id, &existing)?;
+            register_replay_mapping(self, &existing)?;
             self.refresh_cortical_mappings_hash();
             return Ok(existing);
         }
@@ -1382,6 +1433,7 @@ impl ConnectomeManager {
             }
             self.set_memory_twin_mapping(memory_area_id, upstream_area_id, &twin_id);
             self.ensure_memory_replay_mapping(memory_area_id, &twin_id)?;
+            register_replay_mapping(self, &twin_id)?;
             self.refresh_cortical_mappings_hash();
             return Ok(twin_id);
         }
@@ -1409,6 +1461,7 @@ impl ConnectomeManager {
 
         self.set_memory_twin_mapping(memory_area_id, upstream_area_id, &twin_id);
         self.ensure_memory_replay_mapping(memory_area_id, &twin_id)?;
+        register_replay_mapping(self, &twin_id)?;
         self.refresh_cortical_mappings_hash();
         Ok(twin_id)
     }
@@ -2399,11 +2452,21 @@ impl ConnectomeManager {
         // - This value represents the synapse PSP stored in the NPU (u8: 0..255).
         // - Treat `postsynaptic_current` as an absolute value in 0..255 units.
         // - Do NOT scale by 255 here. A PSP of 1.0 should remain PSP=1 (not 255).
-        let psp = {
+        let (psp_f32, psp) = {
             use crate::models::cortical_area::CorticalAreaExt;
             let psp_f32 = src_area.postsynaptic_current();
-            psp_f32.clamp(0.0, 255.0) as u8
+            (psp_f32, psp_f32.clamp(0.0, 255.0) as u8)
         };
+
+        tracing::debug!(
+            target: "feagi-bdu",
+            "Resolved synapse params src={} weight={} psp={} psp_f32={} type={:?}",
+            src_area_id.as_base_64(),
+            weight,
+            psp,
+            psp_f32,
+            synapse_type
+        );
 
         Ok((weight, psp, synapse_type))
     }

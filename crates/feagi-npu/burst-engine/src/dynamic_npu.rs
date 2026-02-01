@@ -841,6 +841,42 @@ where
         }
     }
 
+    /// Register replay frames for a memory neuron (used when it fires via synapses).
+    pub fn register_memory_replay_frames(
+        &mut self,
+        neuron_id: u32,
+        frames: Vec<crate::npu::MemoryReplayFrame>,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.register_memory_replay_frames(neuron_id, frames),
+            DynamicNPUGeneric::INT8(npu) => npu.register_memory_replay_frames(neuron_id, frames),
+        }
+    }
+
+    /// Register the twin cortical area mapping for memory replay.
+    pub fn register_memory_twin_mapping(
+        &mut self,
+        memory_area_idx: u32,
+        upstream_area_idx: u32,
+        twin_area_idx: u32,
+        potential: f32,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.register_memory_twin_mapping(
+                memory_area_idx,
+                upstream_area_idx,
+                twin_area_idx,
+                potential,
+            ),
+            DynamicNPUGeneric::INT8(npu) => npu.register_memory_twin_mapping(
+                memory_area_idx,
+                upstream_area_idx,
+                twin_area_idx,
+                potential,
+            ),
+        }
+    }
+
     pub fn configure_fire_ledger_window(
         &mut self,
         cortical_idx: u32,
