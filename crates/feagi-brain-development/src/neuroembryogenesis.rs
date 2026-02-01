@@ -981,6 +981,8 @@ impl Neuroembryogenesis {
         let expected_synapses = genome.stats.innate_synapse_count;
         info!(target: "feagi-bdu","  Expected innate synapses from genome: {}", expected_synapses);
 
+        self.rebuild_memory_twin_mappings_from_genome(genome)?;
+
         let mut total_synapses_created = 0;
         let total_areas = genome.cortical_areas.len();
 
@@ -1162,6 +1164,107 @@ impl Neuroembryogenesis {
         self.update_stage(DevelopmentStage::Synaptogenesis, 100);
         info!(target: "feagi-bdu","  ✅ Synaptogenesis complete: {} synapses created", total_synapses_created);
 
+        Ok(())
+    }
+
+    fn rebuild_memory_twin_mappings_from_genome(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
+        use feagi_structures::genomic::cortical_area::CorticalAreaType;
+        let mut repaired = 0usize;
+
+        for (memory_id, memory_area) in genome.cortical_areas.iter() {
+            let is_memory = matches!(
+                memory_area.cortical_id.as_cortical_type(),
+                Ok(CorticalAreaType::Memory(_))
+            ) || memory_area
+                .properties
+                .get("is_mem_type")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+                || memory_area
+                    .properties
+                    .get("cortical_group")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|v| v.eq_ignore_ascii_case("MEMORY"));
+            if !is_memory {
+                continue;
+            }
+
+            let Some(dstmap) = memory_area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+            else {
+                continue;
+            };
+
+            for (dst_id_str, rules) in dstmap {
+                let Some(rule_array) = rules.as_array() else {
+                    continue;
+                };
+                let has_replay = rule_array.iter().any(|rule| {
+                    rule.get("morphology_id")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|id| id == "memory_replay")
+                });
+                if !has_replay {
+                    continue;
+                }
+
+                let dst_id = match CorticalID::try_from_base_64(dst_id_str) {
+                    Ok(id) => id,
+                    Err(_) => {
+                        warn!(
+                            target: "feagi-bdu",
+                            "Invalid twin cortical ID in memory_replay dstmap: {}",
+                            dst_id_str
+                        );
+                        continue;
+                    }
+                };
+
+                let Some(twin_area) = genome.cortical_areas.get(&dst_id) else {
+                    continue;
+                };
+                let Some(upstream_id_str) = twin_area
+                    .properties
+                    .get("memory_twin_of")
+                    .and_then(|v| v.as_str())
+                else {
+                    continue;
+                };
+                let upstream_id = match CorticalID::try_from_base_64(upstream_id_str) {
+                    Ok(id) => id,
+                    Err(_) => {
+                        warn!(
+                            target: "feagi-bdu",
+                            "Invalid memory_twin_of value on twin area {}: {}",
+                            dst_id.as_base_64(),
+                            upstream_id_str
+                        );
+                        continue;
+                    }
+                };
+
+                let mut manager = self.connectome_manager.write();
+                if let Err(e) = manager.ensure_memory_twin_area(memory_id, &upstream_id) {
+                    warn!(
+                        target: "feagi-bdu",
+                        "Failed to rebuild memory twin mapping for memory {} upstream {}: {}",
+                        memory_id.as_base_64(),
+                        upstream_id.as_base_64(),
+                        e
+                    );
+                    continue;
+                }
+                repaired += 1;
+            }
+        }
+
+        info!(
+            target: "feagi-bdu",
+            "Rebuilt {} memory twin mapping(s) from genome",
+            repaired
+        );
         Ok(())
     }
 }
