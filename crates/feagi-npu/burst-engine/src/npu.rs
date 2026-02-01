@@ -3168,6 +3168,25 @@ impl<
         updated
     }
 
+    /// Update PSP stored in STDP mapping params for mappings sourced by a cortical area.
+    ///
+    /// Returns number of mappings updated.
+    pub fn update_stdp_mapping_psp_for_source(
+        &mut self,
+        src_cortical_idx: u32,
+        new_psp: u8,
+    ) -> usize {
+        let mut updated = 0usize;
+        let mut mappings = self.stdp_mappings.write().unwrap();
+        for (key, params) in mappings.iter_mut() {
+            if key.0 == src_cortical_idx {
+                params.synapse_psp = new_psp;
+                updated += 1;
+            }
+        }
+        updated
+    }
+
     /// Delete a neuron (mark as invalid)
     /// Returns true if successful, false if neuron out of bounds
     pub fn delete_neuron(&mut self, neuron_id: u32) -> bool {
