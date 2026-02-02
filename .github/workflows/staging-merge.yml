@@ -48,8 +48,6 @@ jobs:
       
       - name: Smart version detection and bumping
         id: version
-        env:
-          FORCE_VERSION_GAP: "true"
         run: |
           echo "🔍 Detecting changed crates and computing independent version bumps..."
           echo ""

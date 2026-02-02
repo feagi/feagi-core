@@ -68,6 +68,42 @@ jobs:
     - name: Run Clippy (lib and tests only)
       run: cargo clippy --workspace --lib --tests -- -D warnings
 
+  microbench:
+    name: Burst Engine Microbench Gate
+    runs-on: ubuntu-latest
+    needs: [test]
+    timeout-minutes: 30
+    steps:
+    - name: Checkout PR code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Run microbenchmarks (criterion)
+      run: cargo bench -p feagi-npu-burst-engine --bench ci_microbench
+
+    - name: Regression gate (perf compare)
+      run: |
+        cargo run --bin perf_compare -- \
+          --baseline perf/ci_microbench_baseline.json \
+          --criterion-dir target/criterion
+
   agent-sdk-live-contracts:
     name: Agent SDK Live HTTP Contract Tests
     runs-on: ubuntu-latest
@@ -146,7 +182,7 @@ jobs:
   publish-local-sim:
     name: Publish Simulation (local packaged deps gate)
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [test, microbench]
     timeout-minutes: 45
     steps:
     - name: Checkout PR code (full history for diff)
