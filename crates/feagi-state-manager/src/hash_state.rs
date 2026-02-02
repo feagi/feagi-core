@@ -15,6 +15,7 @@ pub struct HashState {
     brain_geometry_hash: AtomicU64,
     morphologies_hash: AtomicU64,
     cortical_mappings_hash: AtomicU64,
+    agent_data_hash: AtomicU64,
 }
 
 impl HashState {
@@ -71,5 +72,15 @@ impl HashState {
     /// Set cortical mappings hash.
     pub fn set_cortical_mappings_hash(&self, value: u64) {
         self.cortical_mappings_hash.store(value, Ordering::Release);
+    }
+
+    /// Get agent data hash.
+    pub fn get_agent_data_hash(&self) -> u64 {
+        self.agent_data_hash.load(Ordering::Acquire)
+    }
+
+    /// Set agent data hash.
+    pub fn set_agent_data_hash(&self, value: u64) {
+        self.agent_data_hash.store(value, Ordering::Release);
     }
 }

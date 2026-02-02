@@ -32,8 +32,6 @@ struct TransportOption {
 struct RegistrationInfo {
     status: String,
     message: Option<String>,
-    #[allow(dead_code)]
-    zmq_ports: Option<HashMap<String, u16>>,
     transports: Vec<TransportOption>,
     recommended_transport: Option<String>,
 }
@@ -80,16 +78,6 @@ fn parse_registration_response(response: &Value) -> Result<RegistrationInfo, Str
         }
     }
 
-    // Parse legacy ZMQ ports
-    let zmq_ports = body
-        .get("zmq_ports")
-        .and_then(|p| p.as_object())
-        .map(|obj| {
-            obj.iter()
-                .filter_map(|(k, v)| v.as_u64().map(|port| (k.clone(), port as u16)))
-                .collect()
-        });
-
     Ok(RegistrationInfo {
         status: body
             .get("status")
@@ -100,7 +88,6 @@ fn parse_registration_response(response: &Value) -> Result<RegistrationInfo, Str
             .get("message")
             .and_then(|m| m.as_str())
             .map(|s| s.to_string()),
-        zmq_ports,
         transports,
         recommended_transport: body
             .get("recommended_transport")
@@ -148,11 +135,6 @@ fn main() {
         "body": {
             "status": "success",
             "message": "Agent robot_01 registered successfully",
-            "zmq_ports": {
-                "sensory": 5558,
-                "motor": 5564,
-                "visualization": 5562
-            },
             "transports": [
                 {
                     "transport_type": "zmq",

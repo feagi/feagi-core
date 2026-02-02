@@ -4,11 +4,31 @@
 //! Heartbeat service for maintaining agent liveness
 
 use crate::core::error::{Result, SdkError};
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+use tokio::runtime::Handle;
+use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
+use tokio::time::timeout;
 use tracing::{debug, warn};
+use zeromq::{DealerSocket, SocketRecv, SocketSend, ZmqMessage};
+
+fn block_on_with<T>(
+    handle: &Handle,
+    runtime: Option<&Runtime>,
+    future: impl Future<Output = T>,
+) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| handle.block_on(future))
+    } else if let Some(runtime) = runtime {
+        runtime.block_on(future)
+    } else {
+        handle.block_on(future)
+    }
+}
 
 /// Registration payload used to re-register an agent after FEAGI restarts.
 ///
@@ -29,7 +49,13 @@ pub struct HeartbeatService {
     agent_id: String,
 
     /// ZMQ registration socket (shared with main client)
-    socket: Arc<Mutex<zmq::Socket>>,
+    socket: Arc<Mutex<DealerSocket>>,
+
+    /// Tokio runtime handle (ambient if available)
+    runtime_handle: Handle,
+
+    /// Owned runtime when created outside tokio
+    runtime: Option<Arc<Runtime>>,
 
     /// Heartbeat interval
     interval: Duration,
@@ -51,10 +77,18 @@ impl HeartbeatService {
     /// * `agent_id` - Agent identifier
     /// * `socket` - Shared ZMQ socket for sending heartbeats
     /// * `interval_secs` - Heartbeat interval in seconds
-    pub fn new(agent_id: String, socket: Arc<Mutex<zmq::Socket>>, interval_secs: f64) -> Self {
+    pub fn new(
+        agent_id: String,
+        socket: Arc<Mutex<DealerSocket>>,
+        runtime_handle: Handle,
+        runtime: Option<Arc<Runtime>>,
+        interval_secs: f64,
+    ) -> Self {
         Self {
             agent_id,
             socket,
+            runtime_handle,
+            runtime,
             interval: Duration::from_secs_f64(interval_secs),
             running: Arc::new(AtomicBool::new(false)),
             thread: None,
@@ -83,6 +117,8 @@ impl HeartbeatService {
 
         let agent_id = self.agent_id.clone();
         let socket = Arc::clone(&self.socket);
+        let runtime_handle = self.runtime_handle.clone();
+        let runtime = self.runtime.clone();
         let interval = self.interval;
         let running = Arc::clone(&self.running);
         let reconnect = self.reconnect.clone();
@@ -99,7 +135,13 @@ impl HeartbeatService {
                 }
 
                 // Send heartbeat
-                if let Err(e) = Self::send_heartbeat(&agent_id, &socket, reconnect.as_ref()) {
+                if let Err(e) = Self::send_heartbeat(
+                    &agent_id,
+                    &socket,
+                    &runtime_handle,
+                    runtime.as_deref(),
+                    reconnect.as_ref(),
+                ) {
                     warn!(
                         "[HEARTBEAT] Failed to send heartbeat for {}: {}",
                         agent_id, e
@@ -162,7 +204,9 @@ impl HeartbeatService {
     /// Send a single heartbeat message
     fn send_heartbeat(
         agent_id: &str,
-        socket: &Arc<Mutex<zmq::Socket>>,
+        socket: &Arc<Mutex<DealerSocket>>,
+        runtime_handle: &Handle,
+        runtime: Option<&Runtime>,
         reconnect: Option<&ReconnectSpec>,
     ) -> Result<()> {
         let message = serde_json::json!({
@@ -177,56 +221,56 @@ impl HeartbeatService {
             }
         });
 
-        let socket_guard = socket
+        let mut socket_guard = socket
             .lock()
             .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
 
         // Send heartbeat request
-        socket_guard.send(message.to_string().as_bytes(), 0)?;
+        let message = ZmqMessage::from(message.to_string().into_bytes());
+        block_on_with(runtime_handle, runtime, socket_guard.send(message))
+            .map_err(SdkError::Zmq)?;
 
-        // Wait for response (ROUTER replies are multipart: [empty][json] when seen by REQ)
-        if socket_guard.poll(zmq::POLLIN, 1000)? > 0 {
-            let parts = socket_guard.recv_multipart(0)?;
-            let last = parts
-                .last()
-                .ok_or_else(|| SdkError::Other("Heartbeat reply was empty".to_string()))?;
-            let response: serde_json::Value = serde_json::from_slice(last)?;
-            drop(socket_guard);
+        // Wait for response (ROUTER replies may include empty delimiter)
+        let response = block_on_with(runtime_handle, runtime, async {
+            timeout(Duration::from_millis(1000), socket_guard.recv()).await
+        })
+        .map_err(|_| SdkError::Timeout("Heartbeat response timeout".to_string()))?
+        .map_err(SdkError::Zmq)?;
+        let frames = response.into_vec();
+        let last = frames
+            .last()
+            .ok_or_else(|| SdkError::Other("Heartbeat reply was empty".to_string()))?;
+        let response: serde_json::Value = serde_json::from_slice(last)?;
 
-            // Heartbeat response schema varies by FEAGI version/transport:
-            // - Legacy: {"status":"success", ...}
-            // - HTTP-style: {"status":200,"body":{"message":"ok"}, ...}
-            //
-            // Treat both as success deterministically.
-            let status_value = response.get("status");
-            let is_success = match status_value {
-                Some(serde_json::Value::String(s)) => s == "success" || s == "ok",
-                Some(serde_json::Value::Number(n)) => n.as_u64() == Some(200),
-                _ => false,
-            };
+        // Heartbeat response schema varies by FEAGI version/transport:
+        // - Legacy: {"status":"success", ...}
+        // - HTTP-style: {"status":200,"body":{"message":"ok"}, ...}
+        //
+        // Treat both as success deterministically.
+        let status_value = response.get("status");
+        let is_success = match status_value {
+            Some(serde_json::Value::String(s)) => s == "success" || s == "ok",
+            Some(serde_json::Value::Number(n)) => n.as_u64() == Some(200),
+            _ => false,
+        };
 
-            if is_success {
-                debug!("[HEARTBEAT] ✓ Heartbeat acknowledged for {}", agent_id);
-                Ok(())
-            } else {
-                warn!("[HEARTBEAT] ⚠ Heartbeat rejected: {:?}", response);
-                if Self::is_agent_not_registered(&response) {
-                    if let Some(spec) = reconnect {
-                        if Self::try_re_register(spec, socket).is_ok() {
-                            debug!(
-                                "[HEARTBEAT] ✓ Auto re-registered agent after heartbeat rejection: {}",
-                                agent_id
-                            );
-                            return Ok(());
-                        }
+        if is_success {
+            debug!("[HEARTBEAT] ✓ Heartbeat acknowledged for {}", agent_id);
+            Ok(())
+        } else {
+            warn!("[HEARTBEAT] ⚠ Heartbeat rejected: {:?}", response);
+            if Self::is_agent_not_registered(&response) {
+                if let Some(spec) = reconnect {
+                    if Self::try_re_register(spec, socket, runtime_handle, runtime).is_ok() {
+                        debug!(
+                            "[HEARTBEAT] ✓ Auto re-registered agent after heartbeat rejection: {}",
+                            agent_id
+                        );
+                        return Ok(());
                     }
                 }
-                Err(SdkError::HeartbeatFailed(format!("{:?}", response)))
             }
-        } else {
-            drop(socket_guard);
-            warn!("[HEARTBEAT] ⚠ Heartbeat timeout for {}", agent_id);
-            Ok(()) // Don't treat timeout as fatal - just log it
+            Err(SdkError::HeartbeatFailed(format!("{:?}", response)))
         }
     }
 
@@ -248,7 +292,12 @@ impl HeartbeatService {
     }
 
     /// Attempt to re-register the agent (used after FEAGI restarts).
-    fn try_re_register(spec: &ReconnectSpec, socket: &Arc<Mutex<zmq::Socket>>) -> Result<()> {
+    fn try_re_register(
+        spec: &ReconnectSpec,
+        socket: &Arc<Mutex<DealerSocket>>,
+        runtime_handle: &Handle,
+        runtime: Option<&Runtime>,
+    ) -> Result<()> {
         let registration_msg = serde_json::json!({
             "method": "POST",
             "path": "/v1/agent/register",
@@ -262,24 +311,28 @@ impl HeartbeatService {
         let mut attempt = 0u32;
         loop {
             attempt += 1;
-            let socket = socket
+            let mut socket = socket
                 .lock()
                 .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
 
-            socket.send(registration_msg.to_string().as_bytes(), 0)?;
-            if socket.poll(zmq::POLLIN, 1000)? > 0 {
-                let parts = socket.recv_multipart(0)?;
-                let last = parts
-                    .last()
-                    .ok_or_else(|| SdkError::Other("Registration reply was empty".to_string()))?;
-                let response: serde_json::Value = serde_json::from_slice(last)?;
-                let status_code = response
-                    .get("status")
-                    .and_then(|s| s.as_u64())
-                    .unwrap_or(500);
-                if status_code == 200 {
-                    return Ok(());
-                }
+            let message = ZmqMessage::from(registration_msg.to_string().into_bytes());
+            block_on_with(runtime_handle, runtime, socket.send(message)).map_err(SdkError::Zmq)?;
+            let response = block_on_with(runtime_handle, runtime, async {
+                timeout(Duration::from_millis(1000), socket.recv()).await
+            })
+            .map_err(|_| SdkError::Timeout("Registration response timeout".to_string()))?
+            .map_err(SdkError::Zmq)?;
+            let frames = response.into_vec();
+            let last = frames
+                .last()
+                .ok_or_else(|| SdkError::Other("Registration reply was empty".to_string()))?;
+            let response: serde_json::Value = serde_json::from_slice(last)?;
+            let status_code = response
+                .get("status")
+                .and_then(|s| s.as_u64())
+                .unwrap_or(500);
+            if status_code == 200 {
+                return Ok(());
             }
 
             if attempt > spec.registration_retries {

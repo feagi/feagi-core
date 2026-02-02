@@ -8,14 +8,14 @@ Block_to_block is equivalent to vectors morphology with vector (0, 0, 0).
 It reuses the vector offset logic to avoid code duplication.
 */
 
-use crate::connectivity::rules::apply_vector_offset;
+use super::vectors::apply_vector_offset_clamped;
 use crate::types::BduResult;
 
 /// Block connection mapping - identity mapping (like vector (0,0,0)).
 ///
 /// Maps source coordinates to destination coordinates with zero offset.
 /// This is equivalent to vectors morphology with vector (0, 0, 0).
-/// Reuses `apply_vector_offset` with vector (0, 0, 0) to avoid code duplication.
+/// Reuses the clamped vector offset with vector (0, 0, 0) to avoid duplication.
 ///
 /// Note: scaling_factor parameter is ignored (kept for backward compatibility).
 pub fn syn_block_connection(
@@ -27,7 +27,7 @@ pub fn syn_block_connection(
     _scaling_factor: u32,
 ) -> BduResult<crate::types::Position> {
     // Reuse vector offset logic with zero vector (0, 0, 0) for identity mapping
-    apply_vector_offset(neuron_location, (0, 0, 0), 1.0, dst_dimensions)
+    apply_vector_offset_clamped(neuron_location, (0, 0, 0), 1.0, dst_dimensions)
 }
 
 #[cfg(test)]

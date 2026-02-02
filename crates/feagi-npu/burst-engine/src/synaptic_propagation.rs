@@ -31,7 +31,7 @@
 //!
 //! ## Rust Optimization Strategy
 //! 1. **Gather Phase**: Build synapse list (minimal Python loop overhead)
-//! 2. **SIMD Phase**: Vectorized math (weight × conductance × sign)
+//! 2. **SIMD Phase**: Vectorized math (weight × PSP × sign)
 //! 3. **Grouping Phase**: Sort/split by cortical area (np.argsort overhead removed)
 //!
 //! ## Performance Target
@@ -587,8 +587,8 @@ mod tests {
             source_neurons: vec![1, 1, 2],    // Raw u32 values
             target_neurons: vec![10, 11, 10], // Raw u32 values
             weights: vec![255, 128, 200],     // Raw u8 values
-            postsynaptic_potentials: vec![255, 255, 200], // Raw u8 values (renamed from conductances)
-            types: vec![0, 1, 0],                         // 0=excitatory, 1=inhibitory
+            postsynaptic_potentials: vec![255, 255, 200], // Raw u8 PSP values
+            types: vec![0, 1, 0],             // 0=excitatory, 1=inhibitory
             valid_mask: vec![true, true, true],
             source_index: ahash::AHashMap::new(),
         };

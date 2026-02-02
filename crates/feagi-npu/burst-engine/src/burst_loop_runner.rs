@@ -109,6 +109,9 @@ pub struct BurstLoopRunner {
     /// Callback receives the current burst/timestep number
     /// Uses Fn trait object to avoid circular dependency with plasticity crate
     plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>,
+    /// Optional post-burst callback invoked after NPU lock release
+    /// Use for external integrations that must run outside the NPU lock
+    post_burst_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>,
     /// Cached cortical_idx -> cortical_id mappings (from ConnectomeManager, not NPU)
     /// Refreshed periodically to avoid ConnectomeManager lock contention
     /// This eliminates NPU lock acquisitions that were causing 1-3s delays!
@@ -320,6 +323,7 @@ impl BurstLoopRunner {
             cached_fire_queue: Arc::new(Mutex::new(None)), // Cached fire queue for API (Arc-wrapped to avoid cloning)
             parameter_queue: ParameterUpdateQueue::new(),
             plasticity_notify: None, // Initialized later via set_plasticity_notify_callback
+            post_burst_callback: None, // Initialized later via set_post_burst_callback
         }
     }
 
@@ -331,6 +335,20 @@ impl BurstLoopRunner {
     {
         self.plasticity_notify = Some(Arc::new(callback));
         info!("[BURST-RUNNER] Plasticity notification callback attached");
+    }
+
+    /// Set a post-burst callback that runs after the NPU lock is released.
+    pub fn set_post_burst_callback<F>(&mut self, callback: F)
+    where
+        F: Fn(u64) + Send + Sync + 'static,
+    {
+        self.post_burst_callback = Some(Arc::new(callback));
+        info!("[BURST-RUNNER] Post-burst callback attached");
+    }
+
+    /// Return true if a post-burst callback is configured.
+    pub fn has_post_burst_callback(&self) -> bool {
+        self.post_burst_callback.is_some()
     }
 
     /// Attach visualization SHM writer (called from Python after registration)
@@ -429,6 +447,7 @@ impl BurstLoopRunner {
         let cached_fire_queue = self.cached_fire_queue.clone(); // For caching fire queue data
         let param_queue = self.parameter_queue.clone(); // Parameter update queue
         let plasticity_notify = self.plasticity_notify.clone(); // Clone Arc for thread
+        let post_burst_callback = self.post_burst_callback.clone(); // Clone Arc for thread
         let cached_cortical_id_mappings = self.cached_cortical_id_mappings.clone();
         let last_cortical_id_refresh = self.last_cortical_id_refresh.clone();
         let cached_visualization_granularities = self.cached_visualization_granularities.clone();
@@ -450,6 +469,7 @@ impl BurstLoopRunner {
                         cached_fire_queue,
                         param_queue,
                         plasticity_notify,
+                        post_burst_callback,
                         cached_cortical_id_mappings,
                         last_cortical_id_refresh,
                         cached_visualization_granularities,
@@ -942,6 +962,7 @@ fn burst_loop(
     cached_fire_queue: Arc<Mutex<Option<Arc<FireQueueSample>>>>, // For caching fire queue data (Arc-wrapped to avoid cloning)
     parameter_queue: ParameterUpdateQueue, // Asynchronous parameter update queue
     plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Plasticity notification callback
+    post_burst_callback: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Post-burst callback
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>, // Cached cortical_idx -> cortical_id
     _last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
     cached_visualization_granularities: Arc<Mutex<VisualizationGranularityCache>>, // Cached cortical_idx -> visualization_granularity
@@ -1024,6 +1045,8 @@ fn burst_loop(
         static LAST_LOCK_RELEASE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
         #[allow(dead_code)]
         static LAST_BURST_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+        static POST_BURST_MISSING_LOGGED: std::sync::atomic::AtomicBool =
+            std::sync::atomic::AtomicBool::new(false);
 
         let lock_start = Instant::now();
         if let Ok(last_release) = LAST_LOCK_RELEASE.lock() {
@@ -1047,6 +1070,9 @@ fn burst_loop(
                 burst_num
             );
         }
+
+        let mut last_process_duration: Option<std::time::Duration> = None;
+        let mut last_burst_stats: Option<(usize, usize, usize, usize, usize)> = None;
 
         // Track lock acquisition time outside block scope for diagnostics
         let lock_acquired = {
@@ -1103,6 +1129,7 @@ fn burst_loop(
             }
 
             // Check flag again after acquiring lock (in case shutdown happened during lock wait)
+            let mut burst_after = npu_lock.get_burst_count();
             let should_exit = if !running.load(Ordering::Relaxed) {
                 true // Signal to exit
             } else {
@@ -1249,13 +1276,28 @@ fn burst_loop(
                             }
                             "postsynaptic_current" | "neuron_post_synaptic_potential" => {
                                 if let Some(psp) = update.value.as_f64() {
-                                    // PSP is stored in the NPU as u8 conductance (0..=255).
+                                    // PSP is stored in the NPU as u8 (0..=255).
                                     // Clamp deterministically (matches synaptogenesis behavior).
                                     let psp_u8 = psp.clamp(0.0, 255.0) as u8;
-                                    npu_lock.update_cortical_area_postsynaptic_current(
-                                        update.cortical_idx,
+                                    let synapses_updated = npu_lock
+                                        .update_cortical_area_postsynaptic_current(
+                                            update.cortical_idx,
+                                            psp_u8,
+                                        );
+                                    let mappings_updated = npu_lock
+                                        .update_stdp_mapping_psp_for_source(
+                                            update.cortical_idx,
+                                            psp_u8,
+                                        );
+                                    info!(
+                                        target: "feagi-burst-engine",
+                                        "Applied PSP update area={} psp={} synapses_updated={} stdp_mappings_updated={}",
+                                        update.cortical_id,
                                         psp_u8,
-                                    )
+                                        synapses_updated,
+                                        mappings_updated
+                                    );
+                                    synapses_updated
                                 } else {
                                     0
                                 }
@@ -1326,10 +1368,22 @@ fn burst_loop(
                 let process_start = Instant::now();
                 debug!("[BURST-TIMING] Starting process_burst()...");
 
-                match npu_lock.process_burst() {
-                    Ok(mut result) => {
+                let burst_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    npu_lock.process_burst()
+                }));
+
+                match burst_result {
+                    Ok(Ok(mut result)) => {
                         let process_done = Instant::now();
                         let duration = process_done.duration_since(process_start);
+                        last_process_duration = Some(duration);
+                        last_burst_stats = Some((
+                            result.neuron_count,
+                            result.power_injections,
+                            result.synaptic_injections,
+                            result.neurons_processed,
+                            result.neurons_in_refractory,
+                        ));
 
                         if burst_num < 5 || burst_num.is_multiple_of(100) {
                             trace!(
@@ -1378,24 +1432,33 @@ fn burst_loop(
                             );
                         }
 
+                        burst_after = current_burst;
                         false // Continue processing
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         let timestamp = get_timestamp();
                         error!(
                             "[{}] [BURST-LOOP] ❌ Burst processing error: {}",
                             timestamp, e
                         );
+                        burst_after = npu_lock.get_burst_count();
                         false // Continue despite error
+                    }
+                    Err(panic_payload) => {
+                        error!(
+                            "[BURST-LOOP] ❌ process_burst() panicked; rethrowing to preserve crash"
+                        );
+                        std::panic::resume_unwind(panic_payload);
                     }
                 }
             };
 
-            // Return both should_exit and lock_acquired time
-            (should_exit, acquired)
+            // Return should_exit, lock_acquired time, and burst count
+            (should_exit, acquired, burst_after)
         };
 
-        let (should_exit, lock_acquired) = lock_acquired;
+        let (should_exit, lock_acquired, burst_after) = lock_acquired;
+        let lock_wait_duration = lock_acquired.duration_since(lock_start);
         let npu_lock_release_time = Instant::now();
         let release_thread_id = std::thread::current().id();
 
@@ -1406,6 +1469,39 @@ fn burst_loop(
 
         // Log lock release timing for diagnostics
         let lock_hold_duration = npu_lock_release_time.duration_since(lock_acquired);
+        if lock_wait_duration.as_millis() > 50 {
+            warn!(
+                "[NPU-LOCK] Burst {} waited {:.2}ms to acquire lock",
+                burst_num,
+                lock_wait_duration.as_secs_f64() * 1000.0
+            );
+        }
+        if lock_hold_duration.as_millis() > 50 {
+            if let Some((fired, power, synaptic, processed, refractory)) = last_burst_stats {
+                warn!(
+                    "[NPU-LOCK] Burst {} held lock {:.2}ms | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
+                    burst_num,
+                    lock_hold_duration.as_secs_f64() * 1000.0,
+                    last_process_duration
+                        .map(|d| d.as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0),
+                    fired,
+                    power,
+                    synaptic,
+                    processed,
+                    refractory
+                );
+            } else {
+                warn!(
+                    "[NPU-LOCK] Burst {} held lock {:.2}ms | process_burst {:.2}ms",
+                    burst_num,
+                    lock_hold_duration.as_secs_f64() * 1000.0,
+                    last_process_duration
+                        .map(|d| d.as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0)
+                );
+            }
+        }
         if lock_hold_duration.as_millis() > 5 || burst_num < 5 || burst_num.is_multiple_of(100) {
             debug!(
                 "[NPU-LOCK] Burst {} (thread={:?}): Lock RELEASED (held for {:.2}ms, total from acquisition: {:.2}ms)",
@@ -1414,6 +1510,12 @@ fn burst_loop(
                 lock_hold_duration.as_secs_f64() * 1000.0,
                 npu_lock_release_time.duration_since(lock_start).as_secs_f64() * 1000.0
             );
+        }
+
+        if let Some(ref callback) = post_burst_callback {
+            callback(burst_after);
+        } else if !POST_BURST_MISSING_LOGGED.swap(true, Ordering::Relaxed) {
+            tracing::debug!("[BURST-LOOP] Post-burst callback not configured");
         }
 
         // Exit if shutdown was requested
@@ -2108,13 +2210,22 @@ fn burst_loop(
             // Note: process_burst_duration is only available in the NPU lock scope, so we approximate
             // The actual breakdown will be logged in the next iteration when we have all timings
             warn!(
-                    "[BURST-LOOP] ⚠️ Slow burst iteration: {:.2}ms total (burst {}) | breakdown: gap_before_post={:.2}ms, post_burst={:.2}ms, stats={:.2}ms, unaccounted={:.2}ms",
+                    "[BURST-LOOP] ⚠️ Slow burst iteration: {:.2}ms total (burst {}) | breakdown: gap_before_post={:.2}ms, post_burst={:.2}ms, stats={:.2}ms, unaccounted={:.2}ms | process_burst_ms={:.2} fired={} power_inj={} syn_inj={} processed={} refractory={} lock_wait_ms={:.2}",
                     iteration_duration.as_secs_f64() * 1000.0,
                     burst_num,
                     time_between_npu_release_and_post_burst.as_secs_f64() * 1000.0,
                     post_burst_duration.as_secs_f64() * 1000.0,
                     stats_duration.as_secs_f64() * 1000.0,
-                iteration_duration.as_secs_f64() * 1000.0 - time_between_npu_release_and_post_burst.as_secs_f64() * 1000.0 - post_burst_duration.as_secs_f64() * 1000.0 - stats_duration.as_secs_f64() * 1000.0
+                iteration_duration.as_secs_f64() * 1000.0 - time_between_npu_release_and_post_burst.as_secs_f64() * 1000.0 - post_burst_duration.as_secs_f64() * 1000.0 - stats_duration.as_secs_f64() * 1000.0,
+                last_process_duration
+                    .map(|d| d.as_secs_f64() * 1000.0)
+                    .unwrap_or(0.0),
+                last_burst_stats.map(|s| s.0).unwrap_or(0),
+                last_burst_stats.map(|s| s.1).unwrap_or(0),
+                last_burst_stats.map(|s| s.2).unwrap_or(0),
+                last_burst_stats.map(|s| s.3).unwrap_or(0),
+                last_burst_stats.map(|s| s.4).unwrap_or(0),
+                lock_wait_duration.as_secs_f64() * 1000.0
             );
         }
 

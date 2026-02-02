@@ -1213,7 +1213,7 @@
       "class": "core",
       "dimension_sensitive": true
     },
-    "memory": {
+    "episodic_memory": {
       "parameters": {},
       "type": "functions",
       "class": "core",

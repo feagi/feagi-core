@@ -26,10 +26,26 @@ pub fn calculate_area_dimensions_without_scanning(
     npu: &feagi_npu_burst_engine::DynamicNPU,
     area_id: u32,
 ) -> BduResult<(usize, usize, usize)> {
-    // TODO: Get dimensions from ConnectomeManager.cortical_areas[area_id].dimensions
-    // For now, return error - dimensions must be provided by caller
-    // This ensures we NEVER call get_neurons_in_cortical_area during synaptogenesis
-    Err(crate::types::BduError::Internal(
-        format!("Area dimensions not available for area {}. Dimensions must be stored in ConnectomeManager when areas are created.", area_id)
+    let neuron_ids = npu.get_neurons_in_cortical_area(area_id);
+    if neuron_ids.is_empty() {
+        return Err(crate::types::BduError::Internal(format!(
+            "Area dimensions not available for area {} (no neurons present)",
+            area_id
+        )));
+    }
+
+    let (mut max_x, mut max_y, mut max_z) = (0u32, 0u32, 0u32);
+    for neuron_id in neuron_ids {
+        if let Some((x, y, z)) = npu.get_neuron_coordinates(neuron_id) {
+            max_x = max_x.max(x);
+            max_y = max_y.max(y);
+            max_z = max_z.max(z);
+        }
+    }
+
+    Ok((
+        (max_x + 1) as usize,
+        (max_y + 1) as usize,
+        (max_z + 1) as usize,
     ))
 }

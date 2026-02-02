@@ -36,7 +36,6 @@ pub struct RegistrationResponse {
     pub status: String,
     pub message: Option<String>,
     pub shm_paths: Option<HashMap<String, String>>,
-    pub zmq_ports: Option<HashMap<String, u16>>,
     pub transports: Option<Vec<TransportConfig>>,
     pub recommended_transport: Option<String>,
     /// Cortical area availability status for agent operations
@@ -97,11 +96,6 @@ impl RegistrationResponse {
         available.first().copied()
     }
 
-    /// Get ZMQ ports (legacy support)
-    pub fn get_zmq_ports(&self) -> HashMap<String, u16> {
-        self.zmq_ports.clone().unwrap_or_default()
-    }
-
     /// Check if transport is available
     pub fn has_transport(&self, transport_type: &str) -> bool {
         self.get_transport(transport_type).is_some()
@@ -117,11 +111,6 @@ mod tests {
         let json = serde_json::json!({
             "status": "success",
             "message": "Agent registered successfully",
-            "zmq_ports": {
-                "sensory": 5558,
-                "motor": 5564,
-                "visualization": 5562
-            },
             "transports": [
                 {
                     "transport_type": "zmq",

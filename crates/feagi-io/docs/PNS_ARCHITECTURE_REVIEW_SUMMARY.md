@@ -892,7 +892,7 @@ std = []
 async = ["dep:async-trait", "dep:tokio"]
 
 # Transport implementations
-transport-zmq = ["std", "dep:zmq", "dep:lz4"]              # Sync ZMQ (blocking)
+transport-zmq = ["std", "dep:zeromq", "dep:lz4"]           # ZMQ (async-native)
 transport-zmq-async = ["async", "std", "dep:async-zmq"]    # Async ZMQ (future)
 transport-udp = ["async", "std"]                            # Async UDP
 transport-shm = ["std", "dep:shared_memory"]                # Sync SHM
@@ -928,7 +928,7 @@ async-trait = { version = "0.1", optional = true }
 tokio = { version = "1.0", features = ["net", "sync", "rt"], optional = true }
 
 # Transport-specific
-zmq = { version = "0.10", optional = true }
+zeromq = { version = "0.4.1", optional = true }
 async-zmq = { version = "0.4", optional = true }
 lz4 = { version = "1.24", optional = true }
 shared_memory = { version = "0.12", optional = true }

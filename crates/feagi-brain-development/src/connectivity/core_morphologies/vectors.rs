@@ -9,7 +9,7 @@ Creates synapses based on vector offsets from source neurons.
 
 use crate::connectivity::rules::apply_vector_offset;
 use crate::types::BduResult;
-use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
+use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 
 /// Apply vector offset morphology directly on NPU with explicit dimensions
@@ -21,7 +21,7 @@ pub fn apply_vectors_morphology_with_dimensions(
     vectors: Vec<(i32, i32, i32)>,
     dst_dimensions: (usize, usize, usize),
     weight: u8,
-    conductance: u8,
+    psp: u8,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -46,6 +46,7 @@ pub fn apply_vectors_morphology_with_dimensions(
     }
 
     let mut synapse_count = 0u32;
+    let mut seen_pairs: std::collections::HashSet<(u32, u32)> = std::collections::HashSet::new();
 
     for src_nid in src_neurons {
         let Some(src_pos) = npu.get_neuron_coordinates(src_nid) else {
@@ -54,17 +55,27 @@ pub fn apply_vectors_morphology_with_dimensions(
 
         // Apply all vectors
         for &vector in &vectors {
-            if let Ok(dst_pos) = apply_vector_offset(src_pos, vector, 1.0, dst_dimensions) {
+            if let Some(dst_pos) = apply_vector_offset(src_pos, vector, 1.0, dst_dimensions) {
                 // Note: Cannot collapse this if in Rust 2021 (let chains require Rust 2024)
                 #[allow(clippy::collapsible_if)]
                 if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
+                    if !seen_pairs.insert((src_nid, dst_nid)) {
+                        continue;
+                    }
+                    if npu
+                        .get_outgoing_synapses(src_nid)
+                        .iter()
+                        .any(|(target, _, _, _)| *target == dst_nid)
+                    {
+                        continue;
+                    }
                     if rng.gen_range(0..100) < synapse_attractivity
                         && npu
                             .add_synapse(
                                 NeuronId(src_nid),
                                 NeuronId(dst_nid),
                                 SynapticWeight(weight),
-                                SynapticConductance(conductance),
+                                SynapticPsp(psp),
                                 synapse_type,
                             )
                             .is_ok()
@@ -91,7 +102,7 @@ pub fn apply_vectors_morphology(
     dst_area_id: u32,
     vectors: Vec<(i32, i32, i32)>,
     weight: u8,
-    conductance: u8,
+    psp: u8,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -104,7 +115,7 @@ pub fn apply_vectors_morphology(
         vectors,
         dst_dimensions,
         weight,
-        conductance,
+        psp,
         synapse_attractivity,
         synapse_type,
     )

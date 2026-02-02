@@ -13,7 +13,7 @@
 use crate::memory_stats_cache::MemoryStatsCache;
 use crate::service::{PlasticityCommand, PlasticityConfig, PlasticityService};
 use std::sync::{Arc, Mutex};
-use tracing::warn;
+use tracing::{debug, warn};
 
 /// Trait for executing plasticity computation
 ///
@@ -113,6 +113,12 @@ impl AsyncPlasticityExecutor {
     pub fn get_memory_stats_cache(&self) -> MemoryStatsCache {
         self.memory_stats_cache.clone()
     }
+
+    pub fn enqueue_commands_for_test(&self, commands: Vec<crate::PlasticityCommand>) {
+        if let Some(service) = self.service.lock().unwrap().as_ref() {
+            service.enqueue_commands_for_test(commands);
+        }
+    }
 }
 
 impl PlasticityExecutor for AsyncPlasticityExecutor {
@@ -127,7 +133,61 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
 
     fn drain_commands(&self) -> Vec<PlasticityCommand> {
         if let Some(service) = self.service.lock().unwrap().as_ref() {
-            service.drain_commands()
+            let drained = service.drain_commands();
+            if !drained.is_empty() {
+                debug!(
+                    target: "plasticity",
+                    "[PLASTICITY-EXEC] Drained {} command(s) from executor",
+                    drained.len()
+                );
+                for command in &drained {
+                    match command {
+                        PlasticityCommand::RegisterMemoryNeuron {
+                            neuron_id,
+                            area_idx,
+                            ..
+                        } => {
+                            debug!(
+                                target: "plasticity",
+                                "[PLASTICITY-EXEC] RegisterMemoryNeuron area={} neuron_id={}",
+                                area_idx,
+                                neuron_id
+                            );
+                        }
+                        PlasticityCommand::MemoryNeuronConvertedToLtm {
+                            neuron_id,
+                            area_idx,
+                            ..
+                        } => {
+                            debug!(
+                                target: "plasticity",
+                                "[PLASTICITY-EXEC] MemoryNeuronConvertedToLtm area={} neuron_id={}",
+                                area_idx,
+                                neuron_id
+                            );
+                        }
+                        PlasticityCommand::InjectMemoryNeuronToFCL {
+                            neuron_id,
+                            area_idx,
+                            is_reactivation,
+                            replay_frames,
+                            ..
+                        } => {
+                            debug!(
+                                target: "plasticity",
+                                "[PLASTICITY-EXEC] InjectMemoryNeuronToFCL area={} neuron_id={} reactivation={} replay_frames={}",
+                                area_idx,
+                                neuron_id,
+                                is_reactivation,
+                                replay_frames.len()
+                            );
+                        }
+                        PlasticityCommand::UpdateWeightsDelta { .. } => {}
+                        PlasticityCommand::UpdateStateCounters { .. } => {}
+                    }
+                }
+            }
+            drained
         } else {
             Vec::new()
         }

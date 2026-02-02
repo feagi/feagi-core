@@ -1,6 +1,6 @@
 [package]
 name = "feagi-hal"
-version = "0.0.1-beta.3"
+version = "0.0.1-beta.7"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -14,8 +14,8 @@ path = "src/lib.rs"
 
 [dependencies]
 # Core FEAGI crates (always included)
-feagi-npu-neural = { version = "0.0.1-beta.3", path = "../feagi-npu/neural" }  # Includes types + synapse + models
-feagi-npu-runtime = { version = "0.0.1-beta.3", path = "../feagi-npu/runtime", features = ["embedded"], default-features = false }
+feagi-npu-neural = { version = "0.0.1-beta.4", path = "../feagi-npu/neural" }  # Includes types + synapse + models
+feagi-npu-runtime = { version = "0.0.1-beta.7", path = "../feagi-npu/runtime", features = ["embedded"], default-features = false }
 
 # Error handling
 anyhow = "1.0"

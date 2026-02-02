@@ -286,6 +286,7 @@ fn convert_properties_to_flat(
         ("temporal_depth", ("tmpdpt-i", "cx")),
         ("neuron_excitability", ("excite-f", "nx")),
         ("dev_count", ("devcnt-i", "cx")),
+        ("memory_twin_of", ("twinrf-t", "cx")),
     ]
     .iter()
     .cloned()
@@ -563,5 +564,56 @@ mod tests {
             blueprint[ipu_group_key], "IPU",
             "IPU area should have _group-t set to IPU"
         );
+    }
+
+    #[test]
+    fn test_memory_twin_reference_saved_to_flat() {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+            IOCorticalAreaConfigurationFlag,
+        };
+        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "Test twin reference".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+        };
+
+        let twin_id = CorticalID::try_from_base_64("Y7Gx8Xy7Fpo=").unwrap();
+        let mut twin_area = CorticalArea::new(
+            twin_id,
+            0,
+            "a2_twin".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            GenomeCoordinate3D::new(0, 0, 0),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+        twin_area.properties.insert(
+            "memory_twin_of".to_string(),
+            serde_json::json!("Y2EyX19fX/U="),
+        );
+        genome.cortical_areas.insert(twin_id, twin_area);
+
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        let key = "_____10c-Y7Gx8Xy7Fpo=-cx-twinrf-t";
+        assert_eq!(flat["blueprint"][key], "Y2EyX19fX/U=");
     }
 }

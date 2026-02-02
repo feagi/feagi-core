@@ -232,13 +232,10 @@ where
         source: NeuronId,
         target: NeuronId,
         weight: SynapticWeight,
-        conductance: SynapticConductance,
+        psp: SynapticPsp,
         synapse_type: SynapseType,
     ) -> Result<usize> {
-        dispatch_mut!(
-            self,
-            add_synapse(source, target, weight, conductance, synapse_type)
-        )
+        dispatch_mut!(self, add_synapse(source, target, weight, psp, synapse_type))
     }
 
     pub fn get_neurons_in_cortical_area(&self, cortical_idx: u32) -> Vec<u32> {
@@ -662,13 +659,11 @@ where
     }
 
     pub fn get_incoming_synapses(&self, _neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
-        // This method doesn't exist in RustNPU - return empty for now
-        Vec::new()
+        dispatch!(self, get_incoming_synapses(_neuron_id))
     }
 
     pub fn get_outgoing_synapses(&self, _neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
-        // This method doesn't exist in RustNPU - return empty for now
-        Vec::new()
+        dispatch!(self, get_outgoing_synapses(_neuron_id))
     }
 
     pub fn get_cortical_area_name(&self, area_id: u32) -> Option<String> {
@@ -753,7 +748,7 @@ where
         )
     }
 
-    /// Update postsynaptic potential (PSP / conductance) for all existing outgoing synapses
+    /// Update postsynaptic potential (PSP) for all existing outgoing synapses
     /// from neurons in a given cortical area.
     ///
     /// Returns number of synapses updated.
@@ -765,6 +760,17 @@ where
         dispatch_mut!(
             self,
             update_cortical_area_postsynaptic_current(cortical_area, postsynaptic_potential)
+        )
+    }
+
+    pub fn update_stdp_mapping_psp_for_source(
+        &mut self,
+        src_cortical_idx: u32,
+        new_psp: u8,
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            update_stdp_mapping_psp_for_source(src_cortical_idx, new_psp)
         )
     }
 
@@ -829,6 +835,42 @@ where
             DynamicNPUGeneric::INT8(npu) => {
                 npu.register_dynamic_neuron_mapping(neuron_id, cortical_id)
             }
+        }
+    }
+
+    /// Register replay frames for a memory neuron (used when it fires via synapses).
+    pub fn register_memory_replay_frames(
+        &mut self,
+        neuron_id: u32,
+        frames: Vec<crate::npu::MemoryReplayFrame>,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.register_memory_replay_frames(neuron_id, frames),
+            DynamicNPUGeneric::INT8(npu) => npu.register_memory_replay_frames(neuron_id, frames),
+        }
+    }
+
+    /// Register the twin cortical area mapping for memory replay.
+    pub fn register_memory_twin_mapping(
+        &mut self,
+        memory_area_idx: u32,
+        upstream_area_idx: u32,
+        twin_area_idx: u32,
+        potential: f32,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.register_memory_twin_mapping(
+                memory_area_idx,
+                upstream_area_idx,
+                twin_area_idx,
+                potential,
+            ),
+            DynamicNPUGeneric::INT8(npu) => npu.register_memory_twin_mapping(
+                memory_area_idx,
+                upstream_area_idx,
+                twin_area_idx,
+                potential,
+            ),
         }
     }
 

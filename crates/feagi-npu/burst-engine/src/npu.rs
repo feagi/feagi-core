@@ -64,6 +64,9 @@ pub struct StdpMappingParams {
     pub plasticity_constant: i64,
     pub ltp_multiplier: i64,
     pub ltd_multiplier: i64,
+    pub bidirectional_stdp: bool,
+    pub synapse_psp: u8,
+    pub synapse_type: SynapseType,
 }
 
 impl StdpMappingParams {
@@ -167,6 +170,12 @@ pub struct RustNPU<
     #[allow(dead_code)]
     pub(crate) backend: std::sync::Mutex<B>,
 
+    // Memory replay: neuron -> replay frames (per memory neuron)
+    pub(crate) memory_replay_frames:
+        std::sync::RwLock<AHashMap<u32, std::sync::Arc<Vec<MemoryReplayFrame>>>>,
+    // Memory replay: (memory area idx, upstream area idx) -> twin area + potential
+    pub(crate) memory_replay_twin_map: std::sync::RwLock<AHashMap<(u32, u32), MemoryReplayTarget>>,
+
     // Atomic stats (lock-free reads)
     burst_count: std::sync::atomic::AtomicU64,
 
@@ -175,9 +184,11 @@ pub struct RustNPU<
 
     // Fatigue state (atomic for lock-free reads during burst injection)
     fatigue_active: std::sync::atomic::AtomicBool,
-    // REMOVED: power_neuron_cache - no longer needed with deterministic IDs
-    // Power neuron is always neuron ID 1 (area 1 → neuron 1), so we can access it directly
+    /// Cached power neuron ID (core area 1). Updated during neurogenesis.
+    power_neuron_id: std::sync::atomic::AtomicU32,
 }
+
+const POWER_NEURON_UNSET: u32 = u32::MAX;
 
 /// Fire-related structures grouped together for single mutex
 pub(crate) struct FireStructures {
@@ -197,6 +208,30 @@ pub(crate) struct FireStructures {
     /// Populated during Phase 1 from `pending_memory_injections` and cleared each burst.
     pub(crate) memory_candidate_cortical_idx: AHashMap<u32, u32>,
     pub(crate) last_fcl_snapshot: Vec<(NeuronId, f32)>,
+    /// Scheduled replay injections (burst target -> twin area coords).
+    pub(crate) pending_replay_injections: Vec<ReplayInjection>,
+}
+
+/// Replay frame captured from upstream activity for memory replay.
+#[derive(Debug, Clone)]
+pub struct MemoryReplayFrame {
+    pub offset: u32,
+    pub upstream_area_idx: u32,
+    pub coords: Vec<(u32, u32, u32)>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct MemoryReplayTarget {
+    twin_area_idx: u32,
+    potential: f32,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ReplayInjection {
+    target_burst: u64,
+    twin_area_idx: u32,
+    coords: Vec<(u32, u32, u32)>,
+    potential: f32,
 }
 
 impl<
@@ -251,16 +286,19 @@ impl<
                 pending_memory_injections: Vec::with_capacity(1024),
                 memory_candidate_cortical_idx: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
+                pending_replay_injections: Vec::new(),
             }),
             area_id_to_name: std::sync::RwLock::new(AHashMap::new()),
             propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
             stdp_mappings: std::sync::RwLock::new(AHashMap::new()),
             stdp_mapping_index: std::sync::RwLock::new(AHashMap::new()),
             backend: std::sync::Mutex::new(backend),
+            memory_replay_frames: std::sync::RwLock::new(AHashMap::new()),
+            memory_replay_twin_map: std::sync::RwLock::new(AHashMap::new()),
             burst_count: std::sync::atomic::AtomicU64::new(0),
             power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
             fatigue_active: std::sync::atomic::AtomicBool::new(false),
-            // No power neuron cache needed - using deterministic ID (neuron 1)
+            power_neuron_id: std::sync::atomic::AtomicU32::new(POWER_NEURON_UNSET),
         })
     }
 }
@@ -460,9 +498,36 @@ impl<
             .neuron_to_area
             .insert(neuron_id, cortical_id);
 
-        // No cache needed - power neuron is always neuron ID 1 (deterministic)
+        if cortical_area == 1 {
+            self.update_power_neuron_cache(neuron_id);
+        }
 
         Ok(neuron_id)
+    }
+
+    fn update_power_neuron_cache(&self, neuron_id: NeuronId) {
+        use std::sync::atomic::Ordering;
+        let new_id = neuron_id.0;
+        let mut current = self.power_neuron_id.load(Ordering::Relaxed);
+        loop {
+            let next = if current == POWER_NEURON_UNSET || new_id < current {
+                new_id
+            } else {
+                current
+            };
+            if next == current {
+                break;
+            }
+            match self.power_neuron_id.compare_exchange(
+                current,
+                next,
+                Ordering::Release,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(observed) => current = observed,
+            }
+        }
     }
 
     /// Batch add neurons (optimized for neurogenesis)
@@ -574,12 +639,20 @@ impl<
                     "[PROP-ENGINE] Neuron-to-area mapping updated"
                 );
 
-                // CRITICAL PERFORMANCE: Cache power neurons (cortical_area = 1) to avoid scanning all neurons
-                // This is especially important for large neuron counts (3M+) where scanning is expensive
-                // No cache needed - power neuron is always neuron ID 1 (deterministic)
-
-                // NOTE: Cache will be built lazily on first access to get_neurons_in_cortical_area
-                // To optimize further, call prepopulate_cortical_area_cache() after genome load
+                // Cache power neuron ID (cortical_area = 1) for O(1) injection access.
+                let mut power_candidate: Option<u32> = None;
+                for (i, area_id) in cortical_areas.iter().enumerate() {
+                    if *area_id == 1 {
+                        let neuron_id = (start_idx + i) as u32;
+                        power_candidate = Some(match power_candidate {
+                            Some(current) => current.min(neuron_id),
+                            None => neuron_id,
+                        });
+                    }
+                }
+                if let Some(power_id) = power_candidate {
+                    self.update_power_neuron_cache(NeuronId(power_id));
+                }
 
                 // ✅ ARCHITECTURE FIX: Return only success COUNT, not full Vec<u32> of IDs
                 // Python doesn't need IDs - Rust owns all neuron data!
@@ -905,20 +978,14 @@ impl<
         source: NeuronId,
         target: NeuronId,
         weight: SynapticWeight,
-        conductance: SynapticConductance,
+        psp: SynapticPsp,
         synapse_type: SynapseType,
     ) -> Result<usize> {
         let result = self
             .synapse_storage
             .write()
             .unwrap()
-            .add_synapse(
-                source.0,
-                target.0,
-                weight.0,
-                conductance.0,
-                synapse_type as u8,
-            )
+            .add_synapse(source.0, target.0, weight.0, psp.0, synapse_type as u8)
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapse: {:?}", e)))?;
 
         // NOTE: This does NOT rebuild the synapse index for performance reasons.
@@ -944,7 +1011,7 @@ impl<
         sources: Vec<NeuronId>,
         targets: Vec<NeuronId>,
         weights: Vec<SynapticWeight>,
-        postsynaptic_potentials: Vec<SynapticConductance>, // TODO: Rename type to SynapticPSP
+        postsynaptic_potentials: Vec<SynapticPsp>,
         synapse_types: Vec<SynapseType>,
     ) -> Result<()> {
         // Convert NeuronId/Weight types to raw u32/u8 for SynapseArray
@@ -1378,6 +1445,12 @@ impl<
         potential: f32,
     ) {
         let mut fire_structures = self.fire_structures.lock().unwrap();
+        tracing::debug!(
+            "[NPU] Staging memory injection: neuron_id={} area_idx={} potential={}",
+            neuron_id,
+            cortical_idx,
+            potential
+        );
         fire_structures.pending_memory_injections.push((
             NeuronId(neuron_id),
             cortical_idx,
@@ -1393,6 +1466,94 @@ impl<
         engine
             .neuron_to_area
             .insert(NeuronId(neuron_id), cortical_id);
+    }
+
+    /// Register replay frames for a memory neuron.
+    ///
+    /// The replay frames are used to drive the twin cortical area when the memory neuron fires.
+    pub fn register_memory_replay_frames(
+        &mut self,
+        neuron_id: u32,
+        frames: Vec<MemoryReplayFrame>,
+    ) {
+        let mut replay_frames = self.memory_replay_frames.write().unwrap();
+        replay_frames.insert(neuron_id, std::sync::Arc::new(frames));
+    }
+
+    /// Register the twin cortical area for replay from a memory area and upstream area.
+    pub fn register_memory_twin_mapping(
+        &mut self,
+        memory_area_idx: u32,
+        upstream_area_idx: u32,
+        twin_area_idx: u32,
+        potential: f32,
+    ) {
+        let mut map = self.memory_replay_twin_map.write().unwrap();
+        map.insert(
+            (memory_area_idx, upstream_area_idx),
+            MemoryReplayTarget {
+                twin_area_idx,
+                potential,
+            },
+        );
+    }
+
+    fn schedule_memory_replay_from_fire_queue(
+        &self,
+        fire_queue: &FireQueue,
+        burst_count: u64,
+        fire_structures: &mut FireStructures,
+    ) {
+        if fire_queue.is_empty() {
+            return;
+        }
+        let replay_frames = self.memory_replay_frames.read().unwrap();
+        if replay_frames.is_empty() {
+            return;
+        }
+        let twin_map = self.memory_replay_twin_map.read().unwrap();
+        if twin_map.is_empty() {
+            return;
+        }
+
+        let mut scheduled = 0usize;
+        for (cortical_idx, neurons) in &fire_queue.neurons_by_area {
+            for neuron in neurons {
+                let neuron_id = neuron.neuron_id.0;
+                let frames = match replay_frames.get(&neuron_id) {
+                    Some(frames) => frames,
+                    None => continue,
+                };
+                for frame in frames.iter() {
+                    let key = (*cortical_idx, frame.upstream_area_idx);
+                    let Some(target) = twin_map.get(&key) else {
+                        tracing::debug!(
+                            "[NPU] Missing twin mapping for memory_area={} upstream_area={} (neuron_id={})",
+                            cortical_idx,
+                            frame.upstream_area_idx,
+                            neuron_id
+                        );
+                        continue;
+                    };
+                    fire_structures
+                        .pending_replay_injections
+                        .push(ReplayInjection {
+                            target_burst: burst_count + frame.offset as u64 + 1,
+                            twin_area_idx: target.twin_area_idx,
+                            coords: frame.coords.clone(),
+                            potential: target.potential,
+                        });
+                    scheduled += 1;
+                }
+            }
+        }
+        if scheduled > 0 {
+            tracing::debug!(
+                "[NPU] Scheduled {} replay injections from memory firing at burst {}",
+                scheduled,
+                burst_count
+            );
+        }
     }
 
     // ===== POWER INJECTION =====
@@ -1444,12 +1605,56 @@ impl<
         );
         let pending_mutex = std::sync::Mutex::new(pending_sensory);
 
+        // Drain scheduled replay injections for this burst (t+offset semantics)
+        let mut replay_due = Vec::new();
+        if !fire_structures.pending_replay_injections.is_empty() {
+            let mut remaining = Vec::with_capacity(fire_structures.pending_replay_injections.len());
+            for replay in fire_structures.pending_replay_injections.drain(..) {
+                if replay.target_burst == burst_count {
+                    replay_due.push(replay);
+                } else if replay.target_burst < burst_count {
+                    tracing::warn!(
+                        "[NPU] Dropping overdue replay injection scheduled for burst {} (current={})",
+                        replay.target_burst,
+                        burst_count
+                    );
+                } else {
+                    remaining.push(replay);
+                }
+            }
+            fire_structures.pending_replay_injections = remaining;
+        }
+        if !replay_due.is_empty() {
+            let mut staged = pending_mutex.lock().unwrap();
+            let mut total_replay_candidates = 0usize;
+            for replay in replay_due.into_iter() {
+                let neuron_ids =
+                    neuron_storage.batch_coordinate_lookup(replay.twin_area_idx, &replay.coords);
+                for idx in neuron_ids.into_iter().flatten() {
+                    staged.push((NeuronId(idx as u32), replay.potential));
+                    total_replay_candidates += 1;
+                }
+            }
+            tracing::debug!(
+                "[NPU] Staged {} replay candidates for burst {}",
+                total_replay_candidates,
+                burst_count
+            );
+        }
+
         // Drain staged memory neuron injections (t+1 semantics)
         let mut pending_memory = Vec::new();
         std::mem::swap(
             &mut pending_memory,
             &mut fire_structures.pending_memory_injections,
         );
+        if !pending_memory.is_empty() {
+            tracing::debug!(
+                "[NPU] Drained {} pending memory injections for burst {}",
+                pending_memory.len(),
+                burst_count
+            );
+        }
 
         let phase1_start = std::time::Instant::now();
         let injection_result = {
@@ -1457,7 +1662,9 @@ impl<
             let fatigue_active = self
                 .fatigue_active
                 .load(std::sync::atomic::Ordering::Acquire);
-            // No cache needed - directly access neuron 1 (deterministic ID)
+            let power_neuron_id = self
+                .power_neuron_id
+                .load(std::sync::atomic::Ordering::Acquire);
             phase1_injection_with_synapses(
                 &mut fire_structures.fire_candidate_list,
                 &mut *neuron_storage,
@@ -1467,6 +1674,7 @@ impl<
                 &*synapse_storage,
                 &pending_mutex,
                 fatigue_active,
+                power_neuron_id,
             )?
         };
         let phase1_duration = phase1_start.elapsed();
@@ -1475,6 +1683,7 @@ impl<
         // Apply memory neuron injections after Phase 1 (so they’re not affected by Phase 1 staging logic).
         // These become candidates for Phase 2 and will be force-fired by the dynamics layer.
         fire_structures.memory_candidate_cortical_idx.clear();
+        let mut memory_candidate_count = 0usize;
         for (neuron_id, cortical_idx, potential) in pending_memory.drain(..) {
             fire_structures
                 .memory_candidate_cortical_idx
@@ -1482,6 +1691,54 @@ impl<
             fire_structures
                 .fire_candidate_list
                 .add_candidate(neuron_id, potential);
+            memory_candidate_count += 1;
+        }
+        if memory_candidate_count > 0 {
+            tracing::debug!(
+                "[NPU] Applied {} memory candidates for burst {}",
+                memory_candidate_count,
+                burst_count
+            );
+        }
+        // Resolve memory neuron candidates sourced via synaptic propagation.
+        // Memory neurons can be targets of associative synapses; ensure they have cortical metadata.
+        const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+        let mut unresolved_memory_candidates = 0usize;
+        let mut resolved_memory_candidates = 0usize;
+        let memory_candidates: Vec<NeuronId> = fire_structures
+            .fire_candidate_list
+            .iter()
+            .filter_map(|(neuron_id, _)| {
+                (neuron_id.0 >= MEMORY_NEURON_ID_START).then_some(neuron_id)
+            })
+            .collect();
+        for neuron_id in memory_candidates {
+            if fire_structures
+                .memory_candidate_cortical_idx
+                .contains_key(&neuron_id.0)
+            {
+                continue;
+            }
+            let cortical_id = propagation_engine.neuron_to_area.get(&neuron_id);
+            let cortical_idx = cortical_id
+                .and_then(|id| self.get_cortical_area_id(&id.to_string()))
+                .or_else(|| cortical_id.and_then(|id| self.get_cortical_area_id(&id.as_base_64())));
+            if let Some(cortical_idx) = cortical_idx {
+                fire_structures
+                    .memory_candidate_cortical_idx
+                    .insert(neuron_id.0, cortical_idx);
+                resolved_memory_candidates += 1;
+            } else {
+                unresolved_memory_candidates += 1;
+            }
+        }
+        if resolved_memory_candidates > 0 || unresolved_memory_candidates > 0 {
+            tracing::debug!(
+                "[NPU] Memory candidates resolved={} unresolved={} burst={}",
+                resolved_memory_candidates,
+                unresolved_memory_candidates,
+                burst_count
+            );
         }
         // Restore vector back (empty, but preserves capacity for future injections).
         fire_structures.pending_memory_injections = pending_memory;
@@ -1495,6 +1752,17 @@ impl<
             burst_count,
         )?;
         let phase2_duration = phase2_start.elapsed();
+
+        // Schedule replay injections based on memory neuron firing in this burst.
+        self.schedule_memory_replay_from_fire_queue(
+            &dynamics_result.fire_queue,
+            burst_count,
+            &mut fire_structures,
+        );
+
+        // Release neuron/synapse locks before plasticity updates to avoid lock contention.
+        drop(propagation_engine);
+        drop(neuron_storage);
 
         // Phase 3: Archival (ZERO-COPY archive to Fire Ledger)
         let phase3_start = std::time::Instant::now();
@@ -1557,7 +1825,7 @@ impl<
         let is_slow = total_duration.as_millis() > 200;
 
         if is_slow {
-            let neuron_count = neuron_storage.count();
+            let neuron_count = self.neuron_storage.read().unwrap().count();
             warn!(
                 "[BURST-TIMING] Burst {}: total={:.2}ms | locks={:.2}ms | phase1={:.2}ms | phase2={:.2}ms | phase3={:.2}ms | phase4={:.2}ms | neurons={} | fired={} | candidates={}",
                 burst_count,
@@ -1631,6 +1899,26 @@ impl<
                 true
             };
             drop(neuron_storage);
+
+            if area_id == 1 && !needs_creation {
+                use std::sync::atomic::Ordering;
+                let neuron_storage = self.neuron_storage.read().unwrap();
+                if neuron_idx < neuron_storage.count()
+                    && neuron_storage
+                        .valid_mask()
+                        .get(neuron_idx)
+                        .copied()
+                        .unwrap_or(false)
+                    && neuron_storage.cortical_areas().get(neuron_idx).copied() == Some(area_id)
+                {
+                    self.power_neuron_id.store(neuron_id.0, Ordering::Release);
+                } else if let Some(&first_idx) =
+                    neuron_storage.get_neurons_in_cortical_area(1).first()
+                {
+                    self.power_neuron_id
+                        .store(first_idx as u32, Ordering::Release);
+                }
+            }
 
             if needs_creation {
                 // Ensure previous core area neurons exist (must be created in order: 0, then 1, then 2)
@@ -2216,7 +2504,7 @@ impl<
             source_neurons,
             target_neurons: synapse_storage.target_neurons().to_vec(),
             weights: synapse_storage.weights().to_vec(),
-            conductances: synapse_storage.postsynaptic_potentials().to_vec(),
+            postsynaptic_potentials: synapse_storage.postsynaptic_potentials().to_vec(),
             types: synapse_storage.types().to_vec(),
             valid_mask: synapse_storage.valid_mask().to_vec(),
             source_index,
@@ -2299,7 +2587,7 @@ impl<
         synapse_storage.source_neurons() = snapshot.synapses.source_neurons;
         synapse_storage.target_neurons() = snapshot.synapses.target_neurons;
         synapse_storage.weights() = snapshot.synapses.weights;
-        synapse_storage.postsynaptic_potentials() = snapshot.synapses.conductances;  // TODO: Rename field in snapshot
+        synapse_storage.postsynaptic_potentials() = snapshot.synapses.postsynaptic_potentials;
         synapse_storage.types() = snapshot.synapses.types;
         synapse_storage.valid_mask() = snapshot.synapses.valid_mask;
         synapse_storage.source_index = snapshot.synapses.source_index;
@@ -2344,15 +2632,22 @@ impl<
                 fire_ledger: FireLedger::new(snapshot.fire_ledger_window),
                 fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
                 pending_sensory_injections: Vec::with_capacity(10000),
+                pending_memory_injections: Vec::with_capacity(1024),
+                memory_candidate_cortical_idx: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
+                pending_replay_injections: Vec::new(),
             }),
             area_id_to_name: std::sync::RwLock::new(snapshot.cortical_area_names),
             propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
             stdp_mappings: std::sync::RwLock::new(AHashMap::new()),
             stdp_mapping_index: std::sync::RwLock::new(AHashMap::new()),
             backend: std::sync::Mutex::new(backend),
+            memory_replay_frames: std::sync::RwLock::new(AHashMap::new()),
+            memory_replay_twin_map: std::sync::RwLock::new(AHashMap::new()),
             burst_count: std::sync::atomic::AtomicU64::new(snapshot.burst_count),
             power_amount: std::sync::atomic::AtomicU32::new(snapshot.power_amount.to_bits()),
+            fatigue_active: std::sync::atomic::AtomicBool::new(false),
+            power_neuron_id: std::sync::atomic::AtomicU32::new(POWER_NEURON_UNSET),
         }
     }
     END COMMENTED OUT */
@@ -3008,7 +3303,7 @@ impl<
         updated_count
     }
 
-    /// Update postsynaptic potential (PSP / conductance) for all **existing outgoing synapses**
+    /// Update postsynaptic potential (PSP) for all **existing outgoing synapses**
     /// from neurons in the specified cortical area.
     ///
     /// @cursor:critical-path
@@ -3075,6 +3370,25 @@ impl<
         updated
     }
 
+    /// Update PSP stored in STDP mapping params for mappings sourced by a cortical area.
+    ///
+    /// Returns number of mappings updated.
+    pub fn update_stdp_mapping_psp_for_source(
+        &mut self,
+        src_cortical_idx: u32,
+        new_psp: u8,
+    ) -> usize {
+        let mut updated = 0usize;
+        let mut mappings = self.stdp_mappings.write().unwrap();
+        for (key, params) in mappings.iter_mut() {
+            if key.0 == src_cortical_idx {
+                params.synapse_psp = new_psp;
+                updated += 1;
+            }
+        }
+        updated
+    }
+
     /// Delete a neuron (mark as invalid)
     /// Returns true if successful, false if neuron out of bounds
     pub fn delete_neuron(&mut self, neuron_id: u32) -> bool {
@@ -3093,7 +3407,11 @@ impl<
 
         // CRITICAL PERFORMANCE: Remove from power neuron cache if it was a power neuron
         if is_power {
-            // No cache needed - power neuron is always neuron ID 1 (deterministic)
+            use std::sync::atomic::Ordering;
+            if self.power_neuron_id.load(Ordering::Relaxed) == neuron_id {
+                self.power_neuron_id
+                    .store(POWER_NEURON_UNSET, Ordering::Release);
+            }
         }
 
         true
@@ -3106,36 +3424,40 @@ impl<
         idx < neuron_storage.count() && neuron_storage.valid_mask()[idx]
     }
 
-    /// Check if power neuron exists (using deterministic ID: neuron 1)
+    /// Check if power neuron exists (cached power neuron ID)
     ///
-    /// This is O(1) - no scanning needed since power neuron is always neuron ID 1
+    /// This is O(1) - no scanning needed.
     pub fn check_power_neuron_exists(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        let power_id = self.power_neuron_id.load(Ordering::Acquire);
+        if power_id == POWER_NEURON_UNSET {
+            return false;
+        }
         let neuron_storage = self.neuron_storage.read().unwrap();
         let count = neuron_storage.count();
 
-        // Direct O(1) access to neuron 1 (deterministic ID)
-        if 1 < count {
-            let is_valid = neuron_storage.valid_mask()[1];
-            let cortical_area = neuron_storage.cortical_areas()[1];
+        let idx = power_id as usize;
+        if idx < count {
+            let is_valid = neuron_storage.valid_mask()[idx];
+            let cortical_area = neuron_storage.cortical_areas()[idx];
             is_valid && cortical_area == 1
         } else {
             false
         }
     }
 
-    /// Rebuild power neuron cache (no-op - kept for API compatibility)
-    ///
-    /// ARCHITECTURE: Core areas have deterministic neuron IDs:
-    /// - Area 0 (_death) → neuron ID 0
-    /// - Area 1 (_power) → neuron ID 1
-    /// - Area 2 (_fatigue) → neuron ID 2
-    ///
-    /// This eliminates the need to scan all neurons (O(1) instead of O(n))
-    /// Power injection now uses direct O(1) access to neuron 1 - no cache needed!
+    /// Rebuild power neuron cache by scanning cortical area 1 once.
     pub fn rebuild_power_neuron_cache(&mut self) {
-        // No-op: Power neuron is always neuron ID 1 (deterministic), no cache needed
-        // This function is kept for API compatibility but does nothing
-        // Power injection now uses direct O(1) access to neuron 1 in phase1_injection_with_synapses
+        use std::sync::atomic::Ordering;
+        let neuron_storage = self.neuron_storage.read().unwrap();
+        let power_neurons = neuron_storage.get_neurons_in_cortical_area(1);
+        if let Some(&first_idx) = power_neurons.first() {
+            self.power_neuron_id
+                .store(first_idx as u32, Ordering::Release);
+        } else {
+            self.power_neuron_id
+                .store(POWER_NEURON_UNSET, Ordering::Release);
+        }
     }
 
     /// Get neuron coordinates (x, y, z)
@@ -3229,7 +3551,7 @@ impl<
     }
 
     /// Get incoming synapses for a neuron (neuron is the target)
-    /// Returns Vec<(source_neuron_id, weight, conductance, synapse_type)>
+    /// Returns Vec<(source_neuron_id, weight, psp, synapse_type)>
     pub fn get_incoming_synapses(&self, target_neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
         let mut synapses = Vec::new();
 
@@ -3298,7 +3620,7 @@ impl<
         self.stdp_mappings.write().unwrap().remove(&key).is_some()
     }
 
-    fn rebuild_stdp_mapping_index(&mut self) {
+    fn rebuild_stdp_mapping_index(&self) {
         let mappings = self.stdp_mappings.read().unwrap().clone();
         if mappings.is_empty() {
             *self.stdp_mapping_index.write().unwrap() = AHashMap::new();
@@ -3343,18 +3665,82 @@ impl<
         burst_timestep: u64,
         fire_ledger: &crate::fire_ledger::FireLedger,
     ) -> Result<()> {
+        const MEMORY_NEURON_ID_START: u32 = 50_000_000;
         let mappings = self.stdp_mappings.read().unwrap().clone();
         if mappings.is_empty() {
             return Ok(());
         }
 
         let mapping_index = self.stdp_mapping_index.read().unwrap().clone();
-        if mapping_index.is_empty() {
+        let has_bidirectional = mappings.values().any(|params| params.bidirectional_stdp);
+        if mapping_index.is_empty() && !has_bidirectional {
             return Ok(());
         }
 
+        if has_bidirectional {
+            let neuron_storage = self.neuron_storage.read().unwrap();
+            let synapse_storage = self.synapse_storage.read().unwrap();
+            for (key, params) in &mappings {
+                if !params.bidirectional_stdp {
+                    continue;
+                }
+                let Some(syn_indices) = mapping_index.get(key) else {
+                    continue;
+                };
+                for &syn_idx in syn_indices {
+                    if syn_idx >= synapse_storage.count() || !synapse_storage.valid_mask()[syn_idx]
+                    {
+                        continue;
+                    }
+                    let src_neuron = synapse_storage.source_neurons()[syn_idx];
+                    let dst_neuron = synapse_storage.target_neurons()[syn_idx];
+                    let src_idx = src_neuron as usize;
+                    let dst_idx = dst_neuron as usize;
+                    if src_idx >= neuron_storage.count()
+                        || dst_idx >= neuron_storage.count()
+                        || !neuron_storage.valid_mask()[src_idx]
+                        || !neuron_storage.valid_mask()[dst_idx]
+                    {
+                        continue;
+                    }
+                    let weight = synapse_storage.weights()[syn_idx];
+                    let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
+                    let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
+                    tracing::info!(
+                        target: "feagi-burst-engine",
+                        "associative-stdp synapse burst={} mapping=({}->{}) synapse_idx={} src_neuron={} dst_neuron={} weight={} src_threshold={} dst_threshold={}",
+                        burst_timestep,
+                        key.0,
+                        key.1,
+                        syn_idx,
+                        src_neuron,
+                        dst_neuron,
+                        weight,
+                        src_threshold,
+                        dst_threshold
+                    );
+                }
+            }
+        }
+
+        if has_bidirectional && mapping_index.is_empty() {
+            tracing::info!(
+                target: "feagi-burst-engine",
+                "associative-stdp synapse burst={} bidirectional_mappings={} synapses=0",
+                burst_timestep,
+                mappings.values().filter(|params| params.bidirectional_stdp).count()
+            );
+        }
+
+        struct StdpActivityWindow {
+            src_any: RoaringBitmap,
+            dst_any: RoaringBitmap,
+            src_all: RoaringBitmap,
+            dst_all: RoaringBitmap,
+        }
+
         // Precompute window activity sets per mapping.
-        let mut activity_sets: AHashMap<CorticalMappingKey, (RoaringBitmap, RoaringBitmap)> =
+        let mut activity_sets: AHashMap<CorticalMappingKey, StdpActivityWindow> =
             AHashMap::with_capacity(mappings.len());
 
         for (key @ (src_area, dst_area), params) in &mappings {
@@ -3370,60 +3756,270 @@ impl<
                     Err(_) => continue,
                 };
 
-            let mut src_active = RoaringBitmap::new();
-            for (_t, bm) in src_window {
-                src_active |= bm;
-            }
-            let mut dst_active = RoaringBitmap::new();
-            for (_t, bm) in dst_window {
-                dst_active |= bm;
+            let mut src_any = RoaringBitmap::new();
+            let mut src_iter = src_window.into_iter();
+            let Some((_t, first)) = src_iter.next() else {
+                continue;
+            };
+            let mut src_all = first.clone();
+            src_any |= &first;
+            for (_t, bm) in src_iter {
+                src_any |= &bm;
+                src_all &= &bm;
             }
 
-            activity_sets.insert(*key, (src_active, dst_active));
+            let mut dst_any = RoaringBitmap::new();
+            let mut dst_iter = dst_window.into_iter();
+            let Some((_t, first)) = dst_iter.next() else {
+                continue;
+            };
+            let mut dst_all = first.clone();
+            dst_any |= &first;
+            for (_t, bm) in dst_iter {
+                dst_any |= &bm;
+                dst_all &= &bm;
+            }
+
+            let (src_any, src_all, dst_any, dst_all) = if params.bidirectional_stdp {
+                // Associative memory uses dynamic memory neuron IDs, keep them in the window.
+                (src_any, src_all, dst_any, dst_all)
+            } else {
+                (
+                    RoaringBitmap::from_iter(
+                        src_any.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+                    ),
+                    RoaringBitmap::from_iter(
+                        src_all.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+                    ),
+                    RoaringBitmap::from_iter(
+                        dst_any.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+                    ),
+                    RoaringBitmap::from_iter(
+                        dst_all.iter().filter(|&id| id < MEMORY_NEURON_ID_START),
+                    ),
+                )
+            };
+
+            activity_sets.insert(
+                *key,
+                StdpActivityWindow {
+                    src_any,
+                    dst_any,
+                    src_all,
+                    dst_all,
+                },
+            );
         }
 
         if activity_sets.is_empty() {
             return Ok(());
         }
 
-        // Apply weight updates.
-        let mut synapse_storage = self.synapse_storage.write().unwrap();
+        // Apply weight updates to existing synapses.
+        {
+            let neuron_storage = self.neuron_storage.read().unwrap();
+            let mut synapse_storage = self.synapse_storage.write().unwrap();
 
-        for (key, params) in mappings {
-            let Some((src_active, dst_active)) = activity_sets.get(&key) else {
+            for (key, params) in &mappings {
+                let Some(activity) = activity_sets.get(key) else {
+                    continue;
+                };
+                let Some(syn_indices) = mapping_index.get(key) else {
+                    continue;
+                };
+
+                let delta_plus = params.delta_plus_u8();
+                let delta_minus = params.delta_minus_u8();
+                if delta_plus == 0 && delta_minus == 0 {
+                    continue;
+                }
+                tracing::info!(
+                    target: "feagi-burst-engine",
+                    "associative-stdp burst={} mapping=({}->{}) synapses={} delta_plus={} delta_minus={} src_all={} dst_all={} psp={}",
+                    burst_timestep,
+                    key.0,
+                    key.1,
+                    syn_indices.len(),
+                    delta_plus,
+                    delta_minus,
+                    activity.src_all.len(),
+                    activity.dst_all.len(),
+                    params.synapse_psp
+                );
+
+                for &syn_idx in syn_indices {
+                    if syn_idx >= synapse_storage.count() || !synapse_storage.valid_mask()[syn_idx]
+                    {
+                        continue;
+                    }
+
+                    let src_neuron = synapse_storage.source_neurons()[syn_idx];
+                    let dst_neuron = synapse_storage.target_neurons()[syn_idx];
+
+                    if params.bidirectional_stdp {
+                        let src_idx = src_neuron as usize;
+                        let dst_idx = dst_neuron as usize;
+                        if src_idx < neuron_storage.count()
+                            && dst_idx < neuron_storage.count()
+                            && neuron_storage.valid_mask()[src_idx]
+                            && neuron_storage.valid_mask()[dst_idx]
+                        {
+                            let weight = synapse_storage.weights()[syn_idx];
+                            let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
+                            let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
+                            let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
+                            tracing::info!(
+                                target: "feagi-burst-engine",
+                                "associative-stdp synapse burst={} mapping=({}->{}) synapse_idx={} src_neuron={} dst_neuron={} weight={} psp={} src_threshold={} dst_threshold={}",
+                                burst_timestep,
+                                key.0,
+                                key.1,
+                                syn_idx,
+                                src_neuron,
+                                dst_neuron,
+                                weight,
+                                psp,
+                                src_threshold,
+                                dst_threshold
+                            );
+                        }
+                    }
+
+                    let src_any_present = activity.src_any.contains(src_neuron);
+                    let dst_any_present = activity.dst_any.contains(dst_neuron);
+                    if !src_any_present && !dst_any_present {
+                        continue;
+                    }
+
+                    let src_all_present = activity.src_all.contains(src_neuron);
+                    let dst_all_present = activity.dst_all.contains(dst_neuron);
+
+                    if src_all_present && dst_all_present {
+                        let old = synapse_storage.weights()[syn_idx];
+                        let new_w = old.saturating_add(delta_plus);
+                        synapse_storage.weights_mut()[syn_idx] = new_w;
+                    } else if delta_minus > 0 {
+                        let old = synapse_storage.weights()[syn_idx];
+                        let new_w = old.saturating_sub(delta_minus);
+                        synapse_storage.weights_mut()[syn_idx] = new_w;
+                    }
+                }
+            }
+        }
+
+        // Create new synapses for bidirectional STDP mappings based on synchronized activity.
+        let mut created_synapses = false;
+        for (key @ (_src_area, dst_area), params) in &mappings {
+            if !params.bidirectional_stdp {
                 continue;
-            };
-            let Some(syn_indices) = mapping_index.get(&key) else {
+            }
+            let Some(activity) = activity_sets.get(key) else {
                 continue;
             };
 
             let delta_plus = params.delta_plus_u8();
-            let delta_minus = params.delta_minus_u8();
-            if delta_plus == 0 && delta_minus == 0 {
+            if delta_plus == 0 || activity.src_all.is_empty() || activity.dst_all.is_empty() {
                 continue;
             }
 
-            for &syn_idx in syn_indices {
-                if syn_idx >= synapse_storage.count() || !synapse_storage.valid_mask()[syn_idx] {
-                    continue;
-                }
+            let mut new_sources = Vec::new();
+            let mut new_targets = Vec::new();
+            let mut new_weights = Vec::new();
+            let mut new_psps = Vec::new();
+            let mut new_types = Vec::new();
 
-                let src_neuron = synapse_storage.source_neurons()[syn_idx];
-                let dst_neuron = synapse_storage.target_neurons()[syn_idx];
+            {
+                let prop_engine = self.propagation_engine.read().unwrap();
+                let synapse_storage = self.synapse_storage.read().unwrap();
+                let neuron_storage = self.neuron_storage.read().unwrap();
+                let neuron_count = neuron_storage.count();
 
-                let src_present = src_active.contains(src_neuron);
-                let dst_present = dst_active.contains(dst_neuron);
+                for src_neuron in activity.src_all.iter() {
+                    let source = NeuronId(src_neuron);
+                    let mut existing_targets = AHashSet::new();
+                    if let Some(indices) = prop_engine.synapse_index.get(&source) {
+                        for &syn_idx in indices {
+                            if syn_idx >= synapse_storage.count()
+                                || !synapse_storage.valid_mask()[syn_idx]
+                            {
+                                continue;
+                            }
+                            let target = synapse_storage.target_neurons()[syn_idx];
+                            let target_idx = target as usize;
+                            if target_idx >= neuron_count
+                                || !neuron_storage.valid_mask()[target_idx]
+                            {
+                                continue;
+                            }
+                            if neuron_storage.cortical_areas()[target_idx] == *dst_area {
+                                existing_targets.insert(target);
+                            }
+                        }
+                    }
 
-                if src_present && dst_present {
-                    let old = synapse_storage.weights()[syn_idx];
-                    let new_w = old.saturating_add(delta_plus);
-                    synapse_storage.weights_mut()[syn_idx] = new_w;
-                } else if src_present ^ dst_present {
-                    let old = synapse_storage.weights()[syn_idx];
-                    let new_w = old.saturating_sub(delta_minus);
-                    synapse_storage.weights_mut()[syn_idx] = new_w;
+                    for dst_neuron in activity.dst_all.iter() {
+                        if existing_targets.contains(&dst_neuron) {
+                            continue;
+                        }
+                        let src_idx = src_neuron as usize;
+                        let dst_idx = dst_neuron as usize;
+                        if src_idx < neuron_count && dst_idx < neuron_count {
+                            let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
+                            let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
+                            tracing::info!(
+                                target: "feagi-burst-engine",
+                                "associative-stdp LTP new synapse burst={} mapping=({}->{}) src_neuron={} dst_neuron={} weight={} psp={} src_threshold={} dst_threshold={}",
+                                burst_timestep,
+                                key.0,
+                                key.1,
+                                src_neuron,
+                                dst_neuron,
+                                delta_plus,
+                                params.synapse_psp,
+                                src_threshold,
+                                dst_threshold
+                            );
+                        }
+                        new_sources.push(NeuronId(src_neuron));
+                        new_targets.push(NeuronId(dst_neuron));
+                        new_weights.push(SynapticWeight(delta_plus));
+                        new_psps.push(SynapticPsp(params.synapse_psp));
+                        new_types.push(params.synapse_type);
+                    }
                 }
             }
+
+            if !new_sources.is_empty() {
+                let source_ids: Vec<u32> = new_sources.iter().map(|n| n.0).collect();
+                let target_ids: Vec<u32> = new_targets.iter().map(|n| n.0).collect();
+                let weight_vals: Vec<u8> = new_weights.iter().map(|w| w.0).collect();
+                let psp_vals: Vec<u8> = new_psps.iter().map(|c| c.0).collect();
+                let type_vals: Vec<u8> = new_types.iter().map(|t| *t as u8).collect();
+
+                self.synapse_storage
+                    .write()
+                    .unwrap()
+                    .add_synapses_batch(
+                        &source_ids,
+                        &target_ids,
+                        &weight_vals,
+                        &psp_vals,
+                        &type_vals,
+                    )
+                    .map_err(|e| {
+                        FeagiError::RuntimeError(format!("Failed to add synapses batch: {:?}", e))
+                    })?;
+                created_synapses = true;
+            }
+        }
+
+        if created_synapses {
+            let synapse_storage = self.synapse_storage.read().unwrap();
+            let mut prop_engine = self.propagation_engine.write().unwrap();
+            prop_engine.build_synapse_index(&*synapse_storage);
+            drop(prop_engine);
+            drop(synapse_storage);
+            self.rebuild_stdp_mapping_index();
         }
 
         Ok(())
@@ -3489,6 +4085,7 @@ fn phase1_injection_with_synapses<
     synapse_storage: &S,
     pending_sensory: &std::sync::Mutex<Vec<(NeuronId, f32)>>,
     fatigue_active: bool,
+    power_neuron_id: u32,
 ) -> Result<InjectionResult> {
     // Clear FCL from previous burst
     fcl.clear();
@@ -3538,13 +4135,12 @@ fn phase1_injection_with_synapses<
     }
 
     // 1. Power Injection + Membrane Potential Reset - OPTIMIZED FOR LARGE COUNTS
-    // CRITICAL PERFORMANCE FIX: Direct O(1) access to power neuron (neuron ID 1, deterministic)
-    // No cache needed - power neuron is always neuron ID 1
+    // O(1) access to cached power neuron ID (core area 1).
     static FIRST_LOG: std::sync::Once = std::sync::Once::new();
     FIRST_LOG.call_once(|| {
         info!("╔══════════════════════════════════════════════════════════════");
-        info!("║ [POWER-INJECTION] 🔋 DIRECT ACCESS TO NEURON 1 (DETERMINISTIC ID)");
-        info!("║ Power neuron is always neuron ID 1 - O(1) access, no cache needed!");
+        info!("║ [POWER-INJECTION] 🔋 DIRECT ACCESS TO CACHED POWER NEURON");
+        info!("║ Power neuron is injected via cached ID - O(1) access");
         info!("╚══════════════════════════════════════════════════════════════");
     });
 
@@ -3556,13 +4152,15 @@ fn phase1_injection_with_synapses<
     let power_start = std::time::Instant::now();
 
     if should_do_full_scan {
-        // Small neuron count: Direct O(1) access to power neuron (neuron ID 1, deterministic)
-        if 1 < neuron_count
-            && neuron_storage.valid_mask()[1]
-            && neuron_storage.cortical_areas()[1] == 1
-        {
-            fcl.add_candidate(NeuronId(1), power_amount);
-            power_count += 1;
+        if power_neuron_id != POWER_NEURON_UNSET {
+            let idx = power_neuron_id as usize;
+            if idx < neuron_count
+                && neuron_storage.valid_mask()[idx]
+                && neuron_storage.cortical_areas()[idx] == 1
+            {
+                fcl.add_candidate(NeuronId(power_neuron_id), power_amount);
+                power_count += 1;
+            }
         }
 
         // Reset membrane potential for non-accumulating neurons
@@ -3586,14 +4184,15 @@ fn phase1_injection_with_synapses<
             }
         }
 
-        // 2. Direct access to power neuron (neuron ID 1, deterministic) - O(1)!
-        // No cache needed - power neuron is always neuron ID 1
-        if 1 < neuron_count
-            && neuron_storage.valid_mask()[1]
-            && neuron_storage.cortical_areas()[1] == 1
-        {
-            fcl.add_candidate(NeuronId(1), power_amount);
-            power_count += 1;
+        if power_neuron_id != POWER_NEURON_UNSET {
+            let idx = power_neuron_id as usize;
+            if idx < neuron_count
+                && neuron_storage.valid_mask()[idx]
+                && neuron_storage.cortical_areas()[idx] == 1
+            {
+                fcl.add_candidate(NeuronId(power_neuron_id), power_amount);
+                power_count += 1;
+            }
         }
     }
 
@@ -3697,7 +4296,7 @@ fn phase1_injection_with_synapses<
         // - FireQueue stores the membrane potential captured at the moment of firing.
         //
         // Conversion contract:
-        // - Synaptic propagation expects a u8 conductance (0..=255).
+        // - Synaptic propagation expects a u8 PSP (0..=255).
         //
         // IMPORTANT:
         // This conversion must be monotonic. A previous heuristic attempted to "downscale"
@@ -4162,6 +4761,56 @@ mod tests {
     }
 
     #[test]
+    fn test_overdue_replay_injections_are_dropped() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.configure_fire_ledger_window(3, 1).unwrap();
+
+        let neuron = npu
+            .add_neuron(
+                1.0,
+                f32::MAX,
+                0.1,
+                0.0,
+                0,
+                5,
+                1.0,
+                u16::MAX,
+                0,
+                true,
+                3,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        {
+            let mut fire_structures = npu.fire_structures.lock().unwrap();
+            fire_structures
+                .pending_replay_injections
+                .push(ReplayInjection {
+                    target_burst: 0,
+                    twin_area_idx: 3,
+                    coords: vec![(0, 0, 0)],
+                    potential: 10.0,
+                });
+        }
+
+        let burst = npu.process_burst().unwrap().burst;
+        let window = npu
+            .get_fire_ledger_dense_window_bitmaps(3, burst, 1)
+            .unwrap();
+        assert!(
+            window.is_empty() || window.iter().all(|(_, bm)| !bm.contains(neuron.0)),
+            "Expected overdue replay injection to be dropped"
+        );
+    }
+
+    #[test]
     fn test_add_neuron_different_parameters() {
         let mut npu =
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
@@ -4269,7 +4918,7 @@ mod tests {
             n1,
             n2,
             SynapticWeight(128),
-            SynapticConductance(255),
+            SynapticPsp(255),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -4299,7 +4948,7 @@ mod tests {
             n1,
             n2,
             SynapticWeight(128),
-            SynapticConductance(255),
+            SynapticPsp(255),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -4307,7 +4956,7 @@ mod tests {
             n1,
             n3,
             SynapticWeight(64),
-            SynapticConductance(128),
+            SynapticPsp(128),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -4315,7 +4964,7 @@ mod tests {
             n2,
             n3,
             SynapticWeight(32),
-            SynapticConductance(64),
+            SynapticPsp(64),
             SynapseType::Inhibitory,
         )
         .unwrap();
@@ -4342,7 +4991,7 @@ mod tests {
             n1,
             n2,
             SynapticWeight(128),
-            SynapticConductance(255),
+            SynapticPsp(255),
             SynapseType::Inhibitory,
         )
         .unwrap();
@@ -4369,7 +5018,7 @@ mod tests {
             n1,
             n2,
             SynapticWeight(128),
-            SynapticConductance(255),
+            SynapticPsp(255),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -4514,7 +5163,7 @@ mod tests {
 
     #[test]
     fn test_mp_charge_accumulation_false_respects_threshold() {
-        use feagi_npu_neural::{SynapseType, SynapticConductance, SynapticWeight};
+        use feagi_npu_neural::{SynapseType, SynapticPsp, SynapticWeight};
 
         // REGRESSION TEST: Verify that neurons with mp_charge_accumulation=false
         // do NOT fire when PSP < threshold, even if they had residual potential
@@ -4567,13 +5216,13 @@ mod tests {
             )
             .unwrap();
 
-        // Connect A → B with conductance=1.0 (PSP)
-        // CRITICAL: Using weight=1, conductance=1 → PSP = 1×1 = 1.0
+        // Connect A → B with PSP=1.0
+        // CRITICAL: Using weight=1, PSP=1 → PSP = 1×1 = 1.0
         npu.add_synapse(
             neuron_a,
             neuron_b,
             SynapticWeight(1),       // weight = 1
-            SynapticConductance(1),  // conductance = 1 → PSP = 1×1 = 1.0
+            SynapticPsp(1),          // PSP = 1 → PSP = 1×1 = 1.0
             SynapseType::Excitatory, // synapse_type (excitatory)
         )
         .unwrap();
@@ -4662,7 +5311,7 @@ mod tests {
 
     #[test]
     fn test_mp_driven_psp_uses_firing_time_membrane_potential() {
-        use feagi_npu_neural::{SynapseType, SynapticConductance, SynapticWeight};
+        use feagi_npu_neural::{SynapseType, SynapticPsp, SynapticWeight};
 
         // REGRESSION TEST:
         // mp_driven_psp must use the firing-time MP captured in FireQueue, NOT neuron_storage MP
@@ -4698,7 +5347,7 @@ mod tests {
             .unwrap();
 
         // Target neuron in cortical_area=4. Threshold=100 so it will fire only if it receives
-        // a conductance roughly >= 100 from mp_driven_psp propagation.
+        // a PSP roughly >= 100 from mp_driven_psp propagation.
         let neuron_dst = npu
             .add_neuron(
                 100.0,    // threshold
@@ -4718,13 +5367,13 @@ mod tests {
             )
             .unwrap();
 
-        // Connect src → dst. With mp_driven_psp enabled, the synapse conductance is ignored
+        // Connect src → dst. With mp_driven_psp enabled, the synapse PSP is ignored
         // and replaced by the source neuron's MP (converted to u8).
         npu.add_synapse(
             neuron_src,
             neuron_dst,
             SynapticWeight(1),
-            SynapticConductance(1),
+            SynapticPsp(1),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -4766,7 +5415,7 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
-        // Add only regular neurons (no power area)
+        // Core power neuron is auto-created when registering area 1.
         npu.add_neuron(
             1.0,
             f32::MAX,
@@ -4787,7 +5436,7 @@ mod tests {
 
         let result = npu.process_burst().unwrap();
 
-        assert_eq!(result.power_injections, 0);
+        assert_eq!(result.power_injections, 1);
     }
 
     #[test]
@@ -5102,7 +5751,7 @@ mod tests {
             n1,
             nonexistent,
             SynapticWeight(128),
-            SynapticConductance(255),
+            SynapticPsp(255),
             SynapseType::Excitatory,
         );
 
@@ -5121,8 +5770,8 @@ mod tests {
         let result = npu.process_burst().unwrap();
 
         assert_eq!(result.burst, 1);
-        assert_eq!(result.neuron_count, 0);
-        assert_eq!(result.power_injections, 0);
+        assert_eq!(result.neuron_count, 1);
+        assert_eq!(result.power_injections, 1);
     }
 
     #[test]
@@ -5609,7 +6258,7 @@ macro_rules! dispatch {
 //         source: NeuronId,
 //         target: NeuronId,
 //         weight: feagi_types::SynapticWeight,
-//         postsynaptic_potential: feagi_types::SynapticConductance,
+//         postsynaptic_potential: feagi_types::SynapticPsp,
 //         synapse_type: feagi_types::SynapseType,
 //     ) -> Result<usize> {
 //         dispatch_mut!(self, add_synapse(source, target, weight, postsynaptic_potential, synapse_type))
@@ -5621,7 +6270,7 @@ macro_rules! dispatch {
 //         source_neurons: Vec<NeuronId>,
 //         target_neurons: Vec<NeuronId>,
 //         weights: Vec<feagi_types::SynapticWeight>,
-//         postsynaptic_potentials: Vec<feagi_types::SynapticConductance>,
+//         postsynaptic_potentials: Vec<feagi_types::SynapticPsp>,
 //         synapse_types: Vec<feagi_types::SynapseType>,
 //     ) -> (usize, Vec<usize>) {
 //         dispatch_mut!(self, add_synapses_batch(source_neurons, target_neurons, weights, postsynaptic_potentials, synapse_types))

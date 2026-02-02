@@ -11,7 +11,7 @@ use crate::connectivity::core_morphologies::common::calculate_area_dimensions;
 use crate::connectivity::rules::match_patterns_batch;
 use crate::connectivity::rules::patterns::Pattern3D;
 use crate::types::BduResult;
-use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
+use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 
 /// Apply pattern matching morphology directly on NPU
@@ -22,7 +22,7 @@ pub fn apply_patterns_morphology(
     dst_area_id: u32,
     patterns: Vec<(Pattern3D, Pattern3D)>,
     weight: u8,
-    conductance: u8,
+    psp: u8,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -70,7 +70,7 @@ pub fn apply_patterns_morphology(
                             NeuronId(src_nid),
                             NeuronId(dst_nid),
                             SynapticWeight(weight),
-                            SynapticConductance(conductance),
+                            SynapticPsp(psp),
                             synapse_type,
                         )
                         .is_ok()

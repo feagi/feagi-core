@@ -293,10 +293,14 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write;
+    use std::sync::Mutex;
     use tempfile::tempdir;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_find_config_file_env_var() {
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("custom_config.toml");
         File::create(&config_path).unwrap();
@@ -311,6 +315,11 @@ mod tests {
 
     #[test]
     fn test_load_minimal_config() {
+        let _env_lock = ENV_LOCK.lock().unwrap();
+        let saved_api_host = env::var("FEAGI_API_HOST").ok();
+        let saved_api_port = env::var("FEAGI_API_PORT").ok();
+        env::remove_var("FEAGI_API_HOST");
+        env::remove_var("FEAGI_API_PORT");
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("feagi_configuration.toml");
 
@@ -324,10 +333,18 @@ mod tests {
 
         assert_eq!(config.system.max_cores, 4);
         assert_eq!(config.api.port, 9000);
+
+        if let Some(value) = saved_api_host {
+            env::set_var("FEAGI_API_HOST", value);
+        }
+        if let Some(value) = saved_api_port {
+            env::set_var("FEAGI_API_PORT", value);
+        }
     }
 
     #[test]
     fn test_environment_overrides() {
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let mut config = FeagiConfig::default();
 
         env::set_var("FEAGI_API_HOST", "192.168.1.100");
@@ -357,6 +374,7 @@ mod tests {
 
     #[test]
     fn test_override_precedence() {
+        let _env_lock = ENV_LOCK.lock().unwrap();
         // Test that CLI overrides take precedence over environment variables
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("feagi_configuration.toml");

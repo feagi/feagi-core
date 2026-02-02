@@ -6,23 +6,36 @@
 
 use feagi_structures::FeagiDataError;
 use parking_lot::Mutex;
+use std::future::Future;
 use std::sync::Arc;
+use tokio::runtime::Handle;
+use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tracing::{debug, error, info};
+use zeromq::{PubSocket, Socket, SocketSend, ZmqMessage};
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 
 /// Motor stream for publishing motor commands
 #[derive(Clone)]
 pub struct MotorStream {
-    context: Arc<zmq::Context>,
+    runtime: Arc<Runtime>,
     bind_address: String,
-    socket: Arc<Mutex<Option<zmq::Socket>>>,
+    socket: Arc<Mutex<Option<PubSocket>>>,
     running: Arc<Mutex<bool>>,
 }
 
 impl MotorStream {
     /// Create a new motor stream
-    pub fn new(context: Arc<zmq::Context>, bind_address: &str) -> Result<Self, FeagiDataError> {
+    pub fn new(runtime: Arc<Runtime>, bind_address: &str) -> Result<Self, FeagiDataError> {
         Ok(Self {
-            context,
+            runtime,
             bind_address: bind_address.to_string(),
             socket: Arc::new(Mutex::new(None)),
             running: Arc::new(Mutex::new(false)),
@@ -38,23 +51,8 @@ impl MotorStream {
         }
 
         // Create PUB socket for broadcasting motor data
-        let socket = self.context.socket(zmq::PUB).map_err(|e| {
-            FeagiDataError::InternalError(format!("Failed to create ZMQ socket: {}", e))
-        })?;
-
-        // Set socket options for optimal performance
-        socket
-            .set_linger(0) // Don't wait on close
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set linger: {}", e)))?;
-        socket
-            .set_sndhwm(1000) // High water mark for send buffer
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set send HWM: {}", e)))?;
-        // NOTE: CONFLATE disabled - it BREAKS multipart messages!
-        // For real-time data, subscribers should use DONTWAIT and discard old messages
-
-        // Bind socket
-        socket
-            .bind(&self.bind_address)
+        let mut socket = PubSocket::new();
+        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.bind_address))
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
@@ -80,8 +78,8 @@ impl MotorStream {
             return Ok(()); // Silently discard - this is expected when no motor agents connected
         }
 
-        let sock_guard = self.socket.lock();
-        let sock = match sock_guard.as_ref() {
+        let mut sock_guard = self.socket.lock();
+        let sock = match sock_guard.as_mut() {
             Some(s) => s,
             None => {
                 return Err(FeagiDataError::BadParameters(
@@ -90,7 +88,8 @@ impl MotorStream {
             }
         };
 
-        sock.send(data, 0).map_err(|e| {
+        let message = ZmqMessage::from(data.to_vec());
+        block_on_runtime(self.runtime.as_ref(), sock.send(message)).map_err(|e| {
             FeagiDataError::InternalError(format!("Failed to send motor data: {}", e))
         })?;
 
@@ -104,8 +103,8 @@ impl MotorStream {
             return Ok(()); // Silently discard - no agents connected
         }
 
-        let sock_guard = self.socket.lock();
-        let sock = match sock_guard.as_ref() {
+        let mut sock_guard = self.socket.lock();
+        let sock = match sock_guard.as_mut() {
             Some(s) => s,
             None => {
                 return Err(FeagiDataError::BadParameters(
@@ -122,10 +121,10 @@ impl MotorStream {
             data.len()
         );
 
-        // Use send_multipart with Vec (zmq crate API compatibility)
-        let parts: Vec<&[u8]> = vec![topic, data];
-        sock.send_multipart(parts, 0).map_err(|e| {
-            error!("[MOTOR-STREAM] ❌ send_multipart failed: {}", e);
+        let mut message = ZmqMessage::from(data.to_vec());
+        message.prepend(&ZmqMessage::from(topic.to_vec()));
+        block_on_runtime(self.runtime.as_ref(), sock.send(message)).map_err(|e| {
+            error!("[MOTOR-STREAM] ❌ send failed: {}", e);
             FeagiDataError::InternalError(format!("Failed to send multipart motor data: {}", e))
         })?;
         debug!("[MOTOR-STREAM] ✅ Multipart sent successfully");
@@ -145,8 +144,8 @@ mod tests {
 
     #[test]
     fn test_motor_stream_creation() {
-        let ctx = Arc::new(zmq::Context::new());
-        let stream = MotorStream::new(ctx, "tcp://127.0.0.1:30015");
+        let runtime = Arc::new(Runtime::new().unwrap());
+        let stream = MotorStream::new(runtime, "tcp://127.0.0.1:30015");
         assert!(stream.is_ok());
     }
 }

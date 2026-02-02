@@ -198,6 +198,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(agent::get_fq_sampler_status),
         )
         .route("/agent/capabilities", get(agent::get_capabilities))
+        .route(
+            "/agent/capabilities/all",
+            get(agent::get_all_agent_capabilities),
+        )
         .route("/agent/info/:agent_id", get(agent::get_agent_info))
         .route(
             "/agent/configure",

@@ -73,8 +73,8 @@ pub use types::{
     Result,
     Synapse,
     SynapseId,
-    SynapticConductance,
     SynapticContribution,
+    SynapticPsp,
     SynapticWeight,
 };
 

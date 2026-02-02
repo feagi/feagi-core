@@ -13,6 +13,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+#[cfg(feature = "std")]
+use feagi_state_manager::StateManager;
+
 /// Statistics for a single memory cortical area
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryAreaStats {
@@ -63,6 +66,14 @@ pub fn on_neuron_created(cache: &MemoryStatsCache, area_name: &str) {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
+
+    #[cfg(feature = "std")]
+    if let Some(state_manager) = StateManager::instance().try_read() {
+        // @cursor:critical-path - Keep per-area neuron count synced for BV reads.
+        state_manager.add_cortical_area_neuron_count(area_name, 1);
+        state_manager.get_core_state().add_neuron_count(1);
+        state_manager.get_core_state().add_memory_neuron_count(1);
+    }
 }
 
 /// Update stats when a neuron is deleted/expired
@@ -76,12 +87,28 @@ pub fn on_neuron_deleted(cache: &MemoryStatsCache, area_name: &str) {
             .unwrap()
             .as_millis() as u64;
     }
+
+    #[cfg(feature = "std")]
+    if let Some(state_manager) = StateManager::instance().try_read() {
+        // @cursor:critical-path - Keep per-area neuron count synced for BV reads.
+        state_manager.subtract_cortical_area_neuron_count(area_name, 1);
+        state_manager.get_core_state().subtract_neuron_count(1);
+        state_manager
+            .get_core_state()
+            .subtract_memory_neuron_count(1);
+    }
 }
 
 /// Initialize stats for a new memory area
 pub fn init_memory_area(cache: &MemoryStatsCache, area_name: &str) {
     let mut stats = cache.write();
     stats.entry(area_name.to_string()).or_default();
+
+    #[cfg(feature = "std")]
+    if let Some(state_manager) = StateManager::instance().try_read() {
+        // @cursor:critical-path - Memory areas start with zero neurons/synapses.
+        state_manager.init_cortical_area_stats(area_name);
+    }
 }
 
 /// Remove stats for a deleted memory area
@@ -103,9 +130,13 @@ pub fn get_area_stats(cache: &MemoryStatsCache, area_name: &str) -> Option<Memor
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static CORE_STATE_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_memory_stats_creation() {
+        let _lock = CORE_STATE_LOCK.lock().unwrap();
         let cache = create_memory_stats_cache();
 
         on_neuron_created(&cache, "mem_00");
@@ -120,6 +151,7 @@ mod tests {
 
     #[test]
     fn test_memory_stats_deletion() {
+        let _lock = CORE_STATE_LOCK.lock().unwrap();
         let cache = create_memory_stats_cache();
 
         on_neuron_created(&cache, "mem_00");
@@ -134,11 +166,32 @@ mod tests {
 
     #[test]
     fn test_memory_area_removal() {
+        let _lock = CORE_STATE_LOCK.lock().unwrap();
         let cache = create_memory_stats_cache();
 
         on_neuron_created(&cache, "mem_00");
         remove_memory_area(&cache, "mem_00");
 
         assert!(get_area_stats(&cache, "mem_00").is_none());
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_memory_stats_updates_core_state_counts() {
+        let _lock = CORE_STATE_LOCK.lock().unwrap();
+        let cache = create_memory_stats_cache();
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        let core_state = state_manager.get_core_state();
+        let start_total = core_state.get_neuron_count();
+        let start_memory = core_state.get_memory_neuron_count();
+
+        on_neuron_created(&cache, "mem_00");
+        assert_eq!(core_state.get_neuron_count(), start_total + 1);
+        assert_eq!(core_state.get_memory_neuron_count(), start_memory + 1);
+
+        on_neuron_deleted(&cache, "mem_00");
+        assert_eq!(core_state.get_neuron_count(), start_total);
+        assert_eq!(core_state.get_memory_neuron_count(), start_memory);
     }
 }

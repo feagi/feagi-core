@@ -415,6 +415,23 @@ impl MemoryMappedState {
         self.increment_version();
     }
 
+    /// Add to regular neuron count (atomic increment)
+    pub fn add_regular_neuron_count(&self, delta: u32) -> u32 {
+        let new_count = self.regular_neuron_count.fetch_add(delta, Ordering::AcqRel) + delta;
+        self.increment_version();
+        new_count
+    }
+
+    /// Subtract from regular neuron count (atomic decrement)
+    pub fn subtract_regular_neuron_count(&self, delta: u32) -> u32 {
+        let new_count = self
+            .regular_neuron_count
+            .fetch_sub(delta, Ordering::AcqRel)
+            .saturating_sub(delta);
+        self.increment_version();
+        new_count
+    }
+
     /// Get memory neuron count (atomic read)
     pub fn get_memory_neuron_count(&self) -> u32 {
         self.memory_neuron_count.load(Ordering::Acquire)
@@ -424,6 +441,23 @@ impl MemoryMappedState {
     pub fn set_memory_neuron_count(&self, count: u32) {
         self.memory_neuron_count.store(count, Ordering::Release);
         self.increment_version();
+    }
+
+    /// Add to memory neuron count (atomic increment)
+    pub fn add_memory_neuron_count(&self, delta: u32) -> u32 {
+        let new_count = self.memory_neuron_count.fetch_add(delta, Ordering::AcqRel) + delta;
+        self.increment_version();
+        new_count
+    }
+
+    /// Subtract from memory neuron count (atomic decrement)
+    pub fn subtract_memory_neuron_count(&self, delta: u32) -> u32 {
+        let new_count = self
+            .memory_neuron_count
+            .fetch_sub(delta, Ordering::AcqRel)
+            .saturating_sub(delta);
+        self.increment_version();
+        new_count
     }
 
     // ===== Fatigue State Accessors =====

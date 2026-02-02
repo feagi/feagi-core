@@ -109,6 +109,48 @@ impl Neuroembryogenesis {
         self.progress.read().clone()
     }
 
+    /// Sync existing core neuron parameters with cortical area properties.
+    ///
+    /// This updates neuron parameters in-place without creating new neurons.
+    fn sync_core_neuron_params(&self, cortical_idx: u32, area: &CorticalArea) -> BduResult<()> {
+        use crate::models::CorticalAreaExt;
+
+        let npu_arc = {
+            let manager = self.connectome_manager.read();
+            manager
+                .get_npu()
+                .cloned()
+                .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?
+        };
+
+        let mut npu_lock = npu_arc
+            .lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+
+        npu_lock.update_cortical_area_threshold_with_gradient(
+            cortical_idx,
+            area.firing_threshold(),
+            area.firing_threshold_increment_x(),
+            area.firing_threshold_increment_y(),
+            area.firing_threshold_increment_z(),
+        );
+        npu_lock.update_cortical_area_threshold_limit(cortical_idx, area.firing_threshold_limit());
+        npu_lock.update_cortical_area_leak(cortical_idx, area.leak_coefficient());
+        npu_lock.update_cortical_area_excitability(cortical_idx, area.neuron_excitability());
+        npu_lock.update_cortical_area_refractory_period(cortical_idx, area.refractory_period());
+        npu_lock.update_cortical_area_consecutive_fire_limit(
+            cortical_idx,
+            area.consecutive_fire_count() as u16,
+        );
+        npu_lock.update_cortical_area_snooze_period(cortical_idx, area.snooze_period());
+        npu_lock.update_cortical_area_mp_charge_accumulation(
+            cortical_idx,
+            area.mp_charge_accumulation(),
+        );
+
+        Ok(())
+    }
+
     /// Incrementally add cortical areas to an existing connectome
     ///
     /// This is for adding new cortical areas after the initial genome has been loaded.
@@ -167,6 +209,40 @@ impl Neuroembryogenesis {
         if !core_areas.is_empty() {
             info!(target: "feagi-bdu", "  🎯 Creating core area neurons FIRST ({} areas) for deterministic IDs", core_areas.len());
             for (core_idx, area) in &core_areas {
+                let existing_core_neurons = {
+                    let manager = self.connectome_manager.read();
+                    let npu = manager.get_npu();
+                    match npu {
+                        Some(npu_arc) => {
+                            let npu_lock = npu_arc.lock();
+                            match npu_lock {
+                                Ok(npu_guard) => {
+                                    npu_guard.get_neurons_in_cortical_area(*core_idx).len()
+                                }
+                                Err(_) => 0,
+                            }
+                        }
+                        None => 0,
+                    }
+                };
+
+                if existing_core_neurons > 0 {
+                    self.sync_core_neuron_params(*core_idx, area)?;
+                    let refreshed = {
+                        let manager = self.connectome_manager.read();
+                        manager.refresh_neuron_count_for_area(&area.cortical_id)
+                    };
+                    let count = refreshed.unwrap_or(existing_core_neurons);
+                    total_neurons += count;
+                    info!(
+                        target: "feagi-bdu",
+                        "  ↪ Skipping core neuron creation for {} (existing={}, idx={})",
+                        area.cortical_id.as_base_64(),
+                        count,
+                        core_idx
+                    );
+                    continue;
+                }
                 let neurons_created = {
                     let mut manager = self.connectome_manager.write();
                     manager.create_neurons_for_area(&area.cortical_id)
@@ -736,6 +812,46 @@ impl Neuroembryogenesis {
 
         // STEP 1: Create core area neurons FIRST (in order: 0, 1, 2)
         for (core_idx, cortical_id, area) in &core_areas {
+            let existing_core_neurons = {
+                let manager = self.connectome_manager.read();
+                let npu = manager.get_npu();
+                match npu {
+                    Some(npu_arc) => {
+                        let npu_lock = npu_arc.lock();
+                        match npu_lock {
+                            Ok(npu_guard) => {
+                                npu_guard.get_neurons_in_cortical_area(*core_idx).len()
+                            }
+                            Err(_) => 0,
+                        }
+                    }
+                    None => 0,
+                }
+            };
+
+            if existing_core_neurons > 0 {
+                self.sync_core_neuron_params(*core_idx, area)?;
+                let refreshed = {
+                    let manager = self.connectome_manager.read();
+                    manager.refresh_neuron_count_for_area(cortical_id)
+                };
+                let count = refreshed.unwrap_or(existing_core_neurons);
+                total_neurons_created += count;
+                info!(
+                    target: "feagi-bdu",
+                    "  ↪ Skipping core neuron creation for {} (existing={}, idx={})",
+                    cortical_id.as_base_64(),
+                    count,
+                    core_idx
+                );
+                processed_count += 1;
+                let progress_pct = (processed_count * 100 / total_areas.max(1)) as u8;
+                self.update_progress(|p| {
+                    p.neurons_created = total_neurons_created;
+                    p.progress = progress_pct;
+                });
+                continue;
+            }
             let per_voxel_count = area
                 .properties
                 .get("neurons_per_voxel")
@@ -867,6 +983,8 @@ impl Neuroembryogenesis {
         let expected_synapses = genome.stats.innate_synapse_count;
         info!(target: "feagi-bdu","  Expected innate synapses from genome: {}", expected_synapses);
 
+        self.rebuild_memory_twin_mappings_from_genome(genome)?;
+
         let mut total_synapses_created = 0;
         let total_areas = genome.cortical_areas.len();
 
@@ -894,6 +1012,12 @@ impl Neuroembryogenesis {
             let synapses_created = {
                 let manager_arc = self.connectome_manager.clone();
                 let mut manager = manager_arc.write();
+                if let Some(dstmap) = src_area.properties.get("cortical_mapping_dst") {
+                    if let Some(area) = manager.get_cortical_area_mut(src_cortical_id) {
+                        area.properties
+                            .insert("cortical_mapping_dst".to_string(), dstmap.clone());
+                    }
+                }
                 manager.apply_cortical_mapping(src_cortical_id)
             }; // Lock released immediately
 
@@ -995,6 +1119,8 @@ impl Neuroembryogenesis {
                             }
 
                             if let Ok(exec) = executor.lock() {
+                                let upstream_non_memory =
+                                    manager.filter_non_memory_upstream_areas(&upstream_areas);
                                 let lifecycle_config = MemoryNeuronLifecycleConfig {
                                     initial_lifespan: mem_props.init_lifespan,
                                     lifespan_growth_rate: mem_props.lifespan_growth_rate,
@@ -1006,7 +1132,7 @@ impl Neuroembryogenesis {
                                     area.cortical_idx,
                                     area_id.as_base_64(),
                                     mem_props.temporal_depth,
-                                    upstream_areas.clone(),
+                                    upstream_non_memory,
                                     Some(lifecycle_config),
                                 );
 
@@ -1040,6 +1166,110 @@ impl Neuroembryogenesis {
         self.update_stage(DevelopmentStage::Synaptogenesis, 100);
         info!(target: "feagi-bdu","  ✅ Synaptogenesis complete: {} synapses created", total_synapses_created);
 
+        Ok(())
+    }
+
+    fn rebuild_memory_twin_mappings_from_genome(
+        &mut self,
+        genome: &RuntimeGenome,
+    ) -> BduResult<()> {
+        use feagi_structures::genomic::cortical_area::CorticalAreaType;
+        let mut repaired = 0usize;
+
+        for (memory_id, memory_area) in genome.cortical_areas.iter() {
+            let is_memory = matches!(
+                memory_area.cortical_id.as_cortical_type(),
+                Ok(CorticalAreaType::Memory(_))
+            ) || memory_area
+                .properties
+                .get("is_mem_type")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+                || memory_area
+                    .properties
+                    .get("cortical_group")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|v| v.eq_ignore_ascii_case("MEMORY"));
+            if !is_memory {
+                continue;
+            }
+
+            let Some(dstmap) = memory_area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+            else {
+                continue;
+            };
+
+            for (dst_id_str, rules) in dstmap {
+                let Some(rule_array) = rules.as_array() else {
+                    continue;
+                };
+                let has_replay = rule_array.iter().any(|rule| {
+                    rule.get("morphology_id")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|id| id == "memory_replay")
+                });
+                if !has_replay {
+                    continue;
+                }
+
+                let dst_id = match CorticalID::try_from_base_64(dst_id_str) {
+                    Ok(id) => id,
+                    Err(_) => {
+                        warn!(
+                            target: "feagi-bdu",
+                            "Invalid twin cortical ID in memory_replay dstmap: {}",
+                            dst_id_str
+                        );
+                        continue;
+                    }
+                };
+
+                let Some(twin_area) = genome.cortical_areas.get(&dst_id) else {
+                    continue;
+                };
+                let Some(upstream_id_str) = twin_area
+                    .properties
+                    .get("memory_twin_of")
+                    .and_then(|v| v.as_str())
+                else {
+                    continue;
+                };
+                let upstream_id = match CorticalID::try_from_base_64(upstream_id_str) {
+                    Ok(id) => id,
+                    Err(_) => {
+                        warn!(
+                            target: "feagi-bdu",
+                            "Invalid memory_twin_of value on twin area {}: {}",
+                            dst_id.as_base_64(),
+                            upstream_id_str
+                        );
+                        continue;
+                    }
+                };
+
+                let mut manager = self.connectome_manager.write();
+                if let Err(e) = manager.ensure_memory_twin_area(memory_id, &upstream_id) {
+                    warn!(
+                        target: "feagi-bdu",
+                        "Failed to rebuild memory twin mapping for memory {} upstream {}: {}",
+                        memory_id.as_base_64(),
+                        upstream_id.as_base_64(),
+                        e
+                    );
+                    continue;
+                }
+                repaired += 1;
+            }
+        }
+
+        info!(
+            target: "feagi-bdu",
+            "Rebuilt {} memory twin mapping(s) from genome",
+            repaired
+        );
         Ok(())
     }
 }

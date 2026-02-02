@@ -108,6 +108,8 @@ pub struct CorticalAreaSummary {
     },
     "neuron_count": 1000,
     "synapse_count": 5000,
+    "incoming_synapse_count": 2500,
+    "outgoing_synapse_count": 2500,
     "cortical_visibility": true,
     "cortical_sub_group_name": "visual_input",
     "cortical_neuron_per_vox_count": 1,
@@ -145,6 +147,12 @@ pub struct CorticalAreaDetail {
 
     /// Number of synapses
     pub synapse_count: usize,
+
+    /// Number of incoming synapses
+    pub incoming_synapse_count: usize,
+
+    /// Number of outgoing synapses
+    pub outgoing_synapse_count: usize,
 
     /// Visibility flag
     pub cortical_visibility: bool,

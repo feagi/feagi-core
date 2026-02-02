@@ -258,6 +258,42 @@ fn test_plasticity_service_basic_workflow() {
 }
 
 #[test]
+fn test_register_memory_area_configures_fire_ledger() {
+    use feagi_npu_burst_engine::backend::CPUBackend;
+    use feagi_npu_burst_engine::DynamicNPU;
+    use feagi_npu_burst_engine::TracingMutex;
+    use feagi_npu_plasticity::create_memory_stats_cache;
+    use feagi_npu_runtime::StdRuntime;
+    use std::sync::Arc;
+
+    let config = PlasticityConfig::default();
+    let cache = create_memory_stats_cache();
+    let npu = Arc::new(TracingMutex::new(
+        DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+        "plasticity-fire-ledger-test-npu",
+    ));
+    let service = PlasticityService::new(config, cache, npu.clone());
+
+    let upstream_idx = 42u32;
+    let temporal_depth = 3u32;
+    service.register_memory_area(
+        100,
+        "mem_00".to_string(),
+        temporal_depth,
+        vec![upstream_idx],
+        None,
+    );
+
+    let configs = npu.lock().unwrap().get_all_fire_ledger_configs();
+    let window = configs
+        .iter()
+        .find(|(idx, _)| *idx == upstream_idx)
+        .map(|(_, w)| *w)
+        .expect("FireLedger window should be configured for upstream area");
+    assert_eq!(window, temporal_depth as usize);
+}
+
+#[test]
 fn test_pattern_cache_performance() {
     let config = PatternConfig {
         max_pattern_cache_size: 100,

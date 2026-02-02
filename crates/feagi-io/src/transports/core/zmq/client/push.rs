@@ -6,26 +6,42 @@
 //! PUSH sockets are used for distributing data to PULL servers.
 //! Messages are load-balanced across connected servers.
 
-use crate::transports::core::common::{ClientConfig, TransportError, TransportResult};
+use crate::transports::core::common::{
+    ClientConfig, TransportConfig, TransportError, TransportResult,
+};
 use crate::transports::core::traits::{Push, Transport};
 use parking_lot::Mutex;
+use std::future::Future;
 use std::sync::Arc;
+use tokio::runtime::Handle;
+use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
+use tokio::time::timeout;
 use tracing::info;
+use zeromq::{PushSocket, Socket, SocketSend, ZmqMessage};
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 /// ZMQ PUSH socket implementation (sender)
 pub struct ZmqPush {
-    context: Arc<zmq::Context>,
+    runtime: Arc<Runtime>,
     config: ClientConfig,
-    socket: Arc<Mutex<Option<zmq::Socket>>>,
+    socket: Arc<Mutex<Option<PushSocket>>>,
     running: Arc<Mutex<bool>>,
 }
 
 impl ZmqPush {
     /// Create a new PUSH socket
-    pub fn new(context: Arc<zmq::Context>, config: ClientConfig) -> TransportResult<Self> {
+    pub fn new(runtime: Arc<Runtime>, config: ClientConfig) -> TransportResult<Self> {
         config.base.validate()?;
 
         Ok(Self {
-            context,
+            runtime,
             config,
             socket: Arc::new(Mutex::new(None)),
             running: Arc::new(Mutex::new(false)),
@@ -34,9 +50,27 @@ impl ZmqPush {
 
     /// Create with default context
     pub fn with_address(address: impl Into<String>) -> TransportResult<Self> {
-        let context = Arc::new(zmq::Context::new());
         let config = ClientConfig::new(address);
-        Self::new(context, config)
+        let runtime = Arc::new(
+            Runtime::new().map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
+        );
+        Self::new(runtime, config)
+    }
+
+    fn ensure_supported_options(&self) -> TransportResult<()> {
+        let defaults = TransportConfig::default();
+        if self.config.base.send_hwm != defaults.send_hwm
+            || self.config.base.recv_hwm != defaults.recv_hwm
+            || self.config.base.linger != defaults.linger
+        {
+            return Err(TransportError::InvalidConfig(format!(
+                "zeromq transport does not support custom socket options (send_hwm={}, recv_hwm={}, linger={:?})",
+                self.config.base.send_hwm,
+                self.config.base.recv_hwm,
+                self.config.base.linger
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -46,18 +80,23 @@ impl Transport for ZmqPush {
             return Err(TransportError::AlreadyRunning);
         }
 
+        self.ensure_supported_options()?;
+
         // Create PUSH socket
-        let socket = self.context.socket(zmq::PUSH)?;
+        let mut socket = PushSocket::new();
 
-        // Set socket options
-        socket.set_linger(0)?;
-        socket.set_sndhwm(self.config.base.send_hwm as i32)?;
-        socket.set_immediate(false)?;
-
-        // Connect socket
-        socket
-            .connect(&self.config.base.address)
+        // Connect socket (respect configured timeout)
+        let connect_future = socket.connect(&self.config.base.address);
+        if let Some(timeout_duration) = self.config.base.timeout {
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(timeout_duration, connect_future).await
+            })
+            .map_err(|_| TransportError::Timeout)?
             .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
+        } else {
+            block_on_runtime(self.runtime.as_ref(), connect_future)
+                .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
+        }
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
@@ -88,8 +127,8 @@ impl Push for ZmqPush {
     }
 
     fn push_timeout(&self, data: &[u8], timeout_ms: u64) -> TransportResult<()> {
-        let sock_guard = self.socket.lock();
-        let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
+        let mut sock_guard = self.socket.lock();
+        let sock = sock_guard.as_mut().ok_or(TransportError::NotRunning)?;
 
         // Check message size
         if let Some(max_size) = self.config.base.max_message_size {
@@ -101,14 +140,22 @@ impl Push for ZmqPush {
             }
         }
 
-        // Set send timeout if specified
-        if timeout_ms > 0 {
-            sock.set_sndtimeo(timeout_ms as i32)?;
-        }
-
         // Send message
-        sock.send(data, 0)
+        let message = ZmqMessage::from(data.to_vec());
+        if timeout_ms > 0 {
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(
+                    std::time::Duration::from_millis(timeout_ms),
+                    sock.send(message),
+                )
+                .await
+            })
+            .map_err(|_| TransportError::Timeout)?
             .map_err(|e| TransportError::SendFailed(e.to_string()))?;
+        } else {
+            block_on_runtime(self.runtime.as_ref(), sock.send(message))
+                .map_err(|e| TransportError::SendFailed(e.to_string()))?;
+        }
 
         Ok(())
     }
@@ -117,18 +164,35 @@ impl Push for ZmqPush {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transports::core::zmq::server::pull::ZmqPull;
+    use std::net::TcpListener;
+
+    fn reserve_tcp_port() -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind ephemeral port");
+        let port = listener
+            .local_addr()
+            .expect("Failed to read local address")
+            .port();
+        drop(listener);
+        port
+    }
 
     #[test]
     fn test_push_creation() {
-        let context = Arc::new(zmq::Context::new());
+        let runtime = Arc::new(Runtime::new().unwrap());
         let config = ClientConfig::new("tcp://127.0.0.1:30020");
-        let push = ZmqPush::new(context, config);
+        let push = ZmqPush::new(runtime, config);
         assert!(push.is_ok());
     }
 
     #[test]
     fn test_push_start_stop() {
-        let mut push = ZmqPush::with_address("tcp://127.0.0.1:30021").unwrap();
+        let port = reserve_tcp_port();
+        let endpoint = format!("tcp://127.0.0.1:{port}");
+        let mut pull = ZmqPull::with_address(endpoint.clone()).unwrap();
+        pull.start().unwrap();
+
+        let mut push = ZmqPush::with_address(endpoint).unwrap();
         assert!(!push.is_running());
 
         push.start().unwrap();
@@ -136,5 +200,8 @@ mod tests {
 
         push.stop().unwrap();
         assert!(!push.is_running());
+
+        pull.stop().unwrap();
+        assert!(!pull.is_running());
     }
 }

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright 2025 Neuraville Inc.
 # SPDX-License-Identifier: Apache-2.0
 

@@ -35,11 +35,10 @@ fn run_server() {
     println!("=== FEAGI ZMQ Server Router Example ===\n");
     println!("Starting server (router) on {}", ADDRESS);
 
-    let mut context = zmq::Context::new();
-
-    let mut server = FEAGIZMQServerRouter::new(&mut context, ADDRESS.to_string(), |state_change| {
-        println!("[SERVER] State changed: {:?}", state_change)
-    })
+    let mut server = FEAGIZMQServerRouter::new(
+        ADDRESS.to_string(),
+        Box::new(|state_change| println!("[SERVER] State changed: {:?}", state_change)),
+    )
     .expect("Failed to create server router");
 
     server.start().expect("Failed to start server");
@@ -85,13 +84,11 @@ fn run_client() {
     println!("=== FEAGI ZMQ Client Requester Example ===\n");
     println!("Connecting client (dealer) to {}", ADDRESS);
 
-    let mut context = zmq::Context::new();
-
-    let mut client =
-        FEAGIZMQClientRequester::new(&mut context, ADDRESS.to_string(), |state_change| {
-            println!("[CLIENT] State changed: {:?}", state_change)
-        })
-        .expect("Failed to create client requester");
+    let mut client = FEAGIZMQClientRequester::new(
+        ADDRESS.to_string(),
+        Box::new(|state_change| println!("[CLIENT] State changed: {:?}", state_change)),
+    )
+    .expect("Failed to create client requester");
 
     client.connect(ADDRESS).expect("Failed to connect");
     println!("Client connected successfully!\n");

@@ -21,9 +21,9 @@ This document defines the correct dependency order for publishing all crates in 
 ### Example of Independent Versioning:
 ```toml
 feagi-npu-neural:       version = "0.0.1-beta.5"
-feagi-npu-burst-engine: version = "0.0.1-beta.3"  
+feagi-npu-burst-engine: version = "0.0.1-beta.4"  
 feagi-io:               version = "0.0.1-beta.8"
-feagi-api:              version = "0.0.1-beta.2"
+feagi-api:              version = "0.0.1-beta.4"
 ```
 
 ### When to Bump Versions:
@@ -270,7 +270,7 @@ If you must publish manually, follow the layer order below exactly.
 ```bash
 # Bug fix in feagi-npu-neural
 # Edit crates/feagi-npu/neural/Cargo.toml
-version = "0.0.1-beta.2"  # was 0.0.1-beta.1
+version = "0.0.1-beta.4"  # was 0.0.1-beta.1
 
 # Publish just that crate
 cargo publish -p feagi-npu-neural

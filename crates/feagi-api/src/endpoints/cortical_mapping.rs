@@ -228,8 +228,13 @@ pub async fn put_mapping_properties(
         .and_then(|v| v.as_array())
         .ok_or_else(|| ApiError::invalid_input("Missing mapping_string"))?;
 
-    info!(target: "feagi-api", "PUT cortical mapping: {} -> {} with {} connections",
-          src_area, dst_area, mapping_string.len());
+    info!(
+        target: "feagi-api",
+        "PUT cortical mapping: {} -> {} with {} connections",
+        src_area,
+        dst_area,
+        mapping_string.len()
+    );
     debug!(target: "feagi-api", "Mapping data: {:?}", mapping_string);
 
     let connectome_service = state.connectome_service.as_ref();
@@ -242,7 +247,10 @@ pub async fn put_mapping_properties(
             mapping_string.clone(),
         )
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to update cortical mapping: {}", e)))?;
+        .map_err(|e| match e {
+            feagi_services::types::ServiceError::InvalidInput(msg) => ApiError::invalid_input(msg),
+            _ => ApiError::internal(format!("Failed to update cortical mapping: {}", e)),
+        })?;
 
     info!(target: "feagi-api", "Cortical mapping updated successfully: {} synapses created", synapse_count);
 

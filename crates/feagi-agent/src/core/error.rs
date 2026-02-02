@@ -11,7 +11,7 @@ pub type Result<T> = std::result::Result<T, SdkError>;
 pub enum SdkError {
     /// ZMQ communication error
     #[error("ZMQ error: {0}")]
-    Zmq(#[from] zmq::Error),
+    Zmq(#[from] zeromq::ZmqError),
 
     /// JSON serialization/deserialization error
     #[error("JSON error: {0}")]

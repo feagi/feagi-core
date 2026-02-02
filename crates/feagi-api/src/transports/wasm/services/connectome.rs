@@ -74,6 +74,75 @@ impl WasmConnectomeService {
             "Custom" => "CUSTOM".to_string(),
             _ => "CORE".to_string(),
         };
+        let cortical_type = match cortical_group.as_str() {
+            "IPU" => "sensory".to_string(),
+            "OPU" => "motor".to_string(),
+            "MEMORY" => "memory".to_string(),
+            "CORE" => "core".to_string(),
+            _ => "custom".to_string(),
+        };
+
+        let firing_threshold = area
+            .properties
+            .get("firing_threshold")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0);
+        let firing_threshold_increment = [
+            area.properties
+                .get("firing_threshold_increment_x")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+            area.properties
+                .get("firing_threshold_increment_y")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+            area.properties
+                .get("firing_threshold_increment_z")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0),
+        ];
+        let postsynaptic_current_max = area
+            .properties
+            .get("postsynaptic_current_max")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(postsynaptic_current);
+        let mp_driven_psp = area
+            .properties
+            .get("mp_driven_psp")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let mp_charge_accumulation = area
+            .properties
+            .get("mp_charge_accumulation")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let neuron_excitability = area
+            .properties
+            .get("neuron_excitability")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let init_lifespan = area
+            .properties
+            .get("init_lifespan")
+            .and_then(|v| v.as_u64())
+            .map(|u| u as u32)
+            .unwrap_or(0);
+        let lifespan_growth_rate = area
+            .properties
+            .get("lifespan_growth_rate")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let longterm_mem_threshold = area
+            .properties
+            .get("longterm_mem_threshold")
+            .and_then(|v| v.as_u64())
+            .map(|u| u as u32)
+            .unwrap_or(0);
+        let temporal_depth = area
+            .properties
+            .get("temporal_depth")
+            .and_then(|v| v.as_u64())
+            .map(|u| u as u32);
 
         CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
@@ -88,8 +157,11 @@ impl WasmConnectomeService {
             position: (area.position.x, area.position.y, area.position.z),
             area_type: area_type_str,
             cortical_group,
-            neuron_count: 0,  // TODO: Extract from NPU if available
-            synapse_count: 0, // TODO: Extract from NPU if available
+            cortical_type,
+            neuron_count: 0,           // TODO: Extract from NPU if available
+            synapse_count: 0,          // TODO: Extract from NPU if available
+            incoming_synapse_count: 0, // TODO: Extract from NPU if available
+            outgoing_synapse_count: 0, // TODO: Extract from NPU if available
             visible: area
                 .properties
                 .get("visible")
@@ -102,6 +174,7 @@ impl WasmConnectomeService {
                 .map(String::from),
             neurons_per_voxel,
             postsynaptic_current,
+            postsynaptic_current_max,
             plasticity_constant: area
                 .properties
                 .get("plasticity_constant")
@@ -117,11 +190,9 @@ impl WasmConnectomeService {
                 .get("psp_uniform_distribution")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
-            firing_threshold_increment: area
-                .properties
-                .get("firing_threshold_increment")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0),
+            mp_driven_psp,
+            firing_threshold,
+            firing_threshold_increment,
             firing_threshold_limit: area
                 .properties
                 .get("firing_threshold_limit")
@@ -151,14 +222,27 @@ impl WasmConnectomeService {
                 .get("leak_variability")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0),
+            mp_charge_accumulation,
+            neuron_excitability,
             burst_engine_active: true, // Always active in WASM
+            init_lifespan,
+            lifespan_growth_rate,
+            longterm_mem_threshold,
+            temporal_depth,
             properties: area.properties.clone(),
             cortical_subtype: None, // TODO: Extract from cortical_id if IPU/OPU
             encoding_type: None,    // TODO: Extract from cortical_id if IPU/OPU
             encoding_format: None,  // TODO: Extract from cortical_id if IPU/OPU
             unit_id: None,          // TODO: Extract from cortical_id if IPU/OPU
             group_id: None,         // TODO: Extract from cortical_id if IPU/OPU
+            coding_signage: None,
+            coding_behavior: None,
+            coding_type: None,
+            coding_options: None,
             parent_region_id: None, // TODO: Find which brain region contains this area
+            dev_count: None,
+            cortical_dimensions_per_device: None,
+            visualization_voxel_granularity: None,
         }
     }
 }

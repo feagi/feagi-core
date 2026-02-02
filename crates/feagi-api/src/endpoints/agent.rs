@@ -46,6 +46,27 @@ fn parse_agent_descriptor(agent_id: &str) -> ApiResult<AgentDescriptor> {
     })
 }
 
+fn get_agent_name_from_id(agent_id: &str) -> ApiResult<String> {
+    #[cfg(feature = "feagi-agent")]
+    {
+        let descriptor = parse_agent_descriptor(agent_id)?;
+        let agent_name = descriptor.agent_name().to_string();
+        if agent_name.is_empty() {
+            return Err(ApiError::invalid_input(format!(
+                "Agent '{}' does not contain a readable name",
+                agent_id
+            )));
+        }
+        Ok(agent_name)
+    }
+    #[cfg(not(feature = "feagi-agent"))]
+    {
+        Err(ApiError::internal(
+            "Agent name requires feagi-agent feature".to_string(),
+        ))
+    }
+}
+
 #[cfg(feature = "feagi-agent")]
 async fn auto_create_cortical_areas_from_device_registrations(
     state: &ApiState,
@@ -692,7 +713,6 @@ pub async fn register_agent(
                 rates: response.rates,
                 transports,
                 recommended_transport: response.recommended_transport,
-                zmq_ports: response.zmq_ports,
                 shm_paths: response.shm_paths,
                 cortical_areas: response.cortical_areas,
             }))
@@ -796,8 +816,10 @@ pub async fn get_agent_properties(
         .as_ref()
         .ok_or_else(|| ApiError::internal("Agent service not available"))?;
 
+    let agent_name = get_agent_name_from_id(agent_id)?;
     match agent_service.get_agent_properties(agent_id).await {
         Ok(properties) => Ok(Json(AgentPropertiesResponse {
+            agent_name,
             agent_type: properties.agent_type,
             agent_ip: properties.agent_ip,
             agent_data_port: properties.agent_data_port,
@@ -1093,6 +1115,130 @@ pub async fn get_capabilities(
     Ok(Json(response))
 }
 
+/// Get capabilities for all agents with optional filtering and payload includes.
+#[utoipa::path(
+    get,
+    path = "/v1/agent/capabilities/all",
+    params(
+        ("agent_type" = Option<String>, Query, description = "Filter by agent type (exact match)"),
+        ("capability" = Option<String>, Query, description = "Filter by capability key(s), comma-separated"),
+        ("include_device_registrations" = Option<bool>, Query, description = "Include device registration payloads per agent")
+    ),
+    responses(
+        (status = 200, description = "Agent capabilities map", body = HashMap<String, AgentCapabilitiesSummary>),
+        (status = 400, description = "Invalid query"),
+        (status = 500, description = "Failed to get agent capabilities")
+    ),
+    tag = "agent"
+)]
+pub async fn get_all_agent_capabilities(
+    State(state): State<ApiState>,
+    Query(params): Query<AgentCapabilitiesAllQuery>,
+) -> ApiResult<Json<HashMap<String, AgentCapabilitiesSummary>>> {
+    let agent_service = state
+        .agent_service
+        .as_ref()
+        .ok_or_else(|| ApiError::internal("Agent service not available"))?;
+
+    let include_device_registrations = params.include_device_registrations.unwrap_or(false);
+    let capability_filters: Option<Vec<String>> = params.capability.as_ref().and_then(|value| {
+        let filters: Vec<String> = value
+            .split(',')
+            .map(|item| item.trim())
+            .filter(|item| !item.is_empty())
+            .map(String::from)
+            .collect();
+        if filters.is_empty() {
+            None
+        } else {
+            Some(filters)
+        }
+    });
+
+    let agent_ids = agent_service
+        .list_agents()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list agents: {}", e)))?;
+
+    let mut response: HashMap<String, AgentCapabilitiesSummary> = HashMap::new();
+
+    for agent_id in agent_ids {
+        let agent_name = get_agent_name_from_id(&agent_id)?;
+        let properties = match agent_service.get_agent_properties(&agent_id).await {
+            Ok(props) => props,
+            Err(_) => continue,
+        };
+
+        if let Some(ref agent_type_filter) = params.agent_type {
+            if properties.agent_type != *agent_type_filter {
+                continue;
+            }
+        }
+
+        if let Some(ref filters) = capability_filters {
+            let has_match = filters
+                .iter()
+                .any(|capability| properties.capabilities.contains_key(capability));
+            if !has_match {
+                continue;
+            }
+        }
+
+        let device_registrations = if include_device_registrations {
+            #[cfg(feature = "feagi-agent")]
+            {
+                Some(export_device_registrations_from_connector(
+                    &state, &agent_id,
+                )?)
+            }
+            #[cfg(not(feature = "feagi-agent"))]
+            {
+                None
+            }
+        } else {
+            None
+        };
+        response.insert(
+            agent_id,
+            AgentCapabilitiesSummary {
+                agent_name,
+                capabilities: properties.capabilities,
+                device_registrations,
+            },
+        );
+    }
+
+    Ok(Json(response))
+}
+
+#[cfg(feature = "feagi-agent")]
+fn export_device_registrations_from_connector(
+    state: &ApiState,
+    agent_id: &str,
+) -> ApiResult<serde_json::Value> {
+    let agent_descriptor = parse_agent_descriptor(agent_id)?;
+    let connector = {
+        let connectors = state.agent_connectors.read();
+        connectors.get(&agent_descriptor).cloned()
+    };
+    let connector = connector.ok_or_else(|| {
+        ApiError::not_found(
+            "device_registrations",
+            &format!("No ConnectorAgent found for agent '{}'", agent_id),
+        )
+    })?;
+
+    let connector_guard = connector
+        .lock()
+        .map_err(|_| ApiError::internal("ConnectorAgent lock poisoned".to_string()))?;
+    connector_guard.get_device_registration_json().map_err(|e| {
+        ApiError::internal(format!(
+            "Failed to export device registrations for agent '{}': {}",
+            agent_id, e
+        ))
+    })
+}
+
 /// Get comprehensive agent information including status, capabilities, version, and connection details.
 #[utoipa::path(
     get,
@@ -1123,6 +1269,10 @@ pub async fn get_agent_info(
 
     let mut response = HashMap::new();
     response.insert("agent_id".to_string(), serde_json::json!(agent_id));
+    response.insert(
+        "agent_name".to_string(),
+        serde_json::json!(get_agent_name_from_id(&agent_id)?),
+    );
     response.insert(
         "agent_type".to_string(),
         serde_json::json!(properties.agent_type),
@@ -1180,6 +1330,7 @@ pub async fn get_agent_properties_path(
 
     match agent_service.get_agent_properties(&agent_id).await {
         Ok(properties) => Ok(Json(AgentPropertiesResponse {
+            agent_name: get_agent_name_from_id(&agent_id)?,
             agent_type: properties.agent_type,
             agent_ip: properties.agent_ip,
             agent_data_port: properties.agent_data_port,

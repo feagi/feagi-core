@@ -55,6 +55,7 @@ pub fn get_default_neural_properties() -> HashMap<String, Value> {
     props.insert("mp_driven_psp".to_string(), Value::from(false));
     props.insert("neuron_excitability".to_string(), Value::from(1.0));
     props.insert("visualization".to_string(), Value::from(true));
+    props.insert("memory_twin_of".to_string(), Value::Null);
     props.insert(
         "cortical_mapping_dst".to_string(),
         Value::Object(serde_json::Map::new()),
@@ -251,7 +252,9 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
     let required_morphologies = vec![
         "block_to_block",
         "projector",
-        "memory",
+        "episodic_memory",
+        "memory_replay",
+        "associative_memory",
         "all_to_0-0-0",
         "0-0-0_to_all",
         "lateral_+x",
@@ -303,9 +306,29 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
         },
     );
 
-    // memory - Function-based morphology
+    // episodic_memory - Function-based morphology
     registry.add_morphology(
-        "memory".to_string(),
+        "episodic_memory".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // memory_replay - Function-based morphology
+    registry.add_morphology(
+        "memory_replay".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // associative_memory (bi-directional STDP) - Function-based morphology
+    registry.add_morphology(
+        "associative_memory".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},
@@ -640,7 +663,7 @@ mod tests {
         assert!(morphs_added > 0);
         assert!(genome.morphologies.contains("block_to_block"));
         assert!(genome.morphologies.contains("projector"));
-        assert!(genome.morphologies.contains("memory"));
+        assert!(genome.morphologies.contains("episodic_memory"));
         assert!(genome.morphologies.contains("lateral_+x"));
     }
 

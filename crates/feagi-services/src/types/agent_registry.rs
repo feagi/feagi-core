@@ -4,9 +4,11 @@
 //! Agent registry types - shared between feagi-services and feagi-io
 
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 /// Type of agent based on I/O direction and purpose
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentType {
     /// Agent provides sensory input to FEAGI
@@ -188,7 +190,7 @@ pub struct AgentCapabilities {
 }
 
 /// Transport mechanism for agent communication
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentTransport {
     Zmq,
@@ -332,6 +334,7 @@ impl AgentRegistry {
             self.agents.len() + if is_reregistration { 0 } else { 1 }
         );
         self.agents.insert(agent_id, agent_info);
+        self.refresh_agent_data_hash();
         Ok(())
     }
 
@@ -343,6 +346,7 @@ impl AgentRegistry {
                 agent_id,
                 self.agents.len()
             );
+            self.refresh_agent_data_hash();
             Ok(())
         } else {
             Err(format!("Agent {} not found", agent_id))
@@ -415,6 +419,7 @@ impl AgentRegistry {
                 count,
                 self.agents.len()
             );
+            self.refresh_agent_data_hash();
         }
 
         count
@@ -423,6 +428,36 @@ impl AgentRegistry {
     /// Get number of registered agents
     pub fn count(&self) -> usize {
         self.agents.len()
+    }
+
+    fn refresh_agent_data_hash(&self) {
+        #[cfg(feature = "std")]
+        {
+            use feagi_state_manager::StateManager;
+            let mut agent_ids: Vec<&String> = self.agents.keys().collect();
+            agent_ids.sort();
+            let mut hasher = DefaultHasher::new();
+            for agent_id in agent_ids {
+                agent_id.hash(&mut hasher);
+                if let Some(agent) = self.agents.get(agent_id) {
+                    agent.agent_id.hash(&mut hasher);
+                    agent.agent_type.hash(&mut hasher);
+                    agent.transport.hash(&mut hasher);
+                    hash_optional_string(&agent.chosen_transport, &mut hasher);
+                    hash_json_value(
+                        &serde_json::Value::Object(agent.metadata.clone()),
+                        &mut hasher,
+                    );
+                    if let Ok(value) = serde_json::to_value(&agent.capabilities) {
+                        hash_json_value(&value, &mut hasher);
+                    }
+                }
+            }
+            let hash_value = hasher.finish() & AGENT_HASH_SAFE_MASK;
+            if let Some(state_manager) = StateManager::instance().try_write() {
+                state_manager.set_agent_data_hash(hash_value);
+            }
+        }
     }
 
     /// Check if any agent has sensory capability (for stream gating)
@@ -541,5 +576,58 @@ impl AgentRegistry {
         }
 
         Ok(())
+    }
+}
+
+const AGENT_HASH_SAFE_MASK: u64 = (1u64 << 53) - 1;
+
+fn hash_optional_string(value: &Option<String>, hasher: &mut DefaultHasher) {
+    match value {
+        Some(text) => {
+            hasher.write_u8(1);
+            text.hash(hasher);
+        }
+        None => {
+            hasher.write_u8(0);
+        }
+    }
+}
+
+fn hash_json_value(value: &serde_json::Value, hasher: &mut DefaultHasher) {
+    match value {
+        serde_json::Value::Null => {
+            hasher.write_u8(0);
+        }
+        serde_json::Value::Bool(val) => {
+            hasher.write_u8(1);
+            hasher.write_u8(*val as u8);
+        }
+        serde_json::Value::Number(num) => {
+            hasher.write_u8(2);
+            num.to_string().hash(hasher);
+        }
+        serde_json::Value::String(text) => {
+            hasher.write_u8(3);
+            text.hash(hasher);
+        }
+        serde_json::Value::Array(values) => {
+            hasher.write_u8(4);
+            for item in values {
+                hash_json_value(item, hasher);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            hasher.write_u8(5);
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            for key in keys {
+                key.hash(hasher);
+                if let Some(item) = map.get(key) {
+                    hash_json_value(item, hasher);
+                } else {
+                    hasher.write_u8(0);
+                }
+            }
+        }
     }
 }

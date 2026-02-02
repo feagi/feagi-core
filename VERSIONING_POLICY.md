@@ -49,7 +49,7 @@ version.workspace = true  # ← FORBIDDEN! This creates synchronized versioning
 
 | Change Type | Action | Example |
 |-------------|--------|---------|
-| Bug fix in crate | Bump patch/beta | `0.0.1-beta.3` → `0.0.1-beta.4` |
+| Bug fix in crate | Bump patch/beta | `0.0.1-beta.4` → `0.0.1-beta.5` |
 | New feature in crate | Bump minor or beta | `0.0.1-beta.4` → `0.1.0-beta.1` |
 | Breaking API change | Bump minor (pre-1.0) or major (post-1.0) | `0.1.0` → `0.2.0` |
 | Documentation only | Optional: Bump patch | `0.0.1-beta.4` → `0.0.1-beta.5` |
@@ -82,7 +82,7 @@ Edit each changed crate's `Cargo.toml`:
 ```bash
 vim crates/feagi-npu/neural/Cargo.toml
 # Change: version = "0.0.1-beta.1"
-# To:     version = "0.0.1-beta.2"
+# To:     version = "0.0.1-beta.4"
 ```
 
 ### 3. Update Dependencies
@@ -90,7 +90,7 @@ If crate B depends on changed crate A, update B's dependency:
 ```toml
 # In crates/feagi-npu/burst-engine/Cargo.toml
 [dependencies]
-feagi-npu-neural = "0.0.1-beta.2"  # Update from beta.1
+feagi-npu-neural = "0.0.1-beta.4"  # Update from beta.1
 ```
 
 ### 4. Publish in Dependency Order

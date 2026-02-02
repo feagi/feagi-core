@@ -14,6 +14,7 @@ use feagi_io::transports::core::prelude::*;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::thread;
+use tokio::runtime::Runtime;
 
 /// ZMQ Transport Adapter for the API
 pub struct ZmqApiAdapter {
@@ -29,26 +30,11 @@ pub struct ZmqApiAdapter {
 
 impl ZmqApiAdapter {
     /// Create a new ZMQ API adapter
-    pub fn new(
-        context: Arc<zmq::Context>,
-        bind_address: &str,
-        state: ApiState,
-    ) -> Result<Self, String> {
-        // Create transport config
-        let config = ServerConfig::new(bind_address)
-            .base
-            .with_recv_hwm(10000)
-            .with_send_hwm(10000)
-            .with_linger(std::time::Duration::from_secs(1));
-
-        let server_config = ServerConfig {
-            base: config,
-            max_connections: 0,
-            track_connections: true,
-        };
+    pub fn new(runtime: Arc<Runtime>, bind_address: &str, state: ApiState) -> Result<Self, String> {
+        let server_config = ServerConfig::new(bind_address);
 
         // Create ZMQ router using feagi-io transport primitives
-        let router = ZmqRouter::new(context, server_config)
+        let router = ZmqRouter::new(runtime, server_config)
             .map_err(|e| format!("Failed to create ZMQ router: {}", e))?;
 
         Ok(Self {
@@ -257,10 +243,10 @@ mod tests {
 
     #[test]
     fn test_zmq_adapter_creation() {
-        let context = Arc::new(zmq::Context::new());
+        let runtime = Arc::new(Runtime::new().unwrap());
         let services = Arc::new(ServiceRegistry::default());
 
-        let adapter = ZmqApiAdapter::new(context, "tcp://127.0.0.1:32000", services);
+        let adapter = ZmqApiAdapter::new(runtime, "tcp://127.0.0.1:32000", services);
 
         assert!(adapter.is_ok());
     }

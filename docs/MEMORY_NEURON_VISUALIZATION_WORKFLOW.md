@@ -8,6 +8,13 @@
 
 The visualization workflow for memory neurons is **already fully functional**. Memory neurons fire like any other neuron and are automatically included in the visualization stream. There are **no missing components** or gaps in the visualization pipeline.
 
+## LTM Associative Twin Bridge (Design Note)
+
+Long-term memory (LTM) neurons can be paired with stable associative "twin" neurons stored in the
+standard neuron array. This enables bidirectional firing between episodic memory (hash-triggered)
+and associative learning (bi-directional STDP) while keeping short-term memory neurons purely
+episodic. The bridge uses t+1 injection semantics to avoid same-burst recursion.
+
 ## Complete Visualization Workflow (Backwards from BV)
 
 ### 1. Brain Visualizer (BV) - Reception & Rendering
@@ -243,11 +250,9 @@ pub fn create_memory_neuron(
 This document describes the **intended/target workflow** for memory neuron visualization.
 
 As of the current implementation:
-- Plasticity can **detect patterns** and **emit** `PlasticityCommand::{RegisterMemoryNeuron, InjectMemoryNeuronToFCL}`.
-- The burst engine does **not** currently consume/apply these commands.
-- `feagi-npu/plasticity` allocates memory neuron IDs in a **separate numeric range** (e.g. `50_000_000+`), while the burst engine currently assumes `NeuronId == index into NPU neuron_storage`.
-
-Until command application + memory-neuron registration are implemented, memory neurons **cannot** reliably participate in the NPU dynamics / `FireQueue` pipeline as described below.
+- Plasticity can **detect patterns** and **emit** `PlasticityCommand::{RegisterMemoryNeuron, MemoryNeuronConvertedToLtm, InjectMemoryNeuronToFCL}`.
+- The runtime consumes these commands via post-burst callbacks and stages memory neuron injections.
+- `feagi-npu/plasticity` allocates memory neuron IDs in a **separate numeric range** (e.g. `50_000_000+`), while the burst engine assumes `NeuronId == index into NPU neuron_storage` for standard neurons.
 
 ---
 

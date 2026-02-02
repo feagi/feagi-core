@@ -87,6 +87,8 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+#[cfg(feature = "connectome-serialization")]
+pub mod connectome;
 #[cfg(feature = "std")]
 pub mod genome;
 #[cfg(feature = "std")]
@@ -132,6 +134,9 @@ pub use types::{
     SystemHealth,
     UpdateCorticalAreaParams,
 };
+
+// Re-export cortical area helpers for adapter crates.
+pub use feagi_brain_development::models::CorticalAreaExt;
 
 // Re-export implementations (optional - adapters can use their own)
 #[cfg(feature = "std")]

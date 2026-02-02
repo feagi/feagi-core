@@ -274,14 +274,12 @@ fn py_apply_vector_offset(
     vector: (i32, i32, i32),
     morphology_scalar: f32,
     dst_dimensions: (usize, usize, usize),
-) -> PyResult<(i32, i32, i32)> {
+) -> PyResult<Option<(i32, i32, i32)>> {
     let src_u32 = (src_position.0 as u32, src_position.1 as u32, src_position.2 as u32);
-    match crate::connectivity::rules::apply_vector_offset(
-        src_u32, vector, morphology_scalar, dst_dimensions
-    ) {
-        Ok((x, y, z)) => Ok((x as i32, y as i32, z as i32)),
-        Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e))),
-    }
+    Ok(
+        crate::connectivity::rules::apply_vector_offset(src_u32, vector, morphology_scalar, dst_dimensions)
+            .map(|(x, y, z)| (x as i32, y as i32, z as i32)),
+    )
 }
 
 /// Vector batch - apply vector to multiple positions

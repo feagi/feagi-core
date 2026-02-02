@@ -73,6 +73,10 @@ pub struct CorticalAreaInfo {
     pub cortical_type: String,
     pub neuron_count: usize,
     pub synapse_count: usize,
+    /// Total number of incoming synapses targeting neurons in this area.
+    pub incoming_synapse_count: usize,
+    /// Total number of outgoing synapses originating from neurons in this area.
+    pub outgoing_synapse_count: usize,
     pub visible: bool,
     #[serde(
         rename = "cortical_sub_group",
@@ -315,7 +319,7 @@ pub struct SynapseInfo {
     pub source_neuron: u64,
     pub target_neuron: u64,
     pub weight: u8,
-    pub conductance: u8,
+    pub psp: u8,
     pub synapse_type: String, // "Excitatory" or "Inhibitory"
 }
 
@@ -325,7 +329,7 @@ pub struct CreateSynapseParams {
     pub source_neuron: u64,
     pub target_neuron: u64,
     pub weight: u8,
-    pub conductance: u8,
+    pub psp: u8,
     pub synapse_type: String,
 }
 

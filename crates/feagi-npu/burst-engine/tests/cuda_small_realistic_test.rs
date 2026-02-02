@@ -5,7 +5,7 @@
 mod cuda_small_realistic_tests {
     use feagi_npu_burst_engine::backend::{is_cuda_available, GpuConfig};
     use feagi_npu_burst_engine::RustNPU;
-    use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
+    use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
     use feagi_npu_neural::SynapseType;
 
     /// Create a small realistic network for fast testing
@@ -44,7 +44,7 @@ mod cuda_small_realistic_tests {
                 NeuronId(0),                 // power neuron
                 NeuronId(1 + target_offset), // Area A neurons
                 SynapticWeight(10),
-                SynapticConductance(5),
+                SynapticPsp(5),
                 SynapseType::Excitatory,
             )
             .unwrap();
@@ -57,7 +57,7 @@ mod cuda_small_realistic_tests {
                     NeuronId(1 + src_offset),                     // Area A
                     NeuronId(101 + dst_offset * 10 + src_offset), // Area B
                     SynapticWeight(10),
-                    SynapticConductance(1),
+                    SynapticPsp(1),
                     SynapseType::Excitatory,
                 )
                 .unwrap();
@@ -70,7 +70,7 @@ mod cuda_small_realistic_tests {
                 NeuronId(101 + src_offset), // Area B
                 NeuronId(201),              // Area C gauge
                 SynapticWeight(1),
-                SynapticConductance(1),
+                SynapticPsp(1),
                 SynapseType::Excitatory,
             )
             .unwrap();
@@ -106,7 +106,7 @@ mod cuda_small_realistic_tests {
                 NeuronId(0),
                 NeuronId(1 + target_offset),
                 SynapticWeight(10),
-                SynapticConductance(5),
+                SynapticPsp(5),
                 SynapseType::Excitatory,
             )
             .unwrap();
@@ -118,7 +118,7 @@ mod cuda_small_realistic_tests {
                     NeuronId(1 + src_offset),
                     NeuronId(101 + dst_offset * 10 + src_offset),
                     SynapticWeight(10),
-                    SynapticConductance(1),
+                    SynapticPsp(1),
                     SynapseType::Excitatory,
                 )
                 .unwrap();
@@ -130,7 +130,7 @@ mod cuda_small_realistic_tests {
                 NeuronId(101 + src_offset),
                 NeuronId(201),
                 SynapticWeight(1),
-                SynapticConductance(1),
+                SynapticPsp(1),
                 SynapseType::Excitatory,
             )
             .unwrap();

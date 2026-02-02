@@ -8,9 +8,23 @@ use crate::core::{RegistrationHandler, RegistrationRequest};
 use feagi_structures::FeagiDataError;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 use std::sync::Arc;
 use std::thread;
+use tokio::runtime::Handle;
+use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
+use tokio::time::timeout;
 use tracing::{debug, error, info};
+use zeromq::{RouterSocket, Socket, SocketRecv, SocketSend, ZmqMessage};
+
+fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
+    if Handle::try_current().is_ok() {
+        block_in_place(|| Handle::current().block_on(future))
+    } else {
+        runtime.block_on(future)
+    }
+}
 
 /// REST request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,18 +45,18 @@ pub struct RestResponse {
 /// REST stream managing agent registration and lifecycle
 #[derive(Clone)]
 pub struct RestStream {
-    context: Arc<zmq::Context>,
+    runtime: Arc<Runtime>,
     bind_address: String,
-    socket: Arc<Mutex<Option<zmq::Socket>>>,
+    socket: Arc<Mutex<Option<RouterSocket>>>,
     running: Arc<Mutex<bool>>,
     registration_handler: Arc<Mutex<Option<Arc<Mutex<RegistrationHandler>>>>>,
 }
 
 impl RestStream {
     /// Create a new REST stream
-    pub fn new(context: Arc<zmq::Context>, bind_address: &str) -> Result<Self, FeagiDataError> {
+    pub fn new(runtime: Arc<Runtime>, bind_address: &str) -> Result<Self, FeagiDataError> {
         Ok(Self {
-            context,
+            runtime,
             bind_address: bind_address.to_string(),
             socket: Arc::new(Mutex::new(None)),
             running: Arc::new(Mutex::new(false)),
@@ -64,19 +78,8 @@ impl RestStream {
         }
 
         // Create ROUTER socket
-        let socket = self.context.socket(zmq::ROUTER).map_err(|e| {
-            FeagiDataError::InternalError(format!("Failed to create ZMQ ROUTER socket: {}", e))
-        })?;
-
-        socket
-            .set_linger(1000)
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to set linger: {}", e)))?;
-        socket.set_router_mandatory(false).map_err(|e| {
-            FeagiDataError::InternalError(format!("Failed to set router mandatory: {}", e))
-        })?;
-
-        socket
-            .bind(&self.bind_address)
+        let mut socket = RouterSocket::new();
+        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.bind_address))
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
 
         *self.socket.lock() = Some(socket);
@@ -100,6 +103,7 @@ impl RestStream {
     /// Start the background processing loop
     fn start_processing_loop(&self) {
         let socket = Arc::clone(&self.socket);
+        let runtime = Arc::clone(&self.runtime);
         let running = Arc::clone(&self.running);
         let registration_handler = Arc::clone(&self.registration_handler);
 
@@ -107,8 +111,8 @@ impl RestStream {
             info!("🦀 [ZMQ-REST] Processing loop started");
 
             while *running.lock() {
-                let sock_guard = socket.lock();
-                let sock = match sock_guard.as_ref() {
+                let mut sock_guard = socket.lock();
+                let sock = match sock_guard.as_mut() {
                     Some(s) => s,
                     None => {
                         drop(sock_guard);
@@ -117,48 +121,48 @@ impl RestStream {
                     }
                 };
 
-                // Poll for messages
-                let poll_items = &mut [sock.as_poll_item(zmq::POLLIN)];
-                if let Err(e) = zmq::poll(poll_items, 100) {
-                    error!("🦀 [ZMQ-REST] [ERR] Poll error: {}", e);
-                    continue;
-                }
+                let recv_result = block_on_runtime(runtime.as_ref(), async {
+                    timeout(std::time::Duration::from_millis(100), sock.recv()).await
+                });
 
-                if !poll_items[0].is_readable() {
-                    drop(sock_guard);
-                    continue;
-                }
-
-                // Receive multipart message: [identity, delimiter, request_json]
-                let mut msg_parts = Vec::new();
-                let mut more = true;
-
-                while more {
-                    let mut msg = zmq::Message::new();
-                    match sock.recv(&mut msg, 0) {
-                        Ok(()) => {
-                            msg_parts.push(msg);
-                            more = sock.get_rcvmore().unwrap_or(false);
-                        }
-                        Err(e) => {
-                            error!("🦀 [ZMQ-REST] [ERR] Receive error: {}", e);
-                            break;
-                        }
+                let message = match recv_result {
+                    Ok(Ok(message)) => message,
+                    Ok(Err(e)) => {
+                        error!("🦀 [ZMQ-REST] [ERR] Receive error: {}", e);
+                        drop(sock_guard);
+                        continue;
                     }
-                }
+                    Err(_) => {
+                        drop(sock_guard);
+                        continue;
+                    }
+                };
 
                 drop(sock_guard);
 
-                // Process request
-                if msg_parts.len() >= 3 {
-                    let identity = msg_parts[0].to_vec();
-                    let request_json = String::from_utf8_lossy(&msg_parts[2]).to_string();
+                let mut frames = message.into_vec();
+                if frames.is_empty() {
+                    continue;
+                }
 
-                    let response_json = Self::process_request(&registration_handler, &request_json);
+                let identity = frames.remove(0).to_vec();
+                if frames
+                    .first()
+                    .map(|frame| frame.is_empty())
+                    .unwrap_or(false)
+                {
+                    frames.remove(0);
+                }
 
-                    if let Err(e) = Self::send_response(&socket, identity, response_json) {
-                        error!("🦀 [ZMQ-REST] [ERR] Failed to send response: {}", e);
-                    }
+                if frames.len() != 1 {
+                    continue;
+                }
+
+                let request_json = String::from_utf8_lossy(&frames.remove(0)).to_string();
+                let response_json = Self::process_request(&registration_handler, &request_json);
+
+                if let Err(e) = Self::send_response(&socket, &runtime, identity, response_json) {
+                    error!("🦀 [ZMQ-REST] [ERR] Failed to send response: {}", e);
                 }
             }
 
@@ -332,12 +336,13 @@ impl RestStream {
 
     /// Send response
     fn send_response(
-        socket_mutex: &Arc<Mutex<Option<zmq::Socket>>>,
+        socket_mutex: &Arc<Mutex<Option<RouterSocket>>>,
+        runtime: &Arc<Runtime>,
         identity: Vec<u8>,
         response_json: String,
     ) -> Result<(), FeagiDataError> {
-        let sock_guard = socket_mutex.lock();
-        let sock = match sock_guard.as_ref() {
+        let mut sock_guard = socket_mutex.lock();
+        let sock = match sock_guard.as_mut() {
             Some(s) => s,
             None => {
                 return Err(FeagiDataError::InternalError(
@@ -346,13 +351,10 @@ impl RestStream {
             }
         };
 
-        sock.send(&identity, zmq::SNDMORE).map_err(|e| {
-            FeagiDataError::InternalError(format!("Failed to send identity: {}", e))
-        })?;
-        sock.send(Vec::<u8>::new(), zmq::SNDMORE).map_err(|e| {
-            FeagiDataError::InternalError(format!("Failed to send empty frame: {}", e))
-        })?;
-        sock.send(response_json.as_bytes(), 0).map_err(|e| {
+        let mut message = ZmqMessage::from(response_json.into_bytes());
+        message.prepend(&ZmqMessage::from(Vec::new()));
+        message.prepend(&ZmqMessage::from(identity));
+        block_on_runtime(runtime.as_ref(), sock.send(message)).map_err(|e| {
             FeagiDataError::InternalError(format!("Failed to send response: {}", e))
         })?;
 

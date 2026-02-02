@@ -35,9 +35,9 @@ Each crate maintains its **own beta counter**:
 
 ```
 feagi-npu-neural:       0.0.1-beta.5
-feagi-npu-burst-engine: 0.0.1-beta.3
+feagi-npu-burst-engine: 0.0.1-beta.4
 feagi-io:               0.0.1-beta.8
-feagi-api:              0.0.1-beta.2
+feagi-api:              0.0.1-beta.4
 ```
 
 **Beta version logic:**
@@ -52,7 +52,7 @@ When a crate's version changes, all `workspace.dependencies` are updated with **
 ```toml
 [workspace.dependencies]
 feagi-npu-neural = { version = "=0.0.1-beta.5", path = "crates/feagi-npu/neural" }
-feagi-npu-burst-engine = { version = "=0.0.1-beta.3", path = "crates/feagi-npu/burst-engine" }
+feagi-npu-burst-engine = { version = "=0.0.1-beta.4", path = "crates/feagi-npu/burst-engine" }
 ```
 
 **Why exact versions (`=X.Y.Z-beta.N`)?**
@@ -88,7 +88,7 @@ After reaching stable 1.0, we'll switch to semver ranges (`^1.0.0`) for patch/mi
 ./scripts/smart-version-bump.sh
 
 # Use custom tag as baseline
-LAST_TAG=v0.0.1-beta.2 ./scripts/smart-version-bump.sh
+LAST_TAG=v0.0.1-beta.4 ./scripts/smart-version-bump.sh
 
 # Dry run
 DRY_RUN=true ./scripts/smart-version-bump.sh
@@ -163,7 +163,7 @@ File: `.github/workflows/staging-merge.yml`
 - ✅ **New:** Bump ONLY changed crates independently
 - ❌ **Old:** Publish all 19 crates every time (~15 minutes)
 - ✅ **New:** Publish only changed crates (~2-5 minutes)
-- ❌ **Old:** Version-based tags (`v0.0.1-beta.3`)
+- ❌ **Old:** Version-based tags (`v0.0.1-beta.4`)
 - ✅ **New:** Timestamp-based tags (`staging-20251221-143045`)
 
 ---
@@ -240,8 +240,8 @@ If you change `feagi-npu-neural`, these crates MUST also bump:
 **Change:** Fix bug in `feagi-sensorimotor`
 
 **Result:**
-- `feagi-sensorimotor`: `0.0.1-beta.3` → `0.0.1-beta.4`
-- `feagi` (root): `0.0.1-beta.2` → `0.0.1-beta.3` (references sensorimotor)
+- `feagi-sensorimotor`: `0.0.1-beta.4` → `0.0.1-beta.5`
+- `feagi` (root): `0.0.1-beta.4` → `0.0.1-beta.5` (references sensorimotor)
 - **All other crates:** Unchanged
 
 **Published:** 2 crates  
@@ -255,9 +255,9 @@ If you change `feagi-npu-neural`, these crates MUST also bump:
 
 **Result:**
 - `feagi-io`: `0.0.1-beta.5` → `0.0.1-beta.6`
-- `feagi-api`: `0.0.1-beta.3` → `0.0.1-beta.4` (depends on io)
-- `feagi-agent`: `0.0.1-beta.2` → `0.0.1-beta.3` (depends on io)
-- `feagi`: `0.0.1-beta.2` → `0.0.1-beta.3`
+- `feagi-api`: `0.0.1-beta.4` → `0.0.1-beta.5` (depends on io)
+- `feagi-agent`: `0.0.1-beta.4` → `0.0.1-beta.5` (depends on io)
+- `feagi`: `0.0.1-beta.4` → `0.0.1-beta.5`
 - **All other crates:** Unchanged
 
 **Published:** 4 crates  
@@ -362,7 +362,7 @@ This should not happen with the smart system, as it queries crates.io for the hi
 | Aspect | Old System (Unified) | New System (Independent) |
 |--------|---------------------|--------------------------|
 | **Version Strategy** | All crates same version | Each crate independent |
-| **Version Format** | `0.0.1-beta.3` (workspace-wide) | `0.0.1-beta.X` (per crate) |
+| **Version Format** | `0.0.1-beta.4` (workspace-wide) | `0.0.1-beta.X` (per crate) |
 | **Publishes per Release** | 19 crates every time | Only changed crates (2-12) |
 | **Release Time** | ~15 minutes | ~2-6 minutes |
 | **Version Pollution** | ❌ High (unchanged crates bumped) | ✅ Low (only changed crates) |

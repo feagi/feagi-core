@@ -10,7 +10,7 @@ Maps neurons from source to destination areas while maintaining spatial topology
 use crate::connectivity::core_morphologies::common::calculate_area_dimensions;
 use crate::connectivity::rules::syn_projector;
 use crate::types::BduResult;
-use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
+use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 
 /// Apply projector morphology directly on NPU
@@ -22,7 +22,7 @@ use feagi_npu_neural::SynapseType;
 /// * `transpose` - Optional axis transposition
 /// * `project_last_layer_of` - Optional axis to project from last layer
 /// * `weight` - Synapse weight (0-255)
-/// * `conductance` - Synapse conductance
+/// * `psp` - Synapse PSP
 /// * `synapse_attractivity` - Probability (0-100) of creating synapse when match found
 ///
 /// # Returns
@@ -35,7 +35,7 @@ pub fn apply_projector_morphology(
     transpose: Option<(usize, usize, usize)>,
     project_last_layer_of: Option<usize>,
     weight: u8,
-    conductance: u8,
+    psp: u8,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -52,7 +52,7 @@ pub fn apply_projector_morphology(
         transpose,
         project_last_layer_of,
         weight,
-        conductance,
+        psp,
         synapse_attractivity,
         synapse_type,
     )
@@ -69,7 +69,7 @@ pub fn apply_projector_morphology(
 /// * `transpose` - Optional axis transposition
 /// * `project_last_layer_of` - Optional axis to project from last layer
 /// * `weight` - Synapse weight (0-255)
-/// * `conductance` - Synapse conductance
+/// * `psp` - Synapse PSP
 /// * `synapse_attractivity` - Probability (0-100) of creating synapse when match found
 ///
 /// # Returns
@@ -84,7 +84,7 @@ pub fn apply_projector_morphology_with_dimensions(
     transpose: Option<(usize, usize, usize)>,
     project_last_layer_of: Option<usize>,
     weight: u8,
-    conductance: u8,
+    psp: u8,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -137,7 +137,7 @@ pub fn apply_projector_morphology_with_dimensions(
                             NeuronId(src_nid),
                             NeuronId(dst_nid),
                             SynapticWeight(weight),
-                            SynapticConductance(conductance),
+                            SynapticPsp(psp),
                             synapse_type,
                         )
                         .is_ok()
