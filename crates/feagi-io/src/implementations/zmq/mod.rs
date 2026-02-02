@@ -7,6 +7,6 @@ pub use client_implementations::{
     FEAGIZMQClientSubscriber,
 };
 pub use server_implementations::{
-    FEAGIZMQServerPublisher, FEAGIZMQServerPuller,
+    FeagiZmqServerPublisher, FEAGIZMQServerPuller,
     FEAGIZMQServerRouter,
 };

@@ -29,3 +29,8 @@ pub trait FeagiServerPublisher: FeagiServer {
     /// Returns [`FeagiNetworkError::SendFailed`] if the data cannot be sent.
     async fn publish(&mut self, buffered_data_to_send: &[u8]) -> Result<(), FeagiNetworkError>;
 }
+
+/// Decoupling of properties into an easily passable structure, from its actual implementation
+pub trait FeagiServerPublisherProperties {
+    fn as_server_publisher_box(&self) -> Box<dyn FeagiServerPublisher>;
+}

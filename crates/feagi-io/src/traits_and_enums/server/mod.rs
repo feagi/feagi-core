@@ -15,5 +15,6 @@ pub mod server_shared;
 
 pub use feagi_server::FeagiServer;
 pub use feagi_server_publisher::FeagiServerPublisher;
+pub use feagi_server_publisher::FeagiServerPublisherProperties;
 pub use feagi_server_puller::FeagiServerPuller;
 pub use feagi_server_router::FeagiServerRouter;

@@ -28,7 +28,7 @@ use std::time::Duration;
 use feagi_io::implementations::websocket::{
     FEAGIWebSocketClientSubscriber, FEAGIWebSocketServerPublisher,
 };
-use feagi_io::implementations::zmq::{FEAGIZMQClientSubscriber, FEAGIZMQServerPublisher};
+use feagi_io::implementations::zmq::{FEAGIZMQClientSubscriber, FeagiZmqServerPublisher};
 use feagi_io::traits_and_enums::client::FeagiClientSubscriber;
 use feagi_io::traits_and_enums::server::FeagiServerPublisher;
 
@@ -89,7 +89,7 @@ fn create_publisher(transport: Transport) -> Box<dyn FeagiServerPublisher> {
             println!("=== Publisher Example (ZMQ Transport) ===\n");
             println!("Binding to {}", ZMQ_ADDRESS);
             Box::new(
-                FEAGIZMQServerPublisher::new(
+                FeagiZmqServerPublisher::new(
                     ZMQ_ADDRESS.to_string(),
                     Box::new(|state| println!("[PUB] State changed: {:?}", state)),
                 )

@@ -2,7 +2,7 @@ use feagi_io::FeagiNetworkError;
 use feagi_io::implementations::zmq::{FEAGIZMQClientPusher, FEAGIZMQClientRequester, FEAGIZMQClientSubscriber};
 use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
 use crate::clients::registration_agent::RegistrationAgent;
-use crate::FeagiAgentError;
+use crate::FeagiAgentClientError;
 use crate::registration::{AgentCapabilities, AgentDescriptor, AuthToken, ConnectionProtocol, RegistrationRequest};
 
 pub struct ConnectorAgent {
@@ -11,14 +11,14 @@ pub struct ConnectorAgent {
 }
 
 impl ConnectorAgent {
-    pub async fn new(feagi_registration_endpoint: String, agent_descriptor: AgentDescriptor, auth_token: AuthToken) -> Result<Self, FeagiAgentError> {
+    pub async fn new(feagi_registration_endpoint: String, agent_descriptor: AgentDescriptor, auth_token: AuthToken) -> Result<Self, FeagiAgentClientError> {
 
         // TODO hardcoded for now
         let mut registration_agent = RegistrationAgent::new(
             Box::new(FEAGIZMQClientRequester::new(
                 feagi_registration_endpoint,
                 Box::new(|_| {}),
-            ).map_err(|e| FeagiAgentError::ConnectionFailed(e.to_string()))?)
+            ).map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?)
         );
 
         let registration_request = RegistrationRequest::new(
@@ -40,22 +40,22 @@ impl ConnectorAgent {
             FEAGIZMQClientPusher::new(
                 sensor_endpoint.clone(),
                 Box::new(|_| {}),
-            ).map_err(|e| FeagiAgentError::ConnectionFailed(e.to_string()))?
+            ).map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?
         );
 
         let mut motor_subscriber: Box<dyn FeagiClientSubscriber> = Box::new(
             FEAGIZMQClientSubscriber::new(
                 motor_endpoint.clone(),
                 Box::new(|_| {}),
-            ).map_err(|e| FeagiAgentError::ConnectionFailed(e.to_string()))?
+            ).map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?
         );
 
         // TODO whats going on with the multiple host name definitions?
 
         sensor_pusher.connect(&sensor_endpoint).await
-            .map_err(|e| FeagiAgentError::ConnectionFailed(e.to_string()))?;
+            .map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?;
         motor_subscriber.connect(&motor_endpoint).await
-            .map_err(|e| FeagiAgentError::ConnectionFailed(e.to_string()))?;
+            .map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?;
 
         Ok(ConnectorAgent {
             sensor_pusher,

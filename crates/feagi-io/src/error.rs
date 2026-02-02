@@ -15,8 +15,8 @@ pub enum FeagiNetworkError {
     SendFailed(String),
     /// Failed to receive data
     ReceiveFailed(String),
-    /// Invalid URL format
-    InvalidUrl(String),
+    /// Invalid socket properties (such as an invalid URL)
+    InvalidSocketProperties(String),
     /// Socket creation failed
     SocketCreationFailed(String),
     /// General failure (e.g., configuration error, invalid state)
@@ -44,8 +44,8 @@ impl Display for FeagiNetworkError {
             FeagiNetworkError::ReceiveFailed(msg) => {
                 write!(f, "FeagiNetworkError: Receive failed: {}", msg)
             }
-            FeagiNetworkError::InvalidUrl(msg) => {
-                write!(f, "FeagiNetworkError: Invalid URL: {}", msg)
+            FeagiNetworkError::InvalidSocketProperties(msg) => {
+                write!(f, "FeagiNetworkError: Invalid socket properties: {}", msg)
             }
             FeagiNetworkError::SocketCreationFailed(msg) => {
                 write!(f, "FeagiNetworkError: Socket creation failed: {}", msg)

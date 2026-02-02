@@ -7,7 +7,7 @@ use zeromq::{Endpoint, PubSocket, PullSocket, RouterSocket, Socket, SocketRecv, 
 use crate::FeagiNetworkError;
 use crate::implementations::zmq::shared_functions::validate_zmq_url;
 use crate::traits_and_enums::server::server_shared::{FeagiServerBindState, FeagiServerBindStateChange};
-use crate::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
+use crate::traits_and_enums::server::{FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerRouter};
 
 /// Type alias for the server state change callback.
 type StateChangeCallback = Box<dyn Fn(FeagiServerBindStateChange) + Send + Sync + 'static>;
@@ -27,7 +27,40 @@ fn message_to_single_frame(message: ZmqMessage) -> Result<Vec<u8>, FeagiNetworkE
 
 //region Publisher
 
-pub struct FEAGIZMQServerPublisher {
+//region Properties
+
+pub struct FeagiZmqServerPublisherProperties {
+    server_bind_address: String,
+
+}
+
+impl FeagiServerPublisherProperties for FeagiZmqServerPublisherProperties {
+    fn as_server_publisher_box(&self) -> Box<dyn FeagiServerPublisher> {
+        let zmq_server = FeagiZmqServerPublisher {
+            server_bind_address: self.server_bind_address.clone(),
+            current_state: FeagiServerBindState::Inactive,
+            state_change_callback: Box::new(()),
+            socket: PubSocket::new(),
+            bound_endpoint: None,
+        };
+        Box::new(zmq_server)
+    }
+}
+
+impl FeagiZmqServerPublisherProperties {
+    pub fn new(server_bind_address: String) -> Result<FeagiZmqServerPublisherProperties, FeagiNetworkError> {
+        validate_zmq_url(&server_bind_address)?;
+        Ok(
+            FeagiZmqServerPublisherProperties {
+                server_bind_address
+            }
+        )
+    }
+}
+
+//endregion
+
+pub struct FeagiZmqServerPublisher {
     server_bind_address: String,
     current_state: FeagiServerBindState,
     state_change_callback: StateChangeCallback,
@@ -35,7 +68,7 @@ pub struct FEAGIZMQServerPublisher {
     bound_endpoint: Option<Endpoint>,
 }
 
-impl FEAGIZMQServerPublisher {
+impl FeagiZmqServerPublisher {
     pub fn new(
         server_bind_address: String,
         state_change_callback: StateChangeCallback,
@@ -53,7 +86,7 @@ impl FEAGIZMQServerPublisher {
 }
 
 #[async_trait]
-impl FeagiServer for FEAGIZMQServerPublisher {
+impl FeagiServer for FeagiZmqServerPublisher {
     async fn start(&mut self) -> Result<(), FeagiNetworkError> {
         let endpoint = self
             .socket
@@ -90,7 +123,7 @@ impl FeagiServer for FEAGIZMQServerPublisher {
 }
 
 #[async_trait]
-impl FeagiServerPublisher for FEAGIZMQServerPublisher {
+impl FeagiServerPublisher for FeagiZmqServerPublisher {
     async fn poll(&mut self) -> Result<(), FeagiNetworkError> {
         // ZMQ handles connections internally - no-op
         Ok(())
@@ -105,6 +138,8 @@ impl FeagiServerPublisher for FEAGIZMQServerPublisher {
         Ok(())
     }
 }
+
+
 
 //endregion
 
