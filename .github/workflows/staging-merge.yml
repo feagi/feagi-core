@@ -266,7 +266,7 @@ jobs:
           body: |
             🚀 **FEAGI Core Staging Release (Smart Independent Versioning)**
             
-            This is a beta/staging release from the staging branch. Only changed crates have been published to crates.io with independent version numbers.
+            This is a staging release from the staging branch. Only changed crates have been published to crates.io with independent version numbers.
             
             ## Changed Crates
             
@@ -282,15 +282,15 @@ jobs:
             
             ```toml
             [dependencies]
-            feagi-npu-neural = "0.0.1-beta.X"  # Check crates.io for latest version
-            feagi-npu-burst-engine = "0.0.1-beta.Y"
+            feagi-npu-neural = "0.0.1+staging.X"  # Check crates.io for latest version
+            feagi-npu-burst-engine = "0.0.1+staging.Y"
             ```
             
             Or use the workspace with feature flags:
             
             ```toml
             [dependencies]
-            feagi = { version = "0.0.1-beta.Z", features = ["compute", "io"] }
+            feagi = { version = "0.0.1+staging.Z", features = ["compute", "io"] }
             ```
             
             ## Release Information
