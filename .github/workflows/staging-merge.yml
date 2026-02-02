@@ -28,6 +28,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: staging  # Ensure we're on the staging branch after merge
+          fetch-depth: 0
       
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -47,6 +48,8 @@ jobs:
       
       - name: Smart version detection and bumping
         id: version
+        env:
+          FORCE_VERSION_GAP: "true"
         run: |
           echo "🔍 Detecting changed crates and computing independent version bumps..."
           echo ""
