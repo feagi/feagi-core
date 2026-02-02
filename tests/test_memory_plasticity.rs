@@ -11,7 +11,6 @@ These tests validate:
 */
 
 use feagi_brain_development::{ConnectomeManager, Neuroembryogenesis};
-use feagi_brain_development::models::CorticalAreaExt;
 use feagi_evolutionary::load_genome_from_file;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
@@ -534,11 +533,6 @@ fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
         {
             l2_twin_fired = true;
         }
-        tracing::debug!(
-            "[TEST] Replay burst offset={} l2_twin_fired={}",
-            offset,
-            l2_twin_fired
-        );
     }
 
     assert!(

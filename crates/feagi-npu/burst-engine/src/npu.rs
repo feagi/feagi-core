@@ -222,13 +222,13 @@ pub struct MemoryReplayFrame {
 }
 
 #[derive(Debug, Clone)]
-struct MemoryReplayTarget {
+pub(crate) struct MemoryReplayTarget {
     twin_area_idx: u32,
     potential: f32,
 }
 
 #[derive(Debug, Clone)]
-struct ReplayInjection {
+pub(crate) struct ReplayInjection {
     target_burst: u64,
     twin_area_idx: u32,
     coords: Vec<(u32, u32, u32)>,
@@ -4761,6 +4761,54 @@ mod tests {
         }
 
         assert_eq!(npu.get_neuron_count(), 10);
+    }
+
+    #[test]
+    fn test_overdue_replay_injections_are_dropped() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.configure_fire_ledger_window(3, 1).unwrap();
+
+        let neuron = npu
+            .add_neuron(
+                1.0,
+                f32::MAX,
+                0.1,
+                0.0,
+                0,
+                5,
+                1.0,
+                u16::MAX,
+                0,
+                true,
+                3,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        {
+            let mut fire_structures = npu.fire_structures.lock().unwrap();
+            fire_structures.pending_replay_injections.push(ReplayInjection {
+                target_burst: 0,
+                twin_area_idx: 3,
+                coords: vec![(0, 0, 0)],
+                potential: 10.0,
+            });
+        }
+
+        let burst = npu.process_burst().unwrap().burst;
+        let window = npu
+            .get_fire_ledger_dense_window_bitmaps(3, burst, 1)
+            .unwrap();
+        assert!(
+            window.is_empty() || window.iter().all(|(_, bm)| !bm.contains(neuron.0)),
+            "Expected overdue replay injection to be dropped"
+        );
     }
 
     #[test]
