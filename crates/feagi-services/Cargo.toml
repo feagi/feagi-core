@@ -1,6 +1,6 @@
 [package]
 name = "feagi-services"
-version = "0.0.1-beta.4"
+version = "0.0.1-beta.7"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -15,11 +15,11 @@ name = "feagi_services"
 [dependencies]
 # Core FEAGI crates (backend)
 feagi-npu-neural = { version = "0.0.1-beta.4", path = "../feagi-npu/neural" }  # For types
-feagi-evolutionary = { version = "0.0.1-beta.4", path = "../feagi-evolutionary" }
-feagi-brain-development = { version = "0.0.1-beta.4", path = "../feagi-brain-development", default-features = false }
-feagi-npu-burst-engine = { version = "0.0.1-beta.4", path = "../feagi-npu/burst-engine", default-features = false, optional = true }
-feagi-npu-plasticity = { version = "0.0.1-beta.4", path = "../feagi-npu/plasticity", optional = true }
-feagi-state-manager = { version = "0.0.1-beta.4", path = "../feagi-state-manager", default-features = false }
+feagi-evolutionary = { version = "0.0.1-beta.7", path = "../feagi-evolutionary" }
+feagi-brain-development = { version = "0.0.1-beta.7", path = "../feagi-brain-development", default-features = false }
+feagi-npu-burst-engine = { version = "0.0.1-beta.7", path = "../feagi-npu/burst-engine", default-features = false, optional = true }
+feagi-npu-plasticity = { version = "0.0.1-beta.7", path = "../feagi-npu/plasticity", optional = true }
+feagi-state-manager = { version = "0.0.1-beta.7", path = "../feagi-state-manager", default-features = false }
 # feagi-io dependency removed to break circular dependency
 # AgentRegistry and types moved to feagi-services
 feagi-structures = { workspace = true }

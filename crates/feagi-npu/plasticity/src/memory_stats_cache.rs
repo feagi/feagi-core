@@ -130,9 +130,13 @@ pub fn get_area_stats(cache: &MemoryStatsCache, area_name: &str) -> Option<Memor
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static CORE_STATE_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_memory_stats_creation() {
+        let _lock = CORE_STATE_LOCK.lock().unwrap();
         let cache = create_memory_stats_cache();
 
         on_neuron_created(&cache, "mem_00");
@@ -147,6 +151,7 @@ mod tests {
 
     #[test]
     fn test_memory_stats_deletion() {
+        let _lock = CORE_STATE_LOCK.lock().unwrap();
         let cache = create_memory_stats_cache();
 
         on_neuron_created(&cache, "mem_00");
@@ -161,6 +166,7 @@ mod tests {
 
     #[test]
     fn test_memory_area_removal() {
+        let _lock = CORE_STATE_LOCK.lock().unwrap();
         let cache = create_memory_stats_cache();
 
         on_neuron_created(&cache, "mem_00");
@@ -172,6 +178,7 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn test_memory_stats_updates_core_state_counts() {
+        let _lock = CORE_STATE_LOCK.lock().unwrap();
         let cache = create_memory_stats_cache();
         let state_manager = StateManager::instance();
         let state_manager = state_manager.read();

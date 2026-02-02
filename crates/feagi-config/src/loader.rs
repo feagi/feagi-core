@@ -315,6 +315,11 @@ mod tests {
 
     #[test]
     fn test_load_minimal_config() {
+        let _env_lock = ENV_LOCK.lock().unwrap();
+        let saved_api_host = env::var("FEAGI_API_HOST").ok();
+        let saved_api_port = env::var("FEAGI_API_PORT").ok();
+        env::remove_var("FEAGI_API_HOST");
+        env::remove_var("FEAGI_API_PORT");
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("feagi_configuration.toml");
 
@@ -328,6 +333,13 @@ mod tests {
 
         assert_eq!(config.system.max_cores, 4);
         assert_eq!(config.api.port, 9000);
+
+        if let Some(value) = saved_api_host {
+            env::set_var("FEAGI_API_HOST", value);
+        }
+        if let Some(value) = saved_api_port {
+            env::set_var("FEAGI_API_PORT", value);
+        }
     }
 
     #[test]

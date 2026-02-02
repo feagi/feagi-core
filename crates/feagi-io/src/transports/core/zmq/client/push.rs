@@ -85,12 +85,18 @@ impl Transport for ZmqPush {
         // Create PUSH socket
         let mut socket = PushSocket::new();
 
-        // Connect socket
-        block_on_runtime(
-            self.runtime.as_ref(),
-            socket.connect(&self.config.base.address),
-        )
-        .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
+        // Connect socket (respect configured timeout)
+        let connect_future = socket.connect(&self.config.base.address);
+        if let Some(timeout_duration) = self.config.base.timeout {
+            block_on_runtime(self.runtime.as_ref(), async {
+                timeout(timeout_duration, connect_future).await
+            })
+            .map_err(|_| TransportError::Timeout)?
+            .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
+        } else {
+            block_on_runtime(self.runtime.as_ref(), connect_future)
+                .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
+        }
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
@@ -158,6 +164,18 @@ impl Push for ZmqPush {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transports::core::zmq::server::pull::ZmqPull;
+    use std::net::TcpListener;
+
+    fn reserve_tcp_port() -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind ephemeral port");
+        let port = listener
+            .local_addr()
+            .expect("Failed to read local address")
+            .port();
+        drop(listener);
+        port
+    }
 
     #[test]
     fn test_push_creation() {
@@ -169,7 +187,12 @@ mod tests {
 
     #[test]
     fn test_push_start_stop() {
-        let mut push = ZmqPush::with_address("tcp://127.0.0.1:30021").unwrap();
+        let port = reserve_tcp_port();
+        let endpoint = format!("tcp://127.0.0.1:{port}");
+        let mut pull = ZmqPull::with_address(endpoint.clone()).unwrap();
+        pull.start().unwrap();
+
+        let mut push = ZmqPush::with_address(endpoint).unwrap();
         assert!(!push.is_running());
 
         push.start().unwrap();
@@ -177,5 +200,8 @@ mod tests {
 
         push.stop().unwrap();
         assert!(!push.is_running());
+
+        pull.stop().unwrap();
+        assert!(!pull.is_running());
     }
 }

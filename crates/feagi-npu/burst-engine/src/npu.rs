@@ -5415,7 +5415,7 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
-        // Add only regular neurons (no power area)
+        // Core power neuron is auto-created when registering area 1.
         npu.add_neuron(
             1.0,
             f32::MAX,
@@ -5436,7 +5436,7 @@ mod tests {
 
         let result = npu.process_burst().unwrap();
 
-        assert_eq!(result.power_injections, 0);
+        assert_eq!(result.power_injections, 1);
     }
 
     #[test]
@@ -5770,8 +5770,8 @@ mod tests {
         let result = npu.process_burst().unwrap();
 
         assert_eq!(result.burst, 1);
-        assert_eq!(result.neuron_count, 0);
-        assert_eq!(result.power_injections, 0);
+        assert_eq!(result.neuron_count, 1);
+        assert_eq!(result.power_injections, 1);
     }
 
     #[test]

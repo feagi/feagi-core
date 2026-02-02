@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright 2025 Neuraville Inc.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -119,11 +119,36 @@ get_crate_version() {
     fi
 }
 
-get_published_version() {
+get_highest_published_version() {
     local crate_name=$1
-    # Query crates.io for latest published version
-    local result=$(cargo search "$crate_name" --limit 1 2>/dev/null | grep "^$crate_name = " | sed 's/.*"\(.*\)".*/\1/' || echo "none")
-    echo "$result"
+    local search_results
+    local versions
+    local highest
+
+    # Query crates.io for published versions (best-effort)
+    search_results=$(cargo search "$crate_name" --limit 100 2>/dev/null || echo "")
+    versions=$(echo "$search_results" | grep "^$crate_name = " | sed 's/.*"\(.*\)".*/\1/')
+
+    if [ -z "$versions" ]; then
+        echo "none"
+        return
+    fi
+
+    highest=$(echo "$versions" | sort -V | tail -1)
+    echo "$highest"
+}
+
+version_gt() {
+    local left=$1
+    local right=$2
+
+    if [ "$left" = "$right" ]; then
+        return 1
+    fi
+
+    local highest
+    highest=$(printf '%s\n' "$left" "$right" | sort -V | tail -1)
+    [ "$highest" = "$left" ]
 }
 
 increment_beta_version() {
@@ -220,6 +245,20 @@ declare -A CHANGE_REASONS
 for crate_name in "${CRATE_ORDER[@]}"; do
     current_version=$(get_crate_version "$crate_name")
     CURRENT_VERSIONS["$crate_name"]="$current_version"
+
+    published_version=$(get_highest_published_version "$crate_name")
+    if [ "$published_version" != "none" ] && version_gt "$current_version" "$published_version"; then
+        if [ "${FORCE_VERSION_GAP:-false}" != "true" ]; then
+            echo -e "${RED}❌ Version gap detected for $crate_name${NC}" >&2
+            echo -e "   Local version:     $current_version" >&2
+            echo -e "   Published version: $published_version" >&2
+            echo -e "   Resolve by publishing missing versions or set FORCE_VERSION_GAP=true to override." >&2
+            exit 1
+        fi
+        echo -e "${YELLOW}⚠️  Version gap override enabled for $crate_name${NC}"
+        echo -e "   Local version:     $current_version"
+        echo -e "   Published version: $published_version"
+    fi
     
     if [ "$(has_crate_changed "$crate_name")" = "true" ]; then
         CHANGED_CRATES["$crate_name"]="direct"
