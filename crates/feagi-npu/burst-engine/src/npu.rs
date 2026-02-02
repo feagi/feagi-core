@@ -3706,7 +3706,7 @@ impl<
                     let weight = synapse_storage.weights()[syn_idx];
                     let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
                     let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
-                    tracing::info!(
+                    tracing::debug!(
                         target: "feagi-burst-engine",
                         "associative-stdp synapse burst={} mapping=({}->{}) synapse_idx={} src_neuron={} dst_neuron={} weight={} src_threshold={} dst_threshold={}",
                         burst_timestep,
@@ -3724,7 +3724,7 @@ impl<
         }
 
         if has_bidirectional && mapping_index.is_empty() {
-            tracing::info!(
+            tracing::debug!(
                 target: "feagi-burst-engine",
                 "associative-stdp synapse burst={} bidirectional_mappings={} synapses=0",
                 burst_timestep,
@@ -3833,7 +3833,7 @@ impl<
                 if delta_plus == 0 && delta_minus == 0 {
                     continue;
                 }
-                tracing::info!(
+                tracing::debug!(
                     target: "feagi-burst-engine",
                     "associative-stdp burst={} mapping=({}->{}) synapses={} delta_plus={} delta_minus={} src_all={} dst_all={} psp={}",
                     burst_timestep,
@@ -3868,7 +3868,7 @@ impl<
                             let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
                             let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
                             let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
-                            tracing::info!(
+                            tracing::trace!(
                                 target: "feagi-burst-engine",
                                 "associative-stdp synapse burst={} mapping=({}->{}) synapse_idx={} src_neuron={} dst_neuron={} weight={} psp={} src_threshold={} dst_threshold={}",
                                 burst_timestep,
@@ -3966,7 +3966,7 @@ impl<
                         if src_idx < neuron_count && dst_idx < neuron_count {
                             let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
                             let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
-                            tracing::info!(
+                            tracing::trace!(
                                 target: "feagi-burst-engine",
                                 "associative-stdp LTP new synapse burst={} mapping=({}->{}) src_neuron={} dst_neuron={} weight={} psp={} src_threshold={} dst_threshold={}",
                                 burst_timestep,

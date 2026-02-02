@@ -60,10 +60,10 @@ ndarray = { workspace = true }
 feagi-state-manager = { version = "=0.0.1-beta.8", path = "crates/feagi-state-manager", optional = true }
 
 # Algorithms (vendored)
-feagi-npu-burst-engine = { version = "=0.0.1-beta.8", path = "crates/feagi-npu/burst-engine", optional = true }
+feagi-npu-burst-engine = { version = "=0.0.1-beta.10", path = "crates/feagi-npu/burst-engine", optional = true }
 feagi-brain-development = { version = "=0.0.1-beta.8", path = "crates/feagi-brain-development", optional = true }
 feagi-sensorimotor = { version = "=0.0.1-beta.8", path = "crates/feagi-sensorimotor", optional = true }
-feagi-npu-plasticity = { version = "=0.0.1-beta.8", path = "crates/feagi-npu/plasticity", optional = true }
+feagi-npu-plasticity = { version = "=0.0.1-beta.10", path = "crates/feagi-npu/plasticity", optional = true }
 
 # I/O (vendored)
 feagi-io = { version = "=0.0.1-beta.8", path = "crates/feagi-io", optional = true }

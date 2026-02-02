@@ -13,11 +13,11 @@ description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
 # feagi-services is always needed (for trait definitions), but can work without tokio
 feagi-services = { version = "0.0.1-beta.8", path = "../feagi-services", default-features = false, features = ["wasm", "connectome-io"] }
 feagi-npu-neural = { version = "0.0.1-beta.4", path = "../feagi-npu/neural", default-features = false }  # For types
-feagi-npu-plasticity = { version = "0.0.1-beta.4", path = "../feagi-npu/plasticity", optional = true }  # For memory stats cache
+feagi-npu-plasticity = { version = "0.0.1-beta.10", path = "../feagi-npu/plasticity", optional = true }  # For memory stats cache
 feagi-evolutionary = { version = "0.0.1-beta.4", path = "../feagi-evolutionary" }  # For embedded default genomes
 feagi-io = { version = "0.0.1-beta.4", path = "../feagi-io", optional = true, features = ["zmq-transport"] }  # For transport primitives and domain logic
 feagi-brain-development = { version = "0.0.1-beta.4", path = "../feagi-brain-development", optional = true }  # For examples
-feagi-npu-burst-engine = { version = "0.0.1-beta.4", path = "../feagi-npu/burst-engine", default-features = false, optional = true }  # For examples
+feagi-npu-burst-engine = { version = "0.0.1-beta.10", path = "../feagi-npu/burst-engine", default-features = false, optional = true }  # For examples
 feagi-state-manager = { version = "0.0.1-beta.8", path = "../feagi-state-manager", default-features = false, optional = true }
 feagi-structures = { workspace = true }
 feagi-agent = { version = "0.0.1-beta.8", path = "../feagi-agent", optional = true, default-features = false, features = ["sdk"] }
