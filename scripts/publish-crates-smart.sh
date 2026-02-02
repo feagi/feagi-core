@@ -91,8 +91,8 @@ CRATE_ORDER=(
     "feagi-sensorimotor"
     "feagi-services"
     "feagi-io"
-    "feagi-api"
     "feagi-agent"
+    "feagi-api"
     "feagi-hal"
     "feagi"
 )
