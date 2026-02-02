@@ -297,8 +297,7 @@ fn test_pattern_morphology_origin_to_all() {
 
     let expected_count = u32::try_from(dst_neurons.len()).expect("Neuron count overflow");
     assert_eq!(
-        synapse_count,
-        expected_count,
+        synapse_count, expected_count,
         "Expected one synapse from origin to each destination neuron"
     );
 

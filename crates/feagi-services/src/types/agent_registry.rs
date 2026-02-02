@@ -444,7 +444,10 @@ impl AgentRegistry {
                     agent.agent_type.hash(&mut hasher);
                     agent.transport.hash(&mut hasher);
                     hash_optional_string(&agent.chosen_transport, &mut hasher);
-                    hash_json_value(&serde_json::Value::Object(agent.metadata.clone()), &mut hasher);
+                    hash_json_value(
+                        &serde_json::Value::Object(agent.metadata.clone()),
+                        &mut hasher,
+                    );
                     if let Ok(value) = serde_json::to_value(&agent.capabilities) {
                         hash_json_value(&value, &mut hasher);
                     }

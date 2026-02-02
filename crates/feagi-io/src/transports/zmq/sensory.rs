@@ -7,15 +7,15 @@
 use feagi_structures::FeagiDataError;
 use futures_util::FutureExt;
 use parking_lot::{Mutex, RwLock};
+use std::future::Future;
 use std::sync::Arc;
 use std::thread;
+use tokio::runtime::Handle;
 use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
 use zeromq::{PullSocket, Socket, SocketRecv};
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-use std::future::Future;
 
 fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
     if Handle::try_current().is_ok() {
@@ -224,7 +224,8 @@ impl SensoryStream {
                 break;
             }
 
-            let result = block_on_runtime(self.runtime.as_ref(), async { sock.recv().now_or_never() });
+            let result =
+                block_on_runtime(self.runtime.as_ref(), async { sock.recv().now_or_never() });
             match result {
                 None => break,
                 Some(Ok(_)) => {
@@ -363,8 +364,7 @@ impl SensoryStream {
                 ) {
                     Ok(neuron_count) => {
                         *total_neurons.lock() += neuron_count as u64;
-                        let t_deserialize_ms =
-                            t_deserialize_start.elapsed().as_secs_f64() * 1000.0;
+                        let t_deserialize_ms = t_deserialize_start.elapsed().as_secs_f64() * 1000.0;
                         let t_zmq_total = t_zmq_receive_start.elapsed();
                         let processing_time_ms = t_zmq_total.as_secs_f64() * 1000.0;
 
@@ -772,8 +772,7 @@ mod tests {
             startup_drain_timeout_ms: 500,
         };
 
-        let stream =
-            SensoryStream::new(runtime, "tcp://127.0.0.1:5568", config.clone()).unwrap();
+        let stream = SensoryStream::new(runtime, "tcp://127.0.0.1:5568", config.clone()).unwrap();
         assert!(stream.start().is_err());
     }
 }

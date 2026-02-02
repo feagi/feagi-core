@@ -93,7 +93,9 @@ pub fn on_neuron_deleted(cache: &MemoryStatsCache, area_name: &str) {
         // @cursor:critical-path - Keep per-area neuron count synced for BV reads.
         state_manager.subtract_cortical_area_neuron_count(area_name, 1);
         state_manager.get_core_state().subtract_neuron_count(1);
-        state_manager.get_core_state().subtract_memory_neuron_count(1);
+        state_manager
+            .get_core_state()
+            .subtract_memory_neuron_count(1);
     }
 }
 

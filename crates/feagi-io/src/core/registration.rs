@@ -36,8 +36,11 @@ pub type DeregistrationCallback =
 /// Type alias for dynamic gating callbacks
 pub type DynamicGatingCallback = Arc<parking_lot::Mutex<Option<Box<dyn Fn(String) + Send + Sync>>>>;
 /// Type alias for stream readiness callbacks (blocks until streams are ready)
-pub type StreamReadyCallback =
-    Arc<parking_lot::Mutex<Option<Box<dyn Fn(&AgentCapabilities) -> Result<(), FeagiDataError> + Send + Sync>>>>;
+pub type StreamReadyCallback = Arc<
+    parking_lot::Mutex<
+        Option<Box<dyn Fn(&AgentCapabilities) -> Result<(), FeagiDataError> + Send + Sync>>,
+    >,
+>;
 
 /// Policy for whether FEAGI should advertise/allocate visualization SHM paths during registration.
 ///

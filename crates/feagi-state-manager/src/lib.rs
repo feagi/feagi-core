@@ -51,11 +51,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
+use ahash::AHashMap;
+#[cfg(feature = "std")]
 use once_cell::sync::Lazy;
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
-#[cfg(feature = "std")]
-use ahash::AHashMap;
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
@@ -219,7 +219,9 @@ impl CorticalAreaStatsRegistry {
         let entry = stats
             .entry(cortical_id.to_string())
             .or_insert_with(CorticalAreaStats::new);
-        let mut current = entry.neuron_count.load(std::sync::atomic::Ordering::Relaxed);
+        let mut current = entry
+            .neuron_count
+            .load(std::sync::atomic::Ordering::Relaxed);
         loop {
             let next = current.saturating_sub(delta);
             match entry.neuron_count.compare_exchange(
@@ -300,17 +302,19 @@ impl CorticalAreaStatsRegistry {
 
     fn get_stats(&self, cortical_id: &str) -> Option<CorticalAreaStatsSnapshot> {
         let stats = self.stats.read();
-        stats.get(cortical_id).map(|entry| CorticalAreaStatsSnapshot {
-            neuron_count: entry
-                .neuron_count
-                .load(std::sync::atomic::Ordering::Acquire),
-            incoming_synapse_count: entry
-                .incoming_synapse_count
-                .load(std::sync::atomic::Ordering::Acquire),
-            outgoing_synapse_count: entry
-                .outgoing_synapse_count
-                .load(std::sync::atomic::Ordering::Acquire),
-        })
+        stats
+            .get(cortical_id)
+            .map(|entry| CorticalAreaStatsSnapshot {
+                neuron_count: entry
+                    .neuron_count
+                    .load(std::sync::atomic::Ordering::Acquire),
+                incoming_synapse_count: entry
+                    .incoming_synapse_count
+                    .load(std::sync::atomic::Ordering::Acquire),
+                outgoing_synapse_count: entry
+                    .outgoing_synapse_count
+                    .load(std::sync::atomic::Ordering::Acquire),
+            })
     }
 }
 
@@ -508,7 +512,8 @@ impl StateManager {
 
     /// Set neuron count for a cortical area.
     pub fn set_cortical_area_neuron_count(&self, cortical_id: &str, count: usize) {
-        self.cortical_area_stats.set_neuron_count(cortical_id, count);
+        self.cortical_area_stats
+            .set_neuron_count(cortical_id, count);
     }
 
     /// Increment neuron count for a cortical area.

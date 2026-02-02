@@ -157,11 +157,9 @@ pub async fn post_region(
     req.remove("name");
 
     let region_id = match req.get("region_id").and_then(|v| v.as_str()) {
-        Some(value) if !value.trim().is_empty() => {
-            RegionID::from_string(value)
-                .map_err(|e| ApiError::invalid_input(format!("Invalid region_id: {}", e)))?
-                .to_string()
-        }
+        Some(value) if !value.trim().is_empty() => RegionID::from_string(value)
+            .map_err(|e| ApiError::invalid_input(format!("Invalid region_id: {}", e)))?
+            .to_string(),
         _ => RegionID::new().to_string(),
     };
     req.remove("region_id");

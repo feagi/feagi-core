@@ -75,15 +75,7 @@ impl<const N: usize> SynapseArray<N> {
         psp: u8,
         synapse_type: SynapseType,
     ) -> bool {
-        SynapseStorage::add_synapse(
-            self,
-            source,
-            target,
-            weight,
-            psp,
-            synapse_type as u8,
-        )
-        .is_ok()
+        SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8).is_ok()
     }
 
     /// Propagate activity from fired neurons (single-threaded)

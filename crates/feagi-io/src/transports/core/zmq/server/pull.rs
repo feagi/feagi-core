@@ -6,17 +6,19 @@
 //! PULL sockets are used for receiving data from multiple PUSH clients.
 //! Messages are load-balanced across connected clients.
 
-use crate::transports::core::common::{ServerConfig, TransportConfig, TransportError, TransportResult};
+use crate::transports::core::common::{
+    ServerConfig, TransportConfig, TransportError, TransportResult,
+};
 use crate::transports::core::traits::{Pull, Transport};
 use parking_lot::Mutex;
+use std::future::Future;
 use std::sync::Arc;
+use tokio::runtime::Handle;
 use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tokio::time::timeout;
 use tracing::info;
 use zeromq::{PullSocket, Socket, SocketRecv};
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-use std::future::Future;
 
 fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
     if Handle::try_current().is_ok() {
@@ -50,8 +52,7 @@ impl ZmqPull {
     pub fn with_address(address: impl Into<String>) -> TransportResult<Self> {
         let config = ServerConfig::new(address);
         let runtime = Arc::new(
-            Runtime::new()
-                .map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
+            Runtime::new().map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
         );
         Self::new(runtime, config)
     }
@@ -85,8 +86,11 @@ impl Transport for ZmqPull {
         let mut socket = PullSocket::new();
 
         // Bind socket
-        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.config.base.address))
-            .map_err(|e| TransportError::BindFailed(e.to_string()))?;
+        block_on_runtime(
+            self.runtime.as_ref(),
+            socket.bind(&self.config.base.address),
+        )
+        .map_err(|e| TransportError::BindFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
@@ -128,8 +132,8 @@ impl Pull for ZmqPull {
             block_on_runtime(self.runtime.as_ref(), async {
                 timeout(std::time::Duration::from_millis(timeout_ms), recv_future).await
             })
-                .map_err(|_| TransportError::Timeout)?
-                .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
+            .map_err(|_| TransportError::Timeout)?
+            .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         };
 
         let mut frames = message.into_vec();

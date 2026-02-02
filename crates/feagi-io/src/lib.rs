@@ -80,8 +80,7 @@ impl IOSystemForCallbacks {
         &self,
         capabilities: &AgentCapabilities,
     ) -> std::result::Result<(), FeagiDataError> {
-        let needs_sensory =
-            capabilities.sensory.is_some() || capabilities.vision.is_some();
+        let needs_sensory = capabilities.sensory.is_some() || capabilities.vision.is_some();
         let needs_motor = capabilities.motor.is_some();
         let needs_viz = capabilities.visualization.is_some();
 
@@ -94,12 +93,11 @@ impl IOSystemForCallbacks {
         let poll = std::time::Duration::from_millis(self.stream_wait_poll_ms);
 
         loop {
-            let sensory_ready = !needs_sensory
-                || *self.sensory_stream_state.lock() == StreamState::Running;
-            let motor_ready = !needs_motor
-                || *self.motor_stream_state.lock() == StreamState::Running;
-            let viz_ready = !needs_viz
-                || *self.viz_stream_state.lock() == StreamState::Running;
+            let sensory_ready =
+                !needs_sensory || *self.sensory_stream_state.lock() == StreamState::Running;
+            let motor_ready =
+                !needs_motor || *self.motor_stream_state.lock() == StreamState::Running;
+            let viz_ready = !needs_viz || *self.viz_stream_state.lock() == StreamState::Running;
 
             if sensory_ready && motor_ready && viz_ready {
                 return Ok(());

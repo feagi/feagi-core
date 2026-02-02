@@ -131,10 +131,7 @@ impl FEAGIZMQServerPublisher {
 impl FeagiServer for FEAGIZMQServerPublisher {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         self.ensure_supported_options()?;
-        let endpoint = block_on_runtime(
-            &self.runtime,
-            self.socket.bind(&self.server_bind_address),
-        )
+        let endpoint = block_on_runtime(&self.runtime, self.socket.bind(&self.server_bind_address))
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.bound_endpoint = Some(endpoint);
         self.current_state = FeagiServerBindState::Active;
@@ -291,10 +288,7 @@ impl FEAGIZMQServerPuller {
 impl FeagiServer for FEAGIZMQServerPuller {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         self.ensure_supported_options()?;
-        let endpoint = block_on_runtime(
-            &self.runtime,
-            self.socket.bind(&self.server_bind_address),
-        )
+        let endpoint = block_on_runtime(&self.runtime, self.socket.bind(&self.server_bind_address))
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.bound_endpoint = Some(endpoint);
         self.current_state = FeagiServerBindState::Active;
@@ -497,10 +491,7 @@ impl FEAGIZMQServerRouter {
 impl FeagiServer for FEAGIZMQServerRouter {
     fn start(&mut self) -> Result<(), FeagiNetworkError> {
         self.ensure_supported_options()?;
-        let endpoint = block_on_runtime(
-            &self.runtime,
-            self.socket.bind(&self.server_bind_address),
-        )
+        let endpoint = block_on_runtime(&self.runtime, self.socket.bind(&self.server_bind_address))
             .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
         self.bound_endpoint = Some(endpoint);
         self.current_state = FeagiServerBindState::Active;
@@ -554,7 +545,11 @@ impl FeagiServerRouter for FEAGIZMQServerRouter {
 
         let identity = frames.remove(0).to_vec();
         let mut payload_frames = frames;
-        if payload_frames.first().map(|frame| frame.is_empty()).unwrap_or(false) {
+        if payload_frames
+            .first()
+            .map(|frame| frame.is_empty())
+            .unwrap_or(false)
+        {
             payload_frames.remove(0);
         }
 

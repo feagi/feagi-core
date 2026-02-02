@@ -73,8 +73,8 @@ fn test_projector_psp_division_issue() {
         npu.add_synapse(
             neuron_a,
             target,
-            SynapticWeight(1),      // weight = 1
-            SynapticPsp(1), // PSP = 1
+            SynapticWeight(1), // weight = 1
+            SynapticPsp(1),    // PSP = 1
             SynapseType::Excitatory,
         )
         .unwrap();

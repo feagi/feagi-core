@@ -37,9 +37,7 @@ fn run_server() {
 
     let mut server = FEAGIZMQServerRouter::new(
         ADDRESS.to_string(),
-        Box::new(|state_change| {
-            println!("[SERVER] State changed: {:?}", state_change)
-        }),
+        Box::new(|state_change| println!("[SERVER] State changed: {:?}", state_change)),
     )
     .expect("Failed to create server router");
 
@@ -88,9 +86,7 @@ fn run_client() {
 
     let mut client = FEAGIZMQClientRequester::new(
         ADDRESS.to_string(),
-        Box::new(|state_change| {
-            println!("[CLIENT] State changed: {:?}", state_change)
-        }),
+        Box::new(|state_change| println!("[CLIENT] State changed: {:?}", state_change)),
     )
     .expect("Failed to create client requester");
 

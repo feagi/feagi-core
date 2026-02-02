@@ -114,10 +114,7 @@ impl AsyncPlasticityExecutor {
         self.memory_stats_cache.clone()
     }
 
-    pub fn enqueue_commands_for_test(
-        &self,
-        commands: Vec<crate::PlasticityCommand>,
-    ) {
+    pub fn enqueue_commands_for_test(&self, commands: Vec<crate::PlasticityCommand>) {
         if let Some(service) = self.service.lock().unwrap().as_ref() {
             service.enqueue_commands_for_test(commands);
         }
@@ -146,7 +143,9 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
                 for command in &drained {
                     match command {
                         PlasticityCommand::RegisterMemoryNeuron {
-                            neuron_id, area_idx, ..
+                            neuron_id,
+                            area_idx,
+                            ..
                         } => {
                             debug!(
                                 target: "plasticity",
@@ -156,7 +155,9 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
                             );
                         }
                         PlasticityCommand::MemoryNeuronConvertedToLtm {
-                            neuron_id, area_idx, ..
+                            neuron_id,
+                            area_idx,
+                            ..
                         } => {
                             debug!(
                                 target: "plasticity",

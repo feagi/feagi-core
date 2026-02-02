@@ -9,20 +9,20 @@ use crate::core::heartbeat::HeartbeatService;
 use crate::core::reconnect::{retry_with_backoff, ReconnectionStrategy};
 use feagi_io::AgentType;
 use futures::FutureExt;
+use std::future::Future;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
 use std::time::Duration;
+use std::time::SystemTime;
+use tokio::runtime::Handle;
 use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tokio::time::timeout;
 use tracing::{debug, error, info, trace, warn};
 use zeromq::{
     DealerSocket, PushSocket, Socket, SocketRecv, SocketSend, SubSocket, ZmqError, ZmqMessage,
 };
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-use std::future::Future;
 
 fn block_on_with<T>(
     handle: &Handle,
@@ -209,10 +209,7 @@ impl AgentClient {
             self.config.sensory_endpoint
         );
         if matches!(self.config.agent_type, AgentType::Motor | AgentType::Both) {
-            info!(
-                "[CLIENT]   motor endpoint: {}",
-                self.config.motor_endpoint
-            );
+            info!("[CLIENT]   motor endpoint: {}", self.config.motor_endpoint);
         }
         let mut data_socket_strategy = ReconnectionStrategy::new(
             self.config.retry_backoff_ms,
@@ -424,14 +421,12 @@ impl AgentClient {
         );
         retry_with_backoff(
             || {
-                let mut addrs = address
-                    .to_socket_addrs()
-                    .map_err(|e| {
-                        SdkError::InvalidConfig(format!(
-                            "Failed to resolve {} endpoint {}: {}",
-                            label, endpoint, e
-                        ))
-                    })?;
+                let mut addrs = address.to_socket_addrs().map_err(|e| {
+                    SdkError::InvalidConfig(format!(
+                        "Failed to resolve {} endpoint {}: {}",
+                        label, endpoint, e
+                    ))
+                })?;
                 let addr = addrs.next().ok_or_else(|| {
                     SdkError::InvalidConfig(format!(
                         "No resolved addresses for {} endpoint {}",
@@ -469,13 +464,8 @@ impl AgentClient {
             self.block_on(async {
                 timeout(std::time::Duration::from_millis(timeout_ms), socket.recv()).await
             })
-                .map_err(|_| {
-                    SdkError::Timeout(format!(
-                        "Request timed out after {}ms",
-                        timeout_ms
-                    ))
-                })?
-                .map_err(SdkError::Zmq)?
+            .map_err(|_| SdkError::Timeout(format!("Request timed out after {}ms", timeout_ms)))?
+            .map_err(SdkError::Zmq)?
         } else {
             self.block_on(socket.recv()).map_err(SdkError::Zmq)?
         };
@@ -962,7 +952,11 @@ impl AgentClient {
         if !self.sensory_connected.load(Ordering::Relaxed) {
             let timeout_ms = self.config.connection_timeout_ms;
             let send_result = self.block_on(async {
-                timeout(std::time::Duration::from_millis(timeout_ms), socket.send(message)).await
+                timeout(
+                    std::time::Duration::from_millis(timeout_ms),
+                    socket.send(message),
+                )
+                .await
             });
             match send_result {
                 Ok(Ok(())) => {

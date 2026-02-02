@@ -87,12 +87,12 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+#[cfg(feature = "connectome-serialization")]
+pub mod connectome;
 #[cfg(feature = "std")]
 pub mod genome;
 #[cfg(feature = "std")]
 pub mod impls;
-#[cfg(feature = "connectome-serialization")]
-pub mod connectome;
 pub mod traits;
 pub mod types;
 

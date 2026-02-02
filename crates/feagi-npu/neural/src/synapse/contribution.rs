@@ -51,11 +51,7 @@ pub enum SynapseType {
 /// assert_eq!(contribution, -65025.0); // Maximum inhibitory
 /// ```
 #[inline]
-pub fn compute_synaptic_contribution(
-    weight: u8,
-    psp: u8,
-    synapse_type: SynapseType,
-) -> f32 {
+pub fn compute_synaptic_contribution(weight: u8, psp: u8, synapse_type: SynapseType) -> f32 {
     // CRITICAL: Direct cast, NO normalization (matches Python .astype(np.float32))
     let w = weight as f32;
     let c = psp as f32;

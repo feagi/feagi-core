@@ -30,11 +30,7 @@ pub struct ZmqApiAdapter {
 
 impl ZmqApiAdapter {
     /// Create a new ZMQ API adapter
-    pub fn new(
-        runtime: Arc<Runtime>,
-        bind_address: &str,
-        state: ApiState,
-    ) -> Result<Self, String> {
+    pub fn new(runtime: Arc<Runtime>, bind_address: &str, state: ApiState) -> Result<Self, String> {
         let server_config = ServerConfig::new(bind_address);
 
         // Create ZMQ router using feagi-io transport primitives

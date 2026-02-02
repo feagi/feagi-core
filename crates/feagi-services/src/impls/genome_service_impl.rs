@@ -11,10 +11,10 @@ Licensed under the Apache License, Version 2.0
 use crate::traits::GenomeService;
 use crate::types::*;
 use async_trait::async_trait;
-use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
 use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::neuroembryogenesis::Neuroembryogenesis;
 use feagi_brain_development::ConnectomeManager;
+use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
 use feagi_npu_burst_engine::{BurstLoopRunner, ParameterUpdateQueue};
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalSubUnitIndex, CorticalUnitIndex,
@@ -73,7 +73,9 @@ fn merge_memory_area_properties(
 ) -> HashMap<String, Value> {
     let mut defaults = get_default_neural_properties();
     let memory_defaults = MemoryAreaProperties::default();
-    defaults.entry("cortical_group".to_string()).or_insert(Value::from("MEMORY"));
+    defaults
+        .entry("cortical_group".to_string())
+        .or_insert(Value::from("MEMORY"));
     defaults
         .entry("is_mem_type".to_string())
         .or_insert(Value::from(true));
@@ -870,7 +872,9 @@ impl GenomeService for GenomeServiceImpl {
             self.regenerate_mappings_for_area(&effective_cortical_id)?;
             changes.remove("group_id");
             if changes.is_empty() {
-                return self.get_cortical_area_info(&effective_cortical_id_str).await;
+                return self
+                    .get_cortical_area_info(&effective_cortical_id_str)
+                    .await;
             }
         }
 
@@ -906,7 +910,7 @@ impl GenomeService for GenomeServiceImpl {
                             &effective_cortical_id_str,
                             metadata_changes.clone(),
                         )
-                            .await?;
+                        .await?;
                     }
                 }
 
@@ -916,7 +920,7 @@ impl GenomeService for GenomeServiceImpl {
                             &effective_cortical_id_str,
                             param_changes.clone(),
                         )
-                            .await?;
+                        .await?;
                     }
                 }
 
@@ -926,12 +930,13 @@ impl GenomeService for GenomeServiceImpl {
                             &effective_cortical_id_str,
                             struct_changes.clone(),
                         )
-                            .await?;
+                        .await?;
                     }
                 }
 
                 // Return updated info
-                self.get_cortical_area_info(&effective_cortical_id_str).await
+                self.get_cortical_area_info(&effective_cortical_id_str)
+                    .await
             }
         }
     }
@@ -2261,11 +2266,9 @@ impl GenomeServiceImpl {
         cortical_id_str: &str,
         changes: &HashMap<String, Value>,
     ) -> ServiceResult<CorticalID> {
-        let new_group_id_value = changes
-            .get("group_id")
-            .ok_or_else(|| {
-                ServiceError::InvalidInput("group_id is required for unit index update".to_string())
-            })?;
+        let new_group_id_value = changes.get("group_id").ok_or_else(|| {
+            ServiceError::InvalidInput("group_id is required for unit index update".to_string())
+        })?;
         let new_group_id = if let Some(value) = new_group_id_value.as_u64() {
             value
                 .try_into()
@@ -2781,7 +2784,8 @@ impl GenomeServiceImpl {
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
         if changes.contains_key("group_id") && changes.len() == 1 {
-            let new_id = self.apply_unit_index_update(&_cortical_id_typed, cortical_id, &changes)?;
+            let new_id =
+                self.apply_unit_index_update(&_cortical_id_typed, cortical_id, &changes)?;
             self.regenerate_mappings_for_area(&new_id)?;
             return self.get_cortical_area_info(&new_id.as_base_64()).await;
         }
@@ -3371,15 +3375,16 @@ impl GenomeServiceImpl {
         // Step 5: Rebuild outgoing synapses (this area -> others)
         let outgoing_targets = {
             let genome_guard = genome_store.read();
-            let genome = genome_guard.as_ref().ok_or_else(|| {
-                ServiceError::Backend("No genome loaded".to_string())
-            })?;
-            let area = genome.cortical_areas.get(&cortical_id_typed).ok_or_else(|| {
-                ServiceError::NotFound {
+            let genome = genome_guard
+                .as_ref()
+                .ok_or_else(|| ServiceError::Backend("No genome loaded".to_string()))?;
+            let area = genome
+                .cortical_areas
+                .get(&cortical_id_typed)
+                .ok_or_else(|| ServiceError::NotFound {
                     resource: "CorticalArea".to_string(),
                     id: cortical_id.to_string(),
-                }
-            })?;
+                })?;
             let mut targets = Vec::new();
             if let Some(mapping) = area
                 .properties
@@ -3447,11 +3452,11 @@ impl GenomeServiceImpl {
                             let count = manager
                                 .regenerate_synapses_for_mapping(src_id, &cortical_id_typed)
                                 .map_err(|e| {
-                                ServiceError::Backend(format!(
-                                    "Failed to rebuild incoming synapses from {}: {}",
-                                    src_id, e
-                                ))
-                            })?;
+                                    ServiceError::Backend(format!(
+                                        "Failed to rebuild incoming synapses from {}: {}",
+                                        src_id, e
+                                    ))
+                                })?;
                             total = total.saturating_add(count as u32);
                             info!(
                                 "[STRUCTURAL-REBUILD] Rebuilt {} incoming synapses from {}",
@@ -3743,10 +3748,8 @@ impl GenomeServiceImpl {
             })?;
 
         let neuron_count = manager.get_neuron_count_in_area(&cortical_id_typed);
-        let outgoing_synapse_count =
-            manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
-        let incoming_synapse_count =
-            manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
+        let outgoing_synapse_count = manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
+        let incoming_synapse_count = manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
         let synapse_count = outgoing_synapse_count;
 
         let cortical_group = area.get_cortical_group();
@@ -3935,10 +3938,8 @@ impl GenomeServiceImpl {
             })?;
 
         let neuron_count = manager.get_neuron_count_in_area(&cortical_id_typed);
-        let outgoing_synapse_count =
-            manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
-        let incoming_synapse_count =
-            manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
+        let outgoing_synapse_count = manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
+        let incoming_synapse_count = manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
         let synapse_count = outgoing_synapse_count;
 
         // Get cortical_group from the area (uses cortical_type_new if available)

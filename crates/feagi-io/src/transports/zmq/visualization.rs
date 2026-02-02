@@ -7,17 +7,17 @@
 use crossbeam::queue::ArrayQueue;
 use feagi_structures::FeagiDataError;
 use parking_lot::Mutex;
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+use tokio::runtime::Handle;
 use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
 use zeromq::{PubSocket, Socket, SocketSend, ZmqError, ZmqMessage};
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-use std::future::Future;
 
 fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
     if Handle::try_current().is_ok() {

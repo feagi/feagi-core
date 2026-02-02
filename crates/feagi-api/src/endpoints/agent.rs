@@ -57,7 +57,7 @@ fn get_agent_name_from_id(agent_id: &str) -> ApiResult<String> {
                 agent_id
             )));
         }
-        return Ok(agent_name);
+        Ok(agent_name)
     }
     #[cfg(not(feature = "feagi-agent"))]
     {
@@ -1187,7 +1187,9 @@ pub async fn get_all_agent_capabilities(
         let device_registrations = if include_device_registrations {
             #[cfg(feature = "feagi-agent")]
             {
-                Some(export_device_registrations_from_connector(&state, &agent_id)?)
+                Some(export_device_registrations_from_connector(
+                    &state, &agent_id,
+                )?)
             }
             #[cfg(not(feature = "feagi-agent"))]
             {

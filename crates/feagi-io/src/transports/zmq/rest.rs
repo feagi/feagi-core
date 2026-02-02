@@ -8,15 +8,15 @@ use crate::core::{RegistrationHandler, RegistrationRequest};
 use feagi_structures::FeagiDataError;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 use std::sync::Arc;
 use std::thread;
+use tokio::runtime::Handle;
 use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tokio::time::timeout;
 use tracing::{debug, error, info};
 use zeromq::{RouterSocket, Socket, SocketRecv, SocketSend, ZmqMessage};
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-use std::future::Future;
 
 fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
     if Handle::try_current().is_ok() {
@@ -146,7 +146,11 @@ impl RestStream {
                 }
 
                 let identity = frames.remove(0).to_vec();
-                if frames.first().map(|frame| frame.is_empty()).unwrap_or(false) {
+                if frames
+                    .first()
+                    .map(|frame| frame.is_empty())
+                    .unwrap_or(false)
+                {
                     frames.remove(0);
                 }
 
@@ -157,9 +161,7 @@ impl RestStream {
                 let request_json = String::from_utf8_lossy(&frames.remove(0)).to_string();
                 let response_json = Self::process_request(&registration_handler, &request_json);
 
-                if let Err(e) =
-                    Self::send_response(&socket, &runtime, identity, response_json)
-                {
+                if let Err(e) = Self::send_response(&socket, &runtime, identity, response_json) {
                     error!("🦀 [ZMQ-REST] [ERR] Failed to send response: {}", e);
                 }
             }
@@ -352,8 +354,9 @@ impl RestStream {
         let mut message = ZmqMessage::from(response_json.into_bytes());
         message.prepend(&ZmqMessage::from(Vec::new()));
         message.prepend(&ZmqMessage::from(identity));
-        block_on_runtime(runtime.as_ref(), sock.send(message))
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to send response: {}", e)))?;
+        block_on_runtime(runtime.as_ref(), sock.send(message)).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to send response: {}", e))
+        })?;
 
         Ok(())
     }

@@ -6,17 +6,19 @@
 //! PUSH sockets are used for distributing data to PULL servers.
 //! Messages are load-balanced across connected servers.
 
-use crate::transports::core::common::{ClientConfig, TransportConfig, TransportError, TransportResult};
+use crate::transports::core::common::{
+    ClientConfig, TransportConfig, TransportError, TransportResult,
+};
 use crate::transports::core::traits::{Push, Transport};
 use parking_lot::Mutex;
+use std::future::Future;
 use std::sync::Arc;
+use tokio::runtime::Handle;
 use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tokio::time::timeout;
 use tracing::info;
 use zeromq::{PushSocket, Socket, SocketSend, ZmqMessage};
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-use std::future::Future;
 
 fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
     if Handle::try_current().is_ok() {
@@ -50,8 +52,7 @@ impl ZmqPush {
     pub fn with_address(address: impl Into<String>) -> TransportResult<Self> {
         let config = ClientConfig::new(address);
         let runtime = Arc::new(
-            Runtime::new()
-                .map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
+            Runtime::new().map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
         );
         Self::new(runtime, config)
     }
@@ -85,8 +86,11 @@ impl Transport for ZmqPush {
         let mut socket = PushSocket::new();
 
         // Connect socket
-        block_on_runtime(self.runtime.as_ref(), socket.connect(&self.config.base.address))
-            .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
+        block_on_runtime(
+            self.runtime.as_ref(),
+            socket.connect(&self.config.base.address),
+        )
+        .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
@@ -134,10 +138,14 @@ impl Push for ZmqPush {
         let message = ZmqMessage::from(data.to_vec());
         if timeout_ms > 0 {
             block_on_runtime(self.runtime.as_ref(), async {
-                timeout(std::time::Duration::from_millis(timeout_ms), sock.send(message)).await
+                timeout(
+                    std::time::Duration::from_millis(timeout_ms),
+                    sock.send(message),
+                )
+                .await
             })
-                .map_err(|_| TransportError::Timeout)?
-                .map_err(|e| TransportError::SendFailed(e.to_string()))?;
+            .map_err(|_| TransportError::Timeout)?
+            .map_err(|e| TransportError::SendFailed(e.to_string()))?;
         } else {
             block_on_runtime(self.runtime.as_ref(), sock.send(message))
                 .map_err(|e| TransportError::SendFailed(e.to_string()))?;

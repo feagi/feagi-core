@@ -70,13 +70,8 @@ fn test_memory_replay_fires_twin_next_burst() {
     let twin_b = add_neuron_at(&mut npu, twin_area_idx, 1, 0, 0);
 
     let memory_neuron_id = 50_000_000u32;
-    npu.register_dynamic_neuron_mapping(memory_neuron_id, memory_id.clone());
-    npu.register_memory_twin_mapping(
-        memory_area_idx,
-        upstream_area_idx,
-        twin_area_idx,
-        10.0,
-    );
+    npu.register_dynamic_neuron_mapping(memory_neuron_id, memory_id);
+    npu.register_memory_twin_mapping(memory_area_idx, upstream_area_idx, twin_area_idx, 10.0);
     npu.register_memory_replay_frames(
         memory_neuron_id,
         vec![MemoryReplayFrame {
@@ -95,7 +90,9 @@ fn test_memory_replay_fires_twin_next_burst() {
         .get_fire_ledger_dense_window_bitmaps(twin_area_idx, burst2, 1)
         .expect("Missing FireLedger window for twin area");
     assert!(
-        window.iter().any(|(_, bm)| bm.contains(twin_a.0) && bm.contains(twin_b.0)),
+        window
+            .iter()
+            .any(|(_, bm)| bm.contains(twin_a.0) && bm.contains(twin_b.0)),
         "Expected replay to fire twin neurons on the next burst"
     );
 }
@@ -125,13 +122,8 @@ fn test_memory_replay_respects_offsets() {
     let twin_neuron = add_neuron_at(&mut npu, twin_area_idx, 0, 0, 0);
 
     let memory_neuron_id = 50_000_010u32;
-    npu.register_dynamic_neuron_mapping(memory_neuron_id, memory_id.clone());
-    npu.register_memory_twin_mapping(
-        memory_area_idx,
-        upstream_area_idx,
-        twin_area_idx,
-        10.0,
-    );
+    npu.register_dynamic_neuron_mapping(memory_neuron_id, memory_id);
+    npu.register_memory_twin_mapping(memory_area_idx, upstream_area_idx, twin_area_idx, 10.0);
     npu.register_memory_replay_frames(
         memory_neuron_id,
         vec![MemoryReplayFrame {

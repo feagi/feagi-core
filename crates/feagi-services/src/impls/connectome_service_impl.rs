@@ -13,8 +13,8 @@ use crate::types::*;
 use async_trait::async_trait;
 use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::ConnectomeManager;
-use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
+use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
@@ -96,7 +96,9 @@ fn merge_memory_area_properties(
 ) -> HashMap<String, Value> {
     let mut defaults = get_default_neural_properties();
     let memory_defaults = MemoryAreaProperties::default();
-    defaults.entry("cortical_group".to_string()).or_insert(Value::from("MEMORY"));
+    defaults
+        .entry("cortical_group".to_string())
+        .or_insert(Value::from("MEMORY"));
     defaults
         .entry("is_mem_type".to_string())
         .or_insert(Value::from(true));
@@ -545,10 +547,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         let is_memory_area = matches!(area_type, CorticalAreaType::Memory(_));
         if is_memory_area {
-            let merged = merge_memory_area_properties(
-                area.properties.clone(),
-                params.properties.as_ref(),
-            );
+            let merged =
+                merge_memory_area_properties(area.properties.clone(), params.properties.as_ref());
             area.properties = merged;
         } else if let Some(properties) = params.properties {
             area.properties = properties;
@@ -663,14 +663,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 }
             }
 
-            Some(
-                manager.recompute_brain_region_io_registry().map_err(|e| {
-                    ServiceError::Backend(format!(
-                        "Failed to recompute region IO registry: {}",
-                        e
-                    ))
-                })?,
-            )
+            Some(manager.recompute_brain_region_io_registry().map_err(|e| {
+                ServiceError::Backend(format!("Failed to recompute region IO registry: {}", e))
+            })?)
         };
 
         // CRITICAL: Persist deletion into RuntimeGenome (source of truth for save/export).
@@ -806,10 +801,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
             &CorticalID::try_from_base_64(cortical_id)
                 .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
         );
-        let outgoing_synapse_count =
-            manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
-        let incoming_synapse_count =
-            manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
+        let outgoing_synapse_count = manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
+        let incoming_synapse_count = manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
         let synapse_count = outgoing_synapse_count;
 
         // Get cortical_group from the area (uses cortical_type_new if available)
@@ -1274,9 +1267,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
             let mut manager = self.connectome.write();
 
             for area_id in &areas {
-                let cortical_id = feagi_evolutionary::string_to_cortical_id(area_id).map_err(|e| {
-                    ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e))
-                })?;
+                let cortical_id =
+                    feagi_evolutionary::string_to_cortical_id(area_id).map_err(|e| {
+                        ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e))
+                    })?;
 
                 if !manager.has_cortical_area(&cortical_id) {
                     return Err(ServiceError::NotFound {
@@ -1691,11 +1685,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         let existing_mapping = {
             let manager = self.connectome.read();
-            manager
-                .get_cortical_area(&src_id)
-                .and_then(|area| {
-                    get_cortical_mapping_dst_from_properties(&area.properties, &dst_area_id)
-                })
+            manager.get_cortical_area(&src_id).and_then(|area| {
+                get_cortical_mapping_dst_from_properties(&area.properties, &dst_area_id)
+            })
         };
 
         let mapping_has_associative_memory = |rules: &[serde_json::Value]| -> bool {
@@ -1716,13 +1708,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .as_ref()
                 .is_some_and(|rules| mapping_has_associative_memory(rules));
 
-        let mut existing_plasticity_by_morphology: HashMap<String, serde_json::Map<String, serde_json::Value>> =
-            HashMap::new();
+        let mut existing_plasticity_by_morphology: HashMap<
+            String,
+            serde_json::Map<String, serde_json::Value>,
+        > = HashMap::new();
         if let Some(existing_rules) = existing_mapping.as_ref() {
             for rule in existing_rules {
                 if let Some(obj) = rule.as_object() {
-                    if let Some(morphology_id) = obj.get("morphology_id").and_then(|v| v.as_str())
-                    {
+                    if let Some(morphology_id) = obj.get("morphology_id").and_then(|v| v.as_str()) {
                         existing_plasticity_by_morphology
                             .insert(morphology_id.to_string(), obj.clone());
                     }
@@ -1755,9 +1748,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         "ltd_multiplier",
                         "plasticity_window",
                     ];
-                    if let Some(existing) =
-                        existing_plasticity_by_morphology.get(&morphology_id)
-                    {
+                    if let Some(existing) = existing_plasticity_by_morphology.get(&morphology_id) {
                         for key in required {
                             if !normalized.contains_key(key) && existing.contains_key(key) {
                                 if let Some(value) = existing.get(key) {
@@ -1930,8 +1921,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                                 .get("parent_region_id")
                                 .and_then(|v| v.as_str())
                             {
-                                if let Some(region) =
-                                    genome.brain_regions.get_mut(parent_region_id)
+                                if let Some(region) = genome.brain_regions.get_mut(parent_region_id)
                                 {
                                     region.add_area(twin_id);
                                 }
@@ -2189,7 +2179,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn associative_memory_missing_window_is_filled_from_existing_mapping() -> ServiceResult<()> {
+    async fn associative_memory_missing_window_is_filled_from_existing_mapping() -> ServiceResult<()>
+    {
         use super::ConnectomeServiceImpl;
         use crate::traits::ConnectomeService;
         use feagi_structures::genomic::cortical_area::{
@@ -2286,12 +2277,8 @@ mod tests {
             "ltd_multiplier": 1
         })];
 
-        svc.update_cortical_mapping(
-            src_id.as_base_64(),
-            dst_id.as_base_64(),
-            mapping_data,
-        )
-        .await?;
+        svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), mapping_data)
+            .await?;
 
         let genome_guard = current_genome.read();
         let genome = genome_guard.as_ref().expect("genome must exist");
@@ -2469,7 +2456,10 @@ mod tests {
                 timestamp: 0.0,
                 brain_regions_root: Some(root_key.clone()),
             },
-            cortical_areas: HashMap::from([(power_id, power_area.clone()), (death_id, death_area.clone())]),
+            cortical_areas: HashMap::from([
+                (power_id, power_area.clone()),
+                (death_id, death_area.clone()),
+            ]),
             brain_regions: HashMap::from([
                 (root_key.clone(), root.clone()),
                 (child_key.clone(), child.clone()),

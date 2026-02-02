@@ -9,34 +9,28 @@ use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
 use feagi_npu_runtime::StdRuntime;
+use feagi_services::impls::ConnectomeServiceImpl;
+use feagi_services::traits::ConnectomeService;
+use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
     IOCorticalAreaConfigurationFlag,
 };
-use feagi_services::impls::ConnectomeServiceImpl;
-use feagi_services::traits::ConnectomeService;
-use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use parking_lot::RwLock;
 use serde_json::json;
 use std::sync::Arc;
 
-fn create_test_manager(
-) -> (
-    ConnectomeManager,
-    Arc<TracingMutex<DynamicNPU>>,
-) {
+fn create_test_manager() -> (ConnectomeManager, Arc<TracingMutex<DynamicNPU>>) {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
-    let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10)
-        .expect("Failed to create NPU");
+    let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("Failed to create NPU");
     let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
     let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
     manager.setup_core_morphologies_for_testing();
     (manager, dyn_npu)
 }
 
-fn create_test_manager_arc(
-) -> (
+fn create_test_manager_arc() -> (
     Arc<RwLock<ConnectomeManager>>,
     Arc<TracingMutex<DynamicNPU>>,
 ) {
@@ -51,13 +45,7 @@ fn create_area(
     name: &str,
     area_type: CorticalAreaType,
 ) -> CorticalArea {
-    create_area_with_dimensions(
-        cortical_id,
-        cortical_idx,
-        name,
-        area_type,
-        (2, 2, 1),
-    )
+    create_area_with_dimensions(cortical_id, cortical_idx, name, area_type, (2, 2, 1))
 }
 
 fn create_area_with_dimensions(
@@ -145,22 +133,10 @@ fn test_incoming_outgoing_synapse_counts_by_area() {
     manager.create_synapse(s1, t1, 128, 200, 0).unwrap();
     manager.create_synapse(t0, s1, 128, 200, 0).unwrap();
 
-    assert_eq!(
-        manager.get_outgoing_synapse_count_in_area(&src_id),
-        2
-    );
-    assert_eq!(
-        manager.get_incoming_synapse_count_in_area(&src_id),
-        1
-    );
-    assert_eq!(
-        manager.get_outgoing_synapse_count_in_area(&dst_id),
-        1
-    );
-    assert_eq!(
-        manager.get_incoming_synapse_count_in_area(&dst_id),
-        2
-    );
+    assert_eq!(manager.get_outgoing_synapse_count_in_area(&src_id), 2);
+    assert_eq!(manager.get_incoming_synapse_count_in_area(&src_id), 1);
+    assert_eq!(manager.get_outgoing_synapse_count_in_area(&dst_id), 1);
+    assert_eq!(manager.get_incoming_synapse_count_in_area(&dst_id), 2);
 }
 
 #[test]
@@ -323,14 +299,8 @@ fn test_block_to_block_counts_single_neuron() {
     assert_eq!(outgoing_src, 1);
     assert_eq!(incoming_dst, 1);
 
-    assert_eq!(
-        manager.get_outgoing_synapse_count_in_area(&src_id),
-        1
-    );
-    assert_eq!(
-        manager.get_incoming_synapse_count_in_area(&dst_id),
-        1
-    );
+    assert_eq!(manager.get_outgoing_synapse_count_in_area(&src_id), 1);
+    assert_eq!(manager.get_incoming_synapse_count_in_area(&dst_id), 1);
 }
 
 #[test]

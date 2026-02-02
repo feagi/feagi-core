@@ -137,7 +137,7 @@ pub fn apply_projector_morphology_with_dimensions(
                             NeuronId(src_nid),
                             NeuronId(dst_nid),
                             SynapticWeight(weight),
-                SynapticPsp(psp),
+                            SynapticPsp(psp),
                             synapse_type,
                         )
                         .is_ok()

@@ -127,7 +127,6 @@ pub async fn get_health_check(
         None
     };
 
-
     // Get total synapse count from analytics service
     let synapse_count = analytics_service
         .get_total_synapse_count()

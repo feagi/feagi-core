@@ -7,17 +7,19 @@
 //! broadcasts messages to all connected subscribers. Subscribers can filter
 //! messages by topic.
 
-use crate::transports::core::common::{ServerConfig, TransportConfig, TransportError, TransportResult};
+use crate::transports::core::common::{
+    ServerConfig, TransportConfig, TransportError, TransportResult,
+};
 use crate::transports::core::traits::{Publisher, Transport};
 use parking_lot::Mutex;
+use std::future::Future;
 use std::sync::Arc;
+use tokio::runtime::Handle;
 use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tokio::time::timeout;
 use tracing::info;
 use zeromq::{PubSocket, Socket, SocketSend, ZmqMessage};
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-use std::future::Future;
 
 fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
     if Handle::try_current().is_ok() {
@@ -51,8 +53,7 @@ impl ZmqPub {
     pub fn with_address(address: impl Into<String>) -> TransportResult<Self> {
         let config = ServerConfig::new(address);
         let runtime = Arc::new(
-            Runtime::new()
-                .map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
+            Runtime::new().map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
         );
         Self::new(runtime, config)
     }
@@ -86,8 +87,11 @@ impl Transport for ZmqPub {
         let mut socket = PubSocket::new();
 
         // Bind socket
-        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.config.base.address))
-            .map_err(|e| TransportError::BindFailed(e.to_string()))?;
+        block_on_runtime(
+            self.runtime.as_ref(),
+            socket.bind(&self.config.base.address),
+        )
+        .map_err(|e| TransportError::BindFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
@@ -134,8 +138,8 @@ impl Publisher for ZmqPub {
             block_on_runtime(self.runtime.as_ref(), async {
                 timeout(timeout_duration, sock.send(message)).await
             })
-                .map_err(|_| TransportError::Timeout)?
-                .map_err(|e| TransportError::SendFailed(e.to_string()))?;
+            .map_err(|_| TransportError::Timeout)?
+            .map_err(|e| TransportError::SendFailed(e.to_string()))?;
         } else {
             block_on_runtime(self.runtime.as_ref(), sock.send(message))
                 .map_err(|e| TransportError::SendFailed(e.to_string()))?;
@@ -163,8 +167,8 @@ impl Publisher for ZmqPub {
             block_on_runtime(self.runtime.as_ref(), async {
                 timeout(timeout_duration, sock.send(message)).await
             })
-                .map_err(|_| TransportError::Timeout)?
-                .map_err(|e| TransportError::SendFailed(e.to_string()))?;
+            .map_err(|_| TransportError::Timeout)?
+            .map_err(|e| TransportError::SendFailed(e.to_string()))?;
         } else {
             block_on_runtime(self.runtime.as_ref(), sock.send(message))
                 .map_err(|e| TransportError::SendFailed(e.to_string()))?;

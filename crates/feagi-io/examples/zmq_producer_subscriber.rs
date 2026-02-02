@@ -31,9 +31,7 @@ fn run_publisher() {
 
     let mut publisher = FEAGIZMQServerPublisher::new(
         ADDRESS.to_string(),
-        Box::new(|state_change| {
-            println!("[PUB] State changed: {:?}", state_change)
-        }),
+        Box::new(|state_change| println!("[PUB] State changed: {:?}", state_change)),
     )
     .expect("Failed to create publisher");
 
@@ -67,9 +65,7 @@ fn run_subscriber() {
 
     let mut subscriber = FEAGIZMQClientSubscriber::new(
         ADDRESS.to_string(),
-        Box::new(|state_change| {
-            println!("[SUB] State changed: {:?}", state_change)
-        }),
+        Box::new(|state_change| println!("[SUB] State changed: {:?}", state_change)),
     )
     .expect("Failed to create subscriber");
 

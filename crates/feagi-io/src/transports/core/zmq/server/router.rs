@@ -13,14 +13,16 @@ use crate::transports::core::common::{
 use crate::transports::core::traits::{RequestReplyServer, Transport};
 use futures_util::FutureExt;
 use parking_lot::Mutex;
+use std::future::Future;
 use std::sync::Arc;
+use tokio::runtime::Handle;
 use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tokio::time::timeout;
 use tracing::info;
 use zeromq::{RouterSocket, Socket, SocketRecv, SocketSend, ZmqMessage};
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-use std::future::Future;
+
+type PendingRequest = Option<(Vec<u8>, Vec<u8>)>;
 
 fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
     if Handle::try_current().is_ok() {
@@ -35,7 +37,7 @@ pub struct ZmqRouter {
     config: ServerConfig,
     socket: Arc<Mutex<Option<RouterSocket>>>,
     running: Arc<Mutex<bool>>,
-    pending_request: Arc<Mutex<Option<(Vec<u8>, Vec<u8>)>>>,
+    pending_request: Arc<Mutex<PendingRequest>>,
 }
 
 impl ZmqRouter {
@@ -56,8 +58,7 @@ impl ZmqRouter {
     pub fn with_address(address: impl Into<String>) -> TransportResult<Self> {
         let config = ServerConfig::new(address);
         let runtime = Arc::new(
-            Runtime::new()
-                .map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
+            Runtime::new().map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
         );
         Self::new(runtime, config)
     }
@@ -91,8 +92,11 @@ impl Transport for ZmqRouter {
         let mut socket = RouterSocket::new();
 
         // Bind socket
-        block_on_runtime(self.runtime.as_ref(), socket.bind(&self.config.base.address))
-            .map_err(|e| TransportError::BindFailed(e.to_string()))?;
+        block_on_runtime(
+            self.runtime.as_ref(),
+            socket.bind(&self.config.base.address),
+        )
+        .map_err(|e| TransportError::BindFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
@@ -143,8 +147,8 @@ impl RequestReplyServer for ZmqRouter {
             block_on_runtime(self.runtime.as_ref(), async {
                 timeout(std::time::Duration::from_millis(timeout_ms), recv_future).await
             })
-                .map_err(|_| TransportError::Timeout)?
-                .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
+            .map_err(|_| TransportError::Timeout)?
+            .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         };
 
         let mut frames = message.into_vec();
@@ -155,7 +159,11 @@ impl RequestReplyServer for ZmqRouter {
         }
 
         let identity = frames.remove(0).to_vec();
-        if frames.first().map(|frame| frame.is_empty()).unwrap_or(false) {
+        if frames
+            .first()
+            .map(|frame| frame.is_empty())
+            .unwrap_or(false)
+        {
             frames.remove(0);
         }
 
@@ -196,8 +204,8 @@ impl RequestReplyServer for ZmqRouter {
             block_on_runtime(self.runtime.as_ref(), async {
                 timeout(std::time::Duration::from_millis(timeout_ms), recv_future).await
             })
-                .map_err(|_| TransportError::Timeout)?
-                .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
+            .map_err(|_| TransportError::Timeout)?
+            .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         };
 
         let mut frames = message.into_vec();
@@ -208,7 +216,11 @@ impl RequestReplyServer for ZmqRouter {
         }
 
         let identity = frames.remove(0).to_vec();
-        if frames.first().map(|frame| frame.is_empty()).unwrap_or(false) {
+        if frames
+            .first()
+            .map(|frame| frame.is_empty())
+            .unwrap_or(false)
+        {
             frames.remove(0);
         }
         if frames.len() != 1 {

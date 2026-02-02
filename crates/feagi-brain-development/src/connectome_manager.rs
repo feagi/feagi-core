@@ -43,9 +43,7 @@ type BrainRegionIoRegistry = HashMap<String, (Vec<String>, Vec<String>)>;
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use crate::types::{BduError, BduResult};
 use feagi_npu_neural::types::NeuronId;
-use feagi_structures::genomic::cortical_area::{
-    CorticalAreaType, CorticalID, CustomCorticalType,
-};
+use feagi_structures::genomic::cortical_area::{CorticalAreaType, CorticalID, CustomCorticalType};
 use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
 
 // State manager access for fatigue calculation
@@ -1317,15 +1315,16 @@ impl ConnectomeManager {
             let Some(npu) = manager.npu.as_ref() else {
                 return Ok(());
             };
-            let memory_area_idx = *manager
-                .cortical_id_to_idx
-                .get(memory_area_id)
-                .ok_or_else(|| {
-                    BduError::InvalidArea(format!(
-                        "Memory area idx missing for {}",
-                        memory_area_id.as_base_64()
-                    ))
-                })?;
+            let memory_area_idx =
+                *manager
+                    .cortical_id_to_idx
+                    .get(memory_area_id)
+                    .ok_or_else(|| {
+                        BduError::InvalidArea(format!(
+                            "Memory area idx missing for {}",
+                            memory_area_id.as_base_64()
+                        ))
+                    })?;
             let upstream_area_idx = *manager
                 .cortical_id_to_idx
                 .get(upstream_area_id)
@@ -1342,10 +1341,7 @@ impl ConnectomeManager {
                 ))
             })?;
             let twin_area = manager.cortical_areas.get(twin_id).ok_or_else(|| {
-                BduError::InvalidArea(format!(
-                    "Twin area {} not found",
-                    twin_id.as_base_64()
-                ))
+                BduError::InvalidArea(format!("Twin area {} not found", twin_id.as_base_64()))
             })?;
             let potential = twin_area.firing_threshold() + twin_area.firing_threshold_increment();
             if let Ok(mut npu_lock) = npu.lock() {
@@ -1359,24 +1355,18 @@ impl ConnectomeManager {
             Ok(())
         };
 
-        let memory_area = self
-            .cortical_areas
-            .get(memory_area_id)
-            .ok_or_else(|| {
-                BduError::InvalidArea(format!(
-                    "Memory area {} not found",
-                    memory_area_id.as_base_64()
-                ))
-            })?;
-        let upstream_area = self
-            .cortical_areas
-            .get(upstream_area_id)
-            .ok_or_else(|| {
-                BduError::InvalidArea(format!(
-                    "Upstream area {} not found",
-                    upstream_area_id.as_base_64()
-                ))
-            })?;
+        let memory_area = self.cortical_areas.get(memory_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!(
+                "Memory area {} not found",
+                memory_area_id.as_base_64()
+            ))
+        })?;
+        let upstream_area = self.cortical_areas.get(upstream_area_id).ok_or_else(|| {
+            BduError::InvalidArea(format!(
+                "Upstream area {} not found",
+                upstream_area_id.as_base_64()
+            ))
+        })?;
 
         if matches!(upstream_area.cortical_type, CorticalAreaType::Memory(_)) {
             return Err(BduError::InvalidArea(format!(
@@ -1445,7 +1435,7 @@ impl ConnectomeManager {
             twin_id,
             0,
             twin_name,
-            upstream_area.dimensions.clone(),
+            upstream_area.dimensions,
             twin_position,
             twin_type,
         )?;
@@ -1479,8 +1469,7 @@ impl ConnectomeManager {
             .properties
             .get("parent_region_id")
             .and_then(|v| v.as_str());
-        let same_region =
-            memory_parent.is_some() && memory_parent == upstream_parent;
+        let same_region = memory_parent.is_some() && memory_parent == upstream_parent;
 
         if !same_region {
             return GenomeCoordinate3D::new(
@@ -1757,8 +1746,7 @@ impl ConnectomeManager {
         let mapping_has_bidirectional_stdp = |rules: &[serde_json::Value]| -> bool {
             for rule in rules {
                 if let Some(obj) = rule.as_object() {
-                    if let Some(morphology_id) = obj.get("morphology_id").and_then(|v| v.as_str())
-                    {
+                    if let Some(morphology_id) = obj.get("morphology_id").and_then(|v| v.as_str()) {
                         if morphology_id == "associative_memory" {
                             return true;
                         }
@@ -1778,12 +1766,15 @@ impl ConnectomeManager {
             .and_then(|v| v.as_array())
             .map(|arr| mapping_has_bidirectional_stdp(arr))
             .unwrap_or(false);
-        let mut should_apply_bidirectional = requested_bidirectional || existing_bidirectional;
+        let should_apply_bidirectional = requested_bidirectional || existing_bidirectional;
 
         {
             // Get source area (must exist)
             let src_area = self.cortical_areas.get_mut(src_area_id).ok_or_else(|| {
-                crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+                crate::types::BduError::InvalidArea(format!(
+                    "Source area not found: {}",
+                    src_area_id
+                ))
             })?;
 
             // Get or create cortical_mapping_dst property
@@ -1825,7 +1816,10 @@ impl ConnectomeManager {
         // Bi-directional STDP: mirror the mapping on the reverse pair
         if should_apply_bidirectional {
             let dst_area = self.cortical_areas.get_mut(dst_area_id).ok_or_else(|| {
-                crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_area_id))
+                crate::types::BduError::InvalidArea(format!(
+                    "Destination area not found: {}",
+                    dst_area_id
+                ))
             })?;
             let dst_mapping_dst =
                 if let Some(existing) = dst_area.properties.get_mut("cortical_mapping_dst") {
@@ -2091,14 +2085,10 @@ impl ConnectomeManager {
             if let Some(state_manager) = StateManager::instance().try_read() {
                 let core_state = state_manager.get_core_state();
                 core_state.add_synapse_count(created_u32);
-                state_manager.add_cortical_area_outgoing_synapses(
-                    &src_area_id.as_base_64(),
-                    synapse_count,
-                );
-                state_manager.add_cortical_area_incoming_synapses(
-                    &dst_area_id.as_base_64(),
-                    synapse_count,
-                );
+                state_manager
+                    .add_cortical_area_outgoing_synapses(&src_area_id.as_base_64(), synapse_count);
+                state_manager
+                    .add_cortical_area_incoming_synapses(&dst_area_id.as_base_64(), synapse_count);
             }
         }
 
@@ -2290,6 +2280,7 @@ impl ConnectomeManager {
     }
 
     /// Register STDP mapping parameters for a plastic rule
+    #[allow(clippy::too_many_arguments)]
     fn register_stdp_mapping_for_rule(
         npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
         src_area_id: &CorticalID,
@@ -2585,22 +2576,25 @@ impl ConnectomeManager {
             }
 
             // Apply the morphology rule
-            let synapse_count =
-                match self.apply_single_morphology_rule(src_area_id, dst_area_id, rule) {
-                    Ok(count) => count,
-                    Err(e) => {
-                        tracing::error!(
-                            target: "feagi-bdu",
-                            "Mapping rule application failed for {} -> {} (morphology={}, keys={:?}): {}",
-                            src_area_id,
-                            dst_area_id,
-                            morphology_id,
-                            rule_keys,
-                            e
-                        );
-                        return Err(e);
-                    }
-                };
+            let synapse_count = match self.apply_single_morphology_rule(
+                src_area_id,
+                dst_area_id,
+                rule,
+            ) {
+                Ok(count) => count,
+                Err(e) => {
+                    tracing::error!(
+                        target: "feagi-bdu",
+                        "Mapping rule application failed for {} -> {} (morphology={}, keys={:?}): {}",
+                        src_area_id,
+                        dst_area_id,
+                        morphology_id,
+                        rule_keys,
+                        e
+                    );
+                    return Err(e);
+                }
+            };
             total_synapses += synapse_count;
             tracing::debug!(
                 target: "feagi-bdu",
@@ -3520,10 +3514,8 @@ impl ConnectomeManager {
 
         // @cursor:critical-path - Keep BV-facing stats in StateManager.
         if let Some(state_manager) = StateManager::instance().try_read() {
-            state_manager.set_cortical_area_neuron_count(
-                &cortical_id.as_base_64(),
-                neuron_count as usize,
-            );
+            state_manager
+                .set_cortical_area_neuron_count(&cortical_id.as_base_64(), neuron_count as usize);
         }
 
         // Update total neuron count cache
@@ -3687,8 +3679,7 @@ impl ConnectomeManager {
                 core_state.subtract_neuron_count(1);
                 core_state.subtract_regular_neuron_count(1);
                 if let Some(cortical_id) = cortical_id {
-                    state_manager
-                        .subtract_cortical_area_neuron_count(&cortical_id.as_base_64(), 1);
+                    state_manager.subtract_cortical_area_neuron_count(&cortical_id.as_base_64(), 1);
                 }
             }
 
@@ -6237,9 +6228,10 @@ mod tests {
         )
         .unwrap();
 
+        let initial_count = manager.get_brain_region_ids().len();
         manager.add_brain_region(root, None).unwrap();
 
-        assert_eq!(manager.get_brain_region_ids().len(), 1);
+        assert_eq!(manager.get_brain_region_ids().len(), initial_count + 1);
         assert!(manager.get_brain_region(&region_id_str).is_some());
     }
 
@@ -6926,16 +6918,32 @@ mod tests {
 
         let upstream_m1 = manager.get_upstream_cortical_areas(&m1_id);
         let upstream_m2 = manager.get_upstream_cortical_areas(&m2_id);
-        assert_eq!(upstream_m1.len(), 1, "M1 should have only 1 upstream before refresh");
-        assert_eq!(upstream_m2.len(), 2, "M2 should have 2 upstreams before refresh");
+        assert_eq!(
+            upstream_m1.len(),
+            1,
+            "M1 should have only 1 upstream before refresh"
+        );
+        assert_eq!(
+            upstream_m2.len(),
+            2,
+            "M2 should have 2 upstreams before refresh"
+        );
 
         manager.refresh_upstream_cortical_areas_from_mappings(&m1_id);
         manager.refresh_upstream_cortical_areas_from_mappings(&m2_id);
 
         let upstream_m1 = manager.get_upstream_cortical_areas(&m1_id);
         let upstream_m2 = manager.get_upstream_cortical_areas(&m2_id);
-        assert_eq!(upstream_m1.len(), 2, "M1 should have 2 upstreams after refresh");
-        assert_eq!(upstream_m2.len(), 2, "M2 should have 2 upstreams after refresh");
+        assert_eq!(
+            upstream_m1.len(),
+            2,
+            "M1 should have 2 upstreams after refresh"
+        );
+        assert_eq!(
+            upstream_m2.len(),
+            2,
+            "M2 should have 2 upstreams after refresh"
+        );
         assert!(upstream_m1.contains(&a1_idx));
         assert!(upstream_m1.contains(&m2_idx));
         assert!(upstream_m2.contains(&a2_idx));
@@ -6953,8 +6961,16 @@ mod tests {
 
         let upstream_m1 = manager.get_upstream_cortical_areas(&m1_id);
         let upstream_m2 = manager.get_upstream_cortical_areas(&m2_id);
-        assert_eq!(upstream_m1.len(), 2, "M1 should keep 2 upstreams after firing");
-        assert_eq!(upstream_m2.len(), 2, "M2 should keep 2 upstreams after firing");
+        assert_eq!(
+            upstream_m1.len(),
+            2,
+            "M1 should keep 2 upstreams after firing"
+        );
+        assert_eq!(
+            upstream_m2.len(),
+            2,
+            "M2 should keep 2 upstreams after firing"
+        );
     }
 
     #[test]

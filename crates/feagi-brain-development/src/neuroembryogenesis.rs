@@ -143,8 +143,10 @@ impl Neuroembryogenesis {
             area.consecutive_fire_count() as u16,
         );
         npu_lock.update_cortical_area_snooze_period(cortical_idx, area.snooze_period());
-        npu_lock
-            .update_cortical_area_mp_charge_accumulation(cortical_idx, area.mp_charge_accumulation());
+        npu_lock.update_cortical_area_mp_charge_accumulation(
+            cortical_idx,
+            area.mp_charge_accumulation(),
+        );
 
         Ok(())
     }
@@ -225,7 +227,7 @@ impl Neuroembryogenesis {
                 };
 
                 if existing_core_neurons > 0 {
-                    self.sync_core_neuron_params(*core_idx as u32, area)?;
+                    self.sync_core_neuron_params(*core_idx, area)?;
                     let refreshed = {
                         let manager = self.connectome_manager.read();
                         manager.refresh_neuron_count_for_area(&area.cortical_id)
@@ -828,7 +830,7 @@ impl Neuroembryogenesis {
             };
 
             if existing_core_neurons > 0 {
-                self.sync_core_neuron_params(*core_idx as u32, area)?;
+                self.sync_core_neuron_params(*core_idx, area)?;
                 let refreshed = {
                     let manager = self.connectome_manager.read();
                     manager.refresh_neuron_count_for_area(cortical_id)
@@ -1167,7 +1169,10 @@ impl Neuroembryogenesis {
         Ok(())
     }
 
-    fn rebuild_memory_twin_mappings_from_genome(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
+    fn rebuild_memory_twin_mappings_from_genome(
+        &mut self,
+        genome: &RuntimeGenome,
+    ) -> BduResult<()> {
         use feagi_structures::genomic::cortical_area::CorticalAreaType;
         let mut repaired = 0usize;
 

@@ -588,7 +588,7 @@ mod tests {
             target_neurons: vec![10, 11, 10], // Raw u32 values
             weights: vec![255, 128, 200],     // Raw u8 values
             postsynaptic_potentials: vec![255, 255, 200], // Raw u8 PSP values
-            types: vec![0, 1, 0],                         // 0=excitatory, 1=inhibitory
+            types: vec![0, 1, 0],             // 0=excitatory, 1=inhibitory
             valid_mask: vec![true, true, true],
             source_index: ahash::AHashMap::new(),
         };

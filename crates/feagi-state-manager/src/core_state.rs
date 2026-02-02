@@ -417,10 +417,7 @@ impl MemoryMappedState {
 
     /// Add to regular neuron count (atomic increment)
     pub fn add_regular_neuron_count(&self, delta: u32) -> u32 {
-        let new_count = self
-            .regular_neuron_count
-            .fetch_add(delta, Ordering::AcqRel)
-            + delta;
+        let new_count = self.regular_neuron_count.fetch_add(delta, Ordering::AcqRel) + delta;
         self.increment_version();
         new_count
     }
@@ -448,10 +445,7 @@ impl MemoryMappedState {
 
     /// Add to memory neuron count (atomic increment)
     pub fn add_memory_neuron_count(&self, delta: u32) -> u32 {
-        let new_count = self
-            .memory_neuron_count
-            .fetch_add(delta, Ordering::AcqRel)
-            + delta;
+        let new_count = self.memory_neuron_count.fetch_add(delta, Ordering::AcqRel) + delta;
         self.increment_version();
         new_count
     }

@@ -663,7 +663,7 @@ mod tests {
         assert!(morphs_added > 0);
         assert!(genome.morphologies.contains("block_to_block"));
         assert!(genome.morphologies.contains("projector"));
-        assert!(genome.morphologies.contains("memory"));
+        assert!(genome.morphologies.contains("episodic_memory"));
         assert!(genome.morphologies.contains("lateral_+x"));
     }
 

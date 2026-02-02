@@ -143,7 +143,7 @@ pub fn apply_block_connection_morphology_batched(
                     NeuronId(src_nid),
                     NeuronId(dst_nid),
                     SynapticWeight(weight),
-                SynapticPsp(psp),
+                    SynapticPsp(psp),
                     synapse_type,
                 )
                 .is_ok()
@@ -408,8 +408,7 @@ pub fn apply_block_connection_morphology(
     // Create synapses for matched pairs
     let mut synapse_count = 0u32;
     let mut found_dest_count = 0;
-    let mut created_pairs: std::collections::HashSet<(u32, u32)> =
-        std::collections::HashSet::new();
+    let mut created_pairs: std::collections::HashSet<(u32, u32)> = std::collections::HashSet::new();
 
     for (src_nid, dst_pos) in src_to_dst_map {
         if let Some(dst_nid) = dst_coord_to_neuron.get(&dst_pos) {

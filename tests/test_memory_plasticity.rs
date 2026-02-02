@@ -13,8 +13,8 @@ These tests validate:
 use feagi_brain_development::{ConnectomeManager, Neuroembryogenesis};
 use feagi_evolutionary::load_genome_from_file;
 use feagi_npu_burst_engine::backend::CPUBackend;
-use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
 use feagi_npu_burst_engine::npu::MemoryReplayFrame;
+use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
 use feagi_npu_neural::types::NeuronId;
 use feagi_npu_plasticity::{
     MemoryNeuronArray, MemoryNeuronLifecycleConfig, PatternConfig, PatternDetector,
@@ -96,11 +96,7 @@ fn create_multi_neuron_area(
     npu_lock.get_neurons_in_cortical_area(cortical_idx)
 }
 
-fn inject_and_burst(
-    npu: &Arc<TracingMutex<DynamicNPU>>,
-    neuron_id: u32,
-    potential: f32,
-) -> u64 {
+fn inject_and_burst(npu: &Arc<TracingMutex<DynamicNPU>>, neuron_id: u32, potential: f32) -> u64 {
     let mut npu_lock = npu.lock().unwrap();
     npu_lock.inject_sensory_with_potentials(&[(NeuronId(neuron_id), potential)]);
     npu_lock.process_burst().expect("Burst failed").burst
@@ -136,7 +132,7 @@ fn cortical_id_by_name(genome: &feagi_evolutionary::RuntimeGenome, name: &str) -
         .cortical_areas
         .iter()
         .find(|(_, area)| area.name == name)
-        .map(|(id, _)| id.clone())
+        .map(|(id, _)| *id)
         .unwrap_or_else(|| panic!("Missing cortical area named '{}'", name))
 }
 
@@ -144,14 +140,13 @@ fn cortical_id_by_name(genome: &feagi_evolutionary::RuntimeGenome, name: &str) -
 fn test_associative_mem_genome_l1_l2_do_not_drive_m1_m2_firing() {
     let genome_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../feagi-rs/genomes/associative_mem_genome.json");
-    let genome = load_genome_from_file(&genome_path)
-        .expect("Failed to load associative_mem_genome.json");
+    let genome =
+        load_genome_from_file(&genome_path).expect("Failed to load associative_mem_genome.json");
 
     let runtime = StdRuntime::new();
     let backend = CPUBackend::new();
     let npu = Arc::new(TracingMutex::new(
-        DynamicNPU::new_f32(runtime, backend, 100_000, 100_000, 10)
-            .expect("Failed to create NPU"),
+        DynamicNPU::new_f32(runtime, backend, 100_000, 100_000, 10).expect("Failed to create NPU"),
         "associative_mem_genome_test",
     ));
 
@@ -247,14 +242,13 @@ fn test_associative_mem_genome_l1_l2_do_not_drive_m1_m2_firing() {
 fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
     let genome_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../feagi-rs/genomes/associative_mem_genome.json");
-    let genome = load_genome_from_file(&genome_path)
-        .expect("Failed to load associative_mem_genome.json");
+    let genome =
+        load_genome_from_file(&genome_path).expect("Failed to load associative_mem_genome.json");
 
     let runtime = StdRuntime::new();
     let backend = CPUBackend::new();
     let npu = Arc::new(TracingMutex::new(
-        DynamicNPU::new_f32(runtime, backend, 100_000, 100_000, 10)
-            .expect("Failed to create NPU"),
+        DynamicNPU::new_f32(runtime, backend, 100_000, 100_000, 10).expect("Failed to create NPU"),
         "associative_mem_genome_synapse_test",
     ));
 
@@ -377,21 +371,17 @@ fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
                 }
             }
         }
-        apply_plasticity_commands_with_manager(
-            &npu,
-            &manager,
-            &commands,
-            &mut memory_neuron_ids,
-        );
+        apply_plasticity_commands_with_manager(&npu, &manager, &commands, &mut memory_neuron_ids);
 
         let memory_burst = {
             let npu_lock = npu.lock().unwrap();
             npu_lock.process_burst().expect("Burst failed").burst
         };
 
-        if let (Some(&m1_mem), Some(&m2_mem)) =
-            (memory_neuron_ids.get(&m1_idx), memory_neuron_ids.get(&m2_idx))
-        {
+        if let (Some(&m1_mem), Some(&m2_mem)) = (
+            memory_neuron_ids.get(&m1_idx),
+            memory_neuron_ids.get(&m2_idx),
+        ) {
             let m1_window = npu
                 .lock()
                 .unwrap()
@@ -403,15 +393,11 @@ fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
                 .get_fire_ledger_dense_window_bitmaps(m2_idx, memory_burst, 1)
                 .expect("Missing FireLedger window for m2");
             assert!(
-                m1_window
-                    .iter()
-                    .any(|(_, bm)| bm.contains(m1_mem)),
+                m1_window.iter().any(|(_, bm)| bm.contains(m1_mem)),
                 "Expected m1 memory neuron to fire"
             );
             assert!(
-                m2_window
-                    .iter()
-                    .any(|(_, bm)| bm.contains(m2_mem)),
+                m2_window.iter().any(|(_, bm)| bm.contains(m2_mem)),
                 "Expected m2 memory neuron to fire"
             );
 
@@ -488,9 +474,7 @@ fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
         .get_fire_ledger_dense_window_bitmaps(m1_idx, m1_fire_burst, 1)
         .expect("Missing FireLedger window for m1 after l1-only");
     assert!(
-        m1_window
-            .iter()
-            .any(|(_, bm)| bm.contains(m1_mem)),
+        m1_window.iter().any(|(_, bm)| bm.contains(m1_mem)),
         "Expected l1-only to activate m1 memory neuron"
     );
 
@@ -504,9 +488,7 @@ fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
         .get_fire_ledger_dense_window_bitmaps(m2_idx, m2_fire_burst, 1)
         .expect("Missing FireLedger window for m2 after m1 activation");
     assert!(
-        m2_window
-            .iter()
-            .any(|(_, bm)| bm.contains(m2_mem)),
+        m2_window.iter().any(|(_, bm)| bm.contains(m2_mem)),
         "Expected associative synapse to activate m2 memory neuron"
     );
 
@@ -523,8 +505,8 @@ fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
         .max()
         .expect("Missing replay frame offsets for m2");
     let mut l2_twin_fired = false;
-    for offset in 0..=max_offset {
-        let mut npu_lock = npu.lock().unwrap();
+    for _ in 0..=max_offset {
+        let npu_lock = npu.lock().unwrap();
         let result = npu_lock.process_burst().expect("Burst failed");
         if result
             .fired_neurons
@@ -601,13 +583,14 @@ fn apply_plasticity_commands_with_manager(
     for command in commands {
         match command {
             PlasticityCommand::RegisterMemoryNeuron {
-                neuron_id, area_idx, ..
+                neuron_id,
+                area_idx,
+                ..
             } => {
-                let cortical_id = manager
+                let cortical_id = *manager
                     .read()
                     .get_cortical_id(*area_idx)
-                    .unwrap_or_else(|| panic!("Missing cortical ID for area {}", area_idx))
-                    .clone();
+                    .unwrap_or_else(|| panic!("Missing cortical ID for area {}", area_idx));
                 npu_lock.register_dynamic_neuron_mapping(*neuron_id, cortical_id);
                 memory_neuron_ids.insert(*area_idx, *neuron_id);
             }
@@ -722,8 +705,12 @@ fn test_memory_neuron_allocation_is_deterministic() {
         .expect("Missing memory neuron ID");
 
     assert_ne!(id_a, id_b);
-    assert!(feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(id_a));
-    assert!(feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(id_b));
+    assert!(feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(
+        id_a
+    ));
+    assert!(feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(
+        id_b
+    ));
 }
 
 #[test]
@@ -765,13 +752,18 @@ fn test_memory_command_flow_creates_and_reactivates() {
         .fired_neurons
         .iter()
         .any(|id| feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(id.0));
-    assert!(memory_fired, "Expected memory neuron to fire after injection");
+    assert!(
+        memory_fired,
+        "Expected memory neuron to fire after injection"
+    );
 
     let burst_again = inject_and_burst(&npu, upstream_neuron_id, 10.0);
     service.notify_burst(burst_again);
     let commands_again = wait_for_commands(&service);
     let reactivation = commands_again.iter().any(|c| match c {
-        PlasticityCommand::InjectMemoryNeuronToFCL { is_reactivation, .. } => *is_reactivation,
+        PlasticityCommand::InjectMemoryNeuronToFCL {
+            is_reactivation, ..
+        } => *is_reactivation,
         _ => false,
     });
     assert!(reactivation, "Expected reactivation command");
@@ -1082,7 +1074,13 @@ fn test_memory_neuron_count_stalls_with_limited_unique_patterns() {
         longterm_threshold: 9,
         max_reactivations: 1000,
     };
-    service.register_memory_area(100, "mem_00".to_string(), 1, vec![7], Some(lifecycle_config));
+    service.register_memory_area(
+        100,
+        "mem_00".to_string(),
+        1,
+        vec![7],
+        Some(lifecycle_config),
+    );
 
     let sequence = [0usize, 1, 2, 0, 1, 2, 0, 1, 2, 0];
     for idx in sequence {
@@ -1093,7 +1091,11 @@ fn test_memory_neuron_count_stalls_with_limited_unique_patterns() {
         apply_plasticity_commands(&npu, &commands);
     }
 
-    let array_stats = service.get_memory_neuron_array().lock().unwrap().get_stats();
+    let array_stats = service
+        .get_memory_neuron_array()
+        .lock()
+        .unwrap()
+        .get_stats();
     assert_eq!(array_stats.active_neurons, 3);
 
     let stats = service.get_stats();
@@ -1170,7 +1172,13 @@ fn test_memory_replay_injects_twin_area() {
         npu.clone(),
     );
     service.start();
-    service.register_memory_area(memory_area_idx, "mem_00".to_string(), 1, vec![upstream_idx], None);
+    service.register_memory_area(
+        memory_area_idx,
+        "mem_00".to_string(),
+        1,
+        vec![upstream_idx],
+        None,
+    );
 
     let upstream_neuron_id = {
         let npu_lock = npu.lock().unwrap();
@@ -1189,7 +1197,10 @@ fn test_memory_replay_injects_twin_area() {
             _ => None,
         })
         .expect("Expected replay frames from memory command");
-    assert!(!replay_frames.is_empty(), "Replay frames should not be empty");
+    assert!(
+        !replay_frames.is_empty(),
+        "Replay frames should not be empty"
+    );
 
     let max_offset = replay_frames
         .iter()

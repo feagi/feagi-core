@@ -861,7 +861,9 @@ impl PlasticityService {
             for command in &drained {
                 match command {
                     PlasticityCommand::RegisterMemoryNeuron {
-                        neuron_id, area_idx, ..
+                        neuron_id,
+                        area_idx,
+                        ..
                     } => {
                         tracing::debug!(
                             target: "plasticity",
@@ -871,7 +873,9 @@ impl PlasticityService {
                         );
                     }
                     PlasticityCommand::MemoryNeuronConvertedToLtm {
-                        neuron_id, area_idx, ..
+                        neuron_id,
+                        area_idx,
+                        ..
                     } => {
                         tracing::info!(
                             target: "plasticity",

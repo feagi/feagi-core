@@ -6,17 +6,19 @@
 //! DEALER sockets are used for asynchronous request-reply patterns where the client
 //! can send multiple requests without waiting for replies. Used with ROUTER servers.
 
-use crate::transports::core::common::{ClientConfig, TransportConfig, TransportError, TransportResult};
+use crate::transports::core::common::{
+    ClientConfig, TransportConfig, TransportError, TransportResult,
+};
 use crate::transports::core::traits::{RequestReplyClient, Transport};
 use parking_lot::Mutex;
+use std::future::Future;
 use std::sync::Arc;
+use tokio::runtime::Handle;
 use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tokio::time::timeout;
 use tracing::info;
 use zeromq::{DealerSocket, Socket, SocketRecv, SocketSend, ZmqMessage};
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-use std::future::Future;
 
 fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
     if Handle::try_current().is_ok() {
@@ -50,8 +52,7 @@ impl ZmqDealer {
     pub fn with_address(address: impl Into<String>) -> TransportResult<Self> {
         let config = ClientConfig::new(address);
         let runtime = Arc::new(
-            Runtime::new()
-                .map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
+            Runtime::new().map_err(|e| TransportError::InitializationFailed(e.to_string()))?,
         );
         Self::new(runtime, config)
     }
@@ -85,8 +86,11 @@ impl Transport for ZmqDealer {
         let mut socket = DealerSocket::new();
 
         // Connect socket
-        block_on_runtime(self.runtime.as_ref(), socket.connect(&self.config.base.address))
-            .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
+        block_on_runtime(
+            self.runtime.as_ref(),
+            socket.connect(&self.config.base.address),
+        )
+        .map_err(|e| TransportError::ConnectFailed(e.to_string()))?;
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
@@ -145,12 +149,16 @@ impl RequestReplyClient for ZmqDealer {
             block_on_runtime(self.runtime.as_ref(), async {
                 timeout(std::time::Duration::from_millis(timeout_ms), recv_future).await
             })
-                .map_err(|_| TransportError::Timeout)?
-                .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
+            .map_err(|_| TransportError::Timeout)?
+            .map_err(|e| TransportError::ReceiveFailed(e.to_string()))?
         };
 
         let mut frames = reply.into_vec();
-        if frames.first().map(|frame| frame.is_empty()).unwrap_or(false) {
+        if frames
+            .first()
+            .map(|frame| frame.is_empty())
+            .unwrap_or(false)
+        {
             frames.remove(0);
         }
         if frames.len() != 1 {

@@ -6,8 +6,8 @@ use crate::io_api::traits_and_enums::client::{
 };
 use crate::io_api::{FeagiClientConnectionState, FeagiNetworkError};
 use futures_util::FutureExt;
-use std::future::Future;
 use parking_lot::Mutex;
+use std::future::Future;
 use tokio::runtime::{Handle, Runtime};
 use tokio::task::block_in_place;
 use zeromq::{DealerSocket, PushSocket, Socket, SocketRecv, SocketSend, SubSocket, ZmqMessage};
@@ -456,8 +456,9 @@ impl FeagiClientRequester for FEAGIZMQClientRequester {
     }
 
     fn try_poll_receive(&mut self) -> Result<Option<&[u8]>, FeagiNetworkError> {
-        let result =
-            block_on_runtime(&self.runtime, async { self.socket.lock().recv().now_or_never() });
+        let result = block_on_runtime(&self.runtime, async {
+            self.socket.lock().recv().now_or_never()
+        });
         let message = match result {
             None => return Ok(None),
             Some(Ok(message)) => message,
@@ -465,7 +466,11 @@ impl FeagiClientRequester for FEAGIZMQClientRequester {
         };
 
         let mut frames = message.into_vec();
-        if frames.first().map(|frame| frame.is_empty()).unwrap_or(false) {
+        if frames
+            .first()
+            .map(|frame| frame.is_empty())
+            .unwrap_or(false)
+        {
             frames.remove(0);
         }
 

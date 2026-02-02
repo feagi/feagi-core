@@ -4,17 +4,17 @@
 //! Heartbeat service for maintaining agent liveness
 
 use crate::core::error::{Result, SdkError};
+use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+use tokio::runtime::Handle;
 use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tokio::time::timeout;
 use tracing::{debug, warn};
 use zeromq::{DealerSocket, SocketRecv, SocketSend, ZmqMessage};
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-use std::future::Future;
 
 fn block_on_with<T>(
     handle: &Handle,
@@ -234,25 +234,25 @@ impl HeartbeatService {
         let response = block_on_with(runtime_handle, runtime, async {
             timeout(Duration::from_millis(1000), socket_guard.recv()).await
         })
-            .map_err(|_| SdkError::Timeout("Heartbeat response timeout".to_string()))?
-            .map_err(SdkError::Zmq)?;
+        .map_err(|_| SdkError::Timeout("Heartbeat response timeout".to_string()))?
+        .map_err(SdkError::Zmq)?;
         let frames = response.into_vec();
         let last = frames
             .last()
             .ok_or_else(|| SdkError::Other("Heartbeat reply was empty".to_string()))?;
         let response: serde_json::Value = serde_json::from_slice(last)?;
 
-            // Heartbeat response schema varies by FEAGI version/transport:
-            // - Legacy: {"status":"success", ...}
-            // - HTTP-style: {"status":200,"body":{"message":"ok"}, ...}
-            //
-            // Treat both as success deterministically.
-            let status_value = response.get("status");
-            let is_success = match status_value {
-                Some(serde_json::Value::String(s)) => s == "success" || s == "ok",
-                Some(serde_json::Value::Number(n)) => n.as_u64() == Some(200),
-                _ => false,
-            };
+        // Heartbeat response schema varies by FEAGI version/transport:
+        // - Legacy: {"status":"success", ...}
+        // - HTTP-style: {"status":200,"body":{"message":"ok"}, ...}
+        //
+        // Treat both as success deterministically.
+        let status_value = response.get("status");
+        let is_success = match status_value {
+            Some(serde_json::Value::String(s)) => s == "success" || s == "ok",
+            Some(serde_json::Value::Number(n)) => n.as_u64() == Some(200),
+            _ => false,
+        };
 
         if is_success {
             debug!("[HEARTBEAT] ✓ Heartbeat acknowledged for {}", agent_id);
@@ -320,8 +320,8 @@ impl HeartbeatService {
             let response = block_on_with(runtime_handle, runtime, async {
                 timeout(Duration::from_millis(1000), socket.recv()).await
             })
-                .map_err(|_| SdkError::Timeout("Registration response timeout".to_string()))?
-                .map_err(SdkError::Zmq)?;
+            .map_err(|_| SdkError::Timeout("Registration response timeout".to_string()))?
+            .map_err(SdkError::Zmq)?;
             let frames = response.into_vec();
             let last = frames
                 .last()

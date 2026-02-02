@@ -62,12 +62,9 @@ impl ZmqStreams {
         let viz_stream = VisualizationStream::new(Arc::clone(&runtime), viz_address, viz_config)
             .map_err(|e| IOError::Zmq(format!("Viz stream: {}", e)))?;
 
-        let sensory_stream = SensoryStream::new(
-            Arc::clone(&runtime),
-            sensory_address,
-            sensory_config,
-        )
-        .map_err(|e| IOError::Zmq(format!("Sensory stream: {}", e)))?;
+        let sensory_stream =
+            SensoryStream::new(Arc::clone(&runtime), sensory_address, sensory_config)
+                .map_err(|e| IOError::Zmq(format!("Sensory stream: {}", e)))?;
 
         // Wire up agent registry for security gating
         sensory_stream.set_agent_registry(Arc::clone(&agent_registry));

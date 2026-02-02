@@ -174,8 +174,7 @@ pub struct RustNPU<
     pub(crate) memory_replay_frames:
         std::sync::RwLock<AHashMap<u32, std::sync::Arc<Vec<MemoryReplayFrame>>>>,
     // Memory replay: (memory area idx, upstream area idx) -> twin area + potential
-    pub(crate) memory_replay_twin_map:
-        std::sync::RwLock<AHashMap<(u32, u32), MemoryReplayTarget>>,
+    pub(crate) memory_replay_twin_map: std::sync::RwLock<AHashMap<(u32, u32), MemoryReplayTarget>>,
 
     // Atomic stats (lock-free reads)
     burst_count: std::sync::atomic::AtomicU64,
@@ -519,10 +518,12 @@ impl<
             if next == current {
                 break;
             }
-            match self
-                .power_neuron_id
-                .compare_exchange(current, next, Ordering::Release, Ordering::Relaxed)
-            {
+            match self.power_neuron_id.compare_exchange(
+                current,
+                next,
+                Ordering::Release,
+                Ordering::Relaxed,
+            ) {
                 Ok(_) => break,
                 Err(observed) => current = observed,
             }
@@ -984,13 +985,7 @@ impl<
             .synapse_storage
             .write()
             .unwrap()
-            .add_synapse(
-                source.0,
-                target.0,
-                weight.0,
-                psp.0,
-                synapse_type as u8,
-            )
+            .add_synapse(source.0, target.0, weight.0, psp.0, synapse_type as u8)
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapse: {:?}", e)))?;
 
         // NOTE: This does NOT rebuild the synapse index for performance reasons.
@@ -1540,12 +1535,14 @@ impl<
                         );
                         continue;
                     };
-                    fire_structures.pending_replay_injections.push(ReplayInjection {
-                        target_burst: burst_count + frame.offset as u64 + 1,
-                        twin_area_idx: target.twin_area_idx,
-                        coords: frame.coords.clone(),
-                        potential: target.potential,
-                    });
+                    fire_structures
+                        .pending_replay_injections
+                        .push(ReplayInjection {
+                            target_burst: burst_count + frame.offset as u64 + 1,
+                            twin_area_idx: target.twin_area_idx,
+                            coords: frame.coords.clone(),
+                            potential: target.potential,
+                        });
                     scheduled += 1;
                 }
             }
@@ -1631,13 +1628,11 @@ impl<
             let mut staged = pending_mutex.lock().unwrap();
             let mut total_replay_candidates = 0usize;
             for replay in replay_due.into_iter() {
-                let neuron_ids = neuron_storage
-                    .batch_coordinate_lookup(replay.twin_area_idx, &replay.coords);
-                for opt_idx in neuron_ids.into_iter() {
-                    if let Some(idx) = opt_idx {
-                        staged.push((NeuronId(idx as u32), replay.potential));
-                        total_replay_candidates += 1;
-                    }
+                let neuron_ids =
+                    neuron_storage.batch_coordinate_lookup(replay.twin_area_idx, &replay.coords);
+                for idx in neuron_ids.into_iter().flatten() {
+                    staged.push((NeuronId(idx as u32), replay.potential));
+                    total_replay_candidates += 1;
                 }
             }
             tracing::debug!(
@@ -1778,10 +1773,7 @@ impl<
 
         // Phase 3.5: Synaptic Plasticity (STDP-like) updates
         // Uses FireLedger window ending at this burst and applies weight updates to affect burst t+1.
-        self.apply_stdp_updates_for_burst(burst_count, &fire_structures.fire_ledger)
-            .map_err(|e| {
-                e
-            })?;
+        self.apply_stdp_updates_for_burst(burst_count, &fire_structures.fire_ledger)?;
         let phase3_duration = phase3_start.elapsed();
 
         // Phase 4: Swap fire queues (current becomes previous for next burst)
@@ -1919,8 +1911,7 @@ impl<
                         .unwrap_or(false)
                     && neuron_storage.cortical_areas().get(neuron_idx).copied() == Some(area_id)
                 {
-                    self.power_neuron_id
-                        .store(neuron_id.0, Ordering::Release);
+                    self.power_neuron_id.store(neuron_id.0, Ordering::Release);
                 } else if let Some(&first_idx) =
                     neuron_storage.get_neurons_in_cortical_area(1).first()
                 {
@@ -3464,7 +3455,8 @@ impl<
             self.power_neuron_id
                 .store(first_idx as u32, Ordering::Release);
         } else {
-            self.power_neuron_id.store(POWER_NEURON_UNSET, Ordering::Release);
+            self.power_neuron_id
+                .store(POWER_NEURON_UNSET, Ordering::Release);
         }
     }
 
@@ -3696,8 +3688,7 @@ impl<
                     continue;
                 };
                 for &syn_idx in syn_indices {
-                    if syn_idx >= synapse_storage.count()
-                        || !synapse_storage.valid_mask()[syn_idx]
+                    if syn_idx >= synapse_storage.count() || !synapse_storage.valid_mask()[syn_idx]
                     {
                         continue;
                     }
@@ -3857,8 +3848,7 @@ impl<
                 );
 
                 for &syn_idx in syn_indices {
-                    if syn_idx >= synapse_storage.count()
-                        || !synapse_storage.valid_mask()[syn_idx]
+                    if syn_idx >= synapse_storage.count() || !synapse_storage.valid_mask()[syn_idx]
                     {
                         continue;
                     }
@@ -3875,8 +3865,7 @@ impl<
                             && neuron_storage.valid_mask()[dst_idx]
                         {
                             let weight = synapse_storage.weights()[syn_idx];
-                            let psp =
-                                synapse_storage.postsynaptic_potentials()[syn_idx];
+                            let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
                             let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
                             let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
                             tracing::info!(
@@ -3957,7 +3946,9 @@ impl<
                             }
                             let target = synapse_storage.target_neurons()[syn_idx];
                             let target_idx = target as usize;
-                            if target_idx >= neuron_count || !neuron_storage.valid_mask()[target_idx] {
+                            if target_idx >= neuron_count
+                                || !neuron_storage.valid_mask()[target_idx]
+                            {
                                 continue;
                             }
                             if neuron_storage.cortical_areas()[target_idx] == *dst_area {
@@ -4008,7 +3999,13 @@ impl<
                 self.synapse_storage
                     .write()
                     .unwrap()
-                    .add_synapses_batch(&source_ids, &target_ids, &weight_vals, &psp_vals, &type_vals)
+                    .add_synapses_batch(
+                        &source_ids,
+                        &target_ids,
+                        &weight_vals,
+                        &psp_vals,
+                        &type_vals,
+                    )
                     .map_err(|e| {
                         FeagiError::RuntimeError(format!("Failed to add synapses batch: {:?}", e))
                     })?;
@@ -4793,12 +4790,14 @@ mod tests {
 
         {
             let mut fire_structures = npu.fire_structures.lock().unwrap();
-            fire_structures.pending_replay_injections.push(ReplayInjection {
-                target_burst: 0,
-                twin_area_idx: 3,
-                coords: vec![(0, 0, 0)],
-                potential: 10.0,
-            });
+            fire_structures
+                .pending_replay_injections
+                .push(ReplayInjection {
+                    target_burst: 0,
+                    twin_area_idx: 3,
+                    coords: vec![(0, 0, 0)],
+                    potential: 10.0,
+                });
         }
 
         let burst = npu.process_burst().unwrap().burst;
@@ -5223,7 +5222,7 @@ mod tests {
             neuron_a,
             neuron_b,
             SynapticWeight(1),       // weight = 1
-            SynapticPsp(1),  // PSP = 1 → PSP = 1×1 = 1.0
+            SynapticPsp(1),          // PSP = 1 → PSP = 1×1 = 1.0
             SynapseType::Excitatory, // synapse_type (excitatory)
         )
         .unwrap();

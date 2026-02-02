@@ -158,8 +158,8 @@ impl WasmConnectomeService {
             area_type: area_type_str,
             cortical_group,
             cortical_type,
-            neuron_count: 0,  // TODO: Extract from NPU if available
-            synapse_count: 0, // TODO: Extract from NPU if available
+            neuron_count: 0,           // TODO: Extract from NPU if available
+            synapse_count: 0,          // TODO: Extract from NPU if available
             incoming_synapse_count: 0, // TODO: Extract from NPU if available
             outgoing_synapse_count: 0, // TODO: Extract from NPU if available
             visible: area

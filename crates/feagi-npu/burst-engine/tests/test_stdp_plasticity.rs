@@ -11,7 +11,11 @@ use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
 /// Create a minimal STDP test network with two cortical areas.
-fn create_stdp_network() -> (RustNPU<StdRuntime, f32, CPUBackend>, Vec<NeuronId>, Vec<NeuronId>) {
+fn create_stdp_network() -> (
+    RustNPU<StdRuntime, f32, CPUBackend>,
+    Vec<NeuronId>,
+    Vec<NeuronId>,
+) {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 100, 1000, 10).unwrap();
@@ -87,11 +91,20 @@ fn test_bidirectional_stdp_requires_consistent_neurons_across_window() {
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     // Burst 1: fire src0/dst0
-    process_burst_with_injection(&mut npu, &[(src_neurons[0], 128.0), (dst_neurons[0], 128.0)]);
+    process_burst_with_injection(
+        &mut npu,
+        &[(src_neurons[0], 128.0), (dst_neurons[0], 128.0)],
+    );
     // Burst 2: fire src1/dst1
-    process_burst_with_injection(&mut npu, &[(src_neurons[1], 128.0), (dst_neurons[1], 128.0)]);
+    process_burst_with_injection(
+        &mut npu,
+        &[(src_neurons[1], 128.0), (dst_neurons[1], 128.0)],
+    );
     // Burst 3: fire src2/dst2
-    process_burst_with_injection(&mut npu, &[(src_neurons[2], 128.0), (dst_neurons[2], 128.0)]);
+    process_burst_with_injection(
+        &mut npu,
+        &[(src_neurons[2], 128.0), (dst_neurons[2], 128.0)],
+    );
 
     // No synapse should form because no single neuron is present in all bursts.
     for src in &src_neurons {
@@ -149,7 +162,11 @@ fn test_bidirectional_stdp_creates_synapse_after_full_window() {
     assert_neuron_fired(&npu, 11, burst, dst);
 
     let outgoing = npu.get_outgoing_synapses(src.0);
-    assert_eq!(outgoing.len(), 1, "Synapse should be created after full window");
+    assert_eq!(
+        outgoing.len(),
+        1,
+        "Synapse should be created after full window"
+    );
     let (target, weight, psp, synapse_type) = outgoing[0];
     assert_eq!(target, dst.0);
     assert_eq!(weight, 5);
@@ -188,7 +205,11 @@ fn test_bidirectional_stdp_with_memory_neuron_ids() {
     assert_neuron_fired(&npu, 11, burst, dst);
 
     let outgoing = npu.get_outgoing_synapses(src.0);
-    assert_eq!(outgoing.len(), 1, "Synapse should be created after full window");
+    assert_eq!(
+        outgoing.len(),
+        1,
+        "Synapse should be created after full window"
+    );
     assert_eq!(outgoing[0].0, dst.0);
 }
 

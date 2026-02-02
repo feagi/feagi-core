@@ -1279,12 +1279,13 @@ fn burst_loop(
                                     // PSP is stored in the NPU as u8 (0..=255).
                                     // Clamp deterministically (matches synaptogenesis behavior).
                                     let psp_u8 = psp.clamp(0.0, 255.0) as u8;
-                                    let synapses_updated = npu_lock.update_cortical_area_postsynaptic_current(
-                                        update.cortical_idx,
-                                        psp_u8,
-                                    );
-                                    let mappings_updated =
-                                        npu_lock.update_stdp_mapping_psp_for_source(
+                                    let synapses_updated = npu_lock
+                                        .update_cortical_area_postsynaptic_current(
+                                            update.cortical_idx,
+                                            psp_u8,
+                                        );
+                                    let mappings_updated = npu_lock
+                                        .update_stdp_mapping_psp_for_source(
                                             update.cortical_idx,
                                             psp_u8,
                                         );
@@ -1517,15 +1518,15 @@ fn burst_loop(
             tracing::debug!("[BURST-LOOP] Post-burst callback not configured");
         }
 
-            // Exit if shutdown was requested
-            if should_exit || !running.load(Ordering::Relaxed) {
-                break;
-            }
+        // Exit if shutdown was requested
+        if should_exit || !running.load(Ordering::Relaxed) {
+            break;
+        }
 
         burst_num += 1;
         // Note: NPU.process_burst() already incremented its internal burst_count
 
-            let post_burst_start = Instant::now();
+        let post_burst_start = Instant::now();
         let time_between_npu_release_and_post_burst =
             post_burst_start.duration_since(npu_lock_release_time);
         if time_between_npu_release_and_post_burst.as_millis() > 10 {

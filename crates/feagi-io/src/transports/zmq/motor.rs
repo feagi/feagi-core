@@ -6,13 +6,13 @@
 
 use feagi_structures::FeagiDataError;
 use parking_lot::Mutex;
+use std::future::Future;
 use std::sync::Arc;
+use tokio::runtime::Handle;
 use tokio::runtime::Runtime;
+use tokio::task::block_in_place;
 use tracing::{debug, error, info};
 use zeromq::{PubSocket, Socket, SocketSend, ZmqMessage};
-use tokio::runtime::Handle;
-use tokio::task::block_in_place;
-use std::future::Future;
 
 fn block_on_runtime<T>(runtime: &Runtime, future: impl Future<Output = T>) -> T {
     if Handle::try_current().is_ok() {
@@ -89,8 +89,9 @@ impl MotorStream {
         };
 
         let message = ZmqMessage::from(data.to_vec());
-        block_on_runtime(self.runtime.as_ref(), sock.send(message))
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to send motor data: {}", e)))?;
+        block_on_runtime(self.runtime.as_ref(), sock.send(message)).map_err(|e| {
+            FeagiDataError::InternalError(format!("Failed to send motor data: {}", e))
+        })?;
 
         Ok(())
     }
