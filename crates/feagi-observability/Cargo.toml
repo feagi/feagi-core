@@ -1,6 +1,6 @@
 [package]
 name = "feagi-observability"
-version = "0.0.1-beta.7"
+version = "0.0.1-beta.8"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
