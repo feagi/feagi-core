@@ -384,9 +384,13 @@ impl PlasticityService {
         // Step 3: Detect patterns for all memory areas
         // Query CPU-resident FireLedger for upstream area firing history
         for (memory_area_idx, area_config) in memory_areas_snapshot.iter() {
-            tracing::debug!(target: "plasticity",
-                "[PLASTICITY-DEBUG] Burst {} - Processing memory area {} with {} upstream areas: {:?}",
-                current_timestep, memory_area_idx, area_config.upstream_areas.len(), area_config.upstream_areas
+            tracing::trace!(
+                target: "plasticity",
+                "Burst {} - Processing memory area {} with {} upstream areas: {:?}",
+                current_timestep,
+                memory_area_idx,
+                area_config.upstream_areas.len(),
+                area_config.upstream_areas
             );
 
             // Query FireLedger for upstream firing history (CPU-resident, dense burst-aligned windows)
@@ -432,9 +436,13 @@ impl PlasticityService {
                         ) {
                             Ok(w) => w,
                             Err(e) => {
-                                tracing::debug!(target: "plasticity",
-                                    "[PLASTICITY-DEBUG] Burst {} - Upstream area {} dense window unavailable (depth={}): {}",
-                                    current_timestep, upstream_area_idx, temporal_depth, e
+                                tracing::trace!(
+                                    target: "plasticity",
+                                    "Burst {} - Upstream area {} dense window unavailable (depth={}): {}",
+                                    current_timestep,
+                                    upstream_area_idx,
+                                    temporal_depth,
+                                    e
                                 );
                                 windows_ok = false;
                                 break;
@@ -443,8 +451,9 @@ impl PlasticityService {
                         let frame_counts: Vec<u64> =
                             window.iter().map(|(_, bm)| bm.len()).collect();
                         let total_fired: u64 = frame_counts.iter().sum();
-                        tracing::debug!(target: "plasticity",
-                            "[PLASTICITY-DEBUG] Burst {} - Upstream area {} window covers {}..{} ({} frames) fired_counts={:?} total_fired={}",
+                        tracing::trace!(
+                            target: "plasticity",
+                            "Burst {} - Upstream area {} window covers {}..{} ({} frames) fired_counts={:?} total_fired={}",
                             current_timestep,
                             upstream_area_idx,
                             window.first().map(|(t, _)| *t).unwrap_or(0),
@@ -513,17 +522,22 @@ impl PlasticityService {
             };
 
             if timestep_bitmaps.is_empty() {
-                tracing::debug!(target: "plasticity",
-                    "[PLASTICITY-DEBUG] Burst {} - Memory area {} has NO firing history from upstream areas - skipping",
-                    current_timestep, memory_area_idx
+                tracing::trace!(
+                    target: "plasticity",
+                    "Burst {} - Memory area {} has no firing history from upstream areas - skipping",
+                    current_timestep,
+                    memory_area_idx
                 );
                 // No firing history available for upstream areas - skip pattern detection
                 continue;
             }
 
-            tracing::debug!(target: "plasticity",
-                "[PLASTICITY-DEBUG] Burst {} - Memory area {} has {} timestep bitmaps for pattern detection",
-                current_timestep, memory_area_idx, timestep_bitmaps.len()
+            tracing::trace!(
+                target: "plasticity",
+                "Burst {} - Memory area {} has {} timestep bitmaps for pattern detection",
+                current_timestep,
+                memory_area_idx,
+                timestep_bitmaps.len()
             );
 
             let detector =
@@ -692,9 +706,11 @@ impl PlasticityService {
                     }
                 }
             } else {
-                tracing::debug!(target: "plasticity",
-                    "[PLASTICITY-DEBUG] Burst {} - No pattern detected for memory area {}",
-                    current_timestep, memory_area_idx
+                tracing::trace!(
+                    target: "plasticity",
+                    "Burst {} - No pattern detected for memory area {}",
+                    current_timestep,
+                    memory_area_idx
                 );
             }
         }
