@@ -19,7 +19,7 @@ pub trait FeagiServer: Send {
     ///
     /// The current [`FeagiEndpointState`]. Check this before performing data operations
     /// to ensure the server is in a valid state.
-    fn poll(&mut self) -> FeagiEndpointState;
+    fn poll(&mut self) -> &FeagiEndpointState;
 
     /// Initiates binding to the configured address and starts listening.
     ///

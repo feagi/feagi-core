@@ -1,10 +1,7 @@
 
-
-
 mod error;
 
-mod core;
-
+pub mod core;
 pub use error::FeagiNetworkError;
 
 

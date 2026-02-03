@@ -13,6 +13,6 @@ mod feagi_client_requester;
 mod feagi_client_subscriber;
 
 pub use feagi_client::FeagiClient;
-pub use feagi_client_pusher::FeagiClientPusher;
-pub use feagi_client_requester::FeagiClientRequester;
-pub use feagi_client_subscriber::FeagiClientSubscriber;
+pub use feagi_client_pusher::{FeagiClientPusher, FeagiClientPusherProperties};
+pub use feagi_client_requester::{FeagiClientRequester, FeagiClientRequesterProperties};
+pub use feagi_client_subscriber::{FeagiClientSubscriber, FeagiClientSubscriberProperties};

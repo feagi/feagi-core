@@ -36,3 +36,12 @@ pub trait FeagiClientPusher: FeagiClient {
     /// transition the client to `Errored` state.
     fn publish_data(&mut self, data: &[u8]) -> Result<(), FeagiNetworkError>;
 }
+
+/// Factory trait for creating pusher client instances from stored properties.
+///
+/// This enables storing client configuration separately from active instances,
+/// allowing new pushers to be created on demand with the same settings.
+pub trait FeagiClientPusherProperties {
+    /// Creates a new boxed pusher client from these properties.
+    fn as_boxed_client_pusher(&self) -> Box<dyn FeagiClientPusher>;
+}

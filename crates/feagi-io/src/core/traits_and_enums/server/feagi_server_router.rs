@@ -54,3 +54,8 @@ pub trait FeagiServerRouter: FeagiServer {
         message: &[u8],
     ) -> Result<(), FeagiNetworkError>;
 }
+
+pub trait FeagiServerRouterProperties {
+    /// Creates a new boxed router from these properties.
+    fn as_boxed_server_router(&self) -> Box<dyn FeagiServerRouter>;
+}

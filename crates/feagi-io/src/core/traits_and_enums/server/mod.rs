@@ -13,7 +13,6 @@ mod feagi_server_puller;
 mod feagi_server_router;
 
 pub use feagi_server::FeagiServer;
-pub use feagi_server_publisher::FeagiServerPublisher;
-pub use feagi_server_publisher::FeagiServerPublisherProperties;
-pub use feagi_server_puller::FeagiServerPuller;
-pub use feagi_server_router::FeagiServerRouter;
+pub use feagi_server_publisher::{FeagiServerPublisher, FeagiServerPublisherProperties};
+pub use feagi_server_puller::{FeagiServerPuller, FeagiServerPullerProperties};
+pub use feagi_server_router::{FeagiServerRouter, FeagiServerRouterProperties};
