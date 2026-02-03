@@ -26,14 +26,18 @@
 //! ```
 
 use std::env;
+use std::thread;
 use std::time::Duration;
 
-use feagi_io::core::::websocket::{
-    FEAGIWebSocketClientPusher, FEAGIWebSocketServerPuller,
+use feagi_io::core::protocol_implementations::websocket::{
+    FeagiWebSocketClientPusherProperties, FeagiWebSocketServerPullerProperties,
 };
-use feagi_io::core::::zmq::{FEAGIZMQClientPusher, FEAGIZMQServerPuller};
-use feagi_io::core::::client::FeagiClientPusher;
-use feagi_io::core::::server::FeagiServerPuller;
+use feagi_io::core::protocol_implementations::zmq::{
+    FeagiZmqClientPusherProperties, FeagiZmqServerPullerProperties,
+};
+use feagi_io::core::traits_and_enums::client::{FeagiClientPusher, FeagiClientPusherProperties};
+use feagi_io::core::traits_and_enums::server::{FeagiServerPuller, FeagiServerPullerProperties};
+use feagi_io::core::traits_and_enums::FeagiEndpointState;
 
 const ZMQ_ADDRESS: &str = "tcp://127.0.0.1:5556";
 const WS_ADDRESS: &str = "127.0.0.1:8081";
@@ -91,59 +95,37 @@ fn create_server(transport: Transport) -> Box<dyn FeagiServerPuller> {
         Transport::Zmq => {
             println!("=== Server Puller Example (ZMQ Transport) ===\n");
             println!("Binding to {}", ZMQ_ADDRESS);
-            Box::new(
-                FEAGIZMQServerPuller::new(
-                    ZMQ_ADDRESS.to_string(),
-                    Box::new(|state| println!("[SERVER] State changed: {:?}", state)),
-                )
-                .expect("Failed to create ZMQ server"),
-            )
+            let props = FeagiZmqServerPullerProperties::new(ZMQ_ADDRESS)
+                .expect("Failed to create ZMQ server properties");
+            props.as_boxed_server_puller()
         }
         Transport::WebSocket => {
             println!("=== Server Puller Example (WebSocket Transport) ===\n");
             println!("Binding to {}", WS_ADDRESS);
-            Box::new(
-                FEAGIWebSocketServerPuller::new(
-                    WS_ADDRESS.to_string(),
-                    Box::new(|state| println!("[SERVER] State changed: {:?}", state)),
-                )
-                .expect("Failed to create WebSocket server"),
-            )
+            let props = FeagiWebSocketServerPullerProperties::new(WS_ADDRESS)
+                .expect("Failed to create WebSocket server properties");
+            props.as_boxed_server_puller()
         }
     }
 }
 
 /// Creates the appropriate client (pusher) implementation based on transport type.
 /// Returns a boxed trait object that can be used with transport-agnostic code.
-fn create_client(transport: Transport) -> (Box<dyn FeagiClientPusher>, &'static str) {
+fn create_client(transport: Transport) -> Box<dyn FeagiClientPusher> {
     match transport {
         Transport::Zmq => {
             println!("=== Client Pusher Example (ZMQ Transport) ===\n");
             println!("Connecting to {}", ZMQ_ADDRESS);
-            (
-                Box::new(
-                    FEAGIZMQClientPusher::new(
-                        ZMQ_ADDRESS.to_string(),
-                        Box::new(|state| println!("[CLIENT] State changed: {:?}", state)),
-                    )
-                    .expect("Failed to create ZMQ client"),
-                ),
-                ZMQ_ADDRESS,
-            )
+            let props = FeagiZmqClientPusherProperties::new(ZMQ_ADDRESS)
+                .expect("Failed to create ZMQ client properties");
+            props.as_boxed_client_pusher()
         }
         Transport::WebSocket => {
             println!("=== Client Pusher Example (WebSocket Transport) ===\n");
             println!("Connecting to {}", WS_URL);
-            (
-                Box::new(
-                    FEAGIWebSocketClientPusher::new(
-                        WS_URL.to_string(),
-                        Box::new(|state| println!("[CLIENT] State changed: {:?}", state)),
-                    )
-                    .expect("Failed to create WebSocket client"),
-                ),
-                WS_URL,
-            )
+            let props = FeagiWebSocketClientPusherProperties::new(WS_URL)
+                .expect("Failed to create WebSocket client properties");
+            props.as_boxed_client_pusher()
         }
     }
 }
@@ -161,27 +143,56 @@ fn create_client(transport: Transport) -> (Box<dyn FeagiClientPusher>, &'static 
 /// This function is completely transport-agnostic - it only uses the trait
 /// interface and will work identically with ZMQ, WebSocket, or any future
 /// transport implementation.
-async fn run_server(mut server: Box<dyn FeagiServerPuller>) {
+fn run_server(mut server: Box<dyn FeagiServerPuller>) {
     // Start the server (binds to address)
-    server.start().await.expect("Failed to start server");
-    println!("Server started successfully!");
+    server.request_start().expect("Failed to start server");
+    println!("Server start requested...");
+
+    // Wait for the server to become active
+    loop {
+        match server.poll() {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                println!("Server started successfully!");
+                break;
+            }
+            FeagiEndpointState::Pending => {
+                thread::sleep(Duration::from_millis(10));
+            }
+            FeagiEndpointState::Errored(e) => {
+                panic!("Server failed to start: {:?}", e);
+            }
+            FeagiEndpointState::Inactive => {
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
     println!("Waiting for clients to push data...\n");
 
     // Receive loop
     loop {
-        match server.try_poll_receive().await {
-            Ok(data) => {
-                let message = String::from_utf8_lossy(&data);
-                println!("[SERVER] Received: {}", message);
-            }
-            Err(e) => {
-                // Some implementations return errors when no data is available
-                // In production, you'd want more sophisticated error handling
-                let err_str = e.to_string();
-                if !err_str.contains("No clients") && !err_str.contains("No data") {
-                    eprintln!("[SERVER] Error polling: {}", e);
+        match server.poll() {
+            FeagiEndpointState::ActiveHasData => {
+                match server.consume_retrieved_data() {
+                    Ok(data) => {
+                        let message = String::from_utf8_lossy(data);
+                        println!("[SERVER] Received: {}", message);
+                    }
+                    Err(e) => {
+                        eprintln!("[SERVER] Error consuming data: {}", e);
+                    }
                 }
-                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            FeagiEndpointState::ActiveWaiting => {
+                // No data yet, keep polling
+                thread::sleep(Duration::from_millis(10));
+            }
+            FeagiEndpointState::Errored(e) => {
+                eprintln!("[SERVER] Error: {:?}", e);
+                break;
+            }
+            _ => {
+                thread::sleep(Duration::from_millis(10));
             }
         }
     }
@@ -192,13 +203,32 @@ async fn run_server(mut server: Box<dyn FeagiServerPuller>) {
 /// This function is completely transport-agnostic - it only uses the trait
 /// interface and will work identically with ZMQ, WebSocket, or any future
 /// transport implementation.
-async fn run_client(mut client: Box<dyn FeagiClientPusher>, address: &str) {
+fn run_client(mut client: Box<dyn FeagiClientPusher>) {
     // Connect to the server
-    client.connect(address).await.expect("Failed to connect");
-    println!("Client connected successfully!");
+    client.request_connect().expect("Failed to request connection");
+    println!("Client connection requested...");
+
+    // Wait for the connection to become active
+    loop {
+        match client.poll() {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                println!("Client connected successfully!");
+                break;
+            }
+            FeagiEndpointState::Pending => {
+                thread::sleep(Duration::from_millis(10));
+            }
+            FeagiEndpointState::Errored(e) => {
+                panic!("Client failed to connect: {:?}", e);
+            }
+            FeagiEndpointState::Inactive => {
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
 
     // Brief delay to ensure connection is established
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    thread::sleep(Duration::from_millis(200));
     println!("Starting to push messages...\n");
 
     // Push loop
@@ -208,26 +238,24 @@ async fn run_client(mut client: Box<dyn FeagiClientPusher>, address: &str) {
         println!("[CLIENT] Pushing: {}", message);
 
         client
-            .push_data(message.as_bytes())
-            .await
+            .publish_data(message.as_bytes())
             .expect("Failed to push data");
 
         counter += 1;
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        thread::sleep(Duration::from_millis(500));
     }
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     match parse_args() {
         Some((transport, mode)) => match mode.as_str() {
             "server" => {
                 let server = create_server(transport);
-                run_server(server).await;
+                run_server(server);
             }
             "client" => {
-                let (client, address) = create_client(transport);
-                run_client(client, address).await;
+                let client = create_client(transport);
+                run_client(client);
             }
             _ => unreachable!(),
         },

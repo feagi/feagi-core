@@ -23,14 +23,18 @@
 //! ```
 
 use std::env;
+use std::thread;
 use std::time::Duration;
 
-use feagi_io::core::::websocket::{
-    FEAGIWebSocketClientSubscriber, FEAGIWebSocketServerPublisher,
+use feagi_io::core::protocol_implementations::websocket::{
+    FeagiWebSocketClientSubscriberProperties, FeagiWebSocketServerPublisherProperties,
 };
-use feagi_io::core::::zmq::{FEAGIZMQClientSubscriber, FeagiZmqServerPublisher};
-use feagi_io::core::::client::FeagiClientSubscriber;
-use feagi_io::core::::server::FeagiServerPublisher;
+use feagi_io::core::protocol_implementations::zmq::{
+    FeagiZmqClientSubscriberProperties, FeagiZmqServerPublisherProperties,
+};
+use feagi_io::core::traits_and_enums::client::{FeagiClientSubscriber, FeagiClientSubscriberProperties};
+use feagi_io::core::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties};
+use feagi_io::core::traits_and_enums::FeagiEndpointState;
 
 const ZMQ_ADDRESS: &str = "tcp://127.0.0.1:5555";
 const WS_ADDRESS: &str = "127.0.0.1:8080";
@@ -88,59 +92,37 @@ fn create_publisher(transport: Transport) -> Box<dyn FeagiServerPublisher> {
         Transport::Zmq => {
             println!("=== Publisher Example (ZMQ Transport) ===\n");
             println!("Binding to {}", ZMQ_ADDRESS);
-            Box::new(
-                FeagiZmqServerPublisher::new(
-                    ZMQ_ADDRESS.to_string(),
-                    Box::new(|state| println!("[PUB] State changed: {:?}", state)),
-                )
-                .expect("Failed to create ZMQ publisher"),
-            )
+            let props = FeagiZmqServerPublisherProperties::new(ZMQ_ADDRESS)
+                .expect("Failed to create ZMQ publisher properties");
+            props.as_boxed_server_publisher()
         }
         Transport::WebSocket => {
             println!("=== Publisher Example (WebSocket Transport) ===\n");
             println!("Binding to {}", WS_ADDRESS);
-            Box::new(
-                FEAGIWebSocketServerPublisher::new(
-                    WS_ADDRESS.to_string(),
-                    Box::new(|state| println!("[PUB] State changed: {:?}", state)),
-                )
-                .expect("Failed to create WebSocket publisher"),
-            )
+            let props = FeagiWebSocketServerPublisherProperties::new(WS_ADDRESS)
+                .expect("Failed to create WebSocket publisher properties");
+            props.as_boxed_server_publisher()
         }
     }
 }
 
 /// Creates the appropriate subscriber implementation based on transport type.
 /// Returns a boxed trait object that can be used with transport-agnostic code.
-fn create_subscriber(transport: Transport) -> (Box<dyn FeagiClientSubscriber>, &'static str) {
+fn create_subscriber(transport: Transport) -> Box<dyn FeagiClientSubscriber> {
     match transport {
         Transport::Zmq => {
             println!("=== Subscriber Example (ZMQ Transport) ===\n");
             println!("Connecting to {}", ZMQ_ADDRESS);
-            (
-                Box::new(
-                    FEAGIZMQClientSubscriber::new(
-                        ZMQ_ADDRESS.to_string(),
-                        Box::new(|state| println!("[SUB] State changed: {:?}", state)),
-                    )
-                    .expect("Failed to create ZMQ subscriber"),
-                ),
-                ZMQ_ADDRESS,
-            )
+            let props = FeagiZmqClientSubscriberProperties::new(ZMQ_ADDRESS)
+                .expect("Failed to create ZMQ subscriber properties");
+            props.as_boxed_client_subscriber()
         }
         Transport::WebSocket => {
             println!("=== Subscriber Example (WebSocket Transport) ===\n");
             println!("Connecting to {}", WS_URL);
-            (
-                Box::new(
-                    FEAGIWebSocketClientSubscriber::new(
-                        WS_URL.to_string(),
-                        Box::new(|state| println!("[SUB] State changed: {:?}", state)),
-                    )
-                    .expect("Failed to create WebSocket subscriber"),
-                ),
-                WS_URL,
-            )
+            let props = FeagiWebSocketClientSubscriberProperties::new(WS_URL)
+                .expect("Failed to create WebSocket subscriber properties");
+            props.as_boxed_client_subscriber()
         }
     }
 }
@@ -158,31 +140,48 @@ fn create_subscriber(transport: Transport) -> (Box<dyn FeagiClientSubscriber>, &
 /// This function is completely transport-agnostic - it only uses the trait
 /// interface and will work identically with ZMQ, WebSocket, or any future
 /// transport implementation.
-async fn run_publisher(mut publisher: Box<dyn FeagiServerPublisher>) {
+fn run_publisher(mut publisher: Box<dyn FeagiServerPublisher>) {
     // Start the server (binds to address)
-    publisher.start().await.expect("Failed to start publisher");
-    println!("Publisher started successfully!");
-    println!("Waiting for subscribers to connect...\n");
+    publisher.request_start().expect("Failed to start publisher");
+    println!("Publisher start requested...");
 
-    // Brief warm-up period for connection establishment
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for the server to become active
+    loop {
+        match publisher.poll() {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                println!("Publisher started successfully!");
+                break;
+            }
+            FeagiEndpointState::Pending => {
+                thread::sleep(Duration::from_millis(10));
+            }
+            FeagiEndpointState::Errored(e) => {
+                panic!("Publisher failed to start: {:?}", e);
+            }
+            FeagiEndpointState::Inactive => {
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
+    println!("Waiting for subscribers to connect...\n");
+    thread::sleep(Duration::from_millis(500));
 
     let mut counter = 0u64;
     loop {
-        // Poll for new connections / maintenance tasks
-        publisher.poll().await.expect("Failed to poll");
+        // Poll for maintenance tasks / new connections
+        let _ = publisher.poll();
 
         // Create and publish message
         let message = format!("Message #{}: Hello from FEAGI!", counter);
         println!("[PUB] Publishing: {}", message);
 
         publisher
-            .publish(message.as_bytes())
-            .await
+            .publish_data(message.as_bytes())
             .expect("Failed to publish");
 
         counter += 1;
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        thread::sleep(Duration::from_millis(500));
     }
 }
 
@@ -191,40 +190,73 @@ async fn run_publisher(mut publisher: Box<dyn FeagiServerPublisher>) {
 /// This function is completely transport-agnostic - it only uses the trait
 /// interface and will work identically with ZMQ, WebSocket, or any future
 /// transport implementation.
-async fn run_subscriber(mut subscriber: Box<dyn FeagiClientSubscriber>, address: &str) {
+fn run_subscriber(mut subscriber: Box<dyn FeagiClientSubscriber>) {
     // Connect to the server
     subscriber
-        .connect(address)
-        .await
-        .expect("Failed to connect");
-    println!("Subscriber connected. Waiting for messages...\n");
+        .request_connect()
+        .expect("Failed to request connection");
+    println!("Subscriber connection requested...");
+
+    // Wait for the connection to become active
+    loop {
+        match subscriber.poll() {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                println!("Subscriber connected successfully!");
+                break;
+            }
+            FeagiEndpointState::Pending => {
+                thread::sleep(Duration::from_millis(10));
+            }
+            FeagiEndpointState::Errored(e) => {
+                panic!("Subscriber failed to connect: {:?}", e);
+            }
+            FeagiEndpointState::Inactive => {
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
+    println!("Waiting for messages...\n");
 
     // Receive loop
     loop {
-        match subscriber.get_subscribed_data().await {
-            Ok(data) => {
-                let message = String::from_utf8_lossy(&data);
-                println!("[SUB] Received: {}", message);
+        match subscriber.poll() {
+            FeagiEndpointState::ActiveHasData => {
+                match subscriber.consume_retrieved_data() {
+                    Ok(data) => {
+                        let message = String::from_utf8_lossy(data);
+                        println!("[SUB] Received: {}", message);
+                    }
+                    Err(e) => {
+                        eprintln!("[SUB] Error consuming data: {}", e);
+                    }
+                }
             }
-            Err(e) => {
-                eprintln!("[SUB] Error receiving: {}", e);
+            FeagiEndpointState::ActiveWaiting => {
+                // No data yet, keep polling
+                thread::sleep(Duration::from_millis(10));
+            }
+            FeagiEndpointState::Errored(e) => {
+                eprintln!("[SUB] Error: {:?}", e);
                 break;
+            }
+            _ => {
+                thread::sleep(Duration::from_millis(10));
             }
         }
     }
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     match parse_args() {
         Some((transport, mode)) => match mode.as_str() {
             "publisher" => {
                 let publisher = create_publisher(transport);
-                run_publisher(publisher).await;
+                run_publisher(publisher);
             }
             "subscriber" => {
-                let (subscriber, address) = create_subscriber(transport);
-                run_subscriber(subscriber, address).await;
+                let subscriber = create_subscriber(transport);
+                run_subscriber(subscriber);
             }
             _ => unreachable!(),
         },

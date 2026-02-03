@@ -2024,7 +2024,6 @@ version = "0.0.1-beta.4"
 dependencies = [
  "feagi-serialization",
  "feagi-structures",
- "tokio",
  "tungstenite",
  "zmq",
 ]

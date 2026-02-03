@@ -63,7 +63,7 @@ zmq = { version = "0.10.0", optional = true }  # ZMQ transport
 tungstenite = { version = "0.24", optional = true }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+# No async runtime needed - examples use poll-based synchronous API
 
 # Examples that test both ZMQ and WebSocket transports
 [[example]]
