@@ -28,12 +28,12 @@
 use std::env;
 use std::time::Duration;
 
-use feagi_io::implementations::websocket::{
+use feagi_io::core::::websocket::{
     FEAGIWebSocketClientRequester, FEAGIWebSocketServerRouter,
 };
-use feagi_io::implementations::zmq::{FEAGIZMQClientRequester, FEAGIZMQServerRouter};
-use feagi_io::traits_and_enums::client::FeagiClientRequester;
-use feagi_io::traits_and_enums::server::FeagiServerRouter;
+use feagi_io::core::::zmq::{FEAGIZMQClientRequester, FEAGIZMQServerRouter};
+use feagi_io::core::::client::FeagiClientRequester;
+use feagi_io::core::::server::FeagiServerRouter;
 
 const ZMQ_ADDRESS: &str = "tcp://127.0.0.1:5557";
 const WS_ADDRESS: &str = "127.0.0.1:8082";

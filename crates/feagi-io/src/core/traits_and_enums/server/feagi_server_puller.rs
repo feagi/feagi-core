@@ -1,5 +1,5 @@
 use crate::FeagiNetworkError;
-use crate::traits_and_enums::server::FeagiServer;
+use crate::core::traits_and_enums::server::FeagiServer;
 
 /// A server that receives pushed data from clients.
 ///

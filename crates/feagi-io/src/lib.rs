@@ -3,8 +3,7 @@
 
 mod error;
 
-pub mod implementations;
-pub mod traits_and_enums;
+mod core;
 
 pub use error::FeagiNetworkError;
 

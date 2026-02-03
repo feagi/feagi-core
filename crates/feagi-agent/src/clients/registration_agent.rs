@@ -7,7 +7,7 @@
 //! is retrieved
 
 use std::collections::HashMap;
-use feagi_io::traits_and_enums::client::FeagiClientRequester;
+use feagi_io::core::::client::FeagiClientRequester;
 use feagi_serialization::SessionID;
 use crate::FeagiAgentClientError;
 use crate::registration::{AgentCapabilities, RegistrationRequest, RegistrationResponse};

@@ -1,4 +1,4 @@
-use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPuller};
+use feagi_io::core::::server::{FeagiServerPublisher, FeagiServerPuller};
 use feagi_serialization::FeagiByteContainer;
 use crate::FeagiAgentClientError;
 

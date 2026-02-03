@@ -1,6 +1,6 @@
 use feagi_io::FeagiNetworkError;
-use feagi_io::implementations::zmq::{FEAGIZMQClientPusher, FEAGIZMQClientRequester, FEAGIZMQClientSubscriber};
-use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
+use feagi_io::core::::zmq::{FEAGIZMQClientPusher, FEAGIZMQClientRequester, FEAGIZMQClientSubscriber};
+use feagi_io::core::::client::{FeagiClientPusher, FeagiClientSubscriber};
 use crate::clients::registration_agent::RegistrationAgent;
 use crate::FeagiAgentClientError;
 use crate::registration::{AgentCapabilities, AgentDescriptor, AuthToken, ConnectionProtocol, RegistrationRequest};

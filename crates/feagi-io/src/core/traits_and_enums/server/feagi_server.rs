@@ -1,5 +1,5 @@
 use crate::FeagiNetworkError;
-use crate::traits_and_enums::FeagiEndpointState;
+use crate::core::traits_and_enums::FeagiEndpointState;
 
 /// Base trait for all FEAGI server types.
 ///

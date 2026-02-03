@@ -9,10 +9,10 @@ use async_tungstenite::{client_async, WebSocketStream};
 use futures_util::{SinkExt, StreamExt};
 
 use super::shared_functions::{extract_host_port, normalize_ws_url};
-use crate::traits_and_enums::client::client_shared::{
+use crate::core::traits_and_enums::client::client_shared::{
     FeagiClientConnectionState, FeagiClientConnectionStateChange,
 };
-use crate::traits_and_enums::client::{
+use crate::core::traits_and_enums::client::{
     FeagiClient, FeagiClientPusher, FeagiClientRequester, FeagiClientSubscriber,
 };
 use crate::FeagiNetworkError;

@@ -2,9 +2,9 @@ use async_trait::async_trait;
 use zeromq::{DealerSocket, PushSocket, Socket, SocketRecv, SocketSend, SubSocket, ZmqMessage};
 
 use crate::FeagiNetworkError;
-use crate::implementations::zmq::shared_functions::validate_zmq_url;
-use crate::traits_and_enums::client::client_shared::{FeagiClientConnectionState, FeagiClientConnectionStateChange, StateChangeCallback};
-use crate::traits_and_enums::client::{
+use crate::core::protocol_implementations::zmq::shared::validate_zmq_url;
+use crate::core::traits_and_enums::client::client_shared::{FeagiClientConnectionState, FeagiClientConnectionStateChange, StateChangeCallback};
+use crate::core::traits_and_enums::client::{
     FeagiClient, FeagiClientPusher, FeagiClientRequester, FeagiClientSubscriber,
 };
 

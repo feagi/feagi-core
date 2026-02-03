@@ -1,5 +1,5 @@
 use crate::FeagiNetworkError;
-use crate::traits_and_enums::client::FeagiClient;
+use crate::core::traits_and_enums::client::FeagiClient;
 
 /// A client that subscribes to data broadcast by a publisher server.
 ///

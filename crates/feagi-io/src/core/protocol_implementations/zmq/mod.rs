@@ -1,6 +1,6 @@
 mod client_implementations;
 mod server_implementations;
-mod shared_functions;
+mod shared;
 
 pub use client_implementations::{
     FEAGIZMQClientPusher, FEAGIZMQClientRequester,

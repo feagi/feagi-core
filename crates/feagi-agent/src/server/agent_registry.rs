@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use feagi_io::implementations::zmq::{FeagiZmqServerPublisher, FEAGIZMQServerPuller};
-use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
+use feagi_io::core::::zmq::{FeagiZmqServerPublisher, FEAGIZMQServerPuller};
+use feagi_io::core::::server::{FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
 use feagi_serialization::{FeagiByteContainer, SessionID};
 use crate::FeagiAgentClientError;
 use crate::registration::{AgentCapabilities, RegistrationResponse};

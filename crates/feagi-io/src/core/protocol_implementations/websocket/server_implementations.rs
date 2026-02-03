@@ -11,10 +11,10 @@ use async_tungstenite::{accept_async, WebSocketStream};
 use feagi_serialization::SessionID;
 use futures_util::{SinkExt, StreamExt};
 
-use crate::traits_and_enums::server::server_shared::{
+use crate::core::traits_and_enums::server::server_shared::{
     FeagiServerBindState, FeagiServerBindStateChange,
 };
-use crate::traits_and_enums::server::{
+use crate::core::traits_and_enums::server::{
     FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter,
 };
 use crate::FeagiNetworkError;
