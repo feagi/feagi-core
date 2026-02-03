@@ -11,7 +11,7 @@ description = "FEAGI I/O System"
 [features]
 default = ["zmq-transport"]
 zmq-transport = ["dep:zmq"]
-ws-transport = ["dep:async-tungstenite", "dep:async-net", "dep:futures-util"] # not wasm compatible
+ws-transport = ["dep:tungstenite"] # Poll-based WebSocket using non-blocking sockets
 ws-transport-wasm = [] # WASM WebSocket implementation
 udp-transport = []
 
@@ -24,8 +24,6 @@ udp-transport = []
 #connectome-compression = []  # LZ4 compression for connectome files (lz4 already in dependencies)
 
 [dependencies]
-async-trait = "0.1.89"  # Async traits for dyn-compatible async methods
-
 #feagi-npu-burst-engine = { version = "0.0.1-beta.4", path = "../feagi-npu/burst-engine" }
 #feagi-brain-development = { version = "0.0.1-beta.4", path = "../feagi-brain-development" }  # For CorticalAreaExt
 #feagi-services = { version = "0.0.1-beta.4", path = "../feagi-services" }  # For GenomeService and ConnectomeService
@@ -61,10 +59,8 @@ feagi-serialization = { workspace = true }
 # ZMQ (have to use the C based package as it supports blocking configs)
 zmq = { version = "0.10.0", optional = true }  # ZMQ transport
 
-# Websocket (nonwasm) - runtime-agnostic
-async-tungstenite = { version = "0.28", optional = true }
-async-net = { version = "2.0", optional = true }
-futures-util = { version = "0.3", optional = true }
+# WebSocket (non-WASM) - poll-based using non-blocking sockets
+tungstenite = { version = "0.24", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

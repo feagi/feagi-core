@@ -475,19 +475,19 @@ pub struct FeagiZmqServerRouter {
 }
 
 impl FeagiZmqServerRouter {
-    /// Get or create a SessionID for the given ZMQ identity.
+    /// Look up an existing SessionID for the given ZMQ identity.
+    fn lookup_session_id(&self, identity: &[u8]) -> Option<SessionID> {
+        self.identity_to_session.get(identity).copied()
+    }
+
+    /// Create and register a new SessionID for the given ZMQ identity.
     ///
     /// Uses cryptographically random session IDs to prevent enumeration attacks.
-    fn get_or_create_session_id(&mut self, identity: &[u8]) -> SessionID {
-        if let Some(&session_id) = self.identity_to_session.get(identity) {
-            session_id
-        } else {
-            // Generate a random session ID to prevent enumeration attacks
-            let session_id = SessionID::new_random();
-            self.identity_to_session.insert(identity.to_vec(), session_id);
-            self.session_to_identity.insert(*session_id.bytes(), identity.to_vec());
-            session_id
-        }
+    fn create_session_id(&mut self, identity: Vec<u8>) -> SessionID {
+        let session_id = SessionID::new_random();
+        self.identity_to_session.insert(identity.clone(), session_id);
+        self.session_to_identity.insert(*session_id.bytes(), identity);
+        session_id
     }
 
     /// Receive a multipart message into reusable buffers.
@@ -531,7 +531,14 @@ impl FeagiServer for FeagiZmqServerRouter {
             match self.try_recv_multipart() {
                 Ok(true) => {
                     // Successfully received a complete multipart message
-                    let session_id = self.get_or_create_session_id(&self.identity_msg);
+                    let session_id = match self.lookup_session_id(&self.identity_msg) {
+                        Some(id) => id,
+                        None => {
+                            // New client - allocate identity and create session
+                            let identity = self.identity_msg.to_vec();
+                            self.create_session_id(identity)
+                        }
+                    };
                     self.current_session = Some(session_id);
                     self.has_data = true;
                     self.current_state = FeagiEndpointState::ActiveHasData;

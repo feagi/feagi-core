@@ -1,358 +1,522 @@
-//! WebSocket server implementations for FEAGI network traits.
+//! WebSocket server implementations using the poll-based trait design.
 //!
-//! Uses `async-tungstenite` with `async-net` for runtime-agnostic async WebSocket communication.
+//! Uses `tungstenite` with non-blocking `std::net::TcpStream` for poll-based
+//! WebSocket communication that works with any async runtime or synchronously.
 
 use std::collections::HashMap;
+use std::io::ErrorKind;
+use std::net::{TcpListener, TcpStream};
 
-use async_net::{TcpListener, TcpStream};
-use async_trait::async_trait;
-use async_tungstenite::tungstenite::Message;
-use async_tungstenite::{accept_async, WebSocketStream};
 use feagi_serialization::SessionID;
-use futures_util::{SinkExt, StreamExt};
+use tungstenite::protocol::Role;
+use tungstenite::{accept, Message, WebSocket};
 
-use crate::core::traits_and_enums::server::server_shared::{
-    FeagiServerBindState, FeagiServerBindStateChange,
-};
-use crate::core::traits_and_enums::server::{
-    FeagiServer, FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter,
-};
 use crate::FeagiNetworkError;
+use crate::core::protocol_implementations::websocket::shared_functions::extract_host_port;
+use crate::core::traits_and_enums::FeagiEndpointState;
+use crate::core::traits_and_enums::server::{
+    FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties,
+    FeagiServerPuller, FeagiServerPullerProperties,
+    FeagiServerRouter, FeagiServerRouterProperties,
+};
 
-/// Type alias for the server state change callback.
-type StateChangeCallback = Box<dyn Fn(FeagiServerBindStateChange) + Send + Sync + 'static>;
+/// Type alias for WebSocket over TcpStream
+type WsStream = WebSocket<TcpStream>;
 
-/// Type alias for the WebSocket stream using async-net's TcpStream.
-type WsStream = WebSocketStream<TcpStream>;
+// ============================================================================
+// Publisher
+// ============================================================================
 
-//region Publisher
+//region Publisher Properties
 
-/// WebSocket server that broadcasts messages to all connected clients.
-pub struct FEAGIWebSocketServerPublisher {
+/// Configuration properties for creating a WebSocket publisher server.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FeagiWebSocketServerPublisherProperties {
     bind_address: String,
-    current_state: FeagiServerBindState,
-    state_change_callback: StateChangeCallback,
+}
+
+impl FeagiWebSocketServerPublisherProperties {
+    /// Creates new publisher properties with the given bind address.
+    ///
+    /// # Arguments
+    ///
+    /// * `bind_address` - The address to bind to (e.g., "127.0.0.1:8080" or "0.0.0.0:8080").
+    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        // Validate by extracting host:port
+        let _ = extract_host_port(&format!("ws://{}", bind_address))?;
+        Ok(Self {
+            bind_address: bind_address.to_string(),
+        })
+    }
+}
+
+impl FeagiServerPublisherProperties for FeagiWebSocketServerPublisherProperties {
+    fn as_boxed_server_publisher(&self) -> Box<dyn FeagiServerPublisher> {
+        Box::new(FeagiWebSocketServerPublisher {
+            bind_address: self.bind_address.clone(),
+            current_state: FeagiEndpointState::Inactive,
+            listener: None,
+            clients: Vec::new(),
+        })
+    }
+}
+
+//endregion
+
+//region Publisher Implementation
+
+/// A WebSocket server that broadcasts data to all connected clients.
+pub struct FeagiWebSocketServerPublisher {
+    bind_address: String,
+    current_state: FeagiEndpointState,
     listener: Option<TcpListener>,
     clients: Vec<WsStream>,
 }
 
-impl FEAGIWebSocketServerPublisher {
-    pub fn new(
-        bind_address: String,
-        state_change_callback: StateChangeCallback,
-    ) -> Result<Self, FeagiNetworkError> {
-        Ok(Self {
-            bind_address,
-            current_state: FeagiServerBindState::Inactive,
-            state_change_callback,
-            listener: None,
-            clients: Vec::new(),
-        })
+impl FeagiWebSocketServerPublisher {
+    /// Accept any pending connections (non-blocking).
+    fn accept_pending_connections(&mut self) {
+        let listener = match &self.listener {
+            Some(l) => l,
+            None => return,
+        };
+
+        // Try to accept connections in non-blocking mode
+        loop {
+            match listener.accept() {
+                Ok((stream, _addr)) => {
+                    // Set the stream to non-blocking for WebSocket operations
+                    if stream.set_nonblocking(true).is_err() {
+                        continue;
+                    }
+
+                    // Perform WebSocket handshake
+                    match accept(stream) {
+                        Ok(ws) => {
+                            self.clients.push(ws);
+                        }
+                        Err(_e) => {
+                            // Handshake failed, skip this connection
+                        }
+                    }
+                }
+                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                    // No more pending connections
+                    break;
+                }
+                Err(_) => {
+                    break;
+                }
+            }
+        }
     }
 
     /// Get the number of connected clients.
     pub fn client_count(&self) -> usize {
         self.clients.len()
     }
+}
 
-    /// Accept any pending connections (non-blocking check).
-    async fn accept_pending_connections(&mut self) -> Result<usize, FeagiNetworkError> {
-        let listener = match &self.listener {
-            Some(l) => l,
-            None => return Ok(0),
-        };
+impl FeagiServer for FeagiWebSocketServerPublisher {
+    fn poll(&mut self) -> &FeagiEndpointState {
+        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) {
+            self.accept_pending_connections();
+        }
+        &self.current_state
+    }
 
-        let mut accepted = 0;
-        // Try to accept connections in a non-blocking manner
-        loop {
-            // Use poll-like behavior with incoming()
-            match futures_util::poll!(Box::pin(listener.accept())) {
-                std::task::Poll::Ready(Ok((stream, _addr))) => {
-                    match accept_async(stream).await {
-                        Ok(ws) => {
-                            self.clients.push(ws);
-                            accepted += 1;
+    fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Inactive => {
+                let listener = TcpListener::bind(&self.bind_address)
+                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+
+                // Set listener to non-blocking for poll-based accept
+                listener
+                    .set_nonblocking(true)
+                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+
+                self.listener = Some(listener);
+                self.current_state = FeagiEndpointState::ActiveWaiting;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot start: server is not in Inactive state".to_string(),
+            )),
+        }
+    }
+
+    fn request_stop(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                // Close all client connections
+                for mut client in self.clients.drain(..) {
+                    let _ = client.close(None);
+                }
+                self.listener = None;
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot stop: server is not in Active state".to_string(),
+            )),
+        }
+    }
+
+    fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Errored(_) => {
+                for mut client in self.clients.drain(..) {
+                    let _ = client.close(None);
+                }
+                self.listener = None;
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot confirm error: server is not in Errored state".to_string(),
+            )),
+        }
+    }
+}
+
+impl FeagiServerPublisher for FeagiWebSocketServerPublisher {
+    fn publish_data(&mut self, data: &[u8]) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                let message = Message::Binary(data.to_vec());
+
+                // Send to all clients, tracking which ones fail
+                let mut failed_indices = Vec::new();
+                for (i, client) in self.clients.iter_mut().enumerate() {
+                    // Try to send, handling WouldBlock gracefully
+                    match client.send(message.clone()) {
+                        Ok(()) => {}
+                        Err(tungstenite::Error::Io(ref e)) if e.kind() == ErrorKind::WouldBlock => {
+                            // Socket buffer full - could buffer, but for now skip
                         }
-                        Err(e) => {
-                            eprintln!("WebSocket handshake failed: {}", e);
+                        Err(_) => {
+                            failed_indices.push(i);
                         }
                     }
+                    // Flush to actually send
+                    let _ = client.flush();
                 }
-                std::task::Poll::Ready(Err(_)) => {
-                    break;
+
+                // Remove failed clients (in reverse order to preserve indices)
+                for i in failed_indices.into_iter().rev() {
+                    let _ = self.clients.remove(i).close(None);
                 }
-                std::task::Poll::Pending => {
-                    break;
-                }
+
+                Ok(())
             }
+            _ => Err(FeagiNetworkError::SendFailed(
+                "Cannot publish: server is not in Active state".to_string(),
+            )),
         }
-        Ok(accepted)
-    }
-}
-
-#[async_trait]
-impl FeagiServer for FEAGIWebSocketServerPublisher {
-    async fn start(&mut self) -> Result<(), FeagiNetworkError> {
-        let listener = TcpListener::bind(&self.bind_address)
-            .await
-            .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
-
-        self.listener = Some(listener);
-        let previous = self.current_state;
-        self.current_state = FeagiServerBindState::Active;
-        (self.state_change_callback)(FeagiServerBindStateChange::new(
-            previous,
-            FeagiServerBindState::Active,
-        ));
-        Ok(())
     }
 
-    async fn stop(&mut self) -> Result<(), FeagiNetworkError> {
-        // Close all client connections
-        for mut client in self.clients.drain(..) {
-            let _ = client.close(None).await;
-        }
-        self.listener = None;
-        let previous = self.current_state;
-        self.current_state = FeagiServerBindState::Inactive;
-        (self.state_change_callback)(FeagiServerBindStateChange::new(
-            previous,
-            FeagiServerBindState::Inactive,
-        ));
-        Ok(())
-    }
-
-    fn get_current_state(&self) -> FeagiServerBindState {
-        self.current_state
-    }
-}
-
-#[async_trait]
-impl FeagiServerPublisher for FEAGIWebSocketServerPublisher {
-    async fn poll(&mut self) -> Result<(), FeagiNetworkError> {
-        self.accept_pending_connections().await?;
-        Ok(())
-    }
-
-    async fn publish(&mut self, buffered_data_to_send: &[u8]) -> Result<(), FeagiNetworkError> {
-        let message = Message::Binary(buffered_data_to_send.to_vec());
-
-        // Send to all clients, tracking which ones fail
-        let mut failed_indices = Vec::new();
-        for (i, client) in self.clients.iter_mut().enumerate() {
-            if client.send(message.clone()).await.is_err() {
-                failed_indices.push(i);
-            }
-        }
-
-        // Remove failed clients (in reverse order to preserve indices)
-        for i in failed_indices.into_iter().rev() {
-            self.clients.remove(i);
-        }
-
-        Ok(())
-    }
-}
-
-//endregion
-
-//region Puller
-
-/// WebSocket server that receives pushed data from clients.
-pub struct FEAGIWebSocketServerPuller {
-    bind_address: String,
-    current_state: FeagiServerBindState,
-    state_change_callback: StateChangeCallback,
-    listener: Option<TcpListener>,
-    clients: Vec<WsStream>,
-}
-
-impl FEAGIWebSocketServerPuller {
-    pub fn new(
-        bind_address: String,
-        state_change_callback: StateChangeCallback,
-    ) -> Result<Self, FeagiNetworkError> {
-        Ok(Self {
-            bind_address,
-            current_state: FeagiServerBindState::Inactive,
-            state_change_callback,
-            listener: None,
-            clients: Vec::new(),
+    fn as_boxed_publisher_properties(&self) -> Box<dyn FeagiServerPublisherProperties> {
+        Box::new(FeagiWebSocketServerPublisherProperties {
+            bind_address: self.bind_address.clone(),
         })
     }
+}
 
-    /// Accept any pending connections.
-    async fn accept_pending_connections(&mut self) -> Result<usize, FeagiNetworkError> {
-        let listener = match &self.listener {
-            Some(l) => l,
-            None => return Ok(0),
-        };
+//endregion
 
-        let mut accepted = 0;
-        loop {
-            match futures_util::poll!(Box::pin(listener.accept())) {
-                std::task::Poll::Ready(Ok((stream, _addr))) => {
-                    match accept_async(stream).await {
-                        Ok(ws) => {
-                            self.clients.push(ws);
-                            accepted += 1;
-                        }
-                        Err(e) => {
-                            eprintln!("WebSocket handshake failed: {}", e);
-                        }
-                    }
-                }
-                std::task::Poll::Ready(Err(_)) => break,
-                std::task::Poll::Pending => break,
-            }
-        }
-        Ok(accepted)
+// ============================================================================
+// Puller
+// ============================================================================
+
+//region Puller Properties
+
+/// Configuration properties for creating a WebSocket puller server.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FeagiWebSocketServerPullerProperties {
+    bind_address: String,
+}
+
+impl FeagiWebSocketServerPullerProperties {
+    /// Creates new puller properties with the given bind address.
+    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        let _ = extract_host_port(&format!("ws://{}", bind_address))?;
+        Ok(Self {
+            bind_address: bind_address.to_string(),
+        })
     }
 }
 
-#[async_trait]
-impl FeagiServer for FEAGIWebSocketServerPuller {
-    async fn start(&mut self) -> Result<(), FeagiNetworkError> {
-        let listener = TcpListener::bind(&self.bind_address)
-            .await
-            .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
-
-        self.listener = Some(listener);
-        let previous = self.current_state;
-        self.current_state = FeagiServerBindState::Active;
-        (self.state_change_callback)(FeagiServerBindStateChange::new(
-            previous,
-            FeagiServerBindState::Active,
-        ));
-        Ok(())
-    }
-
-    async fn stop(&mut self) -> Result<(), FeagiNetworkError> {
-        for mut client in self.clients.drain(..) {
-            let _ = client.close(None).await;
-        }
-        self.listener = None;
-        let previous = self.current_state;
-        self.current_state = FeagiServerBindState::Inactive;
-        (self.state_change_callback)(FeagiServerBindStateChange::new(
-            previous,
-            FeagiServerBindState::Inactive,
-        ));
-        Ok(())
-    }
-
-    fn get_current_state(&self) -> FeagiServerBindState {
-        self.current_state
-    }
-}
-
-#[async_trait]
-impl FeagiServerPuller for FEAGIWebSocketServerPuller {
-    async fn try_poll_receive(&mut self) -> Result<Vec<u8>, FeagiNetworkError> {
-        // Accept any pending connections first
-        self.accept_pending_connections().await?;
-
-        if self.clients.is_empty() {
-            return Err(FeagiNetworkError::ReceiveFailed(
-                "No clients connected".to_string(),
-            ));
-        }
-
-        let mut failed_indices = Vec::new();
-
-        for (i, client) in self.clients.iter_mut().enumerate() {
-            loop {
-                match client.next().await {
-                    Some(Ok(Message::Binary(data))) => {
-                        // Remove failed clients before returning
-                        for idx in failed_indices.into_iter().rev() {
-                            self.clients.remove(idx);
-                        }
-                        return Ok(data);
-                    }
-                    Some(Ok(Message::Text(text))) => {
-                        for idx in failed_indices.into_iter().rev() {
-                            self.clients.remove(idx);
-                        }
-                        return Ok(text.into_bytes());
-                    }
-                    Some(Ok(Message::Close(_))) => {
-                        failed_indices.push(i);
-                        break;
-                    }
-                    Some(Ok(_)) => {
-                        // Ping/Pong - continue reading from this client
-                        continue;
-                    }
-                    Some(Err(_)) => {
-                        failed_indices.push(i);
-                        break;
-                    }
-                    None => {
-                        failed_indices.push(i);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Remove disconnected clients
-        for i in failed_indices.into_iter().rev() {
-            self.clients.remove(i);
-        }
-
-        Err(FeagiNetworkError::ReceiveFailed(
-            "All clients disconnected".to_string(),
-        ))
+impl FeagiServerPullerProperties for FeagiWebSocketServerPullerProperties {
+    fn as_boxed_server_puller(&self) -> Box<dyn FeagiServerPuller> {
+        Box::new(FeagiWebSocketServerPuller {
+            bind_address: self.bind_address.clone(),
+            current_state: FeagiEndpointState::Inactive,
+            listener: None,
+            clients: Vec::new(),
+            receive_buffer: None,
+            has_data: false,
+        })
     }
 }
 
 //endregion
 
-//region Router
+//region Puller Implementation
 
-/// WebSocket server that handles request-response communication.
-pub struct FEAGIWebSocketServerRouter {
+/// A WebSocket server that receives pushed data from clients.
+pub struct FeagiWebSocketServerPuller {
     bind_address: String,
-    current_state: FeagiServerBindState,
-    state_change_callback: StateChangeCallback,
+    current_state: FeagiEndpointState,
     listener: Option<TcpListener>,
     clients: Vec<WsStream>,
-    // Client ID tracking - map client index to SessionID
-    next_client_id: u64,
-    index_to_session: HashMap<usize, SessionID>,
-    session_to_index: HashMap<SessionID, usize>,
+    /// Buffer for received data
+    receive_buffer: Option<Vec<u8>>,
+    has_data: bool,
 }
 
-impl FEAGIWebSocketServerRouter {
-    pub fn new(
-        bind_address: String,
-        state_change_callback: StateChangeCallback,
-    ) -> Result<Self, FeagiNetworkError> {
+impl FeagiWebSocketServerPuller {
+    fn accept_pending_connections(&mut self) {
+        let listener = match &self.listener {
+            Some(l) => l,
+            None => return,
+        };
+
+        loop {
+            match listener.accept() {
+                Ok((stream, _addr)) => {
+                    if stream.set_nonblocking(true).is_err() {
+                        continue;
+                    }
+                    match accept(stream) {
+                        Ok(ws) => {
+                            self.clients.push(ws);
+                        }
+                        Err(_) => {}
+                    }
+                }
+                Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
+                Err(_) => break,
+            }
+        }
+    }
+
+    /// Try to receive data from any client (non-blocking).
+    fn try_receive(&mut self) -> bool {
+        let mut failed_indices = Vec::new();
+
+        for (i, client) in self.clients.iter_mut().enumerate() {
+            match client.read() {
+                Ok(Message::Binary(data)) => {
+                    self.receive_buffer = Some(data);
+                    // Remove failed clients before returning
+                    for idx in failed_indices.into_iter().rev() {
+                        let _ = self.clients.remove(idx).close(None);
+                    }
+                    return true;
+                }
+                Ok(Message::Text(text)) => {
+                    self.receive_buffer = Some(text.into_bytes());
+                    for idx in failed_indices.into_iter().rev() {
+                        let _ = self.clients.remove(idx).close(None);
+                    }
+                    return true;
+                }
+                Ok(Message::Close(_)) => {
+                    failed_indices.push(i);
+                }
+                Ok(_) => {
+                    // Ping/Pong/Frame - continue
+                }
+                Err(tungstenite::Error::Io(ref e)) if e.kind() == ErrorKind::WouldBlock => {
+                    // No data from this client
+                }
+                Err(_) => {
+                    failed_indices.push(i);
+                }
+            }
+        }
+
+        // Remove failed clients
+        for i in failed_indices.into_iter().rev() {
+            let _ = self.clients.remove(i).close(None);
+        }
+
+        false
+    }
+}
+
+impl FeagiServer for FeagiWebSocketServerPuller {
+    fn poll(&mut self) -> &FeagiEndpointState {
+        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
+            self.accept_pending_connections();
+
+            if self.try_receive() {
+                self.has_data = true;
+                self.current_state = FeagiEndpointState::ActiveHasData;
+            }
+        }
+        &self.current_state
+    }
+
+    fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Inactive => {
+                let listener = TcpListener::bind(&self.bind_address)
+                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+                listener
+                    .set_nonblocking(true)
+                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+
+                self.listener = Some(listener);
+                self.current_state = FeagiEndpointState::ActiveWaiting;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot start: server is not in Inactive state".to_string(),
+            )),
+        }
+    }
+
+    fn request_stop(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                for mut client in self.clients.drain(..) {
+                    let _ = client.close(None);
+                }
+                self.listener = None;
+                self.receive_buffer = None;
+                self.has_data = false;
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot stop: server is not in Active state".to_string(),
+            )),
+        }
+    }
+
+    fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Errored(_) => {
+                for mut client in self.clients.drain(..) {
+                    let _ = client.close(None);
+                }
+                self.listener = None;
+                self.receive_buffer = None;
+                self.has_data = false;
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot confirm error: server is not in Errored state".to_string(),
+            )),
+        }
+    }
+}
+
+impl FeagiServerPuller for FeagiWebSocketServerPuller {
+    fn consume_retrieved_data(&mut self) -> Result<&[u8], FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveHasData => {
+                if self.has_data {
+                    if let Some(ref data) = self.receive_buffer {
+                        self.has_data = false;
+                        self.current_state = FeagiEndpointState::ActiveWaiting;
+                        Ok(data.as_slice())
+                    } else {
+                        Err(FeagiNetworkError::ReceiveFailed(
+                            "No data in buffer".to_string(),
+                        ))
+                    }
+                } else {
+                    Err(FeagiNetworkError::ReceiveFailed(
+                        "No data available".to_string(),
+                    ))
+                }
+            }
+            _ => Err(FeagiNetworkError::ReceiveFailed(
+                "Cannot consume: no data available".to_string(),
+            )),
+        }
+    }
+}
+
+//endregion
+
+// ============================================================================
+// Router
+// ============================================================================
+
+//region Router Properties
+
+/// Configuration properties for creating a WebSocket router server.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FeagiWebSocketServerRouterProperties {
+    bind_address: String,
+}
+
+impl FeagiWebSocketServerRouterProperties {
+    /// Creates new router properties with the given bind address.
+    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        let _ = extract_host_port(&format!("ws://{}", bind_address))?;
         Ok(Self {
-            bind_address,
-            current_state: FeagiServerBindState::Inactive,
-            state_change_callback,
+            bind_address: bind_address.to_string(),
+        })
+    }
+}
+
+impl FeagiServerRouterProperties for FeagiWebSocketServerRouterProperties {
+    fn as_boxed_server_router(&self) -> Box<dyn FeagiServerRouter> {
+        Box::new(FeagiWebSocketServerRouter {
+            bind_address: self.bind_address.clone(),
+            current_state: FeagiEndpointState::Inactive,
             listener: None,
             clients: Vec::new(),
-            next_client_id: 1,
+            receive_buffer: None,
+            current_session: None,
+            has_data: false,
             index_to_session: HashMap::new(),
             session_to_index: HashMap::new(),
         })
     }
+}
 
-    /// Accept any pending connections.
-    async fn accept_pending_connections(&mut self) -> Result<usize, FeagiNetworkError> {
+//endregion
+
+//region Router Implementation
+
+/// A WebSocket server that handles request-response communication with multiple clients.
+pub struct FeagiWebSocketServerRouter {
+    bind_address: String,
+    current_state: FeagiEndpointState,
+    listener: Option<TcpListener>,
+    clients: Vec<WsStream>,
+    /// Buffer for received request
+    receive_buffer: Option<Vec<u8>>,
+    /// Session ID of the client that sent the current request
+    current_session: Option<SessionID>,
+    has_data: bool,
+    /// Client index to SessionID mapping
+    index_to_session: HashMap<usize, SessionID>,
+    /// SessionID to client index mapping
+    session_to_index: HashMap<SessionID, usize>,
+}
+
+impl FeagiWebSocketServerRouter {
+    fn accept_pending_connections(&mut self) {
         let listener = match &self.listener {
             Some(l) => l,
-            None => return Ok(0),
+            None => return,
         };
 
-        let mut accepted = 0;
         loop {
-            match futures_util::poll!(Box::pin(listener.accept())) {
-                std::task::Poll::Ready(Ok((stream, _addr))) => {
-                    match accept_async(stream).await {
+            match listener.accept() {
+                Ok((stream, _addr)) => {
+                    if stream.set_nonblocking(true).is_err() {
+                        continue;
+                    }
+                    match accept(stream) {
                         Ok(ws) => {
                             let index = self.clients.len();
                             let session_id = SessionID::new_random();
@@ -360,37 +524,79 @@ impl FEAGIWebSocketServerRouter {
                             self.clients.push(ws);
                             self.index_to_session.insert(index, session_id);
                             self.session_to_index.insert(session_id, index);
-                            accepted += 1;
                         }
-                        Err(e) => {
-                            eprintln!("WebSocket handshake failed: {}", e);
-                        }
+                        Err(_) => {}
                     }
                 }
-                std::task::Poll::Ready(Err(_)) => break,
-                std::task::Poll::Pending => break,
+                Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
+                Err(_) => break,
             }
         }
-        Ok(accepted)
     }
 
-    /// Remove a client and update the mappings.
+    fn try_receive(&mut self) -> bool {
+        let mut failed_indices = Vec::new();
+
+        for (i, client) in self.clients.iter_mut().enumerate() {
+            match client.read() {
+                Ok(Message::Binary(data)) => {
+                    if let Some(&session_id) = self.index_to_session.get(&i) {
+                        self.receive_buffer = Some(data);
+                        self.current_session = Some(session_id);
+                        // Remove failed clients before returning
+                        for idx in failed_indices.into_iter().rev() {
+                            self.remove_client(idx);
+                        }
+                        return true;
+                    }
+                }
+                Ok(Message::Text(text)) => {
+                    if let Some(&session_id) = self.index_to_session.get(&i) {
+                        self.receive_buffer = Some(text.into_bytes());
+                        self.current_session = Some(session_id);
+                        for idx in failed_indices.into_iter().rev() {
+                            self.remove_client(idx);
+                        }
+                        return true;
+                    }
+                }
+                Ok(Message::Close(_)) => {
+                    failed_indices.push(i);
+                }
+                Ok(_) => {}
+                Err(tungstenite::Error::Io(ref e)) if e.kind() == ErrorKind::WouldBlock => {}
+                Err(_) => {
+                    failed_indices.push(i);
+                }
+            }
+        }
+
+        for i in failed_indices.into_iter().rev() {
+            self.remove_client(i);
+        }
+
+        false
+    }
+
     fn remove_client(&mut self, index: usize) {
+        if index >= self.clients.len() {
+            return;
+        }
+
+        // Remove and close the client
+        let _ = self.clients.remove(index).close(None);
+
+        // Remove from mappings
         if let Some(session_id) = self.index_to_session.remove(&index) {
             self.session_to_index.remove(&session_id);
         }
-        self.clients.remove(index);
 
         // Update indices for all clients after the removed one
         let mut new_index_to_session = HashMap::new();
         let mut new_session_to_index = HashMap::new();
 
         for (old_idx, session_id) in self.index_to_session.drain() {
-            let new_idx = if old_idx > index {
-                old_idx - 1
-            } else {
-                old_idx
-            };
+            let new_idx = if old_idx > index { old_idx - 1 } else { old_idx };
             new_index_to_session.insert(new_idx, session_id);
             new_session_to_index.insert(session_id, new_idx);
         }
@@ -400,130 +606,141 @@ impl FEAGIWebSocketServerRouter {
     }
 }
 
-#[async_trait]
-impl FeagiServer for FEAGIWebSocketServerRouter {
-    async fn start(&mut self) -> Result<(), FeagiNetworkError> {
-        let listener = TcpListener::bind(&self.bind_address)
-            .await
-            .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+impl FeagiServer for FeagiWebSocketServerRouter {
+    fn poll(&mut self) -> &FeagiEndpointState {
+        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
+            self.accept_pending_connections();
 
-        self.listener = Some(listener);
-        let previous = self.current_state;
-        self.current_state = FeagiServerBindState::Active;
-        (self.state_change_callback)(FeagiServerBindStateChange::new(
-            previous,
-            FeagiServerBindState::Active,
-        ));
-        Ok(())
-    }
-
-    async fn stop(&mut self) -> Result<(), FeagiNetworkError> {
-        for mut client in self.clients.drain(..) {
-            let _ = client.close(None).await;
+            if self.try_receive() {
+                self.has_data = true;
+                self.current_state = FeagiEndpointState::ActiveHasData;
+            }
         }
-        self.index_to_session.clear();
-        self.session_to_index.clear();
-        self.listener = None;
-        let previous = self.current_state;
-        self.current_state = FeagiServerBindState::Inactive;
-        (self.state_change_callback)(FeagiServerBindStateChange::new(
-            previous,
-            FeagiServerBindState::Inactive,
-        ));
-        Ok(())
+        &self.current_state
     }
 
-    fn get_current_state(&self) -> FeagiServerBindState {
-        self.current_state
+    fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Inactive => {
+                let listener = TcpListener::bind(&self.bind_address)
+                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+                listener
+                    .set_nonblocking(true)
+                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+
+                self.listener = Some(listener);
+                self.current_state = FeagiEndpointState::ActiveWaiting;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot start: server is not in Inactive state".to_string(),
+            )),
+        }
+    }
+
+    fn request_stop(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                for mut client in self.clients.drain(..) {
+                    let _ = client.close(None);
+                }
+                self.listener = None;
+                self.receive_buffer = None;
+                self.current_session = None;
+                self.has_data = false;
+                self.index_to_session.clear();
+                self.session_to_index.clear();
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot stop: server is not in Active state".to_string(),
+            )),
+        }
+    }
+
+    fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Errored(_) => {
+                for mut client in self.clients.drain(..) {
+                    let _ = client.close(None);
+                }
+                self.listener = None;
+                self.receive_buffer = None;
+                self.current_session = None;
+                self.has_data = false;
+                self.index_to_session.clear();
+                self.session_to_index.clear();
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot confirm error: server is not in Errored state".to_string(),
+            )),
+        }
     }
 }
 
-#[async_trait]
-impl FeagiServerRouter for FEAGIWebSocketServerRouter {
-    async fn try_poll_receive(&mut self) -> Result<(SessionID, Vec<u8>), FeagiNetworkError> {
-        // Accept any pending connections first
-        self.accept_pending_connections().await?;
-
-        if self.clients.is_empty() {
-            return Err(FeagiNetworkError::ReceiveFailed(
-                "No clients connected".to_string(),
-            ));
-        }
-
-        let mut failed_indices = Vec::new();
-
-        for (i, client) in self.clients.iter_mut().enumerate() {
-            loop {
-                match client.next().await {
-                    Some(Ok(Message::Binary(data))) => {
-                        if let Some(&session_id) = self.index_to_session.get(&i) {
-                            // Remove failed clients before returning
-                            for idx in failed_indices.into_iter().rev() {
-                                self.remove_client(idx);
-                            }
-                            return Ok((session_id, data));
-                        }
+impl FeagiServerRouter for FeagiWebSocketServerRouter {
+    fn consume_retrieved_request(&mut self) -> Result<(SessionID, &[u8]), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveHasData => {
+                if self.has_data {
+                    if let (Some(ref data), Some(session_id)) =
+                        (&self.receive_buffer, self.current_session)
+                    {
+                        self.has_data = false;
+                        self.current_session = None;
+                        self.current_state = FeagiEndpointState::ActiveWaiting;
+                        Ok((session_id, data.as_slice()))
+                    } else {
+                        Err(FeagiNetworkError::ReceiveFailed(
+                            "No data or session in buffer".to_string(),
+                        ))
                     }
-                    Some(Ok(Message::Text(text))) => {
-                        if let Some(&session_id) = self.index_to_session.get(&i) {
-                            for idx in failed_indices.into_iter().rev() {
-                                self.remove_client(idx);
-                            }
-                            return Ok((session_id, text.into_bytes()));
-                        }
-                    }
-                    Some(Ok(Message::Close(_))) => {
-                        failed_indices.push(i);
-                        break;
-                    }
-                    Some(Ok(_)) => {
-                        // Ping/Pong - continue reading
-                        continue;
-                    }
-                    Some(Err(_)) => {
-                        failed_indices.push(i);
-                        break;
-                    }
-                    None => {
-                        failed_indices.push(i);
-                        break;
-                    }
+                } else {
+                    Err(FeagiNetworkError::ReceiveFailed(
+                        "No data available".to_string(),
+                    ))
                 }
             }
+            _ => Err(FeagiNetworkError::ReceiveFailed(
+                "Cannot consume: no request available".to_string(),
+            )),
         }
-
-        // Remove failed clients (in reverse order)
-        for i in failed_indices.into_iter().rev() {
-            self.remove_client(i);
-        }
-
-        Err(FeagiNetworkError::ReceiveFailed(
-            "All clients disconnected".to_string(),
-        ))
     }
 
-    async fn send_response(
+    fn publish_response(
         &mut self,
-        client: SessionID,
-        response: &[u8],
+        session_id: SessionID,
+        message: &[u8],
     ) -> Result<(), FeagiNetworkError> {
-        let client_index = self.session_to_index.get(&client).ok_or_else(|| {
-            FeagiNetworkError::SendFailed(format!("Unknown client session: {:?}", client))
-        })?;
+        match &self.current_state {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                let client_index = *self.session_to_index.get(&session_id).ok_or_else(|| {
+                    FeagiNetworkError::SendFailed(format!("Unknown session: {:?}", session_id))
+                })?;
 
-        if *client_index >= self.clients.len() {
-            return Err(FeagiNetworkError::SendFailed(
-                "Client disconnected".to_string(),
-            ));
+                if client_index >= self.clients.len() {
+                    return Err(FeagiNetworkError::SendFailed(
+                        "Client disconnected".to_string(),
+                    ));
+                }
+
+                let ws_message = Message::Binary(message.to_vec());
+                self.clients[client_index]
+                    .send(ws_message)
+                    .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
+                self.clients[client_index]
+                    .flush()
+                    .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
+
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::SendFailed(
+                "Cannot send response: server is not in Active state".to_string(),
+            )),
         }
-
-        let message = Message::Binary(response.to_vec());
-        self.clients[*client_index]
-            .send(message)
-            .await
-            .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
-
-        Ok(())
     }
 }
 

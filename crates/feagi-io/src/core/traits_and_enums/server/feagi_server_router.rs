@@ -53,6 +53,8 @@ pub trait FeagiServerRouter: FeagiServer {
         session_id: SessionID,
         message: &[u8],
     ) -> Result<(), FeagiNetworkError>;
+
+    // TODO functions to add clienbts, remove clients, lock registering new clients
 }
 
 pub trait FeagiServerRouterProperties {
