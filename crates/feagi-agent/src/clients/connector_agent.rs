@@ -2,10 +2,16 @@
 //! data channels (sensory, motor, optional visualization). Sensory data must be
 //! sent as FeagiByteContainer bytes with the session_id set (see `session_id()` and
 //! `push_sensor_data`).
+//!
+//! Use `connect` for ZMQ or `connect_ws` for WebSocket; flow and API are the same.
 
 use feagi_io::core::protocol_implementations::zmq::{
     FeagiZmqClientPusherProperties, FeagiZmqClientRequesterProperties,
     FeagiZmqClientSubscriberProperties,
+};
+use feagi_io::core::protocol_implementations::websocket::{
+    FeagiWebSocketClientPusherProperties, FeagiWebSocketClientRequesterProperties,
+    FeagiWebSocketClientSubscriberProperties,
 };
 use feagi_io::core::traits_and_enums::client::{
     FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequesterProperties,
@@ -115,6 +121,101 @@ impl ConnectorAgent {
             .and_then(|viz_endpoint| {
                 let mut sub: Box<dyn FeagiClientSubscriber> =
                     FeagiZmqClientSubscriberProperties::new(viz_endpoint)
+                        .ok()?
+                        .as_boxed_client_subscriber();
+                sub.request_connect().ok()?;
+                Some(sub)
+            });
+
+        Ok(ConnectorAgent {
+            session_id,
+            sensor_pusher,
+            motor_subscriber,
+            viz_subscriber,
+        })
+    }
+
+    /// Same as `connect` but over WebSocket. `registration_ws_url` must be a WebSocket URL
+    /// (e.g. `ws://host:port`). Uses the same data-channel flow and API as the ZMQ connector.
+    pub fn connect_ws(
+        registration_ws_url: &str,
+        agent_descriptor: AgentDescriptor,
+        auth_token: AuthToken,
+        requested_capabilities: Vec<AgentCapabilities>,
+        device_registrations: DeviceRegistrations,
+    ) -> Result<Self, FeagiAgentClientError> {
+        use feagi_io::core::protocol_implementations::ProtocolImplementation;
+
+        let requester_props = FeagiWebSocketClientRequesterProperties::new(registration_ws_url)
+            .map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?;
+        let mut registration_agent =
+            RegistrationAgent::new(requester_props.as_boxed_client_requester());
+
+        registration_agent.connect()?;
+
+        let registration_request = RegistrationRequest::new(
+            agent_descriptor,
+            auth_token,
+            requested_capabilities,
+            ProtocolImplementation::WebSocket,
+        )
+        .with_device_registrations(device_registrations);
+
+        let (session_id, endpoints) = registration_agent.try_register(registration_request)?;
+        registration_agent.disconnect()?;
+
+        let sensor_endpoint = endpoints
+            .get(&AgentCapabilities::SendSensorData)
+            .ok_or_else(|| {
+                FeagiAgentClientError::ConnectionFailed(
+                    "Server did not return sensory endpoint".to_string(),
+                )
+            })?;
+        let motor_endpoint = endpoints
+            .get(&AgentCapabilities::ReceiveMotorData)
+            .ok_or_else(|| {
+                FeagiAgentClientError::ConnectionFailed(
+                    "Server did not return motor endpoint".to_string(),
+                )
+            })?;
+
+        let mut sensor_pusher: Box<dyn FeagiClientPusher> =
+            FeagiWebSocketClientPusherProperties::new(sensor_endpoint)
+                .map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?
+                .as_boxed_client_pusher();
+        sensor_pusher
+            .request_connect()
+            .map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?;
+        while !matches!(sensor_pusher.poll(), FeagiEndpointState::ActiveWaiting) {
+            if matches!(sensor_pusher.poll(), FeagiEndpointState::Errored(_)) {
+                return Err(FeagiAgentClientError::ConnectionFailed(
+                    "Failed to connect sensory channel".to_string(),
+                ));
+            }
+        }
+
+        let mut motor_subscriber: Box<dyn FeagiClientSubscriber> =
+            FeagiWebSocketClientSubscriberProperties::new(motor_endpoint)
+                .map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?
+                .as_boxed_client_subscriber();
+        motor_subscriber
+            .request_connect()
+            .map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?;
+        while !matches!(motor_subscriber.poll(), FeagiEndpointState::ActiveWaiting)
+            && !matches!(motor_subscriber.poll(), FeagiEndpointState::ActiveHasData)
+        {
+            if matches!(motor_subscriber.poll(), FeagiEndpointState::Errored(_)) {
+                return Err(FeagiAgentClientError::ConnectionFailed(
+                    "Failed to connect motor channel".to_string(),
+                ));
+            }
+        }
+
+        let viz_subscriber = endpoints
+            .get(&AgentCapabilities::ReceiveNeuronVisualizations)
+            .and_then(|viz_endpoint| {
+                let mut sub: Box<dyn FeagiClientSubscriber> =
+                    FeagiWebSocketClientSubscriberProperties::new(viz_endpoint)
                         .ok()?
                         .as_boxed_client_subscriber();
                 sub.request_connect().ok()?;
