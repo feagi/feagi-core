@@ -30,11 +30,13 @@ pub struct FeagiAgentHandler {
 
     sensory_cache: FeagiByteContainer,
 
-    /// Invoked when an agent registers successfully with optional device_registrations.
-    /// Used by the host (e.g. feagi-rs) to trigger auto IPU/OPU creation for ZMQ/WS registrations.
+    /// Invoked when an agent registers successfully with capabilities and optional device_registrations.
+    /// Used by the host (e.g. feagi-rs) for auto IPU/OPU creation and session-aware FCL/FQ subscriptions.
     registration_hook: Option<
         Arc<
-            dyn Fn(SessionID, AgentDescriptor, Option<serde_json::Value>) + Send + Sync,
+            dyn Fn(SessionID, AgentDescriptor, Vec<AgentCapabilities>, Option<serde_json::Value>)
+                + Send
+                + Sync,
         >,
     >,
 }
@@ -63,12 +65,14 @@ impl FeagiAgentHandler {
         }
     }
 
-    /// Set a hook to be invoked when an agent registers successfully with device_registrations.
-    /// The host can use this to trigger auto IPU/OPU creation for ZMQ/WS registrations.
+    /// Set a hook invoked when an agent registers successfully (capabilities + optional device_registrations).
+    /// The host uses this for auto IPU/OPU creation and session-aware motor/visualization subscriptions.
     pub fn set_registration_hook(
         &mut self,
         hook: Arc<
-            dyn Fn(SessionID, AgentDescriptor, Option<serde_json::Value>) + Send + Sync,
+            dyn Fn(SessionID, AgentDescriptor, Vec<AgentCapabilities>, Option<serde_json::Value>)
+                + Send
+                + Sync,
         >,
     ) {
         self.registration_hook = Some(hook);
@@ -314,9 +318,11 @@ impl FeagiAgentHandler {
 
         if let Some(hook) = &self.registration_hook {
             let dr = registration_request.device_registrations().cloned();
+            let capabilities = registration_request.requested_capabilities().to_vec();
             hook(
                 session_id.clone(),
                 registration_request.agent_descriptor().clone(),
+                capabilities,
                 dr,
             );
         }
