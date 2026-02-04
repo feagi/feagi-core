@@ -7,6 +7,5 @@ pub mod websocket_wasm;
 
 #[cfg(feature = "zmq-transport")]
 pub mod zmq;
-mod protocol_implementation;
 
-pub use protocol_implementation::ProtocolImplementation;
+pub use crate::core::traits_and_enums::protocol_implementation::ProtocolImplementation;

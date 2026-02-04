@@ -12,6 +12,7 @@ use tungstenite::protocol::Role;
 use tungstenite::{accept, Message, WebSocket};
 
 use crate::FeagiNetworkError;
+use crate::core::protocol_implementations::ProtocolImplementation;
 use crate::core::protocol_implementations::websocket::shared_functions::extract_host_port;
 use crate::core::traits_and_enums::FeagiEndpointState;
 use crate::core::traits_and_enums::server::{
@@ -58,6 +59,10 @@ impl FeagiServerPublisherProperties for FeagiWebSocketServerPublisherProperties 
             listener: None,
             clients: Vec::new(),
         })
+    }
+
+    fn get_protocol(&self) -> ProtocolImplementation {
+        ProtocolImplementation::WebSocket
     }
 }
 
@@ -257,6 +262,10 @@ impl FeagiServerPullerProperties for FeagiWebSocketServerPullerProperties {
             receive_buffer: None,
             has_data: false,
         })
+    }
+
+    fn get_protocol(&self) -> ProtocolImplementation {
+        ProtocolImplementation::WebSocket
     }
 }
 
@@ -479,6 +488,10 @@ impl FeagiServerRouterProperties for FeagiWebSocketServerRouterProperties {
             index_to_session: HashMap::new(),
             session_to_index: HashMap::new(),
         })
+    }
+
+    fn get_protocol(&self) -> ProtocolImplementation {
+        ProtocolImplementation::WebSocket
     }
 }
 

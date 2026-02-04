@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-
-use crate::registration::{AgentDescriptor, ConnectionProtocol};
+use feagi_io::core::protocol_implementations::ProtocolImplementation;
+use crate::registration::{AgentDescriptor};
 use crate::registration::common::{AgentCapabilities, AuthToken};
 
 /// A request from an agent to register with FEAGI.
@@ -11,7 +11,7 @@ pub struct RegistrationRequest {
     agent_descriptor: AgentDescriptor,
     auth_token: AuthToken,
     requested_capabilities: Vec<AgentCapabilities>,
-    connection_protocol: ConnectionProtocol
+    connection_protocol: ProtocolImplementation
 }
 
 impl RegistrationRequest {
@@ -26,7 +26,7 @@ impl RegistrationRequest {
         agent_descriptor: AgentDescriptor,
         auth_token: AuthToken,
         requested_capabilities: Vec<AgentCapabilities>, // TODO hashset?
-        connection_protocol: ConnectionProtocol,
+        connection_protocol: ProtocolImplementation,
     ) -> Self {
         Self {
             agent_descriptor,
@@ -52,7 +52,7 @@ impl RegistrationRequest {
     }
 
     /// Get the connection protocol.
-    pub fn connection_protocol(&self) -> &ConnectionProtocol {
+    pub fn connection_protocol(&self) -> &ProtocolImplementation {
         &self.connection_protocol
     }
 }

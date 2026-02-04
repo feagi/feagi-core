@@ -1,15 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-//region Connection Protocol
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-pub enum ConnectionProtocol {
-    ZMQ,
-    WebSocket,
-}
-
-//endregion
-
 //region Auth Token
 /// Fixed length for authentication tokens (32 bytes = 256 bits)
 pub const AUTH_TOKEN_LENGTH: usize = 32;

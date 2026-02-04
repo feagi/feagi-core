@@ -15,6 +15,7 @@ use feagi_serialization::SessionID;
 use zmq::{Context, Message, Socket};
 
 use crate::FeagiNetworkError;
+use crate::core::protocol_implementations::ProtocolImplementation;
 use crate::core::protocol_implementations::zmq::shared::ZmqUrl;
 use crate::core::traits_and_enums::FeagiEndpointState;
 use crate::core::traits_and_enums::server::{
@@ -67,6 +68,10 @@ impl FeagiServerPublisherProperties for FeagiZmqServerPublisherProperties {
             context,
             socket,
         })
+    }
+
+    fn get_protocol(&self) -> ProtocolImplementation {
+        ProtocolImplementation::ZMQ
     }
 }
 
@@ -232,6 +237,10 @@ impl FeagiServerPullerProperties for FeagiZmqServerPullerProperties {
             recv_msg: Message::new(),
             has_data: false,
         })
+    }
+
+    fn get_protocol(&self) -> ProtocolImplementation {
+        ProtocolImplementation::ZMQ
     }
 }
 
@@ -422,6 +431,10 @@ impl FeagiServerRouterProperties for FeagiZmqServerRouterProperties {
             identity_to_session: HashMap::new(),
             session_to_identity: HashMap::new(),
         })
+    }
+
+    fn get_protocol(&self) -> ProtocolImplementation {
+        ProtocolImplementation::ZMQ
     }
 }
 

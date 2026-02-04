@@ -1,3 +1,4 @@
+use crate::core::protocol_implementations::ProtocolImplementation;
 use crate::FeagiNetworkError;
 use crate::core::traits_and_enums::server::FeagiServer;
 
@@ -45,4 +46,6 @@ pub trait FeagiServerPublisher: FeagiServer {
 pub trait FeagiServerPublisherProperties {
     /// Creates a new boxed publisher from these properties.
     fn as_boxed_server_publisher(&self) -> Box<dyn FeagiServerPublisher>;
+    
+    fn get_protocol(&self) -> ProtocolImplementation;
 }

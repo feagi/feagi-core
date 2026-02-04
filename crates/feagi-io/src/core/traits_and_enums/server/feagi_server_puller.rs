@@ -1,3 +1,4 @@
+use crate::core::protocol_implementations::ProtocolImplementation;
 use crate::FeagiNetworkError;
 use crate::core::traits_and_enums::server::{FeagiServer};
 
@@ -27,4 +28,6 @@ pub trait FeagiServerPuller: FeagiServer {
 pub trait FeagiServerPullerProperties {
     /// Creates a new boxed puller from these properties.
     fn as_boxed_server_puller(&self) -> Box<dyn FeagiServerPuller>;
+
+    fn get_protocol(&self) -> ProtocolImplementation;
 }

@@ -1,5 +1,6 @@
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
+use feagi_io::core::protocol_implementations::ProtocolImplementation;
 use feagi_io::core::traits_and_enums::FeagiEndpointState;
 use feagi_io::core::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouter, FeagiServerRouterProperties};
 use feagi_serialization::{FeagiByteContainer, SessionID};
@@ -148,10 +149,7 @@ impl FeagiAgentHandler {
         Ok(())
     }
 
-
-
     //endregion
-
 
     //region Internal
 
@@ -200,17 +198,72 @@ impl FeagiAgentHandler {
 
         // TODO func for starting new servers and registering
 
+        let mut endpoints: HashMap<AgentCapabilities, String> = HashMap::new();
+        for requested_capability in registration_request.requested_capabilities() {
+            match requested_capability {
+                AgentCapabilities::SendSensorData => {
+                    let property = self.try_get_puller_property(registration_request.connection_protocol())?;
+                    let mut puller = property.as_boxed_server_puller();
+                    puller.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
+                    self.active_sensor_servers.push(puller);
+                    endpoints.insert(AgentCapabilities::SendSensorData, "".to_string());
+                }
+                AgentCapabilities::ReceiveMotorData => {
+                    let property = self.try_get_publisher_property(registration_request.connection_protocol())?;
+                    let mut publisher = property.as_boxed_server_publisher();
+                    publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
+                    self.active_motor_servers.push(publisher);
+                    endpoints.insert(AgentCapabilities::ReceiveMotorData, "".to_string());
+                }
+                AgentCapabilities::ReceiveNeuronVisualizations => {
+                    let property = self.try_get_publisher_property(registration_request.connection_protocol())?;
+                    let mut publisher = property.as_boxed_server_publisher();
+                    publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
+                    self.active_visualizer_servers.push(publisher);
+                    endpoints.insert(AgentCapabilities::ReceiveNeuronVisualizations, "".to_string());
+                }
+            }
+        }
+
+
+
         self.registered_agents.insert(session_id.clone(), (
             registration_request.agent_descriptor().clone(),
             registration_request.requested_capabilities().to_vec()));
 
-        return Ok(RegistrationResponse::Success(session_id.clone()));
+        return Ok(RegistrationResponse::Success(session_id.clone(), endpoints));
+    }
+
+    fn try_get_puller_property(&mut self, wanted_protocol: &ProtocolImplementation) -> Result<Box<dyn FeagiServerPullerProperties>, FeagiAgentServerError> {
+        for i in 0..self.available_pullers.len() {
+            let available_puller = &self.available_pullers[i];
+            if &available_puller.get_protocol() != wanted_protocol {
+                // not the protocol we are looking for
+                continue;
+            } else {
+                // found the protocol we want
+                return Ok(self.available_pullers.remove(i));
+            }
+        }
+        Err(FeagiAgentServerError::InitFail("Missing required protocol puller".to_string()))
+    }
+
+    fn try_get_publisher_property(&mut self, wanted_protocol: &ProtocolImplementation) -> Result<Box<dyn FeagiServerPublisherProperties>, FeagiAgentServerError> {
+        for i in 0..self.available_publishers.len() {
+            let available_publisher = &self.available_publishers[i];
+            if &available_publisher.get_protocol() != wanted_protocol {
+                // not the protocol we are looking for
+                continue;
+            } else {
+                // found the protocol we want
+                return Ok(self.available_publishers.remove(i));
+            }
+        }
+        Err(FeagiAgentServerError::InitFail("Missing required protocol publisher".to_string()))
     }
 
 
     //endregion
-
-
 
     //endregion
 

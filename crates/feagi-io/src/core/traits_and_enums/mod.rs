@@ -19,5 +19,6 @@
 pub mod client;
 pub mod server;
 pub mod shared;
+pub mod protocol_implementation;
 
 pub use shared::FeagiEndpointState;
