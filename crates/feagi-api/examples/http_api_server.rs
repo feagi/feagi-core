@@ -245,6 +245,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         amalgamation_state: ApiState::init_amalgamation_state(),
         #[cfg(feature = "feagi-agent")]
         agent_connectors: ApiState::init_agent_connectors(),
+        #[cfg(feature = "feagi-agent")]
+        agent_registration_handler: ApiState::init_agent_registration_handler(),
     };
 
     println!(

@@ -211,6 +211,8 @@ async fn create_test_server() -> axum::Router {
         amalgamation_state: ApiState::init_amalgamation_state(),
         #[cfg(feature = "feagi-agent")]
         agent_connectors: ApiState::init_agent_connectors(),
+        #[cfg(feature = "feagi-agent")]
+        agent_registration_handler: ApiState::init_agent_registration_handler(),
     };
 
     // Create router

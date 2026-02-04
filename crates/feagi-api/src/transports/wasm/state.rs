@@ -45,5 +45,7 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
         amalgamation_state: ApiState::init_amalgamation_state(),
         #[cfg(feature = "feagi-agent")]
         agent_connectors: ApiState::init_agent_connectors(),
+        #[cfg(feature = "feagi-agent")]
+        agent_registration_handler: ApiState::init_agent_registration_handler(),
     }
 }

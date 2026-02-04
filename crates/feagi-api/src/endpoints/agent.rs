@@ -11,13 +11,15 @@ use std::collections::HashMap;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use crate::v1::agent_dtos::*;
-use feagi_services::traits::agent_service::{
-    AgentRegistration, HeartbeatRequest as ServiceHeartbeatRequest,
-};
+use feagi_services::traits::agent_service::HeartbeatRequest as ServiceHeartbeatRequest;
+use base64::Engine;
 use tracing::{error, info, warn};
 
 #[cfg(feature = "feagi-agent")]
-use feagi_agent::sdk::AgentDescriptor;
+use feagi_agent::registration::{
+    AgentCapabilities as RegistrationCapabilities, AgentDescriptor, AuthToken, RegistrationRequest,
+    RegistrationResponse,
+};
 #[cfg(feature = "feagi-agent")]
 use feagi_agent::sdk::ConnectorAgent;
 #[cfg(feature = "feagi-agent")]
@@ -44,6 +46,62 @@ fn parse_agent_descriptor(agent_id: &str) -> ApiResult<AgentDescriptor> {
             "Invalid agent_id (expected AgentDescriptor base64): {e}"
         ))
     })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn parse_auth_token(request: &AgentRegistrationRequest) -> ApiResult<AuthToken> {
+    let token_b64 = request
+        .auth_token
+        .as_deref()
+        .ok_or_else(|| ApiError::invalid_input("Missing auth_token for registration"))?;
+    AuthToken::from_base64(token_b64).ok_or_else(|| {
+        ApiError::invalid_input("Invalid auth_token (expected base64 32-byte token)")
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn derive_capabilities_from_device_registrations(
+    device_registrations: &serde_json::Value,
+) -> ApiResult<Vec<RegistrationCapabilities>> {
+    let obj = device_registrations.as_object().ok_or_else(|| {
+        ApiError::invalid_input("device_registrations must be a JSON object")
+    })?;
+
+    let input_units = obj
+        .get("input_units_and_encoder_properties")
+        .and_then(|v| v.as_object());
+    let output_units = obj
+        .get("output_units_and_decoder_properties")
+        .and_then(|v| v.as_object());
+    let feedbacks = obj.get("feedbacks").and_then(|v| v.as_object());
+
+    let mut capabilities = Vec::new();
+    if input_units.map(|m| !m.is_empty()).unwrap_or(false) {
+        capabilities.push(RegistrationCapabilities::SendSensorData);
+    }
+    if output_units.map(|m| !m.is_empty()).unwrap_or(false) {
+        capabilities.push(RegistrationCapabilities::ReceiveMotorData);
+    }
+    if feedbacks.map(|m| !m.is_empty()).unwrap_or(false) {
+        capabilities.push(RegistrationCapabilities::ReceiveNeuronVisualizations);
+    }
+
+    if capabilities.is_empty() {
+        return Err(ApiError::invalid_input(
+            "device_registrations does not declare any input/output/feedback units",
+        ));
+    }
+
+    Ok(capabilities)
+}
+
+#[cfg(feature = "feagi-agent")]
+fn capability_key(capability: &RegistrationCapabilities) -> &'static str {
+    match capability {
+        RegistrationCapabilities::SendSensorData => "send_sensor_data",
+        RegistrationCapabilities::ReceiveMotorData => "receive_motor_data",
+        RegistrationCapabilities::ReceiveNeuronVisualizations => "receive_neuron_visualizations",
+    }
 }
 
 fn get_agent_name_from_id(agent_id: &str) -> ApiResult<String> {
@@ -587,58 +645,64 @@ pub async fn register_agent(
         request.agent_id, request.agent_type
     );
 
-    let agent_service = state
-        .agent_service
-        .as_ref()
-        .ok_or_else(|| ApiError::internal("Agent service not available"))?;
-
-    // Extract device_registrations from capabilities before they're moved
     #[cfg(feature = "feagi-agent")]
     let device_registrations_opt = request
         .capabilities
         .get("device_registrations")
-        .and_then(|v| {
-            // Validate structure before cloning
-            if let Some(obj) = v.as_object() {
-                if obj.contains_key("input_units_and_encoder_properties")
-                    && obj.contains_key("output_units_and_decoder_properties")
-                    && obj.contains_key("feedbacks")
-                {
-                    Some(v.clone())
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        });
+        .and_then(|v| v.as_object().map(|_| v.clone()));
 
-    let registration = AgentRegistration {
-        agent_id: request.agent_id.clone(),
-        agent_type: request.agent_type,
-        agent_data_port: request.agent_data_port,
-        agent_version: request.agent_version,
-        controller_version: request.controller_version,
-        agent_ip: request.agent_ip,
-        capabilities: request.capabilities,
-        metadata: request.metadata,
-        chosen_transport: request.chosen_transport,
+    #[cfg(not(feature = "feagi-agent"))]
+    {
+        return Err(ApiError::internal("feagi-agent feature not enabled"));
+    }
+
+    #[cfg(feature = "feagi-agent")]
+    let registration_response = {
+        let registration_handler = state
+            .agent_registration_handler
+            .clone();
+        let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
+        let auth_token = parse_auth_token(&request)?;
+        let device_registrations = device_registrations_opt.clone().ok_or_else(|| {
+            ApiError::invalid_input("device_registrations is required for registration")
+        })?;
+        let requested_capabilities =
+            derive_capabilities_from_device_registrations(&device_registrations)?;
+
+        let mut handler_guard = registration_handler.lock();
+        let protocol = match request.chosen_transport.as_deref() {
+            Some(transport) => handler_guard.parse_protocol(transport).map_err(|e| {
+                ApiError::invalid_input(format!("Unsupported transport: {e}"))
+            })?,
+            None => handler_guard
+                .default_protocol()
+                .map_err(|e| ApiError::internal(format!("Missing default transport: {e}")))?,
+        };
+
+        let registration_request = RegistrationRequest::new(
+            agent_descriptor.clone(),
+            auth_token,
+            requested_capabilities,
+            protocol,
+        );
+
+        handler_guard
+            .register_agent_direct(registration_request)
+            .map_err(|e| ApiError::internal(format!("Registration failed: {e}")))?
     };
 
-    match agent_service.register_agent(registration).await {
-        Ok(response) => {
+    #[cfg(feature = "feagi-agent")]
+    match registration_response {
+        RegistrationResponse::Success(session_id, endpoints) => {
             info!(
-                "✅ [API] Agent '{}' registration succeeded (status: {})",
-                request.agent_id, response.status
+                "✅ [API] Agent '{}' registration succeeded (session: {:?})",
+                request.agent_id, session_id
             );
 
-            // Initialize ConnectorAgent for this agent
-            // If capabilities contained device_registrations, import them
             #[cfg(feature = "feagi-agent")]
             if let Some(device_registrations_value) = device_registrations_opt {
                 let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
                 let device_registrations_for_autocreate = device_registrations_value.clone();
-                // IMPORTANT: do not hold a non-Send lock guard across an await.
                 let connector = {
                     let mut connectors = state.agent_connectors.write();
                     if let Some(existing) = connectors.get(&agent_descriptor) {
@@ -659,7 +723,6 @@ pub async fn register_agent(
                     }
                 };
 
-                // IMPORTANT: do not hold a non-Send MutexGuard across an await.
                 let import_result = {
                     let mut connector_guard = connector.lock().unwrap();
                     connector_guard.set_device_registrations_from_json(device_registrations_value)
@@ -686,50 +749,43 @@ pub async fn register_agent(
                 }
             } else {
                 let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
-                // Initialize empty ConnectorAgent even if no device_registrations
                 let mut connectors = state.agent_connectors.write();
                 connectors.entry(agent_descriptor).or_insert_with(|| {
                     Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor)))
                 });
             }
 
-            // Convert service TransportConfig to API TransportConfig
-            let transports = response.transports.map(|ts| {
-                ts.into_iter()
-                    .map(|t| crate::v1::agent_dtos::TransportConfig {
-                        transport_type: t.transport_type,
-                        enabled: t.enabled,
-                        ports: t.ports,
-                        host: t.host,
-                    })
-                    .collect()
-            });
+            let mut endpoint_map = HashMap::new();
+            for (capability, endpoint) in endpoints {
+                endpoint_map.insert(capability_key(&capability).to_string(), serde_json::json!(endpoint));
+            }
+
+            let session_b64 = base64::engine::general_purpose::STANDARD.encode(session_id.bytes());
+            let mut transport = HashMap::new();
+            transport.insert("session_id".to_string(), serde_json::json!(session_b64));
+            transport.insert("endpoints".to_string(), serde_json::json!(endpoint_map));
 
             Ok(Json(AgentRegistrationResponse {
-                status: response.status,
-                message: response.message,
-                success: response.success,
-                transport: response.transport,
-                rates: response.rates,
-                transports,
-                recommended_transport: response.recommended_transport,
-                shm_paths: response.shm_paths,
-                cortical_areas: response.cortical_areas,
+                status: "success".to_string(),
+                message: "Agent registered successfully".to_string(),
+                success: true,
+                transport: Some(transport),
+                rates: None,
+                transports: None,
+                recommended_transport: request.chosen_transport,
+                shm_paths: None,
+                cortical_areas: serde_json::json!({}),
             }))
         }
-        Err(e) => {
-            // Check if error is about unsupported transport (validation error)
-            let error_msg = e.to_string();
-            warn!(
-                "❌ [API] Agent '{}' registration FAILED: {}",
-                request.agent_id, error_msg
-            );
-            if error_msg.contains("not supported") || error_msg.contains("disabled") {
-                Err(ApiError::invalid_input(error_msg))
-            } else {
-                Err(ApiError::internal(format!("Registration failed: {}", e)))
-            }
-        }
+        RegistrationResponse::FailedInvalidAuth => Err(ApiError::invalid_input(
+            "Registration failed: invalid auth token",
+        )),
+        RegistrationResponse::FailedInvalidRequest => Err(ApiError::invalid_input(
+            "Registration failed: invalid request",
+        )),
+        RegistrationResponse::AlreadyRegistered => Err(ApiError::invalid_input(
+            "Registration failed: agent already registered",
+        )),
     }
 }
 

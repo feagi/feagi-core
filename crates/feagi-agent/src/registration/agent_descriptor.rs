@@ -1,3 +1,4 @@
+use base64::Engine;
 use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
 
@@ -80,6 +81,68 @@ impl AgentDescriptor {
         })
     }
 
+    /// Encode the descriptor into a fixed-width base64 string.
+    ///
+    /// Format: u32 instance_id + manufacturer (padded) + agent_name (padded) + u32 agent_version.
+    pub fn to_base64(&self) -> String {
+        let mut bytes = vec![0u8; Self::SIZE_BYTES];
+        let mut offset = 0;
+
+        bytes[offset..offset + 4].copy_from_slice(&self.instance_id.to_le_bytes());
+        offset += 4;
+
+        let manufacturer_bytes = self.manufacturer.as_bytes();
+        let manufacturer_len = manufacturer_bytes.len().min(MAX_MANUFACTURER_NAME_BYTE_COUNT);
+        bytes[offset..offset + manufacturer_len].copy_from_slice(&manufacturer_bytes[..manufacturer_len]);
+        offset += MAX_MANUFACTURER_NAME_BYTE_COUNT;
+
+        let agent_name_bytes = self.agent_name.as_bytes();
+        let agent_name_len = agent_name_bytes.len().min(MAX_AGENT_NAME_BYTE_COUNT);
+        bytes[offset..offset + agent_name_len].copy_from_slice(&agent_name_bytes[..agent_name_len]);
+        offset += MAX_AGENT_NAME_BYTE_COUNT;
+
+        bytes[offset..offset + 4].copy_from_slice(&self.agent_version.to_le_bytes());
+
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    }
+
+    /// Decode a base64 AgentDescriptor.
+    pub fn try_from_base64(encoded: &str) -> Result<Self, FeagiDataError> {
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|e| FeagiDataError::BadParameters(format!("Invalid base64: {e}")))?;
+
+        if decoded.len() != Self::SIZE_BYTES {
+            return Err(FeagiDataError::BadParameters(format!(
+                "Invalid AgentDescriptor payload size: expected {}, got {}",
+                Self::SIZE_BYTES,
+                decoded.len()
+            )));
+        }
+
+        let mut offset = 0;
+        let instance_id = u32::from_le_bytes(decoded[offset..offset + 4].try_into().unwrap());
+        offset += 4;
+
+        let manufacturer_raw = &decoded[offset..offset + MAX_MANUFACTURER_NAME_BYTE_COUNT];
+        offset += MAX_MANUFACTURER_NAME_BYTE_COUNT;
+        let agent_name_raw = &decoded[offset..offset + MAX_AGENT_NAME_BYTE_COUNT];
+        offset += MAX_AGENT_NAME_BYTE_COUNT;
+
+        let agent_version = u32::from_le_bytes(decoded[offset..offset + 4].try_into().unwrap());
+
+        let manufacturer = extract_padded_ascii(manufacturer_raw)?;
+        let agent_name = extract_padded_ascii(agent_name_raw)?;
+
+        Self::validate(&manufacturer, &agent_name, agent_version)?;
+
+        Ok(Self {
+            instance_id,
+            manufacturer,
+            agent_name,
+            agent_version,
+        })
+    }
 
     /// Get the instance ID
     pub fn instance_id(&self) -> u32 {
@@ -138,4 +201,21 @@ impl AgentDescriptor {
         }
         Ok(())
     }
+}
+
+fn extract_padded_ascii(bytes: &[u8]) -> Result<String, FeagiDataError> {
+    let trimmed = bytes
+        .iter()
+        .copied()
+        .take_while(|b| *b != 0)
+        .collect::<Vec<u8>>();
+    let value = String::from_utf8(trimmed).map_err(|e| {
+        FeagiDataError::BadParameters(format!("Invalid UTF-8 in AgentDescriptor: {e}"))
+    })?;
+    if !value.is_ascii() {
+        return Err(FeagiDataError::BadParameters(
+            "AgentDescriptor fields must be ASCII".to_string(),
+        ));
+    }
+    Ok(value)
 }

@@ -61,6 +61,10 @@ pub struct ApiState {
             >,
         >,
     >,
+    /// Unified registration handler (REST/ZMQ/WS share this pipeline)
+    #[cfg(feature = "feagi-agent")]
+    pub agent_registration_handler:
+        Arc<parking_lot::Mutex<feagi_agent::server::FeagiAgentHandler>>,
 }
 
 impl ApiState {
@@ -75,6 +79,17 @@ impl ApiState {
         >,
     > {
         Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()))
+    }
+
+    /// Initialize the unified registration handler.
+    #[cfg(feature = "feagi-agent")]
+    pub fn init_agent_registration_handler(
+    ) -> Arc<parking_lot::Mutex<feagi_agent::server::FeagiAgentHandler>> {
+        let handler = feagi_agent::server::FeagiAgentHandler::new(Box::new(
+            feagi_agent::server::auth::DummyAuth {},
+        ))
+        .expect("Failed to initialize FeagiAgentHandler");
+        Arc::new(parking_lot::Mutex::new(handler))
     }
 
     /// Initialize amalgamation_state field (empty state).

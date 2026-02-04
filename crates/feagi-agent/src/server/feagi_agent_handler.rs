@@ -107,6 +107,15 @@ impl FeagiAgentHandler {
         Ok(())
     }
 
+    /// Register an agent without a transport-level router (REST path).
+    pub fn register_agent_direct(
+        &mut self,
+        registration_request: RegistrationRequest,
+    ) -> Result<RegistrationResponse, FeagiAgentServerError> {
+        let session_id = self.new_session_id();
+        self.verify_agent_request_and_make_response(&session_id, registration_request)
+    }
+
     pub fn poll_sensory_handlers(&mut self) -> Option<&FeagiByteContainer> {
         for i in 0..self.active_sensor_servers.len() {
             match self.active_sensor_servers[i].poll() {
@@ -317,6 +326,20 @@ impl FeagiAgentHandler {
         self.registered_agents.contains_key(session_id)
     }
 
+    pub fn parse_protocol(&self, transport: &str) -> Result<ProtocolImplementation, FeagiAgentServerError> {
+        match transport.to_lowercase().as_str() {
+            "zmq" => Ok(ProtocolImplementation::ZMQ),
+            "ws" | "websocket" => Ok(ProtocolImplementation::WebSocket),
+            _ => Err(FeagiAgentServerError::InitFail(format!(
+                "Unsupported transport '{transport}'"
+            ))),
+        }
+    }
+
+    pub fn default_protocol(&self) -> Result<ProtocolImplementation, FeagiAgentServerError> {
+        self.parse_protocol(&self.config.transports.default)
+    }
+
     pub fn build_capability_endpoint(
         &self,
         protocol: &ProtocolImplementation,
@@ -357,6 +380,15 @@ impl FeagiAgentHandler {
             format!("ws://[{host}]:{port}")
         } else {
             format!("ws://{host}:{port}")
+        }
+    }
+
+    fn new_session_id(&self) -> SessionID {
+        loop {
+            let session_id = SessionID::new_random();
+            if !self.registered_agents.contains_key(&session_id) {
+                return session_id;
+            }
         }
     }
 
