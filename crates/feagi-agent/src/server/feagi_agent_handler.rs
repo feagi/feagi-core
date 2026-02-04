@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use tracing::warn;
 use feagi_config::{load_config, FeagiConfig};
 use feagi_evolutionary::{save_genome_to_file, RuntimeGenome};
@@ -28,6 +29,14 @@ pub struct FeagiAgentHandler {
     active_registration_servers: Vec<Box<dyn FeagiServerRouter>>,
 
     sensory_cache: FeagiByteContainer,
+
+    /// Invoked when an agent registers successfully with optional device_registrations.
+    /// Used by the host (e.g. feagi-rs) to trigger auto IPU/OPU creation for ZMQ/WS registrations.
+    registration_hook: Option<
+        Arc<
+            dyn Fn(SessionID, AgentDescriptor, Option<serde_json::Value>) + Send + Sync,
+        >,
+    >,
 }
 
 impl FeagiAgentHandler {
@@ -50,7 +59,19 @@ impl FeagiAgentHandler {
             active_sensor_servers: vec![],
             active_registration_servers: vec![],
             sensory_cache: FeagiByteContainer::new_empty(),
+            registration_hook: None,
         }
+    }
+
+    /// Set a hook to be invoked when an agent registers successfully with device_registrations.
+    /// The host can use this to trigger auto IPU/OPU creation for ZMQ/WS registrations.
+    pub fn set_registration_hook(
+        &mut self,
+        hook: Arc<
+            dyn Fn(SessionID, AgentDescriptor, Option<serde_json::Value>) + Send + Sync,
+        >,
+    ) {
+        self.registration_hook = Some(hook);
     }
 
     //region Add Servers
@@ -291,7 +312,16 @@ impl FeagiAgentHandler {
             registration_request.agent_descriptor().clone(),
             registration_request.requested_capabilities().to_vec()));
 
-        return Ok(RegistrationResponse::Success(session_id.clone(), endpoints));
+        if let Some(hook) = &self.registration_hook {
+            let dr = registration_request.device_registrations().cloned();
+            hook(
+                session_id.clone(),
+                registration_request.agent_descriptor().clone(),
+                dr,
+            );
+        }
+
+        Ok(RegistrationResponse::Success(session_id.clone(), endpoints))
     }
 
     fn try_get_puller_property(&mut self, wanted_protocol: &ProtocolImplementation) -> Result<Box<dyn FeagiServerPullerProperties>, FeagiAgentServerError> {

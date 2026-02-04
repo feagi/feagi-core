@@ -5,13 +5,18 @@ use crate::registration::common::{AgentCapabilities, AuthToken};
 
 /// A request from an agent to register with FEAGI.
 ///
-/// Contains the agent's descriptor, authentication token, and requested capabilities.
+/// Contains the agent's descriptor, authentication token, requested capabilities,
+/// and optionally device_registrations (for auto IPU/OPU creation when enabled).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RegistrationRequest {
     agent_descriptor: AgentDescriptor,
     auth_token: AuthToken,
     requested_capabilities: Vec<AgentCapabilities>,
-    connection_protocol: ProtocolImplementation
+    connection_protocol: ProtocolImplementation,
+    /// Optional device_registrations JSON; when present and server config allows,
+    /// triggers auto-creation of missing IPU/OPU cortical areas (REST and ZMQ/WS).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    device_registrations: Option<serde_json::Value>,
 }
 
 impl RegistrationRequest {
@@ -33,7 +38,21 @@ impl RegistrationRequest {
             auth_token,
             requested_capabilities,
             connection_protocol,
+            device_registrations: None,
         }
+    }
+
+    /// Set device_registrations for this request.
+    /// When the server has auto_create_missing_cortical_areas enabled, sending this over ZMQ/WS
+    /// triggers the same auto IPU/OPU creation as REST registration.
+    pub fn with_device_registrations(mut self, value: Option<serde_json::Value>) -> Self {
+        self.device_registrations = value;
+        self
+    }
+
+    /// Get device_registrations if present.
+    pub fn device_registrations(&self) -> Option<&serde_json::Value> {
+        self.device_registrations.as_ref()
     }
 
     /// Get the agent descriptor.
