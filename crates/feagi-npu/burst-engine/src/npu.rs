@@ -3703,33 +3703,8 @@ impl<
                     {
                         continue;
                     }
-                    let weight = synapse_storage.weights()[syn_idx];
-                    let src_threshold = neuron_storage.thresholds()[src_idx].to_f32();
-                    let dst_threshold = neuron_storage.thresholds()[dst_idx].to_f32();
-                    tracing::debug!(
-                        target: "feagi-burst-engine",
-                        "associative-stdp synapse burst={} mapping=({}->{}) synapse_idx={} src_neuron={} dst_neuron={} weight={} src_threshold={} dst_threshold={}",
-                        burst_timestep,
-                        key.0,
-                        key.1,
-                        syn_idx,
-                        src_neuron,
-                        dst_neuron,
-                        weight,
-                        src_threshold,
-                        dst_threshold
-                    );
                 }
             }
-        }
-
-        if has_bidirectional && mapping_index.is_empty() {
-            tracing::debug!(
-                target: "feagi-burst-engine",
-                "associative-stdp synapse burst={} bidirectional_mappings={} synapses=0",
-                burst_timestep,
-                mappings.values().filter(|params| params.bidirectional_stdp).count()
-            );
         }
 
         struct StdpActivityWindow {
@@ -3833,19 +3808,6 @@ impl<
                 if delta_plus == 0 && delta_minus == 0 {
                     continue;
                 }
-                tracing::debug!(
-                    target: "feagi-burst-engine",
-                    "associative-stdp burst={} mapping=({}->{}) synapses={} delta_plus={} delta_minus={} src_all={} dst_all={} psp={}",
-                    burst_timestep,
-                    key.0,
-                    key.1,
-                    syn_indices.len(),
-                    delta_plus,
-                    delta_minus,
-                    activity.src_all.len(),
-                    activity.dst_all.len(),
-                    params.synapse_psp
-                );
 
                 for &syn_idx in syn_indices {
                     if syn_idx >= synapse_storage.count() || !synapse_storage.valid_mask()[syn_idx]
