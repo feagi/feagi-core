@@ -7,11 +7,11 @@
 //! is retrieved
 
 use std::collections::HashMap;
-use feagi_io::core::::client::FeagiClientRequester;
+use feagi_io::core::traits_and_enums::client::FeagiClientRequester;
 use feagi_serialization::SessionID;
 use crate::FeagiAgentClientError;
 use crate::registration::{AgentCapabilities, RegistrationRequest, RegistrationResponse};
-// TODO registration requests specifies protocol, we need to make sure it matches with the FeagiClientRequester
+
 
 pub struct RegistrationAgent {
     io_client: Box<dyn FeagiClientRequester>
@@ -28,7 +28,7 @@ impl RegistrationAgent {
     pub async fn try_register(&mut self, registration_request: RegistrationRequest) -> Result<(SessionID, HashMap<AgentCapabilities, String>), FeagiAgentClientError> {
         // Serialize request to JSON bytes
         let request_bytes = serde_json::to_vec(&registration_request)
-            .map_err(|e| FeagiAgentClientError::GeneralFailure(format!("Failed to serialize request: {}", e)))?;
+            .map_err(|e| FeagiAgentClientError::UnableToSendData(format!("Failed to serialize request: {}", e)))?;
 
         // Send the request
         self.io_client.send_request(&request_bytes).await
@@ -40,7 +40,7 @@ impl RegistrationAgent {
 
         // Deserialize response from JSON
         let response: RegistrationResponse = serde_json::from_slice(&response_bytes)
-            .map_err(|e| FeagiAgentClientError::GeneralFailure(format!("Unable to parse response: {}", e)))?;
+            .map_err(|e| FeagiAgentClientError::UnableToDecodeReceivedData(format!("Unable to parse response: {}", e)))?;
 
         match response {
             RegistrationResponse::FailedInvalidRequest => Err(FeagiAgentClientError::ConnectionFailed(
