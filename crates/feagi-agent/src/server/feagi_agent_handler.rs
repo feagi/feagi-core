@@ -20,6 +20,7 @@ pub struct FeagiAgentHandler {
     active_sensor_servers: Vec<Box<dyn FeagiServerPuller>>,
     active_registration_servers: Vec<Box<dyn FeagiServerRouter>>,
 
+    sensory_cache: FeagiByteContainer,
 }
 
 impl FeagiAgentHandler {
@@ -48,7 +49,7 @@ impl FeagiAgentHandler {
 
     //region Polling
 
-    pub fn poll_registration_servers(&mut self) -> Result<(), FeagiAgentServerError> {
+    pub fn poll_registration_handlers(&mut self) -> Result<(), FeagiAgentServerError> {
         for i in 0..self.active_registration_servers.len() {
             match self.active_registration_servers[i].poll() {
                 FeagiEndpointState::Inactive => {
@@ -75,20 +76,79 @@ impl FeagiAgentHandler {
         Ok(())
     }
 
-    /*
-    pub fn poll_sensory_servers(&mut self) -> Option<&FeagiByteContainer> {
-
+    pub fn poll_sensory_handlers(&mut self) -> Option<&FeagiByteContainer> {
+        for i in 0..self.active_sensor_servers.len() {
+            match self.active_sensor_servers[i].poll() {
+                FeagiEndpointState::ActiveHasData => {
+                    &mut self.sensory_cache.try_write_data_by_copy_and_verify(
+                        self.active_sensor_servers[i].consume_retrieved_data().unwrap() // TODO error handling
+                    ).unwrap();
+                    return Some(&self.sensory_cache)
+                }
+                FeagiEndpointState::Errored(e) => {
+                    return None; // TODO we need to do better here
+                }
+                _ => {
+                    continue;
+                }
+            }
+        }
+        None
     }
 
-    pub fn poll_motor_servers(&mut self, Option<&FeagiByteContainer>) -> Result<> {
+    pub fn poll_motor_handlers(&mut self, data: Option<&FeagiByteContainer>) -> Result<(), FeagiAgentServerError> {
+        let Some(bytes) = data else {
+            return Ok(()); // Nothing to publish
+        };
 
+        for i in 0..self.active_motor_servers.len() {
+            match self.active_motor_servers[i].poll() {
+                FeagiEndpointState::ActiveWaiting => {
+                    self.active_motor_servers[i]
+                        .publish_data(bytes.get_byte_ref())
+                        .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
+                }
+                FeagiEndpointState::Errored(e) => {
+                    self.active_motor_servers[i].confirm_error_and_close().map_err(
+                        |e| FeagiAgentServerError::ConnectionFailed(e.to_string())
+                    )?;
+                    // TODO we need to do better here
+                }
+                _ => {
+                    continue;
+                }
+            }
+        }
+        Ok(())
     }
 
-    pub fn poll_visualization_servers(&mut self, Option<&FeagiByteContainer>) -> Result<> {
+    pub fn poll_visualization_handlers(&mut self, data: Option<&FeagiByteContainer>) -> Result<(), FeagiAgentServerError> {
+        let Some(bytes) = data else {
+            return Ok(()); // Nothing to publish
+        };
 
+        for i in 0..self.active_visualizer_servers.len() {
+            match self.active_visualizer_servers[i].poll() {
+                FeagiEndpointState::ActiveWaiting => {
+                    self.active_visualizer_servers[i]
+                        .publish_data(bytes.get_byte_ref())
+                        .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
+                }
+                FeagiEndpointState::Errored(e) => {
+                    self.active_visualizer_servers[i].confirm_error_and_close().map_err(
+                        |e| FeagiAgentServerError::ConnectionFailed(e.to_string())
+                    )?;
+                    // TODO we need to do better here
+                }
+                _ => {
+                    continue;
+                }
+            }
+        }
+        Ok(())
     }
 
-     */
+
 
     //endregion
 
