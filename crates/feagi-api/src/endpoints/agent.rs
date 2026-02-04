@@ -180,22 +180,19 @@ pub async fn register_agent(
         .get("device_registrations")
         .and_then(|v| v.as_object().map(|_| v.clone()));
 
-    #[cfg(feature = "feagi-agent")]
-    let mut motor_rate_hz: Option<f64> = None;
-    #[cfg(feature = "feagi-agent")]
-    let mut visualization_rate_hz: Option<f64> = None;
-    #[cfg(feature = "feagi-agent")]
-    let mut burst_frequency_hz: f64 = 0.0;
-    #[cfg(feature = "feagi-agent")]
-    let mut visualization_requested = false;
-
     #[cfg(not(feature = "feagi-agent"))]
     {
         return Err(ApiError::internal("feagi-agent feature not enabled"));
     }
 
     #[cfg(feature = "feagi-agent")]
-    let registration_response = {
+    let (
+        registration_response,
+        motor_rate_hz,
+        visualization_rate_hz,
+        burst_frequency_hz,
+        visualization_requested,
+    ) = {
         let registration_handler = state
             .agent_registration_handler
             .clone();
@@ -206,20 +203,20 @@ pub async fn register_agent(
         })?;
         let requested_capabilities =
             derive_capabilities_from_device_registrations(&device_registrations)?;
-        visualization_requested = requested_capabilities.iter().any(|cap| {
+        let visualization_requested = requested_capabilities.iter().any(|cap| {
             matches!(cap, RegistrationCapabilities::ReceiveNeuronVisualizations)
         });
         let runtime_status = state.runtime_service.get_status().await.map_err(|e| {
             ApiError::internal(format!("Failed to read runtime status: {}", e))
         })?;
-        burst_frequency_hz = runtime_status.frequency_hz;
+        let burst_frequency_hz = runtime_status.frequency_hz;
         if burst_frequency_hz <= 0.0 {
             return Err(ApiError::internal(
                 "Invalid burst frequency reported by runtime service".to_string(),
             ));
         }
 
-        motor_rate_hz = parse_capability_rate_hz(&request.capabilities, "motor")?;
+        let motor_rate_hz = parse_capability_rate_hz(&request.capabilities, "motor")?;
         if let Some(rate) = motor_rate_hz {
             if rate > burst_frequency_hz {
                 return Err(ApiError::invalid_input(format!(
@@ -229,7 +226,7 @@ pub async fn register_agent(
             }
         }
 
-        visualization_rate_hz =
+        let visualization_rate_hz =
             parse_capability_rate_hz(&request.capabilities, "visualization")?;
         if let Some(rate) = visualization_rate_hz {
             if rate > burst_frequency_hz {
@@ -261,7 +258,13 @@ pub async fn register_agent(
             .register_agent_direct(registration_request)
             .map_err(|e| ApiError::internal(format!("Registration failed: {e}")))?;
 
-        registration_response
+        (
+            registration_response,
+            motor_rate_hz,
+            visualization_rate_hz,
+            burst_frequency_hz,
+            visualization_requested,
+        )
     };
 
     #[cfg(feature = "feagi-agent")]

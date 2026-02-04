@@ -26,8 +26,6 @@ fn main() {
 
     for path in &path_list {
         let path_item = paths.paths.get(*path).unwrap();
-        let method_count = path_item.operations.len();
-
         // Get tags from operations
         for (_method, operation) in &path_item.operations {
             if let Some(tags) = &operation.tags {

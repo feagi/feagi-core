@@ -8,7 +8,6 @@ use std::io::ErrorKind;
 use std::net::{TcpListener, TcpStream};
 
 use feagi_serialization::SessionID;
-use tungstenite::protocol::Role;
 use tungstenite::{accept, Message, WebSocket};
 
 use crate::FeagiNetworkError;
