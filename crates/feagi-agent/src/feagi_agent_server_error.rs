@@ -14,6 +14,8 @@ pub enum FeagiAgentServerError {
     UnableToDecodeReceivedData(String),
     /// Server failed to send data to the client
     UnableToSendData(String),
+    /// Failed to persist connectome or genome data
+    PersistenceFailed(String),
 }
 
 impl Display for FeagiAgentServerError {
@@ -33,6 +35,9 @@ impl Display for FeagiAgentServerError {
             }
             FeagiAgentServerError::UnableToSendData(msg) => {
                 write!(f, "FeagiAgentServerError: Unable to send data: {}", msg)
+            }
+            FeagiAgentServerError::PersistenceFailed(msg) => {
+                write!(f, "FeagiAgentServerError: Unable to persist data: {}", msg)
             }
         }
     }

@@ -30,6 +30,9 @@ feagi-io = { version = "0.0.1-beta.8", path = "../feagi-io" }
 feagi-structures = { version = "0.0.1-beta.8", path = "../feagi-structures" }
 feagi-serialization = { version = "0.0.1-beta.8", path = "../feagi-serialization" }
 feagi-config = { version = "0.0.1-beta.8", path = "../feagi-config" }
+feagi-services = { version = "0.0.1-beta.8", path = "../feagi-services" }
+feagi-npu-neural = { version = "0.0.1-beta.8", path = "../feagi-npu/neural" }
+feagi-evolutionary = { version = "0.0.1-beta.8", path = "../feagi-evolutionary" }
 
 # SDK dependencies (optional, behind feature flags)
 feagi-sensorimotor = { version = "0.0.1-beta.8", path = "../feagi-sensorimotor", optional = true }

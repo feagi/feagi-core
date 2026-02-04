@@ -1,11 +1,14 @@
-use std::cmp::PartialEq;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::path::Path;
 use tracing::warn;
 use feagi_config::{load_config, FeagiConfig};
+use feagi_evolutionary::{save_genome_to_file, RuntimeGenome};
 use feagi_io::core::protocol_implementations::ProtocolImplementation;
 use feagi_io::core::traits_and_enums::FeagiEndpointState;
 use feagi_io::core::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouter, FeagiServerRouterProperties};
+use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
 use feagi_serialization::{FeagiByteContainer, SessionID};
+use feagi_services::connectome::save_connectome;
 use crate::feagi_agent_server_error::FeagiAgentServerError;
 use crate::registration::{AgentCapabilities, AgentDescriptor, RegistrationRequest, RegistrationResponse};
 use crate::server::auth::AgentAuth;
@@ -355,6 +358,34 @@ impl FeagiAgentHandler {
         } else {
             format!("ws://{host}:{port}")
         }
+    }
+
+    /// Persist a connectome snapshot to disk using FEAGI serialization.
+    pub fn save_connectome_snapshot<P: AsRef<Path>>(
+        &self,
+        snapshot: &ConnectomeSnapshot,
+        path: P,
+    ) -> Result<(), FeagiAgentServerError> {
+        save_connectome(snapshot, path.as_ref()).map_err(|e| {
+            FeagiAgentServerError::PersistenceFailed(format!(
+                "Failed to save connectome to {}: {e}",
+                path.as_ref().display()
+            ))
+        })
+    }
+
+    /// Persist the current runtime genome to disk.
+    pub fn save_genome<P: AsRef<Path>>(
+        &self,
+        genome: &RuntimeGenome,
+        path: P,
+    ) -> Result<(), FeagiAgentServerError> {
+        save_genome_to_file(genome, path.as_ref()).map_err(|e| {
+            FeagiAgentServerError::PersistenceFailed(format!(
+                "Failed to save genome to {}: {e}",
+                path.as_ref().display()
+            ))
+        })
     }
 
 
