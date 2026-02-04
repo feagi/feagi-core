@@ -167,8 +167,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Dummy publishers for testing
     struct DummyViz;
     impl feagi_npu_burst_engine::VisualizationPublisher for DummyViz {
-        fn publish_raw_fire_queue(
+        fn publish_raw_fire_queue_for_agent(
             &self,
+            _agent_id: &str,
             _fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
         ) -> Result<(), String> {
             Ok(())

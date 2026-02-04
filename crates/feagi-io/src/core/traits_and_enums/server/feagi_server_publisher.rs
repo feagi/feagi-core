@@ -43,7 +43,7 @@ pub trait FeagiServerPublisher: FeagiServer {
     fn as_boxed_publisher_properties(&self) -> Box<dyn FeagiServerPublisherProperties>;
 }
 
-pub trait FeagiServerPublisherProperties {
+pub trait FeagiServerPublisherProperties: Send + Sync {
     /// Creates a new boxed publisher from these properties.
     fn as_boxed_server_publisher(&self) -> Box<dyn FeagiServerPublisher>;
     

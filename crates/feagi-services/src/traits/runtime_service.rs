@@ -211,4 +211,30 @@ pub trait RuntimeService: Send + Sync {
         cortical_id: &str,
         xyzp_data: &[(u32, u32, u32, f32)],
     ) -> ServiceResult<usize>;
+
+    /// Register motor subscriptions with per-agent rate limits.
+    ///
+    /// # Arguments
+    /// * `agent_id` - Unique agent identifier
+    /// * `cortical_ids` - List of cortical IDs to subscribe to
+    /// * `rate_hz` - Motor publish rate (Hz)
+    ///
+    async fn register_motor_subscriptions(
+        &self,
+        agent_id: &str,
+        cortical_ids: Vec<String>,
+        rate_hz: f64,
+    ) -> ServiceResult<()>;
+
+    /// Register visualization subscriptions with per-agent rate limits.
+    ///
+    /// # Arguments
+    /// * `agent_id` - Unique agent identifier
+    /// * `rate_hz` - Visualization publish rate (Hz)
+    ///
+    async fn register_visualization_subscriptions(
+        &self,
+        agent_id: &str,
+        rate_hz: f64,
+    ) -> ServiceResult<()>;
 }

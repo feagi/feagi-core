@@ -21,7 +21,10 @@ use feagi_agent::registration::{
     RegistrationResponse,
 };
 #[cfg(feature = "feagi-agent")]
-use crate::common::agent_registration::auto_create_cortical_areas_from_device_registrations as auto_create_cortical_areas_shared;
+use crate::common::agent_registration::{
+    auto_create_cortical_areas_from_device_registrations as auto_create_cortical_areas_shared,
+    derive_motor_cortical_ids_from_device_registrations,
+};
 #[cfg(feature = "feagi-agent")]
 use feagi_agent::sdk::ConnectorAgent;
 #[cfg(feature = "feagi-agent")]
@@ -81,6 +84,36 @@ fn derive_capabilities_from_device_registrations(
     }
 
     Ok(capabilities)
+}
+
+#[cfg(feature = "feagi-agent")]
+fn parse_capability_rate_hz(
+    capabilities: &HashMap<String, serde_json::Value>,
+    capability_key: &str,
+) -> ApiResult<Option<f64>> {
+    let Some(capability_value) = capabilities.get(capability_key) else {
+        return Ok(None);
+    };
+
+    let Some(rate_value) = capability_value.get("rate_hz") else {
+        return Ok(None);
+    };
+
+    let rate_hz = rate_value.as_f64().ok_or_else(|| {
+        ApiError::invalid_input(format!(
+            "Invalid rate_hz for capability '{}': expected number",
+            capability_key
+        ))
+    })?;
+
+    if rate_hz <= 0.0 {
+        return Err(ApiError::invalid_input(format!(
+            "Invalid rate_hz for capability '{}': must be > 0",
+            capability_key
+        )));
+    }
+
+    Ok(Some(rate_hz))
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -147,6 +180,15 @@ pub async fn register_agent(
         .get("device_registrations")
         .and_then(|v| v.as_object().map(|_| v.clone()));
 
+    #[cfg(feature = "feagi-agent")]
+    let mut motor_rate_hz: Option<f64> = None;
+    #[cfg(feature = "feagi-agent")]
+    let mut visualization_rate_hz: Option<f64> = None;
+    #[cfg(feature = "feagi-agent")]
+    let mut burst_frequency_hz: f64 = 0.0;
+    #[cfg(feature = "feagi-agent")]
+    let mut visualization_requested = false;
+
     #[cfg(not(feature = "feagi-agent"))]
     {
         return Err(ApiError::internal("feagi-agent feature not enabled"));
@@ -164,6 +206,39 @@ pub async fn register_agent(
         })?;
         let requested_capabilities =
             derive_capabilities_from_device_registrations(&device_registrations)?;
+        visualization_requested = requested_capabilities.iter().any(|cap| {
+            matches!(cap, RegistrationCapabilities::ReceiveNeuronVisualizations)
+        });
+        let runtime_status = state.runtime_service.get_status().await.map_err(|e| {
+            ApiError::internal(format!("Failed to read runtime status: {}", e))
+        })?;
+        burst_frequency_hz = runtime_status.frequency_hz;
+        if burst_frequency_hz <= 0.0 {
+            return Err(ApiError::internal(
+                "Invalid burst frequency reported by runtime service".to_string(),
+            ));
+        }
+
+        motor_rate_hz = parse_capability_rate_hz(&request.capabilities, "motor")?;
+        if let Some(rate) = motor_rate_hz {
+            if rate > burst_frequency_hz {
+                return Err(ApiError::invalid_input(format!(
+                    "motor rate_hz {} exceeds burst frequency {}",
+                    rate, burst_frequency_hz
+                )));
+            }
+        }
+
+        visualization_rate_hz =
+            parse_capability_rate_hz(&request.capabilities, "visualization")?;
+        if let Some(rate) = visualization_rate_hz {
+            if rate > burst_frequency_hz {
+                return Err(ApiError::invalid_input(format!(
+                    "visualization rate_hz {} exceeds burst frequency {}",
+                    rate, burst_frequency_hz
+                )));
+            }
+        }
 
         let mut handler_guard = registration_handler.lock();
         let protocol = match request.chosen_transport.as_deref() {
@@ -182,9 +257,11 @@ pub async fn register_agent(
             protocol,
         );
 
-        handler_guard
+        let registration_response = handler_guard
             .register_agent_direct(registration_request)
-            .map_err(|e| ApiError::internal(format!("Registration failed: {e}")))?
+            .map_err(|e| ApiError::internal(format!("Registration failed: {e}")))?;
+
+        registration_response
     };
 
     #[cfg(feature = "feagi-agent")]
@@ -205,7 +282,7 @@ pub async fn register_agent(
                         existing.clone()
                     } else {
                         let connector = ConnectorAgent::new_from_device_registration_json(
-                            agent_descriptor,
+                            agent_descriptor.clone(),
                             device_registrations_value.clone(),
                         )
                         .map_err(|e| {
@@ -214,7 +291,7 @@ pub async fn register_agent(
                             ))
                         })?;
                         let connector = Arc::new(Mutex::new(connector));
-                        connectors.insert(agent_descriptor, connector.clone());
+                        connectors.insert(agent_descriptor.clone(), connector.clone());
                         connector
                     }
                 };
@@ -241,13 +318,61 @@ pub async fn register_agent(
                             &device_registrations_for_autocreate,
                         )
                         .await;
+
+                        let output_units_present = device_registrations_for_autocreate
+                            .get("output_units_and_decoder_properties")
+                            .and_then(|v| v.as_object())
+                            .map(|v| !v.is_empty())
+                            .unwrap_or(false);
+
+                        if output_units_present {
+                            let cortical_ids =
+                                derive_motor_cortical_ids_from_device_registrations(
+                                    &device_registrations_for_autocreate,
+                                )
+                                .map_err(ApiError::invalid_input)?;
+                            let rate_hz =
+                                motor_rate_hz.unwrap_or(burst_frequency_hz);
+                            state
+                                .runtime_service
+                                .register_motor_subscriptions(
+                                    &request.agent_id,
+                                    cortical_ids.into_iter().collect(),
+                                    rate_hz,
+                                )
+                                .await
+                                .map_err(|e| {
+                                    ApiError::internal(format!(
+                                        "Failed to register motor subscriptions: {}",
+                                        e
+                                    ))
+                                })?;
+                        }
+
+                        if visualization_requested {
+                            let rate_hz =
+                                visualization_rate_hz.unwrap_or(burst_frequency_hz);
+                            state
+                                .runtime_service
+                                .register_visualization_subscriptions(
+                                    &request.agent_id,
+                                    rate_hz,
+                                )
+                                .await
+                                .map_err(|e| {
+                                    ApiError::internal(format!(
+                                        "Failed to register visualization subscription: {}",
+                                        e
+                                    ))
+                                })?;
+                        }
                     }
                 }
             } else {
                 let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
                 let mut connectors = state.agent_connectors.write();
-                connectors.entry(agent_descriptor).or_insert_with(|| {
-                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor)))
+                connectors.entry(agent_descriptor.clone()).or_insert_with(|| {
+                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor.clone())))
                 });
             }
 
@@ -1154,13 +1279,13 @@ pub async fn import_device_registrations(
             let mut connectors = state.agent_connectors.write();
             let was_existing = connectors.contains_key(&agent_descriptor);
             let connector = connectors
-                .entry(agent_descriptor)
+                .entry(agent_descriptor.clone())
                 .or_insert_with(|| {
                     info!(
                         "🔧 [API] Creating new ConnectorAgent for agent '{}'",
                         agent_id
                     );
-                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor)))
+                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor.clone())))
                 })
                 .clone();
             if was_existing {

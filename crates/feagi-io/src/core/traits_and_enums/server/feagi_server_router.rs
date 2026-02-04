@@ -57,7 +57,7 @@ pub trait FeagiServerRouter: FeagiServer {
     // TODO functions to add clienbts, remove clients, lock registering new clients
 }
 
-pub trait FeagiServerRouterProperties {
+pub trait FeagiServerRouterProperties: Send + Sync {
     /// Creates a new boxed router from these properties.
     fn as_boxed_server_router(&self) -> Box<dyn FeagiServerRouter>;
 

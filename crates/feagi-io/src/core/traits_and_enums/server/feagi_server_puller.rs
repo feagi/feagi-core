@@ -25,7 +25,7 @@ pub trait FeagiServerPuller: FeagiServer {
     fn consume_retrieved_data(&mut self) -> Result<&[u8], FeagiNetworkError>;
 }
 
-pub trait FeagiServerPullerProperties {
+pub trait FeagiServerPullerProperties: Send + Sync {
     /// Creates a new boxed puller from these properties.
     fn as_boxed_server_puller(&self) -> Box<dyn FeagiServerPuller>;
 

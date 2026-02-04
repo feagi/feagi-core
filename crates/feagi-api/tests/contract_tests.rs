@@ -29,16 +29,25 @@ use feagi_services::impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     SystemServiceImpl,
 };
+use feagi_evolutionary::templates::create_genome_with_core_areas;
 use parking_lot::RwLock;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
+use tower::ServiceExt;
 // tower::util::ServiceExt requires the "util" feature which may not be enabled
 // Using axum's test utilities instead
 
 /// Build ApiState with initialized components.
 /// Each test gets a fresh, isolated manager (no singleton conflicts)
 fn build_test_state() -> ApiState {
+    if std::env::var("FEAGI_CONFIG_PATH").is_err() {
+        std::env::set_var(
+            "FEAGI_CONFIG_PATH",
+            "/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml",
+        );
+    }
+
     // Initialize NPU (fire_ledger_window=10)
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
@@ -56,6 +65,13 @@ fn build_test_state() -> ApiState {
     // Create services
     let genome_service_impl = Arc::new(GenomeServiceImpl::new(Arc::clone(&manager)));
     let current_genome = genome_service_impl.get_current_genome_arc();
+    {
+        let mut genome_guard = current_genome.write();
+        *genome_guard = Some(create_genome_with_core_areas(
+            "test-genome".to_string(),
+            "test".to_string(),
+        ));
+    }
     let genome_service = genome_service_impl;
     let connectome_service = Arc::new(ConnectomeServiceImpl::new(
         Arc::clone(&manager),
@@ -108,7 +124,7 @@ fn build_test_state() -> ApiState {
             Ok(feagi_services::RuntimeStatus {
                 is_running: false,
                 is_paused: false,
-                frequency_hz: 0.0,
+                frequency_hz: 1000.0,
                 burst_count: 0,
                 current_rate_hz: 0.0,
                 last_burst_neuron_count: 0,
@@ -193,6 +209,23 @@ fn build_test_state() -> ApiState {
                 "MockRuntimeService".to_string(),
             ))
         }
+
+        async fn register_motor_subscriptions(
+            &self,
+            _agent_id: &str,
+            _cortical_ids: Vec<String>,
+            _rate_hz: f64,
+        ) -> feagi_services::ServiceResult<()> {
+            Ok(())
+        }
+
+        async fn register_visualization_subscriptions(
+            &self,
+            _agent_id: &str,
+            _rate_hz: f64,
+        ) -> feagi_services::ServiceResult<()> {
+            Ok(())
+        }
     }
 
     let runtime_service =
@@ -260,10 +293,52 @@ fn set_temp_config(auto_create: bool) -> ConfigEnvGuard {
     let path = std::path::PathBuf::from(format!(
         "/tmp/feagi-config-{nanos}--temp.toml"
     ));
-    let contents = format!(
-        "[agent]\nauto_create_missing_cortical_areas = {}\n",
-        auto_create
+    let base_path = std::path::PathBuf::from(
+        "/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml",
     );
+    let base_contents =
+        std::fs::read_to_string(&base_path).expect("Failed to read base FEAGI config");
+    let mut contents = String::new();
+    let mut in_agent = false;
+    let mut injected = false;
+
+    for line in base_contents.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("[agent]") {
+            in_agent = true;
+            contents.push_str(line);
+            contents.push('\n');
+            continue;
+        }
+        if in_agent && trimmed.starts_with('[') {
+            if !injected {
+                contents.push_str(&format!(
+                    "auto_create_missing_cortical_areas = {}\n",
+                    auto_create
+                ));
+                injected = true;
+            }
+            in_agent = false;
+        }
+        if in_agent && trimmed.starts_with("auto_create_missing_cortical_areas") {
+            contents.push_str(&format!(
+                "auto_create_missing_cortical_areas = {}\n",
+                auto_create
+            ));
+            injected = true;
+            continue;
+        }
+        contents.push_str(line);
+        contents.push('\n');
+    }
+
+    if in_agent && !injected {
+        contents.push_str(&format!(
+            "auto_create_missing_cortical_areas = {}\n",
+            auto_create
+        ));
+    }
+
     std::fs::write(&path, contents).expect("Failed to write temp config");
 
     let previous = std::env::var("FEAGI_CONFIG_PATH").ok();
@@ -276,7 +351,7 @@ fn set_temp_config(auto_create: bool) -> ConfigEnvGuard {
 fn sample_device_registrations() -> Value {
     json!({
         "input_units_and_encoder_properties": {
-            "vision": [
+            "Vision": [
                 [
                     {
                         "cortical_unit_index": 0,
@@ -287,7 +362,7 @@ fn sample_device_registrations() -> Value {
             ]
         },
         "output_units_and_decoder_properties": {
-            "rotary_motor": [
+            "RotaryMotor": [
                 [
                     {
                         "cortical_unit_index": 0,
@@ -321,9 +396,6 @@ async fn request_json(
         request_builder.body(Body::empty()).unwrap()
     };
 
-    // TODO: Update to use axum test utilities or enable tower util feature
-    // For now, comment out the actual test logic until proper test utilities are set up
-    /*
     let response = app.oneshot(request).await.unwrap();
     let status = response.status();
 
@@ -338,10 +410,6 @@ async fn request_json(
     };
 
     (status, json)
-    */
-    // Temporarily return default values until test is fully updated
-    let _ = (app, request); // Suppress unused variable warnings
-    (StatusCode::OK, json!(null))
 }
 
 // ============================================================================
@@ -362,7 +430,7 @@ async fn test_health_endpoint() {
 async fn test_system_status() {
     let app = create_test_server().await;
 
-    let (status, response) = request_json(app, "GET", "/v1/system/readiness_check", None).await;
+    let (status, response) = request_json(app, "GET", "/v1/monitoring/status", None).await;
 
     assert_eq!(status, StatusCode::OK);
     // Response should have burst_engine_active field
@@ -415,6 +483,68 @@ async fn test_register_agent_returns_session_and_endpoints() {
         .and_then(|value| value.as_object())
         .expect("Expected endpoints in transport payload");
     assert!(endpoints.contains_key("send_sensor_data"));
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_register_agent_rejects_rate_above_burst_frequency() {
+    let state = build_test_state();
+    let descriptor = AgentDescriptor::new(2, "neuraville", "rate-test", 1).unwrap();
+    let auth_token = AuthToken::new([2u8; 32]).to_base64();
+
+    let mut capabilities: HashMap<String, Value> = HashMap::new();
+    capabilities.insert(
+        "device_registrations".to_string(),
+        sample_device_registrations(),
+    );
+    capabilities.insert("motor".to_string(), json!({ "rate_hz": 2000.0 }));
+
+    let request = AgentRegistrationRequest {
+        agent_type: "motor".to_string(),
+        agent_id: descriptor.to_base64(),
+        agent_data_port: 0,
+        agent_version: "0.0.0-test".to_string(),
+        controller_version: "0.0.0-test".to_string(),
+        capabilities,
+        agent_ip: None,
+        metadata: None,
+        auth_token: Some(auth_token),
+        chosen_transport: None,
+    };
+
+    let result = register_agent(ApiStateExtract(state), ApiJson(request)).await;
+    assert!(result.is_err());
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_register_agent_rejects_visualization_rate_above_burst_frequency() {
+    let state = build_test_state();
+    let descriptor = AgentDescriptor::new(3, "neuraville", "viz-rate-test", 1).unwrap();
+    let auth_token = AuthToken::new([3u8; 32]).to_base64();
+
+    let mut capabilities: HashMap<String, Value> = HashMap::new();
+    capabilities.insert(
+        "device_registrations".to_string(),
+        sample_device_registrations(),
+    );
+    capabilities.insert("visualization".to_string(), json!({ "rate_hz": 2000.0 }));
+
+    let request = AgentRegistrationRequest {
+        agent_type: "visualization".to_string(),
+        agent_id: descriptor.to_base64(),
+        agent_data_port: 0,
+        agent_version: "0.0.0-test".to_string(),
+        controller_version: "0.0.0-test".to_string(),
+        capabilities,
+        agent_ip: None,
+        metadata: None,
+        auth_token: Some(auth_token),
+        chosen_transport: None,
+    };
+
+    let result = register_agent(ApiStateExtract(state), ApiJson(request)).await;
+    assert!(result.is_err());
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -474,22 +604,21 @@ async fn test_create_cortical_area_success() {
     let app = create_test_server().await;
 
     let create_request = json!({
-        "cortical_id": "test01",
-        "name": "Test Area",
-        "dimensions": {
-            "width": 10,
-            "height": 10,
-            "depth": 1
+        "cortical_id": "iinf",
+        "cortical_type": "IPU",
+        "device_count": 1,
+        "coordinates_3d": [0, 0, 0],
+        "data_type_configs_by_subunit": {
+            "0": 0
         },
-        "area_type": "memory"
+        "neurons_per_voxel": 1
     });
 
     let (status, response) =
-        request_json(app, "POST", "/v1/connectome/areas", Some(create_request)).await;
+        request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(create_request)).await;
 
-    assert_eq!(status, StatusCode::CREATED);
-    assert_eq!(response["cortical_id"], "test01");
-    assert_eq!(response["name"], "Test Area");
+    assert_eq!(status, StatusCode::OK, "response: {}", response);
+    assert!(response.get("cortical_id").is_some());
 }
 
 #[tokio::test]
@@ -498,18 +627,18 @@ async fn test_create_cortical_area_invalid_id() {
 
     // Invalid ID (not 6 characters)
     let create_request = json!({
-        "cortical_id": "test",
-        "name": "Test Area",
-        "dimensions": {
-            "width": 10,
-            "height": 10,
-            "depth": 1
+        "cortical_id": "invalid",
+        "cortical_type": "IPU",
+        "device_count": 1,
+        "coordinates_3d": [0, 0, 0],
+        "data_type_configs_by_subunit": {
+            "0": 0
         },
-        "area_type": "memory"
+        "neurons_per_voxel": 1
     });
 
     let (status, _response) =
-        request_json(app, "POST", "/v1/connectome/areas", Some(create_request)).await;
+        request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(create_request)).await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -518,20 +647,31 @@ async fn test_create_cortical_area_invalid_id() {
 async fn test_get_cortical_area_not_found() {
     let app = create_test_server().await;
 
-    let (status, _response) = request_json(app, "GET", "/v1/connectome/areas/notfnd", None).await;
+    let (status, response) = request_json(
+        app,
+        "GET",
+        "/v1/connectome/area_details?area_ids=notfnd",
+        None,
+    )
+    .await;
 
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(status, StatusCode::OK, "response: {}", response);
+    assert!(response.as_object().map(|o| o.is_empty()).unwrap_or(false));
 }
 
 #[tokio::test]
 async fn test_list_cortical_areas_empty() {
     let app = create_test_server().await;
 
-    let (status, response) = request_json(app, "GET", "/v1/connectome/areas", None).await;
+    let (status, response) =
+        request_json(app, "GET", "/v1/cortical_area/cortical_area_id_list", None).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert!(response.is_array());
-    assert_eq!(response.as_array().unwrap().len(), 0);
+    let cortical_ids = response
+        .get("cortical_ids")
+        .and_then(|v| v.as_array())
+        .expect("Expected cortical_ids array");
+    assert!(cortical_ids.is_empty());
 }
 
 #[tokio::test]
@@ -540,23 +680,38 @@ async fn test_create_and_get_cortical_area() {
 
     // Create
     let create_request = json!({
-        "cortical_id": "area01",
-        "name": "Area 1",
-        "dimensions": {"width": 5, "height": 5, "depth": 1},
-        "area_type": "memory"
+        "cortical_id": "iinf",
+        "cortical_type": "IPU",
+        "device_count": 1,
+        "coordinates_3d": [0, 0, 0],
+        "data_type_configs_by_subunit": {
+            "0": 0
+        },
+        "neurons_per_voxel": 1
     });
 
-    let (status, _) = request_json(app, "POST", "/v1/connectome/areas", Some(create_request)).await;
-    assert_eq!(status, StatusCode::CREATED);
+    let (status, response) =
+        request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(create_request)).await;
+    assert_eq!(status, StatusCode::OK);
+    let created_id = response
+        .get("cortical_id")
+        .and_then(|v| v.as_str())
+        .expect("Expected cortical_id in response")
+        .to_string();
 
     // Get - need to recreate app because oneshot consumes it
     let app2 = create_test_server().await;
-    let (status2, _response2) =
-        request_json(app2, "GET", "/v1/connectome/areas/area01", None).await;
+    let (status2, response2) = request_json(
+        app2,
+        "GET",
+        &format!("/v1/connectome/area_details?area_ids={}", created_id),
+        None,
+    )
+    .await;
 
-    // This will fail because each test gets a fresh manager
-    // This demonstrates the isolation - which is good for parallel testing
-    assert_eq!(status2, StatusCode::NOT_FOUND);
+    // Fresh manager: created area not present
+    assert_eq!(status2, StatusCode::OK);
+    assert!(response2.as_object().map(|o| o.is_empty()).unwrap_or(false));
 }
 
 // ============================================================================
@@ -596,9 +751,10 @@ async fn test_error_format_consistency() {
     let app = create_test_server().await;
 
     // All error responses should have consistent format
-    let (status, response) = request_json(app, "GET", "/v1/connectome/areas/notfnd", None).await;
+    let (status, response) =
+        request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(json!({}))).await;
 
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(status, StatusCode::BAD_REQUEST);
     // Should have some error information
     assert!(response.is_object() || response.is_string());
 }

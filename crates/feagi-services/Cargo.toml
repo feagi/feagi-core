@@ -30,6 +30,7 @@ tokio = { version = "1.0", features = ["sync", "rt", "time", "rt-multi-thread"],
 
 # Synchronization
 parking_lot = "0.12"
+ahash = { workspace = true }
 
 # Serialization (for DTOs)
 serde = { version = "1.0", features = ["derive"] }
@@ -64,6 +65,5 @@ plasticity = ["feagi-brain-development/plasticity", "dep:feagi-npu-plasticity"] 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
 feagi-npu-runtime = { path = "../feagi-npu/runtime" }
-ahash = { workspace = true }
 tempfile = "3.8"
 

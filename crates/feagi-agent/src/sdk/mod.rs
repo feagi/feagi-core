@@ -1,7 +1,6 @@
 use serde_json::Value;
 
 use crate::FeagiAgentClientError;
-use crate::registration::AgentDescriptor;
 
 /// Minimal ConnectorAgent for device registration storage in REST flows.
 #[derive(Debug, Clone)]

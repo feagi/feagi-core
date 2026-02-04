@@ -13,7 +13,27 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use std::collections::{HashMap, HashSet};
 use tracing::{info, warn};
+
+fn build_friendly_unit_name(unit_label: &str, group: u8, sub_unit_index: usize) -> String {
+    format!("{unit_label}-{}-{}", group, sub_unit_index)
+}
+
+fn build_io_config_map() -> Result<serde_json::Map<String, serde_json::Value>, String> {
+    let mut config = serde_json::Map::new();
+    config.insert(
+        "frame_change_handling".to_string(),
+        serde_json::to_value(FrameChangeHandling::Absolute)
+            .map_err(|e| format!("Failed to serialize FrameChangeHandling: {}", e))?,
+    );
+    config.insert(
+        "percentage_neuron_positioning".to_string(),
+        serde_json::to_value(PercentageNeuronPositioning::Linear)
+            .map_err(|e| format!("Failed to serialize PercentageNeuronPositioning: {}", e))?,
+    );
+    Ok(config)
+}
 
 pub async fn auto_create_cortical_areas_from_device_registrations(
     state: &ApiState,
@@ -100,61 +120,30 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                 continue;
             }
 
-            // Use defaults consistent with FEAGI registration handler.
-            let frame_change_handling = FrameChangeHandling::Absolute;
-            let percentage_neuron_positioning = PercentageNeuronPositioning::Linear;
+            let config_map = match build_io_config_map() {
+                Ok(map) => map,
+                Err(e) => {
+                    warn!(
+                        "⚠️ [API] Failed to build motor IO config map for '{}' group {}: {}",
+                        motor_unit_key, group_u8, e
+                    );
+                    continue;
+                }
+            };
 
-            let cortical_ids = match motor_unit {
-                MotorCorticalUnit::RotaryMotor => MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
-                    frame_change_handling,
-                    percentage_neuron_positioning,
+            let cortical_ids = match motor_unit
+                .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
                     group,
-                )
-                .to_vec(),
-                MotorCorticalUnit::PositionalServo => MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
-                    frame_change_handling,
-                    percentage_neuron_positioning,
-                    group,
-                )
-                .to_vec(),
-                MotorCorticalUnit::Gaze => MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
-                    frame_change_handling,
-                    percentage_neuron_positioning,
-                    group,
-                )
-                .to_vec(),
-                MotorCorticalUnit::MiscData => MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
-                    frame_change_handling,
-                    group,
-                )
-                .to_vec(),
-                MotorCorticalUnit::TextEnglishOutput => MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
-                    frame_change_handling,
-                    group,
-                )
-                .to_vec(),
-                MotorCorticalUnit::CountOutput => MotorCorticalUnit::get_cortical_ids_array_for_count_output_with_parameters(
-                    frame_change_handling,
-                    percentage_neuron_positioning,
-                    group,
-                )
-                .to_vec(),
-                MotorCorticalUnit::ObjectSegmentation => MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
-                    frame_change_handling,
-                    group,
-                )
-                .to_vec(),
-                MotorCorticalUnit::SimpleVisionOutput => MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
-                    frame_change_handling,
-                    group,
-                )
-                .to_vec(),
-                MotorCorticalUnit::DynamicImageProcessing => MotorCorticalUnit::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
-                    frame_change_handling,
-                    percentage_neuron_positioning,
-                    group,
-                )
-                .to_vec(),
+                    config_map,
+                ) {
+                Ok(ids) => ids,
+                Err(e) => {
+                    warn!(
+                        "⚠️ [API] Failed to derive motor cortical IDs for '{}' group {}: {}",
+                        motor_unit_key, group_u8, e
+                    );
+                    continue;
+                }
             };
 
             let topology = motor_unit.get_unit_default_topology();
@@ -181,7 +170,10 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     //
                     // IMPORTANT: We only auto-rename if the current name is clearly a placeholder (== cortical_id).
                     // This avoids clobbering user-defined names.
-                    let current = match genome_service.get_cortical_area(&cortical_id_b64).await {
+                    let current = match connectome_service
+                        .get_cortical_area(&cortical_id_b64)
+                        .await
+                    {
                         Ok(v) => v,
                         Err(e) => {
                             warn!(
@@ -192,10 +184,16 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         }
                     };
                     if current.name == cortical_id_b64 {
-                        let desired_name = motor_unit.get_unit_friendly_name(group_u8, i);
-                        let changes = serde_json::json!({
-                            "name": desired_name,
-                        });
+                        let desired_name = build_friendly_unit_name(
+                            motor_unit.get_friendly_name(),
+                            group_u8,
+                            i,
+                        );
+                        let mut changes: HashMap<String, serde_json::Value> = HashMap::new();
+                        changes.insert(
+                            "name".to_string(),
+                            serde_json::Value::String(desired_name),
+                        );
                         if let Err(e) = genome_service
                             .update_cortical_area(&cortical_id_b64, changes)
                             .await
@@ -209,8 +207,13 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     continue;
                 }
 
-                let friendly_name = motor_unit.get_unit_friendly_name(group_u8, i);
-                let unit_topology = match topology.get(i) {
+                let friendly_name = build_friendly_unit_name(
+                    motor_unit.get_friendly_name(),
+                    group_u8,
+                    i,
+                );
+                let sub_index = CorticalSubUnitIndex::from(i as u8);
+                let unit_topology = match topology.get(&sub_index) {
                     Some(topology) => topology,
                     None => {
                         warn!(
@@ -221,13 +224,39 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     }
                 };
 
+                let dimensions = (
+                    unit_topology.channel_dimensions_default[0] as usize,
+                    unit_topology.channel_dimensions_default[1] as usize,
+                    unit_topology.channel_dimensions_default[2] as usize,
+                );
+                let position = (
+                    unit_topology.relative_position[0],
+                    unit_topology.relative_position[1],
+                    unit_topology.relative_position[2],
+                );
+
                 to_create.push(CreateCorticalAreaParams {
                     cortical_id: cortical_id_b64.clone(),
                     name: friendly_name,
-                    dimensions: unit_topology.clone(),
+                    dimensions,
+                    position,
                     area_type: "motor".to_string(),
-                    opu_mode: true,
-                    metadata: None,
+                    visible: None,
+                    sub_group: None,
+                    neurons_per_voxel: None,
+                    postsynaptic_current: None,
+                    plasticity_constant: None,
+                    degeneration: None,
+                    psp_uniform_distribution: None,
+                    firing_threshold_increment: None,
+                    firing_threshold_limit: None,
+                    consecutive_fire_count: None,
+                    snooze_period: None,
+                    refractory_period: None,
+                    leak_coefficient: None,
+                    leak_variability: None,
+                    burst_engine_active: None,
+                    properties: None,
                 });
             }
         }
@@ -285,8 +314,30 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     continue;
                 }
 
-                let cortical_ids =
-                    sensory_unit.get_cortical_ids_array_for_sensory_unit(group).to_vec();
+                let config_map = match build_io_config_map() {
+                    Ok(map) => map,
+                    Err(e) => {
+                        warn!(
+                            "⚠️ [API] Failed to build sensory IO config map for '{}' group {}: {}",
+                            sensory_unit_key, group_u8, e
+                        );
+                        continue;
+                    }
+                };
+                let cortical_ids = match sensory_unit
+                    .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+                        group,
+                        config_map,
+                    ) {
+                    Ok(ids) => ids,
+                    Err(e) => {
+                        warn!(
+                            "⚠️ [API] Failed to derive sensory cortical IDs for '{}' group {}: {}",
+                            sensory_unit_key, group_u8, e
+                        );
+                        continue;
+                    }
+                };
                 let topology = sensory_unit.get_unit_default_topology();
 
                 for (i, cortical_id) in cortical_ids.iter().enumerate() {
@@ -311,7 +362,10 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         //
                         // IMPORTANT: We only auto-rename if the current name is clearly a placeholder (== cortical_id).
                         // This avoids clobbering user-defined names.
-                        let current = match genome_service.get_cortical_area(&cortical_id_b64).await {
+                        let current = match connectome_service
+                            .get_cortical_area(&cortical_id_b64)
+                            .await
+                        {
                             Ok(v) => v,
                             Err(e) => {
                                 warn!(
@@ -322,11 +376,16 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             }
                         };
                         if current.name == cortical_id_b64 {
-                            let desired_name =
-                                sensory_unit.get_unit_friendly_name(group_u8, i);
-                            let changes = serde_json::json!({
-                                "name": desired_name,
-                            });
+                            let desired_name = build_friendly_unit_name(
+                                sensory_unit.get_friendly_name(),
+                                group_u8,
+                                i,
+                            );
+                            let mut changes: HashMap<String, serde_json::Value> = HashMap::new();
+                            changes.insert(
+                                "name".to_string(),
+                                serde_json::Value::String(desired_name),
+                            );
                             if let Err(e) = genome_service
                                 .update_cortical_area(&cortical_id_b64, changes)
                                 .await
@@ -340,8 +399,13 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         continue;
                     }
 
-                    let friendly_name = sensory_unit.get_unit_friendly_name(group_u8, i);
-                    let unit_topology = match topology.get(i) {
+                    let friendly_name = build_friendly_unit_name(
+                        sensory_unit.get_friendly_name(),
+                        group_u8,
+                        i,
+                    );
+                    let sub_index = CorticalSubUnitIndex::from(i as u8);
+                    let unit_topology = match topology.get(&sub_index) {
                         Some(topology) => topology,
                         None => {
                             warn!(
@@ -352,17 +416,44 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         }
                     };
 
+                    let dimensions = (
+                        unit_topology.channel_dimensions_default[0] as usize,
+                        unit_topology.channel_dimensions_default[1] as usize,
+                        unit_topology.channel_dimensions_default[2] as usize,
+                    );
+                    let position = (
+                        unit_topology.relative_position[0],
+                        unit_topology.relative_position[1],
+                        unit_topology.relative_position[2],
+                    );
+                    let mut properties: HashMap<String, serde_json::Value> = HashMap::new();
+                    properties.insert(
+                        "cortical_subunit_index".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(sub_index.get())),
+                    );
+
                     to_create.push(CreateCorticalAreaParams {
                         cortical_id: cortical_id_b64.clone(),
                         name: friendly_name,
-                        dimensions: unit_topology.clone(),
+                        dimensions,
+                        position,
                         area_type: "sensory".to_string(),
-                        opu_mode: false,
-                        metadata: Some(
-                            serde_json::json!({
-                                "cortical_subunit_index": CorticalSubUnitIndex::new(i as u8).as_u8(),
-                            }),
-                        ),
+                        visible: None,
+                        sub_group: None,
+                        neurons_per_voxel: None,
+                        postsynaptic_current: None,
+                        plasticity_constant: None,
+                        degeneration: None,
+                        psp_uniform_distribution: None,
+                        firing_threshold_increment: None,
+                        firing_threshold_limit: None,
+                        consecutive_fire_count: None,
+                        snooze_period: None,
+                        refractory_period: None,
+                        leak_coefficient: None,
+                        leak_variability: None,
+                        burst_engine_active: None,
+                        properties: Some(properties),
                     });
                 }
             }
@@ -384,4 +475,86 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
             e
         );
     }
+}
+
+pub fn derive_motor_cortical_ids_from_device_registrations(
+    device_registrations: &serde_json::Value,
+) -> Result<HashSet<String>, String> {
+    let output_units = device_registrations
+        .get("output_units_and_decoder_properties")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| {
+            "device_registrations missing output_units_and_decoder_properties".to_string()
+        })?;
+
+    let mut cortical_ids: HashSet<String> = HashSet::new();
+
+    for (motor_unit_key, unit_defs) in output_units {
+        let motor_unit: MotorCorticalUnit =
+            serde_json::from_value::<MotorCorticalUnit>(serde_json::Value::String(
+                motor_unit_key.clone(),
+            ))
+            .map_err(|e| {
+                format!(
+                    "Unable to parse MotorCorticalUnit key '{}': {}",
+                    motor_unit_key, e
+                )
+            })?;
+
+        let unit_defs_arr = unit_defs
+            .as_array()
+            .ok_or_else(|| "Motor unit definitions must be an array".to_string())?;
+
+        for entry in unit_defs_arr {
+            let pair = entry
+                .as_array()
+                .ok_or_else(|| "Motor unit definition entries must be arrays".to_string())?;
+            let unit_def = pair
+                .first()
+                .ok_or_else(|| "Motor unit definition entry missing unit_def".to_string())?;
+            let group_u64 = unit_def
+                .get("cortical_unit_index")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| "Motor unit definition missing cortical_unit_index".to_string())?;
+            let group_u8: u8 = group_u64.try_into().map_err(|_| {
+                "Motor unit cortical_unit_index out of range for u8".to_string()
+            })?;
+            let group: CorticalUnitIndex = group_u8.into();
+
+            let device_count = unit_def
+                .get("device_grouping")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            if device_count == 0 {
+                return Err(format!(
+                    "device_grouping is empty for motor unit '{}' group {}",
+                    motor_unit_key, group_u8
+                ));
+            }
+
+            let mut config = serde_json::Map::new();
+            config.insert(
+                "frame_change_handling".to_string(),
+                serde_json::to_value(FrameChangeHandling::Absolute)
+                    .map_err(|e| format!("Failed to serialize FrameChangeHandling: {}", e))?,
+            );
+            config.insert(
+                "percentage_neuron_positioning".to_string(),
+                serde_json::to_value(PercentageNeuronPositioning::Linear).map_err(|e| {
+                    format!("Failed to serialize PercentageNeuronPositioning: {}", e)
+                })?,
+            );
+
+            let unit_cortical_ids = motor_unit
+                .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(group, config)
+                .map_err(|e| format!("Failed to derive cortical IDs: {}", e))?;
+
+            for cortical_id in unit_cortical_ids {
+                cortical_ids.insert(cortical_id.as_base_64());
+            }
+        }
+    }
+
+    Ok(cortical_ids)
 }
