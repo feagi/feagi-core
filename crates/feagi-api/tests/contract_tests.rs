@@ -487,6 +487,47 @@ async fn test_register_agent_returns_session_and_endpoints() {
 
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
+async fn test_register_visualization_only_agent_returns_session_and_endpoints() {
+    let state = build_test_state();
+    let descriptor = AgentDescriptor::new(4, "neuraville", "bv-viz-only", 1).unwrap();
+    let auth_token = AuthToken::new([4u8; 32]).to_base64();
+
+    let mut capabilities: HashMap<String, Value> = HashMap::new();
+    capabilities.insert(
+        "visualization".to_string(),
+        json!({ "visualization_type": "3d_brain", "rate_hz": 20.0, "bridge_proxy": false }),
+    );
+
+    let request = AgentRegistrationRequest {
+        agent_type: "visualization".to_string(),
+        agent_id: descriptor.to_base64(),
+        agent_data_port: 0,
+        agent_version: "0.0.0-test".to_string(),
+        controller_version: "0.0.0-test".to_string(),
+        capabilities,
+        agent_ip: None,
+        metadata: None,
+        auth_token: Some(auth_token),
+        chosen_transport: None,
+    };
+
+    let response = register_agent(ApiStateExtract(state), ApiJson(request))
+        .await
+        .expect("Visualization-only registration should succeed");
+    let body = response.0;
+
+    assert!(body.success);
+    let transport = body.transport.expect("Expected transport payload");
+    assert!(transport.get("session_id").is_some());
+    let endpoints = transport
+        .get("endpoints")
+        .and_then(|value| value.as_object())
+        .expect("Expected endpoints in transport payload");
+    assert!(endpoints.contains_key("receive_neuron_visualizations"));
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
 async fn test_register_agent_rejects_rate_above_burst_frequency() {
     let state = build_test_state();
     let descriptor = AgentDescriptor::new(2, "neuraville", "rate-test", 1).unwrap();

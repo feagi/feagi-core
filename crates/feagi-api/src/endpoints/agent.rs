@@ -86,6 +86,34 @@ fn derive_capabilities_from_device_registrations(
     Ok(capabilities)
 }
 
+/// Derive capabilities for visualization-only agents (no device_registrations).
+/// Requires `capabilities.visualization` with valid `rate_hz`. Auth is still required by caller.
+#[cfg(feature = "feagi-agent")]
+fn derive_capabilities_from_visualization_capability(
+    request: &AgentRegistrationRequest,
+) -> ApiResult<Vec<RegistrationCapabilities>> {
+    let viz = request
+        .capabilities
+        .get("visualization")
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| {
+            ApiError::invalid_input(
+                "visualization-only registration requires capabilities.visualization object",
+            )
+        })?;
+    let rate_hz = viz.get("rate_hz").and_then(|v| v.as_f64()).ok_or_else(|| {
+        ApiError::invalid_input(
+            "capabilities.visualization must include rate_hz (number > 0)",
+        )
+    })?;
+    if rate_hz <= 0.0 {
+        return Err(ApiError::invalid_input(
+            "capabilities.visualization.rate_hz must be > 0",
+        ));
+    }
+    Ok(vec![RegistrationCapabilities::ReceiveNeuronVisualizations])
+}
+
 #[cfg(feature = "feagi-agent")]
 fn parse_capability_rate_hz(
     capabilities: &HashMap<String, serde_json::Value>,
@@ -193,19 +221,25 @@ pub async fn register_agent(
         burst_frequency_hz,
         visualization_requested,
     ) = {
-        let registration_handler = state
-            .agent_registration_handler
-            .clone();
+        let registration_handler = state.agent_registration_handler.clone();
         let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
         let auth_token = parse_auth_token(&request)?;
-        let device_registrations = device_registrations_opt.clone().ok_or_else(|| {
-            ApiError::invalid_input("device_registrations is required for registration")
-        })?;
-        let requested_capabilities =
-            derive_capabilities_from_device_registrations(&device_registrations)?;
-        let visualization_requested = requested_capabilities.iter().any(|cap| {
-            matches!(cap, RegistrationCapabilities::ReceiveNeuronVisualizations)
-        });
+
+        let (requested_capabilities, visualization_requested) = match &device_registrations_opt {
+            Some(device_registrations) => {
+                let caps =
+                    derive_capabilities_from_device_registrations(device_registrations)?;
+                let viz = caps.iter().any(|c| {
+                    matches!(c, RegistrationCapabilities::ReceiveNeuronVisualizations)
+                });
+                (caps, viz)
+            }
+            None => {
+                let caps = derive_capabilities_from_visualization_capability(&request)?;
+                (caps, true)
+            }
+        };
+
         let runtime_status = state.runtime_service.get_status().await.map_err(|e| {
             ApiError::internal(format!("Failed to read runtime status: {}", e))
         })?;
@@ -351,24 +385,6 @@ pub async fn register_agent(
                                     ))
                                 })?;
                         }
-
-                        if visualization_requested {
-                            let rate_hz =
-                                visualization_rate_hz.unwrap_or(burst_frequency_hz);
-                            state
-                                .runtime_service
-                                .register_visualization_subscriptions(
-                                    &request.agent_id,
-                                    rate_hz,
-                                )
-                                .await
-                                .map_err(|e| {
-                                    ApiError::internal(format!(
-                                        "Failed to register visualization subscription: {}",
-                                        e
-                                    ))
-                                })?;
-                        }
                     }
                 }
             } else {
@@ -377,6 +393,24 @@ pub async fn register_agent(
                 connectors.entry(agent_descriptor.clone()).or_insert_with(|| {
                     Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor.clone())))
                 });
+            }
+
+            if visualization_requested {
+                let rate_hz =
+                    visualization_rate_hz.unwrap_or(burst_frequency_hz);
+                state
+                    .runtime_service
+                    .register_visualization_subscriptions(
+                        &request.agent_id,
+                        rate_hz,
+                    )
+                    .await
+                    .map_err(|e| {
+                        ApiError::internal(format!(
+                            "Failed to register visualization subscription: {}",
+                            e
+                        ))
+                    })?;
             }
 
             let mut endpoint_map = HashMap::new();
