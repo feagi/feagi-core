@@ -14,6 +14,8 @@ pub enum FeagiAgentClientError {
     UnableToDecodeReceivedData(String),
     /// Client failed to send data to the server
     UnableToSendData(String),
+    /// Other SDK/controller error
+    Other(String),
 }
 
 impl Display for FeagiAgentClientError {
@@ -30,6 +32,9 @@ impl Display for FeagiAgentClientError {
             }
             FeagiAgentClientError::UnableToSendData(msg) => {
                 write!(f, "FeagiAgentClientError: Unable to send data to server: {}", msg)
+            }
+            FeagiAgentClientError::Other(msg) => {
+                write!(f, "FeagiAgentClientError: {}", msg)
             }
         }
     }

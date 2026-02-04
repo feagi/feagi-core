@@ -2,11 +2,13 @@ use serde_json::Value;
 
 use crate::FeagiAgentClientError;
 
-/// Minimal ConnectorAgent for device registration storage in REST flows.
-#[derive(Debug, Clone)]
+/// ConnectorAgent for device registration and sensor/motor caches (SDK flows).
+#[derive(Debug)]
 pub struct ConnectorAgent {
     agent_descriptor: AgentDescriptor,
     device_registrations: Value,
+    #[cfg(feature = "sdk-io")]
+    cache: feagi_sensorimotor::ConnectorCache,
 }
 
 impl ConnectorAgent {
@@ -22,6 +24,8 @@ impl ConnectorAgent {
         Ok(Self {
             agent_descriptor,
             device_registrations,
+            #[cfg(feature = "sdk-io")]
+            cache: feagi_sensorimotor::ConnectorCache::new(),
         })
     }
 
@@ -29,6 +33,8 @@ impl ConnectorAgent {
         Self {
             agent_descriptor,
             device_registrations: serde_json::json!({}),
+            #[cfg(feature = "sdk-io")]
+            cache: feagi_sensorimotor::ConnectorCache::new(),
         }
     }
 
@@ -52,7 +58,58 @@ impl ConnectorAgent {
     pub fn agent_descriptor(&self) -> &AgentDescriptor {
         &self.agent_descriptor
     }
+
+    #[cfg(feature = "sdk-io")]
+    pub fn get_sensor_cache(
+        &self,
+    ) -> std::sync::MutexGuard<'_, feagi_sensorimotor::caching::SensorDeviceCache> {
+        self.cache.get_sensor_cache()
+    }
+
+    #[cfg(feature = "sdk-io")]
+    pub fn get_sensor_cache_ref(
+        &self,
+    ) -> std::sync::Arc<std::sync::Mutex<feagi_sensorimotor::caching::SensorDeviceCache>> {
+        self.cache.get_sensor_cache_ref()
+    }
+
+    #[cfg(feature = "sdk-io")]
+    pub fn get_motor_cache(
+        &self,
+    ) -> std::sync::MutexGuard<'_, feagi_sensorimotor::caching::MotorDeviceCache> {
+        self.cache.get_motor_cache()
+    }
+
+    #[cfg(feature = "sdk-io")]
+    pub fn register_feedback(
+        &mut self,
+        feedback: feagi_sensorimotor::feedbacks::FeedBackRegistration,
+        target: feagi_sensorimotor::feedbacks::FeedbackRegistrationTargets,
+    ) -> Result<(), feagi_structures::FeagiDataError> {
+        self.cache.register_feedback(feedback, target)
+    }
 }
+
+impl Clone for ConnectorAgent {
+    fn clone(&self) -> Self {
+        Self {
+            agent_descriptor: self.agent_descriptor.clone(),
+            device_registrations: self.device_registrations.clone(),
+            #[cfg(feature = "sdk-io")]
+            cache: feagi_sensorimotor::ConnectorCache::new(),
+        }
+    }
+}
+
+pub mod base;
+pub mod registration;
+#[cfg(feature = "sdk-io")]
+pub mod types;
+
+#[cfg(feature = "sdk")]
+pub mod motor;
+#[cfg(feature = "sdk")]
+pub mod sensory;
 
 pub use crate::registration::AuthToken;
 pub use crate::registration::AgentDescriptor;
