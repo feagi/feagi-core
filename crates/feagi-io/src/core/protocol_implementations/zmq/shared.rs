@@ -24,6 +24,7 @@ impl ZmqUrl {
     }
 
     /// Returns the URL as a string slice.
+    #[allow(dead_code)]
     pub fn as_str(&self) -> &str {
         &self.url
     }

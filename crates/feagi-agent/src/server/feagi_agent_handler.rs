@@ -130,7 +130,7 @@ impl FeagiAgentHandler {
                     }
                     return Some(&self.sensory_cache);
                 }
-                FeagiEndpointState::Errored(e) => {
+                FeagiEndpointState::Errored(_e) => {
                     return None; // TODO we need to do better here
                 }
                 _ => {
@@ -153,7 +153,7 @@ impl FeagiAgentHandler {
                         .publish_data(bytes.get_byte_ref())
                         .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
                 }
-                FeagiEndpointState::Errored(e) => {
+                FeagiEndpointState::Errored(_e) => {
                     self.active_motor_servers[i].confirm_error_and_close().map_err(
                         |e| FeagiAgentServerError::ConnectionFailed(e.to_string())
                     )?;
@@ -179,7 +179,7 @@ impl FeagiAgentHandler {
                         .publish_data(bytes.get_byte_ref())
                         .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
                 }
-                FeagiEndpointState::Errored(e) => {
+                FeagiEndpointState::Errored(_e) => {
                     self.active_visualizer_servers[i].confirm_error_and_close().map_err(
                         |e| FeagiAgentServerError::ConnectionFailed(e.to_string())
                     )?;

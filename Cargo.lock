@@ -1862,8 +1862,10 @@ dependencies = [
 name = "feagi"
 version = "0.0.1-beta.8"
 dependencies = [
+ "ahash",
  "feagi-agent",
  "feagi-brain-development",
+ "feagi-config",
  "feagi-evolutionary",
  "feagi-io",
  "feagi-npu-burst-engine",
@@ -1891,10 +1893,13 @@ dependencies = [
  "criterion",
  "env_logger",
  "feagi-config",
+ "feagi-evolutionary",
  "feagi-io",
+ "feagi-npu-neural",
  "feagi-observability",
  "feagi-sensorimotor",
  "feagi-serialization",
+ "feagi-services",
  "feagi-structures",
  "futures",
  "image",

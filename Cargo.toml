@@ -43,7 +43,7 @@ burst-engine = ["feagi-npu-burst-engine"]
 brain-development = ["feagi-brain-development"]
 plasticity = ["feagi-npu-plasticity"]
 state-manager = ["feagi-state-manager"]
-serialization = ["feagi-io/connectome-serialization"]
+serialization = ["feagi-io/connectome-serialization", "dep:feagi-services", "feagi-services/connectome-serialization"]
 sensorimotor = ["dep:feagi-sensorimotor"]
 agent-sdk = ["feagi-agent"]
 
@@ -68,6 +68,7 @@ feagi-npu-plasticity = { version = "=0.0.1-beta.10", path = "crates/feagi-npu/pl
 # I/O (vendored)
 feagi-io = { version = "=0.0.1-beta.8", path = "crates/feagi-io", optional = true }
 feagi-agent = { version = "=0.0.1-beta.8", path = "crates/feagi-agent", optional = true }
+feagi-services = { version = "=0.0.1-beta.8", path = "crates/feagi-services", optional = true }
 
 # Async runtime is now a feature of feagi-data-structures
 
@@ -76,6 +77,7 @@ feagi-agent = { version = "=0.0.1-beta.8", path = "crates/feagi-agent", optional
 feagi-services = { version = "=0.0.1-beta.8", path = "crates/feagi-services" }
 feagi-npu-runtime = { version = "=0.0.1-beta.8", path = "crates/feagi-npu/runtime", features = ["std"] }
 ahash = { workspace = true }
+feagi-config = { version = "=0.0.1-beta.8", path = "crates/feagi-config" }
 parking_lot = "0.12"
 tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros"] }
 
