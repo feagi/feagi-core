@@ -270,30 +270,42 @@ impl FeagiAgentHandler {
         for requested_capability in registration_request.requested_capabilities() {
             match requested_capability {
                 AgentCapabilities::SendSensorData => {
-                    let property = self.try_get_puller_property(registration_request.connection_protocol())?;
-                    let mut puller = property.as_boxed_server_puller();
-                    puller.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
-                    self.active_sensor_servers.push(puller);
+                    if self.active_sensor_servers.is_empty() {
+                        let property = self.try_get_puller_property(registration_request.connection_protocol())?;
+                        let mut puller = property.as_boxed_server_puller();
+                        puller.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
+                        self.active_sensor_servers.push(puller);
+                    }
                     endpoints.insert(
                         AgentCapabilities::SendSensorData,
                         self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::SendSensorData),
                     );
                 }
                 AgentCapabilities::ReceiveMotorData => {
-                    let property = self.try_get_publisher_property(registration_request.connection_protocol())?;
-                    let mut publisher = property.as_boxed_server_publisher();
-                    publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
-                    self.active_motor_servers.push(publisher);
+                    if self.active_motor_servers.is_empty() {
+                        let property = self.try_get_publisher_property_for_capability(
+                            registration_request.connection_protocol(),
+                            AgentCapabilities::ReceiveMotorData,
+                        )?;
+                        let mut publisher = property.as_boxed_server_publisher();
+                        publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
+                        self.active_motor_servers.push(publisher);
+                    }
                     endpoints.insert(
                         AgentCapabilities::ReceiveMotorData,
                         self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::ReceiveMotorData),
                     );
                 }
                 AgentCapabilities::ReceiveNeuronVisualizations => {
-                    let property = self.try_get_publisher_property(registration_request.connection_protocol())?;
-                    let mut publisher = property.as_boxed_server_publisher();
-                    publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
-                    self.active_visualizer_servers.push(publisher);
+                    if self.active_visualizer_servers.is_empty() {
+                        let property = self.try_get_publisher_property_for_capability(
+                            registration_request.connection_protocol(),
+                            AgentCapabilities::ReceiveNeuronVisualizations,
+                        )?;
+                        let mut publisher = property.as_boxed_server_publisher();
+                        publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
+                        self.active_visualizer_servers.push(publisher);
+                    }
                     endpoints.insert(
                         AgentCapabilities::ReceiveNeuronVisualizations,
                         self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::ReceiveNeuronVisualizations),
@@ -336,18 +348,36 @@ impl FeagiAgentHandler {
         Err(FeagiAgentServerError::InitFail("Missing required protocol puller".to_string()))
     }
 
-    fn try_get_publisher_property(&mut self, wanted_protocol: &ProtocolImplementation) -> Result<Box<dyn FeagiServerPublisherProperties>, FeagiAgentServerError> {
+    /// Returns the publisher property for the given protocol and capability.
+    /// Order in available_publishers must match: motor first, then visualization (same as in build_agent_handler).
+    fn try_get_publisher_property_for_capability(
+        &mut self,
+        wanted_protocol: &ProtocolImplementation,
+        capability: AgentCapabilities,
+    ) -> Result<Box<dyn FeagiServerPublisherProperties>, FeagiAgentServerError> {
+        let capability_index = match capability {
+            AgentCapabilities::ReceiveMotorData => 0,
+            AgentCapabilities::ReceiveNeuronVisualizations => 1,
+            AgentCapabilities::SendSensorData => {
+                return Err(FeagiAgentServerError::InitFail(
+                    "SendSensorData uses puller not publisher".to_string(),
+                ));
+            }
+        };
+        let mut nth = 0;
         for i in 0..self.available_publishers.len() {
             let available_publisher = &self.available_publishers[i];
             if &available_publisher.get_protocol() != wanted_protocol {
-                // not the protocol we are looking for
                 continue;
-            } else {
-                // found the protocol we want
+            }
+            if nth == capability_index {
                 return Ok(self.available_publishers.remove(i));
             }
+            nth += 1;
         }
-        Err(FeagiAgentServerError::InitFail("Missing required protocol publisher".to_string()))
+        Err(FeagiAgentServerError::InitFail(
+            "Missing required protocol publisher".to_string(),
+        ))
     }
 
     pub fn is_session_registered(&self, session_id: &SessionID) -> bool {
