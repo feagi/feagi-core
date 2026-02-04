@@ -255,7 +255,7 @@ pub async fn register_agent(
         );
 
         let registration_response = handler_guard
-            .register_agent_direct(registration_request)
+            .process_registration(registration_request, None)
             .map_err(|e| ApiError::internal(format!("Registration failed: {e}")))?;
 
         (

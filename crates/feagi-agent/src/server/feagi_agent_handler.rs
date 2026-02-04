@@ -6,19 +6,20 @@ use feagi_config::{load_config, FeagiConfig};
 use feagi_evolutionary::{save_genome_to_file, RuntimeGenome};
 use feagi_io::core::protocol_implementations::ProtocolImplementation;
 use feagi_io::core::traits_and_enums::FeagiEndpointState;
-use feagi_io::core::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouter, FeagiServerRouterProperties};
+use feagi_io::core::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties};
 use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
 use feagi_serialization::{FeagiByteContainer, SessionID};
 use feagi_services::connectome::save_connectome;
 use crate::feagi_agent_server_error::FeagiAgentServerError;
 use crate::registration::{AgentCapabilities, AgentDescriptor, RegistrationRequest, RegistrationResponse};
 use crate::server::auth::AgentAuth;
+use crate::server::registration_transport::PollableRegistrationSource;
+use crate::server::registration_transport::RouterRegistrationAdapter;
 
 pub struct FeagiAgentHandler {
     config: FeagiConfig,
     agent_auth_backend: Box<dyn AgentAuth>,
     registered_agents: HashMap<SessionID, (AgentDescriptor, Vec<AgentCapabilities>)>,
-
 
     available_publishers: Vec<Box<dyn FeagiServerPublisherProperties>>,
     available_pullers: Vec<Box<dyn FeagiServerPullerProperties>>,
@@ -26,7 +27,9 @@ pub struct FeagiAgentHandler {
     active_motor_servers: Vec<Box<dyn FeagiServerPublisher>>,
     active_visualizer_servers: Vec<Box<dyn FeagiServerPublisher>>,
     active_sensor_servers: Vec<Box<dyn FeagiServerPuller>>,
-    active_registration_servers: Vec<Box<dyn FeagiServerRouter>>,
+
+    /// Poll-based registration sources (ZMQ/WS via RouterRegistrationAdapter; future transports).
+    pollable_registration_sources: Vec<Box<dyn PollableRegistrationSource>>,
 
     sensory_cache: FeagiByteContainer,
 
@@ -59,7 +62,7 @@ impl FeagiAgentHandler {
             active_motor_servers: vec![],
             active_visualizer_servers: vec![],
             active_sensor_servers: vec![],
-            active_registration_servers: vec![],
+            pollable_registration_sources: vec![],
             sensory_cache: FeagiByteContainer::new_empty(),
             registration_hook: None,
         }
@@ -83,13 +86,22 @@ impl FeagiAgentHandler {
     // add at least one registration server  that acts as the endpoint to register, and the publisher pullers you can add a bunch which will act as endpoints for agent capabilties such as sensor motor and visualization
 
 
+    /// Add a poll-based registration server (ZMQ/WS). The router is wrapped in a
+    /// [`RouterRegistrationAdapter`] so the handler only deals with registration types.
     pub fn add_and_start_registration_server(&mut self, router_property: Box<dyn FeagiServerRouterProperties>) -> Result<(), FeagiAgentServerError> {
-        // TODO check for collisions
+        let protocol_name = format!("{:?}", router_property.get_protocol());
         let mut router = router_property.as_boxed_server_router();
-        router.request_start()
+        router
+            .request_start()
             .map_err(|e| FeagiAgentServerError::InitFail(e.to_string()))?;
-        self.active_registration_servers.push(router);
+        let adapter = RouterRegistrationAdapter::new(router, protocol_name);
+        self.pollable_registration_sources.push(Box::new(adapter));
         Ok(())
+    }
+
+    /// Add a custom poll-based registration source (e.g. for future transports).
+    pub fn add_pollable_registration_source(&mut self, source: Box<dyn PollableRegistrationSource>) {
+        self.pollable_registration_sources.push(source);
     }
 
     pub fn add_publisher_server(&mut self, publisher: Box<dyn FeagiServerPublisherProperties>) {
@@ -105,40 +117,52 @@ impl FeagiAgentHandler {
 
     //region Polling
 
+    /// Poll all registration sources (ZMQ/WS adapters, etc.). For each pending request,
+    /// run core registration and send the response back via the source.
     pub fn poll_registration_handlers(&mut self) -> Result<(), FeagiAgentServerError> {
-        for i in 0..self.active_registration_servers.len() {
-            match self.active_registration_servers[i].poll() {
-                FeagiEndpointState::Inactive => {
-                    continue; // Do nothing
+        let mut pending: Vec<(usize, SessionID, RegistrationRequest)> = Vec::new();
+        for (i, source) in self.pollable_registration_sources.iter_mut().enumerate() {
+            match source.poll_registration() {
+                Ok(Some((session_id, request))) => {
+                    pending.push((i, session_id, request));
                 }
-                FeagiEndpointState::Pending => {
-                    continue; // Do nothing
-                }
-                FeagiEndpointState::ActiveWaiting => {
-                    continue; // Do nothing
-                }
-                FeagiEndpointState::ActiveHasData => {
-                    // NOTE: Routers ignore the session ID in the bytes!
-                    self.poll_registration_server(i)?;
-                }
-                FeagiEndpointState::Errored(_) => {
-                    self.active_registration_servers[i].confirm_error_and_close().map_err(
-                        |e| FeagiAgentServerError::ConnectionFailed(e.to_string())
-                    )?;
-                    continue; // TODO we should do more
+                Ok(None) => {}
+                Err(e) => {
+                    warn!(
+                        "[feagi-agent] Registration source '{}' error: {}",
+                        source.source_name(),
+                        e
+                    );
                 }
             }
+        }
+        for (i, session_id, request) in pending {
+            let response = self.process_registration(request, Some(session_id))?;
+            self.pollable_registration_sources[i]
+                .send_response(session_id, &response)
+                .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
         }
         Ok(())
     }
 
-    /// Register an agent without a transport-level router (REST path).
+    /// Single entry point for all registration flows. Use `None` for REST (handler generates
+    /// session id); use `Some(session_id)` for poll-based transports (ZMQ/WS) that provide it.
+    pub fn process_registration(
+        &mut self,
+        registration_request: RegistrationRequest,
+        transport_session_id: Option<SessionID>,
+    ) -> Result<RegistrationResponse, FeagiAgentServerError> {
+        let session_id = transport_session_id.unwrap_or_else(|| self.new_session_id());
+        self.verify_agent_request_and_make_response(&session_id, registration_request)
+    }
+
+    /// Register an agent without a transport-level router (REST path). Thin wrapper around
+    /// `process_registration(request, None)`.
     pub fn register_agent_direct(
         &mut self,
         registration_request: RegistrationRequest,
     ) -> Result<RegistrationResponse, FeagiAgentServerError> {
-        let session_id = self.new_session_id();
-        self.verify_agent_request_and_make_response(&session_id, registration_request)
+        self.process_registration(registration_request, None)
     }
 
     pub fn poll_sensory_handlers(&mut self) -> Option<&FeagiByteContainer> {
@@ -232,38 +256,6 @@ impl FeagiAgentHandler {
     //region Internal
 
     //region Registration
-
-    fn poll_registration_server(&mut self, server_index: usize) -> Result<(), FeagiAgentServerError> {
-        let (session_id, data) = self.active_registration_servers[server_index]
-            .consume_retrieved_request()
-            .map_err(|e| FeagiAgentServerError::UnableToDecodeReceivedData(e.to_string()))?;
-
-        if !self.registered_agents.contains_key(&session_id) {
-            // Agent is unknown, we need to register it
-            let registration_request: RegistrationRequest = serde_json::from_slice(&data)
-                .map_err(|e| FeagiAgentServerError::UnableToDecodeReceivedData(
-                    format!("Failed to parse RegistrationRequest: {}", e)
-                ))?;
-            let registration_response = self.verify_agent_request_and_make_response(&session_id, registration_request)?;
-
-            let response_bytes = serde_json::to_vec(&registration_response)
-                .map_err(|e| FeagiAgentServerError::UnableToSendData(
-                    format!("Failed to serialize RegistrationResponse: {}", e)
-                ))?;
-
-            self.active_registration_servers[server_index]
-                .publish_response(session_id, &response_bytes)
-                .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
-
-            Ok(())
-        }
-        else {
-            // We know this Agent. What does it want?
-            // TODO How do we signal to FEAGI various commands?
-
-            Ok(())
-        }
-    }
 
     fn verify_agent_request_and_make_response(&mut self, session_id: &SessionID, registration_request: RegistrationRequest) -> Result<RegistrationResponse, FeagiAgentServerError> {
 
