@@ -21,6 +21,7 @@ feagi-npu-burst-engine = { version = "0.0.1-beta.10", path = "../feagi-npu/burst
 feagi-state-manager = { version = "0.0.1-beta.8", path = "../feagi-state-manager", default-features = false, optional = true }
 feagi-structures = { workspace = true }
 feagi-agent = { version = "0.0.1-beta.8", path = "../feagi-agent", optional = true, default-features = false, features = ["sdk"] }
+feagi-config = { version = "0.0.1-beta.8", path = "../feagi-config" }
 
 # HTTP/REST (optional - not needed for WASM)
 axum = { version = "0.7", optional = true, features = ["multipart"] }

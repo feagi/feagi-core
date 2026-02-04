@@ -1927,6 +1927,7 @@ dependencies = [
  "chrono",
  "feagi-agent",
  "feagi-brain-development",
+ "feagi-config",
  "feagi-evolutionary",
  "feagi-io",
  "feagi-npu-burst-engine",

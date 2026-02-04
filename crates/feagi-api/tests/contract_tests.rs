@@ -12,7 +12,12 @@
 //! instead of tower::util::ServiceExt (which requires the "util" feature).
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use feagi_api::common::{Json as ApiJson, State as ApiStateExtract};
+use feagi_api::endpoints::agent::register_agent;
 use feagi_api::transports::http::server::{create_http_server, ApiState};
+use feagi_api::v1::AgentRegistrationRequest;
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::registration::{AgentDescriptor, AuthToken};
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::TracingMutex;
@@ -24,13 +29,14 @@ use feagi_services::impls::{
 };
 use parking_lot::RwLock;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::sync::Arc;
 // tower::util::ServiceExt requires the "util" feature which may not be enabled
 // Using axum's test utilities instead
 
-/// Helper to create a test server with initialized components
+/// Build ApiState with initialized components.
 /// Each test gets a fresh, isolated manager (no singleton conflicts)
-async fn create_test_server() -> axum::Router {
+fn build_test_state() -> ApiState {
     // Initialize NPU (fire_ledger_window=10)
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
@@ -197,7 +203,7 @@ async fn create_test_server() -> axum::Router {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
 
-    let state = ApiState {
+    ApiState {
         agent_service: None,
         analytics_service,
         connectome_service,
@@ -213,9 +219,12 @@ async fn create_test_server() -> axum::Router {
         agent_connectors: ApiState::init_agent_connectors(),
         #[cfg(feature = "feagi-agent")]
         agent_registration_handler: ApiState::init_agent_registration_handler(),
-    };
+    }
+}
 
-    // Create router
+/// Helper to create a test server with initialized components
+async fn create_test_server() -> axum::Router {
+    let state = build_test_state();
     create_http_server(state)
 }
 
@@ -285,6 +294,54 @@ async fn test_system_status() {
     assert_eq!(status, StatusCode::OK);
     // Response should have burst_engine_active field
     assert!(response.is_object());
+}
+
+// ============================================================================
+// AGENT REGISTRATION TESTS
+// ============================================================================
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_register_agent_returns_session_and_endpoints() {
+    let state = build_test_state();
+    let descriptor = AgentDescriptor::new(1, "neuraville", "api-test", 1).unwrap();
+    let auth_token = AuthToken::new([1u8; 32]).to_base64();
+
+    let device_registrations = json!({
+        "input_units_and_encoder_properties": { "camera": [] },
+        "output_units_and_decoder_properties": {},
+        "feedbacks": {}
+    });
+
+    let mut capabilities: HashMap<String, Value> = HashMap::new();
+    capabilities.insert("device_registrations".to_string(), device_registrations);
+
+    let request = AgentRegistrationRequest {
+        agent_type: "visualization".to_string(),
+        agent_id: descriptor.to_base64(),
+        agent_data_port: 0,
+        agent_version: "0.0.0-test".to_string(),
+        controller_version: "0.0.0-test".to_string(),
+        capabilities,
+        agent_ip: None,
+        metadata: None,
+        auth_token: Some(auth_token),
+        chosen_transport: None,
+    };
+
+    let response = register_agent(ApiStateExtract(state), ApiJson(request))
+        .await
+        .expect("Registration should succeed");
+    let body = response.0;
+
+    assert!(body.success);
+    let transport = body.transport.expect("Expected transport payload");
+    assert!(transport.get("session_id").is_some());
+    let endpoints = transport
+        .get("endpoints")
+        .and_then(|value| value.as_object())
+        .expect("Expected endpoints in transport payload");
+    assert!(endpoints.contains_key("send_sensor_data"));
 }
 
 // ============================================================================
