@@ -26,7 +26,24 @@ pub struct FeagiAgentHandler {
 
 impl FeagiAgentHandler {
 
+    pub fn new(agent_auth_backend: Box<dyn AgentAuth>) -> FeagiAgentHandler {
+        FeagiAgentHandler {
+            agent_auth_backend,
+            registered_agents: Default::default(),
+            available_publishers: vec![],
+            available_pullers: vec![],
+            active_motor_servers: vec![],
+            active_visualizer_servers: vec![],
+            active_sensor_servers: vec![],
+            active_registration_servers: vec![],
+            sensory_cache: FeagiByteContainer::new_empty(),
+        }
+    }
+
     //region Add Servers
+
+    // add at least one registration server  that acts as the endpoint to register, and the publisher pullers you can add a bunch which will act as endpoints for agent capabilties such as sensor motor and visualization
+
 
     pub fn add_and_start_registration_server(&mut self, router_property: Box<dyn FeagiServerRouterProperties>) -> Result<(), FeagiAgentServerError> {
         // TODO check for collisions
@@ -195,8 +212,6 @@ impl FeagiAgentHandler {
         }
 
         // TODO verify no duplicates!
-
-        // TODO func for starting new servers and registering
 
         let mut endpoints: HashMap<AgentCapabilities, String> = HashMap::new();
         for requested_capability in registration_request.requested_capabilities() {
