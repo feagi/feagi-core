@@ -14,6 +14,7 @@ zmq-transport = ["dep:zmq"]
 ws-transport = ["dep:tungstenite"] # Poll-based WebSocket using non-blocking sockets
 ws-transport-wasm = [] # WASM WebSocket implementation
 udp-transport = []
+connectome-serialization = [] # Legacy feature stub for compatibility
 
 
 #udp-transport = ["dep:tokio", "dep:async-trait", "dep:num_cpus"]  # Async, best-effort transport
