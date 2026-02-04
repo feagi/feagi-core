@@ -1,2 +1,11 @@
-//mod registration_agent;
-//mod connector_agent;
+//! Client-side registration and data channels.
+//!
+//! Flow: connect to the registration endpoint (ZMQ) -> register -> disconnect registration ->
+//! connect to returned data endpoints (sensory, motor, optional visualization).
+//! Sensory data must be sent as FeagiByteContainer bytes with the session_id set.
+
+mod connector_agent;
+mod registration_agent;
+
+pub use connector_agent::{ConnectorAgent, DeviceRegistrations};
+pub use registration_agent::RegistrationAgent;
