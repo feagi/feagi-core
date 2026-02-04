@@ -4,6 +4,8 @@ use std::fmt::{Display, Formatter};
 /// Errors that can occur in FEAGI agent server operations.
 #[derive(Debug, Clone)]
 pub enum FeagiAgentServerError {
+    /// Unable to start
+    InitFail(String),
     /// Failed to connect
     ConnectionFailed(String),
     /// Authentication failed (invalid credentials, expired token, etc.)
@@ -17,6 +19,9 @@ pub enum FeagiAgentServerError {
 impl Display for FeagiAgentServerError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            FeagiAgentServerError::InitFail(msg) => {
+                write!(f, "FeagiAgentServerError: Init failed: {}", msg)
+            }
             FeagiAgentServerError::ConnectionFailed(msg) => {
                 write!(f, "FeagiAgentServerError: Connection failed: {}", msg)
             }

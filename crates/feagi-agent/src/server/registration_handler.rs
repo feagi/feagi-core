@@ -1,22 +1,17 @@
 use std::collections::{HashMap, HashSet};
-use feagi_io::core::::zmq::{FeagiZmqServerPublisher, FEAGIZMQServerPuller};
-use feagi_io::core::::server::{FeagiServerPublisher, FeagiServerPuller, FeagiServerRouter};
 use feagi_serialization::{FeagiByteContainer, SessionID};
 use crate::FeagiAgentClientError;
 use crate::registration::{AgentCapabilities, RegistrationResponse};
 use crate::server::{MotorServer, SensoryServer};
 
-// TODO temp
-const MOTOR_ENDPOINT: &str = "127.0.0.1:5000";
-const SENSORY_ENDPOINT: &str = "127.0.0.1:5001";
 
-pub struct AgentRegistry {
+pub struct RegistrationHandler {
     io_server: Option<Box<dyn FeagiServerRouter>>,
     connected_sessions: HashSet<SessionID>,
 
 }
 
-impl AgentRegistry {
+impl RegistrationHandler {
     pub async fn new() -> Self {
 
         // TODO hardcoded stuff for now
@@ -35,7 +30,7 @@ impl AgentRegistry {
             ).unwrap())
         ).await.unwrap();
 
-        AgentRegistry {
+        RegistrationHandler {
             io_server: None,
             motor_server,
             sensory_server,

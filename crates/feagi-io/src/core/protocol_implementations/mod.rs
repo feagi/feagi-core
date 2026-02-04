@@ -7,3 +7,6 @@ pub mod websocket_wasm;
 
 #[cfg(feature = "zmq-transport")]
 pub mod zmq;
+mod protocol_implementation;
+
+pub use protocol_implementation::ProtocolImplementation;

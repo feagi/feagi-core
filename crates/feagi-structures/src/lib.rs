@@ -7,7 +7,6 @@ mod feagi_json;
 mod feagi_signal;
 pub mod genomic;
 pub mod neuron_voxels;
-pub mod shared_enums;
 mod templates;
 
 // Async runtime abstraction (optional, behind "async" feature)
