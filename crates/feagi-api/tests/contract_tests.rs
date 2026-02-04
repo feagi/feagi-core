@@ -12,6 +12,8 @@
 //! instead of tower::util::ServiceExt (which requires the "util" feature).
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+#[cfg(feature = "feagi-agent")]
+use feagi_api::common::agent_registration::auto_create_cortical_areas_from_device_registrations;
 use feagi_api::common::{Json as ApiJson, State as ApiStateExtract};
 use feagi_api::endpoints::agent::register_agent;
 use feagi_api::transports::http::server::{create_http_server, ApiState};
@@ -30,7 +32,7 @@ use feagi_services::impls::{
 use parking_lot::RwLock;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 // tower::util::ServiceExt requires the "util" feature which may not be enabled
 // Using axum's test utilities instead
 
@@ -228,6 +230,77 @@ async fn create_test_server() -> axum::Router {
     create_http_server(state)
 }
 
+#[cfg(feature = "feagi-agent")]
+static CONFIG_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+#[cfg(feature = "feagi-agent")]
+struct ConfigEnvGuard {
+    previous: Option<String>,
+    path: std::path::PathBuf,
+}
+
+#[cfg(feature = "feagi-agent")]
+impl Drop for ConfigEnvGuard {
+    fn drop(&mut self) {
+        if let Some(value) = self.previous.take() {
+            std::env::set_var("FEAGI_CONFIG_PATH", value);
+        } else {
+            std::env::remove_var("FEAGI_CONFIG_PATH");
+        }
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+fn set_temp_config(auto_create: bool) -> ConfigEnvGuard {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_nanos();
+    let path = std::path::PathBuf::from(format!(
+        "/tmp/feagi-config-{nanos}--temp.toml"
+    ));
+    let contents = format!(
+        "[agent]\nauto_create_missing_cortical_areas = {}\n",
+        auto_create
+    );
+    std::fs::write(&path, contents).expect("Failed to write temp config");
+
+    let previous = std::env::var("FEAGI_CONFIG_PATH").ok();
+    std::env::set_var("FEAGI_CONFIG_PATH", &path);
+
+    ConfigEnvGuard { previous, path }
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "vision": [
+                [
+                    {
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {}
+                ]
+            ]
+        },
+        "output_units_and_decoder_properties": {
+            "rotary_motor": [
+                [
+                    {
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {}
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
 /// Helper to make a request and get response as JSON
 async fn request_json(
     app: axum::Router,
@@ -342,6 +415,54 @@ async fn test_register_agent_returns_session_and_endpoints() {
         .and_then(|value| value.as_object())
         .expect("Expected endpoints in transport payload");
     assert!(endpoints.contains_key("send_sensor_data"));
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_disabled_skips_creation() {
+    let _lock = CONFIG_ENV_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("Failed to lock config env");
+    let _guard = set_temp_config(false);
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    assert!(areas.is_empty());
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_enabled_creates_areas() {
+    let _lock = CONFIG_ENV_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("Failed to lock config env");
+    let _guard = set_temp_config(true);
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    assert!(!areas.is_empty());
 }
 
 // ============================================================================
