@@ -1,0 +1,694 @@
+//! ZMQ server implementations using the poll-based trait design.
+//!
+//! These implementations use the `zmq` crate (C bindings) which provides
+//! true non-blocking operations via `zmq::DONTWAIT`, making them compatible
+//! with any async runtime or synchronous usage.
+//!
+//! # Memory Efficiency
+//!
+//! These implementations reuse `zmq::Message` objects to minimize allocations.
+//! ZMQ handles internal memory pooling and zero-copy optimizations.
+
+use std::collections::HashMap;
+
+use feagi_serialization::SessionID;
+use zmq::{Context, Message, Socket};
+
+use crate::FeagiNetworkError;
+use crate::core::protocol_implementations::ProtocolImplementation;
+use crate::core::protocol_implementations::zmq::shared::ZmqUrl;
+use crate::core::traits_and_enums::FeagiEndpointState;
+use crate::core::traits_and_enums::server::{
+    FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties,
+    FeagiServerPuller, FeagiServerPullerProperties,
+    FeagiServerRouter, FeagiServerRouterProperties,
+};
+
+// ============================================================================
+// Publisher
+// ============================================================================
+
+//region Publisher Properties
+
+/// Configuration properties for creating a ZMQ PUB server.
+///
+/// This allows storing configuration separately from active instances,
+/// enabling creation of new publishers with the same settings.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FeagiZmqServerPublisherProperties {
+    bind_address: ZmqUrl,
+}
+
+impl FeagiZmqServerPublisherProperties {
+    /// Creates new publisher properties with the given bind address.
+    ///
+    /// # Arguments
+    ///
+    /// * `bind_address` - The ZMQ address to bind to (e.g., "tcp://*:5555").
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the address is invalid.
+    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        let zmq_url = ZmqUrl::new(bind_address)?;
+        Ok(Self { bind_address: zmq_url })
+    }
+}
+
+impl FeagiServerPublisherProperties for FeagiZmqServerPublisherProperties {
+    fn as_boxed_server_publisher(&self) -> Box<dyn FeagiServerPublisher> {
+        let context = Context::new();
+        let socket = context
+            .socket(zmq::PUB)
+            .expect("Failed to create ZMQ PUB socket");
+
+        Box::new(FeagiZmqServerPublisher {
+            bind_address: self.bind_address.clone(),
+            current_state: FeagiEndpointState::Inactive,
+            context,
+            socket,
+        })
+    }
+
+    fn get_protocol(&self) -> ProtocolImplementation {
+        ProtocolImplementation::ZMQ
+    }
+}
+
+//endregion
+
+//region Publisher Implementation
+
+/// A ZMQ PUB server that broadcasts data to all connected subscribers.
+///
+/// # Example
+///
+/// ```ignore
+/// let props = FeagiZmqServerPublisherProperties::new("tcp://*:5555")?;
+/// let mut publisher = props.as_boxed_server_publisher();
+///
+/// publisher.request_start()?;
+/// while publisher.poll() == FeagiEndpointState::Pending {
+///     // wait/yield
+/// }
+///
+/// // Now active - can publish
+/// publisher.publish_data(b"Hello subscribers!")?;
+/// ```
+pub struct FeagiZmqServerPublisher {
+    bind_address: ZmqUrl,
+    current_state: FeagiEndpointState,
+    #[allow(dead_code)] // Context must be kept alive for socket lifetime
+    context: Context,
+    socket: Socket,
+}
+
+impl FeagiServer for FeagiZmqServerPublisher {
+    fn poll(&mut self) -> &FeagiEndpointState {
+        // For ZMQ PUB sockets, there's no incoming data to check.
+        // State transitions happen synchronously in request_start/request_stop.
+        &self.current_state
+    }
+
+    fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Inactive => {
+                // ZMQ bind is synchronous
+                self.socket
+                    .bind(&self.bind_address.to_string())
+                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+
+                self.current_state = FeagiEndpointState::ActiveWaiting;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot start: server is not in Inactive state".to_string(),
+            )),
+        }
+    }
+
+    fn request_stop(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                // ZMQ unbind is synchronous
+                self.socket
+                    .unbind(&self.bind_address.to_string())
+                    .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
+
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot stop: server is not in Active state".to_string(),
+            )),
+        }
+    }
+
+    fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Errored(_) => {
+                // Attempt to unbind if we were bound
+                let _ = self.socket.unbind(&self.bind_address.to_string());
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot confirm error: server is not in Errored state".to_string(),
+            )),
+        }
+    }
+}
+
+impl FeagiServerPublisher for FeagiZmqServerPublisher {
+    fn publish_data(&mut self, data: &[u8]) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                // Use DONTWAIT for non-blocking send
+                // For PUB sockets, this typically succeeds immediately (queues the message)
+                self.socket
+                    .send(data, zmq::DONTWAIT)
+                    .map_err(|e| {
+                        if e == zmq::Error::EAGAIN {
+                            FeagiNetworkError::SendFailed("Socket would block".to_string())
+                        } else {
+                            FeagiNetworkError::SendFailed(e.to_string())
+                        }
+                    })?;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::SendFailed(
+                "Cannot publish: server is not in Active state".to_string(),
+            )),
+        }
+    }
+
+    fn as_boxed_publisher_properties(&self) -> Box<dyn FeagiServerPublisherProperties> {
+        Box::new(FeagiZmqServerPublisherProperties {
+            bind_address: self.bind_address.clone(),
+        })
+    }
+}
+
+//endregion
+
+// ============================================================================
+// Puller
+// ============================================================================
+
+//region Puller Properties
+
+/// Configuration properties for creating a ZMQ PULL server.
+///
+/// This allows storing configuration separately from active instances,
+/// enabling creation of new pullers with the same settings.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FeagiZmqServerPullerProperties {
+    bind_address: ZmqUrl,
+}
+
+impl FeagiZmqServerPullerProperties {
+    /// Creates new puller properties with the given bind address.
+    ///
+    /// # Arguments
+    ///
+    /// * `bind_address` - The ZMQ address to bind to (e.g., "tcp://*:5556").
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the address is invalid.
+    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        let zmq_url = ZmqUrl::new(bind_address)?;
+        Ok(Self { bind_address: zmq_url })
+    }
+}
+
+impl FeagiServerPullerProperties for FeagiZmqServerPullerProperties {
+    fn as_boxed_server_puller(&self) -> Box<dyn FeagiServerPuller> {
+        let context = Context::new();
+        let socket = context
+            .socket(zmq::PULL)
+            .expect("Failed to create ZMQ PULL socket");
+
+        Box::new(FeagiZmqServerPuller {
+            bind_address: self.bind_address.clone(),
+            current_state: FeagiEndpointState::Inactive,
+            context,
+            socket,
+            recv_msg: Message::new(),
+            has_data: false,
+        })
+    }
+
+    fn get_protocol(&self) -> ProtocolImplementation {
+        ProtocolImplementation::ZMQ
+    }
+}
+
+//endregion
+
+//region Puller Implementation
+
+/// A ZMQ PULL server that receives pushed data from clients.
+///
+/// Uses a reusable `zmq::Message` to minimize memory allocations.
+///
+/// # Example
+///
+/// ```ignore
+/// let props = FeagiZmqServerPullerProperties::new("tcp://*:5556")?;
+/// let mut puller = props.as_boxed_server_puller();
+///
+/// puller.request_start()?;
+/// loop {
+///     match puller.poll() {
+///         FeagiEndpointState::ActiveHasData => {
+///             let data = puller.consume_retrieved_data()?;
+///             process(data);
+///         }
+///         FeagiEndpointState::ActiveWaiting => { /* no data */ }
+///         _ => break,
+///     }
+/// }
+/// ```
+pub struct FeagiZmqServerPuller {
+    bind_address: ZmqUrl,
+    current_state: FeagiEndpointState,
+    #[allow(dead_code)]
+    context: Context,
+    socket: Socket,
+    /// Reusable message buffer - ZMQ handles internal memory management
+    recv_msg: Message,
+    /// Whether recv_msg contains valid data ready to consume
+    has_data: bool,
+}
+
+impl FeagiServer for FeagiZmqServerPuller {
+    fn poll(&mut self) -> &FeagiEndpointState {
+        // Only check for data if we're active and don't already have buffered data
+        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
+            // Receive into reusable message - no allocation if message capacity is sufficient
+            match self.socket.recv(&mut self.recv_msg, zmq::DONTWAIT) {
+                Ok(()) => {
+                    self.has_data = true;
+                    self.current_state = FeagiEndpointState::ActiveHasData;
+                }
+                Err(zmq::Error::EAGAIN) => {
+                    // No data available, stay in ActiveWaiting
+                }
+                Err(e) => {
+                    self.current_state = FeagiEndpointState::Errored(
+                        FeagiNetworkError::ReceiveFailed(e.to_string()),
+                    );
+                }
+            }
+        }
+        &self.current_state
+    }
+
+    fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Inactive => {
+                self.socket
+                    .bind(&self.bind_address.to_string())
+                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+
+                self.current_state = FeagiEndpointState::ActiveWaiting;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot start: server is not in Inactive state".to_string(),
+            )),
+        }
+    }
+
+    fn request_stop(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                self.socket
+                    .unbind(&self.bind_address.to_string())
+                    .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
+
+                self.has_data = false;
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot stop: server is not in Active state".to_string(),
+            )),
+        }
+    }
+
+    fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Errored(_) => {
+                let _ = self.socket.unbind(&self.bind_address.to_string());
+                self.has_data = false;
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot confirm error: server is not in Errored state".to_string(),
+            )),
+        }
+    }
+}
+
+impl FeagiServerPuller for FeagiZmqServerPuller {
+    fn consume_retrieved_data(&mut self) -> Result<&[u8], FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveHasData => {
+                if self.has_data {
+                    self.has_data = false;
+                    self.current_state = FeagiEndpointState::ActiveWaiting;
+                    // Message implements Deref<Target=[u8]>
+                    Ok(&self.recv_msg)
+                } else {
+                    Err(FeagiNetworkError::ReceiveFailed(
+                        "No data available despite ActiveHasData state".to_string(),
+                    ))
+                }
+            }
+            _ => Err(FeagiNetworkError::ReceiveFailed(
+                "Cannot consume: no data available".to_string(),
+            )),
+        }
+    }
+}
+
+//endregion
+
+// ============================================================================
+// Router
+// ============================================================================
+
+//region Router Properties
+
+/// Configuration properties for creating a ZMQ ROUTER server.
+///
+/// This allows storing configuration separately from active instances,
+/// enabling creation of new routers with the same settings.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FeagiZmqServerRouterProperties {
+    bind_address: ZmqUrl,
+}
+
+impl FeagiZmqServerRouterProperties {
+    /// Creates new router properties with the given bind address.
+    ///
+    /// # Arguments
+    ///
+    /// * `bind_address` - The ZMQ address to bind to (e.g., "tcp://*:5557").
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the address is invalid.
+    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        let zmq_url = ZmqUrl::new(bind_address)?;
+        Ok(Self { bind_address: zmq_url })
+    }
+}
+
+impl FeagiServerRouterProperties for FeagiZmqServerRouterProperties {
+    fn as_boxed_server_router(&self) -> Box<dyn FeagiServerRouter> {
+        let context = Context::new();
+        let socket = context
+            .socket(zmq::ROUTER)
+            .expect("Failed to create ZMQ ROUTER socket");
+
+        Box::new(FeagiZmqServerRouter {
+            bind_address: self.bind_address.clone(),
+            current_state: FeagiEndpointState::Inactive,
+            context,
+            socket,
+            // Reusable messages for multipart receive
+            identity_msg: Message::new(),
+            delimiter_msg: Message::new(),
+            payload_msg: Message::new(),
+            // Current request data
+            current_session: None,
+            has_data: false,
+            // Session tracking
+            identity_to_session: HashMap::new(),
+            session_to_identity: HashMap::new(),
+        })
+    }
+
+    fn get_protocol(&self) -> ProtocolImplementation {
+        ProtocolImplementation::ZMQ
+    }
+}
+
+//endregion
+
+//region Router Implementation
+
+/// A ZMQ ROUTER server that handles request-response with multiple clients.
+///
+/// Automatically tracks client identities via [`SessionID`] for proper routing.
+/// Uses reusable `zmq::Message` objects to minimize allocations.
+///
+/// # Example
+///
+/// ```ignore
+/// let props = FeagiZmqServerRouterProperties::new("tcp://*:5557")?;
+/// let mut router = props.as_boxed_server_router();
+///
+/// router.request_start()?;
+/// loop {
+///     match router.poll() {
+///         FeagiEndpointState::ActiveHasData => {
+///             let (session_id, request) = router.consume_retrieved_request()?;
+///             let response = process(request);
+///             router.publish_response(session_id, &response)?;
+///         }
+///         FeagiEndpointState::ActiveWaiting => { /* no requests */ }
+///         _ => break,
+///     }
+/// }
+/// ```
+pub struct FeagiZmqServerRouter {
+    bind_address: ZmqUrl,
+    current_state: FeagiEndpointState,
+    #[allow(dead_code)]
+    context: Context,
+    socket: Socket,
+    /// Reusable message for identity frame
+    identity_msg: Message,
+    /// Reusable message for delimiter frame
+    delimiter_msg: Message,
+    /// Reusable message for payload frame
+    payload_msg: Message,
+    /// Current session ID for the buffered request
+    current_session: Option<SessionID>,
+    /// Whether we have valid data ready to consume
+    has_data: bool,
+    /// Bidirectional mapping between SessionID and ZMQ identity
+    identity_to_session: HashMap<Vec<u8>, SessionID>,
+    session_to_identity: HashMap<[u8; SessionID::NUMBER_BYTES], Vec<u8>>,
+}
+
+impl FeagiZmqServerRouter {
+    /// Look up an existing SessionID for the given ZMQ identity.
+    fn lookup_session_id(&self, identity: &[u8]) -> Option<SessionID> {
+        self.identity_to_session.get(identity).copied()
+    }
+
+    /// Create and register a new SessionID for the given ZMQ identity.
+    ///
+    /// Uses cryptographically random session IDs to prevent enumeration attacks.
+    fn create_session_id(&mut self, identity: Vec<u8>) -> SessionID {
+        let session_id = SessionID::new_random();
+        self.identity_to_session.insert(identity.clone(), session_id);
+        self.session_to_identity.insert(*session_id.bytes(), identity);
+        session_id
+    }
+
+    /// Receive a multipart message into reusable buffers.
+    /// Returns true if a complete message was received.
+    fn try_recv_multipart(&mut self) -> Result<bool, zmq::Error> {
+        // Receive identity frame
+        self.socket.recv(&mut self.identity_msg, zmq::DONTWAIT)?;
+
+        // Check for more frames
+        if !self.socket.get_rcvmore()? {
+            // Single frame message - unexpected for ROUTER
+            return Ok(false);
+        }
+
+        // Receive second frame (might be delimiter or payload)
+        self.socket.recv(&mut self.delimiter_msg, 0)?;
+
+        // Check if we have more frames (delimiter was empty, payload follows)
+        if self.socket.get_rcvmore()? {
+            // delimiter_msg was the empty delimiter, receive actual payload
+            self.socket.recv(&mut self.payload_msg, 0)?;
+            
+            // Drain any extra frames (shouldn't happen in normal use)
+            while self.socket.get_rcvmore()? {
+                let mut discard = Message::new();
+                self.socket.recv(&mut discard, 0)?;
+            }
+        } else {
+            // No delimiter - delimiter_msg is actually the payload
+            // Swap so payload_msg has the data
+            std::mem::swap(&mut self.delimiter_msg, &mut self.payload_msg);
+        }
+
+        Ok(true)
+    }
+}
+
+impl FeagiServer for FeagiZmqServerRouter {
+    fn poll(&mut self) -> &FeagiEndpointState {
+        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
+            match self.try_recv_multipart() {
+                Ok(true) => {
+                    // Successfully received a complete multipart message
+                    let session_id = match self.lookup_session_id(&self.identity_msg) {
+                        Some(id) => id,
+                        None => {
+                            // New client - allocate identity and create session
+                            let identity = self.identity_msg.to_vec();
+                            self.create_session_id(identity)
+                        }
+                    };
+                    self.current_session = Some(session_id);
+                    self.has_data = true;
+                    self.current_state = FeagiEndpointState::ActiveHasData;
+                }
+                Ok(false) => {
+                    // Incomplete message - treat as error
+                    self.current_state = FeagiEndpointState::Errored(
+                        FeagiNetworkError::ReceiveFailed("Incomplete multipart message".to_string()),
+                    );
+                }
+                Err(zmq::Error::EAGAIN) => {
+                    // No data available
+                }
+                Err(e) => {
+                    self.current_state = FeagiEndpointState::Errored(
+                        FeagiNetworkError::ReceiveFailed(e.to_string()),
+                    );
+                }
+            }
+        }
+        &self.current_state
+    }
+
+    fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Inactive => {
+                self.socket
+                    .bind(&self.bind_address.to_string())
+                    .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
+
+                self.current_state = FeagiEndpointState::ActiveWaiting;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot start: server is not in Inactive state".to_string(),
+            )),
+        }
+    }
+
+    fn request_stop(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                self.socket
+                    .unbind(&self.bind_address.to_string())
+                    .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
+
+                // Clear all state
+                self.current_session = None;
+                self.has_data = false;
+                self.identity_to_session.clear();
+                self.session_to_identity.clear();
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot stop: server is not in Active state".to_string(),
+            )),
+        }
+    }
+
+    fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::Errored(_) => {
+                let _ = self.socket.unbind(&self.bind_address.to_string());
+                self.current_session = None;
+                self.has_data = false;
+                self.identity_to_session.clear();
+                self.session_to_identity.clear();
+                self.current_state = FeagiEndpointState::Inactive;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Cannot confirm error: server is not in Errored state".to_string(),
+            )),
+        }
+    }
+}
+
+impl FeagiServerRouter for FeagiZmqServerRouter {
+    fn consume_retrieved_request(&mut self) -> Result<(SessionID, &[u8]), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveHasData => {
+                if self.has_data {
+                    if let Some(session_id) = self.current_session {
+                        self.has_data = false;
+                        self.current_session = None;
+                        self.current_state = FeagiEndpointState::ActiveWaiting;
+                        Ok((session_id, &self.payload_msg))
+                    } else {
+                        Err(FeagiNetworkError::ReceiveFailed(
+                            "No session ID despite having data".to_string(),
+                        ))
+                    }
+                } else {
+                    Err(FeagiNetworkError::ReceiveFailed(
+                        "No data available despite ActiveHasData state".to_string(),
+                    ))
+                }
+            }
+            _ => Err(FeagiNetworkError::ReceiveFailed(
+                "Cannot consume: no request available".to_string(),
+            )),
+        }
+    }
+
+    fn publish_response(
+        &mut self,
+        session_id: SessionID,
+        message: &[u8],
+    ) -> Result<(), FeagiNetworkError> {
+        match &self.current_state {
+            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                let identity = self
+                    .session_to_identity
+                    .get(session_id.bytes())
+                    .ok_or_else(|| {
+                        FeagiNetworkError::SendFailed(format!("Unknown session ID: {:?}", session_id))
+                    })?;
+
+                // ROUTER response: [identity, empty delimiter, payload]
+                let frames = &[identity.as_slice(), &[], message];
+                self.socket
+                    .send_multipart(frames, zmq::DONTWAIT)
+                    .map_err(|e| {
+                        if e == zmq::Error::EAGAIN {
+                            FeagiNetworkError::SendFailed("Socket would block".to_string())
+                        } else {
+                            FeagiNetworkError::SendFailed(e.to_string())
+                        }
+                    })?;
+                Ok(())
+            }
+            _ => Err(FeagiNetworkError::SendFailed(
+                "Cannot send response: server is not in Active state".to_string(),
+            )),
+        }
+    }
+}
+
+//endregion
