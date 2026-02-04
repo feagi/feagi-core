@@ -1,7 +1,7 @@
 mod feagi_agent_client_error;
-mod server;
+pub mod server;
 mod clients;
-mod registration;
+pub mod registration;
 mod feagi_agent_server_error;
 
 pub use feagi_agent_client_error::FeagiAgentClientError;

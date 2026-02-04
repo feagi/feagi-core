@@ -29,6 +29,7 @@ async-trait = { version = "0.1", optional = true }
 feagi-io = { version = "0.0.1-beta.8", path = "../feagi-io" }
 feagi-structures = { version = "0.0.1-beta.8", path = "../feagi-structures" }
 feagi-serialization = { version = "0.0.1-beta.8", path = "../feagi-serialization" }
+feagi-config = { version = "0.0.1-beta.8", path = "../feagi-config" }
 
 # SDK dependencies (optional, behind feature flags)
 feagi-sensorimotor = { version = "0.0.1-beta.8", path = "../feagi-sensorimotor", optional = true }

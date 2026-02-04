@@ -473,6 +473,7 @@ impl FeagiByteContainer {
 
         let number_of_bytes_used_by_struct = incoming_struct.get_number_of_bytes_needed();
         let total_number_of_bytes = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
+            + Self::SESSION_ID_BYTE_COUNT
             + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE
             + number_of_bytes_used_by_struct;
 

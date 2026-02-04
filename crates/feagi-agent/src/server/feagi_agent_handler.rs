@@ -1,5 +1,7 @@
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
+use tracing::warn;
+use feagi_config::{load_config, FeagiConfig};
 use feagi_io::core::protocol_implementations::ProtocolImplementation;
 use feagi_io::core::traits_and_enums::FeagiEndpointState;
 use feagi_io::core::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouter, FeagiServerRouterProperties};
@@ -9,6 +11,7 @@ use crate::registration::{AgentCapabilities, AgentDescriptor, RegistrationReques
 use crate::server::auth::AgentAuth;
 
 pub struct FeagiAgentHandler {
+    config: FeagiConfig,
     agent_auth_backend: Box<dyn AgentAuth>,
     registered_agents: HashMap<SessionID, (AgentDescriptor, Vec<AgentCapabilities>)>,
 
@@ -26,8 +29,15 @@ pub struct FeagiAgentHandler {
 
 impl FeagiAgentHandler {
 
-    pub fn new(agent_auth_backend: Box<dyn AgentAuth>) -> FeagiAgentHandler {
+    pub fn new(agent_auth_backend: Box<dyn AgentAuth>) -> Result<FeagiAgentHandler, FeagiAgentServerError> {
+        let config = load_config(None, None)
+            .map_err(|e| FeagiAgentServerError::InitFail(format!("Failed to load FEAGI configuration: {e}")))?;
+        Ok(Self::new_with_config(agent_auth_backend, config))
+    }
+
+    pub fn new_with_config(agent_auth_backend: Box<dyn AgentAuth>, config: FeagiConfig) -> FeagiAgentHandler {
         FeagiAgentHandler {
+            config,
             agent_auth_backend,
             registered_agents: Default::default(),
             available_publishers: vec![],
@@ -98,10 +108,24 @@ impl FeagiAgentHandler {
         for i in 0..self.active_sensor_servers.len() {
             match self.active_sensor_servers[i].poll() {
                 FeagiEndpointState::ActiveHasData => {
-                    &mut self.sensory_cache.try_write_data_by_copy_and_verify(
+                    if self.sensory_cache.try_write_data_by_copy_and_verify(
                         self.active_sensor_servers[i].consume_retrieved_data().unwrap() // TODO error handling
-                    ).unwrap();
-                    return Some(&self.sensory_cache)
+                    ).is_err() {
+                        warn!("Failed to decode incoming sensory bytes into FeagiByteContainer");
+                        return None;
+                    }
+                    let session_id = match self.sensory_cache.get_session_id() {
+                        Ok(id) => id,
+                        Err(_) => {
+                            warn!("Rejected sensory payload with invalid session ID");
+                            return None;
+                        }
+                    };
+                    if !self.is_session_registered(&session_id) {
+                        warn!("Rejected sensory payload from unregistered session ID");
+                        return None;
+                    }
+                    return Some(&self.sensory_cache);
                 }
                 FeagiEndpointState::Errored(e) => {
                     return None; // TODO we need to do better here
@@ -221,21 +245,30 @@ impl FeagiAgentHandler {
                     let mut puller = property.as_boxed_server_puller();
                     puller.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
                     self.active_sensor_servers.push(puller);
-                    endpoints.insert(AgentCapabilities::SendSensorData, "".to_string());
+                    endpoints.insert(
+                        AgentCapabilities::SendSensorData,
+                        self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::SendSensorData),
+                    );
                 }
                 AgentCapabilities::ReceiveMotorData => {
                     let property = self.try_get_publisher_property(registration_request.connection_protocol())?;
                     let mut publisher = property.as_boxed_server_publisher();
                     publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
                     self.active_motor_servers.push(publisher);
-                    endpoints.insert(AgentCapabilities::ReceiveMotorData, "".to_string());
+                    endpoints.insert(
+                        AgentCapabilities::ReceiveMotorData,
+                        self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::ReceiveMotorData),
+                    );
                 }
                 AgentCapabilities::ReceiveNeuronVisualizations => {
                     let property = self.try_get_publisher_property(registration_request.connection_protocol())?;
                     let mut publisher = property.as_boxed_server_publisher();
                     publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
                     self.active_visualizer_servers.push(publisher);
-                    endpoints.insert(AgentCapabilities::ReceiveNeuronVisualizations, "".to_string());
+                    endpoints.insert(
+                        AgentCapabilities::ReceiveNeuronVisualizations,
+                        self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::ReceiveNeuronVisualizations),
+                    );
                 }
             }
         }
@@ -275,6 +308,53 @@ impl FeagiAgentHandler {
             }
         }
         Err(FeagiAgentServerError::InitFail("Missing required protocol publisher".to_string()))
+    }
+
+    pub fn is_session_registered(&self, session_id: &SessionID) -> bool {
+        self.registered_agents.contains_key(session_id)
+    }
+
+    pub fn build_capability_endpoint(
+        &self,
+        protocol: &ProtocolImplementation,
+        capability: AgentCapabilities,
+    ) -> String {
+        match protocol {
+            ProtocolImplementation::ZMQ => {
+                let host = &self.config.zmq.host;
+                let port = match capability {
+                    AgentCapabilities::SendSensorData => self.config.ports.zmq_sensory_port,
+                    AgentCapabilities::ReceiveMotorData => self.config.ports.zmq_motor_port,
+                    AgentCapabilities::ReceiveNeuronVisualizations => self.config.ports.zmq_visualization_port,
+                };
+                Self::format_tcp_endpoint(host, port)
+            }
+            ProtocolImplementation::WebSocket => {
+                let host = &self.config.websocket.host;
+                let port = match capability {
+                    AgentCapabilities::SendSensorData => self.config.websocket.sensory_port,
+                    AgentCapabilities::ReceiveMotorData => self.config.websocket.motor_port,
+                    AgentCapabilities::ReceiveNeuronVisualizations => self.config.websocket.visualization_port,
+                };
+                Self::format_ws_endpoint(host, port)
+            }
+        }
+    }
+
+    fn format_tcp_endpoint(host: &str, port: u16) -> String {
+        if host.contains(':') {
+            format!("tcp://[{host}]:{port}")
+        } else {
+            format!("tcp://{host}:{port}")
+        }
+    }
+
+    fn format_ws_endpoint(host: &str, port: u16) -> String {
+        if host.contains(':') {
+            format!("ws://[{host}]:{port}")
+        } else {
+            format!("ws://{host}:{port}")
+        }
     }
 
 
