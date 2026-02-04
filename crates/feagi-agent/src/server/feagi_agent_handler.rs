@@ -35,12 +35,12 @@ impl FeagiAgentHandler {
         Ok(())
     }
 
-    pub fn add_publisher(&mut self, publisher: Box<dyn FeagiServerPublisherProperties>) {
+    pub fn add_publisher_server(&mut self, publisher: Box<dyn FeagiServerPublisherProperties>) {
         // TODO check for collisions
         self.available_publishers.push(publisher);
     }
 
-    pub fn add_puller(&mut self, puller: Box<dyn FeagiServerPullerProperties>) {
+    pub fn add_puller_server(&mut self, puller: Box<dyn FeagiServerPullerProperties>) {
         // TODO check for collisions
         self.available_pullers.push(puller);
     }
@@ -49,8 +49,8 @@ impl FeagiAgentHandler {
     //region Polling
 
     pub fn poll_registration_servers(&mut self) -> Result<(), FeagiAgentServerError> {
-        for active_registration_server in &self.active_registration_servers {
-            match active_registration_server.poll() {
+        for i in 0..self.active_registration_servers.len() {
+            match self.active_registration_servers[i].poll() {
                 FeagiEndpointState::Inactive => {
                     continue; // Do nothing
                 }
@@ -62,17 +62,17 @@ impl FeagiAgentHandler {
                 }
                 FeagiEndpointState::ActiveHasData => {
                     // NOTE: Routers ignore the session ID in the bytes!
-                    self.poll_registration_server(active_registration_server)
-
+                    self.poll_registration_server(i)?;
                 }
                 FeagiEndpointState::Errored(_) => {
-                    active_registration_server.confirm_error_and_close().map_err(
+                    self.active_registration_servers[i].confirm_error_and_close().map_err(
                         |e| FeagiAgentServerError::ConnectionFailed(e.to_string())
                     )?;
                     continue; // TODO we should do more
                 }
             }
-        };
+        }
+        Ok(())
     }
 
     /*
@@ -97,18 +97,26 @@ impl FeagiAgentHandler {
 
     //region Registration
 
-    fn poll_registration_server(&mut self, active_registration_server: &mut Box<dyn FeagiServerRouter>) -> Result<(), FeagiAgentServerError> {
-        let (session_id, data) = active_registration_server.consume_retrieved_request()
+    fn poll_registration_server(&mut self, server_index: usize) -> Result<(), FeagiAgentServerError> {
+        let (session_id, data) = self.active_registration_servers[server_index]
+            .consume_retrieved_request()
             .map_err(|e| FeagiAgentServerError::UnableToDecodeReceivedData(e.to_string()))?;
 
         if !self.registered_agents.contains_key(&session_id) {
             // Agent is unknown, we need to register it
-            let registration_request: RegistrationRequest = data.try_into(); // TODO read bytes into this
+            let registration_request: RegistrationRequest = serde_json::from_slice(&data)
+                .map_err(|e| FeagiAgentServerError::UnableToDecodeReceivedData(
+                    format!("Failed to parse RegistrationRequest: {}", e)
+                ))?;
             let registration_response = self.verify_agent_request_and_make_response(&session_id, registration_request)?;
 
-            active_registration_server.publish_response(
-                session_id,
-                registration_response.into())
+            let response_bytes = serde_json::to_vec(&registration_response)
+                .map_err(|e| FeagiAgentServerError::UnableToSendData(
+                    format!("Failed to serialize RegistrationResponse: {}", e)
+                ))?;
+
+            self.active_registration_servers[server_index]
+                .publish_response(session_id, &response_bytes)
                 .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
 
             Ok(())
@@ -117,7 +125,7 @@ impl FeagiAgentHandler {
             // We know this Agent. What does it want?
             // TODO How do we signal to FEAGI various commands?
 
-            return Ok(())
+            Ok(())
         }
     }
 
