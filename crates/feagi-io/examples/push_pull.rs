@@ -29,7 +29,6 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use feagi_config::{load_config, FeagiConfig};
 use feagi_io::core::protocol_implementations::websocket::{
     FeagiWebSocketClientPusherProperties, FeagiWebSocketServerPullerProperties,
 };
@@ -40,55 +39,14 @@ use feagi_io::core::traits_and_enums::client::{FeagiClientPusher, FeagiClientPus
 use feagi_io::core::traits_and_enums::server::{FeagiServerPuller, FeagiServerPullerProperties};
 use feagi_io::core::traits_and_enums::FeagiEndpointState;
 
+const ZMQ_ADDRESS: &str = "tcp://127.0.0.1:5556";
+const WS_ADDRESS: &str = "127.0.0.1:8081";
+const WS_URL: &str = "ws://127.0.0.1:8081";
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Transport {
     Zmq,
     WebSocket,
-}
-
-#[derive(Debug, Clone)]
-struct ExampleEndpoints {
-    zmq_address: String,
-    ws_address: String,
-    ws_url: String,
-}
-
-/// Load the FEAGI configuration using the standard loader.
-fn load_feagi_config() -> FeagiConfig {
-    load_config(None, None).expect("Failed to load FEAGI configuration")
-}
-
-fn format_tcp_endpoint(host: &str, port: u16) -> String {
-    if host.contains(':') {
-        format!("tcp://[{host}]:{port}")
-    } else {
-        format!("tcp://{host}:{port}")
-    }
-}
-
-fn format_ws_address(host: &str, port: u16) -> String {
-    if host.contains(':') {
-        format!("[{host}]:{port}")
-    } else {
-        format!("{host}:{port}")
-    }
-}
-
-fn format_ws_url(host: &str, port: u16) -> String {
-    if host.contains(':') {
-        format!("ws://[{host}]:{port}")
-    } else {
-        format!("ws://{host}:{port}")
-    }
-}
-
-fn build_endpoints() -> ExampleEndpoints {
-    let config = load_feagi_config();
-    ExampleEndpoints {
-        zmq_address: format_tcp_endpoint(&config.zmq.host, config.ports.zmq_push_pull_port),
-        ws_address: format_ws_address(&config.websocket.host, config.websocket.sensory_port),
-        ws_url: format_ws_url(&config.websocket.host, config.websocket.sensory_port),
-    }
 }
 
 fn parse_args() -> Option<(Transport, String)> {
@@ -132,19 +90,19 @@ fn parse_args() -> Option<(Transport, String)> {
 
 /// Creates the appropriate server (puller) implementation based on transport type.
 /// Returns a boxed trait object that can be used with transport-agnostic code.
-fn create_server(transport: Transport, endpoints: &ExampleEndpoints) -> Box<dyn FeagiServerPuller> {
+fn create_server(transport: Transport) -> Box<dyn FeagiServerPuller> {
     match transport {
         Transport::Zmq => {
             println!("=== Server Puller Example (ZMQ Transport) ===\n");
-            println!("Binding to {}", endpoints.zmq_address);
-            let props = FeagiZmqServerPullerProperties::new(&endpoints.zmq_address)
+            println!("Binding to {}", ZMQ_ADDRESS);
+            let props = FeagiZmqServerPullerProperties::new(ZMQ_ADDRESS)
                 .expect("Failed to create ZMQ server properties");
             props.as_boxed_server_puller()
         }
         Transport::WebSocket => {
             println!("=== Server Puller Example (WebSocket Transport) ===\n");
-            println!("Binding to {}", endpoints.ws_address);
-            let props = FeagiWebSocketServerPullerProperties::new(&endpoints.ws_address)
+            println!("Binding to {}", WS_ADDRESS);
+            let props = FeagiWebSocketServerPullerProperties::new(WS_ADDRESS)
                 .expect("Failed to create WebSocket server properties");
             props.as_boxed_server_puller()
         }
@@ -153,19 +111,19 @@ fn create_server(transport: Transport, endpoints: &ExampleEndpoints) -> Box<dyn 
 
 /// Creates the appropriate client (pusher) implementation based on transport type.
 /// Returns a boxed trait object that can be used with transport-agnostic code.
-fn create_client(transport: Transport, endpoints: &ExampleEndpoints) -> Box<dyn FeagiClientPusher> {
+fn create_client(transport: Transport) -> Box<dyn FeagiClientPusher> {
     match transport {
         Transport::Zmq => {
             println!("=== Client Pusher Example (ZMQ Transport) ===\n");
-            println!("Connecting to {}", endpoints.zmq_address);
-            let props = FeagiZmqClientPusherProperties::new(&endpoints.zmq_address)
+            println!("Connecting to {}", ZMQ_ADDRESS);
+            let props = FeagiZmqClientPusherProperties::new(ZMQ_ADDRESS)
                 .expect("Failed to create ZMQ client properties");
             props.as_boxed_client_pusher()
         }
         Transport::WebSocket => {
             println!("=== Client Pusher Example (WebSocket Transport) ===\n");
-            println!("Connecting to {}", endpoints.ws_url);
-            let props = FeagiWebSocketClientPusherProperties::new(&endpoints.ws_url)
+            println!("Connecting to {}", WS_URL);
+            let props = FeagiWebSocketClientPusherProperties::new(WS_URL)
                 .expect("Failed to create WebSocket client properties");
             props.as_boxed_client_pusher()
         }
@@ -289,15 +247,14 @@ fn run_client(mut client: Box<dyn FeagiClientPusher>) {
 }
 
 fn main() {
-    let endpoints = build_endpoints();
     match parse_args() {
         Some((transport, mode)) => match mode.as_str() {
             "server" => {
-                let server = create_server(transport, &endpoints);
+                let server = create_server(transport);
                 run_server(server);
             }
             "client" => {
-                let client = create_client(transport, &endpoints);
+                let client = create_client(transport);
                 run_client(client);
             }
             _ => unreachable!(),
