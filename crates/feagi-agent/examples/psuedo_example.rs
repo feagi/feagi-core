@@ -8,7 +8,7 @@ fn main() {
 
 
 
-    let registration_endpoint = "127.0.0.1".to_string();
+    let registration_endpoint = "zmq://127.0.0.1".to_string();
     let mut blocking_agent: EmbodimentAgent = EmbodimentAgent::new().unwrap(); // NOTE: for now this is blocking only!
 
 
@@ -42,11 +42,11 @@ fn main() {
             ImageFrameProperties::new(ImageXYResolution::new(16, 16).unwrap(), ColorSpace::Linear, ColorChannelLayout::GrayScale).unwrap()
         ).unwrap();
 
-    // Connect to feagi
-    blocking_agent.connect_to_feagi_zmq(&registration_endpoint).unwrap()
+    // Connect to feagi (Note this is long-term blocking, which can be bad in certain systems)
+    blocking_agent.connect_to_feagi_zmq(&registration_endpoint).unwrap();
 
 
-    // As this is blocking, the user needs to manually define a loop. This is a really dirty way of doing it. We will likely want a tokio version that handles this nicer
+    // As this is blocking, the user needs to manually define a loop. This is a really dirty example of doing it. We will likely want a tokio version that handles this nicer
     loop {
         blocking_agent.poll().unwrap(); // poll network
 
@@ -64,7 +64,10 @@ fn main() {
             )
         ).unwrap();
 
-        blocking_agent.send_encoded_sensor_data().unwrap(); // Send sensor data
+        // Send sensor data
+        blocking_agent.send_encoded_sensor_data().unwrap();
+
+        // NOTE: obviously, we should not be sending sensor data every literal nanosecond. A proper loop setup would time this better, but this is just an example of syntax
     }
 
 
