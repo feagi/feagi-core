@@ -90,5 +90,4 @@ impl TryFrom<&FeagiByteContainer> for RegistrationRequest {
         let json = feagi_json.borrow_json_value().clone();
         serde_json::from_value(json).map_err(|err| FeagiAgentServerError::UnableToDecodeReceivedData(err.to_string()))
     }
-
 }

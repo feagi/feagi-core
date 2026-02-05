@@ -1,3 +1,5 @@
+extern crate core;
+
 mod feagi_agent_client_error;
 //#[cfg(feature = "sdk")]
 //pub mod core;
