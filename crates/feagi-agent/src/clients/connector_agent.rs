@@ -17,7 +17,6 @@ use feagi_io::traits_and_enums::client::{
     FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequesterProperties,
     FeagiClientSubscriber, FeagiClientSubscriberProperties,
 };
-use feagi_io::traits_and_enums::FeagiEndpointState;
 use feagi_io::FeagiNetworkError;
 use feagi_serialization::SessionID;
 

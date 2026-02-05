@@ -11,9 +11,8 @@ use feagi_serialization::SessionID;
 use tungstenite::{accept, Message, WebSocket};
 
 use crate::FeagiNetworkError;
-use crate::protocol_implementations::TransportProtocolImplementation;
 use crate::protocol_implementations::websocket::shared::extract_host_port;
-use crate::traits_and_enums::FeagiEndpointState;
+use crate::shared::{FeagiEndpointState, TransportProtocolImplementation};
 use crate::traits_and_enums::server::{
     FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties,
     FeagiServerPuller, FeagiServerPullerProperties,

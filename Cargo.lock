@@ -1841,6 +1841,8 @@ name = "feagi-agent"
 version = "0.0.1-beta.8"
 dependencies = [
  "feagi-io",
+ "feagi-serialization",
+ "feagi-structures",
  "serde",
  "serde_json",
 ]

@@ -1,5 +1,7 @@
 //! Error types for the FEAGI agent.
 
+use feagi_io::FeagiNetworkError;
+use feagi_structures::FeagiDataError;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
@@ -43,5 +45,70 @@ impl Display for FeagiAgentClientError {
 impl Error for FeagiAgentClientError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         None
+    }
+}
+
+impl From<FeagiDataError> for FeagiAgentClientError {
+    fn from(err: FeagiDataError) -> Self {
+        match err {
+            FeagiDataError::DeserializationError(msg) => {
+                FeagiAgentClientError::UnableToDecodeReceivedData(msg)
+            }
+            FeagiDataError::SerializationError(msg) => {
+                FeagiAgentClientError::UnableToSendData(msg)
+            }
+            FeagiDataError::BadParameters(msg) => {
+                FeagiAgentClientError::Other(format!("Bad parameters: {}", msg))
+            }
+            FeagiDataError::NeuronError(msg) => {
+                FeagiAgentClientError::Other(format!("Neuron error: {}", msg))
+            }
+            FeagiDataError::InternalError(msg) => {
+                FeagiAgentClientError::Other(format!("Internal error: {}", msg))
+            }
+            FeagiDataError::ResourceLockedWhileRunning(msg) => {
+                FeagiAgentClientError::Other(format!("Resource locked: {}", msg))
+            }
+            FeagiDataError::ConstError(msg) => {
+                FeagiAgentClientError::Other(format!("Const error: {}", msg))
+            }
+            FeagiDataError::NotImplemented => {
+                FeagiAgentClientError::Other("Not implemented".to_string())
+            }
+        }
+    }
+}
+
+impl From<FeagiNetworkError> for FeagiAgentClientError {
+    fn from(err: FeagiNetworkError) -> Self {
+        match err {
+            FeagiNetworkError::CannotBind(msg) => {
+                FeagiAgentClientError::ConnectionFailed(format!("Cannot bind: {}", msg))
+            }
+            FeagiNetworkError::CannotUnbind(msg) => {
+                FeagiAgentClientError::ConnectionFailed(format!("Cannot unbind: {}", msg))
+            }
+            FeagiNetworkError::CannotConnect(msg) => {
+                FeagiAgentClientError::ConnectionFailed(format!("Cannot connect: {}", msg))
+            }
+            FeagiNetworkError::CannotDisconnect(msg) => {
+                FeagiAgentClientError::ConnectionFailed(format!("Cannot disconnect: {}", msg))
+            }
+            FeagiNetworkError::SendFailed(msg) => {
+                FeagiAgentClientError::UnableToSendData(msg)
+            }
+            FeagiNetworkError::ReceiveFailed(msg) => {
+                FeagiAgentClientError::UnableToDecodeReceivedData(format!("Receive failed: {}", msg))
+            }
+            FeagiNetworkError::InvalidSocketProperties(msg) => {
+                FeagiAgentClientError::ConnectionFailed(format!("Invalid socket properties: {}", msg))
+            }
+            FeagiNetworkError::SocketCreationFailed(msg) => {
+                FeagiAgentClientError::ConnectionFailed(format!("Socket creation failed: {}", msg))
+            }
+            FeagiNetworkError::GeneralFailure(msg) => {
+                FeagiAgentClientError::Other(format!("General failure: {}", msg))
+            }
+        }
     }
 }

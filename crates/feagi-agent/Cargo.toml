@@ -35,6 +35,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 # FEAGI internal crates (core)
-feagi-io = { version = "0.0.1-beta.8", path = "../feagi-io"}
+feagi-io = {path = "../feagi-io"}
+feagi-serialization = {path = "../feagi-serialization"}
+feagi-structures = {path = "../feagi-structures"}
 
 

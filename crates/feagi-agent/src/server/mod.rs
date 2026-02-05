@@ -1,6 +1,6 @@
 mod feagi_agent_handler;
 pub mod auth;
-mod registration_transport;
+mod registration_handler;
 
 pub use feagi_agent_handler::FeagiAgentHandler;
-pub use registration_transport::{PollableRegistrationSource, RouterRegistrationAdapter};
+pub use registration_handler::{PollableRegistrationSource, RegistrationTranslator};

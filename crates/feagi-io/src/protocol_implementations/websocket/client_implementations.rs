@@ -12,7 +12,7 @@ use crate::FeagiNetworkError;
 use crate::protocol_implementations::websocket::shared::{
     extract_host_port, normalize_ws_url,
 };
-use crate::traits_and_enums::FeagiEndpointState;
+use crate::shared::FeagiEndpointState;
 use crate::traits_and_enums::client::{
     FeagiClient, FeagiClientPusher, FeagiClientPusherProperties,
     FeagiClientRequester, FeagiClientRequesterProperties,
@@ -83,7 +83,7 @@ impl FeagiWebSocketClientSubscriber {
 
         match socket.read() {
             Ok(Message::Binary(data)) => {
-                self.receive_buffer = Some(data);
+                self.receive_buffer = Some(Vec::from(data));
                 true
             }
             Ok(Message::Text(text)) => {

@@ -5,6 +5,7 @@ use tracing::warn;
 use feagi_config::{load_config, FeagiConfig};
 use feagi_evolutionary::{save_genome_to_file, RuntimeGenome};
 use feagi_io::protocol_implementations::TransportProtocolImplementation;
+use feagi_io::shared::FeagiEndpointState;
 use feagi_io::traits_and_enums::FeagiEndpointState;
 use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties};
 use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
@@ -13,8 +14,8 @@ use feagi_services::connectome::save_connectome;
 use crate::feagi_agent_server_error::FeagiAgentServerError;
 use crate::registration::{AgentCapabilities, AgentDescriptor, RegistrationRequest, RegistrationResponse};
 use crate::server::auth::AgentAuth;
-use crate::server::registration_transport::PollableRegistrationSource;
-use crate::server::registration_transport::RouterRegistrationAdapter;
+use crate::server::registration_handler::PollableRegistrationSource;
+use crate::server::registration_handler::RegistrationTranslator;
 
 pub struct FeagiAgentHandler {
     config: FeagiConfig,
@@ -87,14 +88,14 @@ impl FeagiAgentHandler {
 
 
     /// Add a poll-based registration server (ZMQ/WS). The router is wrapped in a
-    /// [`RouterRegistrationAdapter`] so the handler only deals with registration types.
+    /// [`RegistrationTranslator`] so the handler only deals with registration types.
     pub fn add_and_start_registration_server(&mut self, router_property: Box<dyn FeagiServerRouterProperties>) -> Result<(), FeagiAgentServerError> {
         let protocol_name = format!("{:?}", router_property.get_protocol());
         let mut router = router_property.as_boxed_server_router();
         router
             .request_start()
             .map_err(|e| FeagiAgentServerError::InitFail(e.to_string()))?;
-        let adapter = RouterRegistrationAdapter::new(router, protocol_name);
+        let adapter = RegistrationTranslator::new(router, protocol_name);
         self.pollable_registration_sources.push(Box::new(adapter));
         Ok(())
     }

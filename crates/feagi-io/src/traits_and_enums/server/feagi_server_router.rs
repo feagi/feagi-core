@@ -1,7 +1,7 @@
-use feagi_serialization::SessionID;
-use crate::protocol_implementations::TransportProtocolImplementation;
 use crate::FeagiNetworkError;
+use crate::shared::TransportProtocolImplementation;
 use crate::traits_and_enums::server::FeagiServer;
+use feagi_serialization::SessionID;
 
 /// A server that handles request-response communication with multiple clients.
 ///

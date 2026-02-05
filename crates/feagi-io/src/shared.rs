@@ -2,13 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 use crate::FeagiNetworkError;
-use crate::traits_and_enums::client::FeagiClient;
-use crate::traits_and_enums::server::FeagiServer;
 
 /// Represents the current state of a FEAGI network endpoint (client or server).
 ///
-/// This enum is returned by [`FeagiClient::poll`] and
-/// [`FeagiServer::poll`] to indicate what operations are valid
+/// This enum is returned by `FeagiClient::poll()` and
+/// `FeagiServer::poll()` to indicate what operations are valid
 /// and whether data is available.
 ///
 /// # State Machine

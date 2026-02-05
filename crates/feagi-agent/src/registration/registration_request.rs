@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use feagi_io::protocol_implementations::TransportProtocolImplementation;
+use feagi_io::shared::TransportProtocolImplementation;
+use feagi_serialization::FeagiByteContainer;
+use feagi_structures::FeagiJSON;
+use crate::feagi_agent_server_error::FeagiAgentServerError;
 use crate::registration::{AgentDescriptor};
 use crate::registration::common::{AgentCapabilities, AuthToken};
 
@@ -16,10 +19,13 @@ pub struct RegistrationRequest {
     /// Optional device_registrations JSON; when present and server config allows,
     /// triggers auto-creation of missing IPU/OPU cortical areas (REST and ZMQ/WS).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    device_registrations: Option<serde_json::Value>,
+    device_registrations: Option<serde_json::Value>, // TODO this must NOT be here. This request is for things like BV as well and is completely irrelevant here
 }
 
 impl RegistrationRequest {
+
+    pub const MAX_REQUEST_SIZE: usize = 999999;  // Any request more than this many bytes will be ignored // TODO set to a high value of now due to the existence of device_registrations. This should be set to a much lower value!
+
     /// Create a new registration request.
     ///
     /// # Arguments
@@ -74,4 +80,15 @@ impl RegistrationRequest {
     pub fn connection_protocol(&self) -> &TransportProtocolImplementation {
         &self.connection_protocol
     }
+}
+
+impl TryFrom<&FeagiByteContainer> for RegistrationRequest {
+    type Error = FeagiAgentServerError;
+    fn try_from(value: &FeagiByteContainer) -> Result<Self, Self::Error> {
+        let serialized_data = value.try_create_new_struct_from_index(0.into())?;
+        let feagi_json: FeagiJSON = serialized_data.try_into()?;
+        let json = feagi_json.borrow_json_value().clone();
+        serde_json::from_value(json).map_err(|err| err.into())
+    }
+
 }
