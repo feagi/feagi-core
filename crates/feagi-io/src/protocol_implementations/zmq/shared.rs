@@ -1,9 +1,10 @@
 //! Shared utilities for ZMQ implementations.
 
+use serde::{Deserialize, Serialize};
 use crate::FeagiNetworkError;
 
 /// URL endpoint struct for ZMQ endpoints with validation.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ZmqUrl {
     url: String,
 }

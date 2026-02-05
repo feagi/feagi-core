@@ -16,11 +16,11 @@ use feagi_io::protocol_implementations::websocket::{
 
  */
 use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester, FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties};
-use feagi_io::shared::FeagiEndpointState;
+use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_sensorimotor::ConnectorCache;
 use feagi_serialization::{FeagiByteContainer, SessionID};
 
-use crate::clients::registration_agent::RegistrationAgent;
+use crate::clients::blocking::registration_agent::RegistrationAgent;
 use crate::feagi_agent_server_error::FeagiAgentServerError;
 use crate::FeagiAgentClientError;
 use crate::registration::{AgentCapabilities, AgentDescriptor, AuthToken, RegistrationRequest, RegistrationResponse};

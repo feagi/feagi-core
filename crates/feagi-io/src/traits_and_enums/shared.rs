@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use crate::FeagiNetworkError;
+use crate::protocol_implementations::zmq::ZmqUrl;
 
 /// Represents the current state of a FEAGI network endpoint (client or server).
 ///
@@ -85,5 +86,14 @@ pub enum FeagiEndpointState {
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub enum TransportProtocolImplementation {
     WebSocket,
-    ZMQ
+    Zmq
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TransportProtocolEndpoint {
+    #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+    WebSocket(WebSocketUrl),
+
+    #[cfg(feature = "zmq-transport")]
+    Zmq(ZmqUrl)
 }

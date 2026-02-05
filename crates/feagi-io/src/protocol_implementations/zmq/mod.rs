@@ -56,4 +56,5 @@ pub use client_implementations::{
     FeagiZmqClientSubscriberProperties,
 };
 
+pub use shared::ZmqUrl;
 

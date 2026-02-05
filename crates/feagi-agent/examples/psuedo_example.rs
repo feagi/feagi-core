@@ -11,8 +11,6 @@ fn main() {
     let registration_endpoint = "zmq://127.0.0.1".to_string();
     let mut blocking_agent: EmbodimentAgent = EmbodimentAgent::new().unwrap(); // NOTE: for now this is blocking only!
 
-
-
     // adding devices
     //blocking_agent.get_embodiment_mut().import_device_registrations_as_config_json("JSON GO HERE").unwrap() // This can be one way of doing it
 

@@ -1,6 +1,12 @@
 //! Shared utility functions for WebSocket implementations.
 
+use serde::{Deserialize, Serialize};
 use crate::FeagiNetworkError;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WebSocketUrl {
+    url: String,
+}
 
 /// Normalizes a host string to a valid WebSocket URL.
 ///

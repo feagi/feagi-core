@@ -21,3 +21,4 @@ pub mod server;
 
 #[cfg(feature = "feagi-client")]
 pub mod client;
+pub mod shared;

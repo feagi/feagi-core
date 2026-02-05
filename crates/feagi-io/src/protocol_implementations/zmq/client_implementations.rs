@@ -13,7 +13,7 @@ use zmq::{Context, Message, Socket};
 
 use crate::FeagiNetworkError;
 use crate::protocol_implementations::zmq::shared::ZmqUrl;
-use crate::shared::FeagiEndpointState;
+use crate::traits_and_enums::shared::FeagiEndpointState;
 use crate::traits_and_enums::client::{
     FeagiClient, FeagiClientPusher, FeagiClientPusherProperties,
     FeagiClientRequester, FeagiClientRequesterProperties,

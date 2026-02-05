@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use feagi_io::shared::{FeagiEndpointState, TransportProtocolImplementation};
+use feagi_io::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolImplementation};
 use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties};
 use feagi_serialization::{FeagiByteContainer, SessionID};
 use log::warn;
 use crate::feagi_agent_server_error::FeagiAgentServerError;
 use crate::registration::{AgentCapabilities, AgentDescriptor, RegistrationRequest, RegistrationResponse};
 use crate::server::auth::AgentAuth;
-use crate::server::registration_translator::RegistrationTranslator;
+use crate::server::translators::command_control_translator::CommandControlTranslator;
 
 pub struct FeagiAgentHandler {
     agent_auth_backend: Box<dyn AgentAuth>,
@@ -22,7 +22,7 @@ pub struct FeagiAgentHandler {
     active_sensor_servers: Vec<Box<dyn FeagiServerPuller>>,
 
     /// Poll-based registration sources (ZMQ/WS via RouterRegistrationAdapter; future transports).
-    pollable_registration_sources: Vec<RegistrationTranslator>,
+    pollable_registration_sources: Vec<CommandControlTranslator>,
 
     sensory_cache: FeagiByteContainer,
 }
@@ -50,13 +50,13 @@ impl FeagiAgentHandler {
 
 
     /// Add a poll-based registration server (ZMQ/WS). The router is wrapped in a
-    /// [`RegistrationTranslator`] so the handler only deals with registration types.
+    /// [`CommandControlTranslator`] so the handler only deals with registration types.
     pub fn add_and_start_registration_server(&mut self, router_property: Box<dyn FeagiServerRouterProperties>) -> Result<(), FeagiAgentServerError> {
         let mut router = router_property.as_boxed_server_router();
         router
             .request_start()
             .map_err(|e| FeagiAgentServerError::InitFail(e.to_string()))?;
-        let adapter = RegistrationTranslator::new(router);
+        let adapter = CommandControlTranslator::new(router);
         self.pollable_registration_sources.push(adapter);
         Ok(())
     }

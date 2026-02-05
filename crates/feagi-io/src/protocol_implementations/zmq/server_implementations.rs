@@ -16,7 +16,7 @@ use zmq::{Context, Message, Socket};
 
 use crate::FeagiNetworkError;
 use crate::protocol_implementations::zmq::shared::ZmqUrl;
-use crate::shared::{FeagiEndpointState, TransportProtocolImplementation};
+use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolImplementation};
 use crate::traits_and_enums::server::{
     FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties,
     FeagiServerPuller, FeagiServerPullerProperties,
@@ -70,7 +70,7 @@ impl FeagiServerPublisherProperties for FeagiZmqServerPublisherProperties {
     }
 
     fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::ZMQ
+        TransportProtocolImplementation::Zmq
     }
 }
 
@@ -239,7 +239,7 @@ impl FeagiServerPullerProperties for FeagiZmqServerPullerProperties {
     }
 
     fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::ZMQ
+        TransportProtocolImplementation::Zmq
     }
 }
 
@@ -433,7 +433,7 @@ impl FeagiServerRouterProperties for FeagiZmqServerRouterProperties {
     }
 
     fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::ZMQ
+        TransportProtocolImplementation::Zmq
     }
 }
 

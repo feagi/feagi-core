@@ -1,6 +1,6 @@
 mod feagi_agent_handler;
 pub mod auth;
-mod registration_translator;
+mod translators;
 
 pub use feagi_agent_handler::FeagiAgentHandler;
-pub use registration_translator::{RegistrationTranslator};
+pub use translators::command_control_translator::CommandControlTranslator;
