@@ -3,7 +3,7 @@
 //! Allows REST, ZMQ, WebSocket, and future transports to plug into the same
 //! core registration path without changing handler logic.
 
-use feagi_io::core::traits_and_enums::server::FeagiServerRouter;
+use feagi_io::traits_and_enums::server::FeagiServerRouter;
 use feagi_serialization::SessionID;
 
 use crate::feagi_agent_server_error::FeagiAgentServerError;
@@ -57,7 +57,7 @@ impl PollableRegistrationSource for RouterRegistrationAdapter {
     fn poll_registration(
         &mut self,
     ) -> Result<Option<(SessionID, RegistrationRequest)>, FeagiAgentServerError> {
-        use feagi_io::core::traits_and_enums::FeagiEndpointState;
+        use feagi_io::traits_and_enums::FeagiEndpointState;
 
         let state = self.router.poll();
         match state {

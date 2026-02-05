@@ -2,7 +2,7 @@ use feagi_agent::server::auth::DummyAuth;
 use feagi_agent::server::FeagiAgentHandler;
 use feagi_agent::registration::AgentCapabilities;
 use feagi_config::FeagiConfig;
-use feagi_io::core::protocol_implementations::ProtocolImplementation;
+use feagi_io::protocol_implementations::TransportProtocolImplementation;
 use feagi_serialization::SessionID;
 
 fn build_test_config() -> FeagiConfig {
@@ -24,15 +24,15 @@ fn endpoints_are_built_from_config_for_zmq() {
     let handler = FeagiAgentHandler::new_with_config(Box::new(DummyAuth {}), config);
 
     let sensory_endpoint = handler.build_capability_endpoint(
-        &ProtocolImplementation::ZMQ,
+        &TransportProtocolImplementation::ZMQ,
         AgentCapabilities::SendSensorData,
     );
     let motor_endpoint = handler.build_capability_endpoint(
-        &ProtocolImplementation::ZMQ,
+        &TransportProtocolImplementation::ZMQ,
         AgentCapabilities::ReceiveMotorData,
     );
     let viz_endpoint = handler.build_capability_endpoint(
-        &ProtocolImplementation::ZMQ,
+        &TransportProtocolImplementation::ZMQ,
         AgentCapabilities::ReceiveNeuronVisualizations,
     );
 
@@ -47,15 +47,15 @@ fn endpoints_are_built_from_config_for_websocket() {
     let handler = FeagiAgentHandler::new_with_config(Box::new(DummyAuth {}), config);
 
     let sensory_endpoint = handler.build_capability_endpoint(
-        &ProtocolImplementation::WebSocket,
+        &TransportProtocolImplementation::WebSocket,
         AgentCapabilities::SendSensorData,
     );
     let motor_endpoint = handler.build_capability_endpoint(
-        &ProtocolImplementation::WebSocket,
+        &TransportProtocolImplementation::WebSocket,
         AgentCapabilities::ReceiveMotorData,
     );
     let viz_endpoint = handler.build_capability_endpoint(
-        &ProtocolImplementation::WebSocket,
+        &TransportProtocolImplementation::WebSocket,
         AgentCapabilities::ReceiveNeuronVisualizations,
     );
 

@@ -29,15 +29,15 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use feagi_io::core::protocol_implementations::websocket::{
+use feagi_io::protocol_implementations::websocket::{
     FeagiWebSocketClientPusherProperties, FeagiWebSocketServerPullerProperties,
 };
-use feagi_io::core::protocol_implementations::zmq::{
+use feagi_io::protocol_implementations::zmq::{
     FeagiZmqClientPusherProperties, FeagiZmqServerPullerProperties,
 };
-use feagi_io::core::traits_and_enums::client::{FeagiClientPusher, FeagiClientPusherProperties};
-use feagi_io::core::traits_and_enums::server::{FeagiServerPuller, FeagiServerPullerProperties};
-use feagi_io::core::traits_and_enums::FeagiEndpointState;
+use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientPusherProperties};
+use feagi_io::traits_and_enums::server::{FeagiServerPuller, FeagiServerPullerProperties};
+use feagi_io::traits_and_enums::FeagiEndpointState;
 
 const ZMQ_ADDRESS: &str = "tcp://127.0.0.1:5556";
 const WS_ADDRESS: &str = "127.0.0.1:8081";

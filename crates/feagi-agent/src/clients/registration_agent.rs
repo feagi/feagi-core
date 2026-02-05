@@ -7,8 +7,8 @@
 
 use std::collections::HashMap;
 
-use feagi_io::core::traits_and_enums::client::FeagiClientRequester;
-use feagi_io::core::traits_and_enums::FeagiEndpointState;
+use feagi_io::traits_and_enums::client::FeagiClientRequester;
+use feagi_io::traits_and_enums::FeagiEndpointState;
 use feagi_serialization::SessionID;
 
 use crate::FeagiAgentClientError;

@@ -5,19 +5,19 @@
 //!
 //! Use `connect` for ZMQ or `connect_ws` for WebSocket; flow and API are the same.
 
-use feagi_io::core::protocol_implementations::zmq::{
+use feagi_io::protocol_implementations::zmq::{
     FeagiZmqClientPusherProperties, FeagiZmqClientRequesterProperties,
     FeagiZmqClientSubscriberProperties,
 };
-use feagi_io::core::protocol_implementations::websocket::{
+use feagi_io::protocol_implementations::websocket::{
     FeagiWebSocketClientPusherProperties, FeagiWebSocketClientRequesterProperties,
     FeagiWebSocketClientSubscriberProperties,
 };
-use feagi_io::core::traits_and_enums::client::{
+use feagi_io::traits_and_enums::client::{
     FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequesterProperties,
     FeagiClientSubscriber, FeagiClientSubscriberProperties,
 };
-use feagi_io::core::traits_and_enums::FeagiEndpointState;
+use feagi_io::traits_and_enums::FeagiEndpointState;
 use feagi_io::FeagiNetworkError;
 use feagi_serialization::SessionID;
 
@@ -49,7 +49,7 @@ impl ConnectorAgent {
         requested_capabilities: Vec<AgentCapabilities>,
         device_registrations: DeviceRegistrations,
     ) -> Result<Self, FeagiAgentClientError> {
-        use feagi_io::core::protocol_implementations::ProtocolImplementation;
+        use feagi_io::protocol_implementations::TransportProtocolImplementation;
 
         let requester_props = FeagiZmqClientRequesterProperties::new(registration_endpoint)
             .map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?;
@@ -62,7 +62,7 @@ impl ConnectorAgent {
             agent_descriptor,
             auth_token,
             requested_capabilities,
-            ProtocolImplementation::ZMQ,
+            TransportProtocolImplementation::ZMQ,
         )
         .with_device_registrations(device_registrations);
 
@@ -144,7 +144,7 @@ impl ConnectorAgent {
         requested_capabilities: Vec<AgentCapabilities>,
         device_registrations: DeviceRegistrations,
     ) -> Result<Self, FeagiAgentClientError> {
-        use feagi_io::core::protocol_implementations::ProtocolImplementation;
+        use feagi_io::protocol_implementations::TransportProtocolImplementation;
 
         let requester_props = FeagiWebSocketClientRequesterProperties::new(registration_ws_url)
             .map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?;
@@ -157,7 +157,7 @@ impl ConnectorAgent {
             agent_descriptor,
             auth_token,
             requested_capabilities,
-            ProtocolImplementation::WebSocket,
+            TransportProtocolImplementation::WebSocket,
         )
         .with_device_registrations(device_registrations);
 

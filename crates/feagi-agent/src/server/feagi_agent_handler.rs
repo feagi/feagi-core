@@ -4,9 +4,9 @@ use std::sync::Arc;
 use tracing::warn;
 use feagi_config::{load_config, FeagiConfig};
 use feagi_evolutionary::{save_genome_to_file, RuntimeGenome};
-use feagi_io::core::protocol_implementations::ProtocolImplementation;
-use feagi_io::core::traits_and_enums::FeagiEndpointState;
-use feagi_io::core::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties};
+use feagi_io::protocol_implementations::TransportProtocolImplementation;
+use feagi_io::traits_and_enums::FeagiEndpointState;
+use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties};
 use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
 use feagi_serialization::{FeagiByteContainer, SessionID};
 use feagi_services::connectome::save_connectome;
@@ -322,7 +322,7 @@ impl FeagiAgentHandler {
         Ok(RegistrationResponse::Success(session_id.clone(), endpoints))
     }
 
-    fn try_get_puller_property(&mut self, wanted_protocol: &ProtocolImplementation) -> Result<Box<dyn FeagiServerPullerProperties>, FeagiAgentServerError> {
+    fn try_get_puller_property(&mut self, wanted_protocol: &TransportProtocolImplementation) -> Result<Box<dyn FeagiServerPullerProperties>, FeagiAgentServerError> {
         for i in 0..self.available_pullers.len() {
             let available_puller = &self.available_pullers[i];
             if &available_puller.get_protocol() != wanted_protocol {
@@ -336,7 +336,7 @@ impl FeagiAgentHandler {
         Err(FeagiAgentServerError::InitFail("Missing required protocol puller".to_string()))
     }
 
-    fn try_get_publisher_property(&mut self, wanted_protocol: &ProtocolImplementation) -> Result<Box<dyn FeagiServerPublisherProperties>, FeagiAgentServerError> {
+    fn try_get_publisher_property(&mut self, wanted_protocol: &TransportProtocolImplementation) -> Result<Box<dyn FeagiServerPublisherProperties>, FeagiAgentServerError> {
         for i in 0..self.available_publishers.len() {
             let available_publisher = &self.available_publishers[i];
             if &available_publisher.get_protocol() != wanted_protocol {
@@ -354,27 +354,27 @@ impl FeagiAgentHandler {
         self.registered_agents.contains_key(session_id)
     }
 
-    pub fn parse_protocol(&self, transport: &str) -> Result<ProtocolImplementation, FeagiAgentServerError> {
+    pub fn parse_protocol(&self, transport: &str) -> Result<TransportProtocolImplementation, FeagiAgentServerError> {
         match transport.to_lowercase().as_str() {
-            "zmq" => Ok(ProtocolImplementation::ZMQ),
-            "ws" | "websocket" => Ok(ProtocolImplementation::WebSocket),
+            "zmq" => Ok(TransportProtocolImplementation::ZMQ),
+            "ws" | "websocket" => Ok(TransportProtocolImplementation::WebSocket),
             _ => Err(FeagiAgentServerError::InitFail(format!(
                 "Unsupported transport '{transport}'"
             ))),
         }
     }
 
-    pub fn default_protocol(&self) -> Result<ProtocolImplementation, FeagiAgentServerError> {
+    pub fn default_protocol(&self) -> Result<TransportProtocolImplementation, FeagiAgentServerError> {
         self.parse_protocol(&self.config.transports.default)
     }
 
     pub fn build_capability_endpoint(
         &self,
-        protocol: &ProtocolImplementation,
+        protocol: &TransportProtocolImplementation,
         capability: AgentCapabilities,
     ) -> String {
         match protocol {
-            ProtocolImplementation::ZMQ => {
+            TransportProtocolImplementation::ZMQ => {
                 let host = &self.config.zmq.host;
                 let port = match capability {
                     AgentCapabilities::SendSensorData => self.config.ports.zmq_sensory_port,
@@ -383,7 +383,7 @@ impl FeagiAgentHandler {
                 };
                 Self::format_tcp_endpoint(host, port)
             }
-            ProtocolImplementation::WebSocket => {
+            TransportProtocolImplementation::WebSocket => {
                 let host = &self.config.websocket.host;
                 let port = match capability {
                     AgentCapabilities::SendSensorData => self.config.websocket.sensory_port,

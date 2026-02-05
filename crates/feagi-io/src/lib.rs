@@ -1,7 +1,10 @@
 
 mod error;
 
-pub mod core;
+pub mod protocol_implementations;
+pub mod traits_and_enums;
+pub mod shared;
+
 pub use error::FeagiNetworkError;
 
 

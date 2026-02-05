@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use feagi_io::core::protocol_implementations::ProtocolImplementation;
+use feagi_io::protocol_implementations::TransportProtocolImplementation;
 use crate::registration::{AgentDescriptor};
 use crate::registration::common::{AgentCapabilities, AuthToken};
 
@@ -12,7 +12,7 @@ pub struct RegistrationRequest {
     agent_descriptor: AgentDescriptor,
     auth_token: AuthToken,
     requested_capabilities: Vec<AgentCapabilities>,
-    connection_protocol: ProtocolImplementation,
+    connection_protocol: TransportProtocolImplementation,
     /// Optional device_registrations JSON; when present and server config allows,
     /// triggers auto-creation of missing IPU/OPU cortical areas (REST and ZMQ/WS).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -31,7 +31,7 @@ impl RegistrationRequest {
         agent_descriptor: AgentDescriptor,
         auth_token: AuthToken,
         requested_capabilities: Vec<AgentCapabilities>, // TODO hashset?
-        connection_protocol: ProtocolImplementation,
+        connection_protocol: TransportProtocolImplementation,
     ) -> Self {
         Self {
             agent_descriptor,
@@ -71,7 +71,7 @@ impl RegistrationRequest {
     }
 
     /// Get the connection protocol.
-    pub fn connection_protocol(&self) -> &ProtocolImplementation {
+    pub fn connection_protocol(&self) -> &TransportProtocolImplementation {
         &self.connection_protocol
     }
 }

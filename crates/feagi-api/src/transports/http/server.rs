@@ -35,11 +35,11 @@ use feagi_services::{
     AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
 };
 #[cfg(feature = "feagi-agent")]
-use feagi_io::core::protocol_implementations::websocket::{
+use feagi_io::protocol_implementations::websocket::{
     FeagiWebSocketServerPublisherProperties, FeagiWebSocketServerPullerProperties,
 };
 #[cfg(feature = "feagi-agent")]
-use feagi_io::core::protocol_implementations::zmq::{
+use feagi_io::protocol_implementations::zmq::{
     FeagiZmqServerPublisherProperties, FeagiZmqServerPullerProperties,
 };
 
