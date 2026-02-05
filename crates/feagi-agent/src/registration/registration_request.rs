@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use feagi_io::shared::TransportProtocolImplementation;
 use feagi_serialization::FeagiByteContainer;
-use feagi_structures::FeagiJSON;
+use feagi_structures::{FeagiDataError, FeagiJSON};
 use crate::feagi_agent_server_error::FeagiAgentServerError;
 use crate::registration::{AgentDescriptor};
 use crate::registration::common::{AgentCapabilities, AuthToken};
@@ -88,7 +88,7 @@ impl TryFrom<&FeagiByteContainer> for RegistrationRequest {
         let serialized_data = value.try_create_new_struct_from_index(0.into())?;
         let feagi_json: FeagiJSON = serialized_data.try_into()?;
         let json = feagi_json.borrow_json_value().clone();
-        serde_json::from_value(json).map_err(|err| err.into())
+        serde_json::from_value(json).map_err(|err| FeagiAgentServerError::UnableToDecodeReceivedData(err.to_string()))
     }
 
 }

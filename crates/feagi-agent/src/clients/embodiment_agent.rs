@@ -9,15 +9,19 @@ use feagi_io::protocol_implementations::zmq::{
     FeagiZmqClientPusherProperties, FeagiZmqClientRequesterProperties,
     FeagiZmqClientSubscriberProperties,
 };
+/*
 use feagi_io::protocol_implementations::websocket::{
     FeagiWebSocketClientPusherProperties, FeagiWebSocketClientRequesterProperties,
     FeagiWebSocketClientSubscriberProperties,
 };
+
+ */
 use feagi_io::traits_and_enums::client::{
     FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequesterProperties,
     FeagiClientSubscriber, FeagiClientSubscriberProperties,
 };
 use feagi_io::FeagiNetworkError;
+use feagi_io::shared::FeagiEndpointState;
 use feagi_serialization::SessionID;
 
 use crate::clients::registration_agent::RegistrationAgent;
@@ -29,16 +33,15 @@ use crate::registration::{
 /// Optional device_registrations JSON for auto IPU/OPU creation (when server allows).
 pub type DeviceRegistrations = Option<serde_json::Value>;
 
-/// Established connection to FEAGI after registration: sensory push, motor (and optional viz) subscribe.
+/// Established connection to FEAGI after registration: sensory push and motor
 /// Build sensory payloads with the returned session_id (FeagiByteContainer) so the server accepts them.
-pub struct ConnectorAgent {
+pub struct EmbodimentAgent {
     session_id: SessionID,
     sensor_pusher: Box<dyn FeagiClientPusher>,
     motor_subscriber: Box<dyn FeagiClientSubscriber>,
-    viz_subscriber: Option<Box<dyn FeagiClientSubscriber>>,
 }
 
-impl ConnectorAgent {
+impl EmbodimentAgent {
     /// Register at the given endpoint, then connect to the returned data channels.
     /// Uses ZMQ. Pass `device_registrations` to trigger auto IPU/OPU creation when the server allows.
     pub fn connect(
@@ -48,7 +51,7 @@ impl ConnectorAgent {
         requested_capabilities: Vec<AgentCapabilities>,
         device_registrations: DeviceRegistrations,
     ) -> Result<Self, FeagiAgentClientError> {
-        use feagi_io::protocol_implementations::TransportProtocolImplementation;
+        use feagi_io::shared::TransportProtocolImplementation;
 
         let requester_props = FeagiZmqClientRequesterProperties::new(registration_endpoint)
             .map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?;
@@ -114,26 +117,16 @@ impl ConnectorAgent {
                 ));
             }
         }
+        
 
-        let viz_subscriber = endpoints
-            .get(&AgentCapabilities::ReceiveNeuronVisualizations)
-            .and_then(|viz_endpoint| {
-                let mut sub: Box<dyn FeagiClientSubscriber> =
-                    FeagiZmqClientSubscriberProperties::new(viz_endpoint)
-                        .ok()?
-                        .as_boxed_client_subscriber();
-                sub.request_connect().ok()?;
-                Some(sub)
-            });
-
-        Ok(ConnectorAgent {
+        Ok(EmbodimentAgent {
             session_id,
             sensor_pusher,
             motor_subscriber,
-            viz_subscriber,
         })
     }
 
+    /*
     /// Same as `connect` but over WebSocket. `registration_ws_url` must be a WebSocket URL
     /// (e.g. `ws://host:port`). Uses the same data-channel flow and API as the ZMQ connector.
     pub fn connect_ws(
@@ -143,7 +136,7 @@ impl ConnectorAgent {
         requested_capabilities: Vec<AgentCapabilities>,
         device_registrations: DeviceRegistrations,
     ) -> Result<Self, FeagiAgentClientError> {
-        use feagi_io::protocol_implementations::TransportProtocolImplementation;
+        use feagi_io::shared::TransportProtocolImplementation;
 
         let requester_props = FeagiWebSocketClientRequesterProperties::new(registration_ws_url)
             .map_err(|e| FeagiAgentClientError::ConnectionFailed(e.to_string()))?;
@@ -229,6 +222,8 @@ impl ConnectorAgent {
         })
     }
 
+     */
+
     /// Session ID assigned by the server. Use this when building sensory payloads
     /// (FeagiByteContainer) so the server accepts them.
     pub fn session_id(&self) -> SessionID {
@@ -258,23 +253,6 @@ impl ConnectorAgent {
             }
             FeagiEndpointState::Errored(_) => Err(FeagiNetworkError::ReceiveFailed(
                 "Motor channel in error state".to_string(),
-            )),
-            _ => Ok(None),
-        }
-    }
-
-    /// Poll for visualization data if the agent requested ReceiveNeuronVisualizations.
-    pub fn poll_visualization_data(&mut self) -> Result<Option<Vec<u8>>, FeagiNetworkError> {
-        let Some(ref mut sub) = self.viz_subscriber else {
-            return Ok(None);
-        };
-        match sub.poll() {
-            FeagiEndpointState::ActiveHasData => {
-                let slice = sub.consume_retrieved_data()?;
-                Ok(Some(slice.to_vec()))
-            }
-            FeagiEndpointState::Errored(_) => Err(FeagiNetworkError::ReceiveFailed(
-                "Visualization channel in error state".to_string(),
             )),
             _ => Ok(None),
         }

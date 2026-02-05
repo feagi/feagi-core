@@ -1840,9 +1840,11 @@ dependencies = [
 name = "feagi-agent"
 version = "0.0.1-beta.8"
 dependencies = [
+ "base64 0.22.1",
  "feagi-io",
  "feagi-serialization",
  "feagi-structures",
+ "log",
  "serde",
  "serde_json",
 ]

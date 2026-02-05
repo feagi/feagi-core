@@ -38,5 +38,7 @@ serde_json = { workspace = true }
 feagi-io = {path = "../feagi-io"}
 feagi-serialization = {path = "../feagi-serialization"}
 feagi-structures = {path = "../feagi-structures"}
+log = "0.4.29"
+base64 = "0.22.1"
 
 

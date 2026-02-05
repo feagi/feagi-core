@@ -1,24 +1,16 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use tracing::warn;
-use feagi_config::{load_config, FeagiConfig};
-use feagi_evolutionary::{save_genome_to_file, RuntimeGenome};
-use feagi_io::protocol_implementations::TransportProtocolImplementation;
-use feagi_io::shared::FeagiEndpointState;
-use feagi_io::traits_and_enums::FeagiEndpointState;
+use feagi_io::shared::{FeagiEndpointState, TransportProtocolImplementation};
 use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties};
-use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
 use feagi_serialization::{FeagiByteContainer, SessionID};
-use feagi_services::connectome::save_connectome;
+use log::warn;
 use crate::feagi_agent_server_error::FeagiAgentServerError;
 use crate::registration::{AgentCapabilities, AgentDescriptor, RegistrationRequest, RegistrationResponse};
 use crate::server::auth::AgentAuth;
-use crate::server::registration_handler::PollableRegistrationSource;
-use crate::server::registration_handler::RegistrationTranslator;
+use crate::server::registration_translator::RegistrationTranslator;
 
 pub struct FeagiAgentHandler {
-    config: FeagiConfig,
     agent_auth_backend: Box<dyn AgentAuth>,
     registered_agents: HashMap<SessionID, (AgentDescriptor, Vec<AgentCapabilities>)>,
 
@@ -30,34 +22,18 @@ pub struct FeagiAgentHandler {
     active_sensor_servers: Vec<Box<dyn FeagiServerPuller>>,
 
     /// Poll-based registration sources (ZMQ/WS via RouterRegistrationAdapter; future transports).
-    pollable_registration_sources: Vec<Box<dyn PollableRegistrationSource>>,
+    pollable_registration_sources: Vec<RegistrationTranslator>,
 
     sensory_cache: FeagiByteContainer,
-
-    /// Invoked when an agent registers successfully with capabilities and optional device_registrations.
-    /// Used by the host (e.g. feagi-rs) for auto IPU/OPU creation and session-aware FCL/FQ subscriptions.
-    registration_hook: Option<
-        Arc<
-            dyn Fn(SessionID, AgentDescriptor, Vec<AgentCapabilities>, Option<serde_json::Value>)
-                + Send
-                + Sync,
-        >,
-    >,
 }
 
 impl FeagiAgentHandler {
 
-    pub fn new(agent_auth_backend: Box<dyn AgentAuth>) -> Result<FeagiAgentHandler, FeagiAgentServerError> {
-        let config = load_config(None, None)
-            .map_err(|e| FeagiAgentServerError::InitFail(format!("Failed to load FEAGI configuration: {e}")))?;
-        Ok(Self::new_with_config(agent_auth_backend, config))
-    }
 
-    pub fn new_with_config(agent_auth_backend: Box<dyn AgentAuth>, config: FeagiConfig) -> FeagiAgentHandler {
+    pub fn new(agent_auth_backend: Box<dyn AgentAuth>) -> FeagiAgentHandler {
         FeagiAgentHandler {
-            config,
             agent_auth_backend,
-            registered_agents: Default::default(),
+            registered_agents: HashMap::new(),
             available_publishers: vec![],
             available_pullers: vec![],
             active_motor_servers: vec![],
@@ -65,21 +41,7 @@ impl FeagiAgentHandler {
             active_sensor_servers: vec![],
             pollable_registration_sources: vec![],
             sensory_cache: FeagiByteContainer::new_empty(),
-            registration_hook: None,
         }
-    }
-
-    /// Set a hook invoked when an agent registers successfully (capabilities + optional device_registrations).
-    /// The host uses this for auto IPU/OPU creation and session-aware motor/visualization subscriptions.
-    pub fn set_registration_hook(
-        &mut self,
-        hook: Arc<
-            dyn Fn(SessionID, AgentDescriptor, Vec<AgentCapabilities>, Option<serde_json::Value>)
-                + Send
-                + Sync,
-        >,
-    ) {
-        self.registration_hook = Some(hook);
     }
 
     //region Add Servers
@@ -90,19 +52,13 @@ impl FeagiAgentHandler {
     /// Add a poll-based registration server (ZMQ/WS). The router is wrapped in a
     /// [`RegistrationTranslator`] so the handler only deals with registration types.
     pub fn add_and_start_registration_server(&mut self, router_property: Box<dyn FeagiServerRouterProperties>) -> Result<(), FeagiAgentServerError> {
-        let protocol_name = format!("{:?}", router_property.get_protocol());
         let mut router = router_property.as_boxed_server_router();
         router
             .request_start()
             .map_err(|e| FeagiAgentServerError::InitFail(e.to_string()))?;
-        let adapter = RegistrationTranslator::new(router, protocol_name);
-        self.pollable_registration_sources.push(Box::new(adapter));
+        let adapter = RegistrationTranslator::new(router);
+        self.pollable_registration_sources.push(adapter);
         Ok(())
-    }
-
-    /// Add a custom poll-based registration source (e.g. for future transports).
-    pub fn add_pollable_registration_source(&mut self, source: Box<dyn PollableRegistrationSource>) {
-        self.pollable_registration_sources.push(source);
     }
 
     pub fn add_publisher_server(&mut self, publisher: Box<dyn FeagiServerPublisherProperties>) {
@@ -130,8 +86,7 @@ impl FeagiAgentHandler {
                 Ok(None) => {}
                 Err(e) => {
                     warn!(
-                        "[feagi-agent] Registration source '{}' error: {}",
-                        source.source_name(),
+                        "[feagi-agent] Registration source error: {}",
                         e
                     );
                 }
@@ -258,6 +213,8 @@ impl FeagiAgentHandler {
 
     //region Registration
 
+    // TODO we need to have a proper discussion about endpoints. Possibly when defining the pushers / pollers, we also couple an endpoint URL or something?
+
     fn verify_agent_request_and_make_response(&mut self, session_id: &SessionID, registration_request: RegistrationRequest) -> Result<RegistrationResponse, FeagiAgentServerError> {
 
         let verify_auth = self.agent_auth_backend.verify_agent_allowed_to_connect(&registration_request);  // TODO how do we make this non blocking????
@@ -275,30 +232,39 @@ impl FeagiAgentHandler {
                     let mut puller = property.as_boxed_server_puller();
                     puller.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
                     self.active_sensor_servers.push(puller);
+                    /*
                     endpoints.insert(
                         AgentCapabilities::SendSensorData,
                         self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::SendSensorData),
                     );
+
+                     */
                 }
                 AgentCapabilities::ReceiveMotorData => {
                     let property = self.try_get_publisher_property(registration_request.connection_protocol())?;
                     let mut publisher = property.as_boxed_server_publisher();
                     publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
                     self.active_motor_servers.push(publisher);
+                    /*
                     endpoints.insert(
                         AgentCapabilities::ReceiveMotorData,
                         self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::ReceiveMotorData),
                     );
+
+                     */
                 }
                 AgentCapabilities::ReceiveNeuronVisualizations => {
                     let property = self.try_get_publisher_property(registration_request.connection_protocol())?;
                     let mut publisher = property.as_boxed_server_publisher();
                     publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
                     self.active_visualizer_servers.push(publisher);
+                    /*
                     endpoints.insert(
                         AgentCapabilities::ReceiveNeuronVisualizations,
                         self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::ReceiveNeuronVisualizations),
                     );
+
+                     */
                 }
             }
         }
@@ -309,6 +275,8 @@ impl FeagiAgentHandler {
             registration_request.agent_descriptor().clone(),
             registration_request.requested_capabilities().to_vec()));
 
+        // TODO clearly there needs to be some sort of notification, but not like this
+        /*
         if let Some(hook) = &self.registration_hook {
             let dr = registration_request.device_registrations().cloned();
             let capabilities = registration_request.requested_capabilities().to_vec();
@@ -319,6 +287,8 @@ impl FeagiAgentHandler {
                 dr,
             );
         }
+
+         */
 
         Ok(RegistrationResponse::Success(session_id.clone(), endpoints))
     }
@@ -355,20 +325,17 @@ impl FeagiAgentHandler {
         self.registered_agents.contains_key(session_id)
     }
 
-    pub fn parse_protocol(&self, transport: &str) -> Result<TransportProtocolImplementation, FeagiAgentServerError> {
-        match transport.to_lowercase().as_str() {
-            "zmq" => Ok(TransportProtocolImplementation::ZMQ),
-            "ws" | "websocket" => Ok(TransportProtocolImplementation::WebSocket),
-            _ => Err(FeagiAgentServerError::InitFail(format!(
-                "Unsupported transport '{transport}'"
-            ))),
-        }
-    }
 
+
+    /*
     pub fn default_protocol(&self) -> Result<TransportProtocolImplementation, FeagiAgentServerError> {
         self.parse_protocol(&self.config.transports.default)
     }
 
+     */
+
+    // TODO no, this handler should not be reading config files from the filesystem
+    /*
     pub fn build_capability_endpoint(
         &self,
         protocol: &TransportProtocolImplementation,
@@ -396,6 +363,8 @@ impl FeagiAgentHandler {
         }
     }
 
+     */
+
     fn format_tcp_endpoint(host: &str, port: u16) -> String {
         if host.contains(':') {
             format!("tcp://[{host}]:{port}")
@@ -421,6 +390,8 @@ impl FeagiAgentHandler {
         }
     }
 
+    // TODO why is the registration handler saving the connectomE??????
+    /*
     /// Persist a connectome snapshot to disk using FEAGI serialization.
     pub fn save_connectome_snapshot<P: AsRef<Path>>(
         &self,
@@ -448,6 +419,8 @@ impl FeagiAgentHandler {
             ))
         })
     }
+
+     */
 
 
     //endregion

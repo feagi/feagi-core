@@ -14,17 +14,15 @@ use crate::registration::{RegistrationRequest, RegistrationResponse};
 pub struct RegistrationTranslator {
     router: Box<dyn FeagiServerRouter>,
     request_buffer: FeagiByteContainer,
-    source_name: String,
 }
 
 impl RegistrationTranslator {
     /// Build an adapter from a boxed router. The router must already be started
     /// (e.g. `request_start()` called and polled to ActiveWaiting) by the caller.
-    pub fn new(router: Box<dyn FeagiServerRouter>, source_name: impl Into<String>) -> Self {
+    pub fn new(router: Box<dyn FeagiServerRouter>) -> Self {
         Self {
             router,
             request_buffer: FeagiByteContainer::new_empty(),
-            source_name: source_name.into(),
         }
     }
 
@@ -72,10 +70,6 @@ impl RegistrationTranslator {
             .publish_response(session_id, &bytes)
             .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
         Ok(())
-    }
-
-    pub fn source_name(&self) -> &str {
-        &self.source_name
     }
 }
 
