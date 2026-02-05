@@ -7,10 +7,7 @@
 
 use std::future::Future;
 use std::time::Instant;
-use feagi_io::protocol_implementations::zmq::{
-    FeagiZmqClientPusherProperties, FeagiZmqClientRequesterProperties,
-    FeagiZmqClientSubscriberProperties,
-};
+use feagi_io::protocol_implementations::zmq::{FeagiZmqClientPusherProperties, FeagiZmqClientRequester, FeagiZmqClientRequesterProperties, FeagiZmqClientSubscriberProperties};
 /*
 use feagi_io::protocol_implementations::websocket::{
     FeagiWebSocketClientPusherProperties, FeagiWebSocketClientRequesterProperties,
@@ -55,11 +52,17 @@ impl EmbodimentAgent {
         &mut self.embodiment
     }
 
-    pub fn connect_to_feagi(&mut self, feagi_registration_endpoint: Box<dyn FeagiClientRequesterProperties>) -> Result<(), FeagiAgentClientError> {
+    pub fn connect_to_feagi_generic(&mut self, feagi_registration_endpoint: Box<dyn FeagiClientRequesterProperties>) -> Result<(), FeagiAgentClientError> {
         if self.client.is_none() {
             let client = EmbodimentClient::new_and_generic_connect(feagi_registration_endpoint)?;
             self.client = Some(client);
         }
+    }
+
+    pub fn connect_to_feagi_zmq(&mut self, zmq_endpoint: &String) -> Result<(), FeagiAgentClientError> {
+        let zmq_requester = FeagiZmqClientRequesterProperties::new(zmq_endpoint)?;
+        self.connect_to_feagi_generic(Box::new(zmq_requester))?;
+        Ok(())
     }
 
     pub fn poll(&mut self) -> Result<(), FeagiAgentServerError> {
