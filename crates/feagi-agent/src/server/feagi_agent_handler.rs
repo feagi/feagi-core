@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
+use std::vec;
 use feagi_io::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties};
 use feagi_serialization::{FeagiByteContainer, SessionID};
@@ -16,11 +17,13 @@ pub struct FeagiAgentHandler {
     available_publishers: Vec<Box<dyn FeagiServerPublisherProperties>>,
     available_pullers: Vec<Box<dyn FeagiServerPullerProperties>>,
 
-    command_control_servers: Vec<CommandControlTranslator>,
     all_registered_sessions: HashMap<SessionID, AgentDescriptor>,
-    registered_embodiments: HashMap<SessionID, EmbodimentTranslator>
 
+    command_control_servers: Vec<CommandControlTranslator>,
+    registered_embodiments: Vec<EmbodimentTranslator>,
 
+    session_id_command_control_mapping: HashMap<SessionID, usize>,
+    session_id_embodiments_mapping: HashMap<SessionID, usize>,
 
 }
 
@@ -29,7 +32,15 @@ impl FeagiAgentHandler {
 
     pub fn new(agent_auth_backend: Box<dyn AgentAuth>) -> FeagiAgentHandler {
         FeagiAgentHandler {
+            agent_auth_backend,
+            available_publishers: Vec::new(),
+            available_pullers: Vec::new(),
 
+            command_control_servers: Vec::new(),
+            all_registered_sessions: HashMap::new(),
+            registered_embodiments: Vec::new(),
+            session_id_command_control_mapping: Default::default(),
+            session_id_embodiments_mapping: Default::default(),
         }
     }
 
@@ -56,226 +67,149 @@ impl FeagiAgentHandler {
     }
     //endregion
 
-    //region Polling
+    //region Command and Control
 
     /// Poll all command and control servers. Messages for registration request and heartbeat are
     /// handled internally here. Others are raised for FEAGI to act upon
     pub fn poll_command_and_control(&mut self) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
-        for translator in self.command_control_servers.iter_mut() {
+        for (command_index, translator) in self.command_control_servers.iter_mut().enumerate() {
             // TODO smarter error handling. Many things don't deserve a panic
             let possible_message = translator.poll_for_incoming_messages(&self.all_registered_sessions)?;
 
             match possible_message {
                 None => { continue; }
-                Some((session_id, message)) => {
-                    if self.handle_registrations_and_heartbeats(session_id, &message)? {
-                        // We handled the request internally. Continue
-                        continue;
+                Some((session_id, message, is_new_session)) => {
+                    if is_new_session {
+                        return self.handle_messages_from_unknown_session_ids(session_id, &message, command_index)
                     }
-                    // The request is of some other nature, raise it
-                    return Ok(Some((session_id, message)))
+                    else {
+                        return self.handle_messages_from_known_session_ids(session_id, message)
+                    }
                 }
             }
-
         }
         // Nothing to report from anyone!
         Ok(None)
     }
 
-    pub fn send_message_to_agent(&mut self, session_id: SessionID, message: FeagiMessage) -> Result<(), FeagiAgentError> {
-        // TODO logic for picking the correct server!
-        todo!();
-    }
-
-    /// Some messages can be handled here (namely registration and heartbeat). If the message is one of those, handle it and return true.
-    /// Otherwise, return false
-    fn handle_registrations_and_heartbeats(&mut self, session_id: SessionID, message: &FeagiMessage) -> Result<bool, FeagiAgentError> {
-        match &message {
-            FeagiMessage::HeartBeat => {
-                // Send a heartbeat back
-                // TODO prevent spam
-                self.send_message_to_agent(session_id, FeagiMessage::HeartBeat)?;
-                return Ok(true);
-            }
-            FeagiMessage::AgentRegistration(registration_message) => {
-                // A registration message came in, and the translator checked its not obviously invalid
-                match &registration_message {
-                    AgentRegistrationMessage::ClientRequestRegistration(registration_request) => {
-
-                        let response = self.verify_agent_registration_request_and_make_response(session_id, registration_request)?;
-                        self.send_message_to_agent(session_id, FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsRegistration(response)))?;
-                        return Ok(true);
-                    }
-                    AgentRegistrationMessage::ServerRespondsRegistration(_) => {
-                        // This is the server, we do the responding!
-                        return Err(FeagiAgentError::UnableToDecodeReceivedData("Client tried sending registration response!".to_stirng()))
-                    }
-                }
-            }
-            _ => {
-                // Any other message type should be handled on a higher level
-                return Ok(false);
-            }
-        }
-
-    }
+    /// Send a command and control message to a specific agent
+    pub fn send_message_to_agent(&mut self, session_id: SessionID, message: FeagiMessage, increment_counter: u16) -> Result<(), FeagiAgentError> {
 
 
 
-
-
-
-
-
-    /// Single entry point for all registration flows. Use `None` for REST (handler generates
-    /// session id); use `Some(session_id)` for poll-based transports (ZMQ/WS) that provide it.
-    pub fn process_registration(
-        &mut self,
-        registration_request: RegistrationRequest,
-        transport_session_id: Option<SessionID>,
-    ) -> Result<RegistrationResponse, FeagiAgentError> {
-        let session_id = transport_session_id.unwrap_or_else(|| self.new_session_id());
-        self.verify_agent_request_and_make_response(&session_id, registration_request)
-    }
-
-    /// Register an agent without a transport-level router (REST path). Thin wrapper around
-    /// `process_registration(request, None)`.
-    pub fn register_agent_direct(
-        &mut self,
-        registration_request: RegistrationRequest,
-    ) -> Result<RegistrationResponse, FeagiAgentError> {
-        self.process_registration(registration_request, None)
-    }
-
-    pub fn poll_sensory_handlers(&mut self) -> Option<&FeagiByteContainer> {
-        for i in 0..self.active_sensor_servers.len() {
-            match self.active_sensor_servers[i].poll() {
-                FeagiEndpointState::ActiveHasData => {
-                    if self.sensory_cache.try_write_data_by_copy_and_verify(
-                        self.active_sensor_servers[i].consume_retrieved_data().unwrap() // TODO error handling
-                    ).is_err() {
-                        warn!("Failed to decode incoming sensory bytes into FeagiByteContainer");
-                        return None;
-                    }
-                    let session_id = match self.sensory_cache.get_session_id() {
-                        Ok(id) => id,
-                        Err(_) => {
-                            warn!("Rejected sensory payload with invalid session ID");
-                            return None;
-                        }
-                    };
-                    if !self.is_session_registered(&session_id) {
-                        warn!("Rejected sensory payload from unregistered session ID");
-                        return None;
-                    }
-                    return Some(&self.sensory_cache);
-                }
-                FeagiEndpointState::Errored(_e) => {
-                    return None; // TODO we need to do better here
-                }
-                _ => {
-                    continue;
-                }
-            }
-        }
-        None
-    }
-
-    pub fn poll_motor_handlers(&mut self, data: Option<&FeagiByteContainer>) -> Result<(), FeagiAgentError> {
-        let Some(bytes) = data else {
-            return Ok(()); // Nothing to publish
-        };
-
-        for i in 0..self.active_motor_servers.len() {
-            match self.active_motor_servers[i].poll() {
-                FeagiEndpointState::ActiveWaiting => {
-                    self.active_motor_servers[i]
-                        .publish_data(bytes.get_byte_ref())
-                        .map_err(|e| FeagiAgentError::UnableToSendData(e.to_string()))?;
-                }
-                FeagiEndpointState::Errored(_e) => {
-                    self.active_motor_servers[i].confirm_error_and_close().map_err(
-                        |e| FeagiAgentError::ConnectionFailed(e.to_string())
-                    )?;
-                    // TODO we need to do better here
-                }
-                _ => {
-                    continue;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn poll_visualization_handlers(&mut self, data: Option<&FeagiByteContainer>) -> Result<(), FeagiAgentError> {
-        let Some(bytes) = data else {
-            return Ok(()); // Nothing to publish
-        };
-
-        for i in 0..self.active_visualizer_servers.len() {
-            match self.active_visualizer_servers[i].poll() {
-                FeagiEndpointState::ActiveWaiting => {
-                    self.active_visualizer_servers[i]
-                        .publish_data(bytes.get_byte_ref())
-                        .map_err(|e| FeagiAgentError::UnableToSendData(e.to_string()))?;
-                }
-                FeagiEndpointState::Errored(_e) => {
-                    self.active_visualizer_servers[i].confirm_error_and_close().map_err(
-                        |e| FeagiAgentError::ConnectionFailed(e.to_string())
-                    )?;
-                    // TODO we need to do better here
-                }
-                _ => {
-                    continue;
-                }
-            }
-        }
+        let mut command_translator: CommandControlTranslator = todo!();
+        command_translator.send_message(session_id, message, increment_counter)?;
         Ok(())
     }
 
     //endregion
 
+    //region Embodiments
+
+    pub fn poll_embodiment_sensors(&mut self) -> Result<Option<&FeagiByteContainer>, FeagiAgentError> {
+        for embodiment in self.registered_embodiments.iter_mut() {
+            let possible_sensor_data = embodiment.poll_sensor_server()?;
+            if possible_sensor_data.is_some() {
+                return Ok(possible_sensor_data);
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn poll_embodiment_motors(&mut self) -> Result<(), FeagiAgentError> {
+        for embodiment in self.registered_embodiments.iter_mut() {
+            embodiment.poll_motor_server()?;
+        }
+        Ok(())
+    }
+
+    pub fn send_motor_data(&mut self, session_id: SessionID, motor_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
+        let embodiment_option = self.try_get_embodiment_mut(session_id)?;
+        match embodiment_option {
+            Some(embodiment) => {
+                embodiment.send_buffered_motor_data(motor_data)?;
+                Ok(())
+            }
+            None => {
+                Err(FeagiAgentError::UnableToSendData("Nonexistant Session ID!".to_string()))
+            }
+        }
+    }
+
+
+    //endregion
+
+
+
     //region Internal
 
     //region Registration
 
-    // TODO we need to have a proper discussion about endpoints. Possibly when defining the pushers / pollers, we also couple an endpoint URL or something?
+    fn handle_messages_from_unknown_session_ids(&mut self, session_id: SessionID, message: &FeagiMessage, command_control_index: usize) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
+        match &message{
+            FeagiMessage::AgentRegistration(register_message) => {
+                match &register_message {
+                    AgentRegistrationMessage::ClientRequestRegistration(registration_request) => {
+                        let auth_result = self.agent_auth_backend.verify_agent_allowed_to_connect(registration_request);
+                        if auth_result.is_err() {
+                            return Ok(Some((session_id, FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsRegistration(RegistrationResponse::FailedInvalidAuth)))))
+                        }
+                        // auth passed, check if we have the resources
 
-    fn verify_agent_registration_request_and_make_response(&mut self, session_id: SessionID, registration_request: &RegistrationRequest) -> Result<RegistrationResponse, FeagiAgentError> {
+                        // TODO we should rethink agent roles. For now, just assume embodiment
+                        // TODO we shouldnt error like this, we should send a response if we are missing resources
+                        let sensor_puller_props = self.try_get_puller_property(registration_request.connection_protocol())?;
+                        let motor_pusher_props = self.try_get_publisher_property(registration_request.connection_protocol())?;
 
-        let verify_auth = self.agent_auth_backend.verify_agent_allowed_to_connect(&registration_request);  // TODO how do we make this non blocking????
-        if verify_auth.is_err() {
-            return Ok(RegistrationResponse::FailedInvalidAuth)
+                        let mut sensor_puller = sensor_puller_props.as_boxed_server_puller();
+                        let mut motor_pusher = motor_pusher_props.as_boxed_server_publisher();
+
+                        sensor_puller.request_start()?;
+                        motor_pusher.request_start()?;
+
+                        let embodiment = EmbodimentTranslator::new(session_id, motor_pusher, sensor_puller);
+                        self.register_new_embodiment_agent_to_cache(session_id, registration_request.agent_descriptor().clone(), command_control_index, embodiment)?;
+
+                        // we set everything up, send response of success
+                        let mut mapping: HashMap<AgentCapabilities, TransportProtocolEndpoint> = HashMap::new();
+                        mapping.insert(AgentCapabilities::SendSensorData, sensor_puller_props.get_endpoint());
+                        mapping.insert(AgentCapabilities::ReceiveMotorData, motor_pusher_props.get_endpoint());
+                        let response = RegistrationResponse::Success(session_id, mapping);
+                        let message: FeagiMessage = response.into();
+                        Ok(Some((session_id, message)))
+                    }
+                    _ => {
+                        // If not requesting registration, we dont want to hear it
+                        Ok(None)
+                    }
+                }
+            }
+            _ => {
+                // If the new session is not registering, we don't want to hear it
+                Ok(None)
+            }
         }
-        // TODO verify no duplicates!
+    }
 
-
-        if registration_request.requested_capabilities().contains(&AgentCapabilities::SendSensorData) &&
-            registration_request.requested_capabilities().contains(&AgentCapabilities::ReceiveMotorData) {
-            // Agent is requesting a motor and sensor data set. Its an embodiment
-
-            let sensor_property = self.try_get_puller_property(registration_request.connection_protocol())?;
-            let motor_property = self.try_get_publisher_property(registration_request.connection_protocol())?;
-            let mut puller = sensor_property.as_boxed_server_puller();
-            let mut publisher = motor_property.as_boxed_server_publisher();
-
-            puller.request_start().map_err(|e| FeagiAgentError::ConnectionFailed(e.to_string()))?;
-            publisher.request_start().map_err(|e| FeagiAgentError::ConnectionFailed(e.to_string()))?;
-
-            _ = self.registered_embodiments.insert(session_id, EmbodimentTranslator::new(
-                session_id,
-                publisher,
-                puller,
-            ));
-
-            let mut endpoints: HashMap<AgentCapabilities, TransportProtocolEndpoint> = HashMap::new();
-            endpoints.insert(AgentCapabilities::SendSensorData, motor_property.get_protocol())
-            endpoints.insert(AgentCapabilities::ReceiveMotorData, sensor_property.get_protocol())
-            return Ok(RegistrationResponse::Success(session_id, endpoints));
+    fn handle_messages_from_known_session_ids(&mut self, session_id: SessionID, message: FeagiMessage) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
+        match &message{
+            FeagiMessage::AgentRegistration(register_message) => {
+                // Already registered? dont dont register again
+                // TODO any special exceptions?
+                Ok(None)
+            }
+            FeagiMessage::HeartBeat => {
+                // We can handle heartbeat here
+                // TODO or maybe we should let the higher levels handle it?
+                self.send_message_to_agent(session_id, FeagiMessage::HeartBeat, 0)?;
+                Ok(None)
+            }
+            _ => {
+                // Throw up anything else
+                Ok(Some((session_id, message)))
+            }
         }
 
-        // TODO other types. Is this really the best way?
-        return Err(FeagiAgentError::InitFail("TODO".to_string()))
     }
 
     fn try_get_puller_property(&mut self, wanted_protocol: &TransportProtocolImplementation) -> Result<Box<dyn FeagiServerPullerProperties>, FeagiAgentError> {
@@ -306,12 +240,28 @@ impl FeagiAgentHandler {
         Err(FeagiAgentError::InitFail("Missing required protocol publisher".to_string()))
     }
 
-
-
-
-
+    fn register_new_embodiment_agent_to_cache(&mut self, session_id: SessionID, agent_descriptor: AgentDescriptor, command_index: usize, embodiment: EmbodimentTranslator) -> Result<(), FeagiAgentError> {
+        let new_embodiment_index = self.registered_embodiments.len();
+        self.registered_embodiments.push(embodiment);
+        self.all_registered_sessions.insert(session_id, agent_descriptor);
+        self.session_id_embodiments_mapping.insert(session_id, new_embodiment_index);
+        Ok(())
+    }
 
     //endregion
+
+    fn try_get_embodiment_mut(&mut self, session_id: SessionID) -> Result<Option<&mut EmbodimentTranslator>, FeagiAgentError> {
+        let index = self.session_id_embodiments_mapping.get(&session_id);
+        match index {
+            Some(index) => {
+                let embodiment = self.registered_embodiments.get_mut(index);
+                Ok(embodiment)
+            }
+            None => {
+                Ok(None)
+            }
+        }
+    }
 
     //endregion
 

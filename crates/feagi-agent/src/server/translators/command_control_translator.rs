@@ -12,6 +12,8 @@ use crate::command_and_control::agent_registration_message::{AgentRegistrationMe
 use crate::command_and_control::FeagiMessage;
 use crate::{AgentDescriptor, FeagiAgentError};
 
+pub type IsNewSessionId = bool;
+
 /// Translates the byte data from clients into [FeagiMessage] for ease of use upstream
 pub struct CommandControlTranslator {
     router: Box<dyn FeagiServerRouter>,
@@ -30,8 +32,8 @@ impl CommandControlTranslator {
         }
     }
 
-    /// Poll for incoming messages, returns one if found
-    pub fn poll_for_incoming_messages(&mut self, known_session_ids: &HashMap<SessionID, AgentDescriptor>,) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
+    /// Poll for incoming messages, returns one if found, along with the session ID and true if the session id seems to be new
+    pub fn poll_for_incoming_messages(&mut self, known_session_ids: &HashMap<SessionID, AgentDescriptor>,) -> Result<Option<(SessionID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
         let state = self.router.poll();
         match state {
             FeagiEndpointState::Inactive => {
@@ -86,7 +88,6 @@ impl CommandControlTranslator {
                     }
                 }
             }
-
         }
     }
 
@@ -99,53 +100,29 @@ impl CommandControlTranslator {
     }
 
     /// Tries converting incoming data into a [FeagiMessage]
-    fn process_incoming_data_into_message(&mut self, known_session_ids: &HashMap<SessionID, AgentDescriptor>,) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
+    fn process_incoming_data_into_message(&mut self, known_session_ids: &HashMap<SessionID, AgentDescriptor>,) -> Result<Option<(SessionID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
         let (session_id, incoming_data) = self
             .router
             .consume_retrieved_request()?;
 
-        if !known_session_ids.contains_key(&session_id) {
-            // New Agent? Check
-            return self.process_data_from_new_session_id_into_message(session_id, incoming_data);
+        let is_new_session = !known_session_ids.contains_key(&session_id);
+
+        if is_new_session {
+            // New Agent? Just make sure it isnt spam first
+            if incoming_data.len() > RegistrationRequest::MAX_REQUEST_SIZE {
+                // We are not allowing unknown people to throw large amounts of data. Ignore
+                return Ok(None);
+            }
         }
 
         self.request_buffer.try_write_data_by_copy_and_verify(incoming_data)?; // Load in data
         let feagi_message: FeagiMessage = (&self.request_buffer).try_into()?;
 
         // WARNING: It is possible for an agent to request registration a second time. Be wary!
-        Ok(Some((session_id, feagi_message)))
+        Ok(Some((session_id, feagi_message, is_new_session)))
     }
 
-    /// Checks if the incoming request is sensible. If not, drops the message and returns None. If sensible, returns the message and session ID to let the higher level register it
-    fn process_data_from_new_session_id_into_message(&mut self, session_id: SessionID, incoming_data: &[u8]) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
-        if incoming_data.len() > RegistrationRequest::MAX_REQUEST_SIZE {
-            // We are not allowing unknown people to throw large amounts of data. Ignore
-            return Ok(None);
-        }
 
-        self.request_buffer.try_write_data_by_copy_and_verify(incoming_data)?; // Load in data
-
-        let feagi_message: FeagiMessage = (&self.request_buffer).try_into()?;
-
-        match &feagi_message {
-            FeagiMessage::AgentRegistration(registration_message) => {
-                match registration_message {
-                    AgentRegistrationMessage::ClientRequestRegistration(_) => {
-                        // Agent is requesting registration. Pass this up
-                        Ok(Some((session_id, feagi_message)))
-                    }
-                    _ => {
-                        // We do not care for anything from an unknown agent except for a registration request. Ignore
-                        Ok(None)
-                    }
-                }
-            }
-            _ => {
-                // We do not care for anything from an unknown agent except for a registration request. Ignore
-                Ok(None)
-            }
-        }
-    }
 
 
 }

@@ -10,7 +10,6 @@ pub struct EmbodimentTranslator {
     session_id: SessionID,
     motor_server: Box<dyn FeagiServerPublisher>,
     sensor_server: Box<dyn FeagiServerPuller>,
-    motor_byte_cache: FeagiByteContainer,
     sensor_byte_cache: FeagiByteContainer,
 }
 
@@ -26,7 +25,6 @@ impl EmbodimentTranslator {
             session_id,
             motor_server,
             sensor_server,
-            motor_byte_cache,
             sensor_byte_cache
         }
     }
@@ -61,11 +59,6 @@ impl EmbodimentTranslator {
         }
     }
 
-    /// Get byte struct on which you can write motor neuron to
-    pub fn get_motor_data_bytes_ref(&mut self) -> &mut FeagiByteContainer {
-        &mut self.motor_byte_cache
-    }
-
     /// Poll motor server to keep it alive
     pub fn poll_motor_server(&mut self) -> Result<(), FeagiAgentError> {
         let motor_server = &mut self.motor_server;
@@ -93,12 +86,12 @@ impl EmbodimentTranslator {
     }
 
     /// Send motor byte data (that is already encoded to the motor byte buffer)
-    pub fn send_buffered_motor_data(&mut self) -> Result<(), FeagiAgentError> {
+    pub fn send_buffered_motor_data(&mut self, motor_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
         let motor_server = &mut self.motor_server;
         let state = motor_server.poll();
         match state {
             FeagiEndpointState::ActiveWaiting => {
-                motor_server.publish_data(self.motor_byte_cache.get_byte_ref())?;
+                motor_server.publish_data(motor_data.get_byte_ref())?;
                 Ok(())
             }
             _ => {
