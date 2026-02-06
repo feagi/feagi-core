@@ -1156,12 +1156,21 @@ impl RegistrationHandler {
                 shm_paths.insert("motor".to_string(), shm_path);
             }
 
+            // Visualization SHM is Unix-only. On Windows, viz_shm_writer uses paths that fail
+            // (e.g. /tmp); skip so registration succeeds and Brain Visualizer uses WebSocket.
+            #[cfg(unix)]
             if allocated_capabilities.visualization.is_some() {
                 let shm_path = format!(
                     "{}/feagi-shared-mem-visualization_stream.bin",
                     self.shm_base_path
                 );
                 shm_paths.insert("visualization".to_string(), shm_path);
+            }
+            #[cfg(windows)]
+            if allocated_capabilities.visualization.is_some() {
+                info!(
+                    "🦀 [REGISTRATION] Skipping visualization SHM on Windows - agent will use WebSocket"
+                );
             }
         } else {
             info!(
@@ -1170,8 +1179,9 @@ impl RegistrationHandler {
             );
         }
 
-        // If visualization SHM is allocated, attach the burst-engine SHM writer so BV can read frames.
-        // Without this, BV may receive a shm_paths.visualization value but the file will never be created/updated.
+        // If visualization SHM is allocated (Unix only), attach the burst-engine SHM writer so BV can read frames.
+        // On Windows we do not allocate visualization SHM; BV uses WebSocket.
+        #[cfg(unix)]
         if let Some(viz_path) = shm_paths.get("visualization") {
             let runner_opt = self.burst_runner.lock().clone();
             let runner = runner_opt.ok_or_else(|| {
