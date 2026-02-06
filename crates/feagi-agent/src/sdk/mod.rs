@@ -51,8 +51,20 @@ impl ConnectorAgent {
         Ok(())
     }
 
+    /// Returns device registrations. When sdk-io is enabled, returns the live export from the
+    /// sensor/motor cache (so vision_register, gaze_register, etc. are reflected). Otherwise
+    /// returns the stored device_registrations value.
     pub fn get_device_registration_json(&self) -> Result<Value, FeagiAgentClientError> {
-        Ok(self.device_registrations.clone())
+        #[cfg(feature = "sdk-io")]
+        {
+            self.cache
+                .export_device_registrations_as_config_json()
+                .map_err(|e| FeagiAgentClientError::UnableToDecodeReceivedData(e.to_string()))
+        }
+        #[cfg(not(feature = "sdk-io"))]
+        {
+            Ok(self.device_registrations.clone())
+        }
     }
 
     pub fn agent_descriptor(&self) -> &AgentDescriptor {
