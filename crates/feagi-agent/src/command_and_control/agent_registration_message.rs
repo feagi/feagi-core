@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use feagi_io::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 use feagi_serialization::SessionID;
-use crate::registration::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiApiVersion};
+use crate::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiApiVersion};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -10,7 +10,7 @@ use feagi_io::traits_and_enums::server::FeagiServerRouter;
 use feagi_serialization::{FeagiByteContainer, SessionID};
 use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, RegistrationRequest};
 use crate::command_and_control::FeagiMessage;
-use crate::{AgentCapabilities, AgentDescriptor, FeagiAgentError};
+use crate::{AgentDescriptor, FeagiAgentError};
 
 /// Translates the byte data from clients into [FeagiMessage] for ease of use upstream
 pub struct CommandControlTranslator {
@@ -31,7 +31,7 @@ impl CommandControlTranslator {
     }
 
     /// Poll for incoming messages, returns one if found
-    pub fn poll_for_incoming_messages(&mut self, known_session_ids: &HashMap<SessionID, (AgentDescriptor, Vec<AgentCapabilities>)>) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
+    pub fn poll_for_incoming_messages(&mut self, known_session_ids: &HashMap<SessionID, AgentDescriptor>,) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
         let state = self.router.poll();
         match state {
             FeagiEndpointState::Inactive => {
@@ -99,7 +99,7 @@ impl CommandControlTranslator {
     }
 
     /// Tries converting incoming data into a [FeagiMessage]
-    fn process_incoming_data_into_message(&mut self, known_session_ids: &HashMap<SessionID, (AgentDescriptor, Vec<AgentCapabilities>)>) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
+    fn process_incoming_data_into_message(&mut self, known_session_ids: &HashMap<SessionID, AgentDescriptor>,) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
         let (session_id, incoming_data) = self
             .router
             .consume_retrieved_request()?;
@@ -116,7 +116,7 @@ impl CommandControlTranslator {
         Ok(Some((session_id, feagi_message)))
     }
 
-    /// Checks if the incoming request is sensible. If not, drops the message and returns None. If sensible, returns the message and session iD
+    /// Checks if the incoming request is sensible. If not, drops the message and returns None. If sensible, returns the message and session ID to let the higher level register it
     fn process_data_from_new_session_id_into_message(&mut self, session_id: SessionID, incoming_data: &[u8]) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
         if incoming_data.len() > RegistrationRequest::MAX_REQUEST_SIZE {
             // We are not allowing unknown people to throw large amounts of data. Ignore
