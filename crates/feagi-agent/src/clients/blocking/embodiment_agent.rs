@@ -21,9 +21,8 @@ use feagi_sensorimotor::ConnectorCache;
 use feagi_serialization::{FeagiByteContainer, SessionID};
 
 use crate::clients::blocking::registration_agent::RegistrationAgent;
-use crate::feagi_agent_server_error::FeagiAgentServerError;
-use crate::FeagiAgentClientError;
-use crate::registration::{AgentCapabilities, AgentDescriptor, AuthToken, RegistrationRequest, RegistrationResponse};
+use crate::command_and_control::agent_registration_message::RegistrationResponse;
+use crate::FeagiAgentError;
 
 /// Optional device_registrations JSON for auto IPU/OPU creation (when server allows).
 pub type DeviceRegistrations = Option<serde_json::Value>;
@@ -37,7 +36,7 @@ pub struct EmbodimentAgent {
 
 impl EmbodimentAgent {
 
-    pub fn new() -> Result<EmbodimentAgent, FeagiAgentClientError> {
+    pub fn new() -> Result<EmbodimentAgent, FeagiAgentError> {
         Ok(Self {
             embodiment: ConnectorCache::new(),
             client: None
@@ -52,20 +51,20 @@ impl EmbodimentAgent {
         &mut self.embodiment
     }
 
-    pub fn connect_to_feagi_generic(&mut self, feagi_registration_endpoint: Box<dyn FeagiClientRequesterProperties>) -> Result<(), FeagiAgentClientError> {
+    pub fn connect_to_feagi_generic(&mut self, feagi_registration_endpoint: Box<dyn FeagiClientRequesterProperties>) -> Result<(), FeagiAgentError> {
         if self.client.is_none() {
             let client = EmbodimentClient::new_and_generic_connect(feagi_registration_endpoint)?;
             self.client = Some(client);
         }
     }
 
-    pub fn connect_to_feagi_zmq(&mut self, zmq_endpoint: &String) -> Result<(), FeagiAgentClientError> {
+    pub fn connect_to_feagi_zmq(&mut self, zmq_endpoint: &String) -> Result<(), FeagiAgentError> {
         let zmq_requester = FeagiZmqClientRequesterProperties::new(zmq_endpoint)?;
         self.connect_to_feagi_generic(Box::new(zmq_requester))?;
         Ok(())
     }
 
-    pub fn poll(&mut self) -> Result<(), FeagiAgentServerError> {
+    pub fn poll(&mut self) -> Result<(), FeagiAgentError> {
         if self.client.is_none() {
             return Ok(())
         }
@@ -79,9 +78,9 @@ impl EmbodimentAgent {
         Ok(())
     }
     
-    pub fn send_encoded_sensor_data(&mut self) -> Result<(), FeagiAgentServerError> {
+    pub fn send_encoded_sensor_data(&mut self) -> Result<(), FeagiAgentError> {
         if self.client.is_none() {
-            return Err(FeagiAgentServerError::ConnectionFailed("No Connection!".to_string()))
+            return Err(FeagiAgentError::ConnectionFailed("No Connection!".to_string()))
         }
         let mut sensors = self.embodiment.get_sensor_cache();
         sensors.encode_all_sensors_to_neurons(Instant::now())?;
@@ -106,7 +105,7 @@ struct EmbodimentClient {
 
 impl EmbodimentClient {
 
-    pub fn new_and_generic_connect(command_and_control_properties: Box<dyn FeagiClientRequesterProperties>) -> Result<Self, FeagiAgentClientError> {
+    pub fn new_and_generic_connect(command_and_control_properties: Box<dyn FeagiClientRequesterProperties>) -> Result<Self, FeagiAgentError> {
 
         let mut command_and_control = command_and_control_properties.as_boxed_client_requester();
         command_and_control.request_connect()?;
