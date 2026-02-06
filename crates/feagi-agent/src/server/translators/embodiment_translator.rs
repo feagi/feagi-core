@@ -35,8 +35,8 @@ impl EmbodimentTranslator {
 
     /// Poll the sensor server, getting any incoming byte data if there is new
     pub fn poll_sensor_server(&mut self) -> Result<Option<&FeagiByteContainer>, FeagiAgentError> {
-        let sensor_sever = &mut self.sensor_server;
-        let state = sensor_sever.poll();
+        let sensor_server = &mut self.sensor_server;
+        let state = sensor_server.poll().clone();
         match state {
             FeagiEndpointState::Inactive => {
                 Ok(None)
@@ -53,7 +53,7 @@ impl EmbodimentTranslator {
                 Ok(Some(&self.sensor_byte_cache))
             }
             FeagiEndpointState::Errored(error) => {
-                self.sensor_server.confirm_error_and_close()?;
+                sensor_server.confirm_error_and_close()?;
                 Err(FeagiAgentError::SocketFailure(error.to_string()))
             }
         }
@@ -62,7 +62,7 @@ impl EmbodimentTranslator {
     /// Poll motor server to keep it alive
     pub fn poll_motor_server(&mut self) -> Result<(), FeagiAgentError> {
         let motor_server = &mut self.motor_server;
-        let state = motor_server.poll();
+        let state = motor_server.poll().clone();
         match state {
             FeagiEndpointState::Inactive => {
                 Ok(())

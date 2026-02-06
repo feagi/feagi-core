@@ -92,7 +92,7 @@ pub enum TransportProtocolImplementation {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TransportProtocolEndpoint {
     #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
-    WebSocket(WebSocketUrl),
+    //WebSocket(WebSocketUrl),
 
     #[cfg(feature = "zmq-transport")]
     Zmq(ZmqUrl)

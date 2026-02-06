@@ -1,7 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
-use std::sync::Arc;
-use std::vec;
 use feagi_io::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties};
 use feagi_serialization::{FeagiByteContainer, SessionID};
@@ -94,12 +91,15 @@ impl FeagiAgentHandler {
 
     /// Send a command and control message to a specific agent
     pub fn send_message_to_agent(&mut self, session_id: SessionID, message: FeagiMessage, increment_counter: u16) -> Result<(), FeagiAgentError> {
-
-
-
-        let mut command_translator: CommandControlTranslator = todo!();
-        command_translator.send_message(session_id, message, increment_counter)?;
-        Ok(())
+        let command_translator = self.try_get_command_mut(session_id)?;
+        match command_translator {
+            Some(command_translator) => {
+                command_translator.send_message(session_id, message,increment_counter)
+            }
+            None => {
+                Err(FeagiAgentError::UnableToSendData("Unable to send message to unknown Session ID!".to_string()))
+            }
+        }
     }
 
     //endregion
@@ -175,7 +175,7 @@ impl FeagiAgentHandler {
                         mapping.insert(AgentCapabilities::SendSensorData, sensor_puller_props.get_endpoint());
                         mapping.insert(AgentCapabilities::ReceiveMotorData, motor_pusher_props.get_endpoint());
                         let response = RegistrationResponse::Success(session_id, mapping);
-                        let message: FeagiMessage = response.into();
+                        let message = FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsRegistration(response));
                         Ok(Some((session_id, message)))
                     }
                     _ => {
@@ -250,11 +250,24 @@ impl FeagiAgentHandler {
 
     //endregion
 
+    fn try_get_command_mut(&mut self, session_id: SessionID) -> Result<Option<&mut CommandControlTranslator>, FeagiAgentError> {
+        let index = self.session_id_command_control_mapping.get(&session_id);
+        match index {
+            Some(index) => {
+                let command = self.command_control_servers.get_mut(*index);
+                Ok(command)
+            }
+            None => {
+                Ok(None)
+            }
+        }
+    }
+
     fn try_get_embodiment_mut(&mut self, session_id: SessionID) -> Result<Option<&mut EmbodimentTranslator>, FeagiAgentError> {
         let index = self.session_id_embodiments_mapping.get(&session_id);
         match index {
             Some(index) => {
-                let embodiment = self.registered_embodiments.get_mut(index);
+                let embodiment = self.registered_embodiments.get_mut(*index);
                 Ok(embodiment)
             }
             None => {

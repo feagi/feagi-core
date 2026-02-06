@@ -72,6 +72,10 @@ impl FeagiServerPublisherProperties for FeagiZmqServerPublisherProperties {
     fn get_protocol(&self) -> TransportProtocolImplementation {
         TransportProtocolImplementation::Zmq
     }
+
+    fn get_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.bind_address.clone())
+    }
 }
 
 //endregion
@@ -438,6 +442,10 @@ impl FeagiServerRouterProperties for FeagiZmqServerRouterProperties {
 
     fn get_protocol(&self) -> TransportProtocolImplementation {
         TransportProtocolImplementation::Zmq
+    }
+
+    fn get_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.bind_address.clone())
     }
 }
 

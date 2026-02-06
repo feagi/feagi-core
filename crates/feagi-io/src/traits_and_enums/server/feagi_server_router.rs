@@ -1,5 +1,5 @@
 use crate::FeagiNetworkError;
-use crate::traits_and_enums::shared::TransportProtocolImplementation;
+use crate::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::server::FeagiServer;
 use feagi_serialization::SessionID;
 
@@ -62,4 +62,6 @@ pub trait FeagiServerRouterProperties: Send + Sync {
     fn as_boxed_server_router(&self) -> Box<dyn FeagiServerRouter>;
 
     fn get_protocol(&self) -> TransportProtocolImplementation;
+    
+    fn get_endpoint(&self) -> TransportProtocolEndpoint;
 }

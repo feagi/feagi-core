@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use feagi_serialization::{FeagiByteContainer, SessionID};
+use feagi_serialization::{FeagiByteContainer, FeagiSerializable, SessionID};
 use feagi_structures::FeagiJSON;
 use crate::command_and_control::agent_registration_message::AgentRegistrationMessage;
 use crate::FeagiAgentError;
@@ -16,8 +16,8 @@ pub enum FeagiMessage {
 
 impl FeagiMessage {
     pub fn serialize_to_byte_container(&self, container: &mut FeagiByteContainer, session_id: SessionID, increment_value: u16) -> Result<(), FeagiAgentError> {
-        let json: serde_json::Value = self.into();
-        let feagi_json: FeagiJSON = json.into();
+        let json: serde_json::Value = serde_json::to_value(&self).unwrap();
+        let feagi_json: FeagiJSON = FeagiJSON::from_json_value(json);
         container.overwrite_byte_data_with_single_struct_data(&feagi_json, increment_value)?;
         container.set_session_id(session_id)?;
         Ok(())
@@ -39,9 +39,10 @@ impl TryFrom<&FeagiByteContainer> for FeagiMessage {
 // TODO we should consider our ownh implementation for feagi messages instead of just piggybacking off of JSON
 impl From<FeagiMessage> for FeagiByteContainer {
     fn from(message: FeagiMessage) -> Self {
-        let json: serde_json::Value = message.into();
-        let feagi_json: FeagiJSON = json.into();
-        let byte_container: FeagiByteContainer = FeagiByteContainer::try_from(feagi_json).unwrap();
+        let json: serde_json::Value = serde_json::to_value(&message).unwrap();
+        let feagi_json: FeagiJSON = FeagiJSON::from_json_value(json);
+        let mut byte_container: FeagiByteContainer = FeagiByteContainer::new_empty();
+        byte_container.overwrite_byte_data_with_single_struct_data(&feagi_json, 0).unwrap();
         byte_container
     }
 }

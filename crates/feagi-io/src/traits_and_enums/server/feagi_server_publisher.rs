@@ -1,5 +1,5 @@
 use crate::FeagiNetworkError;
-use crate::traits_and_enums::shared::TransportProtocolImplementation;
+use crate::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::server::FeagiServer;
 
 /// A server that broadcasts data to all connected subscribers.
@@ -48,4 +48,6 @@ pub trait FeagiServerPublisherProperties: Send + Sync {
     fn as_boxed_server_publisher(&self) -> Box<dyn FeagiServerPublisher>;
     
     fn get_protocol(&self) -> TransportProtocolImplementation;
+    
+    fn get_endpoint(&self) -> TransportProtocolEndpoint;
 }

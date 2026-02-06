@@ -34,7 +34,7 @@ impl CommandControlTranslator {
 
     /// Poll for incoming messages, returns one if found, along with the session ID and true if the session id seems to be new
     pub fn poll_for_incoming_messages(&mut self, known_session_ids: &HashMap<SessionID, AgentDescriptor>,) -> Result<Option<(SessionID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
-        let state = self.router.poll();
+        let state = self.router.poll().clone();
         match state {
             FeagiEndpointState::Inactive => {
                 Ok(None)
