@@ -103,19 +103,28 @@ CRATE_ORDER=(
 
 # ============================================================================
 # Check if crate is already published on crates.io
+# Uses crates.io API for exact version check (cargo search returns latest only).
 # ============================================================================
 
 is_already_published() {
     local crate_name=$1
     local crate_path=$2
-    
-    # Get version from Cargo.toml
+
+    # Get version from Cargo.toml (trim whitespace)
     cd "$crate_path" 2>/dev/null || return 1
-    local version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+    local version
+    version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/' | xargs)
     cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
-    
-    # Check if this exact version exists on crates.io
-    if cargo search "$crate_name" --limit 1 2>/dev/null | grep -q "^$crate_name = \"$version\""; then
+
+    [ -n "$version" ] || { echo "false"; return; }
+
+    # crates.io API: GET /crates/:name/:version returns 200 if version exists
+    local url="https://crates.io/api/v1/crates/${crate_name}/${version}"
+    local code
+    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+        -H "User-Agent: feagi-release/1.0 (release script)" "$url" 2>/dev/null || echo "000")
+
+    if [ "$code" = "200" ]; then
         echo "true"
     else
         echo "false"
@@ -208,13 +217,13 @@ publish_crate() {
         if [ "$publish_status" -eq 0 ]; then
             echo -e "   ${GREEN}✅ Successfully published $crate_name v$version${NC}"
 
-            # Delay for crates.io indexing (except for last crate)
+            # Delay only after a real publish (skipped crates never reach here)
             if [ "$crate_name" != "feagi" ]; then
                 echo -e "   ${CYAN}⏳ Waiting ${DELAY_SECONDS}s for crates.io indexing...${NC}"
                 sleep $DELAY_SECONDS
             fi
         else
-            # If already published, treat as a skip (do NOT fail the run)
+            # If already published, treat as skip: do NOT fail and do NOT sleep
             if echo "$publish_output" | grep -qiE "already exists on crates\.io|already exists on crates\.io index|version .* already exists"; then
                 echo -e "   ${YELLOW}⏭️  Skipping $crate_name v$version (already published on crates.io)${NC}"
                 cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
