@@ -1,6 +1,6 @@
 [package]
 name = "feagi-sensorimotor"
-version = "0.0.1-beta.8"
+version = "0.0.1-beta.9"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -11,8 +11,8 @@ description = "Sensorimotor System - Data processing, caching, and neuron voxel 
 
 [dependencies]
 ndarray = { workspace = true, features = ["rayon"] }
-feagi-structures = { version = "0.0.1-beta.8", path = "../feagi-structures" }
-feagi-serialization = { version = "0.0.1-beta.8", path = "../feagi-serialization" }
+feagi-structures = { version = "0.0.1-beta.9", path = "../feagi-structures" }
+feagi-serialization = { version = "0.0.1-beta.9", path = "../feagi-serialization" }
 image = {workspace = true}
 rayon = { workspace = true}
 paste = { workspace = true}
