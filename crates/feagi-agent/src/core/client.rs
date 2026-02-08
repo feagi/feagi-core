@@ -249,10 +249,7 @@ impl AgentClient {
         let reg_endpoint = self.config.registration_endpoint.clone();
         self.block_on(reg_socket.connect(&reg_endpoint))
             .map_err(|e: ZmqError| {
-                SdkError::Other(format!(
-                    "registration endpoint {}: {}",
-                    reg_endpoint, e
-                ))
+                SdkError::Other(format!("registration endpoint {}: {}", reg_endpoint, e))
             })?;
         self.registration_socket = Some(Arc::new(Mutex::new(reg_socket)));
 
@@ -276,12 +273,10 @@ impl AgentClient {
         self.wait_for_tcp_endpoint("sensory", &self.config.sensory_endpoint)?;
         let mut sensory_socket = PushSocket::new();
         let sensory_endpoint = self.config.sensory_endpoint.clone();
-        self.block_on(sensory_socket.connect(&sensory_endpoint)).map_err(|e: ZmqError| {
-            SdkError::Other(format!(
-                "sensory endpoint {}: {}",
-                sensory_endpoint, e
-            ))
-        })?;
+        self.block_on(sensory_socket.connect(&sensory_endpoint))
+            .map_err(|e: ZmqError| {
+                SdkError::Other(format!("sensory endpoint {}: {}", sensory_endpoint, e))
+            })?;
         self.sensory_socket = Some(Arc::new(Mutex::new(sensory_socket)));
 
         // Motor socket (SUB - for receiving motor commands from FEAGI)
@@ -337,10 +332,7 @@ impl AgentClient {
             let viz_endpoint = self.config.visualization_endpoint.clone();
             self.block_on(viz_socket.connect(&viz_endpoint))
                 .map_err(|e: ZmqError| {
-                    SdkError::Other(format!(
-                        "visualization endpoint {}: {}",
-                        viz_endpoint, e
-                    ))
+                    SdkError::Other(format!("visualization endpoint {}: {}", viz_endpoint, e))
                 })?;
 
             // Subscribe to all visualization messages
