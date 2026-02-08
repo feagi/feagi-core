@@ -283,7 +283,7 @@ impl RestStream {
                     agent_id, now, count
                 );
 
-                if count == 1 || count.is_multiple_of(30) {
+                if count == 1 || count % 30 == 0 {
                     info!(
                         "🦀 [PNS] 💓 Heartbeat #{} received from {} (timestamp: {})",
                         count, agent_id, now

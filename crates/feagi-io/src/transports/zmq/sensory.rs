@@ -296,7 +296,7 @@ impl SensoryStream {
                         continue;
                     }
                     Err(_) => {
-                        if message_count == 0 || message_count.is_multiple_of(1000) {
+                        if message_count == 0 || message_count % 1000 == 0 {
                             debug!(
                                 "🦀 [ZMQ-SENSORY] 🔍 Polling for messages (no data yet, message_count: {})",
                                 message_count
@@ -369,7 +369,7 @@ impl SensoryStream {
                         let processing_time_ms = t_zmq_total.as_secs_f64() * 1000.0;
 
                         // Log detailed performance metrics (first 10, then every 50th for better visibility)
-                        if message_count <= 10 || message_count.is_multiple_of(50) {
+                        if message_count <= 10 || message_count % 50 == 0 {
                             let total_msg = *total_messages.lock();
                             let total_n = *total_neurons.lock();
                             let avg_neurons_per_msg = if total_msg > 0 {
@@ -385,7 +385,7 @@ impl SensoryStream {
 
                         // Log performance warning if processing takes too long (affects frame rate)
                         if processing_time_ms > 33.0
-                            && (message_count <= 10 || message_count.is_multiple_of(100))
+                            && (message_count <= 10 || message_count % 100 == 0)
                         {
                             warn!(
                                 "[PERF][FEAGI-ZMQ] ⚠️ Slow processing: {:.2}ms for {} neurons (target: <33ms for 30fps)",
@@ -395,7 +395,7 @@ impl SensoryStream {
                     }
                     Err(e) => {
                         // Always log first few errors, then periodically
-                        if message_count <= 10 || message_count.is_multiple_of(100) {
+                        if message_count <= 10 || message_count % 100 == 0 {
                             error!(
                                 "🦀 [ZMQ-SENSORY] [ERR] Failed to process sensory data (message #{}): {}",
                                 message_count, e
@@ -468,7 +468,7 @@ impl SensoryStream {
             if !npu.is_genome_loaded() {
                 *rejected_no_genome.lock() += 1;
                 let count = *rejected_no_genome.lock();
-                if count == 1 || count.is_multiple_of(100) {
+                if count == 1 || count % 100 == 0 {
                     warn!("🚫 [ZMQ-SENSORY] [SECURITY] Rejected sensory data: No genome loaded (rejected {} total)", count);
                 }
                 return Err(FeagiDataError::BadParameters(
@@ -485,7 +485,7 @@ impl SensoryStream {
                 if !registry.has_sensory_agents() {
                     *rejected_no_agents.lock() += 1;
                     let count = *rejected_no_agents.lock();
-                    if count == 1 || count.is_multiple_of(100) {
+                    if count == 1 || count % 100 == 0 {
                         warn!("🚫 [ZMQ-SENSORY] [SECURITY] Rejected sensory data: No registered sensory agents (rejected {} total)", count);
                     }
                     return Err(FeagiDataError::BadParameters(

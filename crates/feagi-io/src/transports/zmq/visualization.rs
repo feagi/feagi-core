@@ -266,7 +266,7 @@ impl VisualizationStream {
                     pending = Some(returned);
                     let backpressure_count = self.stats.record_backpressure_wait();
 
-                    if backpressure_count == 1 || backpressure_count.is_multiple_of(100) {
+                    if backpressure_count == 1 || backpressure_count % 100 == 0 {
                         warn!(
                             "⚠️  [ZMQ-VIZ] Backpressure active - queue full (waits: {})",
                             backpressure_count
@@ -494,7 +494,7 @@ impl VisualizationStream {
                 Ok(()) => {
                     static SEND_COUNTER: AtomicU64 = AtomicU64::new(0);
                     let count = SEND_COUNTER.fetch_add(1, Ordering::Relaxed);
-                    if count.is_multiple_of(30) {
+                    if count % 30 == 0 {
                         debug!(
                             "[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)",
                             count,
@@ -505,7 +505,7 @@ impl VisualizationStream {
                 }
                 Err(ZmqError::BufferFull(_)) => {
                     let waits = stats.record_backpressure_wait();
-                    if waits == 1 || waits.is_multiple_of(100) {
+                    if waits == 1 || waits % 100 == 0 {
                         warn!(
                             "⚠️  [ZMQ-VIZ] Send backpressure from ZMQ socket (waits: {})",
                             waits
