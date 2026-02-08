@@ -1,0 +1,625 @@
+# Copyright 2025 Neuraville Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release to crates.io
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or ref to checkout and publish from'
+        required: false
+        default: 'staging'
+      reason:
+        description: 'Reason for manual publish (optional)'
+        required: false
+        default: ''
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prep:
+    name: validate & version bump
+    runs-on: ubuntu-latest
+    outputs:
+      changed_crates: ${{ steps.version.outputs.changed_crates }}
+    env:
+      PUBLISH_REF: ${{ github.event.inputs.ref || 'staging' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PUBLISH_REF }}
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Install Rust components
+        run: rustup component add rustfmt clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+          save-if: true
+
+      - name: Smart version detection and bumping
+        id: version
+        run: |
+          echo "Detecting changed crates and computing independent version bumps..."
+          chmod +x scripts/smart-version-bump.sh
+          chmod +x scripts/apply-version-bumps.sh
+          VERSION_OUTPUT=$(./scripts/smart-version-bump.sh)
+          echo "$VERSION_OUTPUT"
+          VERSIONS_FILE=$(echo "$VERSION_OUTPUT" | grep "VERSIONS_FILE=" | cut -d'=' -f2)
+          CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
+          echo "versions_file=$VERSIONS_FILE" >> $GITHUB_OUTPUT
+          echo "changed_crates=$CHANGED_CRATES" >> $GITHUB_OUTPUT
+          echo "Applying version updates to Cargo.toml files..."
+          export VERSIONS_FILE="$VERSIONS_FILE"
+          ./scripts/apply-version-bumps.sh
+          echo "Smart independent versioning complete"
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Guard - verify path dependency versions consistent
+        run: |
+          set -euo pipefail
+          echo "Verifying workspace path dependency version consistency..."
+          WORKSPACE_VERSION="$(
+            awk '
+              BEGIN { in_ws=0 }
+              /^\[workspace\.package\]/ { in_ws=1; next }
+              /^\[/ { if (in_ws==1) exit }
+              in_ws==1 && /^version = / {
+                gsub(/version = /, "", $0);
+                gsub(/"/, "", $0);
+                print $0;
+                exit
+              }
+            ' Cargo.toml
+          )"
+          if [ -z "${WORKSPACE_VERSION}" ]; then
+            echo "Failed to detect [workspace.package] version from Cargo.toml"
+            exit 1
+          fi
+          declare -A CRATE_VERSIONS
+          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+            [ -f "$manifest" ] || continue
+            name="$(grep -E '^name = ' "$manifest" | head -1 | sed 's/name = \"\\(.*\)\"/\\1/')"
+            [ -n "$name" ] || continue
+            if grep -qE '^version\\.workspace = true' "$manifest"; then
+              ver="$WORKSPACE_VERSION"
+            else
+              ver="$(grep -E '^version = ' "$manifest" | head -1 | sed 's/version = \"\\(.*\)\"/\\1/')"
+            fi
+            [ -n "$ver" ] && CRATE_VERSIONS["$name"]="$ver"
+          done
+          mismatches=0
+          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+            [ -f "$manifest" ] || continue
+            while IFS= read -r line; do
+              dep="$(echo "$line" | sed -n 's/^\\s*\\([A-Za-z0-9_-][A-Za-z0-9_-]*\\)\\s*=.*/\\1/p')"
+              req="$(echo "$line" | sed -n 's/.*version\\s*=\\s*\"\\([^\"]\\+\\)\".*/\\1/p')"
+              path="$(echo "$line" | sed -n 's/.*path\\s*=\\s*\"\\([^\"]\\+\\)\".*/\\1/p')"
+              [ -n "$dep" ] && [ -n "$req" ] && [ -n "$path" ] || continue
+              case "$path" in ../*) ;; *) continue ;; esac
+              req="${req#=}"; req="${req#^}"
+              actual="${CRATE_VERSIONS[$dep]:-}"
+              [ -z "$actual" ] && continue
+              if [ "$req" != "$actual" ]; then
+                echo "Version mismatch in $manifest: $dep required $req actual $actual"
+                mismatches=$((mismatches + 1))
+              fi
+            done < <(grep -E 'path\\s*=\\s*\"\\.\\./[^\\\"]+\"' "$manifest" || true)
+          done
+          [ "$mismatches" -eq 0 ] || exit 1
+          echo "Workspace path dependency versions are consistent."
+
+      - name: Run Clippy (lib and tests only)
+        run: cargo clippy --workspace --lib --tests -- -D warnings
+
+      - name: Run tests (lib only)
+        run: cargo test --workspace --lib --verbose
+
+      - name: Run tests in release mode (lib only)
+        run: cargo test --workspace --lib --release --verbose
+
+      - name: Build release
+        run: cargo build --release --lib --verbose
+
+      - name: Commit and push version updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
+          git add Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml
+          if [ -n "$CHANGED_CRATES" ]; then
+            echo "chore: bump versions for release (independent versioning)" > commit_msg.txt
+            echo "" >> commit_msg.txt
+            echo "Changed crates: $CHANGED_CRATES" >> commit_msg.txt
+            COMMIT_MSG=$(cat commit_msg.txt)
+          else
+            COMMIT_MSG="chore: release (no version changes)"
+          fi
+          git commit -m "$COMMIT_MSG" || echo "No changes to commit"
+          git push origin HEAD:${{ env.PUBLISH_REF }} || echo "Push failed (may already be up to date)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish_feagi_observability:
+    name: publish feagi-observability
+    needs: [prep]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-observability
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_structures:
+    name: publish feagi-structures
+    needs: [prep, publish_feagi_observability]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-structures
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_config:
+    name: publish feagi-config
+    needs: [prep, publish_feagi_structures]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-config
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_npu_neural:
+    name: publish feagi-npu-neural
+    needs: [prep, publish_feagi_config]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-npu-neural
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_npu_runtime:
+    name: publish feagi-npu-runtime
+    needs: [prep, publish_feagi_npu_neural]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-npu-runtime
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_serialization:
+    name: publish feagi-serialization
+    needs: [prep, publish_feagi_npu_runtime]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-serialization
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_state_manager:
+    name: publish feagi-state-manager
+    needs: [prep, publish_feagi_serialization]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-state-manager
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_npu_burst_engine:
+    name: publish feagi-npu-burst-engine
+    needs: [prep, publish_feagi_state_manager]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-npu-burst-engine
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_npu_plasticity:
+    name: publish feagi-npu-plasticity
+    needs: [prep, publish_feagi_npu_burst_engine]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-npu-plasticity
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_evolutionary:
+    name: publish feagi-evolutionary
+    needs: [prep, publish_feagi_npu_plasticity]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-evolutionary
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_brain_development:
+    name: publish feagi-brain-development
+    needs: [prep, publish_feagi_evolutionary]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-brain-development
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_sensorimotor:
+    name: publish feagi-sensorimotor
+    needs: [prep, publish_feagi_brain_development]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-sensorimotor
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_services:
+    name: publish feagi-services
+    needs: [prep, publish_feagi_sensorimotor]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-services
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_io:
+    name: publish feagi-io
+    needs: [prep, publish_feagi_services]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-io
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_agent:
+    name: publish feagi-agent
+    needs: [prep, publish_feagi_io]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-agent
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_api:
+    name: publish feagi-api
+    needs: [prep, publish_feagi_agent]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-api
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi_hal:
+    name: publish feagi-hal
+    needs: [prep, publish_feagi_api]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi-hal
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  publish_feagi:
+    name: publish feagi
+    needs: [prep, publish_feagi_hal]
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      PUBLISH_SINGLE_CRATE: feagi
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Publish crate
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+
+  release:
+    name: tag & GitHub release
+    needs: [prep, publish_feagi]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+          fetch-depth: 0
+
+      - name: Create release tag
+        id: tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          TAG_NAME="staging-${TIMESTAMP}"
+          echo "Creating prerelease tag: $TAG_NAME"
+          git tag "$TAG_NAME"
+          git push origin "$TAG_NAME"
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Prerelease
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          release_name: Staging Release ${{ steps.tag.outputs.tag_name }}
+          body: |
+            **FEAGI Core release (independent versioning)**
+
+            Only changed crates have been published to crates.io.
+
+            ## Changed crates
+
+            ${{ needs.prep.outputs.changed_crates }}
+
+            ## Installation
+
+            Check [crates.io](https://crates.io/search?q=feagi) for latest versions.
+
+            ## Release info
+
+            - **Tag:** ${{ steps.tag.outputs.tag_name }}
+            - **Ref:** ${{ github.event.inputs.ref || 'staging' }}
+            - **Commit:** ${{ github.sha }}
+          draft: false
+          prerelease: true
+
+      - name: Notify success
+        run: |
+          echo "Release ${{ steps.tag.outputs.tag_name }} completed."
+          echo "Changed crates: ${{ needs.prep.outputs.changed_crates }}"
