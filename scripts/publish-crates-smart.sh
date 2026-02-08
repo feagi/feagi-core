@@ -103,7 +103,7 @@ CRATE_ORDER=(
 
 # ============================================================================
 # Check if crate is already published on crates.io
-# Uses crates.io API for exact version check (cargo search returns latest only).
+# Uses crates.io API first; falls back to cargo search if API fails (e.g. in CI).
 # ============================================================================
 
 is_already_published() {
@@ -118,13 +118,19 @@ is_already_published() {
 
     [ -n "$version" ] || { echo "false"; return; }
 
-    # crates.io API: GET /crates/:name/:version returns 200 if version exists
+    # 1) crates.io API: GET /crates/:name/:version returns 200 if version exists
     local url="https://crates.io/api/v1/crates/${crate_name}/${version}"
     local code
-    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+    code=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 15 \
         -H "User-Agent: feagi-release/1.0 (release script)" "$url" 2>/dev/null || echo "000")
 
     if [ "$code" = "200" ]; then
+        echo "true"
+        return
+    fi
+
+    # 2) Fallback: cargo search can list versions (--limit 100), grep for exact version
+    if cargo search "$crate_name" --limit 100 2>/dev/null | grep -q "^${crate_name} = \"${version}\""; then
         echo "true"
     else
         echo "false"

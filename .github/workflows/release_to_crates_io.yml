@@ -14,6 +14,10 @@ on:
         description: 'Reason for manual publish (optional)'
         required: false
         default: ''
+      indexing_delay_seconds:
+        description: 'Seconds to wait after each publish for crates.io indexing'
+        required: false
+        default: '90'
 
 env:
   CARGO_TERM_COLOR: always
@@ -159,6 +163,7 @@ jobs:
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
       CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+      DELAY_SECONDS: ${{ github.event.inputs.indexing_delay_seconds }}
     steps:
       - uses: actions/checkout@v4
         with:
