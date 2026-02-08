@@ -91,12 +91,12 @@ jobs:
           declare -A CRATE_VERSIONS
           for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
             [ -f "$manifest" ] || continue
-            name="$(grep -E '^name = ' "$manifest" | head -1 | sed 's/name = \"\\(.*\)\"/\\1/')"
+            name="$(grep -E '^name = ' "$manifest" | head -1 | sed 's/name = \"\\(.*\\)\"/\\1/')"
             [ -n "$name" ] || continue
             if grep -qE '^version\\.workspace = true' "$manifest"; then
               ver="$WORKSPACE_VERSION"
             else
-              ver="$(grep -E '^version = ' "$manifest" | head -1 | sed 's/version = \"\\(.*\)\"/\\1/')"
+              ver="$(grep -E '^version = ' "$manifest" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
             fi
             [ -n "$ver" ] && CRATE_VERSIONS["$name"]="$ver"
           done

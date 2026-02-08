@@ -15,6 +15,10 @@ DRY_RUN="${DRY_RUN:-false}"
 # You can override per-run with: DELAY_SECONDS=60 ./scripts/publish-crates-smart.sh
 DELAY_SECONDS="${DELAY_SECONDS:-90}"
 
+# When set, only publish this single crate (used by CI one-job-per-crate workflow).
+# Example: PUBLISH_SINGLE_CRATE=feagi-io ./scripts/publish-crates-smart.sh
+PUBLISH_SINGLE_CRATE="${PUBLISH_SINGLE_CRATE:-}"
+
 # ----------------------------------------------------------------------------
 # Normalize CHANGED_CRATES input (supports both array and string formats)
 #
@@ -253,13 +257,18 @@ PUBLISHED_COUNT=0
 SKIPPED_COUNT=0
 
 for crate_name in "${CRATE_ORDER[@]}"; do
+    # When PUBLISH_SINGLE_CRATE is set, only process that crate (for CI one-job-per-crate)
+    if [ -n "$PUBLISH_SINGLE_CRATE" ] && [ "$crate_name" != "$PUBLISH_SINGLE_CRATE" ]; then
+        continue
+    fi
+
     crate_path="$(crate_path_for "$crate_name")" || continue
-    
+
     if [ ! -f "$crate_path/Cargo.toml" ] && [ "$crate_path" != "." ]; then
         echo -e "${YELLOW}⚠️  Warning: $crate_path not found, skipping...${NC}"
         continue
     fi
-    
+
     # Check if crate should be published
     publish_decision=$(should_publish_crate "$crate_name" "$crate_path")
     
