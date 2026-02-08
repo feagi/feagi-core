@@ -1,6 +1,10 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Manual `n % divisor == 0` used instead of `n.is_multiple_of(divisor)` for stable Rust
+// compatibility (is_multiple_of is unstable on older stable toolchains).
+#![allow(clippy::manual_is_multiple_of)]
+
 /*
  * Copyright 2025 Neuraville Inc.
  *
