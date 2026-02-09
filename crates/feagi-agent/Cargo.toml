@@ -26,7 +26,7 @@ tokio = { version = "1.0", features = ["full"] }
 async-trait = { version = "0.1", optional = true }
 
 # FEAGI internal crates (core)
-feagi-io = { version = "0.0.1-beta.10", path = "../feagi-io" }
+feagi-io = { version = "0.0.1-beta.11", path = "../feagi-io" }
 feagi-structures = { version = "0.0.1-beta.8", path = "../feagi-structures" }
 feagi-serialization = { version = "0.0.1-beta.8", path = "../feagi-serialization" }
 
