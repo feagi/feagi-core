@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# Copyright 2025 Neuraville Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Sync workspace root and workspace.dependencies to match latest versions
+# published on crates.io. Prevents packaging failures when the root points
+# at older versions than dependents already published on crates.io.
+#
+# Run this at the start of a release (before smart-version-bump) so the
+# baseline matches crates.io; then only changed crates get bumped.
+
+set -e
+
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(pwd)}"
+DRY_RUN="${DRY_RUN:-false}"
+
+crate_path_for() {
+    case "$1" in
+        feagi-observability) echo "crates/feagi-observability" ;;
+        feagi-structures) echo "crates/feagi-structures" ;;
+        feagi-config) echo "crates/feagi-config" ;;
+        feagi-npu-neural) echo "crates/feagi-npu/neural" ;;
+        feagi-npu-runtime) echo "crates/feagi-npu/runtime" ;;
+        feagi-serialization) echo "crates/feagi-serialization" ;;
+        feagi-state-manager) echo "crates/feagi-state-manager" ;;
+        feagi-npu-burst-engine) echo "crates/feagi-npu/burst-engine" ;;
+        feagi-npu-plasticity) echo "crates/feagi-npu/plasticity" ;;
+        feagi-evolutionary) echo "crates/feagi-evolutionary" ;;
+        feagi-brain-development) echo "crates/feagi-brain-development" ;;
+        feagi-io) echo "crates/feagi-io" ;;
+        feagi-sensorimotor) echo "crates/feagi-sensorimotor" ;;
+        feagi-services) echo "crates/feagi-services" ;;
+        feagi-api) echo "crates/feagi-api" ;;
+        feagi-agent) echo "crates/feagi-agent" ;;
+        feagi-hal) echo "crates/feagi-hal" ;;
+        *) return 1 ;;
+    esac
+}
+
+# Same order as publish-crates-smart.sh (exclude feagi umbrella)
+CRATE_ORDER=(
+    "feagi-observability"
+    "feagi-structures"
+    "feagi-config"
+    "feagi-npu-neural"
+    "feagi-npu-runtime"
+    "feagi-serialization"
+    "feagi-state-manager"
+    "feagi-npu-burst-engine"
+    "feagi-npu-plasticity"
+    "feagi-evolutionary"
+    "feagi-brain-development"
+    "feagi-sensorimotor"
+    "feagi-services"
+    "feagi-io"
+    "feagi-agent"
+    "feagi-api"
+    "feagi-hal"
+)
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+echo -e "${CYAN}Syncing root and workspace.dependencies from crates.io...${NC}"
+echo ""
+
+ROOT_CARGO="$WORKSPACE_ROOT/Cargo.toml"
+if [ ! -f "$ROOT_CARGO" ]; then
+    echo -e "${RED}ERROR: $ROOT_CARGO not found${NC}"
+    exit 1
+fi
+
+# Fetch latest version from crates.io API (versions are newest first)
+get_latest_on_crates_io() {
+    local name="$1"
+    local url="https://crates.io/api/v1/crates/${name}"
+    local json
+    json=$(curl -sL --max-time 15 -H "User-Agent: feagi-release/1.0" "$url" 2>/dev/null || echo "{}")
+    if [ -z "$json" ] || [ "$json" = "{}" ]; then
+        echo ""
+        return
+    fi
+    echo "$json" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    vers = d.get('versions') or []
+    if not vers:
+        sys.exit(0)
+    # API returns newest first; take first non-yanked
+    for v in vers:
+        if not v.get('yanked', False):
+            print(v.get('num', ''))
+            break
+except Exception:
+    pass
+" 2>/dev/null || echo ""
+}
+
+updated=0
+for crate in "${CRATE_ORDER[@]}"; do
+    latest=$(get_latest_on_crates_io "$crate")
+    if [ -z "$latest" ]; then
+        echo -e "  ${crate}: ${YELLOW}(not on crates.io, skipping)${NC}"
+        continue
+    fi
+    echo -e "  ${crate}: ${GREEN}${latest}${NC}"
+
+    if [ "$DRY_RUN" = "true" ]; then
+        continue
+    fi
+
+    # Update root Cargo.toml: [dependencies] and [workspace.dependencies]
+    if grep -q "^${crate} = " "$ROOT_CARGO" 2>/dev/null; then
+        sed "s/^${crate} = { version = \"=[^\"]*\"/${crate} = { version = \"=${latest}\"/" "$ROOT_CARGO" > "${ROOT_CARGO}.tmp"
+        mv "${ROOT_CARGO}.tmp" "$ROOT_CARGO"
+        updated=$((updated + 1))
+    fi
+
+    # Update crate's own version so workspace is aligned with crates.io
+    # Only when crate has explicit version = "..." (not version.workspace = true)
+    path=$(crate_path_for "$crate" 2>/dev/null) || path=""
+    if [ -n "$path" ] && [ "$DRY_RUN" != "true" ]; then
+        crate_toml="$WORKSPACE_ROOT/$path/Cargo.toml"
+        if [ -f "$crate_toml" ] && grep -q '^version = "' "$crate_toml" 2>/dev/null; then
+            sed 's/^version = ".*"/version = "'"$latest"'"/' "$crate_toml" > "${crate_toml}.tmp"
+            mv "${crate_toml}.tmp" "$crate_toml"
+        fi
+    fi
+done
+
+echo ""
+if [ "$updated" -gt 0 ]; then
+    echo -e "${GREEN}Updated $updated dependency version(s) in $ROOT_CARGO to match crates.io${NC}"
+else
+    echo -e "${CYAN}No updates needed (or dry run)${NC}"
+fi
+echo ""
