@@ -154,7 +154,7 @@ feagi-structures = { version = "=0.0.1-beta.8", path = "crates/feagi-structures"
 feagi-serialization = { version = "=0.0.1-beta.8", path = "crates/feagi-serialization" }
 
 # Workspace-internal crates
-feagi-observability = { version = "=0.0.1-beta.8", path = "crates/feagi-observability" }
+feagi-observability = { version = "=0.0.1-beta.9", path = "crates/feagi-observability" }
 
 # PyO3 for Python bindings
 pyo3 = { version = "0.22", features = ["extension-module"] }
