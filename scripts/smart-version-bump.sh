@@ -16,6 +16,9 @@ set -e  # Exit on error
 WORKSPACE_ROOT=$(pwd)
 LAST_TAG="${LAST_TAG:-}"
 DRY_RUN="${DRY_RUN:-false}"
+ALLOW_DIRTY="${ALLOW_DIRTY:-false}"
+ALLOW_NO_TAG="${ALLOW_NO_TAG:-false}"
+ALLOW_NO_REGISTRY="${ALLOW_NO_REGISTRY:-false}"
 
 # ANSI color codes
 RED='\033[0;31m'
@@ -27,6 +30,38 @@ NC='\033[0m' # No Color
 
 echo -e "${CYAN}🔍 FEAGI Smart Independent Versioning System${NC}"
 echo ""
+
+# ============================================================================
+# Preflight guardrails
+# ============================================================================
+
+# Require clean working tree unless explicitly allowed
+if [ "$ALLOW_DIRTY" != "true" ]; then
+    if [ -n "$(git status --porcelain 2>/dev/null || echo "")" ]; then
+        echo -e "${RED}ERROR: Working tree is dirty.${NC}" >&2
+        echo -e "       Commit or stash changes, or set ALLOW_DIRTY=true to override." >&2
+        exit 1
+    fi
+fi
+
+# Require tag baseline unless explicitly allowed
+if [ -z "$LAST_TAG" ]; then
+    LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+fi
+if [ -z "$LAST_TAG" ] && [ "$ALLOW_NO_TAG" != "true" ]; then
+    echo -e "${RED}ERROR: No git tags found for baseline comparison.${NC}" >&2
+    echo -e "       Create a tag, set LAST_TAG, or set ALLOW_NO_TAG=true to override." >&2
+    exit 1
+fi
+
+# Require crates.io reachability unless explicitly allowed
+if [ "$ALLOW_NO_REGISTRY" != "true" ]; then
+    if ! curl -sL --max-time 10 "https://crates.io/api/v1/crates/serde" >/dev/null 2>&1; then
+        echo -e "${RED}ERROR: crates.io is unreachable.${NC}" >&2
+        echo -e "       Check network or set ALLOW_NO_REGISTRY=true to override." >&2
+        exit 1
+    fi
+fi
 
 # ============================================================================
 # Define all crates in dependency order (same as publish-crates.sh)
@@ -285,7 +320,7 @@ while [ $changed_count -gt 0 ]; do
         fi
         
         # Check if any dependencies changed
-        local deps="${DEPENDENCIES[$crate_name]}"
+        deps="${DEPENDENCIES[$crate_name]}"
         for dep in $deps; do
             if [ -n "${CHANGED_CRATES[$dep]}" ]; then
                 CHANGED_CRATES["$crate_name"]="propagated"
@@ -321,6 +356,22 @@ for crate_name in "${CRATE_ORDER[@]}"; do
         NEW_VERSIONS["$crate_name"]="$new_version"
         
         echo -e "  ${GREEN}📦${NC} $crate_name: $current_version → $new_version"
+    fi
+done
+
+# Validate computed versions are greater than published versions
+for crate_name in "${CRATE_ORDER[@]}"; do
+    if [ -n "${CHANGED_CRATES[$crate_name]}" ]; then
+        published_version=$(get_highest_published_version "$crate_name")
+        new_version="${NEW_VERSIONS[$crate_name]}"
+        if [ "$published_version" != "none" ]; then
+            if ! version_gt "$new_version" "$published_version"; then
+                echo -e "${RED}ERROR: Computed version not greater than published for $crate_name${NC}" >&2
+                echo -e "       Published: $published_version" >&2
+                echo -e "       Computed:  $new_version" >&2
+                exit 1
+            fi
+        fi
     fi
 done
 
