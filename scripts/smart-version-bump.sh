@@ -17,7 +17,6 @@ WORKSPACE_ROOT=$(pwd)
 LAST_TAG="${LAST_TAG:-}"
 DRY_RUN="${DRY_RUN:-false}"
 ALLOW_DIRTY="${ALLOW_DIRTY:-false}"
-ALLOW_NO_TAG="${ALLOW_NO_TAG:-false}"
 ALLOW_NO_REGISTRY="${ALLOW_NO_REGISTRY:-false}"
 
 # ANSI color codes
@@ -48,9 +47,9 @@ fi
 if [ -z "$LAST_TAG" ]; then
     LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 fi
-if [ -z "$LAST_TAG" ] && [ "$ALLOW_NO_TAG" != "true" ]; then
+if [ -z "$LAST_TAG" ]; then
     echo -e "${RED}ERROR: No git tags found for baseline comparison.${NC}" >&2
-    echo -e "       Create a tag, set LAST_TAG, or set ALLOW_NO_TAG=true to override." >&2
+    echo -e "       Create a tag or set LAST_TAG to a baseline tag/commit." >&2
     exit 1
 fi
 

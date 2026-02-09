@@ -1,7 +1,7 @@
 # FEAGI-Core Independent Versioning System
 
 **Last Updated:** December 2025  
-**Status:** ✅ Implemented and Active
+**Status:** Implemented and Active
 
 ---
 
@@ -10,11 +10,11 @@
 FEAGI-Core uses **smart independent versioning** for its 18 workspace crates. Each crate maintains its own version number, and only crates with actual changes (or dependency updates) receive version bumps.
 
 This approach provides:
-- ✅ **Semantic clarity**: Version numbers reflect actual changes
-- ✅ **Reduced noise**: No version pollution from unchanged crates
-- ✅ **Better dependency management**: Users can selectively update
-- ✅ **Clear audit trail**: Easy to see what changed between versions
-- ✅ **Faster releases**: Only publish what changed
+- **Semantic clarity**: Version numbers reflect actual changes
+- **Reduced noise**: No version pollution from unchanged crates
+- **Better dependency management**: Users can selectively update
+- **Clear audit trail**: Easy to see what changed between versions
+- **Faster releases**: Only publish what changed
 
 ---
 
@@ -24,7 +24,7 @@ This approach provides:
 
 When a PR is merged to `staging`, the CI system:
 
-1. **Detects changed files** since the last release tag
+1. **Detects changed files** since the last `feagi-v*` release tag
 2. **Identifies affected crates** by analyzing which crate directories have changes
 3. **Propagates changes** to dependent crates (if `feagi-npu-neural` changes, `feagi-npu-burst-engine` must also bump)
 4. **Computes new version numbers** for each changed crate independently
@@ -87,12 +87,15 @@ After reaching stable 1.0, we'll switch to semver ranges (`^1.0.0`) for patch/mi
 # Detect changes and compute versions
 ./scripts/smart-version-bump.sh
 
-# Use custom tag as baseline
-LAST_TAG=v0.0.1-beta.4 ./scripts/smart-version-bump.sh
+# Use a specific baseline tag or commit
+LAST_TAG=feagi-v0.0.1-beta.8 ./scripts/smart-version-bump.sh
 
 # Dry run
 DRY_RUN=true ./scripts/smart-version-bump.sh
 ```
+
+**Baseline requirement:**
+The script requires a `feagi-v<version>` tag (or an explicit `LAST_TAG`) to compute diffs.
 
 **Output:**
 - Human-readable summary of changes
@@ -148,23 +151,23 @@ File: `.github/workflows/staging-merge.yml`
 **Trigger:** PR merged to `staging`
 
 **Steps:**
-1. ✅ **Checkout code** (staging branch)
-2. ✅ **Run tests** (all workspace tests)
-3. ✅ **Build release** (verify compilation)
-4. 🆕 **Smart version detection** (`smart-version-bump.sh`)
-5. 🆕 **Apply version bumps** (`apply-version-bumps.sh`)
-6. 🆕 **Publish changed crates** (`publish-crates-smart.sh`)
-7. ✅ **Commit version updates** (back to staging)
-8. ✅ **Create release tag** (timestamp-based)
-9. ✅ **Create GitHub prerelease** (with changelog)
+1. **Checkout code** (staging branch)
+2. **Run tests** (all workspace tests)
+3. **Build release** (verify compilation)
+4. **Smart version detection** (`smart-version-bump.sh`)
+5. **Apply version bumps** (`apply-version-bumps.sh`)
+6. **Publish changed crates** (`publish-crates-smart.sh`)
+7. **Commit version updates** (back to staging)
+8. **Create release tag** (`feagi-v<feagi_version>`)
+9. **Create GitHub prerelease** (with changelog)
 
 **Key Changes from Old System:**
-- ❌ **Old:** Bump ALL crates to same version
-- ✅ **New:** Bump ONLY changed crates independently
-- ❌ **Old:** Publish all 19 crates every time (~15 minutes)
-- ✅ **New:** Publish only changed crates (~2-5 minutes)
-- ❌ **Old:** Version-based tags (`v0.0.1-beta.4`)
-- ✅ **New:** Timestamp-based tags (`staging-20251221-143045`)
+- **Old:** Bump ALL crates to same version
+- **New:** Bump ONLY changed crates independently
+- **Old:** Publish all 19 crates every time (~15 minutes)
+- **New:** Publish only changed crates (~2-5 minutes)
+- **Old:** Version-based tags (`v0.0.1-beta.4`)
+- **New:** Umbrella tags (`feagi-v0.0.1-beta.8`)
 
 ---
 
@@ -316,7 +319,7 @@ export CARGO_REGISTRY_TOKEN="your-token"
 
 ### Issue: Script says no crates changed, but I know X changed
 
-**Cause:** No git tag baseline, or changes not committed
+**Cause:** No `feagi-v*` tag baseline, or changes not committed
 
 **Solution:**
 ```bash
@@ -324,7 +327,7 @@ export CARGO_REGISTRY_TOKEN="your-token"
 git tag
 
 # Set explicit baseline tag
-export LAST_TAG=staging-20251215-120000
+export LAST_TAG=feagi-v0.0.1-beta.8
 ./scripts/smart-version-bump.sh
 
 # Ensure changes are committed
