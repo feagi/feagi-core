@@ -22,6 +22,8 @@ jobs:
     steps:
     - name: Checkout PR code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Main branch checks (PR to main only)
       if: github.base_ref == 'main'
@@ -78,6 +80,18 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-
+
+    - name: Dry run version bump preview
+      run: |
+        set -euo pipefail
+        chmod +x scripts/smart-version-bump.sh
+        LAST_TAG="$(git tag --list "feagi-v*" --sort=-v:refname | head -1)"
+        if [ -z "$LAST_TAG" ]; then
+          echo "Missing baseline tag. Create feagi-v<version> before merging."
+          exit 1
+        fi
+        echo "Using baseline tag: $LAST_TAG"
+        DRY_RUN=true LAST_TAG="$LAST_TAG" ./scripts/smart-version-bump.sh
 
     - name: Check formatting
       run: cargo fmt --all -- --check
