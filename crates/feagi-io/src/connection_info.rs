@@ -12,7 +12,10 @@ pub(crate) fn parse_address(addr: &str) -> (String, u16) {
         .or_else(|| addr.strip_prefix("ws://"))
         .unwrap_or(addr);
     let parts: Vec<&str> = s.split(':').collect();
-    let host = parts.first().map(|h| (*h).to_string()).unwrap_or_else(|| "127.0.0.1".to_string());
+    let host = parts
+        .first()
+        .map(|h| (*h).to_string())
+        .unwrap_or_else(|| "127.0.0.1".to_string());
     let port = parts
         .get(1)
         .and_then(|p| p.parse::<u16>().ok())

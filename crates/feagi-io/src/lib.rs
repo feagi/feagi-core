@@ -1464,8 +1464,7 @@ impl IOSystem {
     pub fn get_connection_config_snapshot(&self) -> PnsConnectionConfigSnapshot {
         use crate::connection_info::parse_address;
 
-        let (zmq_host, zmq_registration_port) =
-            parse_address(&self.config.zmq_rest_address);
+        let (zmq_host, zmq_registration_port) = parse_address(&self.config.zmq_rest_address);
         let (_, zmq_sensory_port) = parse_address(&self.config.zmq_sensory_address);
         let (_, zmq_motor_port) = parse_address(&self.config.zmq_motor_address);
         let (_, zmq_viz_port) = parse_address(&self.config.zmq_viz_address);

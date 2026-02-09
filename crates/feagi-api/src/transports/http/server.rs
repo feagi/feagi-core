@@ -37,9 +37,8 @@ use feagi_services::{
 #[derive(Clone)]
 pub struct ApiState {
     /// Optional provider for GET /v1/network/connection_info (None in tests/WASM)
-    pub network_connection_info_provider: Option<
-        Arc<dyn crate::endpoints::network::NetworkConnectionInfoProvider>,
-    >,
+    pub network_connection_info_provider:
+        Option<Arc<dyn crate::endpoints::network::NetworkConnectionInfoProvider>>,
     pub agent_service: Option<Arc<dyn AgentService + Send + Sync>>,
     pub analytics_service: Arc<dyn AnalyticsService + Send + Sync>,
     pub connectome_service: Arc<dyn ConnectomeService + Send + Sync>,

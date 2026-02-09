@@ -9,11 +9,13 @@ use feagi_structures::FeagiDataError;
 
 /// Map socket bind errors to user-actionable messages. Port conflicts are common
 /// and should not suggest raising a GitHub issue.
-pub(crate) fn bind_error_to_feagi_error(address: &str, e: impl std::fmt::Display) -> FeagiDataError {
+pub(crate) fn bind_error_to_feagi_error(
+    address: &str,
+    e: impl std::fmt::Display,
+) -> FeagiDataError {
     let msg = e.to_string();
     let lower = msg.to_lowercase();
-    if lower.contains("already in use") || lower.contains("eaddrinuse")
-    {
+    if lower.contains("already in use") || lower.contains("eaddrinuse") {
         FeagiDataError::BadParameters(format!(
             "Port already in use - cannot bind to {}. \
             Try: (1) Stop any other FEAGI or agent using this port (e.g. lsof -i :PORT), \

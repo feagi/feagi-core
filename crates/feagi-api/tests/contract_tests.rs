@@ -12,8 +12,6 @@
 //! instead of tower::util::ServiceExt (which requires the "util" feature).
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use http_body_util::BodyExt;
-use tower::ServiceExt;
 use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::backend::CPUBackend;
@@ -24,9 +22,11 @@ use feagi_services::impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     SystemServiceImpl,
 };
+use http_body_util::BodyExt;
 use parking_lot::RwLock;
 use serde_json::{json, Value};
 use std::sync::Arc;
+use tower::ServiceExt;
 // tower::util::ServiceExt requires the "util" feature which may not be enabled
 // Using axum's test utilities instead
 
@@ -243,12 +243,7 @@ async fn request_json(
     let response = app.oneshot(request).await.unwrap();
     let status = response.status();
 
-    let body_bytes = response
-        .into_body()
-        .collect()
-        .await
-        .unwrap()
-        .to_bytes();
+    let body_bytes = response.into_body().collect().await.unwrap().to_bytes();
 
     let json: Value = if body_bytes.is_empty() {
         json!(null)
