@@ -80,7 +80,7 @@ impl RestStream {
         // Create ROUTER socket
         let mut socket = RouterSocket::new();
         block_on_runtime(self.runtime.as_ref(), socket.bind(&self.bind_address))
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
+            .map_err(|e| super::bind_error_to_feagi_error(&self.bind_address, e))?;
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
@@ -91,6 +91,11 @@ impl RestStream {
         self.start_processing_loop();
 
         Ok(())
+    }
+
+    /// Check if the REST stream is running
+    pub fn is_running(&self) -> bool {
+        *self.running.lock()
     }
 
     /// Stop the REST stream

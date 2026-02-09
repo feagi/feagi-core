@@ -36,6 +36,10 @@ use feagi_services::{
 /// Application state shared across all HTTP handlers
 #[derive(Clone)]
 pub struct ApiState {
+    /// Optional provider for GET /v1/network/connection_info (None in tests/WASM)
+    pub network_connection_info_provider: Option<
+        Arc<dyn crate::endpoints::network::NetworkConnectionInfoProvider>,
+    >,
     pub agent_service: Option<Arc<dyn AgentService + Send + Sync>>,
     pub analytics_service: Arc<dyn AnalyticsService + Send + Sync>,
     pub connectome_service: Arc<dyn ConnectomeService + Send + Sync>,
@@ -1018,6 +1022,10 @@ fn create_v1_router() -> Router<ApiState> {
         // ===== NETWORK MODULE (3 endpoints) =====
         .route("/network/status", get(network::get_status))
         .route("/network/config", axum::routing::post(network::post_config))
+        .route(
+            "/network/connection_info",
+            get(network::get_connection_info),
+        )
 }
 
 /// OpenAPI spec handler

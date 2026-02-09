@@ -531,6 +531,9 @@ pub use transports::websocket::WebSocketStreams;
 // Keep shm module at root for now (will be moved to transports/ in future)
 pub mod shm;
 
+mod connection_info;
+pub use connection_info::{PnsConnectionConfigSnapshot, StreamStatus};
+
 /// Main PNS - manages all agent I/O
 ///
 /// # Event-Driven Architecture
@@ -1454,6 +1457,87 @@ impl IOSystem {
     /// Check if PNS is running
     pub fn is_running(&self) -> bool {
         *self.running.read()
+    }
+
+    /// Get connection config snapshot for API discovery (GET /v1/network/connection_info)
+    #[cfg(feature = "zmq-transport")]
+    pub fn get_connection_config_snapshot(&self) -> PnsConnectionConfigSnapshot {
+        use crate::connection_info::parse_address;
+
+        let (zmq_host, zmq_registration_port) =
+            parse_address(&self.config.zmq_rest_address);
+        let (_, zmq_sensory_port) = parse_address(&self.config.zmq_sensory_address);
+        let (_, zmq_motor_port) = parse_address(&self.config.zmq_motor_address);
+        let (_, zmq_viz_port) = parse_address(&self.config.zmq_viz_address);
+        let (_, zmq_api_control_port) = parse_address(&self.config.zmq_api_control_address);
+
+        PnsConnectionConfigSnapshot {
+            zmq_host,
+            zmq_registration_port,
+            zmq_sensory_port,
+            zmq_motor_port,
+            zmq_viz_port,
+            zmq_api_control_port,
+            ws_enabled: self.config.websocket.enabled,
+            ws_host: self.config.websocket.host.clone(),
+            ws_registration_port: self.config.websocket.registration_port,
+            ws_sensory_port: self.config.websocket.sensory_port,
+            ws_motor_port: self.config.websocket.motor_port,
+            ws_viz_port: self.config.websocket.visualization_port,
+            ws_rest_api_port: self.config.websocket.rest_api_port,
+            shm_base_path: self.config.shm_base_path.clone(),
+        }
+    }
+
+    #[cfg(not(feature = "zmq-transport"))]
+    #[allow(dead_code)]
+    pub fn get_connection_config_snapshot(&self) -> PnsConnectionConfigSnapshot {
+        PnsConnectionConfigSnapshot {
+            zmq_host: "127.0.0.1".to_string(),
+            zmq_registration_port: 30001,
+            zmq_sensory_port: 5558,
+            zmq_motor_port: 5564,
+            zmq_viz_port: 5562,
+            zmq_api_control_port: 5565,
+            ws_enabled: self.config.websocket.enabled,
+            ws_host: self.config.websocket.host.clone(),
+            ws_registration_port: self.config.websocket.registration_port,
+            ws_sensory_port: self.config.websocket.sensory_port,
+            ws_motor_port: self.config.websocket.motor_port,
+            ws_viz_port: self.config.websocket.visualization_port,
+            ws_rest_api_port: self.config.websocket.rest_api_port,
+            shm_base_path: self.config.shm_base_path.clone(),
+        }
+    }
+
+    /// Get stream runtime status
+    pub fn get_stream_status(&self) -> StreamStatus {
+        #[cfg(feature = "zmq-transport")]
+        let (zmq_control_started, zmq_data_streams_started) = {
+            let guard = self.zmq_streams.lock();
+            guard
+                .as_ref()
+                .map(|z| z.get_stream_status())
+                .unwrap_or((false, false))
+        };
+
+        #[cfg(not(feature = "zmq-transport"))]
+        let (zmq_control_started, zmq_data_streams_started) = (false, false);
+
+        #[cfg(feature = "websocket-transport")]
+        let websocket_started = {
+            let guard = self.websocket_streams.lock();
+            guard.as_ref().map(|ws| ws.is_running()).unwrap_or(false)
+        };
+
+        #[cfg(not(feature = "websocket-transport"))]
+        let websocket_started = false;
+
+        StreamStatus {
+            zmq_control_started,
+            zmq_data_streams_started,
+            websocket_started,
+        }
     }
 
     /// Get agent registry (for external access)

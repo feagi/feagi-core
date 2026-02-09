@@ -12,6 +12,8 @@
 //! instead of tower::util::ServiceExt (which requires the "util" feature).
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use http_body_util::BodyExt;
+use tower::ServiceExt;
 use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::backend::CPUBackend;
@@ -198,6 +200,7 @@ async fn create_test_server() -> axum::Router {
         .unwrap_or(0);
 
     let state = ApiState {
+        network_connection_info_provider: None,
         agent_service: None,
         analytics_service,
         connectome_service,
@@ -237,15 +240,15 @@ async fn request_json(
         request_builder.body(Body::empty()).unwrap()
     };
 
-    // TODO: Update to use axum test utilities or enable tower util feature
-    // For now, comment out the actual test logic until proper test utilities are set up
-    /*
     let response = app.oneshot(request).await.unwrap();
     let status = response.status();
 
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+    let body_bytes = response
+        .into_body()
+        .collect()
         .await
-        .unwrap();
+        .unwrap()
+        .to_bytes();
 
     let json: Value = if body_bytes.is_empty() {
         json!(null)
@@ -254,10 +257,26 @@ async fn request_json(
     };
 
     (status, json)
-    */
-    // Temporarily return default values until test is fully updated
-    let _ = (app, request); // Suppress unused variable warnings
-    (StatusCode::OK, json!(null))
+}
+
+// ============================================================================
+// NETWORK CONNECTION INFO
+// ============================================================================
+
+#[tokio::test]
+async fn test_network_connection_info_placeholder() {
+    let app = create_test_server().await;
+
+    let (status, response) = request_json(app, "GET", "/v1/network/connection_info", None).await;
+
+    assert_eq!(status, StatusCode::OK);
+    // When provider is None, placeholder is returned with expected structure
+    assert!(response.is_object());
+    assert!(response.get("api").is_some());
+    assert!(response.get("zmq").is_some());
+    assert!(response.get("websocket").is_some());
+    assert!(response.get("shm").is_some());
+    assert!(response.get("stream_status").is_some());
 }
 
 // ============================================================================

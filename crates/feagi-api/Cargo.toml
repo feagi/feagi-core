@@ -24,7 +24,7 @@ feagi-agent = { version = "0.0.1-beta.8", path = "../feagi-agent", optional = tr
 
 # HTTP/REST (optional - not needed for WASM)
 axum = { version = "0.7", optional = true, features = ["multipart"] }
-tower = { version = "0.4", optional = true }
+tower = { version = "0.4", optional = true, features = ["util"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "fs"], optional = true }
 hyper = { version = "1.0", optional = true }
 http-body-util = { version = "0.1", optional = true }

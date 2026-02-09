@@ -4,6 +4,26 @@
 // ZMQ Streams - manages all ZMQ communication
 
 mod api_control;
+
+use feagi_structures::FeagiDataError;
+
+/// Map socket bind errors to user-actionable messages. Port conflicts are common
+/// and should not suggest raising a GitHub issue.
+pub(crate) fn bind_error_to_feagi_error(address: &str, e: impl std::fmt::Display) -> FeagiDataError {
+    let msg = e.to_string();
+    let lower = msg.to_lowercase();
+    if lower.contains("already in use") || lower.contains("eaddrinuse")
+    {
+        FeagiDataError::BadParameters(format!(
+            "Port already in use - cannot bind to {}. \
+            Try: (1) Stop any other FEAGI or agent using this port (e.g. lsof -i :PORT), \
+            (2) Use a different port in feagi_configuration.toml (agent.registration_port, ports.zmq_*)",
+            address
+        ))
+    } else {
+        FeagiDataError::InternalError(format!("Failed to bind socket: {}", e))
+    }
+}
 mod motor;
 pub mod rest;
 mod sensory;
@@ -76,6 +96,15 @@ impl ZmqStreams {
             viz_stream,
             sensory_stream,
         })
+    }
+
+    /// Get stream status for API discovery (control = REST+API, data = sensory+motor+viz)
+    pub fn get_stream_status(&self) -> (bool, bool) {
+        let control_started = self.rest_stream.is_running();
+        let data_started = self.sensory_stream.is_running()
+            || self.motor_stream.is_running()
+            || self.viz_stream.is_running();
+        (control_started, data_started)
     }
 
     /// Start only control streams (REST/registration + API control) - safe before burst engine

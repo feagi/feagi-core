@@ -2022,7 +2022,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-io"
-version = "0.0.1-beta.9"
+version = "0.0.1-beta.10"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2050,7 +2050,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-burst-engine"
-version = "0.0.1-beta.10"
+version = "0.0.1-beta.11"
 dependencies = [
  "ahash",
  "base64 0.22.1",
@@ -2089,7 +2089,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-plasticity"
-version = "0.0.1-beta.10"
+version = "0.0.1-beta.11"
 dependencies = [
  "ahash",
  "feagi-npu-burst-engine",

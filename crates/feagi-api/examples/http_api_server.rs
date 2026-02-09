@@ -232,6 +232,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(0);
 
     let api_state = ApiState {
+        network_connection_info_provider: None,
         agent_service: None,
         analytics_service,
         connectome_service,

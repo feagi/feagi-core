@@ -53,7 +53,7 @@ impl MotorStream {
         // Create PUB socket for broadcasting motor data
         let mut socket = PubSocket::new();
         block_on_runtime(self.runtime.as_ref(), socket.bind(&self.bind_address))
-            .map_err(|e| FeagiDataError::InternalError(format!("Failed to bind socket: {}", e)))?;
+            .map_err(|e| super::bind_error_to_feagi_error(&self.bind_address, e))?;
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
