@@ -32,7 +32,7 @@ use std::collections::HashMap;
 
 /// Top level JSON representation of registered devices and feedbacks
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct JSONInputOutputDefinition {
     input_units_and_encoder_properties:
         HashMap<SensoryCorticalUnit, Vec<(JSONUnitDefinition, JSONEncoderProperties)>>,
@@ -145,7 +145,7 @@ impl Default for JSONInputOutputDefinition {
 
 /// Defines a cortical unit. Does not include a COder Property directly since the type can vary
 /// between input and output
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct JSONUnitDefinition {
     pub(crate) friendly_name: Option<String>,
     pub(crate) cortical_unit_index: CorticalUnitIndex,
@@ -182,7 +182,7 @@ impl JSONUnitDefinition {
 }
 
 /// Defines a cortical unit's channel implementations
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct JSONDeviceGrouping {
     pub(crate) friendly_name: Option<String>,
     pub(crate) device_properties: JSONDeviceProperties,
@@ -193,7 +193,7 @@ pub struct JSONDeviceGrouping {
 /// Middleman for Encoders and Decoders
 //region Coder Properties
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum JSONEncoderProperties {
     Boolean,
     CartesianPlane(ImageFrameProperties),
@@ -352,7 +352,7 @@ impl JSONEncoderProperties {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum JSONDecoderProperties {
     CartesianPlane(ImageFrameProperties),
     MiscData(MiscDataDimensions),
@@ -550,7 +550,7 @@ pub type JSONDeviceProperties = HashMap<String, JSONDevicePropertyValue>;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum JSONDevicePropertyValue {
     String(String),
     Integer(i32),

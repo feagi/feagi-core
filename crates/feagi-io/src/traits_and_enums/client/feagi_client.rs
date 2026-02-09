@@ -1,5 +1,5 @@
 use crate::FeagiNetworkError;
-use crate::traits_and_enums::shared::FeagiEndpointState;
+use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 
 /// Base trait for all FEAGI client types.
 ///
@@ -52,4 +52,8 @@ pub trait FeagiClient: Send {
     ///
     /// Returns an error if cleanup fails.
     fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError>;
+
+    fn get_protocol(&self) -> TransportProtocolImplementation;
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint;
 }

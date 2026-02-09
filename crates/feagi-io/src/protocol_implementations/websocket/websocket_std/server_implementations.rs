@@ -11,8 +11,8 @@ use feagi_serialization::SessionID;
 use tungstenite::{accept, Message, WebSocket};
 
 use crate::FeagiNetworkError;
-use crate::protocol_implementations::websocket::shared::extract_host_port;
-use crate::shared::{FeagiEndpointState, TransportProtocolImplementation};
+use crate::protocol_implementations::websocket::shared::{validate_bind_address, WebSocketUrl};
+use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::server::{
     FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties,
     FeagiServerPuller, FeagiServerPullerProperties,
@@ -41,8 +41,7 @@ impl FeagiWebSocketServerPublisherProperties {
     ///
     /// * `bind_address` - The address to bind to (e.g., "127.0.0.1:8080" or "0.0.0.0:8080").
     pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
-        // Validate by extracting host:port
-        let _ = extract_host_port(&format!("ws://{}", bind_address))?;
+        validate_bind_address(bind_address)?;
         Ok(Self {
             bind_address: bind_address.to_string(),
         })
@@ -61,6 +60,13 @@ impl FeagiServerPublisherProperties for FeagiWebSocketServerPublisherProperties 
 
     fn get_protocol(&self) -> TransportProtocolImplementation {
         TransportProtocolImplementation::WebSocket
+    }
+
+    fn get_endpoint(&self) -> TransportProtocolEndpoint {
+        // Create a WebSocketUrl for the endpoint (using ws:// scheme for bind address)
+        TransportProtocolEndpoint::WebSocket(
+            WebSocketUrl::new(&self.bind_address).expect("bind_address already validated")
+        )
     }
 }
 
@@ -181,6 +187,16 @@ impl FeagiServer for FeagiWebSocketServerPublisher {
             )),
         }
     }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
+    }
+
+    fn get_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(
+            WebSocketUrl::new(&self.bind_address).expect("bind_address already validated")
+        )
+    }
 }
 
 impl FeagiServerPublisher for FeagiWebSocketServerPublisher {
@@ -243,7 +259,7 @@ pub struct FeagiWebSocketServerPullerProperties {
 impl FeagiWebSocketServerPullerProperties {
     /// Creates new puller properties with the given bind address.
     pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
-        let _ = extract_host_port(&format!("ws://{}", bind_address))?;
+        validate_bind_address(bind_address)?;
         Ok(Self {
             bind_address: bind_address.to_string(),
         })
@@ -264,6 +280,12 @@ impl FeagiServerPullerProperties for FeagiWebSocketServerPullerProperties {
 
     fn get_protocol(&self) -> TransportProtocolImplementation {
         TransportProtocolImplementation::WebSocket
+    }
+
+    fn get_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(
+            WebSocketUrl::new(&self.bind_address).expect("bind_address already validated")
+        )
     }
 }
 
@@ -420,6 +442,16 @@ impl FeagiServer for FeagiWebSocketServerPuller {
             )),
         }
     }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
+    }
+
+    fn get_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(
+            WebSocketUrl::new(&self.bind_address).expect("bind_address already validated")
+        )
+    }
 }
 
 impl FeagiServerPuller for FeagiWebSocketServerPuller {
@@ -466,7 +498,7 @@ pub struct FeagiWebSocketServerRouterProperties {
 impl FeagiWebSocketServerRouterProperties {
     /// Creates new router properties with the given bind address.
     pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
-        let _ = extract_host_port(&format!("ws://{}", bind_address))?;
+        validate_bind_address(bind_address)?;
         Ok(Self {
             bind_address: bind_address.to_string(),
         })
@@ -486,10 +518,6 @@ impl FeagiServerRouterProperties for FeagiWebSocketServerRouterProperties {
             index_to_session: HashMap::new(),
             session_to_index: HashMap::new(),
         })
-    }
-
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::WebSocket
     }
 }
 
@@ -689,6 +717,16 @@ impl FeagiServer for FeagiWebSocketServerRouter {
                 "Cannot confirm error: server is not in Errored state".to_string(),
             )),
         }
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
+    }
+
+    fn get_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(
+            WebSocketUrl::new(&self.bind_address).expect("bind_address already validated")
+        )
     }
 }
 

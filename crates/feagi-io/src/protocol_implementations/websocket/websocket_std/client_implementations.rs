@@ -9,10 +9,8 @@ use std::net::TcpStream;
 use tungstenite::{connect, Message, WebSocket};
 
 use crate::FeagiNetworkError;
-use crate::protocol_implementations::websocket::shared::{
-    extract_host_port, normalize_ws_url,
-};
-use crate::shared::FeagiEndpointState;
+use crate::protocol_implementations::websocket::WebSocketUrl;
+use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::client::{
     FeagiClient, FeagiClientPusher, FeagiClientPusherProperties,
     FeagiClientRequester, FeagiClientRequesterProperties,
@@ -31,7 +29,7 @@ type WsStream = WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
 /// Configuration properties for creating a WebSocket subscriber client.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FeagiWebSocketClientSubscriberProperties {
-    server_address: String,
+    server_address: WebSocketUrl,
 }
 
 impl FeagiWebSocketClientSubscriberProperties {
@@ -41,8 +39,7 @@ impl FeagiWebSocketClientSubscriberProperties {
     ///
     /// * `server_address` - The WebSocket URL (e.g., "ws://localhost:8080" or "localhost:8080").
     pub fn new(server_address: &str) -> Result<Self, FeagiNetworkError> {
-        let url = normalize_ws_url(server_address);
-        let _ = extract_host_port(&url)?;
+        let url = WebSocketUrl::new(server_address)?;
         Ok(Self {
             server_address: url,
         })
@@ -67,7 +64,7 @@ impl FeagiClientSubscriberProperties for FeagiWebSocketClientSubscriberPropertie
 
 /// A WebSocket client that subscribes to data from a publisher server.
 pub struct FeagiWebSocketClientSubscriber {
-    server_address: String,
+    server_address: WebSocketUrl,
     current_state: FeagiEndpointState,
     socket: Option<WsStream>,
     receive_buffer: Option<Vec<u8>>,
@@ -83,7 +80,7 @@ impl FeagiWebSocketClientSubscriber {
 
         match socket.read() {
             Ok(Message::Binary(data)) => {
-                self.receive_buffer = Some(Vec::from(data));
+                self.receive_buffer = Some(data);
                 true
             }
             Ok(Message::Text(text)) => {
@@ -108,6 +105,7 @@ impl FeagiWebSocketClientSubscriber {
     }
 }
 
+
 impl FeagiClient for FeagiWebSocketClientSubscriber {
     fn poll(&mut self) -> &FeagiEndpointState {
         if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
@@ -122,7 +120,7 @@ impl FeagiClient for FeagiWebSocketClientSubscriber {
     fn request_connect(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
-                let (socket, _response) = connect(&self.server_address)
+                let (socket, _response) = connect(self.server_address.as_str())
                     .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
                 // Set underlying stream to non-blocking
@@ -175,6 +173,14 @@ impl FeagiClient for FeagiWebSocketClientSubscriber {
             )),
         }
     }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
+    }
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.server_address.clone())
+    }
 }
 
 impl FeagiClientSubscriber for FeagiWebSocketClientSubscriber {
@@ -215,14 +221,13 @@ impl FeagiClientSubscriber for FeagiWebSocketClientSubscriber {
 /// Configuration properties for creating a WebSocket pusher client.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FeagiWebSocketClientPusherProperties {
-    server_address: String,
+    server_address: WebSocketUrl,
 }
 
 impl FeagiWebSocketClientPusherProperties {
     /// Creates new pusher properties with the given server address.
     pub fn new(server_address: &str) -> Result<Self, FeagiNetworkError> {
-        let url = normalize_ws_url(server_address);
-        let _ = extract_host_port(&url)?;
+        let url = WebSocketUrl::new(server_address)?;
         Ok(Self {
             server_address: url,
         })
@@ -245,7 +250,7 @@ impl FeagiClientPusherProperties for FeagiWebSocketClientPusherProperties {
 
 /// A WebSocket client that pushes data to a server.
 pub struct FeagiWebSocketClientPusher {
-    server_address: String,
+    server_address: WebSocketUrl,
     current_state: FeagiEndpointState,
     socket: Option<WsStream>,
 }
@@ -259,7 +264,7 @@ impl FeagiClient for FeagiWebSocketClientPusher {
     fn request_connect(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
-                let (socket, _response) = connect(&self.server_address)
+                let (socket, _response) = connect(self.server_address.as_str())
                     .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
                 if let tungstenite::stream::MaybeTlsStream::Plain(ref stream) = socket.get_ref() {
@@ -307,6 +312,14 @@ impl FeagiClient for FeagiWebSocketClientPusher {
             )),
         }
     }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
+    }
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.server_address.clone())
+    }
 }
 
 impl FeagiClientPusher for FeagiWebSocketClientPusher {
@@ -346,14 +359,13 @@ impl FeagiClientPusher for FeagiWebSocketClientPusher {
 /// Configuration properties for creating a WebSocket requester client.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FeagiWebSocketClientRequesterProperties {
-    server_address: String,
+    server_address: WebSocketUrl,
 }
 
 impl FeagiWebSocketClientRequesterProperties {
     /// Creates new requester properties with the given server address.
     pub fn new(server_address: &str) -> Result<Self, FeagiNetworkError> {
-        let url = normalize_ws_url(server_address);
-        let _ = extract_host_port(&url)?;
+        let url = WebSocketUrl::new(server_address)?;
         Ok(Self {
             server_address: url,
         })
@@ -378,7 +390,7 @@ impl FeagiClientRequesterProperties for FeagiWebSocketClientRequesterProperties 
 
 /// A WebSocket client that sends requests and receives responses.
 pub struct FeagiWebSocketClientRequester {
-    server_address: String,
+    server_address: WebSocketUrl,
     current_state: FeagiEndpointState,
     socket: Option<WsStream>,
     receive_buffer: Option<Vec<u8>>,
@@ -433,7 +445,7 @@ impl FeagiClient for FeagiWebSocketClientRequester {
     fn request_connect(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
-                let (socket, _response) = connect(&self.server_address)
+                let (socket, _response) = connect(self.server_address.as_str())
                     .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
 
                 if let tungstenite::stream::MaybeTlsStream::Plain(ref stream) = socket.get_ref() {
@@ -484,6 +496,14 @@ impl FeagiClient for FeagiWebSocketClientRequester {
                 "Cannot confirm error: client is not in Errored state".to_string(),
             )),
         }
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
+    }
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.server_address.clone())
     }
 }
 

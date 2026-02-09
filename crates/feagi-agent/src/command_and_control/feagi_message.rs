@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use feagi_serialization::{FeagiByteContainer, FeagiSerializable, SessionID};
 use feagi_structures::FeagiJSON;
+use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
 use crate::command_and_control::agent_registration_message::AgentRegistrationMessage;
+use crate::command_and_control::health_check_message::HealthCheckMessage;
 use crate::FeagiAgentError;
 
 // All Command and Control messages are within this nested enum.
@@ -10,8 +12,8 @@ use crate::FeagiAgentError;
 pub enum FeagiMessage {
     HeartBeat,
     AgentRegistration(AgentRegistrationMessage),
-    HealthCheck(),
-    AgentConfiguration(),
+    HealthCheck(HealthCheckMessage),
+    AgentConfiguration(AgentEmbodimentConfigurationMessage),
 }
 
 impl FeagiMessage {

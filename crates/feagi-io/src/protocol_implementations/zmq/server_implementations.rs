@@ -160,6 +160,14 @@ impl FeagiServer for FeagiZmqServerPublisher {
             )),
         }
     }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
+    }
+
+    fn get_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.bind_address.clone())
+    }
 }
 
 impl FeagiServerPublisher for FeagiZmqServerPublisher {
@@ -358,6 +366,14 @@ impl FeagiServer for FeagiZmqServerPuller {
             )),
         }
     }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
+    }
+
+    fn get_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.bind_address.clone())
+    }
 }
 
 impl FeagiServerPuller for FeagiZmqServerPuller {
@@ -438,14 +454,6 @@ impl FeagiServerRouterProperties for FeagiZmqServerRouterProperties {
             identity_to_session: HashMap::new(),
             session_to_identity: HashMap::new(),
         })
-    }
-
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::Zmq
-    }
-
-    fn get_endpoint(&self) -> TransportProtocolEndpoint {
-        TransportProtocolEndpoint::Zmq(self.bind_address.clone())
     }
 }
 
@@ -638,6 +646,14 @@ impl FeagiServer for FeagiZmqServerRouter {
                 "Cannot confirm error: server is not in Errored state".to_string(),
             )),
         }
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
+    }
+
+    fn get_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.bind_address.clone())
     }
 }
 

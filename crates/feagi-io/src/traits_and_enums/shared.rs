@@ -2,7 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 use crate::FeagiNetworkError;
+#[cfg(feature = "zmq-transport")]
 use crate::protocol_implementations::zmq::ZmqUrl;
+#[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+use crate::protocol_implementations::websocket::WebSocketUrl;
+
 
 /// Represents the current state of a FEAGI network endpoint (client or server).
 ///
@@ -86,14 +90,31 @@ pub enum FeagiEndpointState {
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub enum TransportProtocolImplementation {
     WebSocket,
-    Zmq
+    Zmq,
+    BluetoothSerial,
+    SharedMemory,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TransportProtocolEndpoint {
     #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
-    //WebSocket(WebSocketUrl),
+    WebSocket(WebSocketUrl),
 
     #[cfg(feature = "zmq-transport")]
     Zmq(ZmqUrl)
+
+    // TODO other implementations
+}
+
+impl From<TransportProtocolEndpoint> for TransportProtocolImplementation {
+    fn from(t: TransportProtocolEndpoint) -> Self {
+        match t {
+            TransportProtocolEndpoint::Zmq(_) => {
+                TransportProtocolImplementation::Zmq
+            }
+            TransportProtocolEndpoint::WebSocket(_) => {
+                TransportProtocolImplementation::WebSocket
+            }
+        }
+    }
 }

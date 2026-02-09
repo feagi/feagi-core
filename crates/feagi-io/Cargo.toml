@@ -40,7 +40,7 @@ serde = { workspace = true }
 zmq = { version = "0.10.0", optional = true }  # ZMQ transport
 
 # WebSocket (non-WASM) - poll-based using non-blocking sockets
-tungstenite = { version = "0.28.0", optional = true }
+tungstenite = { version = "0.24.0", optional = true } # Using an older version for now
 
 
 # Examples that test both ZMQ and WebSocket transports
