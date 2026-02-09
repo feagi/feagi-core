@@ -11,7 +11,7 @@ description = "FEAGI plasticity algorithms - STDP and memory formation"
 [dependencies]
 feagi-npu-neural = { version = "0.0.1-beta.9", path = "../neural" }  # For NeuronId
 feagi-npu-burst-engine = { version = "0.0.1-beta.12", path = "../burst-engine" }  # For DynamicNPU and FireLedger
-feagi-state-manager = { version = "0.0.1-beta.8", path = "../../feagi-state-manager", default-features = false, optional = true }
+feagi-state-manager = { version = "0.0.1-beta.9", path = "../../feagi-state-manager", default-features = false, optional = true }
 thiserror.workspace = true
 rayon.workspace = true
 ahash.workspace = true

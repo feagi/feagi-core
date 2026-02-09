@@ -16,7 +16,7 @@ feagi-npu-neural = { version = "0.0.1-beta.9", path = "../neural" }
 # Standard runtime implementation available via "std" feature
 feagi-npu-runtime = { version = "0.0.1-beta.9", path = "../runtime", optional = true }
 
-feagi-state-manager = { version = "0.0.1-beta.4", path = "../../feagi-state-manager" }  # For BurstEngineState enum
+feagi-state-manager = { version = "0.0.1-beta.9", path = "../../feagi-state-manager" }  # For BurstEngineState enum
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
 feagi-serialization = { workspace = true }  # For decoding sensory data

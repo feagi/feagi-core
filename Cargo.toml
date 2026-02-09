@@ -57,7 +57,7 @@ feagi-serialization = { version = "=0.0.1-beta.9", path = "crates/feagi-serializ
 ndarray = { workspace = true }
 
 # Infrastructure (vendored)
-feagi-state-manager = { version = "=0.0.1-beta.8", path = "crates/feagi-state-manager", optional = true }
+feagi-state-manager = { version = "=0.0.1-beta.9", path = "crates/feagi-state-manager", optional = true }
 
 # Algorithms (vendored)
 feagi-npu-burst-engine = { version = "=0.0.1-beta.12", path = "crates/feagi-npu/burst-engine", optional = true }

@@ -19,7 +19,7 @@ feagi-evolutionary = { version = "0.0.1-beta.9", path = "../feagi-evolutionary" 
 feagi-npu-plasticity = { version = "0.0.1-beta.11", path = "../feagi-npu/plasticity", optional = true }
 # feagi-burst-engine configured per-platform below
 feagi-structures = { workspace = true }
-feagi-state-manager = { version = "0.0.1-beta.8", path = "../feagi-state-manager", default-features = false }
+feagi-state-manager = { version = "0.0.1-beta.9", path = "../feagi-state-manager", default-features = false }
 
 # Performance (using workspace versions)
 rayon = { workspace = true, optional = true }  # Optional - not available in WASM
