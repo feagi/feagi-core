@@ -85,9 +85,9 @@ jobs:
       run: |
         set -euo pipefail
         chmod +x scripts/smart-version-bump.sh
-        LAST_TAG="$(git tag --list "feagi-v*" --sort=-v:refname | head -1)"
+        LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
         if [ -z "$LAST_TAG" ]; then
-          echo "Missing baseline tag. Create feagi-v<version> before merging."
+          echo "Missing baseline tag. Create v<version> before merging."
           exit 1
         fi
         echo "Using baseline tag: $LAST_TAG"

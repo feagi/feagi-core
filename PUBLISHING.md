@@ -316,8 +316,8 @@ jobs:
 
 Release tags must match the umbrella crate version:
 
-- Tag format: `feagi-v<feagi_version>`
-- Example: `feagi-v0.0.1-beta.8`
+- Tag format: `v<feagi_version>`
+- Example: `v0.0.1-beta.8`
 - Baseline for version detection in `smart-version-bump.sh`
 ```
 

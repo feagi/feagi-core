@@ -54,9 +54,9 @@ jobs:
       - name: Guard - require baseline tag
         run: |
           set -euo pipefail
-          BASELINE_TAG="$(git tag --list "feagi-v*" --sort=-v:refname | head -1)"
+          BASELINE_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
           if [ -z "$BASELINE_TAG" ]; then
-            echo "Missing baseline tag. Create feagi-v<version> before releasing."
+            echo "Missing baseline tag. Create v<version> before releasing."
             exit 1
           fi
           echo "Using baseline tag: $BASELINE_TAG"
@@ -73,7 +73,7 @@ jobs:
           echo "Detecting changed crates and computing independent version bumps..."
           chmod +x scripts/smart-version-bump.sh
           chmod +x scripts/apply-version-bumps.sh
-          LAST_TAG="$(git tag --list "feagi-v*" --sort=-v:refname | head -1)"
+          LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
           VERSION_OUTPUT=$(LAST_TAG="$LAST_TAG" ./scripts/smart-version-bump.sh)
           echo "$VERSION_OUTPUT"
           VERSIONS_FILE=$(echo "$VERSION_OUTPUT" | grep "VERSIONS_FILE=" | cut -d'=' -f2)
@@ -322,7 +322,7 @@ jobs:
             echo "Failed to detect feagi version from Cargo.toml"
             exit 1
           fi
-          TAG_NAME="feagi-v${FEAGI_VERSION}"
+          TAG_NAME="v${FEAGI_VERSION}"
           if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
             echo "Release tag already exists: $TAG_NAME"
             echo "Bump feagi version before releasing."
