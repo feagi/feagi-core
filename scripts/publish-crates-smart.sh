@@ -175,6 +175,99 @@ should_publish_crate() {
 }
 
 # ============================================================================
+# Validate all crates that will be published (cargo package) before any publish.
+# Uses [patch.crates-io] so resolution uses local workspace, not crates.io.
+# Surfaces ALL packaging failures at once instead of failing mid-flow.
+# ============================================================================
+
+validate_all_packages() {
+    local to_validate=()
+    local crate_name
+    local crate_path
+    local publish_decision
+    local pkg_output
+    local pkg_rc
+
+    echo -e "${BLUE}Validating all packages (cargo package) before publish...${NC}"
+    echo ""
+
+    for crate_name in "${CRATE_ORDER[@]}"; do
+        if [ -n "$PUBLISH_SINGLE_CRATE" ] && [ "$crate_name" != "$PUBLISH_SINGLE_CRATE" ]; then
+            continue
+        fi
+        crate_path="$(crate_path_for "$crate_name")" || continue
+        if [ ! -f "$crate_path/Cargo.toml" ] && [ "$crate_path" != "." ]; then
+            continue
+        fi
+        publish_decision=$(should_publish_crate "$crate_name" "$crate_path")
+        if [ "$publish_decision" = "skip_published" ] || [ "$publish_decision" = "skip_unchanged" ]; then
+            continue
+        fi
+        to_validate+=("$crate_name")
+    done
+
+    if [ ${#to_validate[@]} -eq 0 ]; then
+        echo -e "${CYAN}No crates to validate (all skipped).${NC}"
+        echo ""
+        return 0
+    fi
+
+    # Create .cargo/config.toml with [patch.crates-io] so cargo package uses local deps
+    mkdir -p .cargo
+    ROOT_ABS="$(cd "$WORKSPACE_ROOT" && pwd)"
+    {
+        echo "[patch.crates-io]"
+        for crate_name in "${CRATE_ORDER[@]}"; do
+            path="$(crate_path_for "$crate_name")" || continue
+            [ -f "${path}/Cargo.toml" ] || [ "$path" = "." ] && [ -f "Cargo.toml" ] || continue
+            if [ "$path" = "." ]; then
+                echo "feagi = { path = \"${ROOT_ABS}\" }"
+            else
+                echo "${crate_name} = { path = \"${ROOT_ABS}/${path}\" }"
+            fi
+        done
+    } > .cargo/config.toml
+
+    VALIDATE_FAILED=()
+    for crate_name in "${to_validate[@]}"; do
+        crate_path="$(crate_path_for "$crate_name")"
+        echo -n "   Validating $crate_name... "
+        if [ "$crate_path" != "." ]; then
+            cd "$crate_path"
+        fi
+        set +e
+        pkg_output="$(cargo package --allow-dirty --quiet 2>&1)"
+        pkg_rc=$?
+        set -e
+        cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+
+        if [ "$pkg_rc" -ne 0 ]; then
+            echo -e "${RED}FAILED${NC}"
+            VALIDATE_FAILED+=("$crate_name")
+            echo "$pkg_output" | sed 's/^/      /'
+        else
+            echo -e "${GREEN}OK${NC}"
+        fi
+    done
+
+    rm -f .cargo/config.toml
+    rmdir .cargo 2>/dev/null || true
+
+    if [ ${#VALIDATE_FAILED[@]} -gt 0 ]; then
+        echo ""
+        echo -e "${RED}Validation failed for ${#VALIDATE_FAILED[@]} crate(s):${NC}"
+        for c in "${VALIDATE_FAILED[@]}"; do
+            echo "  - $c"
+        done
+        echo ""
+        echo -e "${YELLOW}Fix version/dependency conflicts before publishing.${NC}"
+        return 1
+    fi
+    echo ""
+    return 0
+}
+
+# ============================================================================
 # Publish function
 # ============================================================================
 
@@ -270,6 +363,15 @@ fi
 FAILED_CRATES=()
 PUBLISHED_COUNT=0
 SKIPPED_COUNT=0
+
+# Validate all packages before publishing (fails fast with full error report)
+set +e
+validate_all_packages
+validate_rc=$?
+set -e
+if [ "$validate_rc" -ne 0 ]; then
+    exit 1
+fi
 
 for crate_name in "${CRATE_ORDER[@]}"; do
     # When PUBLISH_SINGLE_CRATE is set, only process that crate (for CI one-job-per-crate)
