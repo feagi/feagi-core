@@ -2,11 +2,51 @@
 
 use serde::{Deserialize, Serialize};
 use crate::FeagiNetworkError;
+
 #[cfg(feature = "zmq-transport")]
 use crate::protocol_implementations::zmq::ZmqUrl;
 #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
 use crate::protocol_implementations::websocket::WebSocketUrl;
 
+// Client properties imports
+#[cfg(feature = "websocket-transport-std")]
+use crate::protocol_implementations::websocket::websocket_std::{
+    FeagiWebSocketClientSubscriberProperties,
+    FeagiWebSocketClientPusherProperties,
+    FeagiWebSocketClientRequesterProperties,
+};
+#[cfg(feature = "zmq-transport")]
+use crate::protocol_implementations::zmq::{
+    FeagiZmqClientSubscriberProperties,
+    FeagiZmqClientPusherProperties,
+    FeagiZmqClientRequesterProperties,
+};
+
+// Server properties imports
+#[cfg(feature = "websocket-transport-std")]
+use crate::protocol_implementations::websocket::websocket_std::{
+    FeagiWebSocketServerPublisherProperties,
+    FeagiWebSocketServerPullerProperties,
+    FeagiWebSocketServerRouterProperties,
+};
+#[cfg(feature = "zmq-transport")]
+use crate::protocol_implementations::zmq::{
+    FeagiZmqServerPublisherProperties,
+    FeagiZmqServerPullerProperties,
+    FeagiZmqServerRouterProperties,
+};
+
+// Trait imports
+use crate::traits_and_enums::client::{
+    FeagiClientSubscriberProperties,
+    FeagiClientPusherProperties,
+    FeagiClientRequesterProperties,
+};
+use crate::traits_and_enums::server::{
+    FeagiServerPublisherProperties,
+    FeagiServerPullerProperties,
+    FeagiServerRouterProperties,
+};
 
 /// Represents the current state of a FEAGI network endpoint (client or server).
 ///
@@ -114,6 +154,118 @@ impl From<TransportProtocolEndpoint> for TransportProtocolImplementation {
             }
             TransportProtocolEndpoint::WebSocket(_) => {
                 TransportProtocolImplementation::WebSocket
+            }
+        }
+    }
+}
+
+impl TransportProtocolEndpoint {
+    // ========================================================================
+    // Client Properties Factory Methods
+    // ========================================================================
+
+    /// Creates a boxed client subscriber properties from this endpoint.
+    pub fn create_boxed_client_subscriber_properties(&self) -> Box<dyn FeagiClientSubscriberProperties> {
+        match self {
+            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            TransportProtocolEndpoint::WebSocket(endpoint) => {
+                #[cfg(feature = "websocket-transport-std")]
+                return Box::new(FeagiWebSocketClientSubscriberProperties::new(endpoint.as_str()).unwrap());
+                #[cfg(not(feature = "websocket-transport-std"))]
+                panic!("WebSocket std is not included in this build!")
+            }
+            #[cfg(feature = "zmq-transport")]
+            TransportProtocolEndpoint::Zmq(endpoint) => {
+                Box::new(FeagiZmqClientSubscriberProperties::new(endpoint.as_str()).unwrap())
+            }
+        }
+    }
+
+    /// Creates a boxed client pusher properties from this endpoint.
+    pub fn create_boxed_client_pusher_properties(&self) -> Box<dyn FeagiClientPusherProperties> {
+        match self {
+            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            TransportProtocolEndpoint::WebSocket(endpoint) => {
+                #[cfg(feature = "websocket-transport-std")]
+                return Box::new(FeagiWebSocketClientPusherProperties::new(endpoint.as_str()).unwrap());
+                #[cfg(not(feature = "websocket-transport-std"))]
+                panic!("WebSocket std is not included in this build!")
+            }
+            #[cfg(feature = "zmq-transport")]
+            TransportProtocolEndpoint::Zmq(endpoint) => {
+                Box::new(FeagiZmqClientPusherProperties::new(endpoint.as_str()).unwrap())
+            }
+        }
+    }
+
+    /// Creates a boxed client requester properties from this endpoint.
+    pub fn create_boxed_client_requester_properties(&self) -> Box<dyn FeagiClientRequesterProperties> {
+        match self {
+            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            TransportProtocolEndpoint::WebSocket(endpoint) => {
+                #[cfg(feature = "websocket-transport-std")]
+                return Box::new(FeagiWebSocketClientRequesterProperties::new(endpoint.as_str()).unwrap());
+                #[cfg(not(feature = "websocket-transport-std"))]
+                panic!("WebSocket std is not included in this build!")
+            }
+            #[cfg(feature = "zmq-transport")]
+            TransportProtocolEndpoint::Zmq(endpoint) => {
+                Box::new(FeagiZmqClientRequesterProperties::new(endpoint.as_str()).unwrap())
+            }
+        }
+    }
+
+    // ========================================================================
+    // Server Properties Factory Methods
+    // ========================================================================
+
+    /// Creates a boxed server publisher properties from this endpoint.
+    pub fn create_boxed_server_publisher_properties(&self) -> Box<dyn FeagiServerPublisherProperties> {
+        match self {
+            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            TransportProtocolEndpoint::WebSocket(endpoint) => {
+                #[cfg(feature = "websocket-transport-std")]
+                return Box::new(FeagiWebSocketServerPublisherProperties::new(endpoint.as_str()).unwrap());
+                #[cfg(not(feature = "websocket-transport-std"))]
+                panic!("WebSocket std is not included in this build!")
+            }
+            #[cfg(feature = "zmq-transport")]
+            TransportProtocolEndpoint::Zmq(endpoint) => {
+                Box::new(FeagiZmqServerPublisherProperties::new(endpoint.as_str()).unwrap())
+            }
+        }
+    }
+
+    /// Creates a boxed server puller properties from this endpoint.
+    pub fn create_boxed_server_puller_properties(&self) -> Box<dyn FeagiServerPullerProperties> {
+        match self {
+            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            TransportProtocolEndpoint::WebSocket(endpoint) => {
+                #[cfg(feature = "websocket-transport-std")]
+                return Box::new(FeagiWebSocketServerPullerProperties::new(endpoint.as_str()).unwrap());
+                #[cfg(not(feature = "websocket-transport-std"))]
+                panic!("WebSocket std is not included in this build!")
+            }
+            #[cfg(feature = "zmq-transport")]
+            TransportProtocolEndpoint::Zmq(endpoint) => {
+                Box::new(FeagiZmqServerPullerProperties::new(endpoint.as_str()).unwrap())
+            }
+        }
+    }
+
+    /// Creates a boxed server router properties from this endpoint.
+    pub fn create_boxed_server_router_properties(&self) -> Box<dyn FeagiServerRouterProperties> {
+        match self {
+            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            TransportProtocolEndpoint::WebSocket(endpoint) => {
+                #[cfg(feature = "websocket-transport-std")]
+                return Box::new(FeagiWebSocketServerRouterProperties::new(endpoint.as_str()).unwrap());
+                #[cfg(not(feature = "websocket-transport-std"))]
+                panic!("WebSocket std is not included in this build!")
+            }
+            #[cfg(feature = "zmq-transport")]
+            TransportProtocolEndpoint::Zmq(endpoint) => {
+                Box::new(FeagiZmqServerRouterProperties::new(endpoint.as_str()).unwrap())
             }
         }
     }

@@ -6,7 +6,7 @@
 //!
 //! Use `ConnectorAgent::connect` for ZMQ or `ConnectorAgent::connect_ws` for WebSocket.
 
-//mod blocking;
+mod blocking;
 
-//pub use blocking::embodiment_agent::{DeviceRegistrations, EmbodimentAgent};
-//pub use blocking::registration_agent::RegistrationAgent;
+pub use blocking::embodiment_agent::{EmbodimentAgent};
+pub use blocking::command_control_sub_agent::CommandControlSubAgent;

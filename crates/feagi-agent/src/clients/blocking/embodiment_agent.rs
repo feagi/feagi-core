@@ -5,33 +5,21 @@
 //!
 //! Use `connect` for ZMQ or `connect_ws` for WebSocket; flow and API are the same.
 
-use std::future::Future;
 use std::time::Instant;
-use feagi_io::protocol_implementations::zmq::{FeagiZmqClientPusherProperties, FeagiZmqClientRequester, FeagiZmqClientRequesterProperties, FeagiZmqClientSubscriberProperties};
-/*
-use feagi_io::protocol_implementations::websocket::{
-    FeagiWebSocketClientPusherProperties, FeagiWebSocketClientRequesterProperties,
-    FeagiWebSocketClientSubscriberProperties,
-};
-
- */
-use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester, FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties};
-use feagi_io::traits_and_enums::shared::FeagiEndpointState;
+use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientRequesterProperties, FeagiClientSubscriber};
+use feagi_io::traits_and_enums::shared::TransportProtocolEndpoint;
 use feagi_sensorimotor::ConnectorCache;
 use feagi_serialization::{FeagiByteContainer, SessionID};
-
-use crate::clients::blocking::registration_agent::RegistrationAgent;
-use crate::command_and_control::agent_registration_message::RegistrationResponse;
-use crate::FeagiAgentError;
-
-/// Optional device_registrations JSON for auto IPU/OPU creation (when server allows).
-pub type DeviceRegistrations = Option<serde_json::Value>;
+use crate::clients::CommandControlSubAgent;
+use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, RegistrationResponse};
+use crate::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiAgentError};
+use crate::command_and_control::FeagiMessage;
 
 /// Established connection to FEAGI after registration: sensory push and motor
 /// Build sensory payloads with the returned session_id (FeagiByteContainer) so the server accepts them.
 pub struct EmbodimentAgent {
     embodiment: ConnectorCache,
-    client: Option<EmbodimentClient>
+    client: Option<BlockingEmbodimentClient>
 }
 
 impl EmbodimentAgent {
@@ -51,31 +39,23 @@ impl EmbodimentAgent {
         &mut self.embodiment
     }
 
-    pub fn connect_to_feagi_generic(&mut self, feagi_registration_endpoint: Box<dyn FeagiClientRequesterProperties>) -> Result<(), FeagiAgentError> {
-        if self.client.is_none() {
-            let client = EmbodimentClient::new_and_generic_connect(feagi_registration_endpoint)?;
-            self.client = Some(client);
-        }
-    }
-
-    pub fn connect_to_feagi_zmq(&mut self, zmq_endpoint: &String) -> Result<(), FeagiAgentError> {
-        let zmq_requester = FeagiZmqClientRequesterProperties::new(zmq_endpoint)?;
-        self.connect_to_feagi_generic(Box::new(zmq_requester))?;
+    pub fn connect_to_feagi(&mut self, feagi_registration_endpoint: Box<dyn FeagiClientRequesterProperties>, agent_descriptor: AgentDescriptor, auth_token: AuthToken) -> Result<(), FeagiAgentError> {
+        let client = BlockingEmbodimentClient::new_and_generic_connect(feagi_registration_endpoint, agent_descriptor, auth_token)?;
+        self.client = Some(client);
         Ok(())
     }
 
-    pub fn poll(&mut self) -> Result<(), FeagiAgentError> {
+    pub fn poll(&mut self) -> Result<Option<FeagiMessage>, FeagiAgentError> {
         if self.client.is_none() {
-            return Ok(())
+            return Ok(None)
         }
         let client = self.client.as_mut().unwrap();
 
         // TODO actually do something with this data
         client.motor_subscriber.poll();
         client.sensor_pusher.poll();
-        client.command_and_control.poll();
-
-        Ok(())
+        let possible_message = client.command_and_control.poll_for_messages()?;
+        Ok(possible_message)
     }
     
     pub fn send_encoded_sensor_data(&mut self) -> Result<(), FeagiAgentError> {
@@ -96,64 +76,85 @@ impl EmbodimentAgent {
 
 }
 
-struct EmbodimentClient {
-    session_id: SessionID,
-    command_and_control: Box<dyn FeagiClientRequester>,
+struct BlockingEmbodimentClient {
+    command_and_control: CommandControlSubAgent,
     sensor_pusher: Box<dyn FeagiClientPusher>,
     motor_subscriber: Box<dyn FeagiClientSubscriber>,
 }
 
-impl EmbodimentClient {
+impl BlockingEmbodimentClient {
 
-    pub fn new_and_generic_connect(command_and_control_properties: Box<dyn FeagiClientRequesterProperties>) -> Result<Self, FeagiAgentError> {
+    pub fn new_and_generic_connect(command_and_control_properties: Box<dyn FeagiClientRequesterProperties>, agent_descriptor: AgentDescriptor, auth_token: AuthToken) -> Result<Self, FeagiAgentError> {
 
-        let mut command_and_control = command_and_control_properties.as_boxed_client_requester();
-        command_and_control.request_connect()?;
+        let requested_capabilities = vec![AgentCapabilities::ReceiveMotorData, AgentCapabilities::SendSensorData];
 
-        // TODO this is blocking. We want to reconsider
+        let mut command_control = CommandControlSubAgent::new(command_and_control_properties);
+
+        command_control.request_connect()?; // TODO shouldn't this be blocking somehow?
+
+        command_control.request_registration(agent_descriptor, auth_token, requested_capabilities)?;
+
+        // NOTE blocking!
         loop {
-            let result = command_and_control.poll();
-            match result {
-                FeagiEndpointState::Pending => continue,
-                FeagiEndpointState::ActiveWaiting || FeagiEndpointState::ActiveHasData => break,
-                FeagiEndpointState::Errored(e) => e,
-                _ => panic!("Unexpected state: {:?}", result),
-            };
-        }
+            let data = command_control.poll_for_messages()?;
+            if let Some(message) = data {
+                // We are looking only for registration response. Anything else is invalid
+                match &message {
+                    FeagiMessage::AgentRegistration(registration_message) => {
+                        match registration_message {
+                            AgentRegistrationMessage::ClientRequestRegistration(_) => {
+                                // wtf
+                                return Err(FeagiAgentError::ConnectionFailed("Server cannot register to client as a client!".to_string()))
+                            }
+                            AgentRegistrationMessage::ServerRespondsRegistration(registration_response) => {
+                                match registration_response {
+                                    RegistrationResponse::FailedInvalidRequest => {
+                                        return Err(FeagiAgentError::UnableToDecodeReceivedData("Unable to connect due to invalid request".to_string()))
+                                    }
+                                    RegistrationResponse::FailedInvalidAuth => {
+                                        return Err(FeagiAgentError::AuthenticationFailed("Unable to connect due to invalid auth".to_string()))
+                                    }
+                                    RegistrationResponse::AlreadyRegistered => {
+                                        return Err(FeagiAgentError::ConnectionFailed("Unable to connect due to agent already being registered".to_string()))
+                                    }
+                                    RegistrationResponse::Success(_, connection_endpoints) => {
+                                        // We already handled the details within the struct
 
-        // We have a connection
 
-        command_and_control.publish_request();
-        loop {
-            let result = command_and_control.poll();
-            match result {
-                FeagiEndpointState::Pending => continue,
-                FeagiEndpointState::ActiveWaiting => continue,
-                FeagiEndpointState::Errored(e) => e,
-                FeagiEndpointState::ActiveHasData => break,
-                _ => panic!("Unexpected state: {:?}", result),
-            };
-        }
+                                        let sensor_pusher_endpoint = connection_endpoints.get(&AgentCapabilities::SendSensorData).ok_or_else(|| FeagiAgentError::ConnectionFailed("unable to get sensor endpoint!".to_string()))?;
+                                        let motor_pusher_endpoint = connection_endpoints.get(&AgentCapabilities::ReceiveMotorData).ok_or_else(|| FeagiAgentError::ConnectionFailed("unable to get motor endpoint!".to_string()))?;
 
-        let returned_data = command_and_control.consume_retrieved_response()?;
-        let mut feagi_bytes = FeagiByteContainer::new_empty();
-        feagi_bytes.try_write_data_by_copy_and_verify(returned_data)?;
-        let response: RegistrationResponse = (&feagi_bytes).try_into()?;
+                                        let sensor_pusher_properties = TransportProtocolEndpoint::create_boxed_client_pusher_properties(sensor_pusher_endpoint);
+                                        let motor_subscriber_properties = TransportProtocolEndpoint::create_boxed_client_subscriber_properties(motor_pusher_endpoint);
 
-        match response {
-            RegistrationResponse::Success(session_id, endpoints) => {
+                                        let mut sensor_server = sensor_pusher_properties.as_boxed_client_pusher();
+                                        let mut motor_server = motor_subscriber_properties.as_boxed_client_subscriber();
 
-                // TODO How do we get the connection type?????
+                                        // TODO wait to confirm connection?
+                                        sensor_server.request_connect()?;
+                                        motor_server.request_connect()?;
 
-                return Ok(
-                    EmbodimentClient {
-                        session_id,
-                        command_and_control: command_and_control,
-
+                                        return Ok(
+                                            BlockingEmbodimentClient {
+                                                command_and_control: command_control,
+                                                sensor_pusher: sensor_server,
+                                                motor_subscriber: motor_server,
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
-                )
+                    _ => {
+                        return Err(FeagiAgentError::ConnectionFailed("Invalid message received".to_string()))
+                    }
+                }
             }
+
+            // TODO timeout?
         }
+
 
 
 
