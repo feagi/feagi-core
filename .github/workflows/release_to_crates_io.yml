@@ -3,6 +3,10 @@
 
 name: Release to crates.io
 
+permissions:
+  contents: write
+  pull-requests: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -358,7 +362,25 @@ jobs:
             COMMIT_MSG="chore: release (no version changes)"
           fi
           git commit -m "$COMMIT_MSG"
-          git push origin HEAD:${{ env.PUBLISH_REF }}
+
+          if [ -n "$CHANGED_CRATES" ]; then
+            BRANCH_NAME="release/bump-${{ github.run_id }}"
+            git checkout -b "$BRANCH_NAME"
+            git push origin "$BRANCH_NAME"
+
+            PR_TITLE="chore: bump versions for release"
+            PR_BODY="Automated version bumps for crates changed on staging."
+            PR_URL="$(gh pr create --base "${{ env.PUBLISH_REF }}" --head "$BRANCH_NAME" --title "$PR_TITLE" --body "$PR_BODY")"
+            echo "Created PR: $PR_URL"
+
+            gh pr merge "$PR_URL" --merge --delete-branch
+            git fetch origin "${{ env.PUBLISH_REF }}"
+            git checkout "${{ env.PUBLISH_REF }}"
+            git pull --ff-only origin "${{ env.PUBLISH_REF }}"
+          else
+            git checkout "${{ env.PUBLISH_REF }}"
+            git pull --ff-only origin "${{ env.PUBLISH_REF }}"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Set release SHA
