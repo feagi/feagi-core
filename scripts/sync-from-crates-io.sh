@@ -177,12 +177,13 @@ for manifest in manifests:
                 continue
             if "path" not in line or "version" not in line or "{" not in line:
                 continue
-            match = re.match(rf'^(\s*{re.escape(name)}\s*=\s*\{{)(.*)(\}}\s*)$', line)
+            match = re.match(rf'^(\s*{re.escape(name)}\s*=\s*\{{)(.*)(\}})(\s*#.*)?$', line)
             if not match:
                 continue
             middle = match.group(2)
             middle = re.sub(r'\bversion\s*=\s*"[^"]*"', f'version = "={version}"', middle)
-            lines[idx] = f"{match.group(1)}{middle}{match.group(3)}"
+            comment = match.group(4) or ""
+            lines[idx] = f"{match.group(1)}{middle}{match.group(3)}{comment}"
             updated = True
             break
     if updated:
