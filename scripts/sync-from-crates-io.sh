@@ -15,6 +15,8 @@ WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(pwd)}"
 DRY_RUN="${DRY_RUN:-false}"
 
 SYNC_VERSION_MAP="$(mktemp /tmp/sync-from-crates-io--temp.XXXXXX)"
+export SYNC_VERSION_MAP
+export WORKSPACE_ROOT
 cleanup_temp() {
     rm -f "$SYNC_VERSION_MAP"
 }
