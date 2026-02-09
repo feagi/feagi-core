@@ -41,6 +41,8 @@ jobs:
     outputs:
       changed_crates: ${{ steps.version.outputs.changed_crates }}
       release_sha: ${{ steps.release_sha.outputs.release_sha }}
+      bump_pr_created: ${{ steps.bump_pr.outputs.bump_pr_created }}
+      bump_pr_url: ${{ steps.bump_pr.outputs.bump_pr_url }}
     env:
       PUBLISH_REF: ${{ github.event.inputs.ref || 'staging' }}
     steps:
@@ -340,6 +342,7 @@ jobs:
         run: cargo build --release --lib --verbose
 
       - name: Commit and push version updates
+        id: bump_pr
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -403,6 +406,8 @@ jobs:
             fi
 
             echo "Using PR: $PR_URL"
+            echo "bump_pr_created=true" >> "$GITHUB_OUTPUT"
+            echo "bump_pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
             attempt=1
             while [ "$attempt" -le "$max_attempts" ]; do
               set +e
@@ -433,6 +438,7 @@ jobs:
           else
             git checkout "${{ env.PUBLISH_REF }}"
             git pull --ff-only origin "${{ env.PUBLISH_REF }}"
+            echo "bump_pr_created=false" >> "$GITHUB_OUTPUT"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -445,6 +451,7 @@ jobs:
     name: publish crates
     needs: [prep]
     runs-on: ubuntu-latest
+    if: false
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
       CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
@@ -727,6 +734,7 @@ jobs:
     name: tag & GitHub release
     needs: [prep, publish_crates]
     runs-on: ubuntu-latest
+    if: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
