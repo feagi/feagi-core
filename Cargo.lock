@@ -1979,7 +1979,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-evolutionary"
-version = "0.0.1-beta.8"
+version = "0.0.1-beta.9"
 dependencies = [
  "chrono",
  "env_logger",
