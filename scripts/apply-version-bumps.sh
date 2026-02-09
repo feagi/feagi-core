@@ -202,12 +202,13 @@ def main() -> None:
         if name and ver:
             crate_versions[name] = ver
 
-    # Rewrite inline-table deps with path="../..." and version="...".
+    # Rewrite inline-table deps with path (../... or crates/...) and version.
+    # Root Cargo.toml uses path="crates/..."; subcrates use path="../...".
     dep_re = re.compile(
         r'^(?P<indent>\s*)(?P<dep>[A-Za-z0-9_-]+)\s*=\s*\{\s*(?P<body>[^}]*)\}\s*$'
     )
     version_re = re.compile(r'version\s*=\s*"(?P<ver>[^"]+)"')
-    path_re = re.compile(r'path\s*=\s*"(?P<path>\.\./[^"]+)"')
+    path_re = re.compile(r'path\s*=\s*"(?P<path>(?:\.\./|crates/)[^"]+)"')
 
     changed_files = 0
     changed_deps = 0

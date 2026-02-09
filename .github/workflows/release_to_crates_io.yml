@@ -107,12 +107,13 @@ jobs:
           mismatches=0
           for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
             [ -f "$manifest" ] || continue
+            # Match both path="../..." (subcrates) and path="crates/..." (root)
             while IFS= read -r line; do
-              dep="$(echo "$line" | sed -n 's/^\\s*\\([A-Za-z0-9_-][A-Za-z0-9_-]*\\)\\s*=.*/\\1/p')"
-              req="$(echo "$line" | sed -n 's/.*version\\s*=\\s*\"\\([^\"]\\+\\)\".*/\\1/p')"
-              path="$(echo "$line" | sed -n 's/.*path\\s*=\\s*\"\\([^\"]\\+\\)\".*/\\1/p')"
+              dep="$(echo "$line" | sed -n 's/^[[:space:]]*\([A-Za-z0-9_-][A-Za-z0-9_-]*\)[[:space:]]*=.*/\1/p')"
+              req="$(echo "$line" | sed -n 's/.*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
+              path="$(echo "$line" | sed -n 's/.*path[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
               [ -n "$dep" ] && [ -n "$req" ] && [ -n "$path" ] || continue
-              case "$path" in ../*) ;; *) continue ;; esac
+              case "$path" in ../*|crates/*) ;; *) continue ;; esac
               req="${req#=}"; req="${req#^}"
               actual="${CRATE_VERSIONS[$dep]:-}"
               [ -z "$actual" ] && continue
@@ -120,7 +121,7 @@ jobs:
                 echo "Version mismatch in $manifest: $dep required $req actual $actual"
                 mismatches=$((mismatches + 1))
               fi
-            done < <(grep -E 'path\\s*=\\s*\"\\.\\./[^\\\"]+\"' "$manifest" || true)
+            done < <(grep -E 'path[[:space:]]*=[[:space:]]*"(\.\./|crates/)[^"]+"' "$manifest" || true)
           done
           [ "$mismatches" -eq 0 ] || exit 1
           echo "Workspace path dependency versions are consistent."
