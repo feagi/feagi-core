@@ -14,6 +14,12 @@ set -e
 WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(pwd)}"
 DRY_RUN="${DRY_RUN:-false}"
 
+SYNC_VERSION_MAP="$(mktemp /tmp/sync-from-crates-io--temp.XXXXXX)"
+cleanup_temp() {
+    rm -f "$SYNC_VERSION_MAP"
+}
+trap cleanup_temp EXIT
+
 crate_path_for() {
     case "$1" in
         feagi-observability) echo "crates/feagi-observability" ;;
@@ -108,6 +114,7 @@ for crate in "${CRATE_ORDER[@]}"; do
         continue
     fi
     echo -e "  ${crate}: ${GREEN}${latest}${NC}"
+    echo "${crate}|${latest}" >> "$SYNC_VERSION_MAP"
 
     if [ "$DRY_RUN" = "true" ]; then
         continue
@@ -131,6 +138,55 @@ for crate in "${CRATE_ORDER[@]}"; do
         fi
     fi
 done
+
+if [ "$DRY_RUN" != "true" ] && [ -s "$SYNC_VERSION_MAP" ]; then
+    python3 - <<'PY'
+import os
+import re
+from pathlib import Path
+
+workspace_root = Path(os.environ.get("WORKSPACE_ROOT", ".")).resolve()
+map_file = Path(os.environ["SYNC_VERSION_MAP"])
+version_map = {}
+for line in map_file.read_text(encoding="utf-8").splitlines():
+    if "|" not in line:
+        continue
+    name, version = line.split("|", 1)
+    if name and version:
+        version_map[name.strip()] = version.strip()
+
+if not version_map:
+    raise SystemExit(0)
+
+manifests = []
+manifests.append(workspace_root / "Cargo.toml")
+manifests.extend(workspace_root.glob("crates/*/Cargo.toml"))
+manifests.extend(workspace_root.glob("crates/feagi-npu/*/Cargo.toml"))
+
+for manifest in manifests:
+    if not manifest.exists():
+        continue
+    text = manifest.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    updated = False
+    for idx, line in enumerate(lines):
+        for name, version in version_map.items():
+            if not line.lstrip().startswith(f"{name} "):
+                continue
+            if "path" not in line or "version" not in line or "{" not in line:
+                continue
+            match = re.match(rf'^(\s*{re.escape(name)}\s*=\s*\{{)(.*)(\}}\s*)$', line)
+            if not match:
+                continue
+            middle = match.group(2)
+            middle = re.sub(r'\bversion\s*=\s*"[^"]*"', f'version = "={version}"', middle)
+            lines[idx] = f"{match.group(1)}{middle}{match.group(3)}"
+            updated = True
+            break
+    if updated:
+        manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+fi
 
 echo ""
 if [ "$updated" -gt 0 ]; then
