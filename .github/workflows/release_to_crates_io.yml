@@ -74,7 +74,7 @@ jobs:
           chmod +x scripts/smart-version-bump.sh
           chmod +x scripts/apply-version-bumps.sh
           LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
-          VERSION_OUTPUT=$(LAST_TAG="$LAST_TAG" ./scripts/smart-version-bump.sh)
+          VERSION_OUTPUT=$(ALLOW_DIRTY=true LAST_TAG="$LAST_TAG" ./scripts/smart-version-bump.sh)
           echo "$VERSION_OUTPUT"
           VERSIONS_FILE=$(echo "$VERSION_OUTPUT" | grep "VERSIONS_FILE=" | cut -d'=' -f2)
           CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
