@@ -1,6 +1,6 @@
 [package]
 name = "feagi-npu-burst-engine"
-version = "0.0.1-beta.11"
+version = "0.0.1-beta.12"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true

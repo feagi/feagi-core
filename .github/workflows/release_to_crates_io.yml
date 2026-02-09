@@ -51,6 +51,12 @@ jobs:
           shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
           save-if: true
 
+      - name: Sync workspace from crates.io
+        run: |
+          echo "Syncing root and crate versions to match current crates.io..."
+          chmod +x scripts/sync-from-crates-io.sh
+          ./scripts/sync-from-crates-io.sh
+
       - name: Smart version detection and bumping
         id: version
         run: |

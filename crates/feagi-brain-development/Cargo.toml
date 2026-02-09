@@ -53,13 +53,13 @@ parking_lot = "0.12"
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 rand = { version = "0.8", features = ["std", "std_rng"] }
 # Use async-tokio feature for desktop builds
-feagi-npu-burst-engine = { version = "0.0.1-beta.11", path = "../feagi-npu/burst-engine", default-features = false, features = ["async-tokio", "std"] }
+feagi-npu-burst-engine = { version = "0.0.1-beta.12", path = "../feagi-npu/burst-engine", default-features = false, features = ["async-tokio", "std"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
 rand = { version = "0.8", default-features = false, features = ["getrandom"] }
 # Use wasm feature for WASM builds (no tokio)
-feagi-npu-burst-engine = { version = "0.0.1-beta.11", path = "../feagi-npu/burst-engine", default-features = false, features = ["wasm"] }
+feagi-npu-burst-engine = { version = "0.0.1-beta.12", path = "../feagi-npu/burst-engine", default-features = false, features = ["wasm"] }
 
 [features]
 default = ["parallel", "plasticity"]  # Standard build includes plasticity
