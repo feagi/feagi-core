@@ -317,7 +317,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          FEAGI_VERSION="$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+          FEAGI_VERSION="$(awk -F'\"' '/^version = / { print $2; exit }' Cargo.toml)"
           if [ -z "$FEAGI_VERSION" ]; then
             echo "Failed to detect feagi version from Cargo.toml"
             exit 1
