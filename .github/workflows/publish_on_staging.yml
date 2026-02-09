@@ -54,6 +54,10 @@ jobs:
         with:
           shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
           save-if: true
+      - name: Sync workspace from crates.io
+        run: |
+          chmod +x scripts/sync-from-crates-io.sh
+          ./scripts/sync-from-crates-io.sh
 
       - name: Publish unpublished crates
         run: |
