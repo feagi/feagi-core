@@ -205,7 +205,7 @@ def main() -> None:
     # Rewrite inline-table deps with path (../... or crates/...) and version.
     # Root Cargo.toml uses path="crates/..."; subcrates use path="../...".
     dep_re = re.compile(
-        r'^(?P<indent>\s*)(?P<dep>[A-Za-z0-9_-]+)\s*=\s*\{\s*(?P<body>[^}]*)\}\s*$'
+        r'^(?P<indent>\s*)(?P<dep>[A-Za-z0-9_-]+)\s*=\s*\{\s*(?P<body>[^}]*)\}\s*(?P<comment>#.*)?$'
     )
     version_re = re.compile(r'version\s*=\s*"(?P<ver>[^"]+)"')
     path_re = re.compile(r'path\s*=\s*"(?P<path>(?:\.\./|crates/)[^"]+)"')
@@ -246,7 +246,11 @@ def main() -> None:
                 continue
 
             new_body = version_re.sub(f'version = "{actual}"', body, count=1)
-            new_line = f'{m.group("indent")}{dep} = {{ {new_body.strip()} }}\n'
+            comment = m.group("comment") or ""
+            if comment:
+                new_line = f'{m.group("indent")}{dep} = {{ {new_body.strip()} }} {comment}\n'
+            else:
+                new_line = f'{m.group("indent")}{dep} = {{ {new_body.strip()} }}\n'
             out.append(new_line)
             file_changed = True
             changed_deps += 1
