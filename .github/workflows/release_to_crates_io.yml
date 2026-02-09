@@ -80,9 +80,13 @@ jobs:
           CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
           echo "versions_file=$VERSIONS_FILE" >> $GITHUB_OUTPUT
           echo "changed_crates=$CHANGED_CRATES" >> $GITHUB_OUTPUT
-          echo "Applying version updates to Cargo.toml files..."
-          export VERSIONS_FILE="$VERSIONS_FILE"
-          ./scripts/apply-version-bumps.sh
+          if [ -n "$VERSIONS_FILE" ] && [ -f "$VERSIONS_FILE" ]; then
+            echo "Applying version updates to Cargo.toml files..."
+            export VERSIONS_FILE="$VERSIONS_FILE"
+            ./scripts/apply-version-bumps.sh
+          else
+            echo "No version updates to apply."
+          fi
           echo "Smart independent versioning complete"
 
       - name: Guard - enforce bumps for changed crates
