@@ -325,12 +325,11 @@ jobs:
           TAG_NAME="v${FEAGI_VERSION}"
           if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
             echo "Release tag already exists: $TAG_NAME"
-            echo "Bump feagi version before releasing."
-            exit 1
+          else
+            echo "Creating release tag: $TAG_NAME"
+            git tag "$TAG_NAME"
+            git push origin "$TAG_NAME"
           fi
-          echo "Creating release tag: $TAG_NAME"
-          git tag "$TAG_NAME"
-          git push origin "$TAG_NAME"
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
