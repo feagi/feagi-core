@@ -351,3 +351,18 @@ impl FeagiAgentHandler {
 
 }
 
+/// Implement EmbodimentSensoryPoller trait for integration with BurstLoopRunner
+/// This allows the burst loop to poll for sensory data from ZMQ/WS embodiment agents
+impl feagi_npu_burst_engine::EmbodimentSensoryPoller for FeagiAgentHandler {
+    fn poll_sensory_data(&mut self) -> Result<Option<Vec<u8>>, String> {
+        match self.poll_embodiment_sensors() {
+            Ok(Some(byte_container)) => {
+                // Return the serialized bytes
+                Ok(Some(byte_container.get_byte_ref().to_vec()))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(format!("Sensory poll failed: {:?}", e)),
+        }
+    }
+}
+

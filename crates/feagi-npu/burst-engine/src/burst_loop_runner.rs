@@ -71,10 +71,11 @@ pub trait MotorPublisher: Send + Sync {
 
 /// Trait for polling sensory data from embodiment agents (ZMQ/WS non-blocking)
 /// This trait abstraction avoids circular dependency with feagi-agent
-pub trait EmbodimentSensoryPoller: Send + Sync {
+pub trait EmbodimentSensoryPoller: Send {
     /// Poll for sensory data from any registered embodiment
     /// Returns serialized FeagiByteContainer bytes if data available
-    fn poll_sensory_data(&self) -> Result<Option<Vec<u8>>, String>;
+    /// Takes &mut self because polling modifies internal socket state
+    fn poll_sensory_data(&mut self) -> Result<Option<Vec<u8>>, String>;
 }
 
 /// Burst loop runner - manages the main neural processing loop
@@ -95,7 +96,8 @@ pub struct BurstLoopRunner {
     /// Sensory agent manager (per-agent injection threads - SHM-based agents)
     pub sensory_manager: Arc<Mutex<AgentManager>>,
     /// Optional embodiment sensory poller for ZMQ/WS agents (non-blocking I/O)
-    pub embodiment_poller: Option<Arc<dyn EmbodimentSensoryPoller>>,
+    /// Wrapped in Mutex because polling requires &mut self
+    pub embodiment_poller: Option<Arc<Mutex<dyn EmbodimentSensoryPoller>>>,
     /// Visualization SHM writer (optional, None if not configured)
     pub viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
     /// Motor SHM writer (optional, None if not configured)
@@ -418,7 +420,7 @@ impl BurstLoopRunner {
     }
 
     /// Set embodiment sensory poller (for ZMQ/WS agents)
-    pub fn set_embodiment_poller(&mut self, poller: Arc<dyn EmbodimentSensoryPoller>) {
+    pub fn set_embodiment_poller(&mut self, poller: Arc<Mutex<dyn EmbodimentSensoryPoller>>) {
         self.embodiment_poller = Some(poller);
         info!("[BURST-RUNNER] Embodiment sensory poller attached");
     }
