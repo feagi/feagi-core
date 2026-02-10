@@ -178,12 +178,20 @@ fn get_agent_name_from_id(agent_id: &str) -> ApiResult<String> {
     }
 }
 
+#[cfg(feature = "feagi-agent")]
 async fn auto_create_cortical_areas_from_device_registrations(
     state: &ApiState,
     device_registrations: &serde_json::Value,
 ) {
-    #[cfg(feature = "feagi-agent")]
     auto_create_cortical_areas_shared(state, device_registrations).await;
+}
+
+#[cfg(not(feature = "feagi-agent"))]
+async fn auto_create_cortical_areas_from_device_registrations(
+    _state: &ApiState,
+    _device_registrations: &serde_json::Value,
+) {
+    // No-op when feature is disabled
 }
 
 /// Register a new agent with FEAGI and receive connection details including transport configuration and ports.
@@ -206,10 +214,6 @@ pub async fn register_agent(
         request.agent_id, request.agent_type
     );
 
-    if state.agent_handler.is_none() {
-        return Err(ApiError::internal("Agent handler not available"));
-    }
-
     let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
     
     // Extract device_registrations from capabilities
@@ -218,24 +222,34 @@ pub async fn register_agent(
         .get("device_registrations")
         .and_then(|v| v.as_object().map(|_| v.clone()));
 
-    // Store device registrations in handler if provided
-    if let Some(device_regs) = &device_registrations_opt {
+    // Clone device_regs before async operations to avoid borrow issues
+    let device_regs_for_autocreate = device_registrations_opt.clone();
+
+    // Store device registrations in handler if provided (no await here)
+    let handler_available = if let Some(device_regs) = &device_registrations_opt {
         if let Some(handler) = &state.agent_handler {
-            let mut handler_guard = handler.lock().unwrap();
-            handler_guard.set_device_registrations_by_descriptor(
-                agent_descriptor.clone(),
-                device_regs.clone()
-            );
+            {
+                let mut handler_guard = handler.lock().unwrap();
+                handler_guard.set_device_registrations_by_descriptor(
+                    agent_descriptor.clone(),
+                    device_regs.clone()
+                );
+            } // Drop guard before any await
             info!("✅ [API] Stored device registrations for agent '{}'", request.agent_id);
-            
-            drop(handler_guard);
-            
-            // Trigger auto-creation of cortical areas
-            auto_create_cortical_areas_from_device_registrations(&state, device_regs).await;
+            true
+        } else {
+            false
         }
+    } else {
+        state.agent_handler.is_some()
+    };
+
+    // Now safe to await
+    if let Some(device_regs) = device_regs_for_autocreate {
+        auto_create_cortical_areas_from_device_registrations(&state, &device_regs).await;
     }
 
-    // Get available endpoints from handler
+    // Get available endpoints from handler (no await here)
     let endpoints_map = if let Some(handler) = &state.agent_handler {
         let handler_guard = handler.lock().unwrap();
         let transport_endpoints = handler_guard.get_transport_endpoints();
@@ -247,6 +261,9 @@ pub async fn register_agent(
         }
         response_map
     } else {
+        if !handler_available {
+            return Err(ApiError::internal("Agent handler not available"));
+        }
         HashMap::new()
     };
 
