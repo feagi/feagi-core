@@ -202,9 +202,7 @@ pub async fn register_agent(
     );
 
     #[cfg(not(feature = "feagi-agent"))]
-    {
-        return Err(ApiError::internal("feagi-agent feature not enabled"));
-    }
+    return Err(ApiError::internal("feagi-agent feature not enabled"));
 
     #[cfg(feature = "feagi-agent")]
     {
