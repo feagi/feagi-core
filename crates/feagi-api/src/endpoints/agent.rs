@@ -50,6 +50,7 @@ fn parse_auth_token(request: &AgentRegistrationRequest) -> ApiResult<AuthToken> 
 }
 
 #[cfg(feature = "feagi-agent")]
+#[allow(dead_code)]
 fn derive_capabilities_from_device_registrations(
     device_registrations: &serde_json::Value,
 ) -> ApiResult<Vec<RegistrationCapabilities>> {
@@ -146,6 +147,7 @@ fn parse_capability_rate_hz(
 }
 
 #[cfg(feature = "feagi-agent")]
+#[allow(dead_code)]
 fn capability_key(capability: &RegistrationCapabilities) -> &'static str {
     match capability {
         RegistrationCapabilities::SendSensorData => "send_sensor_data",
