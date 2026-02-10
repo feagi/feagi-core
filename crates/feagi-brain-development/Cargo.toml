@@ -1,6 +1,6 @@
 [package]
 name = "feagi-brain-development"
-version = "0.0.1-beta.8"
+version = "0.0.1-beta.9"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -14,12 +14,12 @@ name = "feagi_brain_development"
 
 [dependencies]
 # Core types from existing FEAGI crates
-feagi-npu-neural = { version = "=0.0.1-beta.8", path = "../feagi-npu/neural" }  # For types (CorticalArea, Dimensions, etc.)
-feagi-evolutionary = { version = "=0.0.1-beta.8", path = "../feagi-evolutionary" }
+feagi-npu-neural = { version = "=0.0.1-beta.9", path = "../feagi-npu/neural" }  # For types (CorticalArea, Dimensions, etc.)
+feagi-evolutionary = { version = "=0.0.1-beta.9", path = "../feagi-evolutionary" }
 feagi-npu-plasticity = { version = "=0.0.1-beta.12", path = "../feagi-npu/plasticity", optional = true }
 # feagi-burst-engine configured per-platform below
 feagi-structures = { workspace = true }
-feagi-state-manager = { version = "=0.0.1-beta.8", path = "../feagi-state-manager", default-features = false }
+feagi-state-manager = { version = "=0.0.1-beta.9", path = "../feagi-state-manager", default-features = false }
 
 # Performance (using workspace versions)
 rayon = { workspace = true, optional = true }  # Optional - not available in WASM
@@ -75,7 +75,7 @@ async-tokio = []
 [dev-dependencies]
 criterion = "0.5"       # Benchmarking
 proptest = "1.4"        # Property-based testing
-feagi-npu-runtime = { version = "=0.0.1-beta.8", path = "../feagi-npu/runtime", features = ["std"] }
+feagi-npu-runtime = { version = "=0.0.1-beta.9", path = "../feagi-npu/runtime", features = ["std"] }
 
 # Benchmarks will be added in Phase 2
 # [[bench]]
