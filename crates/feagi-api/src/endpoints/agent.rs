@@ -201,20 +201,18 @@ pub async fn register_agent(
         request.agent_id, request.agent_type
     );
 
-    #[cfg(not(feature = "feagi-agent"))]
-    return Err(ApiError::internal("feagi-agent feature not enabled"));
+    if state.agent_handler.is_none() {
+        return Err(ApiError::internal("Agent handler not available"));
+    }
 
-    #[cfg(feature = "feagi-agent")]
     let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
     
-    #[cfg(feature = "feagi-agent")]
     // Extract device_registrations from capabilities
     let device_registrations_opt = request
         .capabilities
         .get("device_registrations")
         .and_then(|v| v.as_object().map(|_| v.clone()));
 
-    #[cfg(feature = "feagi-agent")]
     // Store device registrations in handler if provided
     if let Some(device_regs) = &device_registrations_opt {
         if let Some(handler) = &state.agent_handler {
@@ -232,7 +230,6 @@ pub async fn register_agent(
         }
     }
 
-    #[cfg(feature = "feagi-agent")]
     // Get available endpoints from handler
     let endpoints_map = if let Some(handler) = &state.agent_handler {
         let handler_guard = handler.lock().unwrap();
@@ -248,8 +245,7 @@ pub async fn register_agent(
         HashMap::new()
     };
 
-    #[cfg(feature = "feagi-agent")]
-    return Ok(Json(AgentRegistrationResponse {
+    Ok(Json(AgentRegistrationResponse {
         status: "success".to_string(),
         message: "Agent configuration stored. Connect via ZMQ/WebSocket for full registration".to_string(),
         success: true,
@@ -259,7 +255,7 @@ pub async fn register_agent(
         recommended_transport: None,
         shm_paths: None,
         cortical_areas: serde_json::json!({}),
-    }));
+    }))
 }
 
 /// Send a heartbeat to keep the agent registered and prevent timeout disconnection.
