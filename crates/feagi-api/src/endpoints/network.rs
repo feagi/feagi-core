@@ -162,6 +162,7 @@ fn placeholder_connection_info() -> NetworkConnectionInfo {
             relay_port: None,
             note: "Placeholder for future use. Bluetooth relay is provided by feagi-desktop for embodied controllers, not by FEAGI server".to_string(),
         },
+        // TODO dont use this struct
         stream_status: ConnectionInfoStreamStatus {
             zmq_control_started: false,
             zmq_data_streams_started: false,

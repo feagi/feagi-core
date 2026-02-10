@@ -10,7 +10,7 @@ use feagi_io::traits_and_enums::server::FeagiServerRouter;
 use feagi_serialization::{FeagiByteContainer, SessionID};
 use crate::command_and_control::agent_registration_message::RegistrationRequest;
 use crate::command_and_control::FeagiMessage;
-use crate::{AgentDescriptor, FeagiAgentError};
+use crate::{AgentCapabilities, AgentDescriptor, FeagiAgentError};
 
 pub type IsNewSessionId = bool;
 
@@ -33,7 +33,7 @@ impl CommandControlTranslator {
     }
 
     /// Poll for incoming messages, returns one if found, along with the session ID and true if the session id seems to be new
-    pub fn poll_for_incoming_messages(&mut self, known_session_ids: &HashMap<SessionID, AgentDescriptor>,) -> Result<Option<(SessionID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
+    pub fn poll_for_incoming_messages(&mut self, known_session_ids: &HashMap<SessionID, (AgentDescriptor, Vec<AgentCapabilities>)>) -> Result<Option<(SessionID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
         let state = self.router.poll().clone();
         match state {
             FeagiEndpointState::Inactive => {
@@ -100,7 +100,7 @@ impl CommandControlTranslator {
     }
 
     /// Tries converting incoming data into a [FeagiMessage]
-    fn process_incoming_data_into_message(&mut self, known_session_ids: &HashMap<SessionID, AgentDescriptor>,) -> Result<Option<(SessionID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
+    fn process_incoming_data_into_message(&mut self, known_session_ids: &HashMap<SessionID, (AgentDescriptor, Vec<AgentCapabilities>)>) -> Result<Option<(SessionID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
         let (session_id, incoming_data) = self
             .router
             .consume_retrieved_request()?;
@@ -121,9 +121,6 @@ impl CommandControlTranslator {
         // WARNING: It is possible for an agent to request registration a second time. Be wary!
         Ok(Some((session_id, feagi_message, is_new_session)))
     }
-
-
-
 
 }
 

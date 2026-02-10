@@ -1,10 +1,13 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO burn this to the ground
+
 //! PNS connection info for API discovery
 //!
 //! Provides snapshot of active transports and stream status for GET /v1/network/connection_info.
 
+// TODO seems to be unused. Burn and Delete
 /// Parse host and port from address string like "tcp://127.0.0.1:30001"
 pub(crate) fn parse_address(addr: &str) -> (String, u16) {
     let s = addr
@@ -31,6 +34,7 @@ pub struct StreamStatus {
     pub websocket_started: bool,
 }
 
+// TODO seems to be unused. Burn and Delete
 /// Connection config snapshot (for building API response)
 #[derive(Debug, Clone)]
 pub struct PnsConnectionConfigSnapshot {
