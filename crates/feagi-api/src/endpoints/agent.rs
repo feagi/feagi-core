@@ -249,32 +249,66 @@ pub async fn register_agent(
         auto_create_cortical_areas_from_device_registrations(&state, &device_regs).await;
     }
 
-    // Get available endpoints from handler (no await here)
-    let endpoints_map = if let Some(handler) = &state.agent_handler {
+    // Get available endpoints from handler and build TransportConfig objects
+    use crate::v1::TransportConfig;
+    let transports_array = if let Some(handler) = &state.agent_handler {
         let handler_guard = handler.lock().unwrap();
-        let transport_endpoints = handler_guard.get_transport_endpoints();
+        let available_protocols = handler_guard.get_available_protocols();
         
-        let mut response_map = HashMap::new();
-        for (protocol, endpoints) in transport_endpoints {
-            let protocol_name = format!("{:?}", protocol).to_lowercase();
-            response_map.insert(protocol_name, serde_json::json!(endpoints));
+        let mut transport_configs = Vec::new();
+        
+        for protocol in available_protocols {
+            let protocol_name = format!("{:?}", protocol);
+            let transport_type = if protocol_name.contains("Zmq") {
+                "zmq"
+            } else if protocol_name.contains("WebSocket") {
+                "websocket"
+            } else {
+                continue;
+            };
+            
+            // Build ports map from config (simplified - actual ports from config)
+            let mut ports = HashMap::new();
+            if transport_type == "websocket" {
+                ports.insert("registration".to_string(), config.websocket.registration_port);
+                ports.insert("sensory".to_string(), config.websocket.sensory_port);
+                ports.insert("motor".to_string(), config.websocket.motor_port);
+                ports.insert("visualization".to_string(), config.websocket.visualization_port);
+            } else if transport_type == "zmq" {
+                ports.insert("registration".to_string(), config.agent.registration_port);
+                ports.insert("sensory".to_string(), config.ports.zmq_sensory_port);
+                ports.insert("motor".to_string(), config.ports.zmq_motor_port);
+                ports.insert("visualization".to_string(), config.ports.zmq_visualization_port);
+            }
+            
+            transport_configs.push(TransportConfig {
+                transport_type: transport_type.to_string(),
+                enabled: true,
+                ports,
+                host: if transport_type == "websocket" {
+                    config.websocket.host.clone()
+                } else {
+                    config.zmq.host.clone()
+                },
+            });
         }
-        response_map
+        
+        transport_configs
     } else {
         if !handler_available {
             return Err(ApiError::internal("Agent handler not available"));
         }
-        HashMap::new()
+        Vec::new()
     };
 
     Ok(Json(AgentRegistrationResponse {
         status: "success".to_string(),
         message: "Agent configuration stored. Connect via ZMQ/WebSocket for full registration".to_string(),
         success: true,
-        transport: Some(endpoints_map),
+        transport: None, // Legacy field - deprecated
         rates: None,
-        transports: None,
-        recommended_transport: None,
+        transports: Some(transports_array),
+        recommended_transport: Some("websocket".to_string()),
         shm_paths: None,
         cortical_areas: serde_json::json!({}),
     }))
