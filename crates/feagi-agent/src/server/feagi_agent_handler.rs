@@ -79,6 +79,37 @@ impl FeagiAgentHandler {
         self.all_registered_sessions.get(&session_id)
     }
 
+    /// Get available transport protocols (for REST registration response)
+    pub fn get_available_protocols(&self) -> HashSet<TransportProtocolImplementation> {
+        let mut protocols = HashSet::new();
+        for puller in &self.available_pullers {
+            protocols.insert(puller.get_protocol());
+        }
+        for publisher in &self.available_publishers {
+            protocols.insert(publisher.get_protocol());
+        }
+        protocols
+    }
+
+    /// Get transport endpoints for REST registration response
+    pub fn get_transport_endpoints(&self) -> HashMap<TransportProtocolImplementation, Vec<TransportProtocolEndpoint>> {
+        let mut endpoints = HashMap::new();
+        
+        for puller in &self.available_pullers {
+            endpoints.entry(puller.get_protocol())
+                .or_insert_with(Vec::new)
+                .push(puller.get_endpoint());
+        }
+        
+        for publisher in &self.available_publishers {
+            endpoints.entry(publisher.get_protocol())
+                .or_insert_with(Vec::new)
+                .push(publisher.get_endpoint());
+        }
+        
+        endpoints
+    }
+
     //endregion
 
     //region Add Servers
