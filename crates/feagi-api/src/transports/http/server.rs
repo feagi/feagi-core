@@ -251,7 +251,8 @@ fn create_v1_router() -> Router<ApiState> {
 
     Router::new()
         // ===== AGENT MODULE (14 endpoints) =====
-        .route("/agent/register", axum::routing::post(register_agent))
+        // TODO: Fix Handler trait issue with register_agent
+        // .route("/agent/register", axum::routing::post(register_agent))
         .route("/agent/heartbeat", axum::routing::post(heartbeat))
         .route("/agent/list", get(list_agents))
         .route("/agent/properties", get(get_agent_properties))
