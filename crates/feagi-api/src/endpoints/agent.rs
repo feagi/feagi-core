@@ -205,203 +205,59 @@ pub async fn register_agent(
         request.agent_id, request.agent_type
     );
 
-    #[cfg(feature = "feagi-agent")]
-    let device_registrations_opt = request
-        .capabilities
-        .get("device_registrations")
-        .and_then(|v| v.as_object().map(|_| v.clone()));
-
     #[cfg(not(feature = "feagi-agent"))]
     {
         return Err(ApiError::internal("feagi-agent feature not enabled"));
     }
 
     #[cfg(feature = "feagi-agent")]
-    let (
-        registration_response,
-        motor_rate_hz,
-        visualization_rate_hz,
-        burst_frequency_hz,
-        visualization_requested,
-    ) = {
-        let registration_handler = state.agent_registration_handler.clone();
+    {
         let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
-        let auth_token = parse_auth_token(&request)?;
+        
+        // Extract device_registrations from capabilities
+        let device_registrations_opt = request
+            .capabilities
+            .get("device_registrations")
+            .and_then(|v| v.as_object().map(|_| v.clone()));
 
-        let (requested_capabilities, visualization_requested) = match &device_registrations_opt {
-            Some(device_registrations) => {
-                let caps =
-                    derive_capabilities_from_device_registrations(device_registrations)?;
-                let viz = caps.iter().any(|c| {
-                    matches!(c, RegistrationCapabilities::ReceiveNeuronVisualizations)
-                });
-                (caps, viz)
-            }
-            None => {
-                let caps = derive_capabilities_from_visualization_capability(&request)?;
-                (caps, true)
-            }
-        };
-
-        let runtime_status = state.runtime_service.get_status().await.map_err(|e| {
-            ApiError::internal(format!("Failed to read runtime status: {}", e))
-        })?;
-        let burst_frequency_hz = runtime_status.frequency_hz;
-        if burst_frequency_hz <= 0.0 {
-            return Err(ApiError::internal(
-                "Invalid burst frequency reported by runtime service".to_string(),
-            ));
-        }
-
-        let motor_rate_hz = parse_capability_rate_hz(&request.capabilities, "motor")?;
-        if let Some(rate) = motor_rate_hz {
-            if rate > burst_frequency_hz {
-                return Err(ApiError::invalid_input(format!(
-                    "motor rate_hz {} exceeds burst frequency {}",
-                    rate, burst_frequency_hz
-                )));
-            }
-        }
-
-        let visualization_rate_hz =
-            parse_capability_rate_hz(&request.capabilities, "visualization")?;
-        if let Some(rate) = visualization_rate_hz {
-            if rate > burst_frequency_hz {
-                return Err(ApiError::invalid_input(format!(
-                    "visualization rate_hz {} exceeds burst frequency {}",
-                    rate, burst_frequency_hz
-                )));
-            }
-        }
-
-        let mut handler_guard = registration_handler.lock();
-        let protocol = match request.chosen_transport.as_deref() {
-            Some(transport) => handler_guard.parse_protocol(transport).map_err(|e| {
-                ApiError::invalid_input(format!("Unsupported transport: {e}"))
-            })?,
-            None => handler_guard
-                .default_protocol()
-                .map_err(|e| ApiError::internal(format!("Missing default transport: {e}")))?,
-        };
-
-        let registration_request = RegistrationRequest::new(
-            agent_descriptor.clone(),
-            auth_token,
-            requested_capabilities,
-            protocol,
-        );
-
-        let registration_response = handler_guard
-            .process_registration(registration_request, None)
-            .map_err(|e| ApiError::internal(format!("Registration failed: {e}")))?;
-
-        (
-            registration_response,
-            motor_rate_hz,
-            visualization_rate_hz,
-            burst_frequency_hz,
-            visualization_requested,
-        )
-    };
-
-    #[cfg(feature = "feagi-agent")]
-    match registration_response {
-        RegistrationResponse::Success(session_id, endpoints) => {
-            info!(
-                "✅ [API] Agent '{}' registration succeeded (session: {:?})",
-                request.agent_id, session_id
-            );
-
-            #[cfg(feature = "feagi-agent")]
-            if let Some(device_registrations_value) = device_registrations_opt {
-                let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
+        // Store device registrations in handler if provided
+        if let Some(device_regs) = &device_registrations_opt {
+            if let Some(handler) = &state.agent_handler {
+                let mut handler_guard = handler.lock().unwrap();
+                handler_guard.set_device_registrations_by_descriptor(
+                    agent_descriptor.clone(),
+                    device_regs.clone()
+                );
+                info!("✅ [API] Stored device registrations for agent '{}'", request.agent_id);
                 
-                if let Some(handler) = &state.agent_handler {
-                    let mut handler_guard = handler.lock().unwrap();
-                    handler_guard.set_device_registrations_by_descriptor(
-                        agent_descriptor,
-                        device_registrations_value.clone()
-                    );
-                    info!("✅ [API] Stored device registrations for agent '{}'", request.agent_id);
-                    
-                    drop(handler_guard);
-                    auto_create_cortical_areas_from_device_registrations(
-                        &state,
-                        &device_registrations_value,
-                    )
-                    .await;
-
-                    let output_units_present = device_registrations_value
-                        .get("output_units_and_decoder_properties")
-                        .and_then(|v| v.as_object())
-                        .map(|v| !v.is_empty())
-                        .unwrap_or(false);
-
-                    if output_units_present {
-                        let cortical_ids =
-                            derive_motor_cortical_ids_from_device_registrations(
-                                &device_registrations_value,
-                            )
-                            .map_err(ApiError::invalid_input)?;
-                        let rate_hz =
-                            motor_rate_hz.unwrap_or(burst_frequency_hz);
-                        state
-                            .runtime_service
-                            .register_motor_subscriptions(
-                                &request.agent_id,
-                                cortical_ids.into_iter().collect(),
-                                rate_hz,
-                            )
-                            .await
-                            .map_err(ApiError::from)?;
-                    }
-                }
+                drop(handler_guard);
+                
+                // Trigger auto-creation of cortical areas
+                auto_create_cortical_areas_from_device_registrations(&state, device_regs).await;
             }
-
-            if visualization_requested {
-                let rate_hz =
-                    visualization_rate_hz.unwrap_or(burst_frequency_hz);
-                state
-                    .runtime_service
-                    .register_visualization_subscriptions(
-                        &request.agent_id,
-                        rate_hz,
-                    )
-                    .await
-                    .map_err(ApiError::from)?;
-            }
-
-            let mut endpoint_map = HashMap::new();
-            for (capability, endpoint) in endpoints {
-                endpoint_map.insert(capability_key(&capability).to_string(), serde_json::json!(endpoint));
-            }
-
-            let session_b64 = base64::engine::general_purpose::STANDARD.encode(session_id.bytes());
-            let mut transport = HashMap::new();
-            transport.insert("session_id".to_string(), serde_json::json!(session_b64));
-            transport.insert("endpoints".to_string(), serde_json::json!(endpoint_map));
-
-            Ok(Json(AgentRegistrationResponse {
-                status: "success".to_string(),
-                message: "Agent registered successfully".to_string(),
-                success: true,
-                transport: Some(transport),
-                rates: None,
-                transports: None,
-                recommended_transport: request.chosen_transport,
-                shm_paths: None,
-                cortical_areas: serde_json::json!({}),
-            }))
         }
-        RegistrationResponse::FailedInvalidAuth => Err(ApiError::invalid_input(
-            "Registration failed: invalid auth token",
-        )),
-        RegistrationResponse::FailedInvalidRequest => Err(ApiError::invalid_input(
-            "Registration failed: invalid request",
-        )),
-        RegistrationResponse::AlreadyRegistered => Err(ApiError::invalid_input(
-            "Registration failed: agent already registered",
-        )),
+
+        // Get available endpoints from handler
+        let endpoints_map = if let Some(handler) = &state.agent_handler {
+            let handler_guard = handler.lock().unwrap();
+            let transport_endpoints = handler_guard.get_transport_endpoints();
+            
+            let mut response_map = HashMap::new();
+            for (protocol, endpoints) in transport_endpoints {
+                let protocol_name = format!("{:?}", protocol).to_lowercase();
+                response_map.insert(protocol_name, serde_json::json!(endpoints));
+            }
+            response_map
+        } else {
+            HashMap::new()
+        };
+
+        Ok(Json(AgentRegistrationResponse {
+            status: "success".to_string(),
+            message: "Agent configuration stored. Connect via ZMQ/WebSocket for full registration".to_string(),
+            success: true,
+            transport: Some(endpoints_map),
+        }))
     }
 }
 
