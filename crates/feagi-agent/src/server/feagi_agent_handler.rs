@@ -15,6 +15,10 @@ pub struct FeagiAgentHandler {
     available_pullers: Vec<Box<dyn FeagiServerPullerProperties>>,
 
     all_registered_sessions: HashMap<SessionID, AgentDescriptor>,
+    /// Device registrations by AgentDescriptor (REST API configuration storage)
+    device_registrations_by_descriptor: HashMap<AgentDescriptor, serde_json::Value>,
+    /// Device registrations by SessionID (active connections)
+    device_registrations_by_session: HashMap<SessionID, serde_json::Value>,
 
     command_control_servers: Vec<CommandControlTranslator>,
     registered_embodiments: Vec<EmbodimentTranslator>,
@@ -35,11 +39,47 @@ impl FeagiAgentHandler {
 
             command_control_servers: Vec::new(),
             all_registered_sessions: HashMap::new(),
+            device_registrations_by_descriptor: HashMap::new(),
+            device_registrations_by_session: HashMap::new(),
             registered_embodiments: Vec::new(),
             session_id_command_control_mapping: Default::default(),
             session_id_embodiments_mapping: Default::default(),
         }
     }
+
+    //region Device Registration Management (REST API Support)
+
+    /// Store device registrations by AgentDescriptor (REST API - before connection)
+    pub fn set_device_registrations_by_descriptor(&mut self, agent_descriptor: AgentDescriptor, device_registrations: serde_json::Value) {
+        self.device_registrations_by_descriptor.insert(agent_descriptor, device_registrations);
+    }
+
+    /// Get device registrations by AgentDescriptor (REST API queries)
+    pub fn get_device_registrations_by_descriptor(&self, agent_descriptor: &AgentDescriptor) -> Option<&serde_json::Value> {
+        self.device_registrations_by_descriptor.get(agent_descriptor)
+    }
+
+    /// Store device registrations by SessionID (active connection)
+    pub fn set_device_registrations_by_session(&mut self, session_id: SessionID, device_registrations: serde_json::Value) {
+        self.device_registrations_by_session.insert(session_id, device_registrations);
+    }
+
+    /// Get device registrations by SessionID
+    pub fn get_device_registrations_by_session(&self, session_id: SessionID) -> Option<&serde_json::Value> {
+        self.device_registrations_by_session.get(&session_id)
+    }
+
+    /// Get all registered sessions with their descriptors
+    pub fn get_registered_agents(&self) -> &HashMap<SessionID, AgentDescriptor> {
+        &self.all_registered_sessions
+    }
+
+    /// Get agent descriptor by session ID
+    pub fn get_agent_descriptor(&self, session_id: SessionID) -> Option<&AgentDescriptor> {
+        self.all_registered_sessions.get(&session_id)
+    }
+
+    //endregion
 
     //region Add Servers
 

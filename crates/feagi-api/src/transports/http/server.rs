@@ -66,14 +66,7 @@ pub struct ApiState {
     pub amalgamation_state: amalgamation::SharedAmalgamationState,
     /// Device registration connectors per agent (for export/import functionality)
     #[cfg(feature = "feagi-agent")]
-    pub agent_connectors: Arc<
-        parking_lot::RwLock<
-            std::collections::HashMap<
-                feagi_agent::sdk::AgentDescriptor,
-                Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
-            >,
-        >,
-    >,
+    pub agent_handler: Option<Arc<std::sync::Mutex<feagi_agent::server::FeagiAgentHandler>>>,
     /// Unified registration handler (REST/ZMQ/WS share this pipeline)
     #[cfg(feature = "feagi-agent")]
     pub agent_registration_handler:
@@ -82,17 +75,6 @@ pub struct ApiState {
 
 impl ApiState {
     /// Initialize agent_connectors field (empty HashMap)
-    #[cfg(feature = "feagi-agent")]
-    pub fn init_agent_connectors() -> Arc<
-        parking_lot::RwLock<
-            std::collections::HashMap<
-                feagi_agent::sdk::AgentDescriptor,
-                Arc<std::sync::Mutex<feagi_agent::sdk::ConnectorAgent>>,
-            >,
-        >,
-    > {
-        Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new()))
-    }
 
     /// Initialize the unified registration handler.
     #[cfg(feature = "feagi-agent")]

@@ -16,9 +16,12 @@ use base64::Engine;
 use tracing::{error, info, warn};
 
 #[cfg(feature = "feagi-agent")]
-use feagi_agent::registration::{
-    AgentCapabilities as RegistrationCapabilities, AgentDescriptor, AuthToken, RegistrationRequest,
-    RegistrationResponse,
+use feagi_agent::{
+    AgentCapabilities as RegistrationCapabilities, AgentDescriptor, AuthToken,
+};
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::command_and_control::agent_registration_message::{
+    RegistrationRequest as AgentRegistrationRequest, RegistrationResponse as AgentRegistrationResponse,
 };
 #[cfg(feature = "feagi-agent")]
 use crate::common::agent_registration::{
@@ -26,7 +29,7 @@ use crate::common::agent_registration::{
     derive_motor_cortical_ids_from_device_registrations,
 };
 #[cfg(feature = "feagi-agent")]
-use feagi_agent::sdk::ConnectorAgent;
+use feagi_serialization::SessionID;
 #[cfg(feature = "feagi-agent")]
 use std::sync::{Arc, Mutex};
 
@@ -312,82 +315,47 @@ pub async fn register_agent(
             #[cfg(feature = "feagi-agent")]
             if let Some(device_registrations_value) = device_registrations_opt {
                 let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
-                let device_registrations_for_autocreate = device_registrations_value.clone();
-                let connector = {
-                    let mut connectors = state.agent_connectors.write();
-                    if let Some(existing) = connectors.get(&agent_descriptor) {
-                        existing.clone()
-                    } else {
-                        let connector = ConnectorAgent::new_from_device_registration_json(
-                            agent_descriptor.clone(),
-                            device_registrations_value.clone(),
-                        )
-                        .map_err(|e| {
-                            ApiError::invalid_input(format!(
-                                "Failed to initialize connector from device registrations: {e}"
-                            ))
-                        })?;
-                        let connector = Arc::new(Mutex::new(connector));
-                        connectors.insert(agent_descriptor.clone(), connector.clone());
-                        connector
-                    }
-                };
+                
+                if let Some(handler) = &state.agent_handler {
+                    let mut handler_guard = handler.lock().unwrap();
+                    handler_guard.set_device_registrations_by_descriptor(
+                        agent_descriptor,
+                        device_registrations_value.clone()
+                    );
+                    info!("✅ [API] Stored device registrations for agent '{}'", request.agent_id);
+                    
+                    drop(handler_guard);
+                    auto_create_cortical_areas_from_device_registrations(
+                        &state,
+                        &device_registrations_value,
+                    )
+                    .await;
 
-                let import_result = {
-                    let mut connector_guard = connector.lock().unwrap();
-                    connector_guard.set_device_registrations_from_json(device_registrations_value)
-                };
+                    let output_units_present = device_registrations_value
+                        .get("output_units_and_decoder_properties")
+                        .and_then(|v| v.as_object())
+                        .map(|v| !v.is_empty())
+                        .unwrap_or(false);
 
-                match import_result {
-                    Err(e) => {
-                        warn!(
-                            "⚠️ [API] Failed to import device registrations from capabilities for agent '{}': {}",
-                            request.agent_id, e
-                        );
-                    }
-                    Ok(()) => {
-                        info!(
-                            "✅ [API] Imported device registrations from capabilities for agent '{}'",
-                            request.agent_id
-                        );
-                        auto_create_cortical_areas_from_device_registrations(
-                            &state,
-                            &device_registrations_for_autocreate,
-                        )
-                        .await;
-
-                        let output_units_present = device_registrations_for_autocreate
-                            .get("output_units_and_decoder_properties")
-                            .and_then(|v| v.as_object())
-                            .map(|v| !v.is_empty())
-                            .unwrap_or(false);
-
-                        if output_units_present {
-                            let cortical_ids =
-                                derive_motor_cortical_ids_from_device_registrations(
-                                    &device_registrations_for_autocreate,
-                                )
-                                .map_err(ApiError::invalid_input)?;
-                            let rate_hz =
-                                motor_rate_hz.unwrap_or(burst_frequency_hz);
-                            state
-                                .runtime_service
-                                .register_motor_subscriptions(
-                                    &request.agent_id,
-                                    cortical_ids.into_iter().collect(),
-                                    rate_hz,
-                                )
-                                .await
-                                .map_err(ApiError::from)?;
-                        }
+                    if output_units_present {
+                        let cortical_ids =
+                            derive_motor_cortical_ids_from_device_registrations(
+                                &device_registrations_value,
+                            )
+                            .map_err(ApiError::invalid_input)?;
+                        let rate_hz =
+                            motor_rate_hz.unwrap_or(burst_frequency_hz);
+                        state
+                            .runtime_service
+                            .register_motor_subscriptions(
+                                &request.agent_id,
+                                cortical_ids.into_iter().collect(),
+                                rate_hz,
+                            )
+                            .await
+                            .map_err(ApiError::from)?;
                     }
                 }
-            } else {
-                let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
-                let mut connectors = state.agent_connectors.write();
-                connectors.entry(agent_descriptor.clone()).or_insert_with(|| {
-                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor.clone())))
-                });
             }
 
             if visualization_requested {
@@ -921,26 +889,18 @@ fn export_device_registrations_from_connector(
     agent_id: &str,
 ) -> ApiResult<serde_json::Value> {
     let agent_descriptor = parse_agent_descriptor(agent_id)?;
-    let connector = {
-        let connectors = state.agent_connectors.read();
-        connectors.get(&agent_descriptor).cloned()
-    };
-    let connector = connector.ok_or_else(|| {
-        ApiError::not_found(
-            "device_registrations",
-            &format!("No ConnectorAgent found for agent '{}'", agent_id),
-        )
-    })?;
-
-    let connector_guard = connector
-        .lock()
-        .map_err(|_| ApiError::internal("ConnectorAgent lock poisoned".to_string()))?;
-    connector_guard.get_device_registration_json().map_err(|e| {
-        ApiError::internal(format!(
-            "Failed to export device registrations for agent '{}': {}",
-            agent_id, e
-        ))
-    })
+    
+    if let Some(handler) = &state.agent_handler {
+        let handler_guard = handler.lock().unwrap();
+        if let Some(regs) = handler_guard.get_device_registrations_by_descriptor(&agent_descriptor) {
+            return Ok(regs.clone());
+        }
+    }
+    
+    Err(ApiError::not_found(
+        "device_registrations",
+        &format!("No device registrations found for agent '{}'", agent_id),
+    ))
 }
 
 /// Get comprehensive agent information including status, capabilities, version, and connection details.
@@ -1119,95 +1079,31 @@ pub async fn export_device_registrations(
         );
     }
 
-    // Get existing ConnectorAgent for this agent (don't create new one)
+    // Get device registrations from agent_handler
     #[cfg(feature = "feagi-agent")]
     let device_registrations = {
         let agent_descriptor = parse_agent_descriptor(&agent_id)?;
-        // Get existing ConnectorAgent - don't create a new one
-        // If no ConnectorAgent exists, it means device registrations haven't been imported yet
-        let connector = {
-            let connectors = state.agent_connectors.read();
-            connectors.get(&agent_descriptor).cloned()
-        };
-
-        let connector = match connector {
-            Some(c) => {
-                info!(
-                    "🔍 [API] Found existing ConnectorAgent for agent '{}'",
-                    agent_id
-                );
-                c
-            }
-            None => {
-                warn!(
-                    "⚠️ [API] No ConnectorAgent found for agent '{}' - device registrations may not have been imported yet. Total agents in registry: {}",
-                    agent_id,
-                    {
-                        let connectors = state.agent_connectors.read();
-                        connectors.len()
-                    }
-                );
-                // Return empty structure - don't create and store a new ConnectorAgent
-                // This prevents interference with future imports
-                return Ok(Json(DeviceRegistrationExportResponse {
-                    device_registrations: serde_json::json!({
-                        "input_units_and_encoder_properties": {},
-                        "output_units_and_decoder_properties": {},
-                        "feedbacks": []
-                    }),
-                    agent_id,
-                }));
-            }
-        };
-
-        // Export device registrations using ConnectorAgent method
-        let connector_guard = connector.lock().unwrap();
-        match connector_guard.get_device_registration_json() {
-            Ok(registrations) => {
-                // Log what we're exporting for debugging
-                let input_count = registrations
-                    .get("input_units_and_encoder_properties")
-                    .and_then(|v| v.as_object())
-                    .map(|m| m.len())
-                    .unwrap_or(0);
-                let output_count = registrations
-                    .get("output_units_and_decoder_properties")
-                    .and_then(|v| v.as_object())
-                    .map(|m| m.len())
-                    .unwrap_or(0);
-                let feedback_count = registrations
-                    .get("feedbacks")
-                    .and_then(|v| v.as_array())
-                    .map(|a| a.len())
-                    .unwrap_or(0);
-
-                info!(
-                    "📤 [API] Exporting device registrations for agent '{}': {} input units, {} output units, {} feedbacks",
-                    agent_id, input_count, output_count, feedback_count
-                );
-
-                if input_count == 0 && output_count == 0 && feedback_count == 0 {
-                    warn!(
-                        "⚠️ [API] Exported device registrations for agent '{}' are empty - agent may not have synced device registrations yet",
-                        agent_id
-                    );
-                }
-
-                registrations
-            }
-            Err(e) => {
-                warn!(
-                    "⚠️ [API] Failed to export device registrations for agent '{}': {}",
-                    agent_id, e
-                );
-                // @architecture:acceptable - emergency fallback on export failure
-                // Return empty structure on error to prevent API failure
+        
+        if let Some(handler) = &state.agent_handler {
+            let handler_guard = handler.lock().unwrap();
+            if let Some(regs) = handler_guard.get_device_registrations_by_descriptor(&agent_descriptor) {
+                info!("📤 [API] Found device registrations for agent '{}'", agent_id);
+                regs.clone()
+            } else {
+                warn!("⚠️ [API] No device registrations found for agent '{}'", agent_id);
                 serde_json::json!({
                     "input_units_and_encoder_properties": {},
                     "output_units_and_decoder_properties": {},
                     "feedbacks": []
                 })
             }
+        } else {
+            warn!("⚠️ [API] No agent_handler available");
+            serde_json::json!({
+                "input_units_and_encoder_properties": {},
+                "output_units_and_decoder_properties": {},
+                "feedbacks": []
+            })
         }
     };
 
@@ -1297,106 +1193,20 @@ pub async fn import_device_registrations(
         ));
     }
 
-    // Import device registrations using ConnectorAgent
+    // Store device registrations in agent_handler
     #[cfg(feature = "feagi-agent")]
     {
         let agent_descriptor = parse_agent_descriptor(&agent_id)?;
-        // Get or create ConnectorAgent for this agent
-        let connector = {
-            let mut connectors = state.agent_connectors.write();
-            let was_existing = connectors.contains_key(&agent_descriptor);
-            let connector = connectors
-                .entry(agent_descriptor.clone())
-                .or_insert_with(|| {
-                    info!(
-                        "🔧 [API] Creating new ConnectorAgent for agent '{}'",
-                        agent_id
-                    );
-                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor.clone())))
-                })
-                .clone();
-            if was_existing {
-                info!(
-                    "🔧 [API] Using existing ConnectorAgent for agent '{}'",
-                    agent_id
-                );
-            }
-            connector
-        };
-
-        // Log what we're importing for debugging
-        let input_count = request
-            .device_registrations
-            .get("input_units_and_encoder_properties")
-            .and_then(|v| v.as_object())
-            .map(|m| m.len())
-            .unwrap_or(0);
-        let output_count = request
-            .device_registrations
-            .get("output_units_and_decoder_properties")
-            .and_then(|v| v.as_object())
-            .map(|m| m.len())
-            .unwrap_or(0);
-        let feedback_count = request
-            .device_registrations
-            .get("feedbacks")
-            .and_then(|v| v.as_array())
-            .map(|a| a.len())
-            .unwrap_or(0);
-
-        info!(
-            "📥 [API] Importing device registrations for agent '{}': {} input units, {} output units, {} feedbacks",
-            agent_id, input_count, output_count, feedback_count
-        );
-
-        // IMPORTANT: do not hold a non-Send MutexGuard across an await.
-        let import_result: Result<(), String> = (|| {
-            let mut connector_guard = connector
-                .lock()
-                .map_err(|e| format!("ConnectorAgent lock poisoned: {e}"))?;
-
-            connector_guard
-                .set_device_registrations_from_json(request.device_registrations.clone())
-                .map_err(|e| format!("import failed: {e}"))?;
-
-            // Verify the import worked by exporting again (no await here).
-            match connector_guard.get_device_registration_json() {
-                Ok(exported) => {
-                    let exported_input_count = exported
-                        .get("input_units_and_encoder_properties")
-                        .and_then(|v| v.as_object())
-                        .map(|m| m.len())
-                        .unwrap_or(0);
-                    let exported_output_count = exported
-                        .get("output_units_and_decoder_properties")
-                        .and_then(|v| v.as_object())
-                        .map(|m| m.len())
-                        .unwrap_or(0);
-
-                    info!(
-                        "✅ [API] Device registration import succeeded for agent '{}' (verified: {} input, {} output)",
-                        agent_id, exported_input_count, exported_output_count
-                    );
-                }
-                Err(e) => {
-                    warn!(
-                        "⚠️ [API] Import succeeded but verification export failed for agent '{}': {}",
-                        agent_id, e
-                    );
-                }
-            }
-
-            Ok(())
-        })();
-
-        if let Err(msg) = import_result {
-            error!(
-                "❌ [API] Failed to import device registrations for agent '{}': {}",
-                agent_id, msg
+        
+        if let Some(handler) = &state.agent_handler {
+            let mut handler_guard = handler.lock().unwrap();
+            handler_guard.set_device_registrations_by_descriptor(
+                agent_descriptor,
+                request.device_registrations.clone()
             );
-            return Err(ApiError::invalid_input(format!(
-                "Failed to import device registrations: {msg}"
-            )));
+            info!("📥 [API] Imported device registrations for agent '{}'", agent_id);
+        } else {
+            warn!("⚠️ [API] No agent_handler available to store device registrations");
         }
 
         auto_create_cortical_areas_from_device_registrations(&state, &request.device_registrations)
