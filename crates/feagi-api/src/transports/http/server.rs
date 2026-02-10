@@ -64,22 +64,16 @@ pub struct ApiState {
     pub memory_stats_cache: Option<feagi_npu_plasticity::MemoryStatsCache>,
     /// In-memory amalgamation state (pending request + history), surfaced via health_check.
     pub amalgamation_state: amalgamation::SharedAmalgamationState,
-    /// Device registration connectors per agent (for export/import functionality)
+    /// Agent handler for device registrations and transport management
     #[cfg(feature = "feagi-agent")]
     pub agent_handler: Option<Arc<std::sync::Mutex<feagi_agent::server::FeagiAgentHandler>>>,
-    /// Unified registration handler (REST/ZMQ/WS share this pipeline)
-    #[cfg(feature = "feagi-agent")]
-    pub agent_registration_handler:
-        Arc<parking_lot::Mutex<feagi_agent::server::FeagiAgentHandler>>,
 }
 
 impl ApiState {
-    /// Initialize agent_connectors field (empty HashMap)
-
-    /// Initialize the unified registration handler.
+    /// Initialize the agent handler (deprecated - use external initialization).
     #[cfg(feature = "feagi-agent")]
     pub fn init_agent_registration_handler(
-    ) -> Arc<parking_lot::Mutex<feagi_agent::server::FeagiAgentHandler>> {
+    ) -> Arc<std::sync::Mutex<feagi_agent::server::FeagiAgentHandler>> {
         let config = load_config(None, None).expect("Failed to load FEAGI configuration");
         let mut handler = feagi_agent::server::FeagiAgentHandler::new(
             Box::new(feagi_agent::server::auth::DummyAuth {})
@@ -134,7 +128,7 @@ impl ApiState {
             handler.add_publisher_server(Box::new(visualization));
         }
 
-        Arc::new(parking_lot::Mutex::new(handler))
+        Arc::new(std::sync::Mutex::new(handler))
     }
 
     /// Initialize amalgamation_state field (empty state).
