@@ -22,6 +22,16 @@ use crate::traits_and_enums::server::{
 /// Type alias for WebSocket over TcpStream
 type WsStream = WebSocket<TcpStream>;
 
+/// State of a WebSocket connection during handshake
+enum HandshakeState {
+    /// TCP accepted, handshake in progress
+    Handshaking(TcpStream),
+    /// Handshake complete, WebSocket ready
+    Ready(WsStream),
+    /// Handshake failed
+    Failed,
+}
+
 // ============================================================================
 // Publisher
 // ============================================================================
@@ -530,7 +540,8 @@ pub struct FeagiWebSocketServerRouter {
     bind_address: String,
     current_state: FeagiEndpointState,
     listener: Option<TcpListener>,
-    clients: Vec<WsStream>,
+    /// Connections in various states (handshaking or ready)
+    clients: Vec<HandshakeState>,
     /// Buffer for received request
     receive_buffer: Option<Vec<u8>>,
     /// Session ID of the client that sent the current request
@@ -549,26 +560,67 @@ impl FeagiWebSocketServerRouter {
             None => return,
         };
 
+        // Accept new TCP connections and start handshake
         loop {
             match listener.accept() {
                 Ok((stream, _addr)) => {
-                    if stream.set_nonblocking(true).is_err() {
-                        continue;
-                    }
-                    match accept(stream) {
-                        Ok(ws) => {
-                            let index = self.clients.len();
-                            let session_id = SessionID::new_random();
-
-                            self.clients.push(ws);
-                            self.index_to_session.insert(index, session_id);
-                            self.session_to_index.insert(session_id, index);
-                        }
-                        Err(_) => {}
-                    }
+                    // Keep stream blocking for handshake (tungstenite requires it)
+                    // We'll switch to non-blocking after handshake completes
+                    self.clients.push(HandshakeState::Handshaking(stream));
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
                 Err(_) => break,
+            }
+        }
+    }
+    
+    fn process_handshakes(&mut self) {
+        let mut indices_to_remove = Vec::new();
+        
+        for (i, state) in self.clients.iter_mut().enumerate() {
+            match state {
+                HandshakeState::Handshaking(stream) => {
+                    // Try to complete handshake (this may block briefly but should be fast)
+                    match stream.try_clone() {
+                        Ok(cloned_stream) => {
+                            match accept(cloned_stream) {
+                                Ok(ws) => {
+                                    // Handshake successful - generate SessionID
+                                    let session_id = SessionID::new_random();
+                                    
+                                    // Set underlying stream to non-blocking for polling
+                                    if let Ok(tcp_stream) = ws.get_ref().try_clone() {
+                                        let _ = tcp_stream.set_nonblocking(true);
+                                    }
+                                    
+                                    *state = HandshakeState::Ready(ws);
+                                    self.index_to_session.insert(i, session_id);
+                                    self.session_to_index.insert(session_id, i);
+                                }
+                                Err(_e) => {
+                                    // Handshake failed or not ready - mark for removal on next cycle
+                                    // Don't immediately remove to give handshake time to complete
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            indices_to_remove.push(i);
+                        }
+                    }
+                }
+                HandshakeState::Failed => {
+                    indices_to_remove.push(i);
+                }
+                HandshakeState::Ready(_) => {
+                    // Already connected, nothing to do
+                }
+            }
+        }
+        
+        // Remove failed handshakes
+        for &i in indices_to_remove.iter().rev() {
+            if i < self.clients.len() {
+                self.remove_client(i);
             }
         }
     }
@@ -649,6 +701,7 @@ impl FeagiServer for FeagiWebSocketServerRouter {
     fn poll(&mut self) -> &FeagiEndpointState {
         if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
             self.accept_pending_connections();
+            self.process_handshakes(); // Process pending handshakes
 
             if self.try_receive() {
                 self.has_data = true;
