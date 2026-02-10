@@ -153,6 +153,7 @@ fn capability_key(capability: &RegistrationCapabilities) -> &'static str {
         RegistrationCapabilities::SendSensorData => "send_sensor_data",
         RegistrationCapabilities::ReceiveMotorData => "receive_motor_data",
         RegistrationCapabilities::ReceiveNeuronVisualizations => "receive_neuron_visualizations",
+        RegistrationCapabilities::ReceiveSystemMessages => "receive_system_messages",
     }
 }
 

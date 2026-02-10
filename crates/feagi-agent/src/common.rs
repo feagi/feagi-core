@@ -171,6 +171,45 @@ impl AgentDescriptor {
         self.agent_version
     }
 
+    /// Create AgentDescriptor from base64-encoded agent_id (REST API compatibility)
+    pub fn try_from_base64(agent_id_b64: &str) -> Result<Self, FeagiDataError> {
+        use base64::Engine;
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(agent_id_b64)
+            .map_err(|e| FeagiDataError::DeserializationError(format!("Invalid base64: {}", e)))?;
+        
+        if decoded.len() != Self::SIZE_BYTES {
+            return Err(FeagiDataError::DeserializationError(format!(
+                "Invalid agent_id length: expected {} bytes, got {}",
+                Self::SIZE_BYTES,
+                decoded.len()
+            )));
+        }
+        
+        // Deserialize from binary format
+        let instance_id = u32::from_le_bytes([decoded[0], decoded[1], decoded[2], decoded[3]]);
+        
+        let manufacturer_bytes = &decoded[4..4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT];
+        let manufacturer = String::from_utf8_lossy(manufacturer_bytes)
+            .trim_end_matches('\0')
+            .to_string();
+        
+        let agent_name_bytes = &decoded[4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT..4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT];
+        let agent_name = String::from_utf8_lossy(agent_name_bytes)
+            .trim_end_matches('\0')
+            .to_string();
+        
+        let version_offset = 4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT;
+        let agent_version = u32::from_le_bytes([
+            decoded[version_offset],
+            decoded[version_offset + 1],
+            decoded[version_offset + 2],
+            decoded[version_offset + 3],
+        ]);
+        
+        Self::new(instance_id, &manufacturer, &agent_name, agent_version)
+    }
+
     /// Validate the fields without creating a new instance.
     fn validate(
         manufacturer: &str,
