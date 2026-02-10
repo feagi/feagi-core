@@ -7,6 +7,7 @@
 
 #[cfg(feature = "file-logging")]
 use anyhow::Context;
+use anyhow::anyhow;
 use anyhow::Result;
 #[cfg(feature = "file-logging")]
 use chrono::Utc;
@@ -18,6 +19,20 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer, Registry};
 
 use crate::cli::CrateDebugFlags;
+
+/// Resolve tracing EnvFilter with explicit RUST_LOG precedence.
+///
+/// If RUST_LOG is present, it is parsed and used verbatim.
+/// Otherwise, fall back to the per-crate debug flags filter string.
+fn resolve_env_filter(debug_flags: &CrateDebugFlags) -> Result<EnvFilter> {
+    if let Ok(rust_log) = std::env::var("RUST_LOG") {
+        return EnvFilter::try_new(rust_log.clone())
+            .map_err(|e| anyhow!("Invalid RUST_LOG '{}': {}", rust_log, e));
+    }
+
+    let filter = debug_flags.to_filter_string();
+    Ok(EnvFilter::new(&filter))
+}
 
 /// Logging initialization result
 pub struct LoggingGuard {
@@ -76,9 +91,7 @@ pub fn init_logging(
     // Clean up old logs based on retention policy
     cleanup_old_logs(&base_log_dir, retention_days, retention_runs)?;
 
-    // Build filter string from debug flags
-    let filter = debug_flags.to_filter_string();
-    let env_filter = EnvFilter::new(&filter);
+    let env_filter = resolve_env_filter(debug_flags)?;
 
     // Create per-crate log files
     let mut layers = Vec::new();
@@ -152,9 +165,7 @@ pub fn init_logging(
     _retention_days: Option<u64>,
     _retention_runs: Option<usize>,
 ) -> Result<LoggingGuard> {
-    // Build filter string from debug flags
-    let filter = debug_flags.to_filter_string();
-    let env_filter = EnvFilter::new(&filter);
+    let env_filter = resolve_env_filter(debug_flags)?;
 
     // Console layer only (human-readable)
     let console_layer = tracing_subscriber::fmt::layer()

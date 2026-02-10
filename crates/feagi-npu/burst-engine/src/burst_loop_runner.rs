@@ -1121,7 +1121,13 @@ fn decode_sensory_bytes(
             .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()
         {
             Some(cm) => cm,
-            None => continue,
+            None => {
+                trace!(
+                    "[SENSORY-DECODE] Structure {} is not CorticalMappedXYZPNeuronVoxels, skipping",
+                    struct_idx
+                );
+                continue;
+            }
         };
 
         for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
@@ -1139,6 +1145,25 @@ fn decode_sensory_bytes(
             }
         }
     }
+
+    static FIRST_DECODE_LOGGED: std::sync::atomic::AtomicBool =
+        std::sync::atomic::AtomicBool::new(false);
+    if !out.is_empty() && !FIRST_DECODE_LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        let total: usize = out.iter().map(|(_, xyzp)| xyzp.len()).sum();
+        info!(
+            "[SENSORY-DECODE] First decode: {} areas, {} total neurons",
+            out.len(),
+            total
+        );
+        for (cortical_id, xyzp) in &out {
+            info!(
+                "[SENSORY-DECODE]   area base64={} neurons={}",
+                cortical_id.as_base_64(),
+                xyzp.len()
+            );
+        }
+    }
+
     Ok(out)
 }
 
@@ -1255,7 +1280,13 @@ fn burst_loop(
         > = sensory_intake.as_ref().and_then(|intake| {
             let mut guard = intake.lock().ok()?;
             let bytes = guard.poll_sensory_data().ok().flatten()?;
-            decode_sensory_bytes(&bytes).ok()
+            match decode_sensory_bytes(&bytes) {
+                Ok(decoded) => Some(decoded),
+                Err(e) => {
+                    warn!("[SENSORY-DECODE] Failed to decode {} bytes: {}", bytes.len(), e);
+                    None
+                }
+            }
         });
 
         // Track time since last lock release to detect if something held it
@@ -1582,8 +1613,10 @@ fn burst_loop(
                     }
                 }
 
-                // Inject sensory from intake (any transport) into NPU for this burst
+                // Inject sensory from intake (any transport) into NPU for this burst.
+                // Clear pending first so only the latest frame is applied (avoids accumulation).
                 if let Some(ref list) = sensory_xyzp {
+                    npu_lock.clear_pending_sensory_injections();
                     for (cortical_id, xyzp) in list {
                         npu_lock.inject_sensory_xyzp_by_id(cortical_id, xyzp);
                     }
@@ -1814,7 +1847,8 @@ fn burst_loop(
         // Sample fire queue ONCE and share between viz and motor using Arc (zero-cost sharing!)
         let has_motor_publisher = motor_publisher.is_some();
         let has_motor_shm = motor_shm_writer.lock().unwrap().is_some();
-        let needs_motor = has_motor_publisher || has_motor_shm;
+        let has_motor_subscriptions = !motor_subscriptions.read().is_empty();
+        let needs_motor = has_motor_shm || (has_motor_publisher && has_motor_subscriptions);
         let needs_fire_data = has_shm_writer || should_publish_viz || needs_motor;
 
         if burst_num % 100 == 0 {
@@ -2195,9 +2229,13 @@ fn burst_loop(
 
             // Use shared fire data from above (Arc - zero cost!)
             if let Some(ref fire_data_arc) = shared_fire_data_opt {
+                // Read subscriptions first so logs reflect whether motor output is actually in use.
+                let subscriptions = motor_subscriptions.read();
+                let has_motor_subscriptions = !subscriptions.is_empty();
                 debug!(
-                    "[BURST-LOOP] 🎮 MOTOR: Processing fire data with {} cortical areas",
-                    (**fire_data_arc).len()
+                    "[BURST-LOOP] 🎮 MOTOR: Fire snapshot has {} cortical areas (all active areas, motor subscriptions active={})",
+                    (**fire_data_arc).len(),
+                    has_motor_subscriptions
                 );
 
                 // CRITICAL PERFORMANCE FIX: Clone mappings to release lock immediately
@@ -2251,12 +2289,14 @@ fn burst_loop(
                         }
                     };
 
-                    debug!(
-                        "[BURST-LOOP] 🎮 MOTOR: Area {} ('{}') has {} neurons firing",
-                        area_id,
-                        cortical_id.escape_debug(),
-                        neuron_ids.len()
-                    );
+                    if has_motor_subscriptions || has_motor_shm {
+                        debug!(
+                            "[BURST-LOOP] 🎮 MOTOR: Fire snapshot area {} ('{}') has {} neurons firing",
+                            area_id,
+                            cortical_id.escape_debug(),
+                            neuron_ids.len()
+                        );
+                    }
 
                     motor_snapshot.insert(
                         *area_id,
@@ -2276,9 +2316,6 @@ fn burst_loop(
                     "[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas",
                     motor_snapshot.len()
                 );
-
-                // Get motor subscriptions
-                let subscriptions = motor_subscriptions.read();
 
                 // DEBUG: Log subscription state every 30 bursts
                 if burst_num % 30 == 0 {

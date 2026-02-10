@@ -362,6 +362,19 @@ pub async fn heartbeat(
     State(state): State<ApiState>,
     Json(request): Json<HeartbeatRequest>,
 ) -> ApiResult<Json<HeartbeatResponse>> {
+    // Check ZMQ/WS sessions first so we never hit the REST registry or log WARN for them
+    #[cfg(feature = "feagi-agent")]
+    if let Some(handler) = &state.agent_handler {
+        if let Ok(guard) = handler.lock() {
+            if guard.find_session_by_agent_id(&request.agent_id).is_some() {
+                return Ok(Json(HeartbeatResponse {
+                    message: "heartbeat_ok".to_string(),
+                    success: true,
+                }));
+            }
+        }
+    }
+
     let agent_service = state
         .agent_service
         .as_ref()
@@ -376,24 +389,10 @@ pub async fn heartbeat(
             message: "heartbeat_ok".to_string(),
             success: true,
         })),
-        Err(_) => {
-            // Fallback: agents that registered via ZMQ/WS are in the handler but not in the REST registry
-            #[cfg(feature = "feagi-agent")]
-            if let Some(handler) = &state.agent_handler {
-                if let Ok(guard) = handler.lock() {
-                    if guard.find_session_by_agent_id(&request.agent_id).is_some() {
-                        return Ok(Json(HeartbeatResponse {
-                            message: "heartbeat_ok".to_string(),
-                            success: true,
-                        }));
-                    }
-                }
-            }
-            Err(ApiError::not_found(
-                "agent",
-                &format!("Agent {} not in registry", request.agent_id),
-            ))
-        }
+        Err(_) => Err(ApiError::not_found(
+            "agent",
+            &format!("Agent {} not in registry", request.agent_id),
+        )),
     }
 }
 

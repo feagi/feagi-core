@@ -424,7 +424,9 @@ impl FeagiByteContainer {
             data_start_index
         };
 
-        if total_number_of_bytes > self.bytes.capacity() {
+        // Ensure exact payload length. Without truncation, stale trailing bytes from previous
+        // larger payloads can leak into transport buffers and waste bandwidth.
+        if self.bytes.len() != total_number_of_bytes {
             self.bytes.resize(total_number_of_bytes, 0);
         }
 
@@ -487,10 +489,9 @@ impl FeagiByteContainer {
                 number_bytes_to_read: number_of_bytes_used_by_struct as u32,
             });
 
-        if total_number_of_bytes > self.bytes.len() {
-            //unsafe {
-            //    self.bytes.set_len(total_number_of_bytes);
-            //}
+        // Ensure exact payload length. Without truncation, stale trailing bytes from previous
+        // larger payloads can leak into transport buffers and waste bandwidth.
+        if self.bytes.len() != total_number_of_bytes {
             self.bytes.resize(total_number_of_bytes, 0);
         }
 

@@ -2174,11 +2174,14 @@ impl<
             .unwrap()
             .batch_coordinate_lookup(cortical_area, &coords);
 
-        // Build (NeuronId, potential) pairs (filter out None)
+        // Build (NeuronId, potential) pairs (filter out missing coordinates and zero-potential inputs).
+        // Zero-potential sensory entries should not become fire candidates; this keeps sparse input sparse.
         let mut neuron_potential_pairs = Vec::with_capacity(neuron_ids.len());
         for (opt_idx, (_x, _y, _z, potential)) in neuron_ids.iter().zip(xyzp_data.iter()) {
             if let Some(idx) = opt_idx {
-                neuron_potential_pairs.push((NeuronId(*idx as u32), *potential));
+                if potential.is_finite() && *potential != 0.0 {
+                    neuron_potential_pairs.push((NeuronId(*idx as u32), *potential));
+                }
             }
         }
         let found_count = neuron_potential_pairs.len();
