@@ -50,17 +50,19 @@ impl CommandControlSubAgent {
                 Ok(())
             }
             _ => {
+                // Restore requester before returning error
+                self.requester = Some(requester);
                 Err(FeagiAgentError::ConnectionFailed("Socket is already active!".to_string()))
             }
         }
     }
 
     pub fn request_registration(&mut self, agent_descriptor: AgentDescriptor, auth_token: AuthToken, requested_capabilities: Vec<AgentCapabilities>) -> Result<(), FeagiAgentError> {
-        if self.registration_status == AgentRegistrationStatus::NotRegistered {
+        if self.registration_status != AgentRegistrationStatus::NotRegistered {
             return Err(FeagiAgentError::ConnectionFailed("Agent is already registered!".to_string()));
         }
 
-        if let Some(requester) = &mut self.requester.take() {
+        if let Some(requester) = &mut self.requester {
 
             let request = RegistrationRequest::new(
                 agent_descriptor,
@@ -81,17 +83,20 @@ impl CommandControlSubAgent {
     }
 
     pub fn poll_for_messages(&mut self) -> Result<Option<FeagiMessage>, FeagiAgentError> {
-        if let Some(requester) = &mut self.requester.take() {
+        if let Some(mut requester) = self.requester.take() {
 
             let state = requester.poll();
-            match state {
+            let result = match state {
                 FeagiEndpointState::Inactive => {
+                    self.requester = Some(requester);
                     Ok(None)
                 }
                 FeagiEndpointState::Pending => {
+                    self.requester = Some(requester);
                     Ok(None)
                 }
                 FeagiEndpointState::ActiveWaiting => {
+                    self.requester = Some(requester);
                     Ok(None)
                 }
                 FeagiEndpointState::ActiveHasData => {
@@ -99,10 +104,10 @@ impl CommandControlSubAgent {
                     self.incoming_cache.try_write_data_by_copy_and_verify(&data)?;
                     let feagi_message: FeagiMessage = (&self.incoming_cache).try_into()?;
 
-                    match &feagi_message {
+                    let result = match &feagi_message {
                         FeagiMessage::HeartBeat => {
                             // TODO how should we handle this???
-                            return Ok(None)
+                            Ok(None)
                         }
                         FeagiMessage::AgentRegistration(registration_message) => {
                             match registration_message {
@@ -133,14 +138,21 @@ impl CommandControlSubAgent {
                             // just return the message as is
                             Ok(Some(feagi_message))
                         }
-                    }
+                    };
+                    
+                    // Restore requester before returning
+                    self.requester = Some(requester);
+                    result
 
                 }
                 FeagiEndpointState::Errored(_) => {
                     requester.confirm_error_and_close()?;
+                    // Don't restore requester - it's been closed
                     Err(FeagiAgentError::ConnectionFailed("Error occurred".to_string()))
                 }
-            }
+            };
+            
+            result
         }
         else {
             Err(FeagiAgentError::ConnectionFailed("No socket is active to poll!".to_string()))

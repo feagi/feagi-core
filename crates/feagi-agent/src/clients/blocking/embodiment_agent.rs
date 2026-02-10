@@ -5,7 +5,7 @@
 //!
 //! Use `connect` for ZMQ or `connect_ws` for WebSocket; flow and API are the same.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientRequesterProperties, FeagiClientSubscriber};
 use feagi_io::traits_and_enums::shared::TransportProtocolEndpoint;
 use feagi_sensorimotor::ConnectorCache;
@@ -93,8 +93,15 @@ impl BlockingEmbodimentClient {
 
         command_control.request_registration(agent_descriptor, auth_token, requested_capabilities)?;
 
-        // NOTE blocking!
+        // NOTE blocking! Poll for registration response with timeout
+        let timeout = Duration::from_secs(30);
+        let start = Instant::now();
+        
         loop {
+            if start.elapsed() > timeout {
+                return Err(FeagiAgentError::ConnectionFailed("Registration timeout - no response from FEAGI".to_string()));
+            }
+            
             let data = command_control.poll_for_messages()?;
             if let Some(message) = data {
                 // We are looking only for registration response. Anything else is invalid
@@ -150,8 +157,9 @@ impl BlockingEmbodimentClient {
                     }
                 }
             }
-
-            // TODO timeout?
+            
+            // Small sleep to avoid tight loop CPU burn
+            std::thread::sleep(Duration::from_millis(10));
         }
 
 

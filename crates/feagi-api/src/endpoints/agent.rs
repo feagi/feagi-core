@@ -376,7 +376,24 @@ pub async fn heartbeat(
             message: "heartbeat_ok".to_string(),
             success: true,
         })),
-        Err(e) => Err(ApiError::not_found("agent", &format!("{}", e))),
+        Err(_) => {
+            // Fallback: agents that registered via ZMQ/WS are in the handler but not in the REST registry
+            #[cfg(feature = "feagi-agent")]
+            if let Some(handler) = &state.agent_handler {
+                if let Ok(guard) = handler.lock() {
+                    if guard.find_session_by_agent_id(&request.agent_id).is_some() {
+                        return Ok(Json(HeartbeatResponse {
+                            message: "heartbeat_ok".to_string(),
+                            success: true,
+                        }));
+                    }
+                }
+            }
+            Err(ApiError::not_found(
+                "agent",
+                &format!("Agent {} not in registry", request.agent_id),
+            ))
+        }
     }
 }
 

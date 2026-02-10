@@ -69,12 +69,11 @@ pub trait MotorPublisher: Send + Sync {
     fn publish_motor(&self, agent_id: &str, data: &[u8]) -> Result<(), String>;
 }
 
-/// Trait for polling sensory data from embodiment agents (ZMQ/WS non-blocking)
-/// This trait abstraction avoids circular dependency with feagi-agent
-pub trait EmbodimentSensoryPoller: Send {
-    /// Poll for sensory data from any registered embodiment
-    /// Returns serialized FeagiByteContainer bytes if data available
-    /// Takes &mut self because polling modifies internal socket state
+/// Transport-agnostic source of sensory bytes (FeagiByteContainer format).
+/// Implemented by feagi-io; fed by any transport (ZMQ, WebSocket, SHM, etc.).
+pub trait SensoryIntake: Send {
+    /// Poll for next sensory payload if available.
+    /// Returns serialized FeagiByteContainer bytes.
     fn poll_sensory_data(&mut self) -> Result<Option<Vec<u8>>, String>;
 }
 
@@ -95,9 +94,8 @@ pub struct BurstLoopRunner {
     thread_handle: Option<thread::JoinHandle<()>>,
     /// Sensory agent manager (per-agent injection threads - SHM-based agents)
     pub sensory_manager: Arc<Mutex<AgentManager>>,
-    /// Optional embodiment sensory poller for ZMQ/WS agents (non-blocking I/O)
-    /// Wrapped in Mutex because polling requires &mut self
-    pub embodiment_poller: Option<Arc<Mutex<dyn EmbodimentSensoryPoller>>>,
+    /// Transport-agnostic sensory intake (feagi-io); fed by any transport, consumed by burst loop
+    pub sensory_intake: Option<Arc<Mutex<dyn SensoryIntake>>>,
     /// Visualization SHM writer (optional, None if not configured)
     pub viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
     /// Motor SHM writer (optional, None if not configured)
@@ -339,7 +337,7 @@ impl BurstLoopRunner {
             running: Arc::new(AtomicBool::new(false)),
             thread_handle: None,
             sensory_manager: Arc::new(Mutex::new(sensory_manager)),
-            embodiment_poller: None, // Can be set later via set_embodiment_poller()
+            sensory_intake: None, // Can be set later via set_sensory_intake()
             cached_cortical_id_mappings: Arc::new(Mutex::new(ahash::AHashMap::new())),
             last_cortical_id_refresh: Arc::new(Mutex::new(0)),
             cached_visualization_granularities: Arc::new(Mutex::new(ahash::AHashMap::new())),
@@ -419,10 +417,10 @@ impl BurstLoopRunner {
         Ok(())
     }
 
-    /// Set embodiment sensory poller (for ZMQ/WS agents)
-    pub fn set_embodiment_poller(&mut self, poller: Arc<Mutex<dyn EmbodimentSensoryPoller>>) {
-        self.embodiment_poller = Some(poller);
-        info!("[BURST-RUNNER] Embodiment sensory poller attached");
+    /// Set transport-agnostic sensory intake (feagi-io; fed by ZMQ, WebSocket, etc.)
+    pub fn set_sensory_intake(&mut self, intake: Arc<Mutex<dyn SensoryIntake>>) {
+        self.sensory_intake = Some(intake);
+        info!("[BURST-RUNNER] Sensory intake attached");
     }
 
     /// Register an agent's motor subscriptions
@@ -587,6 +585,7 @@ impl BurstLoopRunner {
         let cached_cortical_id_mappings = self.cached_cortical_id_mappings.clone();
         let last_cortical_id_refresh = self.last_cortical_id_refresh.clone();
         let cached_visualization_granularities = self.cached_visualization_granularities.clone();
+        let sensory_intake = self.sensory_intake.clone();
 
         self.thread_handle = Some(
             thread::Builder::new()
@@ -614,6 +613,7 @@ impl BurstLoopRunner {
                         cached_cortical_id_mappings,
                         last_cortical_id_refresh,
                         cached_visualization_granularities,
+                        sensory_intake,
                     );
                 })
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
@@ -1084,6 +1084,64 @@ fn get_timestamp() -> String {
     dt.format("%Y-%m-%dT%H:%M:%S%.3f").to_string()
 }
 
+/// Decode sensory bytes (FeagiByteContainer) into cortical XYZP list.
+/// Transport-agnostic; same format whether source is ZMQ, WebSocket, or SHM.
+fn decode_sensory_bytes(
+    bytes: &[u8],
+) -> Result<
+    Vec<(
+        feagi_structures::genomic::cortical_area::CorticalID,
+        Vec<(u32, u32, u32, f32)>,
+    )>,
+    String,
+> {
+    use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+
+    let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
+    let mut data_vec = bytes.to_vec();
+    byte_container
+        .try_write_data_to_container_and_verify(&mut |container_bytes| {
+            std::mem::swap(container_bytes, &mut data_vec);
+            Ok(())
+        })
+        .map_err(|e| format!("FeagiByteContainer load failed: {:?}", e))?;
+
+    let num_structures = byte_container
+        .try_get_number_contained_structures()
+        .map_err(|e| format!("get_number_contained_structures failed: {:?}", e))?;
+
+    let mut out = Vec::new();
+    for struct_idx in 0..num_structures {
+        let boxed_struct = byte_container
+            .try_create_new_struct_from_index(struct_idx as u8)
+            .map_err(|e| format!("create_new_struct_from_index {} failed: {:?}", struct_idx, e))?;
+
+        let cortical_mapped = match boxed_struct
+            .as_any()
+            .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()
+        {
+            Some(cm) => cm,
+            None => continue,
+        };
+
+        for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
+            let (x_coords, y_coords, z_coords, potentials) =
+                neuron_arrays.borrow_xyzp_vectors();
+            let xyzp_data: Vec<(u32, u32, u32, f32)> = x_coords
+                .iter()
+                .zip(y_coords.iter())
+                .zip(z_coords.iter())
+                .zip(potentials.iter())
+                .map(|(((x, y), z), p)| (*x, *y, *z, *p))
+                .collect();
+            if !xyzp_data.is_empty() {
+                out.push((cortical_id.clone(), xyzp_data));
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// Main burst processing loop (runs in dedicated thread)
 ///
 /// This is the HOT PATH - zero Python involvement!
@@ -1112,6 +1170,7 @@ fn burst_loop(
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>, // Cached cortical_idx -> cortical_id
     _last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
     cached_visualization_granularities: Arc<Mutex<VisualizationGranularityCache>>, // Cached cortical_idx -> visualization_granularity
+    sensory_intake: Option<Arc<Mutex<dyn SensoryIntake>>>, // Transport-agnostic (feagi-io)
 ) {
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
@@ -1186,6 +1245,18 @@ fn burst_loop(
         if !running.load(Ordering::Relaxed) {
             break;
         }
+
+        // Poll transport-agnostic sensory intake (feagi-io) before acquiring NPU lock
+        let sensory_xyzp: Option<
+            Vec<(
+                feagi_structures::genomic::cortical_area::CorticalID,
+                Vec<(u32, u32, u32, f32)>,
+            )>,
+        > = sensory_intake.as_ref().and_then(|intake| {
+            let mut guard = intake.lock().ok()?;
+            let bytes = guard.poll_sensory_data().ok().flatten()?;
+            decode_sensory_bytes(&bytes).ok()
+        });
 
         // Track time since last lock release to detect if something held it
         static LAST_LOCK_RELEASE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
@@ -1508,6 +1579,13 @@ fn burst_loop(
                             "[PARAM-QUEUE] ✓ Applied {} parameter updates in {:?}",
                             applied_count, update_duration
                         );
+                    }
+                }
+
+                // Inject sensory from intake (any transport) into NPU for this burst
+                if let Some(ref list) = sensory_xyzp {
+                    for (cortical_id, xyzp) in list {
+                        npu_lock.inject_sensory_xyzp_by_id(cortical_id, xyzp);
                     }
                 }
 

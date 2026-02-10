@@ -171,6 +171,33 @@ impl AgentDescriptor {
         self.agent_version
     }
 
+    /// Serialize to bytes
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(Self::SIZE_BYTES);
+        
+        // Serialize instance_id (4 bytes, little-endian)
+        bytes.extend_from_slice(&self.instance_id.to_le_bytes());
+        
+        // Serialize manufacturer (128 bytes, null-padded)
+        let mut manufacturer_bytes = [0u8; Self::MAX_MANUFACTURER_NAME_BYTE_COUNT];
+        let mfr_bytes = self.manufacturer.as_bytes();
+        let mfr_len = mfr_bytes.len().min(Self::MAX_MANUFACTURER_NAME_BYTE_COUNT);
+        manufacturer_bytes[..mfr_len].copy_from_slice(&mfr_bytes[..mfr_len]);
+        bytes.extend_from_slice(&manufacturer_bytes);
+        
+        // Serialize agent_name (128 bytes, null-padded)
+        let mut agent_name_bytes = [0u8; Self::MAX_AGENT_NAME_BYTE_COUNT];
+        let name_bytes = self.agent_name.as_bytes();
+        let name_len = name_bytes.len().min(Self::MAX_AGENT_NAME_BYTE_COUNT);
+        agent_name_bytes[..name_len].copy_from_slice(&name_bytes[..name_len]);
+        bytes.extend_from_slice(&agent_name_bytes);
+        
+        // Serialize agent_version (4 bytes, little-endian)
+        bytes.extend_from_slice(&self.agent_version.to_le_bytes());
+        
+        bytes
+    }
+
     /// Create AgentDescriptor from base64-encoded agent_id (REST API compatibility)
     pub fn try_from_base64(agent_id_b64: &str) -> Result<Self, FeagiDataError> {
         use base64::Engine;
@@ -208,6 +235,13 @@ impl AgentDescriptor {
         ]);
         
         Self::new(instance_id, &manufacturer, &agent_name, agent_version)
+    }
+
+    /// Convert AgentDescriptor to base64-encoded string (REST API compatibility)
+    pub fn as_base64(&self) -> String {
+        use base64::Engine;
+        let bytes = self.as_bytes();
+        base64::engine::general_purpose::STANDARD.encode(bytes)
     }
 
     /// Validate the fields without creating a new instance.

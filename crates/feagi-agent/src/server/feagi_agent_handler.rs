@@ -418,11 +418,12 @@ impl FeagiAgentHandler {
         Err(FeagiAgentError::InitFail("Missing required protocol publisher".to_string()))
     }
 
-    fn register_new_embodiment_agent_to_cache(&mut self, session_id: SessionID, agent_descriptor: AgentDescriptor, _command_index: usize, embodiment: EmbodimentTranslator) -> Result<(), FeagiAgentError> {
+    fn register_new_embodiment_agent_to_cache(&mut self, session_id: SessionID, agent_descriptor: AgentDescriptor, command_index: usize, embodiment: EmbodimentTranslator) -> Result<(), FeagiAgentError> {
         let new_embodiment_index = self.registered_embodiments.len();
         self.registered_embodiments.push(embodiment);
         self.all_registered_sessions.insert(session_id, agent_descriptor.clone());
         self.session_id_embodiments_mapping.insert(session_id, new_embodiment_index);
+        self.session_id_command_control_mapping.insert(session_id, command_index);
         
         // Check if this agent has device_registrations from prior REST registration
         // If so, extract visualization rate and store it for WebSocket agent_id
@@ -484,20 +485,5 @@ impl FeagiAgentHandler {
 
     //endregion
 
-}
-
-/// Implement EmbodimentSensoryPoller trait for integration with BurstLoopRunner
-/// This allows the burst loop to poll for sensory data from ZMQ/WS embodiment agents
-impl feagi_npu_burst_engine::EmbodimentSensoryPoller for FeagiAgentHandler {
-    fn poll_sensory_data(&mut self) -> Result<Option<Vec<u8>>, String> {
-        match self.poll_embodiment_sensors() {
-            Ok(Some(byte_container)) => {
-                // Return the serialized bytes
-                Ok(Some(byte_container.get_byte_ref().to_vec()))
-            }
-            Ok(None) => Ok(None),
-            Err(e) => Err(format!("Sensory poll failed: {:?}", e)),
-        }
-    }
 }
 
