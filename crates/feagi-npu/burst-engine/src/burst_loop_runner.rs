@@ -69,6 +69,14 @@ pub trait MotorPublisher: Send + Sync {
     fn publish_motor(&self, agent_id: &str, data: &[u8]) -> Result<(), String>;
 }
 
+/// Trait for polling sensory data from embodiment agents (ZMQ/WS non-blocking)
+/// This trait abstraction avoids circular dependency with feagi-agent
+pub trait EmbodimentSensoryPoller: Send + Sync {
+    /// Poll for sensory data from any registered embodiment
+    /// Returns serialized FeagiByteContainer bytes if data available
+    fn poll_sensory_data(&self) -> Result<Option<Vec<u8>>, String>;
+}
+
 /// Burst loop runner - manages the main neural processing loop
 ///
 /// 🦀 Power neurons are stored in RustNPU, not here - 100% Rust!
@@ -84,8 +92,10 @@ pub struct BurstLoopRunner {
     running: Arc<AtomicBool>,
     /// Thread handle (for graceful shutdown)
     thread_handle: Option<thread::JoinHandle<()>>,
-    /// Sensory agent manager (per-agent injection threads)
+    /// Sensory agent manager (per-agent injection threads - SHM-based agents)
     pub sensory_manager: Arc<Mutex<AgentManager>>,
+    /// Optional embodiment sensory poller for ZMQ/WS agents (non-blocking I/O)
+    pub embodiment_poller: Option<Arc<dyn EmbodimentSensoryPoller>>,
     /// Visualization SHM writer (optional, None if not configured)
     pub viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
     /// Motor SHM writer (optional, None if not configured)
@@ -327,6 +337,7 @@ impl BurstLoopRunner {
             running: Arc::new(AtomicBool::new(false)),
             thread_handle: None,
             sensory_manager: Arc::new(Mutex::new(sensory_manager)),
+            embodiment_poller: None, // Can be set later via set_embodiment_poller()
             cached_cortical_id_mappings: Arc::new(Mutex::new(ahash::AHashMap::new())),
             last_cortical_id_refresh: Arc::new(Mutex::new(0)),
             cached_visualization_granularities: Arc::new(Mutex::new(ahash::AHashMap::new())),
@@ -404,6 +415,12 @@ impl BurstLoopRunner {
         let writer = crate::motor_shm_writer::MotorSHMWriter::new(shm_path, None, None)?;
         *guard = Some(writer);
         Ok(())
+    }
+
+    /// Set embodiment sensory poller (for ZMQ/WS agents)
+    pub fn set_embodiment_poller(&mut self, poller: Arc<dyn EmbodimentSensoryPoller>) {
+        self.embodiment_poller = Some(poller);
+        info!("[BURST-RUNNER] Embodiment sensory poller attached");
     }
 
     /// Register an agent's motor subscriptions
