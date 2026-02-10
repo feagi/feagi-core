@@ -1142,6 +1142,7 @@ pub async fn import_device_registrations(
         if let Some(handler) = &state.agent_handler {
             let mut handler_guard = handler.lock().unwrap();
             handler_guard.set_device_registrations_by_descriptor(
+                agent_id.to_string(),
                 agent_descriptor,
                 request.device_registrations.clone()
             );
