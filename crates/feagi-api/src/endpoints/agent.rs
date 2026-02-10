@@ -205,59 +205,61 @@ pub async fn register_agent(
     return Err(ApiError::internal("feagi-agent feature not enabled"));
 
     #[cfg(feature = "feagi-agent")]
-    {
-        let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
-        
-        // Extract device_registrations from capabilities
-        let device_registrations_opt = request
-            .capabilities
-            .get("device_registrations")
-            .and_then(|v| v.as_object().map(|_| v.clone()));
+    let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
+    
+    #[cfg(feature = "feagi-agent")]
+    // Extract device_registrations from capabilities
+    let device_registrations_opt = request
+        .capabilities
+        .get("device_registrations")
+        .and_then(|v| v.as_object().map(|_| v.clone()));
 
-        // Store device registrations in handler if provided
-        if let Some(device_regs) = &device_registrations_opt {
-            if let Some(handler) = &state.agent_handler {
-                let mut handler_guard = handler.lock().unwrap();
-                handler_guard.set_device_registrations_by_descriptor(
-                    agent_descriptor.clone(),
-                    device_regs.clone()
-                );
-                info!("✅ [API] Stored device registrations for agent '{}'", request.agent_id);
-                
-                drop(handler_guard);
-                
-                // Trigger auto-creation of cortical areas
-                auto_create_cortical_areas_from_device_registrations(&state, device_regs).await;
-            }
-        }
-
-        // Get available endpoints from handler
-        let endpoints_map = if let Some(handler) = &state.agent_handler {
-            let handler_guard = handler.lock().unwrap();
-            let transport_endpoints = handler_guard.get_transport_endpoints();
+    #[cfg(feature = "feagi-agent")]
+    // Store device registrations in handler if provided
+    if let Some(device_regs) = &device_registrations_opt {
+        if let Some(handler) = &state.agent_handler {
+            let mut handler_guard = handler.lock().unwrap();
+            handler_guard.set_device_registrations_by_descriptor(
+                agent_descriptor.clone(),
+                device_regs.clone()
+            );
+            info!("✅ [API] Stored device registrations for agent '{}'", request.agent_id);
             
-            let mut response_map = HashMap::new();
-            for (protocol, endpoints) in transport_endpoints {
-                let protocol_name = format!("{:?}", protocol).to_lowercase();
-                response_map.insert(protocol_name, serde_json::json!(endpoints));
-            }
-            response_map
-        } else {
-            HashMap::new()
-        };
-
-        Ok(Json(AgentRegistrationResponse {
-            status: "success".to_string(),
-            message: "Agent configuration stored. Connect via ZMQ/WebSocket for full registration".to_string(),
-            success: true,
-            transport: Some(endpoints_map),
-            rates: None,
-            transports: None,
-            recommended_transport: None,
-            shm_paths: None,
-            cortical_areas: serde_json::json!({}),
-        }))
+            drop(handler_guard);
+            
+            // Trigger auto-creation of cortical areas
+            auto_create_cortical_areas_from_device_registrations(&state, device_regs).await;
+        }
     }
+
+    #[cfg(feature = "feagi-agent")]
+    // Get available endpoints from handler
+    let endpoints_map = if let Some(handler) = &state.agent_handler {
+        let handler_guard = handler.lock().unwrap();
+        let transport_endpoints = handler_guard.get_transport_endpoints();
+        
+        let mut response_map = HashMap::new();
+        for (protocol, endpoints) in transport_endpoints {
+            let protocol_name = format!("{:?}", protocol).to_lowercase();
+            response_map.insert(protocol_name, serde_json::json!(endpoints));
+        }
+        response_map
+    } else {
+        HashMap::new()
+    };
+
+    #[cfg(feature = "feagi-agent")]
+    return Ok(Json(AgentRegistrationResponse {
+        status: "success".to_string(),
+        message: "Agent configuration stored. Connect via ZMQ/WebSocket for full registration".to_string(),
+        success: true,
+        transport: Some(endpoints_map),
+        rates: None,
+        transports: None,
+        recommended_transport: None,
+        shm_paths: None,
+        cortical_areas: serde_json::json!({}),
+    }));
 }
 
 /// Send a heartbeat to keep the agent registered and prevent timeout disconnection.
