@@ -27,7 +27,6 @@ use crate::common::agent_registration::{
 #[cfg(feature = "feagi-agent")]
 use feagi_serialization::SessionID;
 #[cfg(feature = "feagi-agent")]
-use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "feagi-agent")]
 fn parse_agent_descriptor(agent_id: &str) -> ApiResult<AgentDescriptor> {
@@ -254,6 +253,11 @@ pub async fn register_agent(
             message: "Agent configuration stored. Connect via ZMQ/WebSocket for full registration".to_string(),
             success: true,
             transport: Some(endpoints_map),
+            rates: None,
+            transports: None,
+            recommended_transport: None,
+            shm_paths: None,
+            cortical_areas: serde_json::json!({}),
         }))
     }
 }
