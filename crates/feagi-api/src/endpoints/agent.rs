@@ -179,11 +179,11 @@ fn get_agent_name_from_id(agent_id: &str) -> ApiResult<String> {
     }
 }
 
-#[cfg(feature = "feagi-agent")]
 async fn auto_create_cortical_areas_from_device_registrations(
     state: &ApiState,
     device_registrations: &serde_json::Value,
 ) {
+    #[cfg(feature = "feagi-agent")]
     auto_create_cortical_areas_shared(state, device_registrations).await;
 }
 
