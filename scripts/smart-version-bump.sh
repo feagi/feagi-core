@@ -274,6 +274,7 @@ declare -A CHANGED_CRATES
 declare -A CURRENT_VERSIONS
 declare -A NEW_VERSIONS
 declare -A CHANGE_REASONS
+declare -A MIN_REQUIRED_VERSIONS
 
 # First pass: Detect direct changes
 for crate_name in "${CRATE_ORDER[@]}"; do
@@ -337,6 +338,93 @@ while [ $changed_count -gt 0 ]; do
     fi
 done
 
+# ============================================================================
+# Step 2.5: Close dependency version gaps from published crates
+# ============================================================================
+echo ""
+echo -e "${BLUE}Step 2.5: Checking published dependency version gaps...${NC}"
+echo ""
+
+DEPENDENCY_GAPS=$(
+python3 - <<'PY'
+import json
+import os
+import re
+from urllib.request import urlopen
+
+crate_list = os.environ.get("CRATE_LIST", "").split()
+crate_set = set(crate_list)
+
+def latest_version(crate: str) -> str | None:
+    url = f"https://crates.io/api/v1/crates/{crate}"
+    with urlopen(url, timeout=20) as resp:
+        data = json.load(resp)
+    for v in data.get("versions", []):
+        if not v.get("yanked", False):
+            return v.get("num")
+    return None
+
+def deps_for(crate: str, version: str) -> list[dict]:
+    url = f"https://crates.io/api/v1/crates/{crate}/{version}/dependencies"
+    with urlopen(url, timeout=20) as resp:
+        data = json.load(resp)
+    return data.get("dependencies", [])
+
+def extract_min_version(req: str) -> str | None:
+    if not req:
+        return None
+    token = req.split(",")[0].strip()
+    token = re.sub(r"^[=^~<> ]+", "", token)
+    return token or None
+
+def version_exists(crate: str, version: str) -> bool:
+    url = f"https://crates.io/api/v1/crates/{crate}/{version}"
+    try:
+        with urlopen(url, timeout=20) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+gaps = []
+for crate in crate_list:
+    latest = latest_version(crate)
+    if not latest:
+        continue
+    for dep in deps_for(crate, latest):
+        dep_name = dep.get("crate_id", "")
+        if dep_name not in crate_set:
+            continue
+        req = dep.get("req", "")
+        min_version = extract_min_version(req)
+        if not min_version:
+            continue
+        if not version_exists(dep_name, min_version):
+            gaps.append((dep_name, min_version, crate, req))
+
+for dep_name, min_version, required_by, req in gaps:
+    print(f"{dep_name}|{min_version}|{required_by}|{req}")
+PY
+)
+
+if [ -n "$DEPENDENCY_GAPS" ]; then
+    while IFS="|" read -r dep_name min_version required_by req; do
+        if [ -z "$dep_name" ] || [ -z "$min_version" ]; then
+            continue
+        fi
+        if [ -z "${CHANGED_CRATES[$dep_name]}" ]; then
+            CHANGED_CRATES["$dep_name"]="dependency_gap"
+            CHANGE_REASONS["$dep_name"]="Published $required_by requires $dep_name $req (missing $min_version)"
+            echo "  ${YELLOW}Gap:${NC} $dep_name missing $min_version (required by $required_by $req)"
+        fi
+        current_min="${MIN_REQUIRED_VERSIONS[$dep_name]}"
+        if [ -z "$current_min" ] || version_gt "$min_version" "$current_min"; then
+            MIN_REQUIRED_VERSIONS["$dep_name"]="$min_version"
+        fi
+    done <<< "$DEPENDENCY_GAPS"
+else
+    echo "  No published dependency gaps detected."
+fi
+
 # If nothing changed, we're done
 if [ ${#CHANGED_CRATES[@]} -eq 0 ]; then
     echo -e "${GREEN}✅ No crates have changed. Nothing to version bump!${NC}"
@@ -352,6 +440,10 @@ for crate_name in "${CRATE_ORDER[@]}"; do
     if [ -n "${CHANGED_CRATES[$crate_name]}" ]; then
         current_version="${CURRENT_VERSIONS[$crate_name]}"
         new_version=$(increment_beta_version "$current_version" "$crate_name")
+        min_required="${MIN_REQUIRED_VERSIONS[$crate_name]}"
+        if [ -n "$min_required" ] && version_gt "$min_required" "$new_version"; then
+            new_version="$min_required"
+        fi
         NEW_VERSIONS["$crate_name"]="$new_version"
         
         echo -e "  ${GREEN}📦${NC} $crate_name: $current_version → $new_version"
