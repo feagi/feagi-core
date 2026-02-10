@@ -28,13 +28,19 @@ use crate::common::agent_registration::{
 use feagi_serialization::SessionID;
 #[cfg(feature = "feagi-agent")]
 
-#[cfg(feature = "feagi-agent")]
 fn parse_agent_descriptor(agent_id: &str) -> ApiResult<AgentDescriptor> {
-    AgentDescriptor::try_from_base64(agent_id).map_err(|e| {
-        ApiError::invalid_input(format!(
-            "Invalid agent_id (expected AgentDescriptor base64): {e}"
-        ))
-    })
+    #[cfg(feature = "feagi-agent")]
+    {
+        AgentDescriptor::try_from_base64(agent_id).map_err(|e| {
+            ApiError::invalid_input(format!(
+                "Invalid agent_id (expected AgentDescriptor base64): {e}"
+            ))
+        })
+    }
+    #[cfg(not(feature = "feagi-agent"))]
+    {
+        Err(ApiError::internal("feagi-agent feature not enabled"))
+    }
 }
 
 #[cfg(feature = "feagi-agent")]
