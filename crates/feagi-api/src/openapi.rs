@@ -6,39 +6,58 @@
 // This module generates the OpenAPI 3.0 specification at compile-time
 // using utoipa, ensuring the documentation stays in sync with the code.
 
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, SecurityScheme};
 use utoipa::OpenApi;
-use utoipa::openapi::security::{SecurityScheme, ApiKey, ApiKeyValue};
 
 use crate::{
     common::ApiError,
     v1::{
-        // Health DTOs
-        HealthCheckResponseV1, ReadinessCheckResponseV1, ComponentReadiness,
-        
-        // Cortical area DTOs
-        CorticalAreaSummary, CorticalAreaDetail, CorticalAreaListResponse,
-        CreateCorticalAreaRequest, UpdateCorticalAreaRequest,
-        Coordinates3D, Dimensions3D,
-        
+        BrainRegionDetail,
+        BrainRegionListResponse,
         // Brain region DTOs
-        BrainRegionSummary, BrainRegionDetail, BrainRegionListResponse,
+        BrainRegionSummary,
+        BurstCountResponse,
+
+        ComponentReadiness,
+
+        ConnectivityStatsResponse,
+        ConnectomeAnalyticsResponse,
+        Coordinates3D,
+        CorticalAreaDetail,
+        CorticalAreaListResponse,
+        CorticalAreaStatsResponse,
+        // Cortical area DTOs
+        CorticalAreaSummary,
         CreateBrainRegionRequest,
-        
+
+        CreateCorticalAreaRequest,
+        CreateNeuronRequest,
+        Dimensions3D,
+
         // Genome DTOs
-        GenomeInfoResponse, LoadGenomeRequest, SaveGenomeRequest,
-        SaveGenomeResponse, ValidateGenomeRequest, ValidateGenomeResponse,
-        
-        // Neuron DTOs
-        NeuronInfoResponse, CreateNeuronRequest, NeuronListResponse,
+        GenomeInfoResponse,
+        // Health DTOs
+        HealthCheckResponseV1,
+        LoadGenomeRequest,
         NeuronCountResponse,
-        
-        // Runtime DTOs
-        RuntimeStatusResponse, SetFrequencyRequest, BurstCountResponse,
-        
-        // Analytics DTOs
-        SystemHealthResponse, CorticalAreaStatsResponse, ConnectivityStatsResponse,
-        ConnectomeAnalyticsResponse, PopulatedAreasResponse, PopulatedAreaInfo,
+
         NeuronDensityResponse,
+        // Neuron DTOs
+        NeuronInfoResponse,
+        NeuronListResponse,
+        PopulatedAreaInfo,
+        PopulatedAreasResponse,
+        ReadinessCheckResponseV1,
+        // Runtime DTOs
+        RuntimeStatusResponse,
+        SaveGenomeRequest,
+        SaveGenomeResponse,
+        SetFrequencyRequest,
+        // Analytics DTOs
+        SystemHealthResponse,
+        UpdateCorticalAreaRequest,
+        ValidateGenomeRequest,
+        ValidateGenomeResponse,
     },
 };
 
@@ -64,7 +83,7 @@ use crate::{
         (url = "http://localhost:8080", description = "Alternative port")
     ),
     paths(
-        // Agent endpoints (12 total)
+        // Agent endpoints (14 total)
         crate::endpoints::agent::register_agent,
         crate::endpoints::agent::heartbeat,
         crate::endpoints::agent::list_agents,
@@ -75,9 +94,12 @@ use crate::{
         crate::endpoints::agent::manual_stimulation,
         crate::endpoints::agent::get_fq_sampler_status,
         crate::endpoints::agent::get_capabilities,
+        crate::endpoints::agent::get_all_agent_capabilities,
         crate::endpoints::agent::get_agent_info,
         crate::endpoints::agent::post_configure,
-        
+        crate::endpoints::agent::export_device_registrations,
+        crate::endpoints::agent::import_device_registrations,
+
         // System endpoints (21 total)
         crate::endpoints::system::get_health_check,
         crate::endpoints::system::get_cortical_area_visualization_skip_rate,
@@ -105,7 +127,7 @@ use crate::{
         crate::endpoints::system::post_circuit_library_path,
         crate::endpoints::system::get_influxdb_test,
         crate::endpoints::system::post_register_system,
-        
+
         // Cortical Area endpoints
         crate::endpoints::cortical_area::get_ipu,
         crate::endpoints::cortical_area::get_ipu_types,
@@ -138,7 +160,7 @@ use crate::{
         crate::endpoints::cortical_area::get_opu_list,
         crate::endpoints::cortical_area::put_coordinates_3d,
         crate::endpoints::cortical_area::delete_bulk,
-        crate::endpoints::cortical_area::post_clone_area,
+        crate::endpoints::cortical_area::post_clone,
         crate::endpoints::cortical_area::post_resize,
         crate::endpoints::cortical_area::post_reposition,
         crate::endpoints::cortical_area::post_voxel_neurons,
@@ -151,7 +173,7 @@ use crate::{
         crate::endpoints::cortical_area::post_mapping_restrictions,
         crate::endpoints::cortical_area::post_mapping_restrictions_between_areas,
         crate::endpoints::cortical_area::put_coord_3d,
-        
+
         // Morphology endpoints
         crate::endpoints::morphology::get_morphology_list,
         crate::endpoints::morphology::get_morphology_types,
@@ -167,7 +189,7 @@ use crate::{
         crate::endpoints::morphology::get_info,
         crate::endpoints::morphology::post_create,
         crate::endpoints::morphology::put_update,
-        
+
         // Genome endpoints (22 total)
         crate::endpoints::genome::get_file_name,
         crate::endpoints::genome::get_circuits,
@@ -204,7 +226,7 @@ use crate::{
         crate::endpoints::genome::post_upload_file,
         crate::endpoints::genome::post_upload_file_edit,
         crate::endpoints::genome::post_upload_string,
-        
+
         // Cortical Mapping endpoints (8 total)
         crate::endpoints::cortical_mapping::post_afferents,
         crate::endpoints::cortical_mapping::post_efferents,
@@ -216,7 +238,7 @@ use crate::{
         crate::endpoints::cortical_mapping::post_batch_update,
         crate::endpoints::cortical_mapping::post_mapping,
         crate::endpoints::cortical_mapping::put_mapping,
-        
+
         // Region endpoints (12 total)
         crate::endpoints::region::get_regions_members,
         crate::endpoints::region::post_region,
@@ -230,7 +252,7 @@ use crate::{
         crate::endpoints::region::get_region_detail,
         crate::endpoints::region::put_change_region_parent,
         crate::endpoints::region::put_change_cortical_area_region,
-        
+
         // Connectome endpoints (21 total)
         crate::endpoints::connectome::get_cortical_areas_list_detailed,
         crate::endpoints::connectome::get_properties_dimensions,
@@ -262,6 +284,7 @@ use crate::{
         crate::endpoints::connectome::get_stats_cortical_cumulative,
         crate::endpoints::connectome::get_neuron_properties_by_id,
         crate::endpoints::connectome::get_neuron_properties_query,
+        crate::endpoints::connectome::get_neuron_properties_at_query,
         crate::endpoints::connectome::get_area_neurons_query,
         crate::endpoints::connectome::get_fire_queue_area,
         crate::endpoints::connectome::get_plasticity_info,
@@ -270,12 +293,14 @@ use crate::{
         crate::endpoints::connectome::get_download_cortical_area,
         crate::endpoints::connectome::post_upload_connectome,
         crate::endpoints::connectome::post_upload_cortical_area,
-        
+
         // Burst Engine endpoints (14 total)
         crate::endpoints::burst_engine::get_simulation_timestep,
         crate::endpoints::burst_engine::post_simulation_timestep,
         crate::endpoints::burst_engine::get_fcl,
+        crate::endpoints::burst_engine::get_fcl_neuron,
         crate::endpoints::burst_engine::get_fire_queue,
+        crate::endpoints::burst_engine::get_fire_queue_neuron,
         crate::endpoints::burst_engine::post_fcl_reset,
         crate::endpoints::burst_engine::get_fcl_status,
         crate::endpoints::burst_engine::get_fcl_sampler_config,
@@ -304,13 +329,13 @@ use crate::{
         crate::endpoints::burst_engine::post_measure_frequency,
         crate::endpoints::burst_engine::get_frequency_history,
         crate::endpoints::burst_engine::post_force_connectome_integration,
-        
+
         // Insight endpoints
         crate::endpoints::insight::post_neurons_membrane_potential_status,
         crate::endpoints::insight::post_neuron_synaptic_potential_status,
         crate::endpoints::insight::post_neurons_membrane_potential_set,
         crate::endpoints::insight::post_neuron_synaptic_potential_set,
-        
+
         // Neuroplasticity endpoints (7 total)
         crate::endpoints::neuroplasticity::get_plasticity_queue_depth,
         crate::endpoints::neuroplasticity::put_plasticity_queue_depth,
@@ -319,26 +344,26 @@ use crate::{
         crate::endpoints::neuroplasticity::post_configure,
         crate::endpoints::neuroplasticity::post_enable_area,
         crate::endpoints::neuroplasticity::post_disable_area,
-        
+
         // Input endpoints
         crate::endpoints::input::get_vision,
         crate::endpoints::input::post_vision,
-        
+
         // Outputs endpoints
         crate::endpoints::outputs::get_targets,
         crate::endpoints::outputs::post_configure,
-        
+
         // Physiology endpoints
         crate::endpoints::physiology::get_physiology,
         crate::endpoints::physiology::put_physiology,
-        
+
         // Simulation endpoints
         crate::endpoints::simulation::post_stimulation_upload,
         crate::endpoints::simulation::post_reset,
         crate::endpoints::simulation::get_status,
         crate::endpoints::simulation::get_stats,
         crate::endpoints::simulation::post_config,
-        
+
         // Training endpoints
         crate::endpoints::training::post_shock,
         crate::endpoints::training::get_shock_options,
@@ -354,59 +379,61 @@ use crate::{
         crate::endpoints::training::get_status,
         crate::endpoints::training::get_stats,
         crate::endpoints::training::post_config,
-        
+
         // Visualization endpoints
         crate::endpoints::visualization::post_register_client,
         crate::endpoints::visualization::post_unregister_client,
         crate::endpoints::visualization::post_heartbeat,
         crate::endpoints::visualization::get_status,
-        
+
         // Monitoring endpoints
         crate::endpoints::monitoring::get_status,
         crate::endpoints::monitoring::get_metrics,
         crate::endpoints::monitoring::get_data,
-        
+
         // Evolution endpoints
         crate::endpoints::evolution::get_status,
         crate::endpoints::evolution::post_config,
-        
+
         // Snapshot endpoints
-        crate::endpoints::snapshot::post_create,
-        crate::endpoints::snapshot::post_restore,
-        crate::endpoints::snapshot::get_list,
-        crate::endpoints::snapshot::delete_snapshot,
-        crate::endpoints::snapshot::get_artifact,
-        crate::endpoints::snapshot::post_compare,
-        crate::endpoints::snapshot::post_upload,
-        
+        // TODO: Implement snapshot endpoints
+        // crate::endpoints::snapshot::post_create,
+        // crate::endpoints::snapshot::post_restore,
+        // crate::endpoints::snapshot::get_list,
+        // crate::endpoints::snapshot::delete_snapshot,
+        // crate::endpoints::snapshot::get_artifact,
+        // crate::endpoints::snapshot::post_compare,
+        // crate::endpoints::snapshot::post_upload,
+
         // Network endpoints
         crate::endpoints::network::get_status,
         crate::endpoints::network::post_config,
+        crate::endpoints::network::get_connection_info,
     ),
     components(
         schemas(
             // Common
             ApiError,
-            
+
             // Health
             HealthCheckResponseV1,
             ReadinessCheckResponseV1,
             ComponentReadiness,
-            
+
             // Agent
             crate::v1::AgentRegistrationRequest,
-            
+
             // Outputs
             crate::v1::OutputTargetsResponse,
             crate::v1::OutputConfigRequest,
             crate::v1::OutputConfigResponse,
-            
+
             // Physiology
             crate::v1::PhysiologyResponse,
             crate::v1::PhysiologyParameters,
             crate::v1::PhysiologyUpdateRequest,
             crate::v1::PhysiologyUpdateResponse,
-            
+
             // Burst Engine
             crate::v1::FCLResponse,
             crate::v1::FireQueueResponse,
@@ -415,20 +442,20 @@ use crate::{
             crate::v1::BurstEngineStats,
             crate::v1::BurstEngineStatus,
             crate::v1::BurstEngineControlRequest,
-            
+
             // Monitoring
             crate::v1::MonitoringStatusResponse,
             crate::v1::SystemMetricsResponse,
             crate::v1::MonitoringData,
             crate::v1::MonitoringDataResponse,
-            
+
             // Simulation
             crate::v1::StimulationUploadRequest,
             crate::v1::SimulationControlRequest,
             crate::v1::SimulationStatusResponse,
             crate::v1::SimulationStatsResponse,
             crate::v1::SimulationSuccessResponse,
-            
+
             // Training
             crate::v1::ShockConfigRequest,
             crate::v1::ShockOptionsResponse,
@@ -443,19 +470,19 @@ use crate::{
             crate::v1::TrainingStatsResponse,
             crate::v1::TrainingConfigRequest,
             crate::v1::TrainingSuccessResponse,
-            
+
             // Visualization
             crate::v1::VisualizationClientRequest,
             crate::v1::VisualizationClientResponse,
             crate::v1::VisualizationHeartbeatRequest,
             crate::v1::VisualizationStatusResponse,
             crate::v1::VisualizationSuccessResponse,
-            
+
             // Evolution
             crate::v1::EvolutionStatusResponse,
             crate::v1::EvolutionConfigRequest,
             crate::v1::EvolutionSuccessResponse,
-            
+
             // Snapshot
             crate::v1::SnapshotCreateRequest,
             crate::v1::SnapshotCreateResponse,
@@ -468,9 +495,10 @@ use crate::{
             crate::v1::SnapshotUploadRequest,
             crate::v1::SnapshotUploadResponse,
             crate::v1::SnapshotSuccessResponse,
-            
+
             // Network
             crate::v1::NetworkStatusResponse,
+            crate::v1::NetworkConnectionInfo,
             crate::v1::NetworkConfigRequest,
             crate::v1::NetworkSuccessResponse,
             crate::v1::AgentRegistrationResponse,
@@ -478,22 +506,26 @@ use crate::{
             crate::v1::HeartbeatResponse,
             crate::v1::AgentListResponse,
             crate::v1::AgentPropertiesResponse,
+            crate::v1::AgentCapabilitiesSummary,
             crate::v1::AgentDeregistrationRequest,
             crate::v1::SuccessResponse,
             crate::v1::ManualStimulationRequest,
             crate::v1::ManualStimulationResponse,
-            
+            crate::v1::DeviceRegistrationExportResponse,
+            crate::v1::DeviceRegistrationImportRequest,
+            crate::v1::DeviceRegistrationImportResponse,
+
             // System
             crate::endpoints::system::HealthCheckResponse,
-            
+
             // Cortical Area
             crate::endpoints::cortical_area::CorticalAreaIdListResponse,
             crate::endpoints::cortical_area::CorticalAreaNameListResponse,
             crate::endpoints::cortical_area::CorticalTypeMetadata,
-            
+
             // Morphology
             crate::endpoints::morphology::MorphologyListResponse,
-            
+
             // Cortical Areas
             CorticalAreaSummary,
             CorticalAreaDetail,
@@ -502,13 +534,13 @@ use crate::{
             UpdateCorticalAreaRequest,
             Coordinates3D,
             Dimensions3D,
-            
+
             // Brain Regions
             BrainRegionSummary,
             BrainRegionDetail,
             BrainRegionListResponse,
             CreateBrainRegionRequest,
-            
+
             // Genome
             GenomeInfoResponse,
             LoadGenomeRequest,
@@ -516,18 +548,19 @@ use crate::{
             SaveGenomeResponse,
             ValidateGenomeRequest,
             ValidateGenomeResponse,
-            
+            crate::endpoints::genome::GenomeFileUploadForm,
+
             // Neurons
             NeuronInfoResponse,
             CreateNeuronRequest,
             NeuronListResponse,
             NeuronCountResponse,
-            
+
             // Runtime
             RuntimeStatusResponse,
             SetFrequencyRequest,
             BurstCountResponse,
-            
+
             // Analytics
             SystemHealthResponse,
             CorticalAreaStatsResponse,
@@ -576,7 +609,7 @@ impl utoipa::Modify for SecurityAddon {
                 "api_key",
                 SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("X-API-Key"))),
             );
-            
+
             // JWT Bearer authentication (for future use)
             components.add_security_scheme(
                 "bearer_auth",
@@ -593,9 +626,9 @@ impl utoipa::Modify for SecurityAddon {
 
 /// Get OpenAPI JSON specification
 pub fn get_openapi_json() -> String {
-    ApiDoc::openapi().to_pretty_json().unwrap_or_else(|e| {
-        format!(r#"{{"error": "Failed to generate OpenAPI spec: {}"}}"#, e)
-    })
+    ApiDoc::openapi()
+        .to_pretty_json()
+        .unwrap_or_else(|e| format!(r#"{{"error": "Failed to generate OpenAPI spec: {}"}}"#, e))
 }
 
 /// Get OpenAPI YAML specification
@@ -621,19 +654,33 @@ mod tests {
     fn test_openapi_components() {
         let openapi = ApiDoc::openapi();
         assert!(openapi.components.is_some());
-        
+
         let components = openapi.components.unwrap();
         assert!(components.schemas.contains_key("HealthCheckResponseV1"));
         assert!(components.schemas.contains_key("ApiError"));
     }
 
     #[test]
+    fn test_openapi_amalgamation_by_upload_is_multipart_form() {
+        let openapi = ApiDoc::openapi();
+        let json = serde_json::to_value(&openapi).expect("serialize openapi");
+
+        let content =
+            &json["paths"]["/v1/genome/amalgamation_by_upload"]["post"]["requestBody"]["content"];
+
+        assert!(
+            content.get("multipart/form-data").is_some(),
+            "Expected multipart/form-data content for /v1/genome/amalgamation_by_upload requestBody. Got: {}",
+            content
+        );
+    }
+
+    #[test]
     fn test_security_schemes() {
         let openapi = ApiDoc::openapi();
         let components = openapi.components.unwrap();
-        
+
         assert!(components.security_schemes.contains_key("api_key"));
         assert!(components.security_schemes.contains_key("bearer_auth"));
     }
 }
-

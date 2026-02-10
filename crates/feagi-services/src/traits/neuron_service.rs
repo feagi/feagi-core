@@ -29,10 +29,7 @@ pub trait NeuronService: Send + Sync {
     /// * `ServiceError::InvalidInput` - Invalid coordinates or parameters
     /// * `ServiceError::AlreadyExists` - Neuron already exists at coordinates
     ///
-    async fn create_neuron(
-        &self,
-        params: CreateNeuronParams,
-    ) -> ServiceResult<NeuronInfo>;
+    async fn create_neuron(&self, params: CreateNeuronParams) -> ServiceResult<NeuronInfo>;
 
     /// Delete a neuron by ID
     ///
@@ -117,8 +114,3 @@ pub trait NeuronService: Send + Sync {
     ///
     async fn neuron_exists(&self, neuron_id: u64) -> ServiceResult<bool>;
 }
-
-
-
-
-

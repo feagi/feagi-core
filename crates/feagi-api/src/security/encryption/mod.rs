@@ -3,9 +3,4 @@
 
 pub mod message;
 
-pub use message::{MessageEncryptor, EncryptionError};
-
-
-
-
-
+pub use message::{EncryptionError, MessageEncryptor};

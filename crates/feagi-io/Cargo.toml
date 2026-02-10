@@ -1,0 +1,56 @@
+[package]
+name = "feagi-io"
+version = "0.0.1-beta.11"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "FEAGI I/O System - Agent I/O, registration, ZMQ & SHM"
+
+[features]
+default = ["zmq-transport", "udp-transport"]  # Most deployments need both
+zmq-transport = ["dep:zeromq", "dep:tokio", "dep:futures-util"]  # Async-native ZMQ transport
+udp-transport = ["dep:tokio", "dep:async-trait", "dep:num_cpus"]  # Async, best-effort transport
+shm-transport = []                            # Shared memory (no extra deps, future)
+websocket-transport = ["udp-transport", "dep:tokio-tungstenite", "dep:futures-util"]  # WebSocket requires tokio, tungstenite, futures
+all-transports = ["zmq-transport", "udp-transport", "shm-transport", "websocket-transport"]
+connectome-serialization = ["feagi-services/connectome-serialization"]  # Connectome file I/O via service layer
+connectome-compression = ["feagi-services/connectome-compression"]  # LZ4 compression for connectome files
+
+[dependencies]
+feagi-npu-burst-engine = { version = "=0.0.1-beta.12", path = "../feagi-npu/burst-engine" }
+feagi-services = { version = "=0.0.1-beta.8", path = "../feagi-services" }  # For services and CorticalAreaExt
+# FEAGI data structures and serialization (for binary XYZP format)
+feagi-structures.workspace = true
+feagi-serialization = { workspace = true }
+
+# Core dependencies (always required)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+base64 = "0.22"
+crossbeam = "0.8"
+parking_lot = "0.12"
+ahash.workspace = true
+thiserror = "1.0"
+lz4 = "1.28"  # LZ4 compression (used by multiple transports)
+tracing = { workspace = true }  # Structured logging
+# url = "2.5.8" # for URL support
+
+# Optional transport-specific dependencies (consolidated from feagi-transports)
+zeromq = { version = "0.4.1", optional = true }  # Pure Rust ZeroMQ (async-native)
+tokio = { version = "1.0", features = ["full"], optional = true }  # Async runtime (UDP, WebSocket)
+async-trait = { version = "0.1", optional = true }  # Async traits
+num_cpus = { version = "1.16", optional = true }  # CPU detection for UDP
+tokio-tungstenite = { version = "0.21", optional = true }  # WebSocket transport
+futures-util = { version = "0.3", optional = true }  # WebSocket utilities
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.8"  # For connectome serialization tests
+
+[lib]
+name = "feagi_io"
+path = "src/lib.rs"
+

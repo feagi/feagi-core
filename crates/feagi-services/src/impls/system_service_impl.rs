@@ -11,38 +11,42 @@ Licensed under the Apache License, Version 2.0
 use crate::traits::SystemService;
 use crate::types::*;
 use async_trait::async_trait;
-use feagi_bdu::ConnectomeManager;
-use feagi_burst_engine::BurstLoopRunner;
+use feagi_brain_development::ConnectomeManager;
+use feagi_npu_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::SystemTime;
-use tracing::debug;
+use tracing::trace;
 
 /// Default implementation of SystemService
 pub struct SystemServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
     burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
     start_time: SystemTime,
+    version_info: VersionInfo,
 }
 
 impl SystemServiceImpl {
+    /// Create new SystemServiceImpl
+    ///
+    /// The version_info should be populated by the application (e.g., feagi-rust)
+    /// with the versions of all crates it was compiled with
     pub fn new(
         connectome: Arc<RwLock<ConnectomeManager>>,
         burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
+        version_info: VersionInfo,
     ) -> Self {
         Self {
             connectome,
             burst_runner,
             start_time: SystemTime::now(),
+            version_info,
         }
     }
 
     /// Get uptime in seconds
     fn get_uptime_seconds(&self) -> u64 {
-        self.start_time
-            .elapsed()
-            .map(|d| d.as_secs())
-            .unwrap_or(0)
+        self.start_time.elapsed().map(|d| d.as_secs()).unwrap_or(0)
     }
 
     /// Get FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
@@ -62,7 +66,7 @@ impl SystemServiceImpl {
 #[async_trait]
 impl SystemService for SystemServiceImpl {
     async fn get_health(&self) -> ServiceResult<HealthStatus> {
-        debug!(target: "feagi-services","Getting system health");
+        trace!(target: "feagi-services", "Getting system health");
 
         let mut components = Vec::new();
 
@@ -135,13 +139,26 @@ impl SystemService for SystemServiceImpl {
     }
 
     async fn get_status(&self) -> ServiceResult<SystemStatus> {
-        debug!(target: "feagi-services","Getting system status");
+        trace!(target: "feagi-services", "Getting system status");
 
         let manager = self.connectome.read();
 
         let is_initialized = manager.is_initialized();
-        let neuron_count = manager.get_neuron_count();
-        let synapse_count = manager.get_synapse_count();
+
+        // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
+        let state_manager_instance = feagi_state_manager::StateManager::instance();
+        let (neuron_count, synapse_count) =
+            if let Some(state_manager) = state_manager_instance.try_read() {
+                let core_state = state_manager.get_core_state();
+                (
+                    core_state.get_neuron_count() as usize,
+                    core_state.get_synapse_count() as usize,
+                )
+            } else {
+                // Fallback to ConnectomeManager if StateManager unavailable (shouldn't happen)
+                (manager.get_neuron_count(), manager.get_synapse_count())
+            };
+
         let cortical_area_count = manager.get_cortical_area_count();
         let brain_region_count = manager.get_brain_region_ids().len();
 
@@ -173,30 +190,21 @@ impl SystemService for SystemServiceImpl {
     }
 
     async fn get_version(&self) -> ServiceResult<VersionInfo> {
-        debug!(target: "feagi-services","Getting version information");
+        trace!(target: "feagi-services", "Getting version information");
 
-        Ok(VersionInfo {
-            feagi_core_version: env!("CARGO_PKG_VERSION").to_string(),
-            feagi_bdu_version: "2.0.0".to_string(), // From feagi-bdu Cargo.toml
-            feagi_burst_engine_version: "2.0.0".to_string(),
-            feagi_evo_version: "2.0.0".to_string(),
-            feagi_types_version: "2.0.0".to_string(),
-            build_timestamp: option_env!("VERGEN_BUILD_TIMESTAMP")
-                .unwrap_or("unknown")
-                .to_string(),
-            rust_version: option_env!("VERGEN_RUSTC_SEMVER")
-                .unwrap_or(env!("CARGO_PKG_RUST_VERSION"))
-                .to_string(),
-        })
+        // Return the version info that was provided by the application at startup
+        // The application (e.g., feagi-rust) knows which crates it compiled with
+        // and provides that information when creating SystemServiceImpl
+        Ok(self.version_info.clone())
     }
 
     async fn is_initialized(&self) -> ServiceResult<bool> {
-        debug!(target: "feagi-services","Checking if system is initialized");
+        trace!(target: "feagi-services", "Checking if system is initialized");
         Ok(self.connectome.read().is_initialized())
     }
 
     async fn get_burst_count(&self) -> ServiceResult<u64> {
-        debug!(target: "feagi-services","Getting burst count");
+        trace!(target: "feagi-services", "Getting burst count");
 
         if let Some(ref runner) = self.burst_runner {
             Ok(runner.read().get_burst_count())
@@ -206,7 +214,7 @@ impl SystemService for SystemServiceImpl {
     }
 
     async fn get_runtime_stats(&self) -> ServiceResult<RuntimeStats> {
-        debug!(target: "feagi-services","Getting runtime statistics");
+        trace!(target: "feagi-services", "Getting runtime statistics");
 
         let burst_count = if let Some(ref runner) = self.burst_runner {
             runner.read().get_burst_count()
@@ -218,32 +226,43 @@ impl SystemService for SystemServiceImpl {
         // For now, return basic stats
         Ok(RuntimeStats {
             total_bursts: burst_count,
-            total_neurons_fired: 0,         // TODO: Track in BurstLoopRunner
-            total_processing_time_ms: 0,    // TODO: Track in BurstLoopRunner
-            avg_burst_time_ms: 0.0,         // TODO: Track in BurstLoopRunner
-            avg_neurons_per_burst: 0.0,     // TODO: Track in BurstLoopRunner
-            current_rate_hz: 0.0,           // TODO: Track in BurstLoopRunner
-            peak_rate_hz: 0.0,              // TODO: Track in BurstLoopRunner
+            total_neurons_fired: 0,      // TODO: Track in BurstLoopRunner
+            total_processing_time_ms: 0, // TODO: Track in BurstLoopRunner
+            avg_burst_time_ms: 0.0,      // TODO: Track in BurstLoopRunner
+            avg_neurons_per_burst: 0.0,  // TODO: Track in BurstLoopRunner
+            current_rate_hz: 0.0,        // TODO: Track in BurstLoopRunner
+            peak_rate_hz: 0.0,           // TODO: Track in BurstLoopRunner
             uptime_seconds: self.get_uptime_seconds(),
         })
     }
 
     async fn get_memory_usage(&self) -> ServiceResult<MemoryUsage> {
-        debug!(target: "feagi-services","Getting memory usage");
+        trace!(target: "feagi-services", "Getting memory usage");
 
         // TODO: Implement actual memory tracking
         // For now, estimate based on neuron/synapse counts
         let manager = self.connectome.read();
-        let neuron_count = manager.get_neuron_count();
-        let synapse_count = manager.get_synapse_count();
+
+        // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
+        let state_manager_instance = feagi_state_manager::StateManager::instance();
+        let (neuron_count, synapse_count) =
+            if let Some(state_manager) = state_manager_instance.try_read() {
+                let core_state = state_manager.get_core_state();
+                (
+                    core_state.get_neuron_count() as usize,
+                    core_state.get_synapse_count() as usize,
+                )
+            } else {
+                // Fallback to ConnectomeManager if StateManager unavailable (shouldn't happen)
+                (manager.get_neuron_count(), manager.get_synapse_count())
+            };
 
         // Rough estimates (actual sizes depend on NPU implementation)
         let npu_neurons_bytes = neuron_count * 64; // ~64 bytes per neuron
         let npu_synapses_bytes = synapse_count * 16; // ~16 bytes per synapse
         let npu_total_bytes = npu_neurons_bytes + npu_synapses_bytes;
 
-        let connectome_metadata_bytes = 
-            manager.get_cortical_area_count() * 512 + // ~512 bytes per area metadata
+        let connectome_metadata_bytes = manager.get_cortical_area_count() * 512 + // ~512 bytes per area metadata
             manager.get_brain_region_ids().len() * 256; // ~256 bytes per region
 
         let total_allocated_bytes = npu_total_bytes + connectome_metadata_bytes;
@@ -263,16 +282,26 @@ impl SystemService for SystemServiceImpl {
     }
 
     async fn get_capacity(&self) -> ServiceResult<CapacityInfo> {
-        debug!(target: "feagi-services","Getting capacity information");
+        trace!(target: "feagi-services", "Getting capacity information");
 
         let manager = self.connectome.read();
         let config = manager.get_config();
 
-        let current_neurons = manager.get_neuron_count();
+        // CRITICAL: Read from StateManager's atomic cache - NO NPU lock, NO iteration
+        let state_manager_instance = feagi_state_manager::StateManager::instance();
+        let (current_neurons, current_synapses) =
+            if let Some(state_manager) = state_manager_instance.try_read() {
+                let core_state = state_manager.get_core_state();
+                (
+                    core_state.get_neuron_count() as usize,
+                    core_state.get_synapse_count() as usize,
+                )
+            } else {
+                (manager.get_neuron_count(), manager.get_synapse_count())
+            };
+
         let max_neurons = config.max_neurons;
         let neuron_utilization_percent = (current_neurons as f64 / max_neurons as f64) * 100.0;
-
-        let current_synapses = manager.get_synapse_count();
         let max_synapses = config.max_synapses;
         let synapse_utilization_percent = (current_synapses as f64 / max_synapses as f64) * 100.0;
 
@@ -291,4 +320,3 @@ impl SystemService for SystemServiceImpl {
         })
     }
 }
-

@@ -1,0 +1,90 @@
+[package]
+name = "feagi-npu-burst-engine"
+version = "0.0.1-beta.12"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "High-performance burst engine for FEAGI neural processing"
+
+[dependencies]
+# Platform-agnostic core (types + algorithms + models, includes synapse logic)
+feagi-npu-neural = { version = "=0.0.1-beta.8", path = "../neural" }
+
+# Runtime trait abstraction (generic over any runtime implementation)
+# Standard runtime implementation available via "std" feature
+feagi-npu-runtime = { version = "=0.0.1-beta.8", path = "../runtime", optional = true }
+
+feagi-state-manager = { version = "=0.0.1-beta.8", path = "../../feagi-state-manager" }  # For BurstEngineState enum
+# NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
+# Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
+feagi-serialization = { workspace = true }  # For decoding sensory data
+feagi-structures = { workspace = true, features = ["async"] }  # For CorticalMappedXYZPNeuronVoxels and async runtime
+thiserror.workspace = true
+rayon.workspace = true
+ndarray.workspace = true
+ahash.workspace = true
+roaring = "0.10"  # Compressed bitmaps for efficient neuron set operations
+serde_json = "1.0"  # For parameter update queue values
+memmap2 = "0.9"  # Memory-mapped file I/O for SHM
+chrono = "0.4"   # Timestamp formatting
+parking_lot = "0.12"  # For motor subscriptions RwLock
+
+# Observability
+feagi-observability = { workspace = true }
+tracing = { workspace = true }
+
+# Note: Using LLVM auto-vectorization for SIMD (architecture-agnostic)
+# No explicit SIMD crate needed - LLVM handles it automatically
+
+# GPU acceleration (optional features)
+wgpu = { workspace = true, optional = true }
+pollster = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true }
+
+# CUDA acceleration (optional features)
+cudarc = { version = "0.11", features = ["cuda-11080", "f16"], optional = true }
+half = { version = "2.4", optional = true }
+
+[features]
+default = ["connectome-io", "async-tokio", "std"]
+# Standard library support (includes StdRuntime for DynamicNPU type alias)
+std = ["feagi-npu-runtime/std"]
+# Enable connectome serialization/deserialization (requires native dependencies)
+connectome-io = []  # Types are in feagi-npu-neural (always available with std feature)
+# Async runtime features
+async-tokio = ["feagi-structures/async-tokio"]
+wasm = ["feagi-structures/async-wasm"]  # Explicitly enable wasm feature (no tokio)
+# Enable GPU acceleration via WGPU (cross-platform)
+gpu = ["wgpu", "pollster", "bytemuck"]
+# Enable CUDA acceleration (NVIDIA only, highest performance)
+cuda = ["cudarc", "half"]
+# Enable all GPU backends
+all-gpu = ["gpu", "cuda"]
+# Enable NPU lock tracing (adds overhead - disable for production)
+# When disabled, uses regular Mutex instead of TracingMutex
+npu-lock-tracing = []
+
+[[bench]]
+name = "backend_comparison"
+path = "benches/backend_comparison.rs"
+harness = false
+
+[[bench]]
+name = "ci_microbench"
+path = "benches/ci_microbench.rs"
+harness = false
+
+[[bench]]
+name = "grouping_optimization"
+path = "benches/grouping_optimization.rs"
+harness = false
+
+#[[bench]]
+#name = "largescale_perf_test"
+#harness = false
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+base64 = "0.22"

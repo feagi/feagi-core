@@ -43,7 +43,7 @@ service interfaces that can be used by any adapter (REST API, ZMQ, embedded).
 
 Adapters depend on service traits, not implementations:
 
-```rust
+```rust,ignore
 use feagi_services::{NeuronService, ServiceResult, CreateNeuronParams};
 
 async fn handle_http_request(
@@ -52,10 +52,10 @@ async fn handle_http_request(
 ) -> HttpResponse {
     // 1. Parse HTTP request to DTO
     let params = CreateNeuronParams { ... };
-    
+
     // 2. Call service (transport-agnostic)
     let result = service.create_neuron(params).await?;
-    
+
     // 3. Convert DTO to HTTP response
     HttpResponse::ok(result)
 }
@@ -65,9 +65,9 @@ async fn handle_http_request(
 
 Implementations use domain logic (BDU, NPU, Evo):
 
-```rust
+```rust,ignore
 use feagi_services::{NeuronService, ServiceResult};
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 
 struct NeuronServiceImpl {
     connectome: Arc<ConnectomeManager>,
@@ -87,30 +87,63 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+#[cfg(feature = "connectome-serialization")]
+pub mod connectome;
+#[cfg(feature = "std")]
+pub mod genome;
+#[cfg(feature = "std")]
 pub mod impls;
 pub mod traits;
 pub mod types;
-pub mod genome;
 
 // Re-export main API
 pub use traits::{
     AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
-    SnapshotService, SnapshotMetadata, SnapshotCreateOptions,
+    SnapshotCreateOptions, SnapshotMetadata, SnapshotService,
 };
 
 pub use types::{
+    // Agent registry types
+    agent_registry::{
+        AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
+        SensoryCapability, VisionCapability, VisualizationCapability,
+    },
+    // Registration DTOs
+    registration::{
+        AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest,
+        RegistrationResponse, TransportConfig,
+    },
     // DTOs
-    BrainRegionInfo, ConnectivityStats, CorticalAreaInfo, CorticalAreaStats,
-    CreateBrainRegionParams, CreateCorticalAreaParams, UpdateCorticalAreaParams,
-    CreateNeuronParams, CreateSynapseParams, GenomeInfo, LoadGenomeParams, NeuronInfo,
-    SaveGenomeParams, SynapseInfo, SystemHealth, RuntimeStatus,
+    BrainRegionInfo,
+    ConnectivityStats,
+    CorticalAreaInfo,
+    CorticalAreaStats,
+    CreateBrainRegionParams,
+    CreateCorticalAreaParams,
+    CreateNeuronParams,
+    CreateSynapseParams,
+    GenomeInfo,
+    LoadGenomeParams,
+    NeuronInfo,
+    RuntimeStatus,
+    SaveGenomeParams,
     // Errors
-    ServiceError, ServiceResult,
+    ServiceError,
+    ServiceResult,
+    SynapseInfo,
+    SystemHealth,
+    UpdateCorticalAreaParams,
 };
 
+// Re-export cortical area helpers for adapter crates.
+pub use feagi_brain_development::models::CorticalAreaExt;
+
 // Re-export implementations (optional - adapters can use their own)
+#[cfg(feature = "std")]
 pub use impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     RuntimeServiceImpl, SnapshotServiceImpl,
 };
 
+/// Version of this crate (for feagi-rust version reporting)
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

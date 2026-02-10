@@ -19,13 +19,13 @@ pub struct ObservabilityConfig {
 pub struct LoggingConfig {
     /// Log level (trace, debug, info, warn, error)
     pub level: String,
-    
+
     /// Log format (text or json)
     pub format: LogFormat,
-    
+
     /// Output destination
     pub output: LogOutput,
-    
+
     /// File path (if output is file)
     pub file_path: Option<PathBuf>,
 }
@@ -50,19 +50,19 @@ pub enum LogOutput {
 pub struct TelemetryConfig {
     /// Enable Prometheus metrics
     pub metrics_enabled: bool,
-    
+
     /// Enable distributed tracing
     pub tracing_enabled: bool,
-    
+
     /// Tracing endpoint (Jaeger OTLP)
     pub tracing_endpoint: Option<String>,
-    
+
     /// Metrics endpoint path
     pub metrics_path: String,
-    
+
     /// Health check endpoint
     pub health_check_path: String,
-    
+
     /// System metrics collection interval (seconds)
     pub system_metrics_interval: u64,
 }
@@ -72,19 +72,19 @@ pub struct TelemetryConfig {
 pub struct ProfilingConfig {
     /// Enable CPU profiling
     pub cpu_profiling: bool,
-    
+
     /// Enable memory profiling
     pub memory_profiling: bool,
-    
+
     /// Output directory for profiles
     pub output_dir: PathBuf,
-    
+
     /// Profiling sample rate (0.0-1.0)
     pub sample_rate: f64,
-    
+
     /// Enable Chrome DevTools tracing
     pub chrome_tracing: bool,
-    
+
     /// Enable perf profiling (Linux only)
     pub perf_profiling: bool,
 }
@@ -154,6 +154,3 @@ impl Default for ProfilingConfig {
         }
     }
 }
-
-
-

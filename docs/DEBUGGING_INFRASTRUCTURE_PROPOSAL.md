@@ -17,7 +17,7 @@ This document provides a comprehensive proposal for implementing industrial-grad
 **Current State:**
 - **feagi-api**: Uses `tracing` + `tracing-subscriber` ✅
 - **feagi-services**: Uses `log` crate ❌
-- **feagi-bdu**: Uses `log` crate ❌
+- **feagi-brain-development**: Uses `log` crate ❌
 - **feagi-burst-engine**: Minimal logging ❌
 - **feagi-inference-engine**: Uses `env_logger` + `log` ❌
 

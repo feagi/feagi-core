@@ -1,18 +1,18 @@
 # ============================================================================
-# MAIN CRATE: feagi-core
+# UMBRELLA CRATE: feagi
 # 
 # This is the primary crate that users import. It re-exports all components
 # with feature flags for selective compilation.
-# All workspace members are internal organization only (publish = false).
+# All workspace members are also published individually for selective use.
 # ============================================================================
 
 [package]
-name = "feagi-core"
-version = "0.0.1"
+name = "feagi"
+version = "0.0.1-beta.17"
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
-description = "Framework for Evolutionary Artificial General Intelligence - Core Neural Computation"
+description = "Framework for Evolutionary Artificial General Intelligence - Bio-Inspired Neural Computation"
 repository = "https://github.com/feagi/feagi-core"
 readme = "README.md"
 keywords = ["neuroscience", "ai", "neural-network", "brain", "agi"]
@@ -23,9 +23,8 @@ default = ["std", "full"]
 
 # Platform targets
 std = [
-    "feagi-types/default",
     "feagi-state-manager/std",
-    "feagi-burst-engine/default",
+    "feagi-npu-burst-engine/default",
 ]
 no_std = [
     "feagi-state-manager/no_std",
@@ -36,36 +35,48 @@ wasm = [
 
 # Component features (selective compilation)
 full = ["compute", "io"]
-compute = ["burst-engine", "bdu", "plasticity", "serialization", "state-manager"]
-io = ["pns", "agent-sdk"]
+compute = ["burst-engine", "brain-development", "plasticity", "serialization", "state-manager"]
+io = ["sensorimotor", "agent-sdk"]
 
 # Individual components
-burst-engine = ["feagi-burst-engine"]
-bdu = ["feagi-bdu"]
-plasticity = ["feagi-plasticity"]
+burst-engine = ["feagi-npu-burst-engine"]
+brain-development = ["feagi-brain-development"]
+plasticity = ["feagi-npu-plasticity"]
 state-manager = ["feagi-state-manager"]
-serialization = ["feagi-connectome-serialization"]
-pns = ["feagi-pns"]
-agent-sdk = ["feagi-agent-sdk"]
+serialization = ["feagi-io/connectome-serialization"]
+sensorimotor = ["dep:feagi-sensorimotor"]
+agent-sdk = ["feagi-agent"]
 
 [dependencies]
-# Foundation
-feagi-types = { version = "0.0.1", path = "crates/feagi-types" }
-feagi-evo = { version = "0.0.1", path = "crates/feagi-evo" }
+# Foundation (vendored into feagi-core when published)
+feagi-evolutionary = { version = "=0.0.1-beta.8", path = "crates/feagi-evolutionary" }
+feagi-npu-neural = { version = "=0.0.1-beta.8", path = "crates/feagi-npu/neural" }
 serde_json = "1.0"
+feagi-structures = { version = "=0.0.1-beta.8", path = "crates/feagi-structures" }
+feagi-serialization = { version = "=0.0.1-beta.8", path = "crates/feagi-serialization" }
+ndarray = { workspace = true }
 
-# Infrastructure
-feagi-state-manager = { version = "0.0.1", path = "crates/feagi-state-manager", optional = true }
+# Infrastructure (vendored)
+feagi-state-manager = { version = "=0.0.1-beta.8", path = "crates/feagi-state-manager", optional = true }
 
-# Algorithms
-feagi-burst-engine = { version = "0.0.1", path = "crates/feagi-burst-engine", optional = true }
-feagi-bdu = { version = "0.0.1", path = "crates/feagi-bdu", optional = true }
-feagi-plasticity = { version = "0.0.1", path = "crates/feagi-plasticity", optional = true }
-feagi-connectome-serialization = { version = "0.0.1", path = "crates/feagi-connectome-serialization", optional = true }
+# Algorithms (vendored)
+feagi-npu-burst-engine = { version = "=0.0.1-beta.12", path = "crates/feagi-npu/burst-engine", optional = true }
+feagi-brain-development = { version = "=0.0.1-beta.8", path = "crates/feagi-brain-development", optional = true }
+feagi-sensorimotor = { version = "=0.0.1-beta.8", path = "crates/feagi-sensorimotor", optional = true }
+feagi-npu-plasticity = { version = "=0.0.1-beta.12", path = "crates/feagi-npu/plasticity", optional = true }
 
-# I/O (will move to feagi-io later)
-feagi-pns = { version = "0.0.1", path = "crates/feagi-pns", optional = true }
-feagi-agent-sdk = { version = "0.0.1", path = "crates/feagi-agent-sdk", optional = true }
+# I/O (vendored)
+feagi-io = { version = "=0.0.1-beta.11", path = "crates/feagi-io", optional = true }
+feagi-agent = { version = "=0.0.1-beta.8", path = "crates/feagi-agent", optional = true }
+
+# Async runtime is now a feature of feagi-data-structures
+
+[dev-dependencies]
+# For integration tests that need GenomeService
+feagi-services = { version = "=0.0.1-beta.8", path = "crates/feagi-services" }
+feagi-npu-runtime = { version = "=0.0.1-beta.8", path = "crates/feagi-npu/runtime", features = ["std"] }
+parking_lot = "0.12"
+tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros"] }
 
 # ============================================================================
 # WORKSPACE CONFIGURATION
@@ -75,66 +86,75 @@ feagi-agent-sdk = { version = "0.0.1", path = "crates/feagi-agent-sdk", optional
 resolver = "2"
 members = [
     # === Foundation Layer ===
-    "crates/feagi-types",              # Core data structures (Neuron, Synapse, etc.)
     "crates/feagi-config",             # Configuration loader (TOML + overrides)
     
-    # === Platform-Agnostic Core (NEW - Phase 1) ===
-    "crates/feagi-neural",             # Pure neural dynamics (no_std)
-    "crates/feagi-synapse",            # Pure synaptic algorithms (no_std)
+    # === NPU Subsystem (Neural Processing Unit) ===
+    "crates/feagi-npu/neural",         # Neural computation: types + algorithms + models (no_std)
+    "crates/feagi-npu/runtime",        # Runtime traits + implementations (std/embedded via features)
+    "crates/feagi-npu/burst-engine",   # NPU execution & inference
     
-    # === Runtime Adapters (NEW - Phase 2) ===
-    "crates/feagi-runtime-std",        # Desktop/Server (Vec, Rayon)
-    "crates/feagi-runtime-embedded",   # ESP32/RTOS (fixed arrays, no_std)
-    "crates/feagi-embedded",           # Platform abstraction + implementations (ESP32, Arduino, etc.)
+    # === Platform HALs ===
+    "crates/feagi-hal",                # Hardware Abstraction Layer (HAL) - platform abstraction + implementations (ESP32, Arduino, etc.)
     
-    # === Infrastructure Layer ===
-    "crates/feagi-state-manager",      # Runtime state management (NEW)
-    "crates/feagi-evo",                # Genome I/O and evolution (genotype)
+    # === Infrastructure Layer (Cross-Cutting) ===
+    "crates/feagi-state-manager",      # Runtime state management
+    "crates/feagi-evolutionary",                # Genome I/O and evolution (genotype)
     "crates/feagi-services",           # Service layer (stable application boundary)
     "crates/feagi-api",                # REST API layer (HTTP + ZMQ transports)
     "crates/feagi-observability",      # Unified observability (logging, telemetry, profiling)
     
-    # === Algorithm Layer (Core Neural Computation) ===
-    "crates/feagi-burst-engine",       # NPU execution & inference
-    "crates/feagi-bdu",                # Neurogenesis (brain development)
-    "crates/feagi-plasticity",         # Synaptic learning (STDP, memory) + stdp_core (no_std)
-    "crates/feagi-connectome-serialization",  # Connectome persistence
+    # === Algorithm Layer ===
+    "crates/feagi-brain-development",                # Neurogenesis (brain development)
+    "crates/feagi-npu/plasticity",     # Synaptic learning (STDP, memory)
     
-    # === I/O Layer (TODO: Move to feagi-io repo) ===
-    "crates/feagi-pns",                # Peripheral Nervous System (ZMQ/UDP transport)
-    "crates/feagi-agent-sdk",          # Agent SDK (Rust client library)
+    # === I/O Layer ===
+    "crates/feagi-io",                 # I/O System (ZMQ/UDP transport)
+    "crates/feagi-agent",              # Agent library (Rust client library)
     
     # === Applications ===
-    "crates/feagi-transports",   # Transport layer abstractions
+    
+    # === Data Processing ===
+    "crates/feagi-sensorimotor",                # Sensorimotor System - data processing & encoding (sensory & motor)
+    "crates/feagi-serialization", # Data serialization formats
+    "crates/feagi-structures",    # Core data structures
 ]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.1-beta.17"
 edition = "2021"
+rust-version = "1.75"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/Neuraville/FEAGI-2.0"
+repository = "https://github.com/feagi/feagi-core"
+homepage = "https://feagi.org"
+documentation = "https://docs.rs/feagi"
 
 [workspace.dependencies]
 # Core dependencies (shared across crates)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 thiserror = "1.0.50"
-rayon = "1.10"
-ndarray = "0.16"
-ahash = { version = "0.8", features = ["serde"] }  # Fast non-cryptographic hashing
+rayon = "1.11"
+ndarray = { version = "0.17.1", features = ["rayon"] }
+ahash = { version = "0.8", default-features = false, features = ["std", "serde", "compile-time-rng"] }  # Fast non-cryptographic hashing (no runtime-rng for WASM)
 tracing = "0.1"  # Structured logging and diagnostics
+
+# Additional dependencies from feagi-data-processing
+image = "0.25.9"
+uuid = { version = "1.11", features = ["v7", "serde", "js"] }  # js feature for WASM support
+paste = "1.0.15"
 
 # GPU acceleration (WGPU - cross-platform native GPU library)
 wgpu = "0.19"
 pollster = "0.3"  # Async/await executor for GPU operations
 bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU buffers
 
-# Published FEAGI data crates
-feagi_data_structures = { path = "../feagi-data-processing/feagi_data_structures" }
-feagi_data_serialization = { path = "../feagi-data-processing/feagi_data_serialization" }
+# FEAGI data crates (now internal to workspace)
+feagi-structures = { version = "=0.0.1-beta.8", path = "crates/feagi-structures" }
+feagi-serialization = { version = "=0.0.1-beta.8", path = "crates/feagi-serialization" }
 
 # Workspace-internal crates
-feagi-connectome-serialization = { path = "crates/feagi-connectome-serialization" }
-feagi-observability = { path = "crates/feagi-observability" }
+feagi-observability = { version = "=0.0.1-beta.8", path = "crates/feagi-observability" }
 
 # PyO3 for Python bindings
 pyo3 = { version = "0.22", features = ["extension-module"] }
@@ -149,6 +169,10 @@ panic = "abort"      # Smaller binary, no unwinding
 [profile.dev]
 opt-level = 1        # Some optimization in dev for reasonable performance
 
+[profile.test]
+opt-level = 0
+debug = true
+
 # ============================================================================
 # BINARY TOOLS
 # ============================================================================
@@ -156,4 +180,9 @@ opt-level = 1        # Some optimization in dev for reasonable performance
 [[bin]]
 name = "migrate_genome"
 path = "tools/migrate_genome.rs"
+required-features = []
+
+[[bin]]
+name = "perf_compare"
+path = "tools/perf_compare.rs"
 required-features = []

@@ -1,6 +1,6 @@
-# FEAGI Core
+# FEAGI
 
-High-performance Rust libraries for bio-inspired neural computation and evolutionary artificial general intelligence.
+Framework for Evolutionary Artificial General Intelligence - High-performance Rust libraries for bio-inspired neural computation.
 
 ## What is FEAGI?
 
@@ -29,14 +29,22 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-feagi-core = "2.0"
+feagi = "0.0.1-beta.1"  # Umbrella crate (includes everything)
 ```
 
-Or with specific features:
+Or use individual building blocks:
 
 ```toml
 [dependencies]
-feagi-core = { version = "2.0", features = ["gpu"] }
+feagi-npu-burst-engine = "0.0.1-beta.1"  # Just the NPU
+feagi-npu-neural = "0.0.1-beta.1"        # Just core types
+```
+
+Or umbrella with specific features:
+
+```toml
+[dependencies]
+feagi = { version = "0.0.1-beta.1", features = ["gpu"] }
 ```
 
 ## Quick Start
@@ -44,7 +52,7 @@ feagi-core = { version = "2.0", features = ["gpu"] }
 ### Create and Run a Neural Network
 
 ```rust
-use feagi_core::prelude::*;
+use feagi::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize neural processing unit
@@ -64,8 +72,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 #![no_std]
-use feagi_core::neural::NeuronDynamics;
-use feagi_core::runtime_embedded::EmbeddedRuntime;
+use feagi_neural::NeuronDynamics;
+use feagi_runtime_embedded::EmbeddedRuntime;
 
 // Configure for resource-constrained systems
 let runtime = EmbeddedRuntime::new(1000, 5000);
@@ -98,9 +106,9 @@ FEAGI Core is organized as a workspace of focused crates:
 
 ### Neural Processing
 - **feagi-burst-engine**: High-performance burst cycle execution
-- **feagi-bdu**: Brain development (neurogenesis, synaptogenesis)
+- **feagi-brain-development**: Brain development (neurogenesis, synaptogenesis)
 - **feagi-plasticity**: Synaptic learning (STDP, memory consolidation)
-- **feagi-evo**: Genome I/O and evolutionary algorithms
+- **feagi-evolutionary**: Genome I/O and evolutionary algorithms
 
 ### Infrastructure
 - **feagi-state-manager**: Runtime state and lifecycle management
@@ -108,15 +116,15 @@ FEAGI Core is organized as a workspace of focused crates:
 - **feagi-observability**: Logging, telemetry, and profiling
 
 ### I/O and Integration
-- **feagi-pns**: Peripheral nervous system (sensory input, motor output)
-- **feagi-agent-sdk**: Client library for agent integration
+- **feagi-io**: I/O system (sensory input, motor output)
+- **feagi-agent**: Client library for agent integration
 - **feagi-api**: REST API server
 - **feagi-transports**: Network transport abstractions (ZMQ, UDP, HTTP)
 
 ### Platform Adapters
 - **feagi-runtime-std**: Desktop and server deployment (Vec, Rayon, async)
 - **feagi-runtime-embedded**: Embedded systems (fixed arrays, no_std)
-- **feagi-embedded**: Platform abstraction layer for ESP32, Arduino, STM32
+- **feagi-hal**: Platform abstraction layer for ESP32, Arduino, STM32
 
 ### Utilities
 - **feagi-connectome-serialization**: Brain persistence and loading
@@ -159,7 +167,7 @@ FEAGI Core delivers significant performance improvements over interpreted implem
 
 ## Feature Flags
 
-### Main Crate (feagi-core)
+### Umbrella Crate (feagi)
 
 ```toml
 [features]
@@ -252,7 +260,7 @@ cargo build --workspace --release
 
 ## Documentation
 
-- **API Reference**: [docs.rs/feagi-core](https://docs.rs/feagi-core)
+- **API Reference**: [docs.rs/feagi](https://docs.rs/feagi)
 - **Architecture Guide**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 Generate local documentation:
@@ -301,11 +309,11 @@ cargo bench -p feagi-burst-engine
 
 ## Project Status
 
-**Version**: 2.0.0  
+**Version**: 0.0.1  
 **Status**: Active development  
 **Minimum Rust Version**: 1.75+
 
-FEAGI Core is under active development. The core APIs are stabilizing, but breaking changes may occur in minor releases until 3.0.
+FEAGI Core is under active development. The core APIs are stabilizing, but breaking changes may occur in minor releases.
 
 ## Community and Support
 

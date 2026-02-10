@@ -3,9 +3,4 @@
 
 pub mod permissions;
 
-pub use permissions::{Permission, Authorizer, AuthzError};
-
-
-
-
-
+pub use permissions::{Authorizer, AuthzError, Permission};

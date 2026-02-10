@@ -23,13 +23,13 @@ use utoipa::ToSchema;
 pub struct MappingInfo {
     /// Source cortical area ID
     pub src_cortical_area: String,
-    
+
     /// Destination cortical area ID
     pub dst_cortical_area: String,
-    
+
     /// Mapping type (e.g., "one_to_one", "one_to_many", "topological")
     pub mapping_type: String,
-    
+
     /// Mapping configuration data
     pub mapping_data: serde_json::Value,
 }
@@ -39,13 +39,13 @@ pub struct MappingInfo {
 pub struct CreateMappingRequest {
     /// Source cortical area ID
     pub src_cortical_area: String,
-    
+
     /// Destination cortical area ID
     pub dst_cortical_area: String,
-    
+
     /// Mapping type
     pub mapping_type: String,
-    
+
     /// Optional: Mapping configuration data
     #[serde(default)]
     pub mapping_data: Option<serde_json::Value>,
@@ -56,7 +56,7 @@ pub struct CreateMappingRequest {
 pub struct MappingListResponse {
     /// List of all mappings
     pub mappings: Vec<MappingInfo>,
-    
+
     /// Total count
     pub total_count: usize,
 }
@@ -73,16 +73,16 @@ pub struct MappingListResponse {
 pub struct SynapseStats {
     /// Cortical area ID
     pub cortical_area_id: String,
-    
+
     /// Total number of synapses
     pub total_synapses: usize,
-    
+
     /// Number of active synapses
     pub active_synapses: usize,
-    
+
     /// Number of inactive synapses
     pub inactive_synapses: usize,
-    
+
     /// Total neurons in the area
     pub total_neurons: usize,
 }
@@ -92,17 +92,13 @@ pub struct SynapseStats {
 pub struct ConnectomeStatsResponse {
     /// Total number of cortical areas
     pub total_cortical_areas: usize,
-    
+
     /// Total number of mappings
     pub total_mappings: usize,
-    
+
     /// Total number of synapses across all areas
     pub total_synapses: usize,
-    
+
     /// Per-area synapse statistics
     pub per_area_stats: HashMap<String, SynapseStats>,
 }
-
-
-
-

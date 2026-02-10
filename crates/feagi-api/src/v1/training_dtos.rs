@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 //! Training API DTOs
-//! 
+//!
 //! Request/response types for reinforcement learning and training
 
 use serde::{Deserialize, Serialize};
@@ -90,5 +90,3 @@ pub struct TrainingSuccessResponse {
     pub message: String,
     pub success: bool,
 }
-
-

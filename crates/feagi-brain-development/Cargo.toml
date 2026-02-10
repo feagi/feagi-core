@@ -1,0 +1,87 @@
+[package]
+name = "feagi-brain-development"
+version = "0.0.1-beta.8"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Brain Development Utilities - Synaptogenesis and Connectivity"
+
+[lib]
+crate-type = ["rlib"]
+name = "feagi_brain_development"
+
+[dependencies]
+# Core types from existing FEAGI crates
+feagi-npu-neural = { version = "=0.0.1-beta.8", path = "../feagi-npu/neural" }  # For types (CorticalArea, Dimensions, etc.)
+feagi-evolutionary = { version = "=0.0.1-beta.8", path = "../feagi-evolutionary" }
+feagi-npu-plasticity = { version = "=0.0.1-beta.12", path = "../feagi-npu/plasticity", optional = true }
+# feagi-burst-engine configured per-platform below
+feagi-structures = { workspace = true }
+feagi-state-manager = { version = "=0.0.1-beta.8", path = "../feagi-state-manager", default-features = false }
+
+# Performance (using workspace versions)
+rayon = { workspace = true, optional = true }  # Optional - not available in WASM
+ndarray = { workspace = true }
+ahash = { workspace = true }
+roaring = "0.10"  # Roaring bitmaps for spatial indexing
+
+# Serialization (for debugging)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
+
+# Error handling (using workspace version)
+thiserror = { workspace = true }
+
+# Timestamp generation for genome save
+chrono = "0.4"
+
+# Observability
+feagi-observability = { workspace = true }
+tracing = "0.1"  # Required for tracing macros
+
+# Concurrency & singleton
+once_cell = "1.19"
+parking_lot = "0.12"
+
+# Logging (replaced by feagi-observability)
+# log = "0.4"  # Removed - use feagi-observability instead
+
+# Random number generation - platform-specific
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+rand = { version = "0.8", features = ["std", "std_rng"] }
+# Use async-tokio feature for desktop builds
+feagi-npu-burst-engine = { version = "=0.0.1-beta.12", path = "../feagi-npu/burst-engine", default-features = false, features = ["async-tokio", "std"] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+rand = { version = "0.8", default-features = false, features = ["getrandom"] }
+# Use wasm feature for WASM builds (no tokio)
+feagi-npu-burst-engine = { version = "=0.0.1-beta.12", path = "../feagi-npu/burst-engine", default-features = false, features = ["wasm"] }
+
+[features]
+default = ["parallel", "plasticity"]  # Standard build includes plasticity
+# Parallel processing via rayon (not available in WASM)
+parallel = ["rayon"]
+# Plasticity support (memory neurons, STDP)
+plasticity = ["dep:feagi-npu-plasticity"]
+# WASM-compatible build (disables connectome-io and parallel processing)
+wasm = []
+# Async runtime support (passed through from feagi-services)
+async-tokio = []
+
+[dev-dependencies]
+criterion = "0.5"       # Benchmarking
+proptest = "1.4"        # Property-based testing
+feagi-npu-runtime = { version = "=0.0.1-beta.8", path = "../feagi-npu/runtime", features = ["std"] }
+
+# Benchmarks will be added in Phase 2
+# [[bench]]
+# name = "synaptogenesis"
+# harness = false
+
+# Profile configuration is inherited from workspace root
+# See feagi-rust/Cargo.toml for release profile settings
+

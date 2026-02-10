@@ -11,7 +11,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi-core = "2.0"  # Default: std + full features
+//! feagi = "0.0.1"  # Umbrella crate (default: std + full features)
 //! ```
 //!
 //! ## Feature Flags
@@ -28,7 +28,7 @@
 //!
 //! ### Individual Components
 //! - **`burst-engine`**: NPU execution
-//! - **`bdu`**: Neurogenesis
+//! - **`brain-development`**: Neurogenesis
 //! - **`plasticity`**: Synaptic learning
 //! - **`state-manager`**: Runtime state
 //! - **`serialization`**: Connectome I/O
@@ -41,29 +41,16 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi-core = "2.0"
+//! feagi = "0.0.1"
 //! ```
 //!
 //! ```rust,no_run
-//! use feagi_core::prelude::*;
+//! use feagi::burst_engine::{backend::CPUBackend, RustNPU};
+//! use feagi_npu_runtime::StdRuntime;
 //!
 //! // Create NPU
-//! let mut npu = RustNPU::new_cpu_only(100_000, 1_000_000, 20);
-//!
-//! // Add neurons
-//! let neuron_id = npu.add_neuron(
-//!     1.0,    // threshold
-//!     0.1,    // leak
-//!     0.0,    // resting
-//!     0,      // type
-//!     3,      // refractory
-//!     1.0,    // excitability
-//!     10,     // consecutive limit
-//!     5,      // snooze
-//!     true,   // mp accumulation
-//!     0,      // cortical area
-//!     0, 0, 0 // x, y, z
-//! )?;
+//! let mut npu =
+//!     RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100_000, 1_000_000, 20)?;
 //!
 //! // Run burst
 //! let result = npu.process_burst()?;
@@ -74,16 +61,19 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi-core = { version = "2.0", features = ["burst-engine", "serialization"] }
+//! feagi = { version = "0.0.1", features = ["burst-engine", "serialization"] }
 //! ```
 //!
 //! ```rust,no_run
-//! use feagi_core::burst_engine::RustNPU;
-//! use feagi_core::serialization::load_connectome;
+//! use feagi::burst_engine::{backend::CPUBackend, DynamicNPU};
+//! use feagi::serialization::load_connectome;
+//! use feagi_npu_runtime::StdRuntime;
 //!
-//! // Load pre-trained brain
-//! let snapshot = load_connectome("brain.connectome")?;
-//! let mut npu = RustNPU::<f32>::import_connectome(snapshot);
+//! // Load pre-trained brain (snapshot usage pending import API refactor)
+//! let _snapshot = load_connectome("brain.connectome")?;
+//!
+//! // Create NPU for inference
+//! let mut npu = DynamicNPU::new_f32(StdRuntime, CPUBackend::new(), 100_000, 1_000_000, 20)?;
 //!
 //! // Run inference
 //! loop {
@@ -97,7 +87,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi-core = { version = "2.0", features = ["wasm", "compute"], default-features = false }
+//! feagi = { version = "0.0.1", features = ["wasm", "compute"], default-features = false }
 //! ```
 //!
 //! ## Architecture
@@ -114,12 +104,12 @@
 //! └─────────────────────────────────────────────────────────┘
 //!                         ↓
 //! ┌─────────────────────────────────────────────────────────┐
-//! │  Algorithms: burst-engine, bdu, plasticity              │
+//! │  Algorithms: burst-engine, brain-development, plasticity │
 //! │  (Pure neural computation, no I/O)                      │
 //! └─────────────────────────────────────────────────────────┘
 //!                         ↓
 //! ┌─────────────────────────────────────────────────────────┐
-//! │  I/O: feagi-pns, feagi-agent-sdk                        │
+//! │  I/O: feagi-io, feagi-agent-sdk                         │
 //! │  (ZMQ/UDP transport, agent communication)               │
 //! └─────────────────────────────────────────────────────────┘
 //! ```
@@ -154,7 +144,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // Re-export foundation
-pub use feagi_types as types;
+// Note: feagi_types removed - use feagi_npu_neural::types or feagi_data_structures instead
+pub use feagi_npu_neural::types;
 
 // Re-export infrastructure
 #[cfg(feature = "state-manager")]
@@ -162,42 +153,44 @@ pub use feagi_state_manager as state_manager;
 
 // Re-export algorithms
 #[cfg(feature = "burst-engine")]
-pub use feagi_burst_engine as burst_engine;
+pub use feagi_npu_burst_engine as burst_engine;
 
-#[cfg(feature = "bdu")]
-pub use feagi_bdu as bdu;
+#[cfg(feature = "brain-development")]
+pub use feagi_brain_development as bdu;
 
 #[cfg(feature = "plasticity")]
-pub use feagi_plasticity as plasticity;
+pub use feagi_npu_plasticity as plasticity;
 
 #[cfg(feature = "serialization")]
-pub use feagi_connectome_serialization as serialization;
+pub use feagi_io::connectome as serialization;
 
 // Re-export I/O layer
-#[cfg(feature = "pns")]
-pub use feagi_pns as pns;
+#[cfg(feature = "sensorimotor")]
+pub use feagi_io as io;
 
 #[cfg(feature = "agent-sdk")]
-pub use feagi_agent_sdk as agent_sdk;
+pub use feagi_agent as agent;
 
 /// Prelude - commonly used types and traits
 pub mod prelude {
     pub use crate::types::*;
-    
+
     #[cfg(feature = "burst-engine")]
-    pub use crate::burst_engine::{RustNPU, BurstResult};
-    
+    pub use crate::burst_engine::{BurstResult, RustNPU};
+
     #[cfg(feature = "state-manager")]
-    pub use crate::state_manager::{StateManager, BurstEngineState, GenomeState};
-    
-    #[cfg(feature = "bdu")]
+    pub use crate::state_manager::{BurstEngineState, GenomeState, StateManager};
+
+    #[cfg(feature = "brain-development")]
     pub use crate::bdu::connectivity::synaptogenesis::*;
-    
+
     #[cfg(feature = "plasticity")]
-    pub use crate::plasticity::service::{PlasticityService, PlasticityConfig};
-    
+    pub use crate::plasticity::service::{PlasticityConfig, PlasticityService};
+
     #[cfg(feature = "serialization")]
-    pub use crate::serialization::{save_connectome, load_connectome, ConnectomeSnapshot};
+    pub use crate::serialization::{load_connectome, save_connectome};
+    #[cfg(feature = "serialization")]
+    pub use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
 }
 
 #[cfg(test)]
@@ -209,8 +202,3 @@ mod tests {
         let _neuron_id = NeuronId(0);
     }
 }
-
-
-
-
-

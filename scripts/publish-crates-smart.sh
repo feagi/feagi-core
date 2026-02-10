@@ -1,0 +1,443 @@
+#!/bin/bash
+# Copyright 2025 Neuraville Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Smart Independent Publishing for feagi-core workspace
+# 
+# This script publishes ONLY crates that have version updates
+# Skips unchanged crates to save time and avoid unnecessary publishes
+
+set -e
+
+CARGO_TOKEN="${CARGO_REGISTRY_TOKEN:-}"
+DRY_RUN="${DRY_RUN:-false}"
+# Crates.io enforces publish rate limits. Use a conservative default delay.
+# You can override per-run with: DELAY_SECONDS=60 ./scripts/publish-crates-smart.sh
+DELAY_SECONDS="${DELAY_SECONDS:-90}"
+
+# When set, only publish this single crate (used by CI one-job-per-crate workflow).
+# Example: PUBLISH_SINGLE_CRATE=feagi-io ./scripts/publish-crates-smart.sh
+PUBLISH_SINGLE_CRATE="${PUBLISH_SINGLE_CRATE:-}"
+
+# ----------------------------------------------------------------------------
+# Normalize CHANGED_CRATES input (supports both array and string formats)
+#
+# CI often passes:
+#   CHANGED_CRATES="(feagi-a feagi-b ...)"
+# While bash arrays are:
+#   CHANGED_CRATES=(feagi-a feagi-b ...)
+# ----------------------------------------------------------------------------
+RAW_CHANGED_CRATES="${CHANGED_CRATES[*]}"
+# Strip parentheses, convert commas to spaces, and normalize whitespace
+CHANGED_CRATES_LIST="$(echo "${RAW_CHANGED_CRATES}" | tr -d '()' | tr ',' ' ' | xargs)"
+
+# ANSI colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+if [ -z "$CARGO_TOKEN" ] && [ "$DRY_RUN" != "true" ]; then
+    echo -e "${RED}❌ Error: CARGO_REGISTRY_TOKEN environment variable must be set${NC}"
+    exit 1
+fi
+
+echo -e "${CYAN}🚀 Publishing feagi-core workspace crates to crates.io${NC}"
+echo -e "${BLUE}📦 Dry run: $DRY_RUN${NC}"
+echo ""
+
+# ============================================================================
+# Define crate paths and publication order
+# ============================================================================
+
+# NOTE: This script must work on macOS default bash (3.2) and Ubuntu CI bash.
+# Bash 3.2 does NOT support associative arrays (declare -A), so we use a
+# portable mapping function instead.
+crate_path_for() {
+    case "$1" in
+        feagi-observability) echo "crates/feagi-observability" ;;
+        feagi-structures) echo "crates/feagi-structures" ;;
+        feagi-config) echo "crates/feagi-config" ;;
+        feagi-npu-neural) echo "crates/feagi-npu/neural" ;;
+        feagi-npu-runtime) echo "crates/feagi-npu/runtime" ;;
+        feagi-serialization) echo "crates/feagi-serialization" ;;
+        feagi-state-manager) echo "crates/feagi-state-manager" ;;
+        feagi-npu-burst-engine) echo "crates/feagi-npu/burst-engine" ;;
+        feagi-npu-plasticity) echo "crates/feagi-npu/plasticity" ;;
+        feagi-evolutionary) echo "crates/feagi-evolutionary" ;;
+        feagi-brain-development) echo "crates/feagi-brain-development" ;;
+        feagi-io) echo "crates/feagi-io" ;;
+        feagi-sensorimotor) echo "crates/feagi-sensorimotor" ;;
+        feagi-services) echo "crates/feagi-services" ;;
+        feagi-api) echo "crates/feagi-api" ;;
+        feagi-agent) echo "crates/feagi-agent" ;;
+        feagi-hal) echo "crates/feagi-hal" ;;
+        feagi) echo "." ;;
+        *) return 1 ;;
+    esac
+}
+
+# Publication order (dependencies first)
+CRATE_ORDER=(
+    "feagi-observability"
+    "feagi-structures"
+    "feagi-config"
+    "feagi-npu-neural"
+    "feagi-npu-runtime"
+    "feagi-serialization"
+    "feagi-state-manager"
+    "feagi-npu-burst-engine"
+    "feagi-npu-plasticity"
+    "feagi-evolutionary"
+    "feagi-brain-development"
+    "feagi-sensorimotor"
+    "feagi-services"
+    "feagi-io"
+    "feagi-agent"
+    "feagi-api"
+    "feagi-hal"
+    "feagi"
+)
+
+# ============================================================================
+# Check if crate is already published on crates.io
+# Uses crates.io API first; falls back to cargo search if API fails (e.g. in CI).
+# ============================================================================
+
+is_already_published() {
+    local crate_name=$1
+    local crate_path=$2
+
+    # Get version from Cargo.toml (trim whitespace)
+    cd "$crate_path" 2>/dev/null || return 1
+    local version
+    version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/' | xargs)
+    cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+
+    [ -n "$version" ] || { echo "false"; return; }
+
+    # 1) crates.io API: GET /crates/:name/:version returns 200 if version exists
+    local url="https://crates.io/api/v1/crates/${crate_name}/${version}"
+    local code
+    code=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 15 \
+        -H "User-Agent: feagi-release/1.0 (release script)" "$url" 2>/dev/null || echo "000")
+
+    if [ "$code" = "200" ]; then
+        echo "true"
+        return
+    fi
+
+    # 2) Fallback: cargo search can list versions (--limit 100), grep for exact version
+    if cargo search "$crate_name" --limit 100 2>/dev/null | grep -q "^${crate_name} = \"${version}\""; then
+        echo "true"
+    else
+        echo "false"
+    fi
+}
+
+# ============================================================================
+# Check if crate should be published
+# ============================================================================
+
+should_publish_crate() {
+    local crate_name=$1
+    local crate_path=$2
+    
+    # CRITICAL: Check crates.io FIRST - if already published, always skip
+    if [ "$(is_already_published "$crate_name" "$crate_path")" = "true" ]; then
+        echo "skip_published"
+        return
+    fi
+
+    # If the crate is NOT published yet, we MUST publish it even if it's not in
+    # the changed list. Otherwise, dependents will fail with "no matching package".
+    if [ -n "$CHANGED_CRATES_LIST" ]; then
+        if [[ " ${CHANGED_CRATES_LIST} " != *" ${crate_name} "* ]]; then
+            echo "publish_unpublished"
+            return
+        fi
+    fi
+    
+    # If CHANGED_CRATES_LIST is empty, publish all unpublished crates
+    if [ -z "$CHANGED_CRATES_LIST" ]; then
+        echo "publish"
+        return
+    fi
+    
+    # Check if crate is in changed list
+    if [[ " ${CHANGED_CRATES_LIST} " == *" ${crate_name} "* ]]; then
+        echo "publish"
+    else
+        echo "skip_unchanged"
+    fi
+}
+
+# ============================================================================
+# Validate all crates that will be published (cargo package) before any publish.
+# Uses [patch.crates-io] so resolution uses local workspace, not crates.io.
+# Surfaces ALL packaging failures at once instead of failing mid-flow.
+# ============================================================================
+
+validate_all_packages() {
+    local to_validate=()
+    local crate_name
+    local crate_path
+    local publish_decision
+    local pkg_output
+    local pkg_rc
+
+    echo -e "${BLUE}Validating all packages (cargo package) before publish...${NC}"
+    echo ""
+
+    for crate_name in "${CRATE_ORDER[@]}"; do
+        if [ -n "$PUBLISH_SINGLE_CRATE" ] && [ "$crate_name" != "$PUBLISH_SINGLE_CRATE" ]; then
+            continue
+        fi
+        crate_path="$(crate_path_for "$crate_name")" || continue
+        if [ ! -f "$crate_path/Cargo.toml" ] && [ "$crate_path" != "." ]; then
+            continue
+        fi
+        publish_decision=$(should_publish_crate "$crate_name" "$crate_path")
+        if [ "$publish_decision" = "skip_published" ] || [ "$publish_decision" = "skip_unchanged" ]; then
+            continue
+        fi
+        to_validate+=("$crate_name")
+    done
+
+    if [ ${#to_validate[@]} -eq 0 ]; then
+        echo -e "${CYAN}No crates to validate (all skipped).${NC}"
+        echo ""
+        return 0
+    fi
+
+    # Create .cargo/config.toml with [patch.crates-io] so cargo package uses local deps
+    mkdir -p .cargo
+    ROOT_ABS="$(cd "$WORKSPACE_ROOT" && pwd)"
+    {
+        echo "[patch.crates-io]"
+        for crate_name in "${CRATE_ORDER[@]}"; do
+            path="$(crate_path_for "$crate_name")" || continue
+            [ -f "${path}/Cargo.toml" ] || [ "$path" = "." ] && [ -f "Cargo.toml" ] || continue
+            if [ "$path" = "." ]; then
+                echo "feagi = { path = \"${ROOT_ABS}\" }"
+            else
+                echo "${crate_name} = { path = \"${ROOT_ABS}/${path}\" }"
+            fi
+        done
+    } > .cargo/config.toml
+
+    VALIDATE_FAILED=()
+    for crate_name in "${to_validate[@]}"; do
+        crate_path="$(crate_path_for "$crate_name")"
+        echo -n "   Validating $crate_name... "
+        if [ "$crate_path" != "." ]; then
+            cd "$crate_path"
+        fi
+        set +e
+        pkg_output="$(cargo package --allow-dirty --quiet 2>&1)"
+        pkg_rc=$?
+        set -e
+        cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+
+        if [ "$pkg_rc" -ne 0 ]; then
+            echo -e "${RED}FAILED${NC}"
+            VALIDATE_FAILED+=("$crate_name")
+            echo "$pkg_output" | sed 's/^/      /'
+        else
+            echo -e "${GREEN}OK${NC}"
+        fi
+    done
+
+    rm -f .cargo/config.toml
+    rmdir .cargo 2>/dev/null || true
+
+    if [ ${#VALIDATE_FAILED[@]} -gt 0 ]; then
+        echo ""
+        echo -e "${RED}Validation failed for ${#VALIDATE_FAILED[@]} crate(s):${NC}"
+        for c in "${VALIDATE_FAILED[@]}"; do
+            echo "  - $c"
+        done
+        echo ""
+        echo -e "${YELLOW}Fix version/dependency conflicts before publishing.${NC}"
+        return 1
+    fi
+    echo ""
+    return 0
+}
+
+# ============================================================================
+# Publish function
+# ============================================================================
+
+publish_crate() {
+    local crate_name=$1
+    local crate_path
+    crate_path="$(crate_path_for "$crate_name")" || return 1
+    
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${BLUE}📦 Publishing: $crate_name${NC}"
+    echo "   Path: $crate_path"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    # Change to crate directory
+    if [ "$crate_path" != "." ]; then
+        cd "$crate_path"
+    fi
+    
+    # Get version
+    local version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+    echo "   Version: $version"
+    
+    # Package first to verify
+    echo "   📦 Packaging..."
+    # CI modifies Cargo.toml versions right before publishing, which makes the
+    # working directory "dirty" by design. Packaging must allow this.
+    if ! cargo package --allow-dirty --quiet 2>&1; then
+        echo -e "   ${RED}❌ Failed to package $crate_name${NC}"
+        cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+        return 1
+    fi
+    
+    # Publish
+    if [ "$DRY_RUN" = "true" ]; then
+        echo -e "   ${CYAN}🧪 Dry run: cargo publish --dry-run${NC}"
+        cargo publish --dry-run --allow-dirty
+    else
+        echo "   🚀 Publishing to crates.io..."
+        # With set -e, we must temporarily disable exit-on-error to capture output.
+        set +e
+        publish_output="$(cargo publish --allow-dirty --token "$CARGO_TOKEN" 2>&1)"
+        publish_status=$?
+        set -e
+
+        if [ "$publish_status" -eq 0 ]; then
+            echo -e "   ${GREEN}✅ Successfully published $crate_name v$version${NC}"
+
+            # Delay only after a real publish (skipped crates never reach here)
+            if [ "$crate_name" != "feagi" ]; then
+                echo -e "   ${CYAN}⏳ Waiting ${DELAY_SECONDS}s for crates.io indexing...${NC}"
+                sleep $DELAY_SECONDS
+            fi
+        else
+            # If already published, treat as skip: do NOT fail and do NOT sleep
+            if echo "$publish_output" | grep -qiE "already exists on crates\.io|already exists on crates\.io index|version .* already exists"; then
+                echo -e "   ${YELLOW}⏭️  Skipping $crate_name v$version (already published on crates.io)${NC}"
+                cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+                return 0
+            fi
+
+            echo "$publish_output"
+            echo -e "   ${RED}❌ Failed to publish $crate_name${NC}"
+            cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+            return 1
+        fi
+    fi
+    
+    # Return to workspace root
+    cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+    
+    return 0
+}
+
+# ============================================================================
+# Main execution
+# ============================================================================
+
+WORKSPACE_ROOT=$(pwd)
+
+echo -e "${BLUE}Starting publication process...${NC}"
+echo ""
+
+if [ -n "$CHANGED_CRATES_LIST" ]; then
+    echo -e "${CYAN}📋 Smart publishing mode: Only publishing changed crates${NC}"
+    echo -e "${GREEN}Changed crates: $CHANGED_CRATES_LIST${NC}"
+    echo ""
+else
+    echo -e "${YELLOW}⚠️  No changed crates list provided - publishing ALL crates${NC}"
+    echo ""
+fi
+
+FAILED_CRATES=()
+PUBLISHED_COUNT=0
+SKIPPED_COUNT=0
+
+# Validate all packages before publishing (fails fast with full error report)
+set +e
+validate_all_packages
+validate_rc=$?
+set -e
+if [ "$validate_rc" -ne 0 ]; then
+    exit 1
+fi
+
+for crate_name in "${CRATE_ORDER[@]}"; do
+    # When PUBLISH_SINGLE_CRATE is set, only process that crate (for CI one-job-per-crate)
+    if [ -n "$PUBLISH_SINGLE_CRATE" ] && [ "$crate_name" != "$PUBLISH_SINGLE_CRATE" ]; then
+        continue
+    fi
+
+    crate_path="$(crate_path_for "$crate_name")" || continue
+
+    if [ ! -f "$crate_path/Cargo.toml" ] && [ "$crate_path" != "." ]; then
+        echo -e "${YELLOW}⚠️  Warning: $crate_path not found, skipping...${NC}"
+        continue
+    fi
+
+    # Check if crate should be published
+    publish_decision=$(should_publish_crate "$crate_name" "$crate_path")
+    
+    if [ "$publish_decision" = "skip_published" ]; then
+        # Get version for display
+        cd "$crate_path" 2>/dev/null || continue
+        version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+        echo -e "${YELLOW}⏭️  Skipping $crate_name v$version (already published on crates.io)${NC}"
+        SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+        continue
+    elif [ "$publish_decision" = "skip_unchanged" ]; then
+        echo -e "${BLUE}⏭️  Skipping $crate_name (not in changed list)${NC}"
+        SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+        continue
+    elif [ "$publish_decision" = "publish_unpublished" ]; then
+        echo -e "${CYAN}📌 Publishing $crate_name (unpublished dependency)${NC}"
+    fi
+    
+    # With `set -e`, a non-zero return would abort the script before we can
+    # record failures. Temporarily disable errexit around the publish attempt.
+    set +e
+    publish_crate "$crate_name"
+    publish_rc=$?
+    set -e
+
+    if [ "$publish_rc" -eq 0 ]; then
+        PUBLISHED_COUNT=$((PUBLISHED_COUNT + 1))
+    else
+        FAILED_CRATES+=("$crate_name")
+    fi
+done
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${CYAN}📊 Publication Summary${NC}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${GREEN}✅ Successfully published: $PUBLISHED_COUNT crates${NC}"
+echo -e "${BLUE}⏭️  Skipped (unchanged): $SKIPPED_COUNT crates${NC}"
+
+if [ ${#FAILED_CRATES[@]} -gt 0 ]; then
+    echo -e "${RED}❌ Failed to publish: ${#FAILED_CRATES[@]} crates${NC}"
+    echo ""
+    echo "Failed crates:"
+    for crate in "${FAILED_CRATES[@]}"; do
+        echo "  - $crate"
+    done
+    echo ""
+    exit 1
+else
+    echo ""
+    echo -e "${GREEN}🎉 All crates published successfully!${NC}"
+    exit 0
+fi
+

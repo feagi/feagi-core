@@ -22,22 +22,22 @@ use utoipa::ToSchema;
 pub struct NeuronInfoResponse {
     /// Global neuron ID
     pub neuron_id: u64,
-    
+
     /// Cortical area this neuron belongs to
     pub cortical_area: String,
-    
+
     /// 3D coordinates within the cortical area [x, y, z]
     pub coordinates: [u32; 3],
-    
+
     /// Current membrane potential (mV)
     pub membrane_potential: f32,
-    
+
     /// Whether the neuron is currently firing
     pub is_firing: bool,
-    
+
     /// Number of incoming synapses
     pub synaptic_inputs: usize,
-    
+
     /// Number of outgoing synapses
     pub synaptic_outputs: usize,
 }
@@ -47,7 +47,7 @@ pub struct NeuronInfoResponse {
 pub struct CreateNeuronRequest {
     /// Cortical area ID
     pub cortical_area: String,
-    
+
     /// 3D coordinates within the cortical area [x, y, z]
     pub coordinates: [u32; 3],
 }
@@ -57,10 +57,10 @@ pub struct CreateNeuronRequest {
 pub struct NeuronListResponse {
     /// List of neurons
     pub neurons: Vec<NeuronInfoResponse>,
-    
+
     /// Total count
     pub total_count: usize,
-    
+
     /// Cortical area (if filtered by area)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_area: Option<String>,
@@ -71,11 +71,7 @@ pub struct NeuronListResponse {
 pub struct NeuronCountResponse {
     /// Cortical area ID
     pub cortical_area: String,
-    
+
     /// Number of neurons in the area
     pub neuron_count: usize,
 }
-
-
-
-

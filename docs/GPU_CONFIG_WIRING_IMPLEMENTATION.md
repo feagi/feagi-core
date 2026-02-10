@@ -260,7 +260,7 @@ async fn load_genome(
     manager: &Arc<RwLock<ConnectomeManager>>,
     genome_path: &PathBuf,
 ) -> Result<()> {
-    use feagi_evo::{load_genome_from_file, validate_genome};
+    use feagi_evolutionary::{load_genome_from_file, validate_genome};
     
     // Load genome from file
     let genome = load_genome_from_file(genome_path)

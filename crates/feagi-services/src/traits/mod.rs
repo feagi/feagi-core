@@ -16,6 +16,7 @@ pub mod analytics_service;
 pub mod connectome_service;
 pub mod genome_service;
 pub mod neuron_service;
+pub mod registration_handler;
 pub mod runtime_service;
 pub mod snapshot_service;
 pub mod system_service;
@@ -29,5 +30,3 @@ pub use neuron_service::NeuronService;
 pub use runtime_service::RuntimeService;
 pub use snapshot_service::*;
 pub use system_service::SystemService;
-
-

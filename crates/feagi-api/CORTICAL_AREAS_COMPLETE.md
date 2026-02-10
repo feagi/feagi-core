@@ -16,11 +16,11 @@ API Layer (feagi-api)
     ↓ Only talks to services
 Service Layer (feagi-services)
     ↓ Talks to domain/infrastructure
-Domain/Infrastructure (feagi-bdu, feagi-npu, feagi-types)
+Domain/Infrastructure (feagi-brain-development, feagi-npu, feagi-types)
 ```
 
 **✅ API layer has ZERO imports from:**
-- `feagi_bdu`
+- `feagi_brain_development`
 - `feagi_npu`  
 - `feagi_types` (except through service DTOs)
 
@@ -189,7 +189,7 @@ return Ok(current_state);
 ### ❌ NO Direct NPU/BDU Access from API
 ```rust
 // ❌ NOT ALLOWED:
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 use feagi_npu::NpuCore;
 
 // ✅ CORRECT:
@@ -213,13 +213,13 @@ use feagi_services::{
 
 **Service Layer imports:**
 ```rust
-use feagi_bdu::ConnectomeManager;  // ✅ OK - Service talks to domain
+use feagi_brain_development::ConnectomeManager;  // ✅ OK - Service talks to domain
 use feagi_types::CorticalArea;     // ✅ OK - Service talks to domain
 ```
 
 **NO cross-layer violations:**
 ```bash
-$ grep -r "use feagi_bdu\|use feagi_npu" feagi-api/src/
+$ grep -r "use feagi_brain_development\|use feagi_npu" feagi-api/src/
 # (no results - clean architecture!)
 ```
 

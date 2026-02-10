@@ -1,0 +1,293 @@
+# Copyright 2025 Neuraville Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Verify Individual Crates
+
+on:
+  pull_request:
+    branches: [ main, staging ]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/verify-crates.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+# Least-privilege: verification workflow must not have write permissions.
+permissions:
+  contents: read
+
+jobs:
+  verify-crate-structure:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+    
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: "verify-crates"
+        save-if: true
+    
+    - name: Verify all crate metadata
+      run: |
+        echo "🔍 Verifying crate metadata for crates.io publication..."
+        echo ""
+        
+        FAILED_CRATES=()
+        
+        for crate_dir in crates/*/ crates/feagi-npu/*/; do
+          if [ ! -f "$crate_dir/Cargo.toml" ]; then
+            continue
+          fi
+          
+          crate_name=$(basename "$crate_dir")
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 Checking: $crate_name"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          CRATE_FAILED=false
+          
+          # Check required fields
+          if ! grep -q '^name = ' "$crate_dir/Cargo.toml"; then
+            echo "  ❌ Missing 'name' field"
+            CRATE_FAILED=true
+          fi
+          
+          # Independent versioning enforcement:
+          # - Every crate MUST have explicit `version = "..."` (no workspace inheritance)
+          if grep -q '^version\.workspace = true' "$crate_dir/Cargo.toml"; then
+            echo "  ❌ Forbidden: 'version.workspace = true' (independent versioning required)"
+            CRATE_FAILED=true
+          fi
+          
+          if ! grep -q '^version = ' "$crate_dir/Cargo.toml"; then
+            echo "  ❌ Missing explicit 'version = \"...\"' field (independent versioning requires explicit version)"
+            CRATE_FAILED=true
+          fi
+          
+          if ! grep -q '^description = ' "$crate_dir/Cargo.toml"; then
+            echo "  ❌ Missing 'description' field (required for crates.io)"
+            CRATE_FAILED=true
+          fi
+          
+          # Check license (direct or workspace inheritance)
+          if ! grep -qE '^license(\.workspace)? = ' "$crate_dir/Cargo.toml"; then
+            echo "  ❌ Missing 'license' field (required for crates.io)"
+            CRATE_FAILED=true
+          fi
+          
+          # Check authors (direct or workspace inheritance)
+          if ! grep -qE '^authors(\.workspace)? = ' "$crate_dir/Cargo.toml"; then
+            echo "  ❌ Missing 'authors' field (required for crates.io)"
+            CRATE_FAILED=true
+          fi
+          
+          # Check for path dependencies (should use workspace dependencies)
+          if grep -q 'path = ".*/crates/' "$crate_dir/Cargo.toml" 2>/dev/null; then
+            echo "  ⚠️  Warning: Found absolute path dependencies (should use relative paths)"
+          fi
+          
+          # Check for README
+          if [ ! -f "$crate_dir/README.md" ]; then
+            echo "  ⚠️  Warning: No README.md (recommended for crates.io)"
+          fi
+          
+          if [ "$CRATE_FAILED" = true ]; then
+            FAILED_CRATES+=("$crate_name")
+            echo "  ❌ $crate_name FAILED metadata check"
+          else
+            echo "  ✅ $crate_name has valid metadata"
+          fi
+          
+          echo ""
+        done
+        
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "📊 Metadata Verification Summary"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        if [ ${#FAILED_CRATES[@]} -gt 0 ]; then
+          echo "❌ Failed crates: ${#FAILED_CRATES[@]}"
+          echo ""
+          echo "Crates with missing metadata:"
+          for crate in "${FAILED_CRATES[@]}"; do
+            echo "  - $crate"
+          done
+          echo ""
+          exit 1
+        else
+          echo "✅ All crates have required metadata"
+        fi
+    
+    - name: Verify individual crate builds
+      run: |
+        echo "🔨 Building each crate individually..."
+        echo ""
+        
+        FAILED_BUILDS=()
+        
+        for crate_dir in crates/*/ crates/feagi-npu/*/; do
+          if [ ! -f "$crate_dir/Cargo.toml" ]; then
+            continue
+          fi
+          
+          crate_name=$(basename "$crate_dir")
+          echo "Building $crate_name..."
+          
+          if (cd "$crate_dir" && cargo build --lib --quiet 2>&1); then
+            echo "  ✅ $crate_name builds successfully"
+          else
+            echo "  ❌ $crate_name failed to build"
+            FAILED_BUILDS+=("$crate_name")
+          fi
+        done
+        
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        if [ ${#FAILED_BUILDS[@]} -gt 0 ]; then
+          echo "❌ Failed to build: ${#FAILED_BUILDS[@]} crates"
+          for crate in "${FAILED_BUILDS[@]}"; do
+            echo "  - $crate"
+          done
+          exit 1
+        else
+          echo "✅ All crates build successfully"
+        fi
+    
+    - name: Verify crate packaging (dry-run publish check)
+      run: |
+        set +e  # Don't exit on error - we handle errors manually
+        echo "📦 Verifying each crate can be packaged for publication..."
+        echo ""
+        echo "Note: This verifies package structure. Dependencies must be published"
+        echo "in order (see PUBLISHING_ORDER.md) before dependent crates can be published."
+        echo ""
+        
+        FAILED_PACKAGES=()
+        
+        for crate_dir in crates/*/ crates/feagi-npu/*/; do
+          if [ ! -f "$crate_dir/Cargo.toml" ]; then
+            continue
+          fi
+          
+          crate_name=$(basename "$crate_dir")
+          # Extract package name from Cargo.toml (in case it differs from directory name)
+          package_name=$(grep '^name = ' "$crate_dir/Cargo.toml" | head -1 | sed 's/name = "\(.*\)"/\1/')
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 Packaging: $crate_name (package: $package_name)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Attempt to create the package (this will fail if dependencies aren't on crates.io,
+          # but that's expected for unpublished workspace dependencies)
+          # We use --no-verify to skip the build since we already built them
+          # Note: cargo package resolves the entire workspace, so errors from other workspace
+          # members are expected and should be ignored
+          PACKAGE_OUTPUT=$(cargo package --package "$package_name" --allow-dirty --no-verify 2>&1)
+          PACKAGE_EXIT=$?
+          
+          if [ $PACKAGE_EXIT -eq 0 ]; then
+            echo "  ✅ $crate_name packages successfully"
+          else
+            # Check if the error is about missing dependencies on crates.io
+            # This is expected for crates that depend on unpublished workspace members
+            # Also check for workspace-wide resolution errors (cargo package resolves entire workspace)
+            # Use case-insensitive matching and check for multiple error patterns
+            if echo "$PACKAGE_OUTPUT" | grep -qiE "no matching package|location searched.*crates\.io|failed to get.*as a dependency|searched package name|required by package"; then
+              echo "  ⚠️  $crate_name has unpublished workspace dependencies"
+              echo "     This is expected - dependencies must be published first (see PUBLISHING_ORDER.md)"
+              echo "     Note: cargo package resolves the entire workspace, so errors from other crates are expected"
+            else
+              echo "  ❌ $crate_name failed to package (non-dependency issue)"
+              FAILED_PACKAGES+=("$crate_name")
+              echo ""
+              echo "Detailed error:"
+              echo "$PACKAGE_OUTPUT"
+              echo ""
+            fi
+          fi
+        done
+        
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "📊 Packaging Verification Summary"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        
+        if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
+          echo "❌ Failed to package: ${#FAILED_PACKAGES[@]} crates"
+          echo ""
+          echo "Crates that cannot be published:"
+          for crate in "${FAILED_PACKAGES[@]}"; do
+            echo "  - $crate"
+          done
+          echo ""
+          echo "These crates need to be fixed before they can be published to crates.io."
+          exit 1
+        else
+          echo "✅ All crates can be packaged successfully"
+          echo "✅ Ready for publication to crates.io"
+        fi
+    
+    - name: Verify versioning policy (independent versioning)
+      run: |
+        echo "🔗 Verifying independent versioning policy..."
+        echo ""
+        
+        FAILED=()
+        
+        for crate_dir in crates/*/; do
+          if [ ! -f "$crate_dir/Cargo.toml" ]; then
+            continue
+          fi
+          
+          crate_name=$(basename "$crate_dir")
+          
+          if grep -q '^version\.workspace = true' "$crate_dir/Cargo.toml"; then
+            FAILED+=("$crate_name: version.workspace is forbidden")
+            continue
+          fi
+          
+          if ! grep -q '^version = ' "$crate_dir/Cargo.toml"; then
+            FAILED+=("$crate_name: missing explicit version")
+            continue
+          fi
+        done
+        
+        if [ ${#FAILED[@]} -gt 0 ]; then
+          echo "❌ Independent versioning policy violations:"
+          for item in "${FAILED[@]}"; do
+            echo "  - $item"
+          done
+          exit 1
+        fi
+        
+        echo "✅ Independent versioning policy enforced (explicit versions; no version.workspace)"
+    
+    - name: Summary
+      if: success()
+      run: |
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "✅ All Crate Verification Checks Passed"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo ""
+        echo "✅ Metadata complete for all crates"
+        echo "✅ All crates build independently"
+        echo "✅ All crates package successfully"
+        echo "✅ Independent versioning policy verified"
+        echo ""
+        echo "🎉 Workspace is ready for publication to crates.io"
+
+

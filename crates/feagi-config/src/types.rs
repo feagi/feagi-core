@@ -19,7 +19,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 /// Root configuration structure
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct FeagiConfig {
     pub system: SystemConfig,
@@ -28,7 +28,7 @@ pub struct FeagiConfig {
     pub agent: AgentConfig,
     pub ports: PortsConfig,
     pub zmq: ZmqConfig,
-    pub websocket: WebSocketConfig,  // FEAGI 2.0: WebSocket transport
+    pub websocket: WebSocketConfig,   // FEAGI 2.0: WebSocket transport
     pub transports: TransportsConfig, // FEAGI 2.0: Multi-transport coordination
     pub timeouts: TimeoutsConfig,
     pub agents: AgentsConfig,
@@ -42,33 +42,6 @@ pub struct FeagiConfig {
     pub compression: CompressionConfig,
     pub memory_processing: MemoryProcessingConfig,
     pub snapshot: SnapshotConfig,
-}
-
-impl Default for FeagiConfig {
-    fn default() -> Self {
-        Self {
-            system: SystemConfig::default(),
-            genome: GenomeConfig::default(),
-            api: ApiConfig::default(),
-            agent: AgentConfig::default(),
-            ports: PortsConfig::default(),
-            zmq: ZmqConfig::default(),
-            websocket: WebSocketConfig::default(),
-            transports: TransportsConfig::default(),
-            timeouts: TimeoutsConfig::default(),
-            agents: AgentsConfig::default(),
-            neural: NeuralConfig::default(),
-            plasticity: PlasticityConfig::default(),
-            burst_engine: BurstEngineConfig::default(),
-            connectome: ConnectomeConfig::default(),
-            resources: ResourcesConfig::default(),
-            logging: LoggingConfig::default(),
-            visualization: VisualizationConfig::default(),
-            compression: CompressionConfig::default(),
-            memory_processing: MemoryProcessingConfig::default(),
-            snapshot: SnapshotConfig::default(),
-        }
-    }
 }
 
 /// System-level configuration
@@ -146,15 +119,18 @@ pub struct AgentConfig {
     pub sensory_port: u16,
     pub motor_port: u16,
     pub host: String,
+    /// Enable auto-creation of missing IPU/OPU cortical areas during agent registration
+    pub auto_create_missing_cortical_areas: bool,
 }
 
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
             registration_port: 30001,
-            sensory_port: 5555,  // NOTE: This is agent config (different from ports.zmq_sensory_port)
-            motor_port: 30005,
+            sensory_port: 5555, // NOTE: This is agent config (different from ports.zmq_sensory_port)
+            motor_port: 5564,
             host: "0.0.0.0".to_string(),
+            auto_create_missing_cortical_areas: true,
         }
     }
 }
@@ -235,24 +211,13 @@ impl Default for ZmqConfig {
 }
 
 /// ZMQ stream configurations
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ZmqStreamsConfig {
     pub visualization: VisualizationStreamConfig,
     pub sensory: SensoryStreamConfig,
     pub motor: MotorStreamConfig,
     pub rest: RestStreamConfig,
-}
-
-impl Default for ZmqStreamsConfig {
-    fn default() -> Self {
-        Self {
-            visualization: VisualizationStreamConfig::default(),
-            sensory: SensoryStreamConfig::default(),
-            motor: MotorStreamConfig::default(),
-            rest: RestStreamConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -524,6 +489,7 @@ pub struct MemoryConfig {
     pub min_activation_count: usize,
     pub default_temporal_depth: usize,
     pub pattern_cache_size: usize,
+    pub array_capacity: usize,
     pub initial_lifespan: u32,
     pub lifespan_growth_rate: f32,
     pub longterm_threshold: u32,
@@ -537,9 +503,10 @@ impl Default for MemoryConfig {
         Self {
             lookback_steps: 50,
             pattern_duration: 10,
-            min_activation_count: 3,
+            min_activation_count: 1,
             default_temporal_depth: 3,
             pattern_cache_size: 10000,
+            array_capacity: 50000,
             initial_lifespan: 20,
             lifespan_growth_rate: 3.0,
             longterm_threshold: 100,
@@ -589,9 +556,7 @@ pub struct BurstEngineSleepConfig {
 
 impl Default for BurstEngineSleepConfig {
     fn default() -> Self {
-        Self {
-            enabled: true,
-        }
+        Self { enabled: true }
     }
 }
 
@@ -672,6 +637,13 @@ impl Default for LoggingConfig {
 pub struct VisualizationConfig {
     pub enabled: bool,
     pub update_interval: u64,
+    /// Visualization transport selection.
+    ///
+    /// Allowed values:
+    /// - "auto": honor agent request (chosen_transport / shm_path)
+    /// - "websocket": never allocate/advertise SHM visualization paths
+    /// - "shm": always allocate/advertise SHM visualization paths when applicable
+    pub transport: String,
 }
 
 impl Default for VisualizationConfig {
@@ -679,6 +651,7 @@ impl Default for VisualizationConfig {
         Self {
             enabled: true,
             update_interval: 50,
+            transport: "auto".to_string(),
         }
     }
 }
@@ -774,4 +747,3 @@ impl Default for SnapshotConfig {
         }
     }
 }
-

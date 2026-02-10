@@ -90,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Multiple Crates
 ```bash
-./feagi --debug-feagi-api --debug-feagi-burst-engine --debug-feagi-bdu
+./feagi --debug-feagi-api --debug-feagi-burst-engine --debug-feagi-brain-development
 ```
 
 ### All Crates
@@ -117,13 +117,13 @@ FEAGI_DEBUG=all ./feagi
 
 - `feagi-api`
 - `feagi-burst-engine`
-- `feagi-bdu`
+- `feagi-brain-development`
 - `feagi-services`
-- `feagi-evo`
+- `feagi-evolutionarylutionary`
 - `feagi-config`
-- `feagi-pns`
+- `feagi-io`
 - `feagi-transports`
-- `feagi-agent-sdk`
+- `feagi-agent`
 - `feagi-state-manager`
 - `feagi-plasticity`
 - `feagi-connectome-serialization`

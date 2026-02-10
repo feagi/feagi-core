@@ -12,6 +12,7 @@ Licensed under the Apache License, Version 2.0
 
 use crate::types::*;
 use async_trait::async_trait;
+use std::collections::HashMap;
 
 /// Connectome management service (transport-agnostic)
 #[async_trait]
@@ -156,6 +157,19 @@ pub trait ConnectomeService: Send + Sync {
     ) -> ServiceResult<Vec<std::collections::HashMap<String, serde_json::Value>>>;
 
     // ========================================================================
+    // NEURON INSPECTION (DEBUG/INTROSPECTION)
+    // ========================================================================
+
+    /// Get a neuron's live properties/state snapshot (for visualization/debugging).
+    ///
+    /// This surfaces runtime state like membrane potential, threshold, refractory countdown,
+    /// and consecutive fire tracking.
+    async fn get_neuron_properties(
+        &self,
+        neuron_id: u64,
+    ) -> ServiceResult<HashMap<String, serde_json::Value>>;
+
+    // ========================================================================
     // BRAIN REGION OPERATIONS
     // ========================================================================
 
@@ -242,27 +256,69 @@ pub trait ConnectomeService: Send + Sync {
     /// * `bool` - True if brain region exists
     ///
     async fn brain_region_exists(&self, region_id: &str) -> ServiceResult<bool>;
-    
+
     // ========================================================================
     // MORPHOLOGY OPERATIONS
     // ========================================================================
-    
+
     /// Get all morphologies from the loaded genome
     ///
     /// # Returns
     /// * `HashMap<String, MorphologyInfo>` - All morphology definitions
     ///
-    async fn get_morphologies(&self) -> ServiceResult<std::collections::HashMap<String, MorphologyInfo>>;
-    
+    async fn get_morphologies(
+        &self,
+    ) -> ServiceResult<std::collections::HashMap<String, MorphologyInfo>>;
+
+    /// Create a new morphology definition.
+    ///
+    /// This mutates the currently loaded RuntimeGenome (source of truth) and the in-memory
+    /// morphology registry used by ConnectomeManager.
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidState` - No genome loaded
+    /// * `ServiceError::AlreadyExists` - Morphology already exists
+    /// * `ServiceError::InvalidInput` - Invalid morphology payload
+    async fn create_morphology(
+        &self,
+        morphology_id: String,
+        morphology: feagi_evolutionary::Morphology,
+    ) -> ServiceResult<()>;
+
+    /// Update an existing morphology definition.
+    ///
+    /// This mutates the currently loaded RuntimeGenome (source of truth) and the in-memory
+    /// morphology registry used by ConnectomeManager.
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidState` - No genome loaded
+    /// * `ServiceError::NotFound` - Morphology does not exist
+    /// * `ServiceError::InvalidInput` - Invalid morphology payload
+    async fn update_morphology(
+        &self,
+        morphology_id: String,
+        morphology: feagi_evolutionary::Morphology,
+    ) -> ServiceResult<()>;
+
+    /// Delete a morphology definition by ID.
+    ///
+    /// This mutates the currently loaded RuntimeGenome (source of truth) and the in-memory
+    /// morphology registry used by ConnectomeManager.
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidState` - No genome loaded
+    /// * `ServiceError::NotFound` - Morphology does not exist
+    async fn delete_morphology(&self, morphology_id: &str) -> ServiceResult<()>;
+
     // ========================================================================
     // CORTICAL MAPPING OPERATIONS
     // ========================================================================
-    
+
     /// Update cortical mapping between two cortical areas
     ///
     /// # Arguments
     /// * `src_area_id` - Source cortical area ID
-    /// * `dst_area_id` - Destination cortical area ID  
+    /// * `dst_area_id` - Destination cortical area ID
     /// * `mapping_data` - List of connection specifications
     ///
     /// # Returns
@@ -278,5 +334,44 @@ pub trait ConnectomeService: Send + Sync {
         dst_area_id: String,
         mapping_data: Vec<serde_json::Value>,
     ) -> ServiceResult<usize>;
-}
 
+    // ========================================================================
+    // CONNECTOME I/O OPERATIONS
+    // ========================================================================
+
+    /// Export the current connectome as a snapshot
+    ///
+    /// Captures the complete state of the NPU including all neurons, synapses,
+    /// and runtime state. This is the service layer interface for connectome export.
+    ///
+    /// # Returns
+    /// * `ConnectomeSnapshot` - Complete connectome state snapshot
+    ///
+    /// # Errors
+    /// * `ServiceError::Backend` - Failed to export connectome from NPU
+    /// * `ServiceError::NotImplemented` - Connectome I/O not available (feature disabled)
+    ///
+    #[cfg(feature = "connectome-io")]
+    async fn export_connectome(
+        &self,
+    ) -> ServiceResult<feagi_npu_neural::types::connectome::ConnectomeSnapshot>;
+
+    /// Import a connectome snapshot
+    ///
+    /// Replaces the entire NPU state with data from a saved connectome.
+    /// This is the service layer interface for connectome import.
+    ///
+    /// # Arguments
+    /// * `snapshot` - The connectome snapshot to import
+    ///
+    /// # Errors
+    /// * `ServiceError::Backend` - Failed to import connectome into NPU
+    /// * `ServiceError::InvalidInput` - Invalid snapshot data
+    /// * `ServiceError::NotImplemented` - Connectome I/O not available (feature disabled)
+    ///
+    #[cfg(feature = "connectome-io")]
+    async fn import_connectome(
+        &self,
+        snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+    ) -> ServiceResult<()>;
+}

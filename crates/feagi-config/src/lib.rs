@@ -32,6 +32,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[cfg(feature = "std")]
 pub mod loader;
 
@@ -39,7 +42,7 @@ pub mod types;
 pub mod validation;
 
 #[cfg(feature = "std")]
-pub use loader::{find_config_file, load_config, apply_environment_overrides, apply_cli_overrides};
+pub use loader::{apply_cli_overrides, apply_environment_overrides, find_config_file, load_config};
 
 pub use types::*;
 pub use validation::{validate_config, ConfigValidationError};
@@ -53,24 +56,24 @@ pub enum ConfigError {
     #[cfg(feature = "std")]
     #[error("Config file not found. Searched: {0}")]
     FileNotFound(String),
-    
+
     #[cfg(feature = "std")]
     #[error("Failed to read config file: {0}")]
     IoError(#[from] std::io::Error),
-    
+
     #[cfg(feature = "std")]
     #[error("Invalid TOML syntax: {0}")]
     ParseError(String),
-    
+
     #[error("Validation failed: {0}")]
     ValidationError(String),
-    
+
     #[error("Port conflict: {0} and {1} both use port {2}")]
     PortConflict(String, String, u16),
-    
+
     #[error("Missing required configuration: {0}")]
     MissingRequired(String),
-    
+
     #[error("Invalid configuration value: {0}")]
     InvalidValue(String),
 }
@@ -95,4 +98,3 @@ mod tests {
         let _config = FeagiConfig::default();
     }
 }
-

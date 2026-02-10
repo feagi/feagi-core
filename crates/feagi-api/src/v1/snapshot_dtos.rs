@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 //! Snapshot API DTOs
-//! 
+//!
 //! Request/response types for snapshot management
 
 use serde::{Deserialize, Serialize};
@@ -14,10 +14,10 @@ use utoipa::ToSchema;
 pub struct SnapshotCreateRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 }
@@ -90,5 +90,3 @@ pub struct SnapshotSuccessResponse {
     pub message: String,
     pub success: bool,
 }
-
-

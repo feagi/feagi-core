@@ -1,0 +1,26 @@
+[package]
+name = "feagi-npu-neural"
+version = "0.0.1-beta.8"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Platform-agnostic neural computation: types, algorithms, and neuron models"
+
+[features]
+default = ["std"]
+std = ["serde", "serde_json", "ahash"]
+alloc = []
+
+[dependencies]
+# Optional std dependencies
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+ahash = { workspace = true, optional = true }  # For FireCandidateList
+thiserror = { workspace = true }  # For error types
+
+[dev-dependencies]
+# For tests only
+
+

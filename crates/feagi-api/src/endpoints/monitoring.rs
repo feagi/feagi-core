@@ -3,14 +3,14 @@
 
 /*!
  * FEAGI v1 Monitoring API
- * 
+ *
  * Endpoints for system monitoring, metrics, and telemetry
  * Maps to Python: feagi/api/v1/monitoring.py
  */
 
-use crate::common::{ApiError, ApiResult};
-use crate::transports::http::server::ApiState;
-use axum::{extract::State, Json};
+use crate::common::ApiState;
+use crate::common::{ApiError, ApiResult, Json, State};
+// Removed - using crate::common::State instead
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -18,8 +18,7 @@ use std::collections::HashMap;
 // MONITORING & METRICS
 // ============================================================================
 
-/// GET /v1/monitoring/status
-/// Get monitoring system status
+/// Get monitoring system status including metrics collection and brain readiness.
 #[utoipa::path(
     get,
     path = "/v1/monitoring/status",
@@ -32,22 +31,26 @@ use std::collections::HashMap;
 pub async fn get_status(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
     // Get monitoring status from analytics service
     let analytics_service = state.analytics_service.as_ref();
-    
+
     // Get system health as a proxy for monitoring status
-    let health = analytics_service.get_system_health().await
+    let health = analytics_service
+        .get_system_health()
+        .await
         .map_err(|e| ApiError::internal(format!("Failed to get system health: {}", e)))?;
-    
+
     let mut response = HashMap::new();
     response.insert("enabled".to_string(), json!(true));
     response.insert("metrics_collected".to_string(), json!(5)); // Static count for now
     response.insert("brain_readiness".to_string(), json!(health.brain_readiness));
-    response.insert("burst_engine_active".to_string(), json!(health.burst_engine_active));
-    
+    response.insert(
+        "burst_engine_active".to_string(),
+        json!(health.burst_engine_active),
+    );
+
     Ok(Json(response))
 }
 
-/// GET /v1/monitoring/metrics
-/// Get system metrics
+/// Get system metrics including burst frequency, neuron count, and brain readiness.
 #[utoipa::path(
     get,
     path = "/v1/monitoring/metrics",
@@ -61,26 +64,38 @@ pub async fn get_metrics(State(state): State<ApiState>) -> ApiResult<Json<HashMa
     // Get system metrics from analytics and runtime services
     let runtime_service = state.runtime_service.as_ref();
     let analytics_service = state.analytics_service.as_ref();
-    
-    let runtime_status = runtime_service.get_status().await
+
+    let runtime_status = runtime_service
+        .get_status()
+        .await
         .map_err(|e| ApiError::internal(format!("Failed to get runtime status: {}", e)))?;
-    
-    let health = analytics_service.get_system_health().await
+
+    let health = analytics_service
+        .get_system_health()
+        .await
         .map_err(|e| ApiError::internal(format!("Failed to get system health: {}", e)))?;
-    
+
     let mut response = HashMap::new();
-    response.insert("burst_frequency_hz".to_string(), json!(runtime_status.frequency_hz));
+    response.insert(
+        "burst_frequency_hz".to_string(),
+        json!(runtime_status.frequency_hz),
+    );
     response.insert("burst_count".to_string(), json!(runtime_status.burst_count));
     response.insert("neuron_count".to_string(), json!(health.neuron_count));
-    response.insert("cortical_area_count".to_string(), json!(health.cortical_area_count));
+    response.insert(
+        "cortical_area_count".to_string(),
+        json!(health.cortical_area_count),
+    );
     response.insert("brain_readiness".to_string(), json!(health.brain_readiness));
-    response.insert("burst_engine_active".to_string(), json!(health.burst_engine_active));
-    
+    response.insert(
+        "burst_engine_active".to_string(),
+        json!(health.burst_engine_active),
+    );
+
     Ok(Json(response))
 }
 
-/// GET /v1/monitoring/data
-/// Get detailed monitoring data
+/// Get detailed monitoring data with timestamps for analysis and debugging.
 #[utoipa::path(
     get,
     path = "/v1/monitoring/data",
@@ -93,27 +108,37 @@ pub async fn get_metrics(State(state): State<ApiState>) -> ApiResult<Json<HashMa
 pub async fn get_data(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
     // Get detailed monitoring data from all services
     let analytics_service = state.analytics_service.as_ref();
-    
-    let health = analytics_service.get_system_health().await
+
+    let health = analytics_service
+        .get_system_health()
+        .await
         .map_err(|e| ApiError::internal(format!("Failed to get system health: {}", e)))?;
-    
+
     // Return comprehensive monitoring data
     let mut data = HashMap::new();
     data.insert("neuron_count".to_string(), json!(health.neuron_count));
-    data.insert("cortical_area_count".to_string(), json!(health.cortical_area_count));
+    data.insert(
+        "cortical_area_count".to_string(),
+        json!(health.cortical_area_count),
+    );
     data.insert("burst_count".to_string(), json!(health.burst_count));
     data.insert("brain_readiness".to_string(), json!(health.brain_readiness));
-    data.insert("burst_engine_active".to_string(), json!(health.burst_engine_active));
-    
+    data.insert(
+        "burst_engine_active".to_string(),
+        json!(health.burst_engine_active),
+    );
+
     let mut response = HashMap::new();
     response.insert("data".to_string(), json!(data));
-    response.insert("timestamp".to_string(), json!(chrono::Utc::now().to_rfc3339()));
-    
+    response.insert(
+        "timestamp".to_string(),
+        json!(chrono::Utc::now().to_rfc3339()),
+    );
+
     Ok(Json(response))
 }
 
-/// GET /v1/monitoring/performance
-/// Get performance metrics
+/// Get performance metrics including CPU and memory usage.
 #[utoipa::path(
     get,
     path = "/v1/monitoring/performance",
@@ -123,11 +148,12 @@ pub async fn get_data(State(state): State<ApiState>) -> ApiResult<Json<HashMap<S
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_performance(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+pub async fn get_performance(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, Value>>> {
     let mut response = HashMap::new();
     response.insert("cpu_usage".to_string(), json!(0.0));
     response.insert("memory_usage".to_string(), json!(0.0));
-    
+
     Ok(Json(response))
 }
-

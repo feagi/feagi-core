@@ -101,7 +101,7 @@ pub trait RuntimeService: Send + Sync {
     /// Resets the burst counter to zero.
     ///
     async fn reset_burst_count(&self) -> ServiceResult<()>;
-    
+
     /// Get FCL (Fire Candidate List) snapshot for monitoring
     ///
     /// Returns vector of (neuron_id, potential) pairs from last burst
@@ -110,7 +110,7 @@ pub trait RuntimeService: Send + Sync {
     /// * `Vec<(u64, f32)>` - Neuron IDs and their membrane potentials
     ///
     async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>>;
-    
+
     /// Get Fire Candidate List snapshot with cortical area information
     ///
     /// Returns the last FCL snapshot with cortical_idx for each neuron.
@@ -120,7 +120,7 @@ pub trait RuntimeService: Send + Sync {
     /// * `Vec<(u64, u32, f32)>` - (neuron_id, cortical_idx, membrane_potential) tuples
     ///
     async fn get_fcl_snapshot_with_cortical_idx(&self) -> ServiceResult<Vec<(u64, u32, f32)>>;
-    
+
     /// Get Fire Queue sample for monitoring
     ///
     /// Returns neurons that actually fired in the last burst, organized by cortical area
@@ -128,38 +128,50 @@ pub trait RuntimeService: Send + Sync {
     /// # Returns
     /// * `HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>` - Area data
     ///
-    async fn get_fire_queue_sample(&self) -> ServiceResult<std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>>;
-    
+    async fn get_fire_queue_sample(
+        &self,
+    ) -> ServiceResult<
+        std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
+    >;
+
     /// Get Fire Ledger window configurations for all cortical areas
     ///
     /// # Returns
     /// * `Vec<(u32, usize)>` - (cortical_idx, window_size) pairs
     ///
     async fn get_fire_ledger_configs(&self) -> ServiceResult<Vec<(u32, usize)>>;
-    
+
     /// Configure Fire Ledger window size for a cortical area
     ///
     /// # Arguments
     /// * `cortical_idx` - Cortical area index
     /// * `window_size` - Number of bursts to retain in history
     ///
-    async fn configure_fire_ledger_window(&self, cortical_idx: u32, window_size: usize) -> ServiceResult<()>;
-    
+    async fn configure_fire_ledger_window(
+        &self,
+        cortical_idx: u32,
+        window_size: usize,
+    ) -> ServiceResult<()>;
+
     /// Get FCL/FQ sampler configuration
     ///
     /// # Returns
     /// * `(f64, u32)` - (frequency_hz, consumer_type) where consumer: 1=viz, 2=motor, 3=both
     ///
     async fn get_fcl_sampler_config(&self) -> ServiceResult<(f64, u32)>;
-    
+
     /// Set FCL/FQ sampler configuration
     ///
     /// # Arguments
     /// * `frequency` - Optional sampling frequency in Hz
     /// * `consumer` - Optional consumer type (1=viz, 2=motor, 3=both)
     ///
-    async fn set_fcl_sampler_config(&self, frequency: Option<f64>, consumer: Option<u32>) -> ServiceResult<()>;
-    
+    async fn set_fcl_sampler_config(
+        &self,
+        frequency: Option<f64>,
+        consumer: Option<u32>,
+    ) -> ServiceResult<()>;
+
     /// Get FCL sample rate for a specific cortical area
     ///
     /// # Arguments
@@ -169,7 +181,7 @@ pub trait RuntimeService: Send + Sync {
     /// * `f64` - Sample rate in Hz
     ///
     async fn get_area_fcl_sample_rate(&self, area_id: u32) -> ServiceResult<f64>;
-    
+
     /// Set FCL sample rate for a specific cortical area
     ///
     /// # Arguments
@@ -177,7 +189,7 @@ pub trait RuntimeService: Send + Sync {
     /// * `sample_rate` - Sample rate in Hz
     ///
     async fn set_area_fcl_sample_rate(&self, area_id: u32, sample_rate: f64) -> ServiceResult<()>;
-    
+
     /// Inject sensory data by cortical area ID and coordinates
     ///
     /// Takes cortical ID (base64 string) and coordinates with potential values,
@@ -200,6 +212,3 @@ pub trait RuntimeService: Send + Sync {
         xyzp_data: &[(u32, u32, u32, f32)],
     ) -> ServiceResult<usize>;
 }
-
-
-

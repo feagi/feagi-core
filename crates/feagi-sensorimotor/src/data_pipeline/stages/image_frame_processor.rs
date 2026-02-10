@@ -1,0 +1,151 @@
+//! Image transformation stream processor for FEAGI vision processing pipelines.
+//!
+//! This module provides the `ImageFrameTransformerProcessor` which applies a configured
+//! set of image transformations to incoming frames in a stream processing pipeline.
+//! It wraps an `ImageFrameTransformerDefinition` to provide streaming functionality
+//! with caching and efficient processing.
+
+use crate::data_pipeline::pipeline_stage::PipelineStage;
+use crate::data_pipeline::PipelineStageProperties;
+use crate::data_types::{ImageFrame, ImageFrameProcessor};
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_structures::FeagiDataError;
+use std::any::Any;
+use std::fmt::Display;
+use std::time::Instant;
+
+/// A stream processor that applies image transformations to incoming frames.
+///
+/// This processor wraps an `ImageFrameTransformerDefinition` to provide streaming
+/// functionality for image transformation pipelines. It maintains an internal cache
+/// of the most recent output and applies the configured transformations (cropping,
+/// resizing, color adjustments, etc.) to each incoming frame.
+///
+/// # Transformation Pipeline
+///
+/// The processor applies transformations in the optimal order defined by the
+/// underlying `ImageFrameTransformerDefinition`:
+/// 1. **Cropping** - Extract regions of interest
+/// 2. **Resizing** - Scale to target dimensions
+/// 3. **Color space conversion** - Convert between Linear/Gamma
+/// 4. **Brightness adjustment** - Modify pixel intensity
+/// 5. **Contrast adjustment** - Adjust image contrast
+/// 6. **Grayscale conversion** - Convert to single-channel
+///
+/// # Performance
+///
+/// The processor includes optimized fast paths for common transformation combinations
+/// and maintains a pre-allocated output buffer to minimize memory allocations during
+/// stream processing.
+#[derive(Debug, Clone)]
+pub struct ImageFrameProcessorStage {
+    /// The transformation configuration defining which operations to apply and their parameters
+    transformer_definition: ImageFrameProcessor,
+    /// Cached output buffer containing the most recent transformed image
+    cached: WrappedIOData, // Image Frame
+}
+
+impl Display for ImageFrameProcessorStage {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "ImageFrameTransformerProcessor({:?})",
+            self.transformer_definition
+        )
+    }
+}
+
+impl PipelineStage for ImageFrameProcessorStage {
+    fn get_input_data_type(&self) -> WrappedIOType {
+        WrappedIOType::ImageFrame(Some(
+            *self.transformer_definition.get_input_image_properties(),
+        ))
+    }
+
+    fn get_output_data_type(&self) -> WrappedIOType {
+        WrappedIOType::ImageFrame(Some(
+            self.transformer_definition.get_output_image_properties(),
+        ))
+    }
+
+    fn get_most_recent_output(&self) -> &WrappedIOData {
+        &self.cached
+    }
+
+    fn process_new_input(
+        &mut self,
+        value: &WrappedIOData,
+        _time_of_input: Instant,
+    ) -> Result<&WrappedIOData, FeagiDataError> {
+        let read_from: &ImageFrame = value.try_into()?;
+        let write_target: &mut ImageFrame = (&mut self.cached).try_into()?;
+        self.transformer_definition
+            .process_image(read_from, write_target)?;
+        // NOTE: Do NOT copy skip_encoding from input - let downstream stages (like diff) control it
+        // The process_image function handles skip_encoding appropriately for transformations
+        Ok(&self.cached)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn create_properties(&self) -> PipelineStageProperties {
+        PipelineStageProperties::ImageFrameProcessor {
+            transformer_definition: self.transformer_definition.clone(),
+        }
+    }
+
+    fn load_properties(
+        &mut self,
+        properties: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
+        match properties {
+            PipelineStageProperties::ImageFrameProcessor { transformer_definition } => {
+                // No real point checking for change, just replace
+                self.transformer_definition = transformer_definition;
+                Ok(())
+            }
+            _ => Err(FeagiDataError::BadParameters(
+                "load_properties called with incompatible properties type for ImageFrameProcessorStage".into()
+            ))
+        }
+    }
+}
+
+impl ImageFrameProcessorStage {
+    /// Creates a new ImageFrameTransformerProcessor with the specified transformation definition.
+    ///
+    /// Initializes the processor with a pre-allocated output buffer sized according to the
+    /// expected output properties of the transformation pipeline. The buffer is created based
+    /// on the final resolution, color space, and channel layout after all transformations.
+    ///
+    /// # Arguments
+    ///
+    /// * `transformer_definition` - Configuration defining the transformation pipeline to apply
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(ImageFrameProcessor)` - Successfully created processor
+    /// * `Err(FeagiDataError)` - If output buffer allocation fails
+    pub fn new(transformer_definition: ImageFrameProcessor) -> Result<Self, FeagiDataError> {
+        Ok(ImageFrameProcessorStage {
+            cached: WrappedIOData::ImageFrame(ImageFrame::new_from_image_frame_properties(
+                &transformer_definition.get_output_image_properties(),
+            )?),
+            transformer_definition,
+        })
+    }
+
+    pub fn new_box(
+        transformer_definition: ImageFrameProcessor,
+    ) -> Result<Box<dyn PipelineStage + Send + Sync + 'static>, FeagiDataError> {
+        Ok(Box::new(ImageFrameProcessorStage::new(
+            transformer_definition,
+        )?))
+    }
+}

@@ -6,22 +6,568 @@
 //! These endpoints match the Python implementation at:
 //! feagi-py/feagi/api/v1/feagi_agent.py
 
-use axum::{
-    extract::{Query, State},
-    response::Json,
-};
 use std::collections::HashMap;
 
-use crate::common::{ApiError, ApiResult};
-use crate::transports::http::server::ApiState;
+use crate::common::ApiState;
+use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use crate::v1::agent_dtos::*;
 use feagi_services::traits::agent_service::{
     AgentRegistration, HeartbeatRequest as ServiceHeartbeatRequest,
 };
+use tracing::{error, info, warn};
 
-/// POST /v1/agent/register
-/// 
-/// Register a new agent with FEAGI
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::sdk::AgentDescriptor;
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::sdk::ConnectorAgent;
+#[cfg(feature = "feagi-agent")]
+use feagi_services::types::CreateCorticalAreaParams;
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalSubUnitIndex, CorticalUnitIndex,
+};
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    FrameChangeHandling, PercentageNeuronPositioning,
+};
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::MotorCorticalUnit;
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::SensoryCorticalUnit;
+#[cfg(feature = "feagi-agent")]
+use std::sync::{Arc, Mutex};
+
+#[cfg(feature = "feagi-agent")]
+fn parse_agent_descriptor(agent_id: &str) -> ApiResult<AgentDescriptor> {
+    AgentDescriptor::try_from_base64(agent_id).map_err(|e| {
+        ApiError::invalid_input(format!(
+            "Invalid agent_id (expected AgentDescriptor base64): {e}"
+        ))
+    })
+}
+
+fn get_agent_name_from_id(agent_id: &str) -> ApiResult<String> {
+    #[cfg(feature = "feagi-agent")]
+    {
+        let descriptor = parse_agent_descriptor(agent_id)?;
+        let agent_name = descriptor.agent_name().to_string();
+        if agent_name.is_empty() {
+            return Err(ApiError::invalid_input(format!(
+                "Agent '{}' does not contain a readable name",
+                agent_id
+            )));
+        }
+        Ok(agent_name)
+    }
+    #[cfg(not(feature = "feagi-agent"))]
+    {
+        Err(ApiError::internal(
+            "Agent name requires feagi-agent feature".to_string(),
+        ))
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+async fn auto_create_cortical_areas_from_device_registrations(
+    state: &ApiState,
+    device_registrations: &serde_json::Value,
+) {
+    let connectome_service = state.connectome_service.as_ref();
+    let genome_service = state.genome_service.as_ref();
+
+    let Some(output_units) = device_registrations
+        .get("output_units_and_decoder_properties")
+        .and_then(|v| v.as_object())
+    else {
+        return;
+    };
+    let input_units = device_registrations
+        .get("input_units_and_encoder_properties")
+        .and_then(|v| v.as_object());
+
+    // Build creation params for missing OPU areas based on default topologies.
+    let mut to_create: Vec<CreateCorticalAreaParams> = Vec::new();
+
+    for (motor_unit_key, unit_defs) in output_units {
+        // MotorCorticalUnit is serde-deserializable from its string representation.
+        let motor_unit: MotorCorticalUnit = match serde_json::from_value::<MotorCorticalUnit>(
+            serde_json::Value::String(motor_unit_key.clone()),
+        ) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!(
+                    "⚠️ [API] Unable to parse MotorCorticalUnit key '{}' from device_registrations: {}",
+                    motor_unit_key, e
+                );
+                continue;
+            }
+        };
+
+        let Some(unit_defs_arr) = unit_defs.as_array() else {
+            continue;
+        };
+
+        for entry in unit_defs_arr {
+            // Expected shape: [<unit_definition>, <decoder_properties>]
+            let Some(pair) = entry.as_array() else {
+                continue;
+            };
+            let Some(unit_def) = pair.first() else {
+                continue;
+            };
+            let Some(group_u64) = unit_def.get("cortical_unit_index").and_then(|v| v.as_u64())
+            else {
+                continue;
+            };
+            let group_u8: u8 = match group_u64.try_into() {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let group: CorticalUnitIndex = group_u8.into();
+
+            let device_count = unit_def
+                .get("device_grouping")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            if device_count == 0 {
+                warn!(
+                    "⚠️ [API] device_grouping is empty for motor unit '{}' group {}; skipping auto-create",
+                    motor_unit_key, group_u8
+                );
+                continue;
+            }
+
+            // Use defaults consistent with FEAGI registration handler.
+            let frame_change_handling = FrameChangeHandling::Absolute;
+            let percentage_neuron_positioning = PercentageNeuronPositioning::Linear;
+
+            let cortical_ids = match motor_unit {
+                MotorCorticalUnit::RotaryMotor => MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::PositionalServo => MotorCorticalUnit::get_cortical_ids_array_for_positional_servo_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::Gaze => MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::MiscData => MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                    frame_change_handling,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::TextEnglishOutput => MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
+                    frame_change_handling,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::CountOutput => MotorCorticalUnit::get_cortical_ids_array_for_count_output_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::ObjectSegmentation => MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                    frame_change_handling,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::SimpleVisionOutput => MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+                    frame_change_handling,
+                    group,
+                )
+                .to_vec(),
+                MotorCorticalUnit::DynamicImageProcessing => MotorCorticalUnit::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    group,
+                )
+                .to_vec(),
+            };
+
+            let topology = motor_unit.get_unit_default_topology();
+
+            for (i, cortical_id) in cortical_ids.iter().enumerate() {
+                let cortical_id_b64 = cortical_id.as_base_64();
+                let exists = match connectome_service
+                    .cortical_area_exists(&cortical_id_b64)
+                    .await
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        warn!(
+                            "⚠️ [API] Failed to check cortical area existence for '{}': {}",
+                            cortical_id_b64, e
+                        );
+                        continue;
+                    }
+                };
+
+                if exists {
+                    // If the area already exists but still has a placeholder name (often equal to the cortical_id),
+                    // update it to a deterministic friendly name so UIs (e.g., Brain Visualizer) show readable labels.
+                    //
+                    // IMPORTANT: We only auto-rename if the current name is clearly a placeholder (== cortical_id),
+                    // to avoid overwriting user-custom names.
+                    let desired_name = if matches!(motor_unit, MotorCorticalUnit::Gaze) {
+                        let subunit_name = match i {
+                            0 => "Eccentricity",
+                            1 => "Modulation",
+                            _ => "Subunit",
+                        };
+                        format!(
+                            "{} ({}) Unit {}",
+                            motor_unit.get_friendly_name(),
+                            subunit_name,
+                            group_u8
+                        )
+                    } else if cortical_ids.len() > 1 {
+                        format!(
+                            "{} Subunit {} Unit {}",
+                            motor_unit.get_friendly_name(),
+                            i,
+                            group_u8
+                        )
+                    } else {
+                        format!("{} Unit {}", motor_unit.get_friendly_name(), group_u8)
+                    };
+
+                    match connectome_service.get_cortical_area(&cortical_id_b64).await {
+                        Ok(existing_area) => {
+                            if existing_area.name.is_empty()
+                                || existing_area.name == existing_area.cortical_id
+                            {
+                                let mut changes = std::collections::HashMap::new();
+                                changes.insert(
+                                    "cortical_name".to_string(),
+                                    serde_json::json!(desired_name),
+                                );
+                                if let Err(e) = genome_service
+                                    .update_cortical_area(&cortical_id_b64, changes)
+                                    .await
+                                {
+                                    warn!(
+                                        "⚠️ [API] Failed to auto-rename existing motor cortical area '{}': {}",
+                                        cortical_id_b64, e
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!(
+                                "⚠️ [API] Failed to fetch existing cortical area '{}' for potential rename: {}",
+                                cortical_id_b64, e
+                            );
+                        }
+                    }
+                    continue;
+                }
+
+                let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(i as u8)) else {
+                    warn!(
+                        "⚠️ [API] Missing unit topology for motor unit '{}' subunit {} (agent device_registrations); cannot auto-create '{}'",
+                        motor_unit.get_snake_case_name(),
+                        i,
+                        cortical_id_b64
+                    );
+                    continue;
+                };
+                let dims = unit_topology.channel_dimensions_default;
+                let pos = unit_topology.relative_position;
+                let total_x = (dims[0] as usize).saturating_mul(device_count);
+                let dimensions = (total_x, dims[1] as usize, dims[2] as usize);
+                let position = (pos[0], pos[1], pos[2]);
+
+                // IMPORTANT:
+                // Motor units like Gaze have multiple cortical subunits (eccentricity + modulation).
+                // These must get distinct names; otherwise a uniqueness constraint (or UI mapping)
+                // can cause only one of the subunits to appear.
+                let name = if matches!(motor_unit, MotorCorticalUnit::Gaze) {
+                    let subunit_name = match i {
+                        0 => "Eccentricity",
+                        1 => "Modulation",
+                        _ => "Subunit",
+                    };
+                    format!(
+                        "{} ({}) Unit {}",
+                        motor_unit.get_friendly_name(),
+                        subunit_name,
+                        group_u8
+                    )
+                } else if cortical_ids.len() > 1 {
+                    format!(
+                        "{} Subunit {} Unit {}",
+                        motor_unit.get_friendly_name(),
+                        i,
+                        group_u8
+                    )
+                } else {
+                    format!("{} Unit {}", motor_unit.get_friendly_name(), group_u8)
+                };
+
+                to_create.push(CreateCorticalAreaParams {
+                    cortical_id: cortical_id_b64.clone(),
+                    name,
+                    dimensions,
+                    position,
+                    area_type: "Motor".to_string(),
+                    visible: Some(true),
+                    sub_group: None,
+                    neurons_per_voxel: Some(1),
+                    postsynaptic_current: None,
+                    plasticity_constant: None,
+                    degeneration: None,
+                    psp_uniform_distribution: None,
+                    firing_threshold_increment: None,
+                    firing_threshold_limit: None,
+                    consecutive_fire_count: None,
+                    snooze_period: None,
+                    refractory_period: None,
+                    leak_coefficient: None,
+                    leak_variability: None,
+                    burst_engine_active: None,
+                    properties: None,
+                });
+            }
+        }
+    }
+
+    if let Some(input_units) = input_units {
+        // Auto-rename sensory cortical areas if they exist with placeholder names.
+        for (sensory_unit_key, unit_defs) in input_units {
+            let sensory_unit: SensoryCorticalUnit = match serde_json::from_value::<
+                SensoryCorticalUnit,
+            >(serde_json::Value::String(
+                sensory_unit_key.clone(),
+            )) {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!(
+                        "⚠️ [API] Unable to parse SensoryCorticalUnit key '{}' from device_registrations: {}",
+                        sensory_unit_key, e
+                    );
+                    continue;
+                }
+            };
+
+            let Some(unit_defs_arr) = unit_defs.as_array() else {
+                continue;
+            };
+
+            for entry in unit_defs_arr {
+                let Some(pair) = entry.as_array() else {
+                    continue;
+                };
+                let Some(unit_def) = pair.first() else {
+                    continue;
+                };
+                let Some(group_u64) = unit_def.get("cortical_unit_index").and_then(|v| v.as_u64())
+                else {
+                    continue;
+                };
+                let group_u8: u8 = match group_u64.try_into() {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let group: CorticalUnitIndex = group_u8.into();
+
+                let device_count = unit_def
+                    .get("device_grouping")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+                if device_count == 0 {
+                    continue;
+                }
+
+                let frame_change_handling = FrameChangeHandling::Absolute;
+                let percentage_neuron_positioning = PercentageNeuronPositioning::Linear;
+                let cortical_ids = match sensory_unit {
+                    SensoryCorticalUnit::Infrared => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Proximity => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_proximity_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Shock => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_shock_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Battery => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_battery_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Servo => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_servo_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::AnalogGPIO => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::DigitalGPIO => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_digital_g_p_i_o_with_parameters(
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::MiscData => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::TextEnglishInput => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::CountInput => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_count_input_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Vision => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_vision_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::SegmentedVision => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
+                            frame_change_handling,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Accelerometer => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_accelerometer_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                    SensoryCorticalUnit::Gyroscope => {
+                        SensoryCorticalUnit::get_cortical_ids_array_for_gyroscope_with_parameters(
+                            frame_change_handling,
+                            percentage_neuron_positioning,
+                            group,
+                        )
+                        .to_vec()
+                    }
+                };
+
+                for (i, cortical_id) in cortical_ids.iter().enumerate() {
+                    let cortical_id_b64 = cortical_id.as_base_64();
+                    match connectome_service.get_cortical_area(&cortical_id_b64).await {
+                        Ok(existing_area) => {
+                            if existing_area.name.is_empty()
+                                || existing_area.name == existing_area.cortical_id
+                            {
+                                let desired_name = if cortical_ids.len() > 1 {
+                                    format!(
+                                        "{} Subunit {} Unit {}",
+                                        sensory_unit.get_friendly_name(),
+                                        i,
+                                        group_u8
+                                    )
+                                } else {
+                                    format!(
+                                        "{} Unit {}",
+                                        sensory_unit.get_friendly_name(),
+                                        group_u8
+                                    )
+                                };
+                                let mut changes = std::collections::HashMap::new();
+                                changes.insert(
+                                    "cortical_name".to_string(),
+                                    serde_json::json!(desired_name),
+                                );
+                                if let Err(e) = genome_service
+                                    .update_cortical_area(&cortical_id_b64, changes)
+                                    .await
+                                {
+                                    warn!(
+                                        "⚠️ [API] Failed to auto-rename existing sensory cortical area '{}': {}",
+                                        cortical_id_b64, e
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!(
+                                "⚠️ [API] Failed to fetch existing cortical area '{}' for potential rename: {}",
+                                cortical_id_b64, e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if to_create.is_empty() {
+        return;
+    }
+
+    info!(
+        "🦀 [API] Auto-creating {} missing cortical areas from device registrations",
+        to_create.len()
+    );
+
+    if let Err(e) = genome_service.create_cortical_areas(to_create).await {
+        warn!(
+            "⚠️ [API] Failed to auto-create cortical areas from device registrations: {}",
+            e
+        );
+    }
+}
+
+/// Register a new agent with FEAGI and receive connection details including transport configuration and ports.
 #[utoipa::path(
     post,
     path = "/v1/agent/register",
@@ -36,10 +582,36 @@ pub async fn register_agent(
     State(state): State<ApiState>,
     Json(request): Json<AgentRegistrationRequest>,
 ) -> ApiResult<Json<AgentRegistrationResponse>> {
+    info!(
+        "🦀 [API] Registration request received for agent '{}' (type: {})",
+        request.agent_id, request.agent_type
+    );
+
     let agent_service = state
         .agent_service
         .as_ref()
         .ok_or_else(|| ApiError::internal("Agent service not available"))?;
+
+    // Extract device_registrations from capabilities before they're moved
+    #[cfg(feature = "feagi-agent")]
+    let device_registrations_opt = request
+        .capabilities
+        .get("device_registrations")
+        .and_then(|v| {
+            // Validate structure before cloning
+            if let Some(obj) = v.as_object() {
+                if obj.contains_key("input_units_and_encoder_properties")
+                    && obj.contains_key("output_units_and_decoder_properties")
+                    && obj.contains_key("feedbacks")
+                {
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        });
 
     let registration = AgentRegistration {
         agent_id: request.agent_id.clone(),
@@ -55,18 +627,84 @@ pub async fn register_agent(
 
     match agent_service.register_agent(registration).await {
         Ok(response) => {
+            info!(
+                "✅ [API] Agent '{}' registration succeeded (status: {})",
+                request.agent_id, response.status
+            );
+
+            // Initialize ConnectorAgent for this agent
+            // If capabilities contained device_registrations, import them
+            #[cfg(feature = "feagi-agent")]
+            if let Some(device_registrations_value) = device_registrations_opt {
+                let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
+                let device_registrations_for_autocreate = device_registrations_value.clone();
+                // IMPORTANT: do not hold a non-Send lock guard across an await.
+                let connector = {
+                    let mut connectors = state.agent_connectors.write();
+                    if let Some(existing) = connectors.get(&agent_descriptor) {
+                        existing.clone()
+                    } else {
+                        let connector = ConnectorAgent::new_from_device_registration_json(
+                            agent_descriptor,
+                            device_registrations_value.clone(),
+                        )
+                        .map_err(|e| {
+                            ApiError::invalid_input(format!(
+                                "Failed to initialize connector from device registrations: {e}"
+                            ))
+                        })?;
+                        let connector = Arc::new(Mutex::new(connector));
+                        connectors.insert(agent_descriptor, connector.clone());
+                        connector
+                    }
+                };
+
+                // IMPORTANT: do not hold a non-Send MutexGuard across an await.
+                let import_result = {
+                    let mut connector_guard = connector.lock().unwrap();
+                    connector_guard.set_device_registrations_from_json(device_registrations_value)
+                };
+
+                match import_result {
+                    Err(e) => {
+                        warn!(
+                            "⚠️ [API] Failed to import device registrations from capabilities for agent '{}': {}",
+                            request.agent_id, e
+                        );
+                    }
+                    Ok(()) => {
+                        info!(
+                            "✅ [API] Imported device registrations from capabilities for agent '{}'",
+                            request.agent_id
+                        );
+                        auto_create_cortical_areas_from_device_registrations(
+                            &state,
+                            &device_registrations_for_autocreate,
+                        )
+                        .await;
+                    }
+                }
+            } else {
+                let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
+                // Initialize empty ConnectorAgent even if no device_registrations
+                let mut connectors = state.agent_connectors.write();
+                connectors.entry(agent_descriptor).or_insert_with(|| {
+                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor)))
+                });
+            }
+
             // Convert service TransportConfig to API TransportConfig
             let transports = response.transports.map(|ts| {
-                ts.into_iter().map(|t| {
-                    crate::v1::agent_dtos::TransportConfig {
+                ts.into_iter()
+                    .map(|t| crate::v1::agent_dtos::TransportConfig {
                         transport_type: t.transport_type,
                         enabled: t.enabled,
                         ports: t.ports,
                         host: t.host,
-                    }
-                }).collect()
+                    })
+                    .collect()
             });
-            
+
             Ok(Json(AgentRegistrationResponse {
                 status: response.status,
                 message: response.message,
@@ -75,13 +713,17 @@ pub async fn register_agent(
                 rates: response.rates,
                 transports,
                 recommended_transport: response.recommended_transport,
-                zmq_ports: response.zmq_ports,
                 shm_paths: response.shm_paths,
+                cortical_areas: response.cortical_areas,
             }))
-        },
+        }
         Err(e) => {
             // Check if error is about unsupported transport (validation error)
             let error_msg = e.to_string();
+            warn!(
+                "❌ [API] Agent '{}' registration FAILED: {}",
+                request.agent_id, error_msg
+            );
             if error_msg.contains("not supported") || error_msg.contains("disabled") {
                 Err(ApiError::invalid_input(error_msg))
             } else {
@@ -91,9 +733,7 @@ pub async fn register_agent(
     }
 }
 
-/// POST /v1/agent/heartbeat
-///
-/// Record a heartbeat to keep agent registered
+/// Send a heartbeat to keep the agent registered and prevent timeout disconnection.
 #[utoipa::path(
     post,
     path = "/v1/agent/heartbeat",
@@ -127,9 +767,7 @@ pub async fn heartbeat(
     }
 }
 
-/// GET /v1/agent/list
-///
-/// List all registered agents
+/// Get a list of all currently registered agent IDs.
 #[utoipa::path(
     get,
     path = "/v1/agent/list",
@@ -139,9 +777,7 @@ pub async fn heartbeat(
     ),
     tag = "agent"
 )]
-pub async fn list_agents(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<Vec<String>>> {
+pub async fn list_agents(State(state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     let agent_service = state
         .agent_service
         .as_ref()
@@ -149,16 +785,11 @@ pub async fn list_agents(
 
     match agent_service.list_agents().await {
         Ok(agent_ids) => Ok(Json(agent_ids)),
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to list agents: {}",
-            e
-        ))),
+        Err(e) => Err(ApiError::internal(format!("Failed to list agents: {}", e))),
     }
 }
 
-/// GET /v1/agent/properties
-///
-/// Get properties for a specific agent (query parameter version)
+/// Get agent properties including type, capabilities, version, and connection details. Uses query parameter ?agent_id=xxx.
 #[utoipa::path(
     get,
     path = "/v1/agent/properties",
@@ -185,8 +816,10 @@ pub async fn get_agent_properties(
         .as_ref()
         .ok_or_else(|| ApiError::internal("Agent service not available"))?;
 
+    let agent_name = get_agent_name_from_id(agent_id)?;
     match agent_service.get_agent_properties(agent_id).await {
         Ok(properties) => Ok(Json(AgentPropertiesResponse {
+            agent_name,
             agent_type: properties.agent_type,
             agent_ip: properties.agent_ip,
             agent_data_port: properties.agent_data_port,
@@ -200,9 +833,7 @@ pub async fn get_agent_properties(
     }
 }
 
-/// GET /v1/agent/shared_mem
-///
-/// Get shared memory information for all agents
+/// Get shared memory configuration and paths for all registered agents using shared memory transport.
 #[utoipa::path(
     get,
     path = "/v1/agent/shared_mem",
@@ -229,9 +860,7 @@ pub async fn get_shared_memory(
     }
 }
 
-/// DELETE /v1/agent/deregister
-///
-/// Deregister an agent (body-based, not query parameter)
+/// Deregister an agent from FEAGI and clean up its resources.
 #[utoipa::path(
     delete,
     path = "/v1/agent/deregister",
@@ -260,9 +889,7 @@ pub async fn deregister_agent(
     }
 }
 
-/// POST /v1/agent/manual_stimulation
-///
-/// Trigger manual neural stimulation across multiple cortical areas
+/// Manually stimulate neurons at specific coordinates across multiple cortical areas for testing and debugging.
 #[utoipa::path(
     post,
     path = "/v1/agent/manual_stimulation",
@@ -329,9 +956,7 @@ pub async fn manual_stimulation(
     }
 }
 
-/// GET /v1/agent/fq_sampler_status
-///
-/// Get comprehensive FQ sampler coordination status
+/// Get Fire Queue (FQ) sampler coordination status including visualization and motor sampling configuration.
 #[utoipa::path(
     get,
     path = "/v1/agent/fq_sampler_status",
@@ -348,21 +973,25 @@ pub async fn get_fq_sampler_status(
         .agent_service
         .as_ref()
         .ok_or_else(|| ApiError::internal("Agent service not available"))?;
-    
+
     let runtime_service = state.runtime_service.as_ref();
-    
+
     // Get all agents
-    let agent_ids = agent_service.list_agents().await
+    let agent_ids = agent_service
+        .list_agents()
+        .await
         .map_err(|e| ApiError::internal(format!("Failed to list agents: {}", e)))?;
-    
+
     // Get FCL sampler config from RuntimeService
-    let (fcl_frequency, fcl_consumer) = runtime_service.get_fcl_sampler_config().await
+    let (fcl_frequency, fcl_consumer) = runtime_service
+        .get_fcl_sampler_config()
+        .await
         .map_err(|e| ApiError::internal(format!("Failed to get sampler config: {}", e)))?;
-    
+
     // Build response matching Python structure
     let mut visualization_agents = Vec::new();
     let mut motor_agents = Vec::new();
-    
+
     for agent_id in &agent_ids {
         if let Ok(props) = agent_service.get_agent_properties(agent_id).await {
             if props.capabilities.contains_key("visualization") {
@@ -373,50 +1002,83 @@ pub async fn get_fq_sampler_status(
             }
         }
     }
-    
+
     let mut fq_coordination = HashMap::new();
-    
+
     let mut viz_sampler = HashMap::new();
-    viz_sampler.insert("enabled".to_string(), serde_json::json!(!visualization_agents.is_empty()));
-    viz_sampler.insert("reason".to_string(), serde_json::json!(
-        if visualization_agents.is_empty() {
+    viz_sampler.insert(
+        "enabled".to_string(),
+        serde_json::json!(!visualization_agents.is_empty()),
+    );
+    viz_sampler.insert(
+        "reason".to_string(),
+        serde_json::json!(if visualization_agents.is_empty() {
             "No visualization agents connected".to_string()
         } else {
-            format!("{} visualization agent(s) connected", visualization_agents.len())
-        }
-    ));
-    viz_sampler.insert("agents_requiring".to_string(), serde_json::json!(visualization_agents));
+            format!(
+                "{} visualization agent(s) connected",
+                visualization_agents.len()
+            )
+        }),
+    );
+    viz_sampler.insert(
+        "agents_requiring".to_string(),
+        serde_json::json!(visualization_agents),
+    );
     viz_sampler.insert("frequency_hz".to_string(), serde_json::json!(fcl_frequency));
-    fq_coordination.insert("visualization_fq_sampler".to_string(), serde_json::json!(viz_sampler));
-    
+    fq_coordination.insert(
+        "visualization_fq_sampler".to_string(),
+        serde_json::json!(viz_sampler),
+    );
+
     let mut motor_sampler = HashMap::new();
-    motor_sampler.insert("enabled".to_string(), serde_json::json!(!motor_agents.is_empty()));
-    motor_sampler.insert("reason".to_string(), serde_json::json!(
-        if motor_agents.is_empty() {
+    motor_sampler.insert(
+        "enabled".to_string(),
+        serde_json::json!(!motor_agents.is_empty()),
+    );
+    motor_sampler.insert(
+        "reason".to_string(),
+        serde_json::json!(if motor_agents.is_empty() {
             "No motor agents connected".to_string()
         } else {
             format!("{} motor agent(s) connected", motor_agents.len())
-        }
-    ));
-    motor_sampler.insert("agents_requiring".to_string(), serde_json::json!(motor_agents));
+        }),
+    );
+    motor_sampler.insert(
+        "agents_requiring".to_string(),
+        serde_json::json!(motor_agents),
+    );
     motor_sampler.insert("frequency_hz".to_string(), serde_json::json!(100.0));
-    fq_coordination.insert("motor_fq_sampler".to_string(), serde_json::json!(motor_sampler));
-    
+    fq_coordination.insert(
+        "motor_fq_sampler".to_string(),
+        serde_json::json!(motor_sampler),
+    );
+
     let mut response = HashMap::new();
-    response.insert("fq_sampler_coordination".to_string(), serde_json::json!(fq_coordination));
-    response.insert("agent_registry".to_string(), serde_json::json!({
-        "total_agents": agent_ids.len(),
-        "agent_ids": agent_ids
-    }));
-    response.insert("system_status".to_string(), serde_json::json!("coordinated_via_registration_manager"));
-    response.insert("fcl_sampler_consumer".to_string(), serde_json::json!(fcl_consumer));
-    
+    response.insert(
+        "fq_sampler_coordination".to_string(),
+        serde_json::json!(fq_coordination),
+    );
+    response.insert(
+        "agent_registry".to_string(),
+        serde_json::json!({
+            "total_agents": agent_ids.len(),
+            "agent_ids": agent_ids
+        }),
+    );
+    response.insert(
+        "system_status".to_string(),
+        serde_json::json!("coordinated_via_registration_manager"),
+    );
+    response.insert(
+        "fcl_sampler_consumer".to_string(),
+        serde_json::json!(fcl_consumer),
+    );
+
     Ok(Json(response))
 }
 
-/// GET /v1/agent/capabilities
-///
-/// List all supported agent capabilities
+/// Get list of all supported agent types and capability types (sensory, motor, visualization, etc.).
 #[utoipa::path(
     get,
     path = "/v1/agent/capabilities",
@@ -430,26 +1092,154 @@ pub async fn get_capabilities(
     State(_state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
     let mut response = HashMap::new();
-    response.insert("agent_types".to_string(), vec![
-        "sensory".to_string(),
-        "motor".to_string(),
-        "both".to_string(),
-        "visualization".to_string(),
-        "infrastructure".to_string(),
-    ]);
-    response.insert("capability_types".to_string(), vec![
-        "vision".to_string(),
-        "motor".to_string(),
-        "visualization".to_string(),
-        "sensory".to_string(),
-    ]);
-    
+    response.insert(
+        "agent_types".to_string(),
+        vec![
+            "sensory".to_string(),
+            "motor".to_string(),
+            "both".to_string(),
+            "visualization".to_string(),
+            "infrastructure".to_string(),
+        ],
+    );
+    response.insert(
+        "capability_types".to_string(),
+        vec![
+            "vision".to_string(),
+            "motor".to_string(),
+            "visualization".to_string(),
+            "sensory".to_string(),
+        ],
+    );
+
     Ok(Json(response))
 }
 
-/// GET /v1/agent/info/{agent_id}
-///
-/// Get detailed agent information
+/// Get capabilities for all agents with optional filtering and payload includes.
+#[utoipa::path(
+    get,
+    path = "/v1/agent/capabilities/all",
+    params(
+        ("agent_type" = Option<String>, Query, description = "Filter by agent type (exact match)"),
+        ("capability" = Option<String>, Query, description = "Filter by capability key(s), comma-separated"),
+        ("include_device_registrations" = Option<bool>, Query, description = "Include device registration payloads per agent")
+    ),
+    responses(
+        (status = 200, description = "Agent capabilities map", body = HashMap<String, AgentCapabilitiesSummary>),
+        (status = 400, description = "Invalid query"),
+        (status = 500, description = "Failed to get agent capabilities")
+    ),
+    tag = "agent"
+)]
+pub async fn get_all_agent_capabilities(
+    State(state): State<ApiState>,
+    Query(params): Query<AgentCapabilitiesAllQuery>,
+) -> ApiResult<Json<HashMap<String, AgentCapabilitiesSummary>>> {
+    let agent_service = state
+        .agent_service
+        .as_ref()
+        .ok_or_else(|| ApiError::internal("Agent service not available"))?;
+
+    let include_device_registrations = params.include_device_registrations.unwrap_or(false);
+    let capability_filters: Option<Vec<String>> = params.capability.as_ref().and_then(|value| {
+        let filters: Vec<String> = value
+            .split(',')
+            .map(|item| item.trim())
+            .filter(|item| !item.is_empty())
+            .map(String::from)
+            .collect();
+        if filters.is_empty() {
+            None
+        } else {
+            Some(filters)
+        }
+    });
+
+    let agent_ids = agent_service
+        .list_agents()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to list agents: {}", e)))?;
+
+    let mut response: HashMap<String, AgentCapabilitiesSummary> = HashMap::new();
+
+    for agent_id in agent_ids {
+        let agent_name = get_agent_name_from_id(&agent_id)?;
+        let properties = match agent_service.get_agent_properties(&agent_id).await {
+            Ok(props) => props,
+            Err(_) => continue,
+        };
+
+        if let Some(ref agent_type_filter) = params.agent_type {
+            if properties.agent_type != *agent_type_filter {
+                continue;
+            }
+        }
+
+        if let Some(ref filters) = capability_filters {
+            let has_match = filters
+                .iter()
+                .any(|capability| properties.capabilities.contains_key(capability));
+            if !has_match {
+                continue;
+            }
+        }
+
+        let device_registrations = if include_device_registrations {
+            #[cfg(feature = "feagi-agent")]
+            {
+                Some(export_device_registrations_from_connector(
+                    &state, &agent_id,
+                )?)
+            }
+            #[cfg(not(feature = "feagi-agent"))]
+            {
+                None
+            }
+        } else {
+            None
+        };
+        response.insert(
+            agent_id,
+            AgentCapabilitiesSummary {
+                agent_name,
+                capabilities: properties.capabilities,
+                device_registrations,
+            },
+        );
+    }
+
+    Ok(Json(response))
+}
+
+#[cfg(feature = "feagi-agent")]
+fn export_device_registrations_from_connector(
+    state: &ApiState,
+    agent_id: &str,
+) -> ApiResult<serde_json::Value> {
+    let agent_descriptor = parse_agent_descriptor(agent_id)?;
+    let connector = {
+        let connectors = state.agent_connectors.read();
+        connectors.get(&agent_descriptor).cloned()
+    };
+    let connector = connector.ok_or_else(|| {
+        ApiError::not_found(
+            "device_registrations",
+            &format!("No ConnectorAgent found for agent '{}'", agent_id),
+        )
+    })?;
+
+    let connector_guard = connector
+        .lock()
+        .map_err(|_| ApiError::internal("ConnectorAgent lock poisoned".to_string()))?;
+    connector_guard.get_device_registration_json().map_err(|e| {
+        ApiError::internal(format!(
+            "Failed to export device registrations for agent '{}': {}",
+            agent_id, e
+        ))
+    })
+}
+
+/// Get comprehensive agent information including status, capabilities, version, and connection details.
 #[utoipa::path(
     get,
     path = "/v1/agent/info/{agent_id}",
@@ -465,35 +1255,57 @@ pub async fn get_capabilities(
 )]
 pub async fn get_agent_info(
     State(state): State<ApiState>,
-    axum::extract::Path(agent_id): axum::extract::Path<String>,
+    Path(agent_id): Path<String>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let agent_service = state
         .agent_service
         .as_ref()
         .ok_or_else(|| ApiError::internal("Agent service not available"))?;
-    
-    let properties = agent_service.get_agent_properties(&agent_id).await
+
+    let properties = agent_service
+        .get_agent_properties(&agent_id)
+        .await
         .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
-    
+
     let mut response = HashMap::new();
     response.insert("agent_id".to_string(), serde_json::json!(agent_id));
-    response.insert("agent_type".to_string(), serde_json::json!(properties.agent_type));
-    response.insert("agent_ip".to_string(), serde_json::json!(properties.agent_ip));
-    response.insert("agent_data_port".to_string(), serde_json::json!(properties.agent_data_port));
-    response.insert("capabilities".to_string(), serde_json::json!(properties.capabilities));
-    response.insert("agent_version".to_string(), serde_json::json!(properties.agent_version));
-    response.insert("controller_version".to_string(), serde_json::json!(properties.controller_version));
+    response.insert(
+        "agent_name".to_string(),
+        serde_json::json!(get_agent_name_from_id(&agent_id)?),
+    );
+    response.insert(
+        "agent_type".to_string(),
+        serde_json::json!(properties.agent_type),
+    );
+    response.insert(
+        "agent_ip".to_string(),
+        serde_json::json!(properties.agent_ip),
+    );
+    response.insert(
+        "agent_data_port".to_string(),
+        serde_json::json!(properties.agent_data_port),
+    );
+    response.insert(
+        "capabilities".to_string(),
+        serde_json::json!(properties.capabilities),
+    );
+    response.insert(
+        "agent_version".to_string(),
+        serde_json::json!(properties.agent_version),
+    );
+    response.insert(
+        "controller_version".to_string(),
+        serde_json::json!(properties.controller_version),
+    );
     response.insert("status".to_string(), serde_json::json!("active"));
     if let Some(ref transport) = properties.chosen_transport {
         response.insert("chosen_transport".to_string(), serde_json::json!(transport));
     }
-    
+
     Ok(Json(response))
 }
 
-/// GET /v1/agent/properties/{agent_id}
-///
-/// Get agent properties (path parameter version)
+/// Get agent properties using path parameter. Same as /v1/agent/properties but with agent_id in the URL path.
 #[utoipa::path(
     get,
     path = "/v1/agent/properties/{agent_id}",
@@ -509,7 +1321,7 @@ pub async fn get_agent_info(
 )]
 pub async fn get_agent_properties_path(
     State(state): State<ApiState>,
-    axum::extract::Path(agent_id): axum::extract::Path<String>,
+    Path(agent_id): Path<String>,
 ) -> ApiResult<Json<AgentPropertiesResponse>> {
     let agent_service = state
         .agent_service
@@ -518,6 +1330,7 @@ pub async fn get_agent_properties_path(
 
     match agent_service.get_agent_properties(&agent_id).await {
         Ok(properties) => Ok(Json(AgentPropertiesResponse {
+            agent_name: get_agent_name_from_id(&agent_id)?,
             agent_type: properties.agent_type,
             agent_ip: properties.agent_ip,
             agent_data_port: properties.agent_data_port,
@@ -531,9 +1344,7 @@ pub async fn get_agent_properties_path(
     }
 }
 
-/// POST /v1/agent/configure
-///
-/// Configure agent parameters
+/// Configure agent parameters and settings. (Not yet implemented)
 #[utoipa::path(
     post,
     path = "/v1/agent/configure",
@@ -549,10 +1360,367 @@ pub async fn post_configure(
     Json(config): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     tracing::info!(target: "feagi-api", "Agent configuration requested: {} params", config.len());
-    
+
     Ok(Json(HashMap::from([
-        ("message".to_string(), "Agent configuration updated".to_string()),
-        ("status".to_string(), "not_yet_implemented".to_string())
+        (
+            "message".to_string(),
+            "Agent configuration updated".to_string(),
+        ),
+        ("status".to_string(), "not_yet_implemented".to_string()),
     ])))
 }
 
+/// Export device registrations for an agent
+///
+/// Returns the complete device registration configuration including
+/// sensor and motor device registrations, encoder/decoder properties,
+/// and feedback configurations in the format compatible with
+/// ConnectorAgent::get_device_registration_json.
+#[utoipa::path(
+    get,
+    path = "/v1/agent/{agent_id}/device_registrations",
+    params(
+        ("agent_id" = String, Path, description = "Agent ID")
+    ),
+    responses(
+        (status = 200, description = "Device registrations exported successfully", body = DeviceRegistrationExportResponse),
+        (status = 404, description = "Agent not found"),
+        (status = 500, description = "Failed to export device registrations")
+    ),
+    tag = "agent"
+)]
+pub async fn export_device_registrations(
+    State(state): State<ApiState>,
+    Path(agent_id): Path<String>,
+) -> ApiResult<Json<DeviceRegistrationExportResponse>> {
+    info!(
+        "🦀 [API] Device registration export requested for agent '{}'",
+        agent_id
+    );
+
+    // Verify agent exists only if AgentService is available.
+    //
+    // Rationale: live contract tests and minimal deployments can run without an AgentService.
+    // In that case, device registration import/export should still work as a pure per-agent
+    // configuration store (ConnectorAgent-backed).
+    if let Some(agent_service) = state.agent_service.as_ref() {
+        let _properties = agent_service
+            .get_agent_properties(&agent_id)
+            .await
+            .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
+    } else {
+        info!(
+            "ℹ️ [API] Agent service not available; skipping agent existence check for export (agent '{}')",
+            agent_id
+        );
+    }
+
+    // Get existing ConnectorAgent for this agent (don't create new one)
+    #[cfg(feature = "feagi-agent")]
+    let device_registrations = {
+        let agent_descriptor = parse_agent_descriptor(&agent_id)?;
+        // Get existing ConnectorAgent - don't create a new one
+        // If no ConnectorAgent exists, it means device registrations haven't been imported yet
+        let connector = {
+            let connectors = state.agent_connectors.read();
+            connectors.get(&agent_descriptor).cloned()
+        };
+
+        let connector = match connector {
+            Some(c) => {
+                info!(
+                    "🔍 [API] Found existing ConnectorAgent for agent '{}'",
+                    agent_id
+                );
+                c
+            }
+            None => {
+                warn!(
+                    "⚠️ [API] No ConnectorAgent found for agent '{}' - device registrations may not have been imported yet. Total agents in registry: {}",
+                    agent_id,
+                    {
+                        let connectors = state.agent_connectors.read();
+                        connectors.len()
+                    }
+                );
+                // Return empty structure - don't create and store a new ConnectorAgent
+                // This prevents interference with future imports
+                return Ok(Json(DeviceRegistrationExportResponse {
+                    device_registrations: serde_json::json!({
+                        "input_units_and_encoder_properties": {},
+                        "output_units_and_decoder_properties": {},
+                        "feedbacks": []
+                    }),
+                    agent_id,
+                }));
+            }
+        };
+
+        // Export device registrations using ConnectorAgent method
+        let connector_guard = connector.lock().unwrap();
+        match connector_guard.get_device_registration_json() {
+            Ok(registrations) => {
+                // Log what we're exporting for debugging
+                let input_count = registrations
+                    .get("input_units_and_encoder_properties")
+                    .and_then(|v| v.as_object())
+                    .map(|m| m.len())
+                    .unwrap_or(0);
+                let output_count = registrations
+                    .get("output_units_and_decoder_properties")
+                    .and_then(|v| v.as_object())
+                    .map(|m| m.len())
+                    .unwrap_or(0);
+                let feedback_count = registrations
+                    .get("feedbacks")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0);
+
+                info!(
+                    "📤 [API] Exporting device registrations for agent '{}': {} input units, {} output units, {} feedbacks",
+                    agent_id, input_count, output_count, feedback_count
+                );
+
+                if input_count == 0 && output_count == 0 && feedback_count == 0 {
+                    warn!(
+                        "⚠️ [API] Exported device registrations for agent '{}' are empty - agent may not have synced device registrations yet",
+                        agent_id
+                    );
+                }
+
+                registrations
+            }
+            Err(e) => {
+                warn!(
+                    "⚠️ [API] Failed to export device registrations for agent '{}': {}",
+                    agent_id, e
+                );
+                // @architecture:acceptable - emergency fallback on export failure
+                // Return empty structure on error to prevent API failure
+                serde_json::json!({
+                    "input_units_and_encoder_properties": {},
+                    "output_units_and_decoder_properties": {},
+                    "feedbacks": []
+                })
+            }
+        }
+    };
+
+    #[cfg(not(feature = "feagi-agent"))]
+    // @architecture:acceptable - fallback when feature is disabled
+    // Returns empty structure when feagi-agent feature is not compiled in
+    let device_registrations = serde_json::json!({
+        "input_units_and_encoder_properties": {},
+        "output_units_and_decoder_properties": {},
+        "feedbacks": []
+    });
+
+    info!(
+        "✅ [API] Device registration export succeeded for agent '{}'",
+        agent_id
+    );
+
+    Ok(Json(DeviceRegistrationExportResponse {
+        device_registrations,
+        agent_id,
+    }))
+}
+
+/// Import device registrations for an agent
+///
+/// Imports a device registration configuration, replacing all existing
+/// device registrations for the agent. The configuration must be in
+/// the format compatible with ConnectorAgent::set_device_registrations_from_json.
+///
+/// # Warning
+/// This operation **wipes all existing registered devices** before importing
+/// the new configuration.
+#[utoipa::path(
+    post,
+    path = "/v1/agent/{agent_id}/device_registrations",
+    params(
+        ("agent_id" = String, Path, description = "Agent ID")
+    ),
+    request_body = DeviceRegistrationImportRequest,
+    responses(
+        (status = 200, description = "Device registrations imported successfully", body = DeviceRegistrationImportResponse),
+        (status = 400, description = "Invalid device registration configuration"),
+        (status = 404, description = "Agent not found"),
+        (status = 500, description = "Failed to import device registrations")
+    ),
+    tag = "agent"
+)]
+pub async fn import_device_registrations(
+    State(state): State<ApiState>,
+    Path(agent_id): Path<String>,
+    Json(request): Json<DeviceRegistrationImportRequest>,
+) -> ApiResult<Json<DeviceRegistrationImportResponse>> {
+    info!(
+        "🦀 [API] Device registration import requested for agent '{}'",
+        agent_id
+    );
+
+    // Verify agent exists only if AgentService is available (see export_device_registrations).
+    if let Some(agent_service) = state.agent_service.as_ref() {
+        let _properties = agent_service
+            .get_agent_properties(&agent_id)
+            .await
+            .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
+    } else {
+        info!(
+            "ℹ️ [API] Agent service not available; skipping agent existence check for import (agent '{}')",
+            agent_id
+        );
+    }
+
+    // Validate the device registration JSON structure
+    // Check that it has the expected fields
+    if !request.device_registrations.is_object() {
+        return Err(ApiError::invalid_input(
+            "Device registrations must be a JSON object",
+        ));
+    }
+
+    // Validate required fields exist
+    let obj = request.device_registrations.as_object().unwrap();
+    if !obj.contains_key("input_units_and_encoder_properties")
+        || !obj.contains_key("output_units_and_decoder_properties")
+        || !obj.contains_key("feedbacks")
+    {
+        return Err(ApiError::invalid_input(
+            "Device registrations must contain: input_units_and_encoder_properties, output_units_and_decoder_properties, and feedbacks",
+        ));
+    }
+
+    // Import device registrations using ConnectorAgent
+    #[cfg(feature = "feagi-agent")]
+    {
+        let agent_descriptor = parse_agent_descriptor(&agent_id)?;
+        // Get or create ConnectorAgent for this agent
+        let connector = {
+            let mut connectors = state.agent_connectors.write();
+            let was_existing = connectors.contains_key(&agent_descriptor);
+            let connector = connectors
+                .entry(agent_descriptor)
+                .or_insert_with(|| {
+                    info!(
+                        "🔧 [API] Creating new ConnectorAgent for agent '{}'",
+                        agent_id
+                    );
+                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor)))
+                })
+                .clone();
+            if was_existing {
+                info!(
+                    "🔧 [API] Using existing ConnectorAgent for agent '{}'",
+                    agent_id
+                );
+            }
+            connector
+        };
+
+        // Log what we're importing for debugging
+        let input_count = request
+            .device_registrations
+            .get("input_units_and_encoder_properties")
+            .and_then(|v| v.as_object())
+            .map(|m| m.len())
+            .unwrap_or(0);
+        let output_count = request
+            .device_registrations
+            .get("output_units_and_decoder_properties")
+            .and_then(|v| v.as_object())
+            .map(|m| m.len())
+            .unwrap_or(0);
+        let feedback_count = request
+            .device_registrations
+            .get("feedbacks")
+            .and_then(|v| v.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0);
+
+        info!(
+            "📥 [API] Importing device registrations for agent '{}': {} input units, {} output units, {} feedbacks",
+            agent_id, input_count, output_count, feedback_count
+        );
+
+        // IMPORTANT: do not hold a non-Send MutexGuard across an await.
+        let import_result: Result<(), String> = (|| {
+            let mut connector_guard = connector
+                .lock()
+                .map_err(|e| format!("ConnectorAgent lock poisoned: {e}"))?;
+
+            connector_guard
+                .set_device_registrations_from_json(request.device_registrations.clone())
+                .map_err(|e| format!("import failed: {e}"))?;
+
+            // Verify the import worked by exporting again (no await here).
+            match connector_guard.get_device_registration_json() {
+                Ok(exported) => {
+                    let exported_input_count = exported
+                        .get("input_units_and_encoder_properties")
+                        .and_then(|v| v.as_object())
+                        .map(|m| m.len())
+                        .unwrap_or(0);
+                    let exported_output_count = exported
+                        .get("output_units_and_decoder_properties")
+                        .and_then(|v| v.as_object())
+                        .map(|m| m.len())
+                        .unwrap_or(0);
+
+                    info!(
+                        "✅ [API] Device registration import succeeded for agent '{}' (verified: {} input, {} output)",
+                        agent_id, exported_input_count, exported_output_count
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        "⚠️ [API] Import succeeded but verification export failed for agent '{}': {}",
+                        agent_id, e
+                    );
+                }
+            }
+
+            Ok(())
+        })();
+
+        if let Err(msg) = import_result {
+            error!(
+                "❌ [API] Failed to import device registrations for agent '{}': {}",
+                agent_id, msg
+            );
+            return Err(ApiError::invalid_input(format!(
+                "Failed to import device registrations: {msg}"
+            )));
+        }
+
+        auto_create_cortical_areas_from_device_registrations(&state, &request.device_registrations)
+            .await;
+
+        Ok(Json(DeviceRegistrationImportResponse {
+            success: true,
+            message: format!(
+                "Device registrations imported successfully for agent '{}'",
+                agent_id
+            ),
+            agent_id,
+        }))
+    }
+
+    #[cfg(not(feature = "feagi-agent"))]
+    {
+        info!(
+            "✅ [API] Device registration import succeeded for agent '{}' (feagi-agent feature not enabled)",
+            agent_id
+        );
+        Ok(Json(DeviceRegistrationImportResponse {
+            success: true,
+            message: format!(
+                "Device registrations imported successfully for agent '{}' (feature not enabled)",
+                agent_id
+            ),
+            agent_id,
+        }))
+    }
+}

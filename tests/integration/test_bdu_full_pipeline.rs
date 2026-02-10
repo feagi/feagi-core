@@ -6,19 +6,51 @@
 /// These tests verify that the entire BDU stack works end-to-end:
 /// - Genome loading → Brain development → Neuron creation → Synapse creation → Queries
 ///
-/// No HTTP/API layer - direct testing of business logic.
+/// Uses GenomeService for genome loading (single source of truth).
 
 use feagi_bdu::ConnectomeManager;
-use feagi_burst_engine::RustNPU;
-use feagi_evo::{load_genome_from_file, validate_genome};
-use feagi_types::{CorticalArea, Dimensions, AreaType};
+use feagi_npu_burst_engine::{RustNPU, DynamicNPU};
+use feagi_evolutionary::{load_genome_from_file, validate_genome};
+use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions, AreaType};
+use feagi_npu_runtime::StdRuntime;
+use feagi_npu_burst_engine::backend::CPUBackend;
+use feagi_services::impls::GenomeServiceImpl;
+use feagi_services::traits::GenomeService;
 use std::sync::{Arc, Mutex};
 use parking_lot::RwLock;
 
 /// Helper to create an isolated test manager with NPU
 fn create_test_manager() -> ConnectomeManager {
-    let npu = Arc::new(Mutex::new(RustNPU::new(1_000_000, 10_000_000, 10)));
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let npu_result = RustNPU::new(
+        runtime,
+        backend,
+        1_000_000,
+        10_000_000,
+        10,
+    ).expect("Failed to create NPU");
+    let npu = Arc::new(Mutex::new(DynamicNPU::F32(npu_result)));
     ConnectomeManager::new_for_testing_with_npu(npu)
+}
+
+/// Helper to create GenomeService for testing
+fn create_test_genome_service(manager: Arc<RwLock<ConnectomeManager>>) -> GenomeServiceImpl {
+    GenomeServiceImpl::new(manager)
+}
+
+/// Helper to load genome synchronously in tests (using tokio runtime)
+fn load_genome_sync(genome_service: &GenomeServiceImpl, genome_json: &str) -> Result<(), String> {
+    use tokio::runtime::Runtime;
+    let rt = Runtime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
+    rt.block_on(async {
+        let params = feagi_services::LoadGenomeParams {
+            json_str: genome_json.to_string(),
+        };
+        genome_service.load_genome(params).await
+            .map_err(|e| format!("Failed to load genome: {}", e))?;
+        Ok::<(), String>(())
+    })
 }
 
 // ============================================================================
@@ -44,8 +76,14 @@ fn test_load_barebones_genome() {
     let validation = validate_genome(&genome);
     assert!(validation.errors.is_empty(), "Genome should be valid: {:?}", validation.errors);
     
-    // Load genome into manager (this runs neuroembryogenesis)
-    manager.load_from_genome(&genome).expect("Failed to load genome");
+    // Load genome via GenomeService (single source of truth)
+    let manager_arc = Arc::new(RwLock::new(manager));
+    let genome_service = create_test_genome_service(manager_arc.clone());
+    let genome_json = serde_json::to_string(&genome)
+        .expect("Failed to serialize genome");
+    load_genome_sync(&genome_service, &genome_json)
+        .expect("Failed to load genome");
+    let manager = Arc::try_unwrap(manager_arc).unwrap().into_inner();
     
     // Verify brain was developed
     let area_count = manager.get_cortical_area_count();
@@ -77,8 +115,14 @@ fn test_load_essential_genome() {
         }
     };
     
-    // Load genome
-    manager.load_from_genome(&genome).expect("Failed to load genome");
+    // Load genome via GenomeService (single source of truth)
+    let manager_arc = Arc::new(RwLock::new(manager));
+    let genome_service = create_test_genome_service(manager_arc.clone());
+    let genome_json = serde_json::to_string(&genome)
+        .expect("Failed to serialize genome");
+    load_genome_sync(&genome_service, &genome_json)
+        .expect("Failed to load genome");
+    let manager = Arc::try_unwrap(manager_arc).unwrap().into_inner();
     
     // Verify multiple areas created
     let area_count = manager.get_cortical_area_count();
@@ -478,9 +522,12 @@ fn test_save_and_load_brain_state() {
     // Create a new manager
     let mut manager2 = create_test_manager();
     
-    // Load the saved state
-    manager2.load_from_genome_json(&json_state)
+    // Load the saved state via GenomeService
+    let manager2_arc = Arc::new(RwLock::new(manager2));
+    let genome_service2 = create_test_genome_service(manager2_arc.clone());
+    load_genome_sync(&genome_service2, &json_state)
         .expect("Failed to load genome from JSON");
+    let manager2 = Arc::try_unwrap(manager2_arc).unwrap().into_inner();
     
     // Verify the loaded state matches
     assert_eq!(manager2.get_cortical_area_count(), 1);

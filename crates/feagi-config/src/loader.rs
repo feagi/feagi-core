@@ -41,16 +41,16 @@ pub fn find_config_file() -> ConfigResult<PathBuf> {
 
     // 2. Search in common locations
     let mut search_paths = Vec::new();
-    
+
     // Current directory
     if let Ok(cwd) = env::current_dir() {
         search_paths.push(cwd.join("feagi_configuration.toml"));
-        
+
         // Parent directory
         if let Some(parent) = cwd.parent() {
             search_paths.push(parent.join("feagi_configuration.toml"));
         }
-        
+
         // Search up to 5 levels for workspace root
         let mut current = cwd.clone();
         for _ in 0..5 {
@@ -74,7 +74,7 @@ pub fn find_config_file() -> ConfigResult<PathBuf> {
         .map(|p| format!("  - {}", p.display()))
         .collect::<Vec<_>>()
         .join("\n");
-    
+
     Err(ConfigError::FileNotFound(format!(
         "FEAGI configuration file 'feagi_configuration.toml' not found in any of these locations:\n{}\n\nSet FEAGI_CONFIG_PATH environment variable to specify custom location.",
         search_list
@@ -114,7 +114,7 @@ pub fn load_config(
 
     // Apply overrides in order
     apply_environment_overrides(&mut config);
-    
+
     if let Some(cli) = cli_args {
         apply_cli_overrides(&mut config, cli);
     }
@@ -150,9 +150,8 @@ pub fn apply_environment_overrides(config: &mut FeagiConfig) {
         }
     }
     if let Ok(value) = env::var("FEAGI_API_RELOAD") {
-        config.api.reload = value.to_lowercase() == "true" 
-            || value == "1" 
-            || value.to_lowercase() == "yes";
+        config.api.reload =
+            value.to_lowercase() == "true" || value == "1" || value.to_lowercase() == "yes";
     }
 
     // ZMQ settings
@@ -177,7 +176,7 @@ pub fn apply_environment_overrides(config: &mut FeagiConfig) {
     if let Ok(value) = env::var("FEAGI_AGENT_DEFAULT_HOST") {
         config.agents.default_host = value;
     }
-    
+
     // Port overrides
     if let Ok(value) = env::var("FEAGI_ZMQ_REQ_REP_PORT") {
         if let Ok(port) = value.parse::<u16>() {
@@ -294,10 +293,14 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write;
+    use std::sync::Mutex;
     use tempfile::tempdir;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_find_config_file_env_var() {
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("custom_config.toml");
         File::create(&config_path).unwrap();
@@ -312,9 +315,14 @@ mod tests {
 
     #[test]
     fn test_load_minimal_config() {
+        let _env_lock = ENV_LOCK.lock().unwrap();
+        let saved_api_host = env::var("FEAGI_API_HOST").ok();
+        let saved_api_port = env::var("FEAGI_API_PORT").ok();
+        env::remove_var("FEAGI_API_HOST");
+        env::remove_var("FEAGI_API_PORT");
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("feagi_configuration.toml");
-        
+
         let mut file = File::create(&config_path).unwrap();
         writeln!(file, "[system]").unwrap();
         writeln!(file, "max_cores = 4").unwrap();
@@ -322,23 +330,31 @@ mod tests {
         writeln!(file, "port = 9000").unwrap();
 
         let config = load_config(Some(&config_path), None).unwrap();
-        
+
         assert_eq!(config.system.max_cores, 4);
         assert_eq!(config.api.port, 9000);
+
+        if let Some(value) = saved_api_host {
+            env::set_var("FEAGI_API_HOST", value);
+        }
+        if let Some(value) = saved_api_port {
+            env::set_var("FEAGI_API_PORT", value);
+        }
     }
 
     #[test]
     fn test_environment_overrides() {
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let mut config = FeagiConfig::default();
-        
+
         env::set_var("FEAGI_API_HOST", "192.168.1.100");
         env::set_var("FEAGI_API_PORT", "9999");
-        
+
         apply_environment_overrides(&mut config);
-        
+
         env::remove_var("FEAGI_API_HOST");
         env::remove_var("FEAGI_API_PORT");
-        
+
         assert_eq!(config.api.host, "192.168.1.100");
         assert_eq!(config.api.port, 9999);
     }
@@ -349,19 +365,20 @@ mod tests {
         let mut cli_args = HashMap::new();
         cli_args.insert("api_host".to_string(), "10.0.0.1".to_string());
         cli_args.insert("api_port".to_string(), "7777".to_string());
-        
+
         apply_cli_overrides(&mut config, &cli_args);
-        
+
         assert_eq!(config.api.host, "10.0.0.1");
         assert_eq!(config.api.port, 7777);
     }
 
     #[test]
     fn test_override_precedence() {
+        let _env_lock = ENV_LOCK.lock().unwrap();
         // Test that CLI overrides take precedence over environment variables
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("feagi_configuration.toml");
-        
+
         let mut file = File::create(&config_path).unwrap();
         writeln!(file, "[api]").unwrap();
         writeln!(file, "host = \"file-host\"").unwrap();
@@ -369,21 +386,17 @@ mod tests {
 
         env::set_var("FEAGI_API_HOST", "env-host");
         env::set_var("FEAGI_API_PORT", "9000");
-        
+
         let mut cli_args = HashMap::new();
         cli_args.insert("api_host".to_string(), "cli-host".to_string());
-        
+
         let config = load_config(Some(&config_path), Some(&cli_args)).unwrap();
-        
+
         env::remove_var("FEAGI_API_HOST");
         env::remove_var("FEAGI_API_PORT");
-        
+
         // CLI wins for host, env wins for port (no CLI override)
         assert_eq!(config.api.host, "cli-host");
         assert_eq!(config.api.port, 9000);
     }
 }
-
-
-
-

@@ -69,6 +69,11 @@ feagi_services::types::RuntimeStatus
 
 ---
 
+## Benchmark Integrity Note
+
+- Never update benchmark baselines or thresholds just to make CI pass.
+- If perf regressions occur, investigate and fix the code or revert the change.
+
 ## 🎯 Next Steps to Fix Tests
 
 ### Step 1: Check Service Exports (5 min)
@@ -101,7 +106,7 @@ use feagi_services::impls::{
     NeuronServiceImpl,
 };
 use feagi_services::types::RuntimeStatus; // Or whatever the actual DTO is
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 use feagi_burst_engine::RustNPU;
 use tower::util::ServiceExt; // ✅ Correct path
 use std::sync::{Arc, Mutex};
@@ -119,6 +124,22 @@ let state = ApiState {
     // runtime_service: None, // If optional in ApiState
 };
 ```
+
+---
+
+## Pending Test Work (Requires Follow-Up)
+
+### CUDA Tests (Hardware Required)
+- Location: `crates/feagi-npu/burst-engine/tests/cuda_*`
+- Status: intentionally ignored in standard runs
+- Reason: requires CUDA-capable hardware and drivers
+- Next step: gate with a `cuda` feature or run on CUDA-enabled CI runners
+
+### INT8 Quantization Accuracy Tests
+- Location: `crates/feagi-npu/neural/src/dynamics.rs`
+- Status: intentionally ignored in standard runs
+- Reason: current INT8 quantization accuracy does not meet expectations
+- Next step: improve INT8 quantization behavior and re-enable tests
 
 OR check if `ApiState` requires all services and what the actual fields are.
 
@@ -145,7 +166,7 @@ Here's a working template once imports are fixed:
 ```rust
 use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_services::impls::*; // Import all service impls
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 use feagi_burst_engine::RustNPU;
 use tower::util::ServiceExt;
 use std::sync::{Arc, Mutex};
@@ -187,9 +208,9 @@ Instead of fixing contract tests, we could start with **integration tests** whic
 ```rust
 // feagi-core/tests/integration/test_full_pipeline.rs
 
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 use feagi_burst_engine::RustNPU;
-use feagi_evo::load_genome_from_file;
+use feagi_evolutionary::load_genome_from_file;
 use std::sync::{Arc, Mutex};
 use parking_lot::RwLock;
 

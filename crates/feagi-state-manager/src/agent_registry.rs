@@ -9,7 +9,7 @@
 //! - wasm (single-threaded): RefCell (no locking needed)
 //! - wasm-threaded: wasm_sync::Mutex
 
-use crate::{StateError, Result};
+use crate::{Result, StateError};
 
 // Platform-specific imports
 #[cfg(all(feature = "std", not(target_family = "wasm")))]
@@ -42,8 +42,9 @@ pub enum AgentType {
 }
 
 impl AgentType {
-    pub fn from_str(s: &str) -> Self {
-        match s {
+    /// Parse agent type from string (case-insensitive)
+    pub fn parse_from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
             "sensory" => AgentType::Sensory,
             "motor" => AgentType::Motor,
             "both" => AgentType::Both,
@@ -52,7 +53,7 @@ impl AgentType {
             _ => AgentType::Sensory,
         }
     }
-    
+
     pub fn as_str(&self) -> &'static str {
         match self {
             AgentType::Sensory => "sensory",
@@ -84,16 +85,16 @@ impl AgentInfo {
             metadata: None,
         }
     }
-    
+
     pub fn with_metadata(mut self, metadata: String) -> Self {
         self.metadata = Some(metadata);
         self
     }
-    
+
     pub fn update_last_seen(&mut self) {
         self.last_seen = Self::current_timestamp();
     }
-    
+
     #[cfg(feature = "std")]
     fn current_timestamp() -> u64 {
         std::time::SystemTime::now()
@@ -101,7 +102,7 @@ impl AgentInfo {
             .unwrap_or_default()
             .as_millis() as u64
     }
-    
+
     #[cfg(not(feature = "std"))]
     fn current_timestamp() -> u64 {
         // For no_std, use a counter (will be synchronized with external clock)
@@ -124,7 +125,7 @@ impl AgentRegistry {
             agents: RwLock::new(HashMap::new()),
         }
     }
-    
+
     pub fn register(&self, info: AgentInfo) -> Result<()> {
         let mut agents = self.agents.write();
         if agents.contains_key(&info.agent_id) {
@@ -133,34 +134,41 @@ impl AgentRegistry {
         agents.insert(info.agent_id.clone(), info);
         Ok(())
     }
-    
+
     pub fn deregister(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.write();
-        agents.remove(agent_id)
+        agents
+            .remove(agent_id)
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
         Ok(())
     }
-    
+
     pub fn get(&self, agent_id: &str) -> Option<AgentInfo> {
         let agents = self.agents.read();
         agents.get(agent_id).cloned()
     }
-    
+
     pub fn get_all(&self) -> Vec<AgentInfo> {
         let agents = self.agents.read();
         agents.values().cloned().collect()
     }
-    
+
     pub fn count(&self) -> usize {
         let agents = self.agents.read();
         agents.len()
     }
-    
+
     pub fn update_heartbeat(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.write();
-        agents.get_mut(agent_id)
+        agents
+            .get_mut(agent_id)
             .map(|agent| agent.update_last_seen())
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))
+    }
+
+    /// Alias for update_heartbeat for compatibility
+    pub fn heartbeat(&self, agent_id: &str) -> Result<()> {
+        self.update_heartbeat(agent_id)
     }
 }
 
@@ -177,7 +185,7 @@ impl AgentRegistry {
             agents: RwLock::new(HashMap::default()),
         }
     }
-    
+
     pub fn register(&self, info: AgentInfo) -> Result<()> {
         let mut agents = self.agents.write();
         if agents.contains_key(&info.agent_id) {
@@ -186,34 +194,41 @@ impl AgentRegistry {
         agents.insert(info.agent_id.clone(), info);
         Ok(())
     }
-    
+
     pub fn deregister(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.write();
-        agents.remove(agent_id)
+        agents
+            .remove(agent_id)
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
         Ok(())
     }
-    
+
     pub fn get(&self, agent_id: &str) -> Option<AgentInfo> {
         let agents = self.agents.read();
         agents.get(agent_id).cloned()
     }
-    
+
     pub fn get_all(&self) -> Vec<AgentInfo> {
         let agents = self.agents.read();
         agents.values().cloned().collect()
     }
-    
+
     pub fn count(&self) -> usize {
         let agents = self.agents.read();
         agents.len()
     }
-    
+
     pub fn update_heartbeat(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.write();
-        agents.get_mut(agent_id)
+        agents
+            .get_mut(agent_id)
             .map(|agent| agent.update_last_seen())
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))
+    }
+
+    /// Alias for update_heartbeat for compatibility
+    pub fn heartbeat(&self, agent_id: &str) -> Result<()> {
+        self.update_heartbeat(agent_id)
     }
 }
 
@@ -230,7 +245,7 @@ impl AgentRegistry {
             agents: RefCell::new(HashMap::new()),
         }
     }
-    
+
     pub fn register(&self, info: AgentInfo) -> Result<()> {
         let mut agents = self.agents.borrow_mut();
         if agents.contains_key(&info.agent_id) {
@@ -239,34 +254,41 @@ impl AgentRegistry {
         agents.insert(info.agent_id.clone(), info);
         Ok(())
     }
-    
+
     pub fn deregister(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.borrow_mut();
-        agents.remove(agent_id)
+        agents
+            .remove(agent_id)
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
         Ok(())
     }
-    
+
     pub fn get(&self, agent_id: &str) -> Option<AgentInfo> {
         let agents = self.agents.borrow();
         agents.get(agent_id).cloned()
     }
-    
+
     pub fn get_all(&self) -> Vec<AgentInfo> {
         let agents = self.agents.borrow();
         agents.values().cloned().collect()
     }
-    
+
     pub fn count(&self) -> usize {
         let agents = self.agents.borrow();
         agents.len()
     }
-    
+
     pub fn update_heartbeat(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.borrow_mut();
-        agents.get_mut(agent_id)
+        agents
+            .get_mut(agent_id)
             .map(|agent| agent.update_last_seen())
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))
+    }
+
+    /// Alias for update_heartbeat for compatibility
+    pub fn heartbeat(&self, agent_id: &str) -> Result<()> {
+        self.update_heartbeat(agent_id)
     }
 }
 
@@ -283,7 +305,7 @@ impl AgentRegistry {
             agents: Mutex::new(HashMap::new()),
         }
     }
-    
+
     pub fn register(&self, info: AgentInfo) -> Result<()> {
         let mut agents = self.agents.lock().unwrap();
         if agents.contains_key(&info.agent_id) {
@@ -292,34 +314,41 @@ impl AgentRegistry {
         agents.insert(info.agent_id.clone(), info);
         Ok(())
     }
-    
+
     pub fn deregister(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.lock().unwrap();
-        agents.remove(agent_id)
+        agents
+            .remove(agent_id)
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))?;
         Ok(())
     }
-    
+
     pub fn get(&self, agent_id: &str) -> Option<AgentInfo> {
         let agents = self.agents.lock().unwrap();
         agents.get(agent_id).cloned()
     }
-    
+
     pub fn get_all(&self) -> Vec<AgentInfo> {
         let agents = self.agents.lock().unwrap();
         agents.values().cloned().collect()
     }
-    
+
     pub fn count(&self) -> usize {
         let agents = self.agents.lock().unwrap();
         agents.len()
     }
-    
+
     pub fn update_heartbeat(&self, agent_id: &str) -> Result<()> {
         let mut agents = self.agents.lock().unwrap();
-        agents.get_mut(agent_id)
+        agents
+            .get_mut(agent_id)
             .map(|agent| agent.update_last_seen())
             .ok_or_else(|| StateError::AgentNotFound(agent_id.to_string()))
+    }
+
+    /// Alias for update_heartbeat for compatibility
+    pub fn heartbeat(&self, agent_id: &str) -> Result<()> {
+        self.update_heartbeat(agent_id)
     }
 }
 
@@ -332,57 +361,61 @@ impl Default for AgentRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_agent_registry_register() {
         let registry = AgentRegistry::new();
         let agent = AgentInfo::new("agent1".to_string(), AgentType::Sensory);
-        
+
         assert!(registry.register(agent).is_ok());
         assert_eq!(registry.count(), 1);
     }
-    
+
     #[test]
     fn test_agent_registry_duplicate() {
         let registry = AgentRegistry::new();
         let agent1 = AgentInfo::new("agent1".to_string(), AgentType::Sensory);
         let agent2 = AgentInfo::new("agent1".to_string(), AgentType::Motor);
-        
+
         registry.register(agent1).unwrap();
         assert!(registry.register(agent2).is_err());
     }
-    
+
     #[test]
     fn test_agent_registry_deregister() {
         let registry = AgentRegistry::new();
         let agent = AgentInfo::new("agent1".to_string(), AgentType::Sensory);
-        
+
         registry.register(agent).unwrap();
         assert_eq!(registry.count(), 1);
-        
+
         registry.deregister("agent1").unwrap();
         assert_eq!(registry.count(), 0);
     }
-    
+
     #[test]
     fn test_agent_registry_get() {
         let registry = AgentRegistry::new();
         let agent = AgentInfo::new("agent1".to_string(), AgentType::Sensory);
-        
+
         registry.register(agent).unwrap();
-        
+
         let retrieved = registry.get("agent1");
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().agent_id, "agent1");
     }
-    
+
     #[test]
     fn test_agent_registry_get_all() {
         let registry = AgentRegistry::new();
-        
-        registry.register(AgentInfo::new("agent1".to_string(), AgentType::Sensory)).unwrap();
-        registry.register(AgentInfo::new("agent2".to_string(), AgentType::Motor)).unwrap();
-        
+
+        registry
+            .register(AgentInfo::new("agent1".to_string(), AgentType::Sensory))
+            .unwrap();
+        registry
+            .register(AgentInfo::new("agent2".to_string(), AgentType::Motor))
+            .unwrap();
+
         let all = registry.get_all();
         assert_eq!(all.len(), 2);
     }

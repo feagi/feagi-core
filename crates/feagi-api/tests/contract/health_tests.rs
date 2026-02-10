@@ -30,13 +30,13 @@ fn test_health_check_response_structure() {
         },
         "timestamp": "2025-10-29T12:34:56Z"
     });
-    
+
     // This is a structure test - actual values don't need to match
     // Just verify all required fields exist
     assert_success_response(&expected_structure);
-    
+
     let data = expected_structure.get("data").unwrap();
-    
+
     // Verify all required fields exist in data
     let required_fields = [
         "status",
@@ -52,7 +52,7 @@ fn test_health_check_response_structure() {
         "change_state",
         "changes_saved_externally",
     ];
-    
+
     for field in required_fields {
         assert!(
             data.get(field).is_some(),
@@ -83,9 +83,9 @@ fn test_health_check_field_types() {
         },
         "timestamp": "2025-10-29T12:34:56Z"
     });
-    
+
     let data = sample_response.get("data").unwrap();
-    
+
     // Verify types
     assert!(data.get("status").unwrap().is_string());
     assert!(data.get("brain_readiness").unwrap().is_boolean());
@@ -117,15 +117,15 @@ fn test_readiness_check_response_structure() {
         },
         "timestamp": "2025-10-29T12:34:56Z"
     });
-    
+
     assert_success_response(&expected_structure);
-    
+
     let data = expected_structure.get("data").unwrap();
-    
+
     // Verify required fields
     assert!(data.get("ready").is_some());
     assert!(data.get("components").is_some());
-    
+
     let components = data.get("components").unwrap();
     assert!(components.get("api").is_some());
     assert!(components.get("burst_engine").is_some());
@@ -148,12 +148,12 @@ fn test_readiness_check_field_types() {
         },
         "timestamp": "2025-10-29T12:34:56Z"
     });
-    
+
     let data = sample_response.get("data").unwrap();
-    
+
     // Verify types
     assert!(data.get("ready").unwrap().is_boolean());
-    
+
     let components = data.get("components").unwrap();
     assert!(components.get("api").unwrap().is_boolean());
     assert!(components.get("burst_engine").unwrap().is_boolean());
@@ -177,7 +177,7 @@ fn test_readiness_check_field_types() {
 //         .json::<Value>()
 //         .await
 //         .unwrap();
-//     
+//
 //     let python_snapshot = load_snapshot("health_check.json");
 //     assert_json_structure_matches(&rust_response, &python_snapshot, "");
 // }
