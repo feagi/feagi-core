@@ -205,6 +205,7 @@ impl FeagiAgentHandler {
     pub fn poll_embodiment_motors(&mut self) -> Result<(), FeagiAgentError> {
         for embodiment in self.registered_embodiments.iter_mut() {
             embodiment.poll_motor_server()?;
+            embodiment.poll_visualization_server()?;
         }
         Ok(())
     }
@@ -222,13 +223,18 @@ impl FeagiAgentHandler {
         }
     }
 
-    /// Send visualization data to a specific agent
-    /// For now, visualization uses the same channel as motor data
-    /// TODO: Implement dedicated visualization channel if needed
+    /// Send visualization data to a specific agent via dedicated visualization channel
     pub fn send_visualization_data(&mut self, session_id: SessionID, viz_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
-        // Use motor channel for visualization (both use publisher)
-        // In the future, we might want dedicated visualization publishers
-        self.send_motor_data(session_id, viz_data)
+        let embodiment_option = self.try_get_embodiment_mut(session_id)?;
+        match embodiment_option {
+            Some(embodiment) => {
+                embodiment.send_visualization_data(viz_data)?;
+                Ok(())
+            }
+            None => {
+                Err(FeagiAgentError::UnableToSendData("Nonexistant Session ID!".to_string()))
+            }
+        }
     }
 
     //endregion
@@ -254,20 +260,24 @@ impl FeagiAgentHandler {
                         // TODO we shouldnt error like this, we should send a response if we are missing resources
                         let sensor_puller_props = self.try_get_puller_property(registration_request.connection_protocol())?;
                         let motor_pusher_props = self.try_get_publisher_property(registration_request.connection_protocol())?;
+                        let viz_pusher_props = self.try_get_publisher_property(registration_request.connection_protocol())?;
 
                         let mut sensor_puller = sensor_puller_props.as_boxed_server_puller();
                         let mut motor_pusher = motor_pusher_props.as_boxed_server_publisher();
+                        let mut viz_pusher = viz_pusher_props.as_boxed_server_publisher();
 
                         sensor_puller.request_start()?;
                         motor_pusher.request_start()?;
+                        viz_pusher.request_start()?;
 
-                        let embodiment = EmbodimentTranslator::new(session_id, motor_pusher, sensor_puller);
+                        let embodiment = EmbodimentTranslator::new(session_id, motor_pusher, sensor_puller, viz_pusher);
                         self.register_new_embodiment_agent_to_cache(session_id, registration_request.agent_descriptor().clone(), command_control_index, embodiment)?;
 
                         // we set everything up, send response of success
                         let mut mapping: HashMap<AgentCapabilities, TransportProtocolEndpoint> = HashMap::new();
                         mapping.insert(AgentCapabilities::SendSensorData, sensor_puller_props.get_endpoint());
                         mapping.insert(AgentCapabilities::ReceiveMotorData, motor_pusher_props.get_endpoint());
+                        mapping.insert(AgentCapabilities::ReceiveNeuronVisualizations, viz_pusher_props.get_endpoint());
                         let response = RegistrationResponse::Success(session_id, mapping);
                         let message = FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsRegistration(response));
                         Ok(Some((session_id, message)))

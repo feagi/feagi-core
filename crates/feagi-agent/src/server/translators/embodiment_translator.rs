@@ -10,12 +10,18 @@ pub struct EmbodimentTranslator {
     session_id: SessionID,
     motor_server: Box<dyn FeagiServerPublisher>,
     sensor_server: Box<dyn FeagiServerPuller>,
+    visualization_server: Box<dyn FeagiServerPublisher>,
     sensor_byte_cache: FeagiByteContainer,
 }
 
 impl EmbodimentTranslator {
 
-    pub fn new(session_id: SessionID, motor_server: Box<dyn FeagiServerPublisher>, sensor_server: Box<dyn FeagiServerPuller>) -> Self {
+    pub fn new(
+        session_id: SessionID,
+        motor_server: Box<dyn FeagiServerPublisher>,
+        sensor_server: Box<dyn FeagiServerPuller>,
+        visualization_server: Box<dyn FeagiServerPublisher>,
+    ) -> Self {
         let mut motor_byte_cache = FeagiByteContainer::new_empty();
         let _ = motor_byte_cache.set_session_id(session_id);
         let mut sensor_byte_cache = FeagiByteContainer::new_empty();
@@ -25,6 +31,7 @@ impl EmbodimentTranslator {
             session_id,
             motor_server,
             sensor_server,
+            visualization_server,
             sensor_byte_cache
         }
     }
@@ -85,6 +92,24 @@ impl EmbodimentTranslator {
         }
     }
 
+    /// Poll visualization server to keep it alive
+    pub fn poll_visualization_server(&mut self) -> Result<(), FeagiAgentError> {
+        let viz_server = &mut self.visualization_server;
+        let state = viz_server.poll().clone();
+        match state {
+            FeagiEndpointState::Inactive => Ok(()),
+            FeagiEndpointState::Pending => Ok(()),
+            FeagiEndpointState::ActiveWaiting => Ok(()),
+            FeagiEndpointState::ActiveHasData => {
+                Err(FeagiAgentError::SocketFailure("Agent cannot send Visualization data!".to_string()))
+            }
+            FeagiEndpointState::Errored(error) => {
+                self.visualization_server.confirm_error_and_close()?;
+                Err(FeagiAgentError::SocketFailure(error.to_string()))
+            }
+        }
+    }
+
     /// Send motor byte data (that is already encoded to the motor byte buffer)
     pub fn send_buffered_motor_data(&mut self, motor_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
         let motor_server = &mut self.motor_server;
@@ -99,9 +124,20 @@ impl EmbodimentTranslator {
                 Err(FeagiAgentError::UnableToSendData("Socket is not in a state to send data!".to_string()))
             }
         }
-
-
     }
 
-
+    /// Send visualization data over the dedicated visualization socket
+    pub fn send_visualization_data(&mut self, viz_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
+        let viz_server = &mut self.visualization_server;
+        let state = viz_server.poll();
+        match state {
+            FeagiEndpointState::ActiveWaiting => {
+                viz_server.publish_data(viz_data.get_byte_ref())?;
+                Ok(())
+            }
+            _ => {
+                Err(FeagiAgentError::UnableToSendData("Visualization socket not ready!".to_string()))
+            }
+        }
+    }
 }
