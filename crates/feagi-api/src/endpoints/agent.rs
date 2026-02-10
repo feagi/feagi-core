@@ -249,6 +249,31 @@ pub async fn register_agent(
         auto_create_cortical_areas_from_device_registrations(&state, &device_regs).await;
     }
 
+    // Register visualization subscription if visualization capability is present
+    if let Some(viz) = request.capabilities.get("visualization") {
+        if let Some(rate_hz) = viz.get("rate_hz").and_then(|v| v.as_f64()) {
+            if rate_hz > 0.0 {
+                match state.runtime_service.register_visualization_subscriptions(
+                    &request.agent_id,
+                    rate_hz
+                ).await {
+                    Ok(_) => {
+                        info!(
+                            "✅ [API] Registered visualization subscription for agent '{}' at {}Hz",
+                            request.agent_id, rate_hz
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            "⚠️  [API] Failed to register visualization subscription for agent '{}': {}",
+                            request.agent_id, e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     // Get available endpoints from handler and build TransportConfig objects
     use crate::v1::TransportConfig;
     let transports_array = if let Some(handler) = &state.agent_handler {
