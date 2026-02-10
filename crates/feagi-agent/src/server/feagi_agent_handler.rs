@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use feagi_io::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
-use feagi_io::traits_and_enums::server::{FeagiServerPublisherProperties, FeagiServerPullerProperties, FeagiServerRouterProperties};
+use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPullerProperties, FeagiServerRouterProperties};
 use feagi_serialization::{FeagiByteContainer, SessionID};
 use crate::{AgentCapabilities, AgentDescriptor, FeagiAgentError};
 use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, RegistrationResponse};
@@ -24,6 +24,9 @@ pub struct FeagiAgentHandler {
 
     command_control_servers: Vec<CommandControlTranslator>,
     registered_embodiments: Vec<EmbodimentTranslator>,
+    
+    /// Running broadcast publishers (e.g., visualization on port 9050) for visualization-only agents
+    broadcast_publishers: Vec<Box<dyn FeagiServerPublisher>>,
 
     session_id_command_control_mapping: HashMap<SessionID, usize>,
     session_id_embodiments_mapping: HashMap<SessionID, usize>,
@@ -45,6 +48,7 @@ impl FeagiAgentHandler {
             agent_id_by_descriptor: HashMap::new(),
             device_registrations_by_session: HashMap::new(),
             registered_embodiments: Vec::new(),
+            broadcast_publishers: Vec::new(),
             session_id_command_control_mapping: Default::default(),
             session_id_embodiments_mapping: Default::default(),
         }
@@ -164,6 +168,16 @@ impl FeagiAgentHandler {
         // TODO check for collisions
         self.available_publishers.push(publisher);
     }
+    
+    /// Add and start a broadcast publisher server (e.g., visualization on port 9050)
+    /// This creates a running server instance that can be polled and broadcast to
+    /// NOTE: This does NOT add to available_publishers - broadcast publishers are shared
+    pub fn add_and_start_broadcast_publisher(&mut self, publisher_props: Box<dyn FeagiServerPublisherProperties>) -> Result<(), FeagiAgentError> {
+        let mut publisher = publisher_props.as_boxed_server_publisher();
+        publisher.request_start()?;
+        self.broadcast_publishers.push(publisher);
+        Ok(())
+    }
 
     pub fn add_puller_server(&mut self, puller: Box<dyn FeagiServerPullerProperties>) {
         // TODO check for collisions
@@ -230,6 +244,13 @@ impl FeagiAgentHandler {
         }
         Ok(())
     }
+    
+    /// Poll broadcast publishers to accept new connections
+    pub fn poll_broadcast_publishers(&mut self) {
+        for publisher in &mut self.broadcast_publishers {
+            let _ = publisher.poll();
+        }
+    }
 
     pub fn send_motor_data(&mut self, session_id: SessionID, motor_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
         let embodiment_option = self.try_get_embodiment_mut(session_id)?;
@@ -256,6 +277,38 @@ impl FeagiAgentHandler {
                 Err(FeagiAgentError::UnableToSendData("Nonexistant Session ID!".to_string()))
             }
         }
+    }
+
+    /// Broadcast visualization data directly to all broadcast publisher servers
+    /// Used for visualization-only agents that connect without embodiment registration
+    pub fn broadcast_visualization_data(&mut self, viz_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
+        for publisher in &mut self.broadcast_publishers {
+            match publisher.publish_data(viz_data.get_byte_ref()) {
+                Ok(_) => {
+                    log::trace!("[BROADCAST-VIZ] Published {} bytes", viz_data.get_byte_ref().len());
+                }
+                Err(e) => {
+                    log::warn!("[BROADCAST-VIZ] Failed to broadcast: {}", e);
+                }
+            }
+        }
+        Ok(())
+    }
+    
+    /// Broadcast raw bytes directly to all broadcast publisher servers
+    /// Used for visualization-only agents that expect raw Type 11 format
+    pub fn broadcast_raw_visualization_data(&mut self, raw_bytes: &[u8]) -> Result<(), FeagiAgentError> {
+        for publisher in &mut self.broadcast_publishers {
+            match publisher.publish_data(raw_bytes) {
+                Ok(_) => {
+                    log::trace!("[BROADCAST-VIZ] Published {} raw bytes", raw_bytes.len());
+                }
+                Err(e) => {
+                    log::warn!("[BROADCAST-VIZ] Failed to broadcast: {}", e);
+                }
+            }
+        }
+        Ok(())
     }
 
     //endregion
