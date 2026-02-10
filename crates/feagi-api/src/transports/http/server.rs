@@ -81,9 +81,8 @@ impl ApiState {
     pub fn init_agent_registration_handler(
     ) -> Arc<parking_lot::Mutex<feagi_agent::server::FeagiAgentHandler>> {
         let config = load_config(None, None).expect("Failed to load FEAGI configuration");
-        let mut handler = feagi_agent::server::FeagiAgentHandler::new_with_config(
-            Box::new(feagi_agent::server::auth::DummyAuth {}),
-            config.clone(),
+        let mut handler = feagi_agent::server::FeagiAgentHandler::new(
+            Box::new(feagi_agent::server::auth::DummyAuth),
         );
         let available_transports: Vec<String> = config
             .transports

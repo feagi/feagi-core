@@ -20,10 +20,6 @@ use feagi_agent::{
     AgentCapabilities as RegistrationCapabilities, AgentDescriptor, AuthToken,
 };
 #[cfg(feature = "feagi-agent")]
-use feagi_agent::command_and_control::agent_registration_message::{
-    RegistrationRequest as AgentRegistrationRequest, RegistrationResponse as AgentRegistrationResponse,
-};
-#[cfg(feature = "feagi-agent")]
 use crate::common::agent_registration::{
     auto_create_cortical_areas_from_device_registrations as auto_create_cortical_areas_shared,
     derive_motor_cortical_ids_from_device_registrations,

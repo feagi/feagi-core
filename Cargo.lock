@@ -1849,6 +1849,7 @@ dependencies = [
  "feagi-npu-plasticity",
  "feagi-npu-runtime",
  "feagi-observability",
+ "feagi-serialization",
  "feagi-services",
  "feagi-state-manager",
  "feagi-structures",
