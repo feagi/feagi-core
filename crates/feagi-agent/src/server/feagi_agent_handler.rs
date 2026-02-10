@@ -79,6 +79,21 @@ impl FeagiAgentHandler {
         self.all_registered_sessions.get(&session_id)
     }
 
+    /// Find SessionID by agent_id (base64-encoded AgentDescriptor)
+    /// Returns the first matching session, or None if agent not connected
+    pub fn find_session_by_agent_id(&self, agent_id: &str) -> Option<SessionID> {
+        // Parse agent_id to AgentDescriptor
+        let agent_descriptor = crate::AgentDescriptor::try_from_base64(agent_id).ok()?;
+        
+        // Find session with matching descriptor
+        for (session_id, descriptor) in &self.all_registered_sessions {
+            if descriptor == &agent_descriptor {
+                return Some(*session_id);
+            }
+        }
+        None
+    }
+
     /// Get available transport protocols (for REST registration response)
     pub fn get_available_protocols(&self) -> HashSet<TransportProtocolImplementation> {
         let mut protocols = HashSet::new();
@@ -207,6 +222,14 @@ impl FeagiAgentHandler {
         }
     }
 
+    /// Send visualization data to a specific agent
+    /// For now, visualization uses the same channel as motor data
+    /// TODO: Implement dedicated visualization channel if needed
+    pub fn send_visualization_data(&mut self, session_id: SessionID, viz_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
+        // Use motor channel for visualization (both use publisher)
+        // In the future, we might want dedicated visualization publishers
+        self.send_motor_data(session_id, viz_data)
+    }
 
     //endregion
 
