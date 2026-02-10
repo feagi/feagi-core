@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use feagi_serialization::{FeagiByteContainer, FeagiSerializable, SessionID};
+use feagi_serialization::{FeagiByteContainer, SessionID};
 use feagi_structures::FeagiJSON;
 use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
 use crate::command_and_control::agent_registration_message::AgentRegistrationMessage;

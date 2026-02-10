@@ -9,7 +9,6 @@ use std::time::Instant;
 use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientRequesterProperties, FeagiClientSubscriber};
 use feagi_io::traits_and_enums::shared::TransportProtocolEndpoint;
 use feagi_sensorimotor::ConnectorCache;
-use feagi_serialization::{FeagiByteContainer, SessionID};
 use crate::clients::CommandControlSubAgent;
 use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, RegistrationResponse};
 use crate::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiAgentError};

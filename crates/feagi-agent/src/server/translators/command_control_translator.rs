@@ -8,7 +8,7 @@ use feagi_io::FeagiNetworkError;
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_io::traits_and_enums::server::FeagiServerRouter;
 use feagi_serialization::{FeagiByteContainer, SessionID};
-use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, RegistrationRequest};
+use crate::command_and_control::agent_registration_message::RegistrationRequest;
 use crate::command_and_control::FeagiMessage;
 use crate::{AgentDescriptor, FeagiAgentError};
 
