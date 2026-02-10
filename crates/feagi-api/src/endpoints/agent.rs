@@ -38,6 +38,7 @@ fn parse_agent_descriptor(agent_id: &str) -> ApiResult<AgentDescriptor> {
 }
 
 #[cfg(feature = "feagi-agent")]
+#[allow(dead_code)]
 fn parse_auth_token(request: &AgentRegistrationRequest) -> ApiResult<AuthToken> {
     let token_b64 = request
         .auth_token
