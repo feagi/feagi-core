@@ -172,40 +172,72 @@ impl AgentDescriptor {
     }
 
     /// Create AgentDescriptor from base64-encoded agent_id (REST API compatibility)
+    /// Supports both old format (72 bytes) and new format (200 bytes) for backward compatibility
     pub fn try_from_base64(agent_id_b64: &str) -> Result<Self, FeagiDataError> {
         use base64::Engine;
         let decoded = base64::engine::general_purpose::STANDARD
             .decode(agent_id_b64)
             .map_err(|e| FeagiDataError::DeserializationError(format!("Invalid base64: {}", e)))?;
         
-        if decoded.len() != Self::SIZE_BYTES {
+        // Support both old (72 bytes) and new (200 bytes) formats
+        const OLD_FORMAT_SIZE: usize = 72; // 4 + 32 + 32 + 4
+        const OLD_MANUFACTURER_SIZE: usize = 32;
+        const OLD_AGENT_NAME_SIZE: usize = 32;
+        
+        let (instance_id, manufacturer, agent_name, agent_version) = if decoded.len() == OLD_FORMAT_SIZE {
+            // Old format: 4 + 32 + 32 + 4 = 72 bytes
+            let instance_id = u32::from_le_bytes([decoded[0], decoded[1], decoded[2], decoded[3]]);
+            
+            let manufacturer_bytes = &decoded[4..4 + OLD_MANUFACTURER_SIZE];
+            let manufacturer = String::from_utf8_lossy(manufacturer_bytes)
+                .trim_end_matches('\0')
+                .to_string();
+            
+            let agent_name_bytes = &decoded[4 + OLD_MANUFACTURER_SIZE..4 + OLD_MANUFACTURER_SIZE + OLD_AGENT_NAME_SIZE];
+            let agent_name = String::from_utf8_lossy(agent_name_bytes)
+                .trim_end_matches('\0')
+                .to_string();
+            
+            let version_offset = 4 + OLD_MANUFACTURER_SIZE + OLD_AGENT_NAME_SIZE;
+            let agent_version = u32::from_le_bytes([
+                decoded[version_offset],
+                decoded[version_offset + 1],
+                decoded[version_offset + 2],
+                decoded[version_offset + 3],
+            ]);
+            
+            (instance_id, manufacturer, agent_name, agent_version)
+        } else if decoded.len() == Self::SIZE_BYTES {
+            // New format: 4 + 128 + 64 + 4 = 200 bytes
+            let instance_id = u32::from_le_bytes([decoded[0], decoded[1], decoded[2], decoded[3]]);
+            
+            let manufacturer_bytes = &decoded[4..4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT];
+            let manufacturer = String::from_utf8_lossy(manufacturer_bytes)
+                .trim_end_matches('\0')
+                .to_string();
+            
+            let agent_name_bytes = &decoded[4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT..4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT];
+            let agent_name = String::from_utf8_lossy(agent_name_bytes)
+                .trim_end_matches('\0')
+                .to_string();
+            
+            let version_offset = 4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT;
+            let agent_version = u32::from_le_bytes([
+                decoded[version_offset],
+                decoded[version_offset + 1],
+                decoded[version_offset + 2],
+                decoded[version_offset + 3],
+            ]);
+            
+            (instance_id, manufacturer, agent_name, agent_version)
+        } else {
             return Err(FeagiDataError::DeserializationError(format!(
-                "Invalid agent_id length: expected {} bytes, got {}",
+                "Invalid agent_id length: expected {} (new) or {} (old) bytes, got {}",
                 Self::SIZE_BYTES,
+                OLD_FORMAT_SIZE,
                 decoded.len()
             )));
-        }
-        
-        // Deserialize from binary format
-        let instance_id = u32::from_le_bytes([decoded[0], decoded[1], decoded[2], decoded[3]]);
-        
-        let manufacturer_bytes = &decoded[4..4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT];
-        let manufacturer = String::from_utf8_lossy(manufacturer_bytes)
-            .trim_end_matches('\0')
-            .to_string();
-        
-        let agent_name_bytes = &decoded[4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT..4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT];
-        let agent_name = String::from_utf8_lossy(agent_name_bytes)
-            .trim_end_matches('\0')
-            .to_string();
-        
-        let version_offset = 4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT;
-        let agent_version = u32::from_le_bytes([
-            decoded[version_offset],
-            decoded[version_offset + 1],
-            decoded[version_offset + 2],
-            decoded[version_offset + 3],
-        ]);
+        };
         
         Self::new(instance_id, &manufacturer, &agent_name, agent_version)
     }
