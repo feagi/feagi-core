@@ -733,8 +733,10 @@ impl FeagiServer for FeagiWebSocketServerRouter {
     fn request_stop(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
-                for mut client in self.clients.drain(..) {
-                    let _ = client.close(None);
+                for state in self.clients.drain(..) {
+                    if let HandshakeState::Ready(mut ws) = state {
+                        let _ = ws.close(None);
+                    }
                 }
                 self.listener = None;
                 self.receive_buffer = None;
@@ -754,8 +756,10 @@ impl FeagiServer for FeagiWebSocketServerRouter {
     fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Errored(_) => {
-                for mut client in self.clients.drain(..) {
-                    let _ = client.close(None);
+                for state in self.clients.drain(..) {
+                    if let HandshakeState::Ready(mut ws) = state {
+                        let _ = ws.close(None);
+                    }
                 }
                 self.listener = None;
                 self.receive_buffer = None;
