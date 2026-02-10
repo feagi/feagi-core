@@ -628,7 +628,12 @@ impl FeagiWebSocketServerRouter {
     fn try_receive(&mut self) -> bool {
         let mut failed_indices = Vec::new();
 
-        for (i, client) in self.clients.iter_mut().enumerate() {
+        for (i, state) in self.clients.iter_mut().enumerate() {
+            let client = match state {
+                HandshakeState::Ready(ws) => ws,
+                _ => continue, // Skip handshaking/failed connections
+            };
+            
             match client.read() {
                 Ok(Message::Binary(data)) => {
                     if let Some(&session_id) = self.index_to_session.get(&i) {
@@ -675,7 +680,10 @@ impl FeagiWebSocketServerRouter {
         }
 
         // Remove and close the client
-        let _ = self.clients.remove(index).close(None);
+        let removed_state = self.clients.remove(index);
+        if let HandshakeState::Ready(mut ws) = removed_state {
+            let _ = ws.close(None);
+        }
 
         // Remove from mappings
         if let Some(session_id) = self.index_to_session.remove(&index) {
@@ -834,10 +842,16 @@ impl FeagiServerRouter for FeagiWebSocketServerRouter {
                 }
 
                 let ws_message = Message::Binary(message.to_vec());
-                self.clients[client_index]
+                
+                let client = match &mut self.clients[client_index] {
+                    HandshakeState::Ready(ws) => ws,
+                    _ => return Err(FeagiNetworkError::SendFailed("Client not ready".to_string())),
+                };
+                
+                client
                     .send(ws_message)
                     .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
-                self.clients[client_index]
+                client
                     .flush()
                     .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;
 
