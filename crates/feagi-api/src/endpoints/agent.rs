@@ -231,6 +231,7 @@ pub async fn register_agent(
             {
                 let mut handler_guard = handler.lock().unwrap();
                 handler_guard.set_device_registrations_by_descriptor(
+                    request.agent_id.clone(),
                     agent_descriptor.clone(),
                     device_regs.clone()
                 );

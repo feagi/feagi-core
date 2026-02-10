@@ -17,6 +17,8 @@ pub struct FeagiAgentHandler {
     all_registered_sessions: HashMap<SessionID, AgentDescriptor>,
     /// Device registrations by AgentDescriptor (REST API configuration storage)
     device_registrations_by_descriptor: HashMap<AgentDescriptor, serde_json::Value>,
+    /// Agent ID (base64) by AgentDescriptor (for REST→WebSocket bridging)
+    agent_id_by_descriptor: HashMap<AgentDescriptor, String>,
     /// Device registrations by SessionID (active connections)
     device_registrations_by_session: HashMap<SessionID, serde_json::Value>,
 
@@ -40,6 +42,7 @@ impl FeagiAgentHandler {
             command_control_servers: Vec::new(),
             all_registered_sessions: HashMap::new(),
             device_registrations_by_descriptor: HashMap::new(),
+            agent_id_by_descriptor: HashMap::new(),
             device_registrations_by_session: HashMap::new(),
             registered_embodiments: Vec::new(),
             session_id_command_control_mapping: Default::default(),
@@ -50,8 +53,10 @@ impl FeagiAgentHandler {
     //region Device Registration Management (REST API Support)
 
     /// Store device registrations by AgentDescriptor (REST API - before connection)
-    pub fn set_device_registrations_by_descriptor(&mut self, agent_descriptor: AgentDescriptor, device_registrations: serde_json::Value) {
-        self.device_registrations_by_descriptor.insert(agent_descriptor, device_registrations);
+    /// Also stores the original agent_id for later WebSocket→REST bridging
+    pub fn set_device_registrations_by_descriptor(&mut self, agent_id_base64: String, agent_descriptor: AgentDescriptor, device_registrations: serde_json::Value) {
+        self.device_registrations_by_descriptor.insert(agent_descriptor.clone(), device_registrations);
+        self.agent_id_by_descriptor.insert(agent_descriptor, agent_id_base64);
     }
 
     /// Get device registrations by AgentDescriptor (REST API queries)
@@ -72,6 +77,22 @@ impl FeagiAgentHandler {
     /// Get all registered sessions with their descriptors
     pub fn get_registered_agents(&self) -> &HashMap<SessionID, AgentDescriptor> {
         &self.all_registered_sessions
+    }
+    
+    /// Check if a session has visualization capability configured
+    /// Returns (agent_id_base64, rate_hz) for registration with RuntimeService
+    pub fn get_visualization_info_for_session(&self, session_id: SessionID) -> Option<(String, f64)> {
+        let device_regs = self.device_registrations_by_session.get(&session_id)?;
+        let viz = device_regs.get("visualization")?;
+        let rate_hz = viz.get("rate_hz").and_then(|v| v.as_f64())?;
+        
+        if rate_hz > 0.0 {
+            let agent_descriptor = self.all_registered_sessions.get(&session_id)?;
+            let agent_id = self.agent_id_by_descriptor.get(agent_descriptor)?.clone();
+            Some((agent_id, rate_hz))
+        } else {
+            None
+        }
     }
 
     /// Get agent descriptor by session ID
@@ -347,8 +368,36 @@ impl FeagiAgentHandler {
     fn register_new_embodiment_agent_to_cache(&mut self, session_id: SessionID, agent_descriptor: AgentDescriptor, _command_index: usize, embodiment: EmbodimentTranslator) -> Result<(), FeagiAgentError> {
         let new_embodiment_index = self.registered_embodiments.len();
         self.registered_embodiments.push(embodiment);
-        self.all_registered_sessions.insert(session_id, agent_descriptor);
+        self.all_registered_sessions.insert(session_id, agent_descriptor.clone());
         self.session_id_embodiments_mapping.insert(session_id, new_embodiment_index);
+        
+        // Check if this agent has device_registrations from prior REST registration
+        // If so, extract visualization rate and store it for WebSocket agent_id
+        if let Some(device_regs) = self.device_registrations_by_descriptor.get(&agent_descriptor) {
+            if let Some(viz) = device_regs.get("visualization") {
+                if let Some(rate_hz) = viz.get("rate_hz").and_then(|v| v.as_f64()) {
+                    if rate_hz > 0.0 {
+                        // Store visualization capability for this session
+                        let mut viz_capability = serde_json::Map::new();
+                        viz_capability.insert("rate_hz".to_string(), serde_json::json!(rate_hz));
+                        
+                        let mut capabilities = serde_json::Map::new();
+                        capabilities.insert("visualization".to_string(), serde_json::json!(viz_capability));
+                        
+                        self.device_registrations_by_session.insert(
+                            session_id, 
+                            serde_json::json!(capabilities)
+                        );
+                        
+                        log::info!(
+                            "[AGENT-HANDLER] ✅ Stored visualization capability for session {:?} at {}Hz (from REST registration)",
+                            session_id, rate_hz
+                        );
+                    }
+                }
+            }
+        }
+        
         Ok(())
     }
 
