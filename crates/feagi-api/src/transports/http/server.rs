@@ -35,7 +35,7 @@ use feagi_services::{
     AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
 };
 #[cfg(feature = "feagi-agent")]
-use feagi_io::protocol_implementations::websocket::{
+use feagi_io::protocol_implementations::websocket::websocket_std::{
     FeagiWebSocketServerPublisherProperties, FeagiWebSocketServerPullerProperties,
 };
 #[cfg(feature = "feagi-agent")]
