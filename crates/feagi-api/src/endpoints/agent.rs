@@ -255,6 +255,12 @@ pub async fn register_agent(
         let handler_guard = handler.lock().unwrap();
         let available_protocols = handler_guard.get_available_protocols();
         
+        // Load config to get port numbers
+        use feagi_config::load_config;
+        let config = load_config(None, None).map_err(|e| {
+            ApiError::internal(format!("Failed to load config: {}", e))
+        })?;
+        
         let mut transport_configs = Vec::new();
         
         for protocol in available_protocols {
@@ -267,7 +273,7 @@ pub async fn register_agent(
                 continue;
             };
             
-            // Build ports map from config (simplified - actual ports from config)
+            // Build ports map from config
             let mut ports = HashMap::new();
             if transport_type == "websocket" {
                 ports.insert("registration".to_string(), config.websocket.registration_port);
