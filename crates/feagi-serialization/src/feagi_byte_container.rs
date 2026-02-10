@@ -29,7 +29,7 @@ type NumberBytesToRead = u32;
 ///
 /// let mut container = FeagiByteContainer::new_empty();
 /// assert!(container.is_valid());
-/// assert_eq!(container.get_number_of_bytes_used(), 4); // Just the header
+/// assert_eq!(container.get_number_of_bytes_used(), 12); // Header + session ID
 /// ```
 #[derive(Debug, Clone)]
 pub struct FeagiByteContainer {
@@ -66,7 +66,7 @@ impl FeagiByteContainer {
     ///
     /// let container = FeagiByteContainer::new_empty();
     /// assert!(container.is_valid());
-    /// assert_eq!(container.get_number_of_bytes_used(), 4);
+    /// assert_eq!(container.get_number_of_bytes_used(), 12); // Header + session ID
     /// ```
     pub fn new_empty() -> Self {
         Self {
@@ -91,8 +91,8 @@ impl FeagiByteContainer {
     ///
     /// let container = FeagiByteContainer::new_empty();
     /// let bytes = container.get_byte_ref();
-    /// assert_eq!(bytes.len(), 4);
-    /// assert_eq!(bytes[0], 2); // Current version
+    /// assert_eq!(bytes.len(), 12);
+    /// assert_eq!(bytes[0], 3); // Current version (CURRENT_FBS_VERSION)
     /// ```
     pub fn get_byte_ref(&self) -> &[u8] {
         &self.bytes
@@ -222,7 +222,7 @@ impl FeagiByteContainer {
     /// use feagi_serialization::FeagiByteContainer;
     ///
     /// let container = FeagiByteContainer::new_empty();
-    /// assert_eq!(container.get_number_of_bytes_used(), 4); // Header only
+    /// assert_eq!(container.get_number_of_bytes_used(), 12); // Header + session ID
     /// ```
     pub fn get_number_of_bytes_used(&self) -> usize {
         self.bytes.len()
@@ -481,8 +481,9 @@ impl FeagiByteContainer {
             .push(ContainedStructReference {
                 structure_type: incoming_struct.get_type(),
                 byte_start_index: (Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
+                    + Self::SESSION_ID_BYTE_COUNT
                     + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE)
-                    as u32, // This is always the first structure start index
+                    as u32, // First structure starts after header + session + length
                 number_bytes_to_read: number_of_bytes_used_by_struct as u32,
             });
 
@@ -608,15 +609,22 @@ impl FeagiByteContainer {
 
         let structure_lookup_header_size_in_bytes =
             Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE * number_contained_structs;
-        let total_header_size =
-            Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + structure_lookup_header_size_in_bytes;
+        let total_header_size = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
+            + Self::SESSION_ID_BYTE_COUNT
+            + structure_lookup_header_size_in_bytes;
         if byte_length < total_header_size {
-            return Err(FeagiDataError::DeserializationError(format!("Feagi Byte Data specifies the existence of {} structures, but the given byte array is under the required {} byte length!", structure_lookup_header_size_in_bytes, Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + structure_lookup_header_size_in_bytes)));
+            return Err(FeagiDataError::DeserializationError(format!(
+                "Feagi Byte Data specifies the existence of {} structures, but the given byte array is under the required {} byte length!",
+                structure_lookup_header_size_in_bytes, total_header_size
+            )));
         }
 
-        let mut structure_header_byte_index: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::SESSION_ID_BYTE_COUNT;
+        let mut structure_header_byte_index: usize =
+            Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::SESSION_ID_BYTE_COUNT;
         let mut structure_data_byte_index: usize =
-            Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + structure_lookup_header_size_in_bytes;
+            Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
+                + Self::SESSION_ID_BYTE_COUNT
+                + structure_lookup_header_size_in_bytes;
         for contained_structure_index in 0..number_contained_structs {
             let structure_length = LittleEndian::read_u32(
                 &self.bytes[structure_header_byte_index..structure_header_byte_index + 4],

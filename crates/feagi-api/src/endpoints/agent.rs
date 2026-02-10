@@ -378,12 +378,7 @@ pub async fn register_agent(
                                     rate_hz,
                                 )
                                 .await
-                                .map_err(|e| {
-                                    ApiError::internal(format!(
-                                        "Failed to register motor subscriptions: {}",
-                                        e
-                                    ))
-                                })?;
+                                .map_err(ApiError::from)?;
                         }
                     }
                 }
@@ -405,12 +400,7 @@ pub async fn register_agent(
                         rate_hz,
                     )
                     .await
-                    .map_err(|e| {
-                        ApiError::internal(format!(
-                            "Failed to register visualization subscription: {}",
-                            e
-                        ))
-                    })?;
+                    .map_err(ApiError::from)?;
             }
 
             let mut endpoint_map = HashMap::new();
