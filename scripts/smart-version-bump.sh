@@ -345,6 +345,9 @@ echo ""
 echo -e "${BLUE}Step 2.5: Checking published dependency version gaps...${NC}"
 echo ""
 
+CRATE_LIST="${CRATE_ORDER[*]}"
+export CRATE_LIST
+
 DEPENDENCY_GAPS=$(
 python3 - <<'PY'
 import json
@@ -355,14 +358,20 @@ from urllib.request import urlopen
 crate_list = os.environ.get("CRATE_LIST", "").split()
 crate_set = set(crate_list)
 
+def semver_key(s):
+    parts = re.split(r"[-.]", s)
+    return [int(p) if p.isdigit() else p for p in parts]
+
 def latest_version(crate: str) -> str | None:
     url = f"https://crates.io/api/v1/crates/{crate}"
     with urlopen(url, timeout=20) as resp:
         data = json.load(resp)
-    for v in data.get("versions", []):
-        if not v.get("yanked", False):
-            return v.get("num")
-    return None
+    candidates = [v.get("num", "") for v in data.get("versions", [])
+                  if not v.get("yanked", False) and v.get("num")]
+    if not candidates:
+        return None
+    candidates.sort(key=semver_key, reverse=True)
+    return candidates[0]
 
 def deps_for(crate: str, version: str) -> list[dict]:
     url = f"https://crates.io/api/v1/crates/{crate}/{version}/dependencies"

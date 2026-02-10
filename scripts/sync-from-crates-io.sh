@@ -119,7 +119,32 @@ for crate in "${CRATE_ORDER[@]}"; do
         echo -e "  ${crate}: ${YELLOW}(not on crates.io, skipping)${NC}"
         continue
     fi
-    echo -e "  ${crate}: ${GREEN}${latest}${NC}"
+
+    # Get local version for this crate
+    path=$(crate_path_for "$crate" 2>/dev/null) || path=""
+    local_version=""
+    if [ -n "$path" ]; then
+        crate_toml="$WORKSPACE_ROOT/$path/Cargo.toml"
+        if [ -f "$crate_toml" ]; then
+            local_version=$(grep '^version = "' "$crate_toml" | head -1 | sed 's/version = "\(.*\)"/\1/' | xargs)
+        fi
+    fi
+
+    # Only upgrade: skip if local version is already >= crates.io
+    if [ -n "$local_version" ]; then
+        higher=$(printf '%s\n' "$local_version" "$latest" | sort -V | tail -1)
+        if [ "$higher" = "$local_version" ] && [ "$local_version" != "$latest" ]; then
+            echo -e "  ${crate}: ${CYAN}local ${local_version} > crates.io ${latest}, keeping local${NC}"
+            continue
+        fi
+        if [ "$local_version" = "$latest" ]; then
+            echo -e "  ${crate}: ${GREEN}${latest} (already matches)${NC}"
+            echo "${crate}|${latest}" >> "$SYNC_VERSION_MAP"
+            continue
+        fi
+    fi
+
+    echo -e "  ${crate}: ${GREEN}${local_version:-?} -> ${latest}${NC}"
     echo "${crate}|${latest}" >> "$SYNC_VERSION_MAP"
 
     if [ "$DRY_RUN" = "true" ]; then
@@ -135,8 +160,7 @@ for crate in "${CRATE_ORDER[@]}"; do
 
     # Update crate's own version so workspace is aligned with crates.io
     # Only when crate has explicit version = "..." (not version.workspace = true)
-    path=$(crate_path_for "$crate" 2>/dev/null) || path=""
-    if [ -n "$path" ] && [ "$DRY_RUN" != "true" ]; then
+    if [ -n "$path" ]; then
         crate_toml="$WORKSPACE_ROOT/$path/Cargo.toml"
         if [ -f "$crate_toml" ] && grep -q '^version = "' "$crate_toml" 2>/dev/null; then
             sed 's/^version = ".*"/version = "'"$latest"'"/' "$crate_toml" > "${crate_toml}.tmp"
