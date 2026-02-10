@@ -12,20 +12,14 @@ use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use crate::v1::agent_dtos::*;
 use feagi_services::traits::agent_service::HeartbeatRequest as ServiceHeartbeatRequest;
-use base64::Engine;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 #[cfg(feature = "feagi-agent")]
 use feagi_agent::{
     AgentCapabilities as RegistrationCapabilities, AgentDescriptor, AuthToken,
 };
 #[cfg(feature = "feagi-agent")]
-use crate::common::agent_registration::{
-    auto_create_cortical_areas_from_device_registrations as auto_create_cortical_areas_shared,
-    derive_motor_cortical_ids_from_device_registrations,
-};
-#[cfg(feature = "feagi-agent")]
-use feagi_serialization::SessionID;
+use crate::common::agent_registration::auto_create_cortical_areas_from_device_registrations as auto_create_cortical_areas_shared;
 #[cfg(feature = "feagi-agent")]
 
 fn parse_agent_descriptor(agent_id: &str) -> ApiResult<AgentDescriptor> {
@@ -93,6 +87,7 @@ fn derive_capabilities_from_device_registrations(
 /// Derive capabilities for visualization-only agents (no device_registrations).
 /// Requires `capabilities.visualization` with valid `rate_hz`. Auth is still required by caller.
 #[cfg(feature = "feagi-agent")]
+#[allow(dead_code)]
 fn derive_capabilities_from_visualization_capability(
     request: &AgentRegistrationRequest,
 ) -> ApiResult<Vec<RegistrationCapabilities>> {
@@ -119,6 +114,7 @@ fn derive_capabilities_from_visualization_capability(
 }
 
 #[cfg(feature = "feagi-agent")]
+#[allow(dead_code)]
 fn parse_capability_rate_hz(
     capabilities: &HashMap<String, serde_json::Value>,
     capability_key: &str,

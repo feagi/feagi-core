@@ -1,9 +1,9 @@
 use std::collections::{HashMap, HashSet};
-use feagi_io::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
-use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties};
+use feagi_io::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
+use feagi_io::traits_and_enums::server::{FeagiServerPublisherProperties, FeagiServerPullerProperties, FeagiServerRouterProperties};
 use feagi_serialization::{FeagiByteContainer, SessionID};
 use crate::{AgentCapabilities, AgentDescriptor, FeagiAgentError};
-use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, RegistrationRequest, RegistrationResponse};
+use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, RegistrationResponse};
 use crate::command_and_control::FeagiMessage;
 use crate::server::auth::AgentAuth;
 use crate::server::CommandControlTranslator;
@@ -264,7 +264,7 @@ impl FeagiAgentHandler {
 
     fn handle_messages_from_known_session_ids(&mut self, session_id: SessionID, message: FeagiMessage) -> Result<Option<(SessionID, FeagiMessage)>, FeagiAgentError> {
         match &message{
-            FeagiMessage::AgentRegistration(register_message) => {
+            FeagiMessage::AgentRegistration(_register_message) => {
                 // Already registered? dont dont register again
                 // TODO any special exceptions?
                 Ok(None)
@@ -311,7 +311,7 @@ impl FeagiAgentHandler {
         Err(FeagiAgentError::InitFail("Missing required protocol publisher".to_string()))
     }
 
-    fn register_new_embodiment_agent_to_cache(&mut self, session_id: SessionID, agent_descriptor: AgentDescriptor, command_index: usize, embodiment: EmbodimentTranslator) -> Result<(), FeagiAgentError> {
+    fn register_new_embodiment_agent_to_cache(&mut self, session_id: SessionID, agent_descriptor: AgentDescriptor, _command_index: usize, embodiment: EmbodimentTranslator) -> Result<(), FeagiAgentError> {
         let new_embodiment_index = self.registered_embodiments.len();
         self.registered_embodiments.push(embodiment);
         self.all_registered_sessions.insert(session_id, agent_descriptor);

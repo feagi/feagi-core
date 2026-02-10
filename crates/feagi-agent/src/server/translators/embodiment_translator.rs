@@ -17,9 +17,9 @@ impl EmbodimentTranslator {
 
     pub fn new(session_id: SessionID, motor_server: Box<dyn FeagiServerPublisher>, sensor_server: Box<dyn FeagiServerPuller>) -> Self {
         let mut motor_byte_cache = FeagiByteContainer::new_empty();
-        motor_byte_cache.set_session_id(session_id);
+        let _ = motor_byte_cache.set_session_id(session_id);
         let mut sensor_byte_cache = FeagiByteContainer::new_empty();
-        sensor_byte_cache.set_session_id(session_id);
+        let _ = sensor_byte_cache.set_session_id(session_id);
 
         EmbodimentTranslator {
             session_id,
