@@ -81,7 +81,10 @@ if [ ! -f "$ROOT_CARGO" ]; then
     exit 1
 fi
 
-# Fetch latest version from crates.io API (versions are newest first)
+# Fetch highest semver version from crates.io API.
+# NOTE: The API returns versions by publication date, NOT semver order.
+# A lower version can be published after a higher one (version regression).
+# We must sort by semver and pick the highest to avoid dependency conflicts.
 get_latest_on_crates_io() {
     local name="$1"
     local url="https://crates.io/api/v1/crates/${name}"
@@ -92,17 +95,18 @@ get_latest_on_crates_io() {
         return
     fi
     echo "$json" | python3 -c "
-import sys, json
+import re, sys, json
 try:
     d = json.load(sys.stdin)
     vers = d.get('versions') or []
-    if not vers:
+    candidates = [v.get('num', '') for v in vers if not v.get('yanked', False) and v.get('num')]
+    if not candidates:
         sys.exit(0)
-    # API returns newest first; take first non-yanked
-    for v in vers:
-        if not v.get('yanked', False):
-            print(v.get('num', ''))
-            break
+    def semver_key(s):
+        parts = re.split(r'[-.]', s)
+        return [int(p) if p.isdigit() else p for p in parts]
+    candidates.sort(key=semver_key, reverse=True)
+    print(candidates[0])
 except Exception:
     pass
 " 2>/dev/null || echo ""
