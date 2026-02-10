@@ -288,7 +288,7 @@ impl PlasticityService {
         let memory_areas_snapshot = memory_areas.lock().unwrap().clone();
 
         // Log plasticity status every 100 bursts
-        if current_timestep.is_multiple_of(100) {
+        if current_timestep % 100 == 0 {
             if memory_areas_snapshot.is_empty() {
                 // This is normal if plasticity isn't being used - log at debug level instead of warn
                 tracing::debug!(target: "plasticity",

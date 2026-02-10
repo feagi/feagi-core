@@ -408,6 +408,7 @@ use crate::{
         // Network endpoints
         crate::endpoints::network::get_status,
         crate::endpoints::network::post_config,
+        crate::endpoints::network::get_connection_info,
     ),
     components(
         schemas(
@@ -497,6 +498,7 @@ use crate::{
 
             // Network
             crate::v1::NetworkStatusResponse,
+            crate::v1::NetworkConnectionInfo,
             crate::v1::NetworkConfigRequest,
             crate::v1::NetworkSuccessResponse,
             crate::v1::AgentRegistrationResponse,

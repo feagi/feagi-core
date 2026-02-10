@@ -1122,7 +1122,7 @@ fn burst_loop(
         update_sim_timestep_from_hz(current_frequency_hz);
 
         // DIAGNOSTIC: Log that we're alive
-        if burst_num.is_multiple_of(100) {
+        if burst_num % 100 == 0 {
             trace!("[BURST-LOOP] Burst {} starting (loop is alive)", burst_num);
         }
 
@@ -1191,7 +1191,7 @@ fn burst_loop(
             }
         }
 
-        if burst_num < 5 || burst_num.is_multiple_of(100) {
+        if burst_num < 5 || burst_num % 100 == 0 {
             trace!(
                 "[BURST-LOOP-DIAGNOSTIC] Burst {}: Attempting NPU lock...",
                 burst_num
@@ -1247,7 +1247,7 @@ fn burst_loop(
                     lock_wait_duration.as_millis()
                 );
             }
-            if burst_num < 5 || burst_num.is_multiple_of(100) {
+            if burst_num < 5 || burst_num % 100 == 0 {
                 trace!(
                     "[BURST-TIMING] Burst {}: NPU lock acquired in {:?}",
                     burst_num,
@@ -1512,7 +1512,7 @@ fn burst_loop(
                             result.neurons_in_refractory,
                         ));
 
-                        if burst_num < 5 || burst_num.is_multiple_of(100) {
+                        if burst_num < 5 || burst_num % 100 == 0 {
                             trace!(
                                 "[BURST-TIMING] Burst {}: process_burst() completed in {:?}, {} neurons fired",
                                 burst_num,
@@ -1629,7 +1629,7 @@ fn burst_loop(
                 );
             }
         }
-        if lock_hold_duration.as_millis() > 5 || burst_num < 5 || burst_num.is_multiple_of(100) {
+        if lock_hold_duration.as_millis() > 5 || burst_num < 5 || burst_num % 100 == 0 {
             debug!(
                 "[NPU-LOCK] Burst {} (thread={:?}): Lock RELEASED (held for {:.2}ms, total from acquisition: {:.2}ms)",
                 burst_num,
@@ -1720,7 +1720,7 @@ fn burst_loop(
         let needs_motor = has_motor_publisher || has_motor_shm;
         let needs_fire_data = has_shm_writer || should_publish_viz || needs_motor;
 
-        if burst_num.is_multiple_of(100) {
+        if burst_num % 100 == 0 {
             trace!(
                 "[BURST-LOOP] Sampling conditions: needs_fire_data={} (shm={}, viz={}, motor={})",
                 needs_fire_data,
@@ -1753,7 +1753,7 @@ fn burst_loop(
                 sample_duration
             );
 
-            if burst_num.is_multiple_of(100) {
+            if burst_num % 100 == 0 {
                 trace!(
                     "[BURST-LOOP] Fire queue sample result: has_data={}",
                     fire_data_arc_opt.is_some()
@@ -1973,7 +1973,7 @@ fn burst_loop(
                 }
 
                 if total_neurons > 0 {
-                    if burst_num.is_multiple_of(100) || total_neurons > 1000 {
+                    if burst_num % 100 == 0 || total_neurons > 1000 {
                         debug!(
                             "[BURST-LOOP] 🔍 Sampled {} neurons from {} areas for viz",
                             total_neurons,
@@ -1984,7 +1984,7 @@ fn burst_loop(
                     // Minimal, high-signal debugging for BV "no power" issues:
                     // Log whether the outgoing visualization snapshot contains the Power cortical area (core idx=1).
                     // This pinpoints whether the failure is upstream (sampling/packaging) or downstream (BV decode/apply).
-                    if burst_num.is_multiple_of(30) {
+                    if burst_num % 30 == 0 {
                         use feagi_structures::genomic::cortical_area::CoreCorticalType;
                         static POWER_ID_B64: std::sync::LazyLock<String> =
                             std::sync::LazyLock::new(|| {
@@ -2034,7 +2034,7 @@ fn burst_loop(
 
                             let count =
                                 PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            if count.is_multiple_of(30) {
+                            if count % 30 == 0 {
                                 trace!(
                                     "[BURST-LOOP] Viz handoff #{}: {} neurons -> publisher (serialization off-thread)",
                                     count,
@@ -2075,7 +2075,7 @@ fn burst_loop(
 
             fire_data_arc_opt // Return Arc for motor reuse
         } else {
-            if burst_num.is_multiple_of(100) {
+            if burst_num % 100 == 0 {
                 trace!("[BURST-LOOP] Fire queue sampling skipped (no consumers need data)");
             }
             None // No fire data needed
@@ -2085,7 +2085,7 @@ fn burst_loop(
         // NOTE: has_motor_publisher and has_motor_shm already computed above for shared_fire_data_opt
 
         // CRITICAL: Log motor publisher state every 100 bursts (using INFO to guarantee visibility)
-        if burst_num.is_multiple_of(100) {
+        if burst_num % 100 == 0 {
             trace!(
                 "[BURST-LOOP] MOTOR PUBLISHER STATE: has_publisher={}, has_shm={}",
                 has_motor_publisher,
@@ -2184,7 +2184,7 @@ fn burst_loop(
                 let subscriptions = motor_subscriptions.read();
 
                 // DEBUG: Log subscription state every 30 bursts
-                if burst_num.is_multiple_of(30) {
+                if burst_num % 30 == 0 {
                     if subscriptions.is_empty() {
                         trace!("[BURST-LOOP] No motor subscriptions");
                     } else {
