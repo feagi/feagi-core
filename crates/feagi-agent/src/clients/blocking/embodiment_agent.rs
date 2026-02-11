@@ -6,6 +6,7 @@
 //! Use `connect` for ZMQ or `connect_ws` for WebSocket; flow and API are the same.
 
 use std::time::{Duration, Instant};
+use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientRequesterProperties, FeagiClientSubscriber};
 use feagi_io::traits_and_enums::shared::TransportProtocolEndpoint;
 use feagi_sensorimotor::ConnectorCache;
@@ -68,6 +69,37 @@ impl EmbodimentAgent {
         let client = self.client.as_mut().unwrap();
         client.sensor_pusher.publish_data(bytes.get_byte_ref())?;
         Ok(())
+    }
+
+    /// Poll the motor subscriber and decode a single motor payload into the motor cache.
+    ///
+    /// Returns `Ok(true)` when a motor frame was received and decoded during this call.
+    /// Returns `Ok(false)` when no new motor frame is currently available.
+    pub fn poll_and_decode_motor_data(&mut self) -> Result<bool, FeagiAgentError> {
+        if self.client.is_none() {
+            return Ok(false);
+        }
+
+        let client = self.client.as_mut().unwrap();
+        let endpoint_state = client.motor_subscriber.poll().clone();
+        match endpoint_state {
+            FeagiEndpointState::ActiveHasData => {
+                let payload = client.motor_subscriber.consume_retrieved_data()?.to_vec();
+                let mut motor_cache = self.embodiment.get_motor_cache();
+                motor_cache
+                    .get_feagi_byte_container_mut()
+                    .try_write_data_by_copy_and_verify(&payload)?;
+
+                let had_neural_data = motor_cache.try_decode_bytes_to_neural_data()?;
+                if had_neural_data {
+                    motor_cache.try_decode_neural_data_into_cache(Instant::now())?;
+                    return Ok(true);
+                }
+                Ok(false)
+            }
+            FeagiEndpointState::Errored(err) => Err(FeagiAgentError::from(err)),
+            _ => Ok(false),
+        }
     }
     
     // TODO how can we handle motor callback hookups? 
