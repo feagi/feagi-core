@@ -12,7 +12,7 @@ fn single_struct_allocation_includes_session_id() {
         .expect("Failed to overwrite byte container with single struct");
 
     let expected_bytes = FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
-        + FeagiByteContainer::SESSION_ID_BYTE_COUNT
+        + FeagiByteContainer::AGENT_ID_BYTE_COUNT
         + FeagiByteContainer::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE
         + json_struct.get_number_of_bytes_needed();
 

@@ -1,6 +1,6 @@
 use crate::FeagiNetworkError;
 use crate::traits_and_enums::server::FeagiServer;
-use feagi_serialization::SessionID;
+use feagi_agent::agent_id::SessionID;
 
 /// A server that handles request-response communication with multiple clients.
 ///

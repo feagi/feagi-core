@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
-use feagi_serialization::{FeagiByteContainer, SessionID};
+use feagi_serialization::FeagiByteContainer;
 use feagi_structures::FeagiJSON;
+use crate::agent_id::AgentID;
 use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
 use crate::command_and_control::agent_registration_message::AgentRegistrationMessage;
 use crate::command_and_control::health_check_message::HealthCheckMessage;
@@ -17,7 +18,7 @@ pub enum FeagiMessage {
 }
 
 impl FeagiMessage {
-    pub fn serialize_to_byte_container(&self, container: &mut FeagiByteContainer, session_id: SessionID, increment_value: u16) -> Result<(), FeagiAgentError> {
+    pub fn serialize_to_byte_container(&self, container: &mut FeagiByteContainer, session_id: AgentID, increment_value: u16) -> Result<(), FeagiAgentError> {
         let json: serde_json::Value = serde_json::to_value(&self).unwrap();
         let feagi_json: FeagiJSON = FeagiJSON::from_json_value(json);
         container.overwrite_byte_data_with_single_struct_data(&feagi_json, increment_value)?;

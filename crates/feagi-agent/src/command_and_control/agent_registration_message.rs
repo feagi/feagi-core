@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use feagi_io::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
-use feagi_serialization::SessionID;
+use crate::agent_id::AgentID;
 use crate::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiApiVersion};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -85,7 +85,7 @@ pub enum RegistrationResponse {
     FailedInvalidRequest, // This may not be sent back if the server ignores bad data
     FailedInvalidAuth, // Usually the auth token, may be the agent too. Server may not send this if configured to ignore invalid auth
     AlreadyRegistered,
-    Success(SessionID, HashMap<AgentCapabilities, TransportProtocolEndpoint>),
+    Success(AgentID, HashMap<AgentCapabilities, TransportProtocolEndpoint>),
 }
 
 //endregion

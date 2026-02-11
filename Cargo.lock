@@ -1823,6 +1823,7 @@ dependencies = [
  "feagi-sensorimotor",
  "feagi-serialization",
  "feagi-structures",
+ "getrandom 0.2.17",
  "log",
  "serde",
  "serde_json",
@@ -2083,7 +2084,6 @@ version = "0.0.1-beta.8"
 dependencies = [
  "byteorder",
  "feagi-structures",
- "getrandom 0.2.17",
  "serde",
  "serde_json",
 ]

@@ -3,7 +3,7 @@ use feagi_agent::server::FeagiAgentHandler;
 use feagi_agent::registration::AgentCapabilities;
 use feagi_config::FeagiConfig;
 use feagi_io::protocol_implementations::TransportProtocolImplementation;
-use feagi_serialization::SessionID;
+use feagi_agent::agent_id::AgentID;
 
 fn build_test_config() -> FeagiConfig {
     let mut config = FeagiConfig::default();
@@ -68,7 +68,7 @@ fn endpoints_are_built_from_config_for_websocket() {
 fn unregistered_session_ids_are_rejected() {
     let config = build_test_config();
     let handler = FeagiAgentHandler::new_with_config(Box::new(DummyAuth {}), config);
-    let session_id = SessionID::new_random();
+    let session_id = AgentID::new_random();
 
     assert!(
         !handler.is_session_registered(&session_id),

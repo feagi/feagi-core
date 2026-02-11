@@ -11,7 +11,7 @@
 
 use std::collections::HashMap;
 
-use feagi_serialization::SessionID;
+use feagi_agent::agent_id::SessionID;
 use zmq::{Context, Message, Socket};
 
 use crate::FeagiNetworkError;

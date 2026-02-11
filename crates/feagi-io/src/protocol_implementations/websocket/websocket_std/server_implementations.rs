@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::net::{TcpListener, TcpStream};
 
-use feagi_serialization::SessionID;
+use feagi_agent::agent_id::SessionID;
 use tungstenite::{accept, Message, WebSocket};
 
 use crate::FeagiNetworkError;

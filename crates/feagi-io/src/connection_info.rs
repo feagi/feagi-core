@@ -1,6 +1,7 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/*
 //! PNS connection info for API discovery
 //!
 //! Provides snapshot of active transports and stream status for GET /v1/network/connection_info.
@@ -49,3 +50,6 @@ pub struct PnsConnectionConfigSnapshot {
     pub ws_rest_api_port: u16,
     pub shm_base_path: String,
 }
+
+
+ */

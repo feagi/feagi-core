@@ -41,4 +41,5 @@ feagi-structures = { version = "=0.0.1-beta.8", path = "../feagi-structures" }
 feagi-sensorimotor = { version = "=0.0.1-beta.8", path = "../feagi-sensorimotor" }
 log = "0.4.29"
 base64 = "0.22.1"
+getrandom = "0.2.17"
 

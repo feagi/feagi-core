@@ -7,10 +7,11 @@ use std::collections::HashMap;
 use feagi_io::FeagiNetworkError;
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_io::traits_and_enums::server::FeagiServerRouter;
-use feagi_serialization::{FeagiByteContainer, SessionID};
+use feagi_serialization::FeagiByteContainer;
 use crate::command_and_control::agent_registration_message::RegistrationRequest;
 use crate::command_and_control::FeagiMessage;
-use crate::{AgentDescriptor, FeagiAgentError};
+use crate::{AgentCapabilities, AgentDescriptor, FeagiAgentError};
+use crate::agent_id::AgentID;
 
 pub type IsNewSessionId = bool;
 
@@ -33,7 +34,7 @@ impl CommandControlTranslator {
     }
 
     /// Poll for incoming messages, returns one if found, along with the session ID and true if the session id seems to be new
-    pub fn poll_for_incoming_messages(&mut self, known_session_ids: &HashMap<SessionID, AgentDescriptor>,) -> Result<Option<(SessionID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
+    pub fn poll_for_incoming_messages(&mut self, known_session_ids: &HashMap<AgentID, (AgentDescriptor, Vec<AgentCapabilities>)>) -> Result<Option<(AgentID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
         let state = self.router.poll().clone();
         match state {
             FeagiEndpointState::Inactive => {
@@ -92,7 +93,7 @@ impl CommandControlTranslator {
     }
 
     /// Send a message to a specific connected agent
-    pub fn send_message(&mut self, session_id: SessionID, message: FeagiMessage, increment_counter: u16) -> Result<(), FeagiAgentError> {
+    pub fn send_message(&mut self, session_id: AgentID, message: FeagiMessage, increment_counter: u16) -> Result<(), FeagiAgentError> {
         let container = &mut self.send_buffer;
         message.serialize_to_byte_container(container, session_id, increment_counter)?;
         self.router.publish_response(session_id, container.get_byte_ref())?;
@@ -100,7 +101,7 @@ impl CommandControlTranslator {
     }
 
     /// Tries converting incoming data into a [FeagiMessage]
-    fn process_incoming_data_into_message(&mut self, known_session_ids: &HashMap<SessionID, AgentDescriptor>,) -> Result<Option<(SessionID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
+    fn process_incoming_data_into_message(&mut self, known_session_ids: &HashMap<AgentID, (AgentDescriptor, Vec<AgentCapabilities>)>) -> Result<Option<(AgentID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
         let (session_id, incoming_data) = self
             .router
             .consume_retrieved_request()?;

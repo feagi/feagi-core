@@ -10,8 +10,8 @@ description = "Adds serialization and deserialization to select Feagi Data Struc
 
 
 [dependencies]
+serde = { workspace = true }
 serde_json = { workspace = true }
 byteorder = "1.5.0"
-getrandom = "0.2"
 feagi-structures = { version = "=0.0.1-beta.8", path = "../feagi-structures" }
-serde = { version = "1.0.228", features = ["derive"] }
+
