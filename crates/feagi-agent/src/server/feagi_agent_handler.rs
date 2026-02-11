@@ -82,6 +82,26 @@ impl FeagiAgentHandler {
     pub fn get_registered_agents(&self) -> &HashMap<SessionID, AgentDescriptor> {
         &self.all_registered_sessions
     }
+
+    /// List all known agent IDs encoded from `AgentDescriptor`.
+    ///
+    /// This includes:
+    /// - descriptors stored from REST registration (`device_registrations_by_descriptor`)
+    /// - descriptors from active transport sessions (`all_registered_sessions`)
+    ///
+    /// Returns a deterministic, deduplicated list sorted lexicographically.
+    pub fn list_agent_ids_from_descriptors(&self) -> Vec<String> {
+        let mut agent_ids = std::collections::BTreeSet::<String>::new();
+
+        for descriptor in self.device_registrations_by_descriptor.keys() {
+            agent_ids.insert(descriptor.as_base64());
+        }
+        for descriptor in self.all_registered_sessions.values() {
+            agent_ids.insert(descriptor.as_base64());
+        }
+
+        agent_ids.into_iter().collect()
+    }
     
     /// Check if a session has visualization capability configured
     /// Returns (agent_id_base64, rate_hz) for registration with RuntimeService
@@ -495,5 +515,45 @@ impl FeagiAgentHandler {
 
     //endregion
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FeagiAgentHandler;
+    use crate::server::auth::DummyAuth;
+    use crate::AgentDescriptor;
+    use feagi_serialization::SessionID;
+
+    #[test]
+    fn list_agent_ids_from_descriptors_includes_rest_and_connected_agents() {
+        let mut handler = FeagiAgentHandler::new(Box::new(DummyAuth {}));
+
+        let descriptor_a = AgentDescriptor::new(1, "neuraville", "agent_a", 1)
+            .expect("descriptor_a must be valid");
+        let descriptor_b = AgentDescriptor::new(2, "neuraville", "agent_b", 1)
+            .expect("descriptor_b must be valid");
+
+        handler.set_device_registrations_by_descriptor(
+            descriptor_a.as_base64(),
+            descriptor_a.clone(),
+            serde_json::json!({"device_registrations": {}}),
+        );
+
+        // Simulate a connected session for a different descriptor.
+        handler
+            .all_registered_sessions
+            .insert(SessionID::new([100, 0, 0, 0, 0, 0, 0, 0]), descriptor_b.clone());
+
+        // Duplicate descriptor present in both stores should still appear only once.
+        handler
+            .all_registered_sessions
+            .insert(SessionID::new([101, 0, 0, 0, 0, 0, 0, 0]), descriptor_a.clone());
+
+        let ids = handler.list_agent_ids_from_descriptors();
+
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&descriptor_a.as_base64()));
+        assert!(ids.contains(&descriptor_b.as_base64()));
+    }
 }
 

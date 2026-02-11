@@ -20,6 +20,54 @@ use crate::traits_and_enums::client::{
     FeagiClientSubscriber, FeagiClientSubscriberProperties,
 };
 
+fn parse_bool_env(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+fn apply_pusher_socket_tuning_from_env(socket: &Socket) -> Result<(), FeagiNetworkError> {
+    if let Ok(value) = std::env::var("FEAGI_ZMQ_SNDHWM") {
+        let hwm = value.parse::<i32>().map_err(|e| {
+            FeagiNetworkError::InvalidSocketProperties(format!(
+                "Invalid FEAGI_ZMQ_SNDHWM value '{}': {}",
+                value, e
+            ))
+        })?;
+        socket
+            .set_sndhwm(hwm)
+            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
+    }
+
+    if let Ok(value) = std::env::var("FEAGI_ZMQ_LINGER_MS") {
+        let linger_ms = value.parse::<i32>().map_err(|e| {
+            FeagiNetworkError::InvalidSocketProperties(format!(
+                "Invalid FEAGI_ZMQ_LINGER_MS value '{}': {}",
+                value, e
+            ))
+        })?;
+        socket
+            .set_linger(linger_ms)
+            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
+    }
+
+    if let Ok(value) = std::env::var("FEAGI_ZMQ_IMMEDIATE") {
+        let immediate = parse_bool_env(&value).ok_or_else(|| {
+            FeagiNetworkError::InvalidSocketProperties(format!(
+                "Invalid FEAGI_ZMQ_IMMEDIATE value '{}'",
+                value
+            ))
+        })?;
+        socket
+            .set_immediate(immediate)
+            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
+    }
+
+    Ok(())
+}
+
 // ============================================================================
 // Subscriber
 // ============================================================================
@@ -136,6 +184,7 @@ impl FeagiClient for FeagiZmqClientSubscriber {
     fn request_connect(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
+                apply_pusher_socket_tuning_from_env(&self.socket)?;
                 self.socket
                     .connect(&self.server_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;

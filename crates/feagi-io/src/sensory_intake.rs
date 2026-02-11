@@ -29,6 +29,17 @@ impl SensoryIntakeQueue {
         }
     }
 
+    /// Replace any buffered payloads with the newest sensory payload.
+    ///
+    /// This keeps ingestion real-time under sustained load by preventing
+    /// unbounded accumulation of stale sensory frames.
+    pub fn push_latest(&self, bytes: Vec<u8>) {
+        if let Ok(mut q) = self.inner.lock() {
+            q.clear();
+            q.push_back(bytes);
+        }
+    }
+
     /// Take the next payload if any (called by burst engine each burst).
     pub fn poll_next(&self) -> Option<Vec<u8>> {
         self.inner.lock().ok().and_then(|mut q| q.pop_front())

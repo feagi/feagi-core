@@ -6,7 +6,7 @@
 //! These endpoints match the Python implementation at:
 //! feagi-py/feagi/api/v1/feagi_agent.py
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
@@ -407,15 +407,26 @@ pub async fn heartbeat(
     tag = "agent"
 )]
 pub async fn list_agents(State(state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
-    let agent_service = state
-        .agent_service
-        .as_ref()
-        .ok_or_else(|| ApiError::internal("Agent service not available"))?;
+    let mut agent_ids = BTreeSet::<String>::new();
 
-    match agent_service.list_agents().await {
-        Ok(agent_ids) => Ok(Json(agent_ids)),
-        Err(e) => Err(ApiError::internal(format!("Failed to list agents: {}", e))),
+    #[cfg(feature = "feagi-agent")]
+    if let Some(handler) = &state.agent_handler {
+        let handler_guard = handler
+            .lock()
+            .map_err(|_| ApiError::internal("Agent handler lock poisoned"))?;
+        agent_ids.extend(handler_guard.list_agent_ids_from_descriptors());
     }
+
+    if let Some(agent_service) = state.agent_service.as_ref() {
+        match agent_service.list_agents().await {
+            Ok(service_agent_ids) => agent_ids.extend(service_agent_ids),
+            Err(e) => return Err(ApiError::internal(format!("Failed to list agents: {}", e))),
+        }
+    } else if agent_ids.is_empty() {
+        return Err(ApiError::internal("Agent service not available"));
+    }
+
+    Ok(Json(agent_ids.into_iter().collect()))
 }
 
 /// Get agent properties including type, capabilities, version, and connection details. Uses query parameter ?agent_id=xxx.
