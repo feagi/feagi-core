@@ -273,6 +273,18 @@ impl FeagiAgentHandler {
         command_translator.send_message(agent_id, message,increment_counter)
     }
 
+    pub fn send_motor_data_to_agent(&mut self, agent_id: AgentID, data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
+        let motor_translator = self.motors.get_mut(&agent_id)
+            .ok_or_else(|| FeagiAgentError::Other("No Agent ID exists!".to_string()))?;
+        motor_translator.poll_and_send_buffered_motor_data(data)
+    }
+
+    pub fn send_visualization_data_to_agent(&mut self, agent_id: AgentID, data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
+        let visualization_translator = self.visualizations.get_mut(&agent_id)
+            .ok_or_else(|| FeagiAgentError::Other("No Agent ID exists!".to_string()))?;
+        visualization_translator.poll_and_send_visualization_data(data)
+    }
+
     //endregion
 
     //region Agents
