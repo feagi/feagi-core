@@ -107,12 +107,22 @@ impl FeagiAgentHandler {
     /// Find SessionID by agent_id (base64-encoded AgentDescriptor)
     /// Returns the first matching session, or None if agent not connected
     pub fn find_session_by_agent_id(&self, agent_id: &str) -> Option<SessionID> {
-        // Parse agent_id to AgentDescriptor
-        let agent_descriptor = crate::AgentDescriptor::try_from_base64(agent_id).ok()?;
-        
-        // Find session with matching descriptor
+        let normalized_agent_id = agent_id.trim();
+
+        // Fast path: parse provided agent ID as descriptor and compare by value.
+        if let Ok(agent_descriptor) = crate::AgentDescriptor::try_from_base64(normalized_agent_id) {
+            for (session_id, descriptor) in &self.all_registered_sessions {
+                if descriptor == &agent_descriptor {
+                    return Some(*session_id);
+                }
+            }
+        }
+
+        // Fallback path: compare textual descriptor representation directly.
+        // This covers benign formatting drift where the input contains extra whitespace
+        // or comes from a source that preserves a pre-encoded descriptor string.
         for (session_id, descriptor) in &self.all_registered_sessions {
-            if descriptor == &agent_descriptor {
+            if descriptor.as_base64() == normalized_agent_id {
                 return Some(*session_id);
             }
         }
