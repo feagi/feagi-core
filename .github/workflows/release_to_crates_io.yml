@@ -76,33 +76,89 @@ jobs:
           fi
           echo "Using baseline tag: $BASELINE_TAG"
 
-      - name: Sync workspace from crates.io
-        run: |
-          echo "Syncing root and crate versions to match current crates.io..."
-          chmod +x scripts/sync-from-crates-io.sh
-          ./scripts/sync-from-crates-io.sh
-
-      - name: Smart version detection and bumping
+      - name: Bump single workspace version
         id: version
         run: |
-          echo "Detecting changed crates and computing independent version bumps..."
-          chmod +x scripts/smart-version-bump.sh
-          chmod +x scripts/apply-version-bumps.sh
-          LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
-          VERSION_OUTPUT=$(ALLOW_DIRTY=true LAST_TAG="$LAST_TAG" ./scripts/smart-version-bump.sh)
-          echo "$VERSION_OUTPUT"
-          VERSIONS_FILE=$(echo "$VERSION_OUTPUT" | grep "VERSIONS_FILE=" | cut -d'=' -f2)
-          CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
-          echo "versions_file=$VERSIONS_FILE" >> $GITHUB_OUTPUT
-          echo "changed_crates=$CHANGED_CRATES" >> $GITHUB_OUTPUT
-          if [ -n "$VERSIONS_FILE" ] && [ -f "$VERSIONS_FILE" ]; then
-            echo "Applying version updates to Cargo.toml files..."
-            export VERSIONS_FILE="$VERSIONS_FILE"
-            ./scripts/apply-version-bumps.sh
-          else
-            echo "No version updates to apply."
-          fi
-          echo "Smart independent versioning complete"
+          set -euo pipefail
+          CRATES="feagi-observability feagi-structures feagi-config feagi-npu-neural feagi-npu-runtime feagi-serialization feagi-state-manager feagi-npu-burst-engine feagi-npu-plasticity feagi-evolutionary feagi-brain-development feagi-sensorimotor feagi-services feagi-io feagi-agent feagi-api feagi-hal feagi"
+          NEW_VERSION="$(
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+          from urllib.request import urlopen
+          
+          
+          crates = "feagi-observability feagi-structures feagi-config feagi-npu-neural feagi-npu-runtime feagi-serialization feagi-state-manager feagi-npu-burst-engine feagi-npu-plasticity feagi-evolutionary feagi-brain-development feagi-sensorimotor feagi-services feagi-io feagi-agent feagi-api feagi-hal feagi".split()
+          cargo = Path("Cargo.toml")
+          
+          
+          def semver_key(v: str):
+              return [int(p) if p.isdigit() else p for p in re.split(r"[-.]", v)]
+          
+          
+          def gt(left: str, right: str) -> bool:
+              if left == right:
+                  return False
+              return sorted([left, right], key=semver_key)[-1] == left
+          
+          
+          def next_beta(version: str) -> str:
+              m = re.fullmatch(r"(\d+\.\d+\.\d+)(?:-beta\.(\d+))?", version)
+              if not m:
+                  raise SystemExit(f"Unsupported version format: {version}")
+              base = m.group(1)
+              beta = int(m.group(2) or "0") + 1
+              return f"{base}-beta.{beta}"
+          
+          
+          text = cargo.read_text(encoding="utf-8")
+          m = re.search(r"(?ms)^\[workspace\.package\].*?^version\s*=\s*\"([^\"]+)\"", text)
+          if not m:
+              raise SystemExit("Failed to read [workspace.package] version")
+          current = m.group(1)
+          
+          baseline = current
+          for crate in crates:
+              url = f"https://crates.io/api/v1/crates/{crate}"
+              with urlopen(url, timeout=20) as resp:
+                  data = json.load(resp)
+              candidates = [v.get("num", "") for v in data.get("versions", []) if not v.get("yanked", False) and v.get("num")]
+              if not candidates:
+                  continue
+              latest = sorted(candidates, key=semver_key)[-1]
+              if gt(latest, baseline):
+                  baseline = latest
+          
+          print(next_beta(baseline))
+          PY
+          )"
+          echo "$NEW_VERSION" > /tmp/feagi-next-version--temp.txt
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          
+          new_version = Path("/tmp/feagi-next-version--temp.txt").read_text(encoding="utf-8").strip()
+          cargo = Path("Cargo.toml")
+          text = cargo.read_text(encoding="utf-8")
+          updated = re.sub(
+              r"(?ms)(^\[workspace\.package\].*?^version\s*=\s*\")([^\"]+)(\")",
+              rf"\g<1>{new_version}\g<3>",
+              text,
+              count=1,
+          )
+          updated = re.sub(
+              r'(?m)^(\s*feagi-[A-Za-z0-9-]+\s*=\s*\{)\s*(?:version\s*=\s*"[^"]+"\s*,\s*)?path\s*=\s*"([^"]+)"\s*(\}\s*(?:#.*)?)$',
+              rf'\1 version = "{new_version}", path = "\2" \3',
+              updated,
+          )
+          if updated == text:
+              raise SystemExit("Failed to update workspace version/dependency entries")
+          cargo.write_text(updated, encoding="utf-8")
+          PY
+          rm -f /tmp/feagi-next-version--temp.txt
+          echo "release_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "changed_crates=$CRATES" >> "$GITHUB_OUTPUT"
       - name: Build release manifest
         id: manifest
         run: |
@@ -192,45 +248,18 @@ jobs:
           name: feagi-release-manifest
           path: ${{ steps.manifest.outputs.manifest_path }}
 
-      - name: Guard - enforce bumps for changed crates
+      - name: Guard - enforce workspace version bump against crates.io
         run: |
           set -euo pipefail
-          echo "Verifying changed crates are version-bumped vs crates.io..."
-          LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
+          echo "Verifying workspace release version is newer than all published FEAGI crates..."
           python3 - <<'PY'
           import json
-          import subprocess
+          import re
           import sys
           from pathlib import Path
           from urllib.request import urlopen
 
-          root = Path(".").resolve()
-          last_tag = subprocess.check_output(["git", "tag", "--list", "v*", "--sort=-v:refname"]).decode().splitlines()[0]
-          changed_files = subprocess.check_output(["git", "diff", "--name-only", last_tag, "HEAD"]).decode().splitlines()
-
-          crate_paths = set()
-          root_changed = False
-          for f in changed_files:
-              p = Path(f)
-              if p.parts[:2] == ("crates",) and len(p.parts) > 2:
-                  crate_paths.add(root / "crates" / p.parts[1])
-              else:
-                  root_changed = True
-
-          def crate_name_and_version(manifest: Path):
-              name = None
-              version = None
-              for line in manifest.read_text(encoding="utf-8").splitlines():
-                  if line.startswith("name = "):
-                      name = line.split('"', 2)[1]
-                  if line.startswith("version = "):
-                      version = line.split('"', 2)[1]
-                  if name and version:
-                      break
-              return name, version
-
           def latest_on_crates_io(name: str):
-              import re as _re
               url = f"https://crates.io/api/v1/crates/{name}"
               with urlopen(url, timeout=20) as resp:
                   data = json.load(resp)
@@ -238,101 +267,54 @@ jobs:
                             if not v.get("yanked", False) and v.get("num")]
               if not candidates:
                   return ""
-              def _semver_key(s):
-                  return [int(p) if p.isdigit() else p for p in _re.split(r"[-.]", s)]
-              candidates.sort(key=_semver_key, reverse=True)
+              def semver_key(s):
+                  return [int(p) if p.isdigit() else p for p in re.split(r"[-.]", s)]
+              candidates.sort(key=semver_key, reverse=True)
               return candidates[0]
 
           def version_gt(a: str, b: str) -> bool:
               if a == b:
                   return False
-              return sorted([a, b], key=lambda s: [int(x) if x.isdigit() else x for x in s.replace("-", ".").split(".")])[-1] == a
+              return sorted([a, b], key=lambda s: [int(x) if x.isdigit() else x for x in re.split(r"[-.]", s)])[-1] == a
+
+          crates = "feagi-observability feagi-structures feagi-config feagi-npu-neural feagi-npu-runtime feagi-serialization feagi-state-manager feagi-npu-burst-engine feagi-npu-plasticity feagi-evolutionary feagi-brain-development feagi-sensorimotor feagi-services feagi-io feagi-agent feagi-api feagi-hal feagi".split()
+          cargo = Path("Cargo.toml").read_text(encoding="utf-8")
+          m = re.search(r"(?ms)^\[workspace\.package\].*?^version\s*=\s*\"([^\"]+)\"", cargo)
+          if not m:
+              raise SystemExit("Failed to read workspace release version")
+          release_version = m.group(1)
 
           violations = []
-
-          for crate_dir in sorted(crate_paths):
-              manifest = crate_dir / "Cargo.toml"
-              if not manifest.exists():
-                  continue
-              name, version = crate_name_and_version(manifest)
-              if not name or not version:
-                  continue
-              published = latest_on_crates_io(name)
-              if published and not version_gt(version, published):
-                  violations.append(f"{name} local {version} not > crates.io {published}")
-
-          if root_changed:
-              name, version = crate_name_and_version(root / "Cargo.toml")
-              if name and version:
-                  published = latest_on_crates_io(name)
-                  if published and not version_gt(version, published):
-                      violations.append(f"{name} local {version} not > crates.io {published}")
+          for crate in crates:
+              published = latest_on_crates_io(crate)
+              if published and not version_gt(release_version, published):
+                  violations.append(f"{crate} release {release_version} not > crates.io {published}")
 
           if violations:
               print("Version bump enforcement failed:")
               for v in violations:
                   print(f"  - {v}")
               sys.exit(1)
-          print("Version bump enforcement passed.")
+          print("Workspace version bump enforcement passed.")
           PY
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Guard - verify path dependency versions consistent
+      - name: Guard - ensure crates inherit workspace version
         run: |
           set -euo pipefail
-          echo "Verifying workspace path dependency version consistency..."
-          WORKSPACE_VERSION="$(
-            awk '
-              BEGIN { in_ws=0 }
-              /^\[workspace\.package\]/ { in_ws=1; next }
-              /^\[/ { if (in_ws==1) exit }
-              in_ws==1 && /^version = / {
-                gsub(/version = /, "", $0);
-                gsub(/"/, "", $0);
-                print $0;
-                exit
-              }
-            ' Cargo.toml
-          )"
-          if [ -z "${WORKSPACE_VERSION}" ]; then
-            echo "Failed to detect [workspace.package] version from Cargo.toml"
-            exit 1
-          fi
-          declare -A CRATE_VERSIONS
+          echo "Verifying every crate uses version.workspace = true..."
+          missing=0
           for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
             [ -f "$manifest" ] || continue
-            name="$(grep -E '^name = ' "$manifest" | head -1 | sed 's/name = \"\\(.*\\)\"/\\1/')"
-            [ -n "$name" ] || continue
-            if grep -qE '^version\\.workspace = true' "$manifest"; then
-              ver="$WORKSPACE_VERSION"
-            else
-              ver="$(grep -E '^version = ' "$manifest" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+            if ! grep -qE '^version\.workspace = true' "$manifest"; then
+              echo "Missing version.workspace inheritance: $manifest"
+              missing=$((missing + 1))
             fi
-            [ -n "$ver" ] && CRATE_VERSIONS["$name"]="$ver"
           done
-          mismatches=0
-          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
-            [ -f "$manifest" ] || continue
-            # Match both path="../..." (subcrates) and path="crates/..." (root)
-            while IFS= read -r line; do
-              dep="$(echo "$line" | sed -n 's/^[[:space:]]*\([A-Za-z0-9_-][A-Za-z0-9_-]*\)[[:space:]]*=.*/\1/p')"
-              req="$(echo "$line" | sed -n 's/.*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
-              path="$(echo "$line" | sed -n 's/.*path[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
-              [ -n "$dep" ] && [ -n "$req" ] && [ -n "$path" ] || continue
-              case "$path" in ../*|crates/*) ;; *) continue ;; esac
-              req="${req#=}"; req="${req#^}"
-              actual="${CRATE_VERSIONS[$dep]:-}"
-              [ -z "$actual" ] && continue
-              if [ "$req" != "$actual" ]; then
-                echo "Version mismatch in $manifest: $dep required $req actual $actual"
-                mismatches=$((mismatches + 1))
-              fi
-            done < <(grep -E 'path[[:space:]]*=[[:space:]]*"(\.\./|crates/)[^"]+"' "$manifest" || true)
-          done
-          [ "$mismatches" -eq 0 ] || exit 1
-          echo "Workspace path dependency versions are consistent."
+          [ "$missing" -eq 0 ] || exit 1
+          echo "All manifests inherit workspace version."
 
       - name: Run Clippy (lib and tests only)
         run: cargo clippy --workspace --lib --tests -- -D warnings
@@ -355,10 +337,11 @@ jobs:
           git add Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml
           if [ -n "$CHANGED_CRATES" ]; then
             if git diff --cached --quiet; then
-              echo "Changed crates detected but no version updates staged"
-              exit 1
+              echo "No workspace version updates staged; skipping bump PR."
+              echo "bump_pr_created=false" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
-            echo "chore: bump versions for release (independent versioning)" > commit_msg.txt
+            echo "chore: bump workspace version for release" > commit_msg.txt
             echo "" >> commit_msg.txt
             echo "Changed crates: $CHANGED_CRATES" >> commit_msg.txt
             COMMIT_MSG=$(cat commit_msg.txt)
@@ -376,8 +359,8 @@ jobs:
             git checkout -b "$BRANCH_NAME"
             git push origin "$BRANCH_NAME"
 
-            PR_TITLE="chore: bump versions for release"
-            PR_BODY="Automated version bumps for crates changed on staging."
+            PR_TITLE="chore: bump workspace version for release"
+            PR_BODY="Automated workspace version bump for lockstep FEAGI crate release."
             PR_URL=""
             attempt=1
             max_attempts=6
@@ -752,7 +735,19 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          FEAGI_VERSION="$(awk -F'\"' '/^version = / { print $2; exit }' Cargo.toml)"
+          FEAGI_VERSION="$(
+            awk '
+              BEGIN { in_ws=0 }
+              /^\[workspace\.package\]/ { in_ws=1; next }
+              /^\[/ { if (in_ws==1) exit }
+              in_ws==1 && /^version = / {
+                gsub(/version = /, "", $0);
+                gsub(/"/, "", $0);
+                print $0;
+                exit
+              }
+            ' Cargo.toml
+          )"
           if [ -z "$FEAGI_VERSION" ]; then
             echo "Failed to detect feagi version from Cargo.toml"
             exit 1
@@ -777,9 +772,9 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag_name }}
           release_name: Release ${{ steps.tag.outputs.tag_name }}
           body: |
-            **FEAGI Core release (independent versioning)**
+            **FEAGI Core release (single workspace versioning)**
 
-            Only changed crates have been published to crates.io.
+            All FEAGI crates share one workspace version and are published in lockstep.
 
             ## Changed crates
 

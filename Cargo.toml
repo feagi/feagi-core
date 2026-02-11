@@ -8,7 +8,7 @@
 
 [package]
 name = "feagi"
-version = "0.0.1-beta.17"
+version.workspace = true
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
@@ -74,35 +74,35 @@ agent-transport-websocket-wasm = ["feagi-agent/agent-transport-websocket-wasm"]
 
 [dependencies]
 # Foundation (vendored into feagi-core when published)
-feagi-evolutionary = { version = "=0.0.1-beta.8", path = "crates/feagi-evolutionary" }
-feagi-npu-neural = { version = "=0.0.1-beta.8", path = "crates/feagi-npu/neural" }
+feagi-evolutionary = { workspace = true }
+feagi-npu-neural = { workspace = true }
 serde_json = "1.0"
-feagi-structures = { version = "=0.0.1-beta.8", path = "crates/feagi-structures" }
-feagi-serialization = { version = "=0.0.1-beta.8", path = "crates/feagi-serialization" }
+feagi-structures = { workspace = true }
+feagi-serialization = { workspace = true }
 ndarray = { workspace = true }
 
 # Infrastructure (vendored)
-feagi-state-manager = { version = "=0.0.1-beta.8", path = "crates/feagi-state-manager", optional = true }
+feagi-state-manager = { workspace = true, optional = true }
 
 # Algorithms (vendored)
-feagi-npu-burst-engine = { version = "=0.0.1-beta.12", path = "crates/feagi-npu/burst-engine", optional = true }
-feagi-brain-development = { version = "=0.0.1-beta.8", path = "crates/feagi-brain-development", optional = true }
-feagi-sensorimotor = { version = "=0.0.1-beta.8", path = "crates/feagi-sensorimotor", optional = true }
-feagi-npu-plasticity = { version = "=0.0.1-beta.12", path = "crates/feagi-npu/plasticity", optional = true }
+feagi-npu-burst-engine = { workspace = true, optional = true }
+feagi-brain-development = { workspace = true, optional = true }
+feagi-sensorimotor = { workspace = true, optional = true }
+feagi-npu-plasticity = { workspace = true, optional = true }
 
 # I/O (vendored)
-feagi-io = { version = "=0.0.1-beta.12", path = "crates/feagi-io", optional = true }
-feagi-agent = { version = "=0.0.1-beta.9", path = "crates/feagi-agent", optional = true }
-feagi-services = { version = "=0.0.1-beta.8", path = "crates/feagi-services", optional = true }
+feagi-io = { workspace = true, optional = true }
+feagi-agent = { workspace = true, optional = true }
+feagi-services = { workspace = true, optional = true }
 
 # Async runtime is now a feature of feagi-data-structures
 
 [dev-dependencies]
 # For integration tests that need GenomeService
-feagi-services = { version = "=0.0.1-beta.8", path = "crates/feagi-services" }
-feagi-npu-runtime = { version = "=0.0.1-beta.8", path = "crates/feagi-npu/runtime", features = ["std"] }
+feagi-services = { workspace = true }
+feagi-npu-runtime = { workspace = true, features = ["std"] }
 ahash = { workspace = true }
-feagi-config = { version = "=0.0.1-beta.8", path = "crates/feagi-config" }
+feagi-config = { workspace = true }
 parking_lot = "0.12"
 tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros"] }
 
@@ -178,12 +178,24 @@ pollster = "0.3"  # Async/await executor for GPU operations
 bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU buffers
 
 # FEAGI data crates (now internal to workspace)
-feagi-structures = { version = "=0.0.1-beta.8", path = "crates/feagi-structures" }
-feagi-serialization = { version = "=0.0.1-beta.8", path = "crates/feagi-serialization" }
-
+feagi-structures = { version = "0.0.1-beta.17", path = "crates/feagi-structures" }
+feagi-serialization = { version = "0.0.1-beta.17", path = "crates/feagi-serialization" }
 # Workspace-internal crates
-feagi-observability = { version = "=0.0.1-beta.8", path = "crates/feagi-observability" }
-
+feagi-observability = { version = "0.0.1-beta.17", path = "crates/feagi-observability" }
+feagi-config = { version = "0.0.1-beta.17", path = "crates/feagi-config" }
+feagi-agent = { version = "0.0.1-beta.17", path = "crates/feagi-agent" }
+feagi-api = { version = "0.0.1-beta.17", path = "crates/feagi-api" }
+feagi-services = { version = "0.0.1-beta.17", path = "crates/feagi-services" }
+feagi-io = { version = "0.0.1-beta.17", path = "crates/feagi-io" }
+feagi-sensorimotor = { version = "0.0.1-beta.17", path = "crates/feagi-sensorimotor" }
+feagi-state-manager = { version = "0.0.1-beta.17", path = "crates/feagi-state-manager" }
+feagi-evolutionary = { version = "0.0.1-beta.17", path = "crates/feagi-evolutionary" }
+feagi-brain-development = { version = "0.0.1-beta.17", path = "crates/feagi-brain-development" }
+feagi-npu-neural = { version = "0.0.1-beta.17", path = "crates/feagi-npu/neural" }
+feagi-npu-runtime = { version = "0.0.1-beta.17", path = "crates/feagi-npu/runtime" }
+feagi-npu-burst-engine = { version = "0.0.1-beta.17", path = "crates/feagi-npu/burst-engine" }
+feagi-npu-plasticity = { version = "0.0.1-beta.17", path = "crates/feagi-npu/plasticity" }
+feagi-hal = { version = "0.0.1-beta.17", path = "crates/feagi-hal" }
 [profile.release]
 lto = true           # Link-time optimization
 codegen-units = 1    # Better optimization, slower compile

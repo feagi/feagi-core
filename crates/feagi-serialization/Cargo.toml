@@ -1,6 +1,6 @@
 [package]
 name = "feagi-serialization"
-version = "0.0.1-beta.8"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -13,5 +13,5 @@ description = "Adds serialization and deserialization to select Feagi Data Struc
 serde_json = { workspace = true }
 byteorder = "1.5.0"
 getrandom = "0.2"
-feagi-structures = { version = "=0.0.1-beta.8", path = "../feagi-structures" }
+feagi-structures = { workspace = true }
 serde = { version = "1.0.228", features = ["derive"] }

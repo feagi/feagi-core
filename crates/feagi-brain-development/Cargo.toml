@@ -1,6 +1,6 @@
 [package]
 name = "feagi-brain-development"
-version = "0.0.1-beta.8"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -14,12 +14,12 @@ name = "feagi_brain_development"
 
 [dependencies]
 # Core types from existing FEAGI crates
-feagi-npu-neural = { version = "=0.0.1-beta.8", path = "../feagi-npu/neural" }  # For types (CorticalArea, Dimensions, etc.)
-feagi-evolutionary = { version = "=0.0.1-beta.8", path = "../feagi-evolutionary" }
-feagi-npu-plasticity = { version = "=0.0.1-beta.12", path = "../feagi-npu/plasticity", optional = true }
+feagi-npu-neural = { workspace = true }  # For types (CorticalArea, Dimensions, etc.)
+feagi-evolutionary = { workspace = true }
+feagi-npu-plasticity = { workspace = true, optional = true }
 # feagi-burst-engine configured per-platform below
 feagi-structures = { workspace = true }
-feagi-state-manager = { version = "=0.0.1-beta.8", path = "../feagi-state-manager", default-features = false }
+feagi-state-manager = { workspace = true, default-features = false }
 
 # Performance (using workspace versions)
 rayon = { workspace = true, optional = true }  # Optional - not available in WASM
@@ -53,13 +53,13 @@ parking_lot = "0.12"
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 rand = { version = "0.8", features = ["std", "std_rng"] }
 # Use async-tokio feature for desktop builds
-feagi-npu-burst-engine = { version = "=0.0.1-beta.12", path = "../feagi-npu/burst-engine", default-features = false, features = ["async-tokio", "std"] }
+feagi-npu-burst-engine = { workspace = true, default-features = false, features = ["async-tokio", "std"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
 rand = { version = "0.8", default-features = false, features = ["getrandom"] }
 # Use wasm feature for WASM builds (no tokio)
-feagi-npu-burst-engine = { version = "=0.0.1-beta.12", path = "../feagi-npu/burst-engine", default-features = false, features = ["wasm"] }
+feagi-npu-burst-engine = { workspace = true, default-features = false, features = ["wasm"] }
 
 [features]
 default = ["parallel", "plasticity"]  # Standard build includes plasticity
@@ -75,7 +75,7 @@ async-tokio = []
 [dev-dependencies]
 criterion = "0.5"       # Benchmarking
 proptest = "1.4"        # Property-based testing
-feagi-npu-runtime = { version = "=0.0.1-beta.8", path = "../feagi-npu/runtime", features = ["std"] }
+feagi-npu-runtime = { workspace = true, features = ["std"] }
 
 # Benchmarks will be added in Phase 2
 # [[bench]]

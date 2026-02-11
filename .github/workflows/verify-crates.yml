@@ -64,15 +64,15 @@ jobs:
             CRATE_FAILED=true
           fi
           
-          # Independent versioning enforcement:
-          # - Every crate MUST have explicit `version = "..."` (no workspace inheritance)
-          if grep -q '^version\.workspace = true' "$crate_dir/Cargo.toml"; then
-            echo "  ❌ Forbidden: 'version.workspace = true' (independent versioning required)"
+          # Workspace versioning enforcement:
+          # - Every crate MUST inherit version from [workspace.package]
+          if ! grep -q '^version\.workspace = true' "$crate_dir/Cargo.toml"; then
+            echo "  ❌ Missing 'version.workspace = true' (workspace versioning required)"
             CRATE_FAILED=true
           fi
           
-          if ! grep -q '^version = ' "$crate_dir/Cargo.toml"; then
-            echo "  ❌ Missing explicit 'version = \"...\"' field (independent versioning requires explicit version)"
+          if grep -q '^version = ' "$crate_dir/Cargo.toml"; then
+            echo "  ❌ Explicit 'version = \"...\"' is forbidden for member crates"
             CRATE_FAILED=true
           fi
           
@@ -240,40 +240,40 @@ jobs:
           echo "✅ Ready for publication to crates.io"
         fi
     
-    - name: Verify versioning policy (independent versioning)
+    - name: Verify versioning policy (workspace versioning)
       run: |
-        echo "🔗 Verifying independent versioning policy..."
+        echo "🔗 Verifying workspace versioning policy..."
         echo ""
         
         FAILED=()
         
-        for crate_dir in crates/*/; do
+        for crate_dir in crates/*/ crates/feagi-npu/*/; do
           if [ ! -f "$crate_dir/Cargo.toml" ]; then
             continue
           fi
           
           crate_name=$(basename "$crate_dir")
           
-          if grep -q '^version\.workspace = true' "$crate_dir/Cargo.toml"; then
-            FAILED+=("$crate_name: version.workspace is forbidden")
+          if ! grep -q '^version\.workspace = true' "$crate_dir/Cargo.toml"; then
+            FAILED+=("$crate_name: missing version.workspace = true")
             continue
           fi
           
-          if ! grep -q '^version = ' "$crate_dir/Cargo.toml"; then
-            FAILED+=("$crate_name: missing explicit version")
+          if grep -q '^version = ' "$crate_dir/Cargo.toml"; then
+            FAILED+=("$crate_name: explicit version is forbidden")
             continue
           fi
         done
         
         if [ ${#FAILED[@]} -gt 0 ]; then
-          echo "❌ Independent versioning policy violations:"
+          echo "❌ Workspace versioning policy violations:"
           for item in "${FAILED[@]}"; do
             echo "  - $item"
           done
           exit 1
         fi
         
-        echo "✅ Independent versioning policy enforced (explicit versions; no version.workspace)"
+        echo "✅ Workspace versioning policy enforced (version.workspace inheritance)"
     
     - name: Summary
       if: success()
@@ -286,7 +286,7 @@ jobs:
         echo "✅ Metadata complete for all crates"
         echo "✅ All crates build independently"
         echo "✅ All crates package successfully"
-        echo "✅ Independent versioning policy verified"
+        echo "✅ Workspace versioning policy verified"
         echo ""
         echo "🎉 Workspace is ready for publication to crates.io"
 

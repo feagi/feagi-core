@@ -39,6 +39,35 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+get_workspace_version() {
+    awk '
+      BEGIN { in_ws=0 }
+      /^\[workspace\.package\]/ { in_ws=1; next }
+      /^\[/ { if (in_ws==1) exit }
+      in_ws==1 && /^version = / {
+        gsub(/version = /, "", $0);
+        gsub(/"/, "", $0);
+        print $0;
+        exit
+      }
+    ' "$WORKSPACE_ROOT/Cargo.toml"
+}
+
+get_effective_version() {
+    local crate_path=$1
+    local manifest="$crate_path/Cargo.toml"
+    if [ "$crate_path" = "." ]; then
+        manifest="$WORKSPACE_ROOT/Cargo.toml"
+    fi
+
+    if grep -q '^version\.workspace = true' "$manifest" 2>/dev/null; then
+        get_workspace_version
+        return
+    fi
+
+    grep '^version = ' "$manifest" | head -1 | sed 's/version = "\(.*\)"/\1/' | xargs
+}
+
 if [ -z "$CARGO_TOKEN" ] && [ "$DRY_RUN" != "true" ]; then
     echo -e "${RED}❌ Error: CARGO_REGISTRY_TOKEN environment variable must be set${NC}"
     exit 1
@@ -111,10 +140,8 @@ is_already_published() {
     local crate_path=$2
 
     # Get version from Cargo.toml (trim whitespace)
-    cd "$crate_path" 2>/dev/null || return 1
     local version
-    version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/' | xargs)
-    cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+    version=$(get_effective_version "$crate_path")
 
     [ -n "$version" ] || { echo "false"; return; }
 
@@ -268,6 +295,33 @@ validate_all_packages() {
 }
 
 # ============================================================================
+# Prepare local patch config for dry-run publish resolution
+# ============================================================================
+
+setup_local_patch_config() {
+    mkdir -p .cargo
+    local root_abs
+    root_abs="$(cd "$WORKSPACE_ROOT" && pwd)"
+    {
+        echo "[patch.crates-io]"
+        for crate_name in "${CRATE_ORDER[@]}"; do
+            path="$(crate_path_for "$crate_name")" || continue
+            [ -f "${path}/Cargo.toml" ] || [ "$path" = "." ] && [ -f "Cargo.toml" ] || continue
+            if [ "$path" = "." ]; then
+                echo "feagi = { path = \"${root_abs}\" }"
+            else
+                echo "${crate_name} = { path = \"${root_abs}/${path}\" }"
+            fi
+        done
+    } > .cargo/config.toml
+}
+
+cleanup_local_patch_config() {
+    rm -f .cargo/config.toml
+    rmdir .cargo 2>/dev/null || true
+}
+
+# ============================================================================
 # Publish function
 # ============================================================================
 
@@ -282,13 +336,15 @@ publish_crate() {
     echo "   Path: $crate_path"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
+    # Resolve version from workspace-aware manifest before changing directories.
+    local version
+    version=$(get_effective_version "$crate_path")
+
     # Change to crate directory
     if [ "$crate_path" != "." ]; then
         cd "$crate_path"
     fi
     
-    # Get version
-    local version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
     echo "   Version: $version"
     
     # Package first to verify
@@ -373,6 +429,12 @@ if [ "$validate_rc" -ne 0 ]; then
     exit 1
 fi
 
+# In dry-run mode, force local dependency resolution for publish simulation.
+if [ "$DRY_RUN" = "true" ]; then
+    setup_local_patch_config
+    trap cleanup_local_patch_config EXIT
+fi
+
 for crate_name in "${CRATE_ORDER[@]}"; do
     # When PUBLISH_SINGLE_CRATE is set, only process that crate (for CI one-job-per-crate)
     if [ -n "$PUBLISH_SINGLE_CRATE" ] && [ "$crate_name" != "$PUBLISH_SINGLE_CRATE" ]; then
@@ -392,7 +454,7 @@ for crate_name in "${CRATE_ORDER[@]}"; do
     if [ "$publish_decision" = "skip_published" ]; then
         # Get version for display
         cd "$crate_path" 2>/dev/null || continue
-        version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        version=$(get_effective_version "$crate_path")
         cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
         echo -e "${YELLOW}⏭️  Skipping $crate_name v$version (already published on crates.io)${NC}"
         SKIPPED_COUNT=$((SKIPPED_COUNT + 1))

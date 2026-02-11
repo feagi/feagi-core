@@ -31,7 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      contains(join(github.event.commits.*.message, '\n'), 'bump versions for release')
+      (github.event_name == 'push' &&
+      contains(github.event.head_commit.message, 'bump workspace version for release'))
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
       DELAY_SECONDS: ${{ github.event.inputs.indexing_delay_seconds || '90' }}
@@ -54,11 +55,6 @@ jobs:
         with:
           shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
           save-if: true
-      - name: Sync workspace from crates.io
-        run: |
-          chmod +x scripts/sync-from-crates-io.sh
-          ./scripts/sync-from-crates-io.sh
-
       - name: Publish unpublished crates
         run: |
           chmod +x scripts/publish-crates-smart.sh
@@ -156,7 +152,19 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          FEAGI_VERSION="$(awk -F'\"' '/^version = / { print $2; exit }' Cargo.toml)"
+          FEAGI_VERSION="$(
+            awk '
+              BEGIN { in_ws=0 }
+              /^\[workspace\.package\]/ { in_ws=1; next }
+              /^\[/ { if (in_ws==1) exit }
+              in_ws==1 && /^version = / {
+                gsub(/version = /, "", $0);
+                gsub(/"/, "", $0);
+                print $0;
+                exit
+              }
+            ' Cargo.toml
+          )"
           if [ -z "$FEAGI_VERSION" ]; then
             echo "Failed to detect feagi version from Cargo.toml"
             exit 1
