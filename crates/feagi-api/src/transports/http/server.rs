@@ -228,7 +228,7 @@ pub fn create_http_server(state: ApiState) -> Router {
 /// Create V1 API router - Match Python structure EXACTLY
 /// Format: /v1/{module}/{snake_case_endpoint}
 fn create_v1_router() -> Router<ApiState> {
-    use crate::endpoints::agent::*; // Import agent functions for routes
+    //use crate::endpoints::agent::*; // Import agent functions for routes
     use crate::endpoints::burst_engine;
     use crate::endpoints::connectome;
     use crate::endpoints::cortical_area;
@@ -247,10 +247,12 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::simulation;
     use crate::endpoints::training;
     use crate::endpoints::visualization;
-    use crate::endpoints::{agent, system};
+    use crate::endpoints::{system};     //use crate::endpoints::{agent, system};
+
 
     Router::new()
         // ===== AGENT MODULE (14 endpoints) =====
+        /*
         .route("/agent/register", axum::routing::post(register_agent))
         .route("/agent/heartbeat", axum::routing::post(heartbeat))
         .route("/agent/list", get(list_agents))
@@ -265,6 +267,7 @@ fn create_v1_router() -> Router<ApiState> {
             "/agent/manual_stimulation",
             axum::routing::post(manual_stimulation),
         )
+
         .route(
             "/agent/fq_sampler_status",
             get(agent::get_fq_sampler_status),
@@ -283,6 +286,7 @@ fn create_v1_router() -> Router<ApiState> {
             "/agent/:agent_id/device_registrations",
             get(agent::export_device_registrations).post(agent::import_device_registrations),
         )
+        */
         // ===== SYSTEM MODULE (21 endpoints) =====
         .route("/system/health_check", get(system::get_health_check))
         .route(

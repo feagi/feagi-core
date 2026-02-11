@@ -1,7 +1,7 @@
 // Copyright 2025 Neuraville Inc.
 // Licensed under the Apache License, Version 2.0
 
-//! Agent API endpoints - Exact port from Python `/v1/agent/*` routes
+points - Exact port from Python `/v1/agent/*` routes
 //!
 //! These endpoints match the Python implementation at:
 //! feagi-py/feagi/api/v1/feagi_agent.py
@@ -193,6 +193,7 @@ async fn auto_create_cortical_areas_from_device_registrations(
 ) {
     // No-op when feature is disabled
 }
+
 
 /// Register a new agent with FEAGI and receive connection details including transport configuration and ports.
 #[utoipa::path(
