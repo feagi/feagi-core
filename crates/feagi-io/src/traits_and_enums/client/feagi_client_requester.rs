@@ -61,6 +61,13 @@ pub trait FeagiClientRequester: FeagiClient {
     ///
     /// Returns an error if no response is available or if retrieval fails.
     fn consume_retrieved_response(&mut self) -> Result<&[u8], FeagiNetworkError>;
+
+    /// Creates a boxed properties object for this requester.
+    ///
+    /// This allows decoupling the configuration/properties from the active
+    /// requester instance, enabling creation of new requesters with the same
+    /// configuration.
+    fn as_boxed_requester_properties(&self) -> Box<dyn FeagiClientRequesterProperties>;
 }
 
 /// Factory trait for creating requester client instances from stored properties.

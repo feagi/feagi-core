@@ -208,6 +208,12 @@ impl FeagiClientSubscriber for FeagiWebSocketClientSubscriber {
             )),
         }
     }
+
+    fn as_boxed_subscriber_properties(&self) -> Box<dyn FeagiClientSubscriberProperties> {
+        Box::new(FeagiWebSocketClientSubscriberProperties {
+            server_address: self.server_address.clone(),
+        })
+    }
 }
 
 //endregion
@@ -345,6 +351,12 @@ impl FeagiClientPusher for FeagiWebSocketClientPusher {
                 "Cannot publish: client is not in Active state".to_string(),
             )),
         }
+    }
+
+    fn as_boxed_pusher_properties(&self) -> Box<dyn FeagiClientPusherProperties> {
+        Box::new(FeagiWebSocketClientPusherProperties {
+            server_address: self.server_address.clone(),
+        })
     }
 }
 
@@ -555,6 +567,12 @@ impl FeagiClientRequester for FeagiWebSocketClientRequester {
                 "Cannot consume: no response available".to_string(),
             )),
         }
+    }
+
+    fn as_boxed_requester_properties(&self) -> Box<dyn FeagiClientRequesterProperties> {
+        Box::new(FeagiWebSocketClientRequesterProperties {
+            server_address: self.server_address.clone(),
+        })
     }
 }
 

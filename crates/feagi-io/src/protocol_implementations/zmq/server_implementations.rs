@@ -11,10 +11,9 @@
 
 use std::collections::HashMap;
 
-use feagi_agent::agent_id::SessionID;
 use zmq::{Context, Message, Socket};
 
-use crate::FeagiNetworkError;
+use crate::{AgentID, FeagiNetworkError};
 use crate::protocol_implementations::zmq::shared::ZmqUrl;
 use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::server::{
@@ -396,6 +395,12 @@ impl FeagiServerPuller for FeagiZmqServerPuller {
             )),
         }
     }
+
+    fn as_boxed_puller_properties(&self) -> Box<dyn FeagiServerPullerProperties> {
+        Box::new(FeagiZmqServerPullerProperties {
+            bind_address: self.bind_address.clone(),
+        })
+    }
 }
 
 //endregion
@@ -463,7 +468,7 @@ impl FeagiServerRouterProperties for FeagiZmqServerRouterProperties {
 
 /// A ZMQ ROUTER server that handles request-response with multiple clients.
 ///
-/// Automatically tracks client identities via [`SessionID`] for proper routing.
+/// Automatically tracks client identities via [`AgentID`] for proper routing.
 /// Uses reusable `zmq::Message` objects to minimize allocations.
 ///
 /// # Example
@@ -498,25 +503,25 @@ pub struct FeagiZmqServerRouter {
     /// Reusable message for payload frame
     payload_msg: Message,
     /// Current session ID for the buffered request
-    current_session: Option<SessionID>,
+    current_session: Option<AgentID>,
     /// Whether we have valid data ready to consume
     has_data: bool,
-    /// Bidirectional mapping between SessionID and ZMQ identity
-    identity_to_session: HashMap<Vec<u8>, SessionID>,
-    session_to_identity: HashMap<[u8; SessionID::NUMBER_BYTES], Vec<u8>>,
+    /// Bidirectional mapping between AgentID and ZMQ identity
+    identity_to_session: HashMap<Vec<u8>, AgentID>,
+    session_to_identity: HashMap<[u8; AgentID::NUMBER_BYTES], Vec<u8>>,
 }
 
 impl FeagiZmqServerRouter {
-    /// Look up an existing SessionID for the given ZMQ identity.
-    fn lookup_session_id(&self, identity: &[u8]) -> Option<SessionID> {
+    /// Look up an existing AgentID for the given ZMQ identity.
+    fn lookup_session_id(&self, identity: &[u8]) -> Option<AgentID> {
         self.identity_to_session.get(identity).copied()
     }
 
-    /// Create and register a new SessionID for the given ZMQ identity.
+    /// Create and register a new AgentID for the given ZMQ identity.
     ///
     /// Uses cryptographically random session IDs to prevent enumeration attacks.
-    fn create_session_id(&mut self, identity: Vec<u8>) -> SessionID {
-        let session_id = SessionID::new_random();
+    fn create_session_id(&mut self, identity: Vec<u8>) -> AgentID {
+        let session_id = AgentID::new_random();
         self.identity_to_session.insert(identity.clone(), session_id);
         self.session_to_identity.insert(*session_id.bytes(), identity);
         session_id
@@ -658,7 +663,7 @@ impl FeagiServer for FeagiZmqServerRouter {
 }
 
 impl FeagiServerRouter for FeagiZmqServerRouter {
-    fn consume_retrieved_request(&mut self) -> Result<(SessionID, &[u8]), FeagiNetworkError> {
+    fn consume_retrieved_request(&mut self) -> Result<(AgentID, &[u8]), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::ActiveHasData => {
                 if self.has_data {
@@ -686,7 +691,7 @@ impl FeagiServerRouter for FeagiZmqServerRouter {
 
     fn publish_response(
         &mut self,
-        session_id: SessionID,
+        session_id: AgentID,
         message: &[u8],
     ) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
@@ -715,6 +720,12 @@ impl FeagiServerRouter for FeagiZmqServerRouter {
                 "Cannot send response: server is not in Active state".to_string(),
             )),
         }
+    }
+
+    fn as_boxed_router_properties(&self) -> Box<dyn FeagiServerRouterProperties> {
+        Box::new(FeagiZmqServerRouterProperties {
+            bind_address: self.bind_address.clone(),
+        })
     }
 }
 

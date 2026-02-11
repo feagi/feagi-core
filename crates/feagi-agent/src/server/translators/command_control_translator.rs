@@ -4,14 +4,13 @@
 //! core path without changing handler logic.
 
 use std::collections::HashMap;
-use feagi_io::FeagiNetworkError;
+use feagi_io::{AgentID, FeagiNetworkError};
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
-use feagi_io::traits_and_enums::server::FeagiServerRouter;
+use feagi_io::traits_and_enums::server::{FeagiServerRouter, FeagiServerRouterProperties};
 use feagi_serialization::FeagiByteContainer;
 use crate::command_and_control::agent_registration_message::RegistrationRequest;
 use crate::command_and_control::FeagiMessage;
 use crate::{AgentCapabilities, AgentDescriptor, FeagiAgentError};
-use crate::agent_id::AgentID;
 
 pub type IsNewSessionId = bool;
 
@@ -98,6 +97,10 @@ impl CommandControlTranslator {
         message.serialize_to_byte_container(container, session_id, increment_counter)?;
         self.router.publish_response(session_id, container.get_byte_ref())?;
         Ok(())
+    }
+
+    pub fn get_running_server_properties(&self) -> Box<dyn FeagiServerRouterProperties> {
+        self.router.as_boxed_router_properties()
     }
 
     /// Tries converting incoming data into a [FeagiMessage]

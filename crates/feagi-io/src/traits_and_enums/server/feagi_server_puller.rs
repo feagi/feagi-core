@@ -23,6 +23,13 @@ pub trait FeagiServerPuller: FeagiServer {
     ///
     /// Returns an error if no data is available or if retrieval fails.
     fn consume_retrieved_data(&mut self) -> Result<&[u8], FeagiNetworkError>;
+
+    /// Creates a boxed properties object for this puller.
+    ///
+    /// This allows decoupling the configuration/properties from the active
+    /// puller instance, enabling creation of new pullers with the same
+    /// configuration.
+    fn as_boxed_puller_properties(&self) -> Box<dyn FeagiServerPullerProperties>;
 }
 
 pub trait FeagiServerPullerProperties: Send + Sync {

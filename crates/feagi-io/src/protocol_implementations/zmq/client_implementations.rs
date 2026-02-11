@@ -208,6 +208,12 @@ impl FeagiClientSubscriber for FeagiZmqClientSubscriber {
             )),
         }
     }
+
+    fn as_boxed_subscriber_properties(&self) -> Box<dyn FeagiClientSubscriberProperties> {
+        Box::new(FeagiZmqClientSubscriberProperties {
+            server_address: self.server_address.clone(),
+        })
+    }
 }
 
 //endregion
@@ -365,6 +371,12 @@ impl FeagiClientPusher for FeagiZmqClientPusher {
                 "Cannot publish: client is not in Active state".to_string(),
             )),
         }
+    }
+
+    fn as_boxed_pusher_properties(&self) -> Box<dyn FeagiClientPusherProperties> {
+        Box::new(FeagiZmqClientPusherProperties {
+            server_address: self.server_address.clone(),
+        })
     }
 }
 
@@ -614,6 +626,12 @@ impl FeagiClientRequester for FeagiZmqClientRequester {
                 "Cannot consume: no response available".to_string(),
             )),
         }
+    }
+
+    fn as_boxed_requester_properties(&self) -> Box<dyn FeagiClientRequesterProperties> {
+        Box::new(FeagiZmqClientRequesterProperties {
+            server_address: self.server_address.clone(),
+        })
     }
 }
 

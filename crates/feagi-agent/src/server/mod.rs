@@ -1,6 +1,5 @@
 mod feagi_agent_handler;
-pub mod auth;
 mod translators;
 
+pub mod auth;
 pub use feagi_agent_handler::FeagiAgentHandler;
-pub use translators::{CommandControlTranslator, EmbodimentTranslator};

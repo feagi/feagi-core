@@ -724,6 +724,6 @@ impl ContainedStructReference {
 
 //endregion
 
-pub trait AgentIdentifier {
+pub trait AgentIdentifier where Self: Sized + 'static {
     fn get_identifier_bytes(&self) -> &[u8; NUMBER_BYTES_IN_AGENT_IDENTIFIER];
 }

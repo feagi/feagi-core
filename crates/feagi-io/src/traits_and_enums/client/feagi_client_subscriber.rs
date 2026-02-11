@@ -41,6 +41,13 @@ pub trait FeagiClientSubscriber: FeagiClient {
     ///
     /// Returns an error if no data is available or if retrieval fails.
     fn consume_retrieved_data(&mut self) -> Result<&[u8], FeagiNetworkError>;
+
+    /// Creates a boxed properties object for this subscriber.
+    ///
+    /// This allows decoupling the configuration/properties from the active
+    /// subscriber instance, enabling creation of new subscribers with the same
+    /// configuration.
+    fn as_boxed_subscriber_properties(&self) -> Box<dyn FeagiClientSubscriberProperties>;
 }
 
 /// Factory trait for creating subscriber client instances from stored properties.

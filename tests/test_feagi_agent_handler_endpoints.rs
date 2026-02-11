@@ -3,7 +3,7 @@ use feagi_agent::server::FeagiAgentHandler;
 use feagi_agent::registration::AgentCapabilities;
 use feagi_config::FeagiConfig;
 use feagi_io::protocol_implementations::TransportProtocolImplementation;
-use feagi_agent::agent_id::AgentID;
+use feagi_io::agent_id::AgentID;
 
 fn build_test_config() -> FeagiConfig {
     let mut config = FeagiConfig::default();

@@ -99,13 +99,12 @@ impl FeagiApiVersion {
 //region Agent Descriptor
 /// Describes an agent connecting to FEAGI.
 ///
-/// Contains identification information including manufacturer, agent name,
-/// version, and a unique instance ID.
+/// Contains metadata information including manufacturer, agent name,
+/// version
 ///
 /// All deserialization (JSON, etc.) goes through validation automatically.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AgentDescriptor {
-    instance_id: u32,
     manufacturer: String,
     agent_name: String,
     agent_version: u32,
@@ -136,7 +135,6 @@ impl AgentDescriptor {
     /// - `agent_name` exceeds 20 bytes
     /// - `agent_version` is zero
     pub fn new(
-        instance_id: u32,
         manufacturer: &str,
         agent_name: &str,
         agent_version: u32,
@@ -144,16 +142,10 @@ impl AgentDescriptor {
         Self::validate(manufacturer, agent_name, agent_version)?;
 
         Ok(AgentDescriptor {
-            instance_id,
             manufacturer: manufacturer.to_string(),
             agent_name: agent_name.to_string(),
             agent_version,
         })
-    }
-
-    /// Get the instance ID
-    pub fn instance_id(&self) -> u32 {
-        self.instance_id
     }
 
     /// Get the manufacturer name
@@ -171,6 +163,7 @@ impl AgentDescriptor {
         self.agent_version
     }
 
+    /*
     /// Serialize to bytes
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(Self::SIZE_BYTES);
@@ -197,7 +190,10 @@ impl AgentDescriptor {
         
         bytes
     }
+    
+     */
 
+    /*
     /// Create AgentDescriptor from base64-encoded agent_id (REST API compatibility)
     pub fn try_from_base64(agent_id_b64: &str) -> Result<Self, FeagiDataError> {
         use base64::Engine;
@@ -243,6 +239,8 @@ impl AgentDescriptor {
         let bytes = self.as_bytes();
         base64::engine::general_purpose::STANDARD.encode(bytes)
     }
+    
+     */
 
     /// Validate the fields without creating a new instance.
     fn validate(

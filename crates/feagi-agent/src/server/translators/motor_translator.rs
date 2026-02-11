@@ -1,7 +1,7 @@
+use feagi_io::AgentID;
 use feagi_io::traits_and_enums::server::FeagiServerPublisher;
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_serialization::FeagiByteContainer;
-use crate::agent_id::AgentID;
 use crate::FeagiAgentError;
 
 // TODO Error handling, error states if one stream fails

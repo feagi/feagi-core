@@ -36,6 +36,13 @@ pub trait FeagiClientPusher: FeagiClient {
     /// Transient send failures return an error here but do not necessarily
     /// transition the client to `Errored` state.
     fn publish_data(&mut self, data: &[u8]) -> Result<(), FeagiNetworkError>;
+
+    /// Creates a boxed properties object for this pusher.
+    ///
+    /// This allows decoupling the configuration/properties from the active
+    /// pusher instance, enabling creation of new pushers with the same
+    /// configuration.
+    fn as_boxed_pusher_properties(&self) -> Box<dyn FeagiClientPusherProperties>;
 }
 
 /// Factory trait for creating pusher client instances from stored properties.

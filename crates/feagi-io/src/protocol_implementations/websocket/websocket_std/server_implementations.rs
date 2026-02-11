@@ -7,10 +7,9 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::net::{TcpListener, TcpStream};
 
-use feagi_agent::agent_id::SessionID;
 use tungstenite::{accept, Message, WebSocket};
 
-use crate::FeagiNetworkError;
+use crate::{AgentID, FeagiNetworkError};
 use crate::protocol_implementations::websocket::shared::{validate_bind_address, WebSocketUrl};
 use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::server::{
@@ -489,6 +488,12 @@ impl FeagiServerPuller for FeagiWebSocketServerPuller {
             )),
         }
     }
+
+    fn as_boxed_puller_properties(&self) -> Box<dyn FeagiServerPullerProperties> {
+        Box::new(FeagiWebSocketServerPullerProperties {
+            bind_address: self.bind_address.clone(),
+        })
+    }
 }
 
 //endregion
@@ -545,12 +550,12 @@ pub struct FeagiWebSocketServerRouter {
     /// Buffer for received request
     receive_buffer: Option<Vec<u8>>,
     /// Session ID of the client that sent the current request
-    current_session: Option<SessionID>,
+    current_session: Option<AgentID>,
     has_data: bool,
-    /// Client index to SessionID mapping
-    index_to_session: HashMap<usize, SessionID>,
-    /// SessionID to client index mapping
-    session_to_index: HashMap<SessionID, usize>,
+    /// Client index to AgentID mapping
+    index_to_session: HashMap<usize, AgentID>,
+    /// AgentID to client index mapping
+    session_to_index: HashMap<AgentID, usize>,
 }
 
 impl FeagiWebSocketServerRouter {
@@ -585,8 +590,8 @@ impl FeagiWebSocketServerRouter {
                         Ok(cloned_stream) => {
                             match accept(cloned_stream) {
                                 Ok(ws) => {
-                                    // Handshake successful - generate SessionID
-                                    let session_id = SessionID::new_random();
+                                    // Handshake successful - generate AgentID
+                                    let session_id = AgentID::new_random();
                                     
                                     // Set underlying stream to non-blocking for polling
                                     if let Ok(tcp_stream) = ws.get_ref().try_clone() {
@@ -796,7 +801,7 @@ impl FeagiServer for FeagiWebSocketServerRouter {
 }
 
 impl FeagiServerRouter for FeagiWebSocketServerRouter {
-    fn consume_retrieved_request(&mut self) -> Result<(SessionID, &[u8]), FeagiNetworkError> {
+    fn consume_retrieved_request(&mut self) -> Result<(AgentID, &[u8]), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::ActiveHasData => {
                 if self.has_data {
@@ -826,7 +831,7 @@ impl FeagiServerRouter for FeagiWebSocketServerRouter {
 
     fn publish_response(
         &mut self,
-        session_id: SessionID,
+        session_id: AgentID,
         message: &[u8],
     ) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
@@ -861,6 +866,12 @@ impl FeagiServerRouter for FeagiWebSocketServerRouter {
                 "Cannot send response: server is not in Active state".to_string(),
             )),
         }
+    }
+
+    fn as_boxed_router_properties(&self) -> Box<dyn FeagiServerRouterProperties> {
+        Box::new(FeagiWebSocketServerRouterProperties {
+            bind_address: self.bind_address.clone(),
+        })
     }
 }
 

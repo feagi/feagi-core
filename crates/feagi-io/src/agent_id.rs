@@ -1,7 +1,7 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use serde::{Deserialize, Serialize};
 use feagi_serialization::{AgentIdentifier, FeagiByteContainer};
-use crate::FeagiAgentError;
+use crate::FeagiNetworkError;
 
 /// Used to identify a connected client to the server. A random identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -37,14 +37,14 @@ impl AgentID {
     /// Returns an error if:
     /// - The string is not valid base64
     /// - The decoded bytes length doesn't match `NUMBER_BYTES`
-    pub fn try_from_base64(base64_str: &str) -> Result<Self, FeagiAgentError> {
+    pub fn try_from_base64(base64_str: &str) -> Result<Self, FeagiNetworkError> {
         let decoded = BASE64_STANDARD.decode(base64_str)
-            .map_err(|e| FeagiAgentError::UnableToDecodeReceivedData(
+            .map_err(|e| FeagiNetworkError::GeneralFailure(
                 format!("Invalid base64: {}", e)
             ))?;
         
         if decoded.len() != Self::NUMBER_BYTES {
-            return Err(FeagiAgentError::UnableToDecodeReceivedData(
+            return Err(FeagiNetworkError::GeneralFailure(
                 format!("Invalid AgentID length: expected {} bytes, got {}", Self::NUMBER_BYTES, decoded.len())
             ));
         }

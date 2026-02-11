@@ -1,14 +1,15 @@
 use std::collections::{HashMap, HashSet};
+use feagi_io::AgentID;
 use feagi_io::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties};
 use feagi_serialization::FeagiByteContainer;
 use crate::{AgentCapabilities, AgentDescriptor, FeagiAgentError};
-use crate::agent_id::AgentID;
 use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, RegistrationResponse};
 use crate::command_and_control::FeagiMessage;
 use crate::server::auth::AgentAuth;
-use crate::server::CommandControlTranslator;
-use crate::server::translators::{MotorTranslator, SensorTranslator, VisualizationTranslator};
+use crate::server::translators::{CommandControlTranslator, MotorTranslator, SensorTranslator, VisualizationTranslator};
+
+type CommandServerIndex = usize;
 
 pub struct FeagiAgentHandler {
     agent_auth_backend: Box<dyn AgentAuth>,
@@ -17,11 +18,13 @@ pub struct FeagiAgentHandler {
     command_control_servers: Vec<CommandControlTranslator>,
 
     all_registered_agents: HashMap<AgentID, (AgentDescriptor, Vec<AgentCapabilities>)>,
+    agent_mapping_to_command_control_server_index: HashMap<AgentID, CommandServerIndex>,
     sensors: HashMap<AgentID,SensorTranslator>,
     motors: HashMap<AgentID,MotorTranslator>,
     visualizations: HashMap<AgentID,VisualizationTranslator>,
 
 
+    // this stuff is likely redundant
     // REST STUFF
     /// Device registrations by AgentDescriptor (REST API configuration storage)
     device_registrations_by_descriptor: HashMap<AgentDescriptor, serde_json::Value>,
@@ -33,7 +36,6 @@ pub struct FeagiAgentHandler {
 
 impl FeagiAgentHandler {
 
-
     pub fn new(agent_auth_backend: Box<dyn AgentAuth>) -> FeagiAgentHandler {
         FeagiAgentHandler {
             agent_auth_backend,
@@ -42,6 +44,7 @@ impl FeagiAgentHandler {
 
             command_control_servers: Vec::new(),
             all_registered_agents: HashMap::new(),
+            agent_mapping_to_command_control_server_index: HashMap::new(),
             sensors: Default::default(),
             motors: Default::default(),
             visualizations: Default::default(),
@@ -70,6 +73,14 @@ impl FeagiAgentHandler {
         self.visualizations.keys().cloned().collect()
     }
 
+    pub fn get_command_control_server_info(&self) -> Vec<Box<dyn FeagiServerRouterProperties>> {
+        let mut output: Vec<Box<dyn FeagiServerRouterProperties>> = Vec::new();
+        for command_control_server in &self.command_control_servers {
+            output.push(command_control_server.get_running_server_properties())
+        }
+        output
+    }
+
     //region  REST
 
     /// Get device registrations by AgentID
@@ -94,6 +105,7 @@ impl FeagiAgentHandler {
         self.device_registrations_by_agent.insert(agent_id, device_registrations);
     }
 
+    // TODO redudant, you can simply check if a AgentID has the capability hash?
     /// Check if a agent has visualization capability configured
     /// Returns (agent_id_base64, rate_hz) for registration with RuntimeService
     pub fn get_visualization_info_for_agent(&self, agent_id: AgentID) -> Option<(String, f64)> {
@@ -241,15 +253,24 @@ impl FeagiAgentHandler {
 
     /// Send a command and control message to a specific agent
     pub fn send_message_to_agent(&mut self, agent_id: AgentID, message: FeagiMessage, increment_counter: u16) -> Result<(), FeagiAgentError> {
-        let command_translator = self.try_get_command_mut(agent_id)?;
-        match command_translator {
-            Some(command_translator) => {
-                command_translator.send_message(agent_id, message,increment_counter)
-            }
+        let translator_index = match self.agent_mapping_to_command_control_server_index.get(&agent_id) {
             None => {
-                Err(FeagiAgentError::UnableToSendData("Unable to send message to unknown Agent ID!".to_string()))
+                return Err(FeagiAgentError::Other("No such Agent ID exists!".to_string()))
             }
-        }
+            Some(index) => {
+                index
+            }
+        };
+
+        let command_translator = match self.command_control_servers.get_mut(*translator_index) {
+            None => {
+                panic!("Missing Index for command control server!") // something went wrong
+            }
+            Some(translator) => {
+                translator
+            }
+        };
+        command_translator.send_message(agent_id, message,increment_counter)
     }
 
     //endregion
@@ -310,49 +331,6 @@ impl FeagiAgentHandler {
     //endregion
 
 
-
-    //region Embodiments
-
-    // TODO talk about broadcasts. These may be useful
-
-    /*
-    /// Broadcast visualization data directly to all broadcast publisher servers
-    /// Used for visualization-only agents that connect without embodiment registration
-    pub fn broadcast_visualization_data(&mut self, viz_data: &FeagiByteContainer) -> Result<(), FeagiAgentError> {
-        for publisher in &mut self.broadcast_publishers {
-            match publisher.publish_data(viz_data.get_byte_ref()) {
-                Ok(_) => {
-                    log::trace!("[BROADCAST-VIZ] Published {} bytes", viz_data.get_byte_ref().len());
-                }
-                Err(e) => {
-                    log::warn!("[BROADCAST-VIZ] Failed to broadcast: {}", e);
-                }
-            }
-        }
-        Ok(())
-    }
-    
-    /// Broadcast raw bytes directly to all broadcast publisher servers
-    /// Used for visualization-only agents that expect raw Type 11 format
-    pub fn broadcast_raw_visualization_data(&mut self, raw_bytes: &[u8]) -> Result<(), FeagiAgentError> {
-        for publisher in &mut self.broadcast_publishers {
-            match publisher.publish_data(raw_bytes) {
-                Ok(_) => {
-                    log::trace!("[BROADCAST-VIZ] Published {} raw bytes", raw_bytes.len());
-                }
-                Err(e) => {
-                    log::warn!("[BROADCAST-VIZ] Failed to broadcast: {}", e);
-                }
-            }
-        }
-        Ok(())
-    }
-
-     */
-
-    //endregion
-
-
     //region Internal
 
     //region Get property
@@ -389,7 +367,7 @@ impl FeagiAgentHandler {
 
     //region Message Handling
 
-    fn handle_messages_from_unknown_agent_ids(&mut self, agent_id: AgentID, message: &FeagiMessage, command_control_index: usize) -> Result<Option<(AgentID, FeagiMessage)>, FeagiAgentError> {
+    fn handle_messages_from_unknown_agent_ids(&mut self, agent_id: AgentID, message: &FeagiMessage, command_control_index: CommandServerIndex) -> Result<Option<(AgentID, FeagiMessage)>, FeagiAgentError> {
         match &message{
             FeagiMessage::AgentRegistration(register_message) => {
                 match &register_message {
@@ -403,7 +381,8 @@ impl FeagiAgentHandler {
                         let mut mappings = self.register_agent(agent_id,
                                                                *registration_request.connection_protocol(),
                                                                registration_request.requested_capabilities().to_vec(),
-                                                               registration_request.agent_descriptor().clone())?;
+                                                               registration_request.agent_descriptor().clone(),
+                                                               command_control_index)?;
 
                         let response = RegistrationResponse::Success(agent_id, mappings);
                         let message = FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsRegistration(response));
@@ -447,10 +426,11 @@ impl FeagiAgentHandler {
 
     //region Registration
 
+    fn register_agent(&mut self, agent_id: AgentID, wanted_protocol: TransportProtocolImplementation, agent_capabilities: Vec<AgentCapabilities>, descriptor: AgentDescriptor, command_server_index: CommandServerIndex) -> Result<HashMap<AgentCapabilities, TransportProtocolEndpoint>, FeagiAgentError> {
 
-    fn register_agent(&mut self, agent_id: AgentID, wanted_protocol: TransportProtocolImplementation, agent_capabilities: Vec<AgentCapabilities>, descriptor: AgentDescriptor) -> Result<HashMap<AgentCapabilities, TransportProtocolEndpoint>, FeagiAgentError> {
-
-        // NOTE: ASSUMES AGENT_ID IS NOT USED!
+        if self.all_registered_agents.contains_key(&agent_id) {
+            return Err(FeagiAgentError::ConnectionFailed("Agent Already registered".to_string()));
+        }
 
         let mut sensor_index: usize = 0;
         let mut motor_index: usize = 0;
@@ -517,8 +497,9 @@ impl FeagiAgentHandler {
         }
 
 
-
         self.all_registered_agents.insert(agent_id, (descriptor, agent_capabilities));
+        self.agent_mapping_to_command_control_server_index.insert(agent_id, command_server_index);
+
         Ok(endpoint_mappings)
     }
 

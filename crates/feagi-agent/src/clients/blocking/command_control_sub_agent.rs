@@ -6,12 +6,12 @@
 //! so the registration channel is not held open.
 
 use std::collections::HashMap;
+use feagi_io::AgentID;
 use feagi_io::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
 use feagi_io::traits_and_enums::client::{FeagiClientRequester, FeagiClientRequesterProperties};
 use feagi_serialization::FeagiByteContainer;
 use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, RegistrationRequest, RegistrationResponse};
 use crate::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiAgentError};
-use crate::agent_id::AgentID;
 use crate::command_and_control::FeagiMessage;
 
 pub struct CommandControlSubAgent {

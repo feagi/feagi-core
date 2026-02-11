@@ -1,7 +1,7 @@
+use feagi_io::AgentID;
 use feagi_io::traits_and_enums::server::FeagiServerPuller;
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_serialization::FeagiByteContainer;
-use crate::agent_id::AgentID;
 use crate::FeagiAgentError;
 
 // TODO Error handling, error states if one stream fails
@@ -19,7 +19,7 @@ impl SensorTranslator {
         sensor_server: Box<dyn FeagiServerPuller>,
     ) -> Self {
         let mut sensor_byte_cache = FeagiByteContainer::new_empty();
-        let _ = sensor_byte_cache.set_session_id(session_id);
+        let _ = sensor_byte_cache.set_agent_identifier(session_id);
 
         SensorTranslator {
             session_id,

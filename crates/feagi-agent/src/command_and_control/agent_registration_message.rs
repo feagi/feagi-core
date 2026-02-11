@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use feagi_io::AgentID;
 use feagi_io::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
-use crate::agent_id::AgentID;
 use crate::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiApiVersion};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
