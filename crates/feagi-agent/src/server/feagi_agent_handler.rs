@@ -375,6 +375,18 @@ impl FeagiAgentHandler {
         Err(FeagiAgentError::InitFail("Missing required protocol publisher".to_string()))
     }
 
+    fn try_get_last_publisher_property_index(&mut self, wanted_protocol: &TransportProtocolImplementation) -> Result<usize, FeagiAgentError> {
+        for i in (0..self.available_publishers.len()).rev() {
+            let available_publisher = &self.available_publishers[i];
+            if &available_publisher.get_protocol() != wanted_protocol {
+                continue;
+            } else {
+                return Ok(i);
+            }
+        }
+        Err(FeagiAgentError::InitFail("Missing required protocol publisher".to_string()))
+    }
+
     //endregion
 
     //region Message Handling
@@ -444,9 +456,8 @@ impl FeagiAgentHandler {
             return Err(FeagiAgentError::ConnectionFailed("Agent Already registered".to_string()));
         }
 
-        let mut sensor_index: usize = 0;
-        let mut motor_index: usize = 0;
-        let mut visualizer_index: usize = 0;
+        let mut used_puller_indices: Vec<usize> = Vec::new();
+        let mut used_publisher_indices: Vec<usize> = Vec::new();
         let mut sensor_servers: Vec<Box<dyn FeagiServerPuller>> = Vec::new();
         let mut motor_servers: Vec<Box<dyn FeagiServerPublisher>> = Vec::new();
         let mut visualizer_servers: Vec<Box<dyn FeagiServerPublisher>> = Vec::new();
@@ -462,7 +473,7 @@ impl FeagiAgentHandler {
                     _ = sensor_server.request_start()?;
                     sensor_servers.push(sensor_server);
                     endpoint_mappings.insert(AgentCapabilities::SendSensorData, puller_property.get_endpoint());
-                    sensor_index += 1;
+                    used_puller_indices.push(puller_property_index);
                 }
                 AgentCapabilities::ReceiveMotorData => {
                     let publisher_index = self.try_get_publisher_property_index(&wanted_protocol)?;
@@ -471,16 +482,18 @@ impl FeagiAgentHandler {
                     _ = publisher_server.request_start()?;
                     motor_servers.push(publisher_server);
                     endpoint_mappings.insert(AgentCapabilities::ReceiveMotorData, publisher_property.get_endpoint());
-                    motor_index += 1;
+                    used_publisher_indices.push(publisher_index);
                 }
                 AgentCapabilities::ReceiveNeuronVisualizations => {
-                    let publisher_index = self.try_get_publisher_property_index(&wanted_protocol)?;
+                    // Prefer the last matching publisher for visualization so motor/viz publishers
+                    // configured in order [motor, visualization] map correctly.
+                    let publisher_index = self.try_get_last_publisher_property_index(&wanted_protocol)?;
                     let publisher_property = &self.available_publishers[publisher_index];
                     let mut publisher_server = publisher_property.as_boxed_server_publisher();
                     _ = publisher_server.request_start()?;
                     visualizer_servers.push(publisher_server);
                     endpoint_mappings.insert(AgentCapabilities::ReceiveNeuronVisualizations, publisher_property.get_endpoint());
-                    visualizer_index += 1;
+                    used_publisher_indices.push(publisher_index);
                 }
                 AgentCapabilities::ReceiveSystemMessages => {
                     todo!()
@@ -488,9 +501,18 @@ impl FeagiAgentHandler {
             }
         }
 
-        // everything is good, take used properties out of circulation
-        self.available_pullers.drain(0..sensor_index);
-        self.available_publishers.drain(0..motor_index + visualizer_index);
+        // everything is good, take used properties out of circulation by exact index
+        used_puller_indices.sort_unstable();
+        used_puller_indices.dedup();
+        for idx in used_puller_indices.into_iter().rev() {
+            self.available_pullers.remove(idx);
+        }
+
+        used_publisher_indices.sort_unstable();
+        used_publisher_indices.dedup();
+        for idx in used_publisher_indices.into_iter().rev() {
+            self.available_publishers.remove(idx);
+        }
 
         // insert the servers into the cache
         for sensor_server in sensor_servers {

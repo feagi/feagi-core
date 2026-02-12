@@ -103,14 +103,12 @@ impl FeagiWebSocketServerPublisher {
         loop {
             match listener.accept() {
                 Ok((stream, _addr)) => {
-                    // Set the stream to non-blocking for WebSocket operations
-                    if stream.set_nonblocking(true).is_err() {
-                        continue;
-                    }
-
-                    // Perform WebSocket handshake
+                    // Perform handshake first on blocking stream.
+                    // Setting non-blocking before handshake can cause immediate failures.
                     match accept(stream) {
-                        Ok(ws) => {
+                        Ok(mut ws) => {
+                            // After handshake, switch the socket to non-blocking mode for poll-based operation.
+                            let _ = ws.get_mut().set_nonblocking(true);
                             self.clients.push(ws);
                         }
                         Err(_e) => {

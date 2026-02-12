@@ -9,4 +9,4 @@
 mod blocking;
 
 pub use blocking::embodiment_agent::{EmbodimentAgent};
-pub use blocking::command_control_sub_agent::CommandControlSubAgent;
+pub use blocking::command_control_sub_agent::{AgentRegistrationStatus, CommandControlSubAgent};
