@@ -37,6 +37,7 @@ common-config-feagi-client = [
     "agent-transport-websocket-std",
     "agent-transport-shm",
     "agent-transport-bluetooth",
+    "agent-client-asynchelper-tokio"
 ]
 
 # Platform targets
@@ -58,6 +59,7 @@ platform-wasm = [
 # STD implementations
 agent-server = ["feagi-agent/agent-server"]
 agent-client = ["feagi-agent/agent-client"]
+agent-client-asynchelper-tokio = ["feagi-agent/agent-client-asynchelper-tokio"]
 agent-transport-zmq = ["feagi-agent/agent-client"]
 agent-transport-websocket-std = ["feagi-agent/agent-transport-websocket-std"]
 agent-transport-shm = ["feagi-agent/agent-transport-shm"]

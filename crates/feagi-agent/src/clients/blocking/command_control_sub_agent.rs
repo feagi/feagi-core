@@ -36,13 +36,19 @@ impl CommandControlSubAgent {
         &self.registration_status
     }
 
+    // Send connection request
     pub fn request_connect(&mut self) -> Result<(), FeagiAgentError> {
-        let mut requester;
-        if self.requester.is_none() {
-            requester = self.properties.as_boxed_client_requester();
-        } else {
-            requester = self.requester.take().unwrap();
+
+        if self.registration_status != AgentRegistrationStatus::NotRegistered {
+            return Err(FeagiAgentError::ConnectionFailed("Agent already connected and registered!".to_string()))
         }
+
+        // TODO if it is something, what is it?
+        if self.requester.is_none() {
+            self.requester = Some(self.properties.as_boxed_client_requester());
+        }
+
+        let mut requester = self.requester.take().unwrap();
 
         match requester.poll() {
             FeagiEndpointState::Inactive => {
@@ -51,7 +57,6 @@ impl CommandControlSubAgent {
                 Ok(())
             }
             _ => {
-                // Restore requester before returning error
                 self.requester = Some(requester);
                 Err(FeagiAgentError::ConnectionFailed("Socket is already active!".to_string()))
             }
@@ -80,6 +85,14 @@ impl CommandControlSubAgent {
         }
         else {
             Err(FeagiAgentError::ConnectionFailed("Cannot register to endpoint when not connected!".to_string()))
+        }
+    }
+
+    pub fn poll_state(&mut self) -> Result<FeagiEndpointState, FeagiAgentError> {
+        if let Some(requester) = &mut self.requester {
+            Ok(requester.poll().clone())
+        } else {
+            Err(FeagiAgentError::ConnectionFailed("No socket active".to_string()))
         }
     }
 
