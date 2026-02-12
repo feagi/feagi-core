@@ -1,12 +1,11 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum HealthCheckMessage {
     FeagiHealthCheckRequest,
-    FeagiHealthCheckResponse(HealthCheckResponse)
+    FeagiHealthCheckResponse(HealthCheckResponse),
 }
-
 
 // TODO: This is a copy of "crates/feagi-api/src/endpoints/system.rs/HealthCheckResponse" that is stored here for now. We should consider moving this potentially
 // TODO: I see a lot of generic types here, especially string keys. Maybe we need somehting better?

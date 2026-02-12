@@ -5,7 +5,8 @@ Production-ready Rust client library for building FEAGI agents.
 ## Features
 
 ✅ **Automatic Registration** - Register with FEAGI with retry/exponential backoff  
-✅ **Background Heartbeat** - Automatic keepalive to prevent agent pruning  
+✅ **Tick-Driven Heartbeat Core** - Deterministic keepalive for explicit event loops  
+✅ **Optional Background Heartbeat** - Convenience helper thread for std clients  
 ✅ **Reconnection Logic** - Handle network issues gracefully  
 ✅ **Sensory Data** - Send neuron activation data to FEAGI (ZMQ PUSH)  
 ✅ **Motor Data** - Receive motor commands from FEAGI (ZMQ SUB)  
@@ -170,12 +171,15 @@ The SDK uses ZeroMQ for all communication with FEAGI:
 
 ### Heartbeat Service
 
-The heartbeat service runs in a background thread and automatically sends keepalive messages to FEAGI:
+Heartbeat has two modes:
 
-- Configured via `heartbeat_interval` (default: 5 seconds)
-- Prevents agent from being pruned due to inactivity
-- Automatically stops on client drop
-- Set interval to 0 to disable
+- Implicit background (default): `EmbodimentAgent::connect_to_feagi()` automatically starts background heartbeat so applications do not need an extra setup step.
+- Tick-driven (core): call `tick_liveness()` from your control loop for fully explicit/deterministic scheduling.
+- Explicit background helper: call `start_background_heartbeat()` manually when implicit mode is disabled.
+
+Disable implicit mode before connect with `set_implicit_background_heartbeat(false)` if your runtime requires strict heartbeat control.
+
+Both modes use the same configured heartbeat interval and keep the same liveness semantics on the server.
 
 ### Reconnection Strategy
 

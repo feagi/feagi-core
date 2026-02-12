@@ -1,9 +1,9 @@
 extern crate core;
-mod feagi_agent_error;
-mod common;
-pub mod command_and_control;
-pub mod server;
 pub mod clients;
+pub mod command_and_control;
+mod common;
+mod feagi_agent_error;
+pub mod server;
 
 pub use feagi_agent_error::FeagiAgentError;
 

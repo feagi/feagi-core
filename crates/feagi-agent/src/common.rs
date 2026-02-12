@@ -1,7 +1,7 @@
-use std::fmt;
 use feagi_io::AgentID;
-use serde::{Deserialize, Serialize};
 use feagi_structures::FeagiDataError;
+use serde::{Deserialize, Serialize};
+use std::fmt;
 
 //region Auth Token
 /// Fixed length for authentication tokens (32 bytes = 256 bits)
@@ -85,7 +85,7 @@ pub enum AgentCapabilities {
     SendSensorData,
     ReceiveMotorData,
     ReceiveNeuronVisualizations,
-    ReceiveSystemMessages
+    ReceiveSystemMessages,
 }
 
 //endregion
@@ -94,7 +94,7 @@ pub enum AgentCapabilities {
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FeagiApiVersion {
-    version: u64
+    version: u64,
 }
 
 impl FeagiApiVersion {
@@ -120,14 +120,14 @@ pub struct AgentDescriptor {
 }
 
 impl AgentDescriptor {
-
     /// Maximum length in bytes for the manufacturer field
     pub const MAX_MANUFACTURER_NAME_BYTE_COUNT: usize = 128;
     /// Maximum length in bytes for the agent name field
     pub const MAX_AGENT_NAME_BYTE_COUNT: usize = 64;
 
     /// Total size in bytes when serialized to binary format
-    pub const SIZE_BYTES: usize = 4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT + 4;
+    pub const SIZE_BYTES: usize =
+        4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT + 4;
 
     /// Create a new AgentDescriptor with validation.
     ///
@@ -176,30 +176,30 @@ impl AgentDescriptor {
     /// Serialize to bytes
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(Self::SIZE_BYTES);
-        
+
         // Serialize instance_id (4 bytes, little-endian)
         bytes.extend_from_slice(&self.instance_id.to_le_bytes());
-        
+
         // Serialize manufacturer (128 bytes, null-padded)
         let mut manufacturer_bytes = [0u8; Self::MAX_MANUFACTURER_NAME_BYTE_COUNT];
         let mfr_bytes = self.manufacturer.as_bytes();
         let mfr_len = mfr_bytes.len().min(Self::MAX_MANUFACTURER_NAME_BYTE_COUNT);
         manufacturer_bytes[..mfr_len].copy_from_slice(&mfr_bytes[..mfr_len]);
         bytes.extend_from_slice(&manufacturer_bytes);
-        
+
         // Serialize agent_name (128 bytes, null-padded)
         let mut agent_name_bytes = [0u8; Self::MAX_AGENT_NAME_BYTE_COUNT];
         let name_bytes = self.agent_name.as_bytes();
         let name_len = name_bytes.len().min(Self::MAX_AGENT_NAME_BYTE_COUNT);
         agent_name_bytes[..name_len].copy_from_slice(&name_bytes[..name_len]);
         bytes.extend_from_slice(&agent_name_bytes);
-        
+
         // Serialize agent_version (4 bytes, little-endian)
         bytes.extend_from_slice(&self.agent_version.to_le_bytes());
-        
+
         bytes
     }
-    
+
      */
 
     /*
@@ -209,7 +209,7 @@ impl AgentDescriptor {
         let decoded = base64::engine::general_purpose::STANDARD
             .decode(agent_id_b64)
             .map_err(|e| FeagiDataError::DeserializationError(format!("Invalid base64: {}", e)))?;
-        
+
         if decoded.len() != Self::SIZE_BYTES {
             return Err(FeagiDataError::DeserializationError(format!(
                 "Invalid agent_id length: expected {} bytes, got {}",
@@ -217,20 +217,20 @@ impl AgentDescriptor {
                 decoded.len()
             )));
         }
-        
+
         // Deserialize from binary format
         let instance_id = u32::from_le_bytes([decoded[0], decoded[1], decoded[2], decoded[3]]);
-        
+
         let manufacturer_bytes = &decoded[4..4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT];
         let manufacturer = String::from_utf8_lossy(manufacturer_bytes)
             .trim_end_matches('\0')
             .to_string();
-        
+
         let agent_name_bytes = &decoded[4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT..4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT];
         let agent_name = String::from_utf8_lossy(agent_name_bytes)
             .trim_end_matches('\0')
             .to_string();
-        
+
         let version_offset = 4 + Self::MAX_MANUFACTURER_NAME_BYTE_COUNT + Self::MAX_AGENT_NAME_BYTE_COUNT;
         let agent_version = u32::from_le_bytes([
             decoded[version_offset],
@@ -238,7 +238,7 @@ impl AgentDescriptor {
             decoded[version_offset + 2],
             decoded[version_offset + 3],
         ]);
-        
+
         Self::new(instance_id, &manufacturer, &agent_name, agent_version)
     }
 
@@ -248,7 +248,7 @@ impl AgentDescriptor {
         let bytes = self.as_bytes();
         base64::engine::general_purpose::STANDARD.encode(bytes)
     }
-    
+
      */
 
     /// Validate the fields without creating a new instance.

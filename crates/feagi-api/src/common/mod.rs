@@ -3,8 +3,8 @@
 
 // Common types used across all transports
 
-pub mod error;
 pub mod agent_registration;
+pub mod error;
 pub mod request;
 pub mod response;
 pub mod types;

@@ -17,6 +17,7 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use std::sync::Arc;
+use std::time::Duration;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::TraceLayer,
@@ -24,16 +25,10 @@ use tower_http::{
 use utoipa::OpenApi;
 
 use crate::amalgamation;
-#[cfg(feature = "feagi-agent")]
-use feagi_config::load_config;
 #[cfg(feature = "http")]
 use crate::openapi::ApiDoc;
-#[cfg(feature = "services")]
-use feagi_services::traits::{AgentService, SystemService};
-#[cfg(feature = "services")]
-use feagi_services::{
-    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
-};
+#[cfg(feature = "feagi-agent")]
+use feagi_config::load_config;
 #[cfg(feature = "feagi-agent")]
 use feagi_io::protocol_implementations::websocket::websocket_std::{
     FeagiWebSocketServerPublisherProperties, FeagiWebSocketServerPullerProperties,
@@ -41,6 +36,12 @@ use feagi_io::protocol_implementations::websocket::websocket_std::{
 #[cfg(feature = "feagi-agent")]
 use feagi_io::protocol_implementations::zmq::{
     FeagiZmqServerPublisherProperties, FeagiZmqServerPullerProperties,
+};
+#[cfg(feature = "services")]
+use feagi_services::traits::{AgentService, SystemService};
+#[cfg(feature = "services")]
+use feagi_services::{
+    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
 };
 
 /// Application state shared across all HTTP handlers
@@ -75,8 +76,13 @@ impl ApiState {
     pub fn init_agent_registration_handler(
     ) -> Arc<std::sync::Mutex<feagi_agent::server::FeagiAgentHandler>> {
         let config = load_config(None, None).expect("Failed to load FEAGI configuration");
-        let mut handler = feagi_agent::server::FeagiAgentHandler::new(
-            Box::new(feagi_agent::server::auth::DummyAuth {})
+        let liveness_config = feagi_agent::server::AgentLivenessConfig {
+            heartbeat_timeout: Duration::from_millis(config.zmq.client_heartbeat_timeout),
+            stale_check_interval: Duration::from_millis(config.zmq.polling_timeout),
+        };
+        let mut handler = feagi_agent::server::FeagiAgentHandler::new_with_liveness_config(
+            Box::new(feagi_agent::server::auth::DummyAuth {}),
+            liveness_config,
         );
         let available_transports: Vec<String> = config
             .transports
@@ -85,13 +91,15 @@ impl ApiState {
             .map(|transport| transport.to_lowercase())
             .collect();
 
-        if available_transports.iter().any(|transport| transport == "zmq") {
-            let sensory_address = format_tcp_endpoint(&config.zmq.host, config.ports.zmq_sensory_port);
+        if available_transports
+            .iter()
+            .any(|transport| transport == "zmq")
+        {
+            let sensory_address =
+                format_tcp_endpoint(&config.zmq.host, config.ports.zmq_sensory_port);
             let motor_address = format_tcp_endpoint(&config.zmq.host, config.ports.zmq_motor_port);
-            let visualization_address = format_tcp_endpoint(
-                &config.zmq.host,
-                config.ports.zmq_visualization_port,
-            );
+            let visualization_address =
+                format_tcp_endpoint(&config.zmq.host, config.ports.zmq_visualization_port);
 
             let sensory = FeagiZmqServerPullerProperties::new(&sensory_address)
                 .expect("Failed to create ZMQ sensory puller properties");
@@ -109,12 +117,12 @@ impl ApiState {
             .iter()
             .any(|transport| transport == "websocket" || transport == "ws")
         {
-            let sensory_address = format_ws_address(&config.websocket.host, config.websocket.sensory_port);
-            let motor_address = format_ws_address(&config.websocket.host, config.websocket.motor_port);
-            let visualization_address = format_ws_address(
-                &config.websocket.host,
-                config.websocket.visualization_port,
-            );
+            let sensory_address =
+                format_ws_address(&config.websocket.host, config.websocket.sensory_port);
+            let motor_address =
+                format_ws_address(&config.websocket.host, config.websocket.motor_port);
+            let visualization_address =
+                format_ws_address(&config.websocket.host, config.websocket.visualization_port);
 
             let sensory = FeagiWebSocketServerPullerProperties::new(&sensory_address)
                 .expect("Failed to create WebSocket sensory puller properties");
@@ -122,8 +130,9 @@ impl ApiState {
 
             let motor = FeagiWebSocketServerPublisherProperties::new(&motor_address)
                 .expect("Failed to create WebSocket motor publisher properties");
-            let visualization = FeagiWebSocketServerPublisherProperties::new(&visualization_address)
-                .expect("Failed to create WebSocket visualization publisher properties");
+            let visualization =
+                FeagiWebSocketServerPublisherProperties::new(&visualization_address)
+                    .expect("Failed to create WebSocket visualization publisher properties");
             handler.add_publisher_server(Box::new(motor));
             handler.add_publisher_server(Box::new(visualization));
         }
@@ -245,10 +254,9 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::physiology;
     use crate::endpoints::region;
     use crate::endpoints::simulation;
+    use crate::endpoints::system;
     use crate::endpoints::training;
-    use crate::endpoints::visualization;
-    use crate::endpoints::{system};     //use crate::endpoints::{agent, system};
-
+    use crate::endpoints::visualization; //use crate::endpoints::{agent, system};
 
     Router::new()
         // ===== AGENT MODULE (14 endpoints) =====
@@ -267,7 +275,6 @@ fn create_v1_router() -> Router<ApiState> {
             "/agent/manual_stimulation",
             axum::routing::post(manual_stimulation),
         )
-
         .route(
             "/agent/fq_sampler_status",
             get(agent::get_fq_sampler_status),

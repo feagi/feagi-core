@@ -1,11 +1,11 @@
-use serde::{Deserialize, Serialize};
-use feagi_io::AgentID;
-use feagi_serialization::FeagiByteContainer;
-use feagi_structures::FeagiJSON;
 use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
 use crate::command_and_control::agent_registration_message::AgentRegistrationMessage;
 use crate::command_and_control::health_check_message::HealthCheckMessage;
 use crate::FeagiAgentError;
+use feagi_io::AgentID;
+use feagi_serialization::FeagiByteContainer;
+use feagi_structures::FeagiJSON;
+use serde::{Deserialize, Serialize};
 
 // All Command and Control messages are within this nested enum.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -18,7 +18,12 @@ pub enum FeagiMessage {
 }
 
 impl FeagiMessage {
-    pub fn serialize_to_byte_container(&self, container: &mut FeagiByteContainer, session_id: AgentID, increment_value: u16) -> Result<(), FeagiAgentError> {
+    pub fn serialize_to_byte_container(
+        &self,
+        container: &mut FeagiByteContainer,
+        session_id: AgentID,
+        increment_value: u16,
+    ) -> Result<(), FeagiAgentError> {
         let json: serde_json::Value = serde_json::to_value(&self).unwrap();
         let feagi_json: FeagiJSON = FeagiJSON::from_json_value(json);
         container.overwrite_byte_data_with_single_struct_data(&feagi_json, increment_value)?;
@@ -35,7 +40,8 @@ impl TryFrom<&FeagiByteContainer> for FeagiMessage {
         let serialized_data = value.try_create_new_struct_from_index(0.into())?;
         let feagi_json: FeagiJSON = serialized_data.try_into()?;
         let json = feagi_json.borrow_json_value().clone();
-        serde_json::from_value(json).map_err(|err| FeagiAgentError::UnableToDecodeReceivedData(err.to_string()))
+        serde_json::from_value(json)
+            .map_err(|err| FeagiAgentError::UnableToDecodeReceivedData(err.to_string()))
     }
 }
 
@@ -45,7 +51,9 @@ impl From<FeagiMessage> for FeagiByteContainer {
         let json: serde_json::Value = serde_json::to_value(&message).unwrap();
         let feagi_json: FeagiJSON = FeagiJSON::from_json_value(json);
         let mut byte_container: FeagiByteContainer = FeagiByteContainer::new_empty();
-        byte_container.overwrite_byte_data_with_single_struct_data(&feagi_json, 0).unwrap();
+        byte_container
+            .overwrite_byte_data_with_single_struct_data(&feagi_json, 0)
+            .unwrap();
         byte_container
     }
 }

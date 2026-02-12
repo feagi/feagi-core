@@ -37,7 +37,11 @@ impl Display for FeagiAgentError {
                 write!(f, "FeagiAgentError: Authentication failed: {}", msg)
             }
             FeagiAgentError::UnableToDecodeReceivedData(msg) => {
-                write!(f, "FeagiAgentError: Unable to decode received data: {}", msg)
+                write!(
+                    f,
+                    "FeagiAgentError: Unable to decode received data: {}",
+                    msg
+                )
             }
             FeagiAgentError::UnableToSendData(msg) => {
                 write!(f, "FeagiAgentError: Unable to send data: {}", msg)
@@ -64,9 +68,7 @@ impl From<FeagiDataError> for FeagiAgentError {
             FeagiDataError::DeserializationError(msg) => {
                 FeagiAgentError::UnableToDecodeReceivedData(msg)
             }
-            FeagiDataError::SerializationError(msg) => {
-                FeagiAgentError::UnableToSendData(msg)
-            }
+            FeagiDataError::SerializationError(msg) => FeagiAgentError::UnableToSendData(msg),
             FeagiDataError::BadParameters(msg) => {
                 FeagiAgentError::Other(format!("Bad parameters: {}", msg))
             }
@@ -82,9 +84,7 @@ impl From<FeagiDataError> for FeagiAgentError {
             FeagiDataError::ConstError(msg) => {
                 FeagiAgentError::Other(format!("Const error: {}", msg))
             }
-            FeagiDataError::NotImplemented => {
-                FeagiAgentError::Other("Not implemented".to_string())
-            }
+            FeagiDataError::NotImplemented => FeagiAgentError::Other("Not implemented".to_string()),
         }
     }
 }
@@ -104,9 +104,7 @@ impl From<FeagiNetworkError> for FeagiAgentError {
             FeagiNetworkError::CannotDisconnect(msg) => {
                 FeagiAgentError::SocketFailure(format!("Cannot disconnect: {}", msg))
             }
-            FeagiNetworkError::SendFailed(msg) => {
-                FeagiAgentError::UnableToSendData(msg)
-            }
+            FeagiNetworkError::SendFailed(msg) => FeagiAgentError::UnableToSendData(msg),
             FeagiNetworkError::ReceiveFailed(msg) => {
                 FeagiAgentError::UnableToDecodeReceivedData(format!("Receive failed: {}", msg))
             }
