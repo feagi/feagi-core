@@ -33,6 +33,7 @@ agent-js-bridge-wasm = ["feagi-io/js-bridge-wasm"]
 # Core dependencies (always included)
 serde = { workspace = true }
 serde_json = { workspace = true }
+tracing = { workspace = true }
 
 # FEAGI internal crates (core)
 feagi-io = { version = "=0.0.1-beta.12", path = "../feagi-io" }

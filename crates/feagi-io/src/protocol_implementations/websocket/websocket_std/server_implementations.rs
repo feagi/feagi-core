@@ -17,6 +17,7 @@ use crate::traits_and_enums::server::{
     FeagiServerPuller, FeagiServerPullerProperties,
     FeagiServerRouter, FeagiServerRouterProperties,
 };
+use feagi_serialization::FeagiByteContainer;
 
 /// Type alias for WebSocket over TcpStream
 type WsStream = WebSocket<TcpStream>;
@@ -557,6 +558,41 @@ pub struct FeagiWebSocketServerRouter {
 }
 
 impl FeagiWebSocketServerRouter {
+    fn try_extract_agent_id_from_payload(payload: &[u8]) -> Option<AgentID> {
+        let start = FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT;
+        let end = start + FeagiByteContainer::AGENT_ID_BYTE_COUNT;
+        if payload.len() < end {
+            return None;
+        }
+
+        let mut id_bytes = [0u8; AgentID::NUMBER_BYTES];
+        id_bytes.copy_from_slice(&payload[start..end]);
+        let parsed_id = AgentID::new(id_bytes);
+        if parsed_id.is_blank() {
+            return None;
+        }
+        Some(parsed_id)
+    }
+
+    fn remap_client_session(&mut self, client_index: usize, new_session_id: AgentID) {
+        let previous_session = self.index_to_session.insert(client_index, new_session_id);
+        if let Some(old_session_id) = previous_session {
+            self.session_to_index.remove(&old_session_id);
+        }
+
+        if let Some(previous_index) = self.session_to_index.insert(new_session_id, client_index) {
+            if previous_index != client_index {
+                self.index_to_session.remove(&previous_index);
+            }
+        }
+    }
+
+    fn align_session_with_payload_agent_id(&mut self, client_index: usize, payload: &[u8]) {
+        if let Some(payload_agent_id) = Self::try_extract_agent_id_from_payload(payload) {
+            self.remap_client_session(client_index, payload_agent_id);
+        }
+    }
+
     fn accept_pending_connections(&mut self) {
         let listener = match &self.listener {
             Some(l) => l,
@@ -631,14 +667,18 @@ impl FeagiWebSocketServerRouter {
     fn try_receive(&mut self) -> bool {
         let mut failed_indices = Vec::new();
 
-        for (i, state) in self.clients.iter_mut().enumerate() {
-            let client = match state {
-                HandshakeState::Ready(ws) => ws,
-                _ => continue, // Skip handshaking/failed connections
+        for i in 0..self.clients.len() {
+            let read_result = {
+                let client = match self.clients.get_mut(i) {
+                    Some(HandshakeState::Ready(ws)) => ws,
+                    _ => continue, // Skip handshaking/failed connections
+                };
+                client.read()
             };
-            
-            match client.read() {
+
+            match read_result {
                 Ok(Message::Binary(data)) => {
+                    self.align_session_with_payload_agent_id(i, &data);
                     if let Some(&session_id) = self.index_to_session.get(&i) {
                         self.receive_buffer = Some(data);
                         self.current_session = Some(session_id);
@@ -650,8 +690,10 @@ impl FeagiWebSocketServerRouter {
                     }
                 }
                 Ok(Message::Text(text)) => {
+                    let text_bytes = text.into_bytes();
+                    self.align_session_with_payload_agent_id(i, &text_bytes);
                     if let Some(&session_id) = self.index_to_session.get(&i) {
-                        self.receive_buffer = Some(text.into_bytes());
+                        self.receive_buffer = Some(text_bytes);
                         self.current_session = Some(session_id);
                         for idx in failed_indices.into_iter().rev() {
                             self.remove_client(idx);

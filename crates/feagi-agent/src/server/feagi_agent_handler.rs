@@ -18,6 +18,7 @@ use feagi_io::AgentID;
 use feagi_serialization::FeagiByteContainer;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
+use tracing::info;
 
 type CommandServerIndex = usize;
 
@@ -67,6 +68,14 @@ pub struct FeagiAgentHandler {
 }
 
 impl FeagiAgentHandler {
+    fn capabilities_equivalent(
+        existing: &[AgentCapabilities],
+        requested: &[AgentCapabilities],
+    ) -> bool {
+        existing.len() == requested.len()
+            && existing.iter().all(|capability| requested.contains(capability))
+    }
+
     pub fn new(agent_auth_backend: Box<dyn AgentAuth>) -> FeagiAgentHandler {
         Self::new_with_liveness_config(agent_auth_backend, AgentLivenessConfig::default())
     }
@@ -368,7 +377,9 @@ impl FeagiAgentHandler {
             .motors
             .get_mut(&agent_id)
             .ok_or_else(|| FeagiAgentError::Other("No Agent ID exists!".to_string()))?;
-        motor_translator.poll_and_send_buffered_motor_data(data)
+        motor_translator.poll_and_send_buffered_motor_data(data)?;
+        self.refresh_agent_activity(agent_id);
+        Ok(())
     }
 
     pub fn send_visualization_data_to_agent(
@@ -380,7 +391,9 @@ impl FeagiAgentHandler {
             .visualizations
             .get_mut(&agent_id)
             .ok_or_else(|| FeagiAgentError::Other("No Agent ID exists!".to_string()))?;
-        visualization_translator.poll_and_send_visualization_data(data)
+        visualization_translator.poll_and_send_visualization_data(data)?;
+        self.refresh_agent_activity(agent_id);
+        Ok(())
     }
 
     //endregion
@@ -420,6 +433,7 @@ impl FeagiAgentHandler {
         match embodiment_option {
             Some(embodiment) => {
                 embodiment.poll_and_send_buffered_motor_data(motor_data)?;
+                self.refresh_agent_activity(agent_id);
                 Ok(())
             }
             None => Err(FeagiAgentError::UnableToSendData(
@@ -438,6 +452,7 @@ impl FeagiAgentHandler {
         match embodiment_option {
             Some(embodiment) => {
                 embodiment.poll_and_send_visualization_data(viz_data)?;
+                self.refresh_agent_activity(agent_id);
                 Ok(())
             }
             None => Err(FeagiAgentError::UnableToSendData(
@@ -536,10 +551,39 @@ impl FeagiAgentHandler {
                         }
                         // auth passed; if the same descriptor is already connected, replace it
                         // first so reconnects can reclaim resources immediately.
+                        //
+                        // Important: only replace when capability shape is equivalent. This
+                        // prevents unrelated clients that share a descriptor string from
+                        // evicting each other (for example, a motor/sensor client removing
+                        // a live visualization client).
                         if let Some(existing_agent_id) = self
                             .find_agent_id_by_descriptor(registration_request.agent_descriptor())
                         {
-                            self.deregister_agent_internal(existing_agent_id);
+                            if let Some((_, existing_capabilities)) =
+                                self.all_registered_agents.get(&existing_agent_id)
+                            {
+                                if !Self::capabilities_equivalent(
+                                    existing_capabilities,
+                                    registration_request.requested_capabilities(),
+                                ) {
+                                    return Ok(Some((
+                                        agent_id,
+                                        FeagiMessage::AgentRegistration(
+                                            AgentRegistrationMessage::ServerRespondsRegistration(
+                                                RegistrationResponse::AlreadyRegistered,
+                                            ),
+                                        ),
+                                    )));
+                                }
+                            }
+                            let replacement_reason = format!(
+                                "descriptor replacement by new registration session={}",
+                                agent_id.to_base64()
+                            );
+                            self.deregister_agent_internal(
+                                existing_agent_id,
+                                &replacement_reason,
+                            );
                         }
 
                         // register and always respond deterministically (avoid client timeouts).
@@ -599,7 +643,7 @@ impl FeagiAgentHandler {
         match &message {
             FeagiMessage::AgentRegistration(register_message) => {
                 match register_message {
-                    AgentRegistrationMessage::ClientRequestDeregistration(_) => {
+                    AgentRegistrationMessage::ClientRequestDeregistration(request) => {
                         // Respond first so REQ/REP clients can complete the in-flight request.
                         self.send_message_to_agent(
                             agent_id,
@@ -610,7 +654,11 @@ impl FeagiAgentHandler {
                             ),
                             0,
                         )?;
-                        self.deregister_agent_internal(agent_id);
+                        let dereg_reason = request
+                            .reason()
+                            .map(|text| format!("client request: {}", text))
+                            .unwrap_or_else(|| "client request".to_string());
+                        self.deregister_agent_internal(agent_id, &dereg_reason);
                         Ok(None)
                     }
                     _ => {
@@ -790,7 +838,11 @@ impl FeagiAgentHandler {
             .collect();
 
         for stale_id in stale_ids {
-            self.deregister_agent_internal(stale_id);
+            let stale_reason = format!(
+                "stale heartbeat timeout exceeded ({:.3}s)",
+                self.liveness_config.heartbeat_timeout.as_secs_f64()
+            );
+            self.deregister_agent_internal(stale_id, &stale_reason);
         }
     }
 
@@ -798,7 +850,7 @@ impl FeagiAgentHandler {
     ///
     /// This is the single teardown path used by both voluntary and forced
     /// deregistration.
-    fn deregister_agent_internal(&mut self, agent_id: AgentID) {
+    fn deregister_agent_internal(&mut self, agent_id: AgentID, reason: &str) {
         self.last_activity_by_agent.remove(&agent_id);
         self.agent_mapping_to_command_control_server_index
             .remove(&agent_id);
@@ -806,6 +858,17 @@ impl FeagiAgentHandler {
             .all_registered_agents
             .remove(&agent_id)
             .map(|(descriptor, _)| descriptor);
+        let descriptor_text = descriptor
+            .as_ref()
+            .map(|item| format!("{:?}", item))
+            .unwrap_or_else(|| "<unknown-descriptor>".to_string());
+        info!(
+            target: "feagi-agent",
+            "Agent deregistered: agent_id={} descriptor={} reason={}",
+            agent_id.to_base64(),
+            descriptor_text,
+            reason
+        );
         self.device_registrations_by_agent.remove(&agent_id);
 
         if let Some(sensor) = self.sensors.remove(&agent_id) {
