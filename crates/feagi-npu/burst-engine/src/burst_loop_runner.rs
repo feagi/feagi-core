@@ -69,6 +69,14 @@ pub trait MotorPublisher: Send + Sync {
     fn publish_motor(&self, agent_id: &str, data: &[u8]) -> Result<(), String>;
 }
 
+/// Returns true when a publish error indicates FEAGI no longer has that agent.
+///
+/// Upstream error strings currently include a historical typo ("Nonexistant").
+/// We match both spellings so stale subscriptions are pruned reliably.
+fn is_missing_agent_publish_error(error_message: &str) -> bool {
+    error_message.contains("Nonexistant Agent ID") || error_message.contains("Nonexistent Agent ID")
+}
+
 /// Transport-agnostic source of sensory bytes (FeagiByteContainer format).
 /// Implemented by feagi-io; fed by any transport (ZMQ, WebSocket, SHM, etc.).
 pub trait SensoryIntake: Send {
@@ -350,7 +358,9 @@ impl BurstLoopRunner {
             motor_last_publish_time: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
             visualization_subscriptions: Arc::new(ParkingLotRwLock::new(ahash::AHashSet::new())),
             visualization_output_rates_hz: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
-            visualization_last_publish_time: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
+            visualization_last_publish_time: Arc::new(
+                ParkingLotRwLock::new(ahash::AHashMap::new()),
+            ),
             fcl_sampler_frequency: Arc::new(Mutex::new(30.0)), // Default 30Hz for visualization
             fcl_sampler_consumer: Arc::new(Mutex::new(1)),     // Default: 1 = visualization only
             cached_burst_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
@@ -533,7 +543,9 @@ impl BurstLoopRunner {
     pub fn unregister_visualization_subscriptions(&self, agent_id: &str) {
         if self.visualization_subscriptions.write().remove(agent_id) {
             self.visualization_output_rates_hz.write().remove(agent_id);
-            self.visualization_last_publish_time.write().remove(agent_id);
+            self.visualization_last_publish_time
+                .write()
+                .remove(agent_id);
             info!(
                 "[BURST-RUNNER] Removed visualization subscription for agent '{}'",
                 agent_id
@@ -1114,7 +1126,12 @@ fn decode_sensory_bytes(
     for struct_idx in 0..num_structures {
         let boxed_struct = byte_container
             .try_create_new_struct_from_index(struct_idx as u8)
-            .map_err(|e| format!("create_new_struct_from_index {} failed: {:?}", struct_idx, e))?;
+            .map_err(|e| {
+                format!(
+                    "create_new_struct_from_index {} failed: {:?}",
+                    struct_idx, e
+                )
+            })?;
 
         let cortical_mapped = match boxed_struct
             .as_any()
@@ -1131,8 +1148,7 @@ fn decode_sensory_bytes(
         };
 
         for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
-            let (x_coords, y_coords, z_coords, potentials) =
-                neuron_arrays.borrow_xyzp_vectors();
+            let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
             let xyzp_data: Vec<(u32, u32, u32, f32)> = x_coords
                 .iter()
                 .zip(y_coords.iter())
@@ -1283,7 +1299,11 @@ fn burst_loop(
             match decode_sensory_bytes(&bytes) {
                 Ok(decoded) => Some(decoded),
                 Err(e) => {
-                    warn!("[SENSORY-DECODE] Failed to decode {} bytes: {}", bytes.len(), e);
+                    warn!(
+                        "[SENSORY-DECODE] Failed to decode {} bytes: {}",
+                        bytes.len(),
+                        e
+                    );
                     None
                 }
             }
@@ -2174,22 +2194,38 @@ fn burst_loop(
                             }
 
                             let publish_start = Instant::now();
+                            let mut stale_viz_agents: Vec<String> = Vec::new();
                             for agent_id in viz_due_agents.iter() {
-                                if let Err(e) = publisher
-                                    .publish_raw_fire_queue_for_agent(
-                                        agent_id,
-                                        raw_snapshot.clone(),
-                                    )
-                                {
+                                if let Err(e) = publisher.publish_raw_fire_queue_for_agent(
+                                    agent_id,
+                                    raw_snapshot.clone(),
+                                ) {
                                     error!(
                                         "[BURST-LOOP] ❌ VIZ HANDOFF ERROR for '{}': {}",
                                         agent_id, e
                                     );
+                                    if is_missing_agent_publish_error(&e) {
+                                        stale_viz_agents.push(agent_id.clone());
+                                    }
                                     continue;
                                 }
                                 visualization_last_publish_time
                                     .write()
                                     .insert(agent_id.clone(), now);
+                            }
+                            if !stale_viz_agents.is_empty() {
+                                let mut subscriptions = visualization_subscriptions.write();
+                                let mut output_rates = visualization_output_rates_hz.write();
+                                let mut last_publish = visualization_last_publish_time.write();
+                                for stale_agent in stale_viz_agents {
+                                    subscriptions.remove(&stale_agent);
+                                    output_rates.remove(&stale_agent);
+                                    last_publish.remove(&stale_agent);
+                                    warn!(
+                                        "[BURST-LOOP] Removed stale visualization subscription for missing agent '{}'",
+                                        stale_agent
+                                    );
+                                }
                             }
                             let publish_duration = publish_start.elapsed();
                             if publish_duration.as_millis() > 5000 {
@@ -2351,6 +2387,7 @@ fn burst_loop(
                     // Note: We clone motor_snapshot for each agent (acceptable overhead for typical 1-2 agents)
                     let now = Instant::now();
                     let burst_hz = *frequency_hz.lock().unwrap();
+                    let mut stale_motor_agents: Vec<String> = Vec::new();
 
                     for (agent_id, subscribed_cortical_ids) in subscriptions.iter() {
                         let rate_hz = motor_output_rates_hz
@@ -2434,6 +2471,9 @@ fn burst_loop(
                                                 "[BURST-LOOP] ❌ MOTOR PUBLISH ERROR for '{}': {}",
                                                 agent_id, e
                                             );
+                                            if is_missing_agent_publish_error(&e) {
+                                                stale_motor_agents.push(agent_id.clone());
+                                            }
                                         }
                                     }
                                 } else {
@@ -2461,6 +2501,21 @@ fn burst_loop(
                                     agent_id, e
                                 );
                             }
+                        }
+                    }
+                    drop(subscriptions);
+                    if !stale_motor_agents.is_empty() {
+                        let mut subscriptions = motor_subscriptions.write();
+                        let mut output_rates = motor_output_rates_hz.write();
+                        let mut last_publish = motor_last_publish_time.write();
+                        for stale_agent in stale_motor_agents {
+                            subscriptions.remove(&stale_agent);
+                            output_rates.remove(&stale_agent);
+                            last_publish.remove(&stale_agent);
+                            warn!(
+                                "[BURST-LOOP] Removed stale motor subscription for missing agent '{}'",
+                                stale_agent
+                            );
                         }
                     }
                 }

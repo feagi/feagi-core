@@ -13,14 +13,15 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 #[cfg(feature = "feagi-agent")]
+use feagi_agent::registration::{AgentDescriptor, AuthToken};
+#[cfg(feature = "feagi-agent")]
 use feagi_api::common::agent_registration::auto_create_cortical_areas_from_device_registrations;
 use feagi_api::common::{Json as ApiJson, State as ApiStateExtract};
 use feagi_api::endpoints::agent::register_agent;
 use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_api::v1::AgentRegistrationRequest;
-#[cfg(feature = "feagi-agent")]
-use feagi_agent::registration::{AgentDescriptor, AuthToken};
 use feagi_brain_development::ConnectomeManager;
+use feagi_evolutionary::templates::create_genome_with_core_areas;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::TracingMutex;
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
@@ -29,7 +30,6 @@ use feagi_services::impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     SystemServiceImpl,
 };
-use feagi_evolutionary::templates::create_genome_with_core_areas;
 use parking_lot::RwLock;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -290,12 +290,9 @@ fn set_temp_config(auto_create: bool) -> ConfigEnvGuard {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("Time went backwards")
         .as_nanos();
-    let path = std::path::PathBuf::from(format!(
-        "/tmp/feagi-config-{nanos}--temp.toml"
-    ));
-    let base_path = std::path::PathBuf::from(
-        "/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml",
-    );
+    let path = std::path::PathBuf::from(format!("/tmp/feagi-config-{nanos}--temp.toml"));
+    let base_path =
+        std::path::PathBuf::from("/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml");
     let base_contents =
         std::fs::read_to_string(&base_path).expect("Failed to read base FEAGI config");
     let mut contents = String::new();
@@ -598,11 +595,8 @@ async fn test_auto_create_disabled_skips_creation() {
     let _guard = set_temp_config(false);
     let state = build_test_state();
 
-    auto_create_cortical_areas_from_device_registrations(
-        &state,
-        &sample_device_registrations(),
-    )
-    .await;
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
+        .await;
 
     let areas = state
         .connectome_service
@@ -622,11 +616,8 @@ async fn test_auto_create_enabled_creates_areas() {
     let _guard = set_temp_config(true);
     let state = build_test_state();
 
-    auto_create_cortical_areas_from_device_registrations(
-        &state,
-        &sample_device_registrations(),
-    )
-    .await;
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
+        .await;
 
     let areas = state
         .connectome_service
@@ -655,8 +646,13 @@ async fn test_create_cortical_area_success() {
         "neurons_per_voxel": 1
     });
 
-    let (status, response) =
-        request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(create_request)).await;
+    let (status, response) = request_json(
+        app,
+        "POST",
+        "/v1/cortical_area/cortical_area",
+        Some(create_request),
+    )
+    .await;
 
     assert_eq!(status, StatusCode::OK, "response: {}", response);
     assert!(response.get("cortical_id").is_some());
@@ -678,8 +674,13 @@ async fn test_create_cortical_area_invalid_id() {
         "neurons_per_voxel": 1
     });
 
-    let (status, _response) =
-        request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(create_request)).await;
+    let (status, _response) = request_json(
+        app,
+        "POST",
+        "/v1/cortical_area/cortical_area",
+        Some(create_request),
+    )
+    .await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -731,8 +732,13 @@ async fn test_create_and_get_cortical_area() {
         "neurons_per_voxel": 1
     });
 
-    let (status, response) =
-        request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(create_request)).await;
+    let (status, response) = request_json(
+        app,
+        "POST",
+        "/v1/cortical_area/cortical_area",
+        Some(create_request),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     let created_id = response
         .get("cortical_id")
@@ -792,8 +798,13 @@ async fn test_error_format_consistency() {
     let app = create_test_server().await;
 
     // All error responses should have consistent format
-    let (status, response) =
-        request_json(app, "POST", "/v1/cortical_area/cortical_area", Some(json!({}))).await;
+    let (status, response) = request_json(
+        app,
+        "POST",
+        "/v1/cortical_area/cortical_area",
+        Some(json!({})),
+    )
+    .await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     // Should have some error information

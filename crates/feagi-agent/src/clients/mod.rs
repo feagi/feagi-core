@@ -8,5 +8,5 @@
 
 mod blocking;
 
-pub use blocking::embodiment_agent::{EmbodimentAgent};
 pub use blocking::command_control_sub_agent::{AgentRegistrationStatus, CommandControlSubAgent};
+pub use blocking::embodiment_agent::EmbodimentAgent;
