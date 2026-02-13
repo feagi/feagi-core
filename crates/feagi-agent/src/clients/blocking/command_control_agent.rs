@@ -33,7 +33,7 @@ impl CommandControlAgent {
     }
 
     pub fn registered_endpoint_target(&mut self) -> TransportProtocolEndpoint {
-        self.properties.
+        self.properties.get_endpoint_target()
     }
     //endregion
 

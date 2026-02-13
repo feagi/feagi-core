@@ -26,15 +26,13 @@ use std::env;
 use std::thread;
 use std::time::Duration;
 
-use feagi_io::protocol_implementations::websocket::{
-    FeagiWebSocketClientSubscriberProperties, FeagiWebSocketServerPublisherProperties,
-};
+use feagi_io::protocol_implementations::websocket::websocket_std::{FeagiWebSocketClientSubscriberProperties, FeagiWebSocketServerPublisherProperties};
 use feagi_io::protocol_implementations::zmq::{
     FeagiZmqClientSubscriberProperties, FeagiZmqServerPublisherProperties,
 };
 use feagi_io::traits_and_enums::client::{FeagiClientSubscriber, FeagiClientSubscriberProperties};
 use feagi_io::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties};
-use feagi_io::traits_and_enums::FeagiEndpointState;
+use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 
 const ZMQ_ADDRESS: &str = "tcp://127.0.0.1:5555";
 const WS_ADDRESS: &str = "127.0.0.1:8080";
@@ -92,14 +90,14 @@ fn create_publisher(transport: Transport) -> Box<dyn FeagiServerPublisher> {
         Transport::Zmq => {
             println!("=== Publisher Example (ZMQ Transport) ===\n");
             println!("Binding to {}", ZMQ_ADDRESS);
-            let props = FeagiZmqServerPublisherProperties::new(ZMQ_ADDRESS)
+            let props = FeagiZmqServerPublisherProperties::new(ZMQ_ADDRESS, ZMQ_ADDRESS)
                 .expect("Failed to create ZMQ publisher properties");
             props.as_boxed_server_publisher()
         }
         Transport::WebSocket => {
             println!("=== Publisher Example (WebSocket Transport) ===\n");
             println!("Binding to {}", WS_ADDRESS);
-            let props = FeagiWebSocketServerPublisherProperties::new(WS_ADDRESS)
+            let props = FeagiWebSocketServerPublisherProperties::new(WS_ADDRESS, WS_URL)
                 .expect("Failed to create WebSocket publisher properties");
             props.as_boxed_server_publisher()
         }
