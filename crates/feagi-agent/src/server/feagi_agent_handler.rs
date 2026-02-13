@@ -22,7 +22,7 @@ use tracing::info;
 
 type CommandServerIndex = usize;
 
-/*
+
 /// Server-side liveness configuration for command/control sessions.
 ///
 /// `heartbeat_timeout` defines when a client is considered stale if no
@@ -43,7 +43,6 @@ impl Default for AgentLivenessConfig {
     }
 }
 
- */
 
 pub struct FeagiAgentHandler {
     agent_auth_backend: Box<dyn AgentAuth>,
