@@ -10,4 +10,4 @@ mod blocking;
 mod async_helpers;
 
 pub use blocking::command_control_agent::{AgentRegistrationStatus, CommandControlAgent};
-pub use blocking::embodiment_agent::EmbodimentAgent;
+//pub use blocking::embodiment_agent::EmbodimentAgent;
