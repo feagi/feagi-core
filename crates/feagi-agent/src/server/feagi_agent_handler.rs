@@ -22,6 +22,7 @@ use tracing::info;
 
 type CommandServerIndex = usize;
 
+/*
 /// Server-side liveness configuration for command/control sessions.
 ///
 /// `heartbeat_timeout` defines when a client is considered stale if no
@@ -41,6 +42,8 @@ impl Default for AgentLivenessConfig {
         }
     }
 }
+
+ */
 
 pub struct FeagiAgentHandler {
     agent_auth_backend: Box<dyn AgentAuth>,
@@ -431,7 +434,7 @@ impl FeagiAgentHandler {
     ) -> Result<usize, FeagiAgentError> {
         for i in 0..self.available_publishers.len() {
             let available_publisher = &self.available_publishers[i];
-            if &available_publisher.get_transport_protocol() != wanted_protocol {
+            if &available_publisher.get_protocol() != wanted_protocol {
                 // not the protocol we are looking for
                 continue;
             } else {
@@ -450,7 +453,7 @@ impl FeagiAgentHandler {
     ) -> Result<usize, FeagiAgentError> {
         for i in (0..self.available_publishers.len()).rev() {
             let available_publisher = &self.available_publishers[i];
-            if &available_publisher.get_transport_protocol() != wanted_protocol {
+            if &available_publisher.get_protocol() != wanted_protocol {
                 continue;
             } else {
                 return Ok(i);
@@ -658,7 +661,7 @@ impl FeagiAgentHandler {
                     sensor_servers.push(sensor_server);
                     endpoint_mappings.insert(
                         AgentCapabilities::SendSensorData,
-                        puller_property.get_endpoint(),
+                        puller_property.get_agent_endpoint(),
                     );
                     used_puller_indices.push(puller_property_index);
                 }
@@ -671,7 +674,7 @@ impl FeagiAgentHandler {
                     motor_servers.push(publisher_server);
                     endpoint_mappings.insert(
                         AgentCapabilities::ReceiveMotorData,
-                        publisher_property.get_endpoint(),
+                        publisher_property.get_agent_endpoint(),
                     );
                     used_publisher_indices.push(publisher_index);
                 }
@@ -686,7 +689,7 @@ impl FeagiAgentHandler {
                     visualizer_servers.push(publisher_server);
                     endpoint_mappings.insert(
                         AgentCapabilities::ReceiveNeuronVisualizations,
-                        publisher_property.get_endpoint(),
+                        publisher_property.get_agent_endpoint(),
                     );
                     used_publisher_indices.push(publisher_index);
                 }

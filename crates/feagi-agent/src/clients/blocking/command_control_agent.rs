@@ -13,7 +13,8 @@ use std::collections::HashMap;
 pub struct CommandControlAgent {
     properties: Box<dyn FeagiClientRequesterProperties>,
     requester: Option<Box<dyn FeagiClientRequester>>,
-    incoming_cache: FeagiByteContainer,
+    request_buffer: FeagiByteContainer,
+    send_buffer: FeagiByteContainer,
     registration_status: AgentRegistrationStatus,
 }
 
@@ -23,7 +24,8 @@ impl CommandControlAgent {
             registration_status: AgentRegistrationStatus::NotRegistered,
             properties: endpoint_properties,
             requester: None,
-            incoming_cache: FeagiByteContainer::new_empty(),
+            request_buffer: FeagiByteContainer::new_empty(),
+            send_buffer: FeagiByteContainer::new_empty(),
         }
     }
 
@@ -76,7 +78,7 @@ impl CommandControlAgent {
 
 
         let transport_protocol = if let Some(requester) = &mut self.requester {
-            requester.get_transport_protocol()
+            requester.get_endpoint_target().as_transport_protocol_implementation()
         } else {
             return Err(FeagiAgentError::ConnectionFailed(
                 "Cannot register to endpoint when not connected!".to_string(),
@@ -130,32 +132,31 @@ impl CommandControlAgent {
 
     //region Base Functions
 
-    pub fn poll_for_messages(&mut self) -> Result<Option<FeagiMessage>, FeagiAgentError> {
+    pub fn poll_for_messages(&mut self) -> Result<(&FeagiEndpointState, Option<FeagiMessage>), FeagiAgentError> {
         if let Some(mut requester) = self.requester.take() {
             let state = requester.poll();
-            let result = match state {
+            let result:  Result<(&FeagiEndpointState, Option<FeagiMessage>), FeagiAgentError> = match state {
                 FeagiEndpointState::Inactive => {
                     self.requester = Some(requester);
-                    Ok(None)
+                    Ok((state, None))
                 }
                 FeagiEndpointState::Pending => {
                     self.requester = Some(requester);
-                    Ok(None)
+                    Ok((state, None))
                 }
                 FeagiEndpointState::ActiveWaiting => {
                     self.requester = Some(requester);
-                    Ok(None)
+                    Ok((state, None))
                 }
                 FeagiEndpointState::ActiveHasData => {
                     let data = requester.consume_retrieved_response()?;
-                    self.incoming_cache
+                    self.request_buffer
                         .try_write_data_by_copy_and_verify(&data)?;
-                    let feagi_message: FeagiMessage = (&self.incoming_cache).try_into()?;
+                    let feagi_message: FeagiMessage = (&self.request_buffer).try_into()?;
 
-                    let result = match &feagi_message {
+                    let result: Result<(&FeagiEndpointState, Option<FeagiMessage>), FeagiAgentError> = match &feagi_message {
                         FeagiMessage::HeartBeat => {
-                            // TODO how should we handle this???
-                            Ok(None)
+                            Ok((state, Some(FeagiMessage::HeartBeat)))
                         }
                         FeagiMessage::AgentRegistration(registration_message) => {
                             match registration_message {
@@ -189,7 +190,7 @@ impl CommandControlAgent {
                                                 session_id.clone(),
                                                 endpoints.clone(),
                                             );
-                                        Ok(Some(feagi_message))
+                                        Ok((state, Some(feagi_message)))
                                     }
                                 },
                                 AgentRegistrationMessage::ClientRequestDeregistration(_) => {
@@ -201,16 +202,20 @@ impl CommandControlAgent {
                                 AgentRegistrationMessage::ServerRespondsDeregistration(
                                     deregistration_response,
                                 ) => match deregistration_response {
-                                    DeregistrationResponse::Success => Ok(Some(feagi_message)),
+                                    DeregistrationResponse::Success => {
+                                        requester.request_disconnect();
+                                        self.registration_status = AgentRegistrationStatus::NotRegistered;
+                                            Ok((state, Some(feagi_message)))
+                                    },
                                     DeregistrationResponse::NotRegistered => {
-                                        Ok(Some(feagi_message))
+                                        Ok((state, Some(feagi_message)))
                                     }
                                 },
                             }
                         }
                         _ => {
                             // just return the message as is
-                            Ok(Some(feagi_message))
+                            Ok((state, Some(feagi_message)))
                         }
                     };
 
@@ -235,14 +240,6 @@ impl CommandControlAgent {
         }
     }
 
-    pub fn poll_state(&mut self) -> Result<FeagiEndpointState, FeagiAgentError> {
-        if let Some(requester) = &mut self.requester {
-            Ok(requester.poll().clone())
-        } else {
-            Err(FeagiAgentError::ConnectionFailed("No socket active".to_string()))
-        }
-    }
-
     pub fn send_message(&mut self, message: FeagiMessage, increment_value: u16) -> Result<(), FeagiAgentError> {
         let agent_id = match self.registration_status {
             AgentRegistrationStatus::Registered(agent_id, _) => { agent_id },
@@ -250,9 +247,8 @@ impl CommandControlAgent {
         };
 
         if let Some(requester) = &mut self.requester {
-            let mut request_bytes = FeagiByteContainer::new_empty();
-            message.serialize_to_byte_container(&mut request_bytes, agent_id, increment_value)?;
-            requester.publish_request(request_bytes.get_byte_ref())?;
+            message.serialize_to_byte_container(&mut self.send_buffer, agent_id, increment_value)?;
+            requester.publish_request(&mut self.send_buffer.get_byte_ref())?;
             Ok(())
         }
         else {

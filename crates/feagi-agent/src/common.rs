@@ -69,6 +69,7 @@ impl fmt::Display for AuthToken {
 
 //endregion
 
+//region Unauthenticated Agent Rejection Behavior
 /// Determines how agents with nonauthenticated agent IDs will be handled by the server
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub enum UnauthenticatedAgentRejectionBehavior {
@@ -78,6 +79,8 @@ pub enum UnauthenticatedAgentRejectionBehavior {
     Log,
     AllowAnyways
 }
+
+//endregion
 
 //region Agent Capabilities
 

@@ -7,7 +7,7 @@ use feagi_sensorimotor::ConnectorCache;
 use crate::clients::{AgentRegistrationStatus, CommandControlAgent, EmbodimentAgent};
 use crate::command_and_control::FeagiMessage;
 use crate::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiAgentError};
-use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, RegistrationResponse};
+use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, DeregistrationResponse, RegistrationResponse};
 
 const TOKIO_SLEEP_TIME_MS: u64 = 1;
 
@@ -24,27 +24,6 @@ impl TokioCommandControlAgent {
     pub const MIN_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(1);
     pub const MAX_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);
 
-    //region Properties
-
-    pub fn registration_status(&self) -> &AgentRegistrationStatus {
-        &self.inner.registration_status()
-    }
-
-    pub fn registered_endpoint_target(&mut self) -> TransportProtocolEndpoint {
-        self.r
-    }
-    
-    //endregion
-    
-    //region Helpers
-    
-    //endregion
-    
-    //Base Functions
-    
-    //endregion
-    
-    
     /// Creates a new unconnected agent
     pub fn new(endpoint_properties: Box<dyn FeagiClientRequesterProperties>) -> Self {
         TokioCommandControlAgent {
@@ -52,6 +31,24 @@ impl TokioCommandControlAgent {
             heartbeat_interval: Self::DEFAULT_HEARTBEAT_INTERVAL
         }
     }
+
+    //region Agent Properties
+
+    pub fn registration_status(&self) -> &AgentRegistrationStatus {
+        &self.inner.registration_status()
+    }
+
+    pub fn registered_endpoint_target(&mut self) -> TransportProtocolEndpoint {
+        self.inner.registered_endpoint_target()
+    }
+
+    pub fn get_heartbeat_interval(&self) -> Duration {
+        self.heartbeat_interval
+    }
+
+    //endregion
+
+    //region Helpers
 
     /// Connects to the endpoint. Resolves when connection is established.
     pub async fn request_connect(&mut self) -> Result<(), FeagiAgentError> {
@@ -76,7 +73,7 @@ impl TokioCommandControlAgent {
     }
 
     /// Register with FEAGI and wait for response.
-    pub async fn register(
+    pub async fn request_registration(
         &mut self,
         agent_descriptor: AgentDescriptor,
         auth_token: AuthToken,
@@ -105,8 +102,54 @@ impl TokioCommandControlAgent {
                 }
             }
         }
-
     }
+
+    /// Deregister with FEAGI and wait for response.
+    pub async fn request_deregistration(
+        &mut self,
+        reason: Option<String>,
+    ) -> Result<DeregistrationResponse, FeagiAgentError> {
+
+        // Send registration response
+        self.inner.request_deregistration(reason)?;
+
+        // Poll until we get the registration response
+        loop {
+            match self.inner.poll_for_messages()? {
+                Some(FeagiMessage::AgentRegistration(
+                         AgentRegistrationMessage::ServerRespondsDeregistration(response))) => 
+                    {
+                        match response {
+                            DeregistrationResponse::Success => {
+                                
+                            }
+                            DeregistrationResponse::NotRegistered => {}
+                        }
+                    return Ok(response);
+                }
+                Some(message) => {
+                    // Why are we getting another kind of message???? We should probably error but this is worth a discussion
+                    todo!()
+                }
+                None => {
+                    tokio::time::sleep(Duration::from_millis(TOKIO_SLEEP_TIME_MS)).await;
+                }
+            }
+        }
+    }
+
+    //endregion
+
+    //region Base Functions
+
+    //endregion
+
+
+
+
+
+
+
 
     /// Wait for the next message.
     pub async fn recv(&mut self) -> Result<FeagiMessage, FeagiAgentError> {
