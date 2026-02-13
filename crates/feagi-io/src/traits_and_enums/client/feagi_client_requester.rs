@@ -1,5 +1,6 @@
 use crate::FeagiNetworkError;
 use crate::traits_and_enums::client::FeagiClient;
+use crate::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 
 /// A client that sends requests and receives responses from a server.
 ///
@@ -79,4 +80,6 @@ pub trait FeagiClientRequester: FeagiClient {
 pub trait FeagiClientRequesterProperties: Send {
     /// Creates a new boxed requester client from these properties.
     fn as_boxed_client_requester(&self) -> Box<dyn FeagiClientRequester>;
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint;
 }

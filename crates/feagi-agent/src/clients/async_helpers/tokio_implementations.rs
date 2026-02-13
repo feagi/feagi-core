@@ -3,23 +3,53 @@ use std::time::Duration;
 use feagi_io::AgentID;
 use feagi_io::traits_and_enums::client::FeagiClientRequesterProperties;
 use feagi_io::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
-use crate::clients::CommandControlSubAgent;
+use feagi_sensorimotor::ConnectorCache;
+use crate::clients::{AgentRegistrationStatus, CommandControlAgent, EmbodimentAgent};
 use crate::command_and_control::FeagiMessage;
 use crate::{AgentCapabilities, AgentDescriptor, AuthToken, FeagiAgentError};
 use crate::command_and_control::agent_registration_message::{AgentRegistrationMessage, RegistrationResponse};
 
 const TOKIO_SLEEP_TIME_MS: u64 = 1;
 
-pub struct TokioCommandControlSubAgent {
-    inner: CommandControlSubAgent
+//region Command and Control Agent
+pub struct TokioCommandControlAgent {
+    inner: CommandControlAgent,
+    heartbeat_interval: Duration,
+    implicit_background_heartbeat: bool,
 }
 
-impl TokioCommandControlSubAgent {
+impl TokioCommandControlAgent {
 
+    pub const DEFAULT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+    pub const MIN_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(1);
+    pub const MAX_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);
+
+    //region Properties
+
+    pub fn registration_status(&self) -> &AgentRegistrationStatus {
+        &self.inner.registration_status()
+    }
+
+    pub fn registered_endpoint_target(&mut self) -> TransportProtocolEndpoint {
+        self.r
+    }
+    
+    //endregion
+    
+    //region Helpers
+    
+    //endregion
+    
+    //Base Functions
+    
+    //endregion
+    
+    
     /// Creates a new unconnected agent
     pub fn new(endpoint_properties: Box<dyn FeagiClientRequesterProperties>) -> Self {
-        TokioCommandControlSubAgent {
-            inner: CommandControlSubAgent::new(endpoint_properties)
+        TokioCommandControlAgent {
+            inner: CommandControlAgent::new(endpoint_properties),
+            heartbeat_interval: Self::DEFAULT_HEARTBEAT_INTERVAL
         }
     }
 
@@ -67,6 +97,7 @@ impl TokioCommandControlSubAgent {
                     return Ok((session_id, endpoints));
                 }
                 Some(message) => {
+                    // Why are we getting another kind of message???? We should probably error but this is worth a discussion
                     todo!()
                 }
                 None => {
@@ -86,7 +117,45 @@ impl TokioCommandControlSubAgent {
             }
         }
     }
+}
 
+//endregion
+
+//region Embodiment Agent
+
+pub struct TokioEmbodimentAgent {
+    inner: EmbodimentAgent,
+}
+
+impl TokioEmbodimentAgent {
+
+    // TODO heartbeat logic should all be moved here!
+
+    pub fn new() -> Result<Self, FeagiAgentError> {
+        Ok(TokioEmbodimentAgent{
+            inner: EmbodimentAgent::new()?
+        })
+    }
+
+    pub fn get_embodiment(&self) -> &ConnectorCache {
+        self.inner.get_embodiment()
+    }
+
+    pub fn get_embodiment_mut(&mut self) -> &mut ConnectorCache {
+        self.inner.get_embodiment_mut()
+    }
+
+    pub async fn connect_to_feagi(
+        &mut self,
+        feagi_registration_endpoint: Box<dyn FeagiClientRequesterProperties>,
+        agent_descriptor: AgentDescriptor,
+        auth_token: AuthToken,
+    ) -> Result<(), FeagiAgentError> {
+
+    }
 
 
 }
+
+//endregion
+

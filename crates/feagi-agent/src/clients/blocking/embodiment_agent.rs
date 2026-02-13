@@ -5,7 +5,7 @@
 //!
 //! Use `connect` for ZMQ or `connect_ws` for WebSocket; flow and API are the same.
 
-use crate::clients::CommandControlSubAgent;
+use crate::clients::CommandControlAgent;
 use crate::command_and_control::agent_registration_message::{
     AgentRegistrationMessage, DeregistrationResponse, RegistrationResponse,
 };
@@ -25,6 +25,8 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 const DEFAULT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+
+// TODO the entire heartbeat thread system must be removed
 
 /// Optional background heartbeat helper state.
 ///
@@ -49,6 +51,11 @@ impl BackgroundHeartbeatHandle {
 /// Build sensory payloads with the returned session_id (FeagiByteContainer) so the server accepts them.
 pub struct EmbodimentAgent {
     embodiment: ConnectorCache,
+
+
+
+
+
     client: Option<BlockingEmbodimentClient>,
     heartbeat_interval: Duration,
     implicit_background_heartbeat: bool,
@@ -267,8 +274,12 @@ impl EmbodimentAgent {
     // TODO how can we handle motor callback hookups?
 }
 
+
+
+
+
 struct BlockingEmbodimentClient {
-    command_and_control: CommandControlSubAgent,
+    command_and_control: CommandControlAgent,
     sensor_pusher: Box<dyn FeagiClientPusher>,
     motor_subscriber: Box<dyn FeagiClientSubscriber>,
     session_id: AgentID,
@@ -290,8 +301,8 @@ impl BlockingEmbodimentClient {
             AgentCapabilities::SendSensorData,
         ];
 
-        let mut command_control = CommandControlSubAgent::new(command_and_control_properties);
-        let command_endpoint = command_control.endpoint_target();
+        let mut command_control = CommandControlAgent::new(command_and_control_properties);
+        let command_endpoint = command_control.registered_endpoint_target();
 
         command_control.request_connect()?; // TODO shouldn't this be blocking somehow?
 
@@ -396,7 +407,7 @@ impl BlockingEmbodimentClient {
             return Ok(());
         }
         self.command_and_control
-            .request_heartbeat(self.session_id)?;
+            .send_heartbeat()?;
         self.last_heartbeat_sent_at = Instant::now();
         Ok(())
     }

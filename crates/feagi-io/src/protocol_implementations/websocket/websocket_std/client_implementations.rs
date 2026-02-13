@@ -10,7 +10,7 @@ use tungstenite::{connect, Message, WebSocket};
 
 use crate::FeagiNetworkError;
 use crate::protocol_implementations::websocket::WebSocketUrl;
-use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
+use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
 use crate::traits_and_enums::client::{
     FeagiClient, FeagiClientPusher, FeagiClientPusherProperties,
     FeagiClientRequester, FeagiClientRequesterProperties,
@@ -55,6 +55,10 @@ impl FeagiClientSubscriberProperties for FeagiWebSocketClientSubscriberPropertie
             receive_buffer: None,
             has_data: false,
         })
+    }
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.server_address.clone())
     }
 }
 
@@ -174,10 +178,6 @@ impl FeagiClient for FeagiWebSocketClientSubscriber {
         }
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::WebSocket
-    }
-
     fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::WebSocket(self.server_address.clone())
     }
@@ -247,6 +247,10 @@ impl FeagiClientPusherProperties for FeagiWebSocketClientPusherProperties {
             current_state: FeagiEndpointState::Inactive,
             socket: None,
         })
+    }
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.server_address.clone())
     }
 }
 
@@ -319,10 +323,6 @@ impl FeagiClient for FeagiWebSocketClientPusher {
         }
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::WebSocket
-    }
-
     fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::WebSocket(self.server_address.clone())
     }
@@ -393,6 +393,10 @@ impl FeagiClientRequesterProperties for FeagiWebSocketClientRequesterProperties 
             receive_buffer: None,
             has_data: false,
         })
+    }
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.server_address.clone())
     }
 }
 
@@ -510,10 +514,6 @@ impl FeagiClient for FeagiWebSocketClientRequester {
         }
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::WebSocket
-    }
-
     fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::WebSocket(self.server_address.clone())
     }
@@ -574,6 +574,7 @@ impl FeagiClientRequester for FeagiWebSocketClientRequester {
             server_address: self.server_address.clone(),
         })
     }
+
 }
 
 //endregion

@@ -54,7 +54,9 @@ pub trait FeagiServer: Send {
     /// Returns an error if cleanup fails.
     fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError>;
 
-    fn get_protocol(&self) -> TransportProtocolImplementation;
+    /// Gets the local bind point
+    fn get_bind_point(&self) -> TransportProtocolEndpoint;
 
-    fn get_endpoint(&self) -> TransportProtocolEndpoint;
+    /// Gets the bind point that is given to agents (the remote bind point)
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint;
 }

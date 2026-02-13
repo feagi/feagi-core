@@ -473,7 +473,7 @@ impl FeagiAgentHandler {
     ) -> Result<usize, FeagiAgentError> {
         for i in 0..self.available_pullers.len() {
             let available_puller = &self.available_pullers[i];
-            if &available_puller.get_protocol() != wanted_protocol {
+            if &available_puller.get_transport_protocol() != wanted_protocol {
                 // not the protocol we are looking for
                 continue;
             } else {
@@ -492,7 +492,7 @@ impl FeagiAgentHandler {
     ) -> Result<usize, FeagiAgentError> {
         for i in 0..self.available_publishers.len() {
             let available_publisher = &self.available_publishers[i];
-            if &available_publisher.get_protocol() != wanted_protocol {
+            if &available_publisher.get_transport_protocol() != wanted_protocol {
                 // not the protocol we are looking for
                 continue;
             } else {
@@ -511,7 +511,7 @@ impl FeagiAgentHandler {
     ) -> Result<usize, FeagiAgentError> {
         for i in (0..self.available_publishers.len()).rev() {
             let available_publisher = &self.available_publishers[i];
-            if &available_publisher.get_protocol() != wanted_protocol {
+            if &available_publisher.get_transport_protocol() != wanted_protocol {
                 continue;
             } else {
                 return Ok(i);

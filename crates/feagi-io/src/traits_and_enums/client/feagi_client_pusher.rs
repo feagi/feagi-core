@@ -1,6 +1,7 @@
 
 use crate::FeagiNetworkError;
 use crate::traits_and_enums::client::FeagiClient;
+use crate::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 
 /// A client that pushes data to a server in a fire-and-forget pattern.
 ///
@@ -52,4 +53,6 @@ pub trait FeagiClientPusher: FeagiClient {
 pub trait FeagiClientPusherProperties {
     /// Creates a new boxed pusher client from these properties.
     fn as_boxed_client_pusher(&self) -> Box<dyn FeagiClientPusher>;
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint;
 }

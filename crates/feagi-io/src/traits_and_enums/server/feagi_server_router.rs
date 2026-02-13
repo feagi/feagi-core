@@ -1,5 +1,6 @@
 use crate::{AgentID, FeagiNetworkError};
 use crate::traits_and_enums::server::FeagiServer;
+use crate::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 
 /// A server that handles request-response communication with multiple clients.
 ///
@@ -58,6 +59,7 @@ pub trait FeagiServerRouter: FeagiServer {
     /// router instance, enabling creation of new routers with the same
     /// configuration.
     fn as_boxed_router_properties(&self) -> Box<dyn FeagiServerRouterProperties>;
+    
 
     // TODO functions to add clients, remove clients, lock registering new clients
 }
@@ -65,4 +67,10 @@ pub trait FeagiServerRouter: FeagiServer {
 pub trait FeagiServerRouterProperties: Send + Sync {
     /// Creates a new boxed router from these properties.
     fn as_boxed_server_router(&self) -> Box<dyn FeagiServerRouter>;
+
+    /// Gets the local bind point
+    fn get_bind_point(&self) -> TransportProtocolEndpoint;
+
+    /// Gets the bind point that is given to agents (the remote bind point)
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint;
 }

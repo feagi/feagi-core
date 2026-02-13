@@ -1,5 +1,6 @@
 use crate::FeagiNetworkError;
 use crate::traits_and_enums::client::FeagiClient;
+use crate::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 
 /// A client that subscribes to data broadcast by a publisher server.
 ///
@@ -57,4 +58,6 @@ pub trait FeagiClientSubscriber: FeagiClient {
 pub trait FeagiClientSubscriberProperties {
     /// Creates a new boxed subscriber client from these properties.
     fn as_boxed_client_subscriber(&self) -> Box<dyn FeagiClientSubscriber>;
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint;
 }
