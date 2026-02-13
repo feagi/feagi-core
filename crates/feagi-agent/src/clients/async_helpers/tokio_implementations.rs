@@ -15,7 +15,6 @@ const TOKIO_SLEEP_TIME_MS: u64 = 1;
 pub struct TokioCommandControlAgent {
     inner: CommandControlAgent,
     heartbeat_interval: Duration,
-    implicit_background_heartbeat: bool,
 }
 
 impl TokioCommandControlAgent {
@@ -54,18 +53,19 @@ impl TokioCommandControlAgent {
     pub async fn request_connect(&mut self) -> Result<(), FeagiAgentError> {
         _ = self.inner.request_connect()?;
 
+        // Just wait until the state has reached active
         loop {
-            match self.inner.poll_state()? {
-                FeagiEndpointState::Pending => {
+            match self.inner.poll_for_messages()? {
+                (FeagiEndpointState::Pending, _) => {
                     tokio::time::sleep(Duration::from_millis(TOKIO_SLEEP_TIME_MS)).await;
                 }
-                FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
+                (FeagiEndpointState::ActiveWaiting, _) | (FeagiEndpointState::ActiveHasData, _) => {
                     return Ok(());
                 }
-                FeagiEndpointState::Errored(e) => {
+                (FeagiEndpointState::Errored(e), _) => {
                     return Err(FeagiAgentError::ConnectionFailed(e.to_string()));
                 }
-                FeagiEndpointState::Inactive => {
+                (FeagiEndpointState::Inactive, _) => {
                     return Err(FeagiAgentError::ConnectionFailed("Connection failed".to_string()));
                 }
             }
@@ -83,21 +83,28 @@ impl TokioCommandControlAgent {
         // Send registration response
         self.inner.request_registration(agent_descriptor, auth_token, requested_capabilities)?;
 
+
         // Poll until we get the registration response
         loop {
             match self.inner.poll_for_messages()? {
-                Some(FeagiMessage::AgentRegistration(
-                         AgentRegistrationMessage::ServerRespondsRegistration(
-                             RegistrationResponse::Success(session_id, endpoints)
-                         )
-                     )) => {
-                    return Ok((session_id, endpoints));
+                (_, Some(FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsRegistration(registration_response)))) => {
+                    match registration_response {
+                        RegistrationResponse::Success(id, endpoints) => {
+                            return Ok((id, endpoints))
+                        }
+                        _ => {
+                            // Anything else is a failure, how should we handle it?
+                            // TODO logging?
+                            return Err(FeagiAgentError::AuthenticationFailed("failed to register".to_string()))
+                        }
+                    }
                 }
-                Some(message) => {
-                    // Why are we getting another kind of message???? We should probably error but this is worth a discussion
-                    todo!()
+                (_, Some(other_message)) => {
+                    // TODO how do we deal with another kind of message being returned here?
+                    tokio::time::sleep(Duration::from_millis(TOKIO_SLEEP_TIME_MS)).await;
                 }
-                None => {
+                (_, None) => {
+                    // Keep waiting
                     tokio::time::sleep(Duration::from_millis(TOKIO_SLEEP_TIME_MS)).await;
                 }
             }
@@ -113,25 +120,40 @@ impl TokioCommandControlAgent {
         // Send registration response
         self.inner.request_deregistration(reason)?;
 
-        // Poll until we get the registration response
+        // Poll until we get the deregistration response
         loop {
             match self.inner.poll_for_messages()? {
-                Some(FeagiMessage::AgentRegistration(
-                         AgentRegistrationMessage::ServerRespondsDeregistration(response))) => 
-                    {
-                        match response {
-                            DeregistrationResponse::Success => {
-                                
-                            }
-                            DeregistrationResponse::NotRegistered => {}
-                        }
-                    return Ok(response);
+                (_, Some(FeagiMessage::AgentRegistration(AgentRegistrationMessage::ServerRespondsDeregistration(deregistration_response)))) => {
+                    return Ok(deregistration_response)
                 }
-                Some(message) => {
-                    // Why are we getting another kind of message???? We should probably error but this is worth a discussion
-                    todo!()
+                (_, Some(other_message)) => {
+                    // TODO how do we deal with another kind of message being returned here?
+                    tokio::time::sleep(Duration::from_millis(TOKIO_SLEEP_TIME_MS)).await;
                 }
-                None => {
+                (_, None) => {
+                    // Keep waiting
+                    tokio::time::sleep(Duration::from_millis(TOKIO_SLEEP_TIME_MS)).await;
+                }
+            }
+        }
+    }
+
+
+    pub async fn send_heartbeat(&mut self) -> Result<(), FeagiAgentError> {
+        self.inner.send_heartbeat()?;
+
+        // Poll until we get the heartbeat back
+        loop {
+            match self.inner.poll_for_messages()? {
+                (_, Some(FeagiMessage::HeartBeat)) => {
+                    return Ok(());
+                }
+                (_, Some(other_message)) => {
+                    // TODO how do we deal with another kind of message being returned here?
+                    tokio::time::sleep(Duration::from_millis(TOKIO_SLEEP_TIME_MS)).await;
+                }
+                (_, None) => {
+                    // Keep waiting
                     tokio::time::sleep(Duration::from_millis(TOKIO_SLEEP_TIME_MS)).await;
                 }
             }
@@ -142,24 +164,41 @@ impl TokioCommandControlAgent {
 
     //region Base Functions
 
-    //endregion
-
-
-
-
-
-
-
-
-    /// Wait for the next message.
-    pub async fn recv(&mut self) -> Result<FeagiMessage, FeagiAgentError> {
+    pub async fn poll_for_messages(&mut self) -> Result<FeagiMessage, FeagiAgentError> {
+        // Poll until we find a message
         loop {
             match self.inner.poll_for_messages()? {
-                Some(msg) => return Ok(msg),
-                None => tokio::time::sleep(Duration::from_millis(TOKIO_SLEEP_TIME_MS)).await,
+                (_, Some(other_message)) => {
+                    // TODO how do we deal with another kind of message being returned here?
+                    return Ok(other_message)
+                }
+                (_, None) => {
+                    // Keep waiting
+                    tokio::time::sleep(Duration::from_millis(TOKIO_SLEEP_TIME_MS)).await;
+                }
             }
         }
     }
+
+    pub async fn send_message(&mut self, message: FeagiMessage, increment_value: u16) -> Result<(), FeagiAgentError> {
+        self.inner.send_message(message, increment_value)?;
+
+        // wait till the socket is no longer sending the data
+        loop {
+            match self.inner.poll_for_messages()? {
+                (&FeagiEndpointState::ActiveWaiting, _) => {
+                    return Ok(())
+                }
+                (_, _) => {
+                    // Keep waiting
+                    tokio::time::sleep(Duration::from_millis(TOKIO_SLEEP_TIME_MS)).await;
+                }
+            }
+        }
+
+    }
+
+    //endregion
 }
 
 //endregion

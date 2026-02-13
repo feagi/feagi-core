@@ -47,7 +47,6 @@ impl CommandControlAgent {
             return Err(FeagiAgentError::ConnectionFailed("Agent already connected and registered!".to_string()))
         }
 
-        // TODO if it is something, what is it?
         if self.requester.is_none() {
             self.requester = Some(self.properties.as_boxed_client_requester());
         }
@@ -133,111 +132,100 @@ impl CommandControlAgent {
     //region Base Functions
 
     pub fn poll_for_messages(&mut self) -> Result<(&FeagiEndpointState, Option<FeagiMessage>), FeagiAgentError> {
-        if let Some(mut requester) = self.requester.take() {
-            let state = requester.poll();
-            let result:  Result<(&FeagiEndpointState, Option<FeagiMessage>), FeagiAgentError> = match state {
-                FeagiEndpointState::Inactive => {
-                    self.requester = Some(requester);
-                    Ok((state, None))
-                }
-                FeagiEndpointState::Pending => {
-                    self.requester = Some(requester);
-                    Ok((state, None))
-                }
-                FeagiEndpointState::ActiveWaiting => {
-                    self.requester = Some(requester);
-                    Ok((state, None))
-                }
+        let maybe_message = {
+            let requester = self.requester.as_mut().ok_or_else(|| {
+                FeagiAgentError::ConnectionFailed("No socket is active to poll!".to_string())
+            })?;
+
+            let state_snapshot = requester.poll().clone();
+            match state_snapshot {
+                FeagiEndpointState::Inactive
+                | FeagiEndpointState::Pending
+                | FeagiEndpointState::ActiveWaiting => Ok(None),
                 FeagiEndpointState::ActiveHasData => {
                     let data = requester.consume_retrieved_response()?;
                     self.request_buffer
                         .try_write_data_by_copy_and_verify(&data)?;
                     let feagi_message: FeagiMessage = (&self.request_buffer).try_into()?;
 
-                    let result: Result<(&FeagiEndpointState, Option<FeagiMessage>), FeagiAgentError> = match &feagi_message {
-                        FeagiMessage::HeartBeat => {
-                            Ok((state, Some(FeagiMessage::HeartBeat)))
-                        }
+                    match &feagi_message {
+                        FeagiMessage::HeartBeat => Ok(Some(FeagiMessage::HeartBeat)),
                         FeagiMessage::AgentRegistration(registration_message) => {
                             match registration_message {
-                                AgentRegistrationMessage::ClientRequestRegistration(_) => {
-                                    // Not possible
-                                    Err(FeagiAgentError::ConnectionFailed(
+                                AgentRegistrationMessage::ClientRequestRegistration(_) => Err(
+                                    FeagiAgentError::ConnectionFailed(
                                         "Client cannot register agents!".to_string(),
-                                    ))
-                                }
+                                    ),
+                                ),
                                 AgentRegistrationMessage::ServerRespondsRegistration(
                                     registration_response,
                                 ) => match registration_response {
-                                    RegistrationResponse::FailedInvalidRequest => {
-                                        Err(FeagiAgentError::ConnectionFailed(
+                                    RegistrationResponse::FailedInvalidRequest => Err(
+                                        FeagiAgentError::ConnectionFailed(
                                             "Invalid server responses!".to_string(),
-                                        ))
-                                    }
-                                    RegistrationResponse::FailedInvalidAuth => {
-                                        Err(FeagiAgentError::ConnectionFailed(
+                                        ),
+                                    ),
+                                    RegistrationResponse::FailedInvalidAuth => Err(
+                                        FeagiAgentError::ConnectionFailed(
                                             "Invalid auth token!".to_string(),
-                                        ))
-                                    }
-                                    RegistrationResponse::AlreadyRegistered => {
-                                        Err(FeagiAgentError::ConnectionFailed(
+                                        ),
+                                    ),
+                                    RegistrationResponse::AlreadyRegistered => Err(
+                                        FeagiAgentError::ConnectionFailed(
                                             "Client already registered!".to_string(),
-                                        ))
-                                    }
+                                        ),
+                                    ),
                                     RegistrationResponse::Success(session_id, endpoints) => {
                                         self.registration_status =
                                             AgentRegistrationStatus::Registered(
                                                 session_id.clone(),
                                                 endpoints.clone(),
                                             );
-                                        Ok((state, Some(feagi_message)))
+                                        Ok(Some(feagi_message))
                                     }
                                 },
-                                AgentRegistrationMessage::ClientRequestDeregistration(_) => {
-                                    Err(FeagiAgentError::ConnectionFailed(
+                                AgentRegistrationMessage::ClientRequestDeregistration(_) => Err(
+                                    FeagiAgentError::ConnectionFailed(
                                         "Client cannot receive deregistration request from server!"
                                             .to_string(),
-                                    ))
-                                }
+                                    ),
+                                ),
                                 AgentRegistrationMessage::ServerRespondsDeregistration(
                                     deregistration_response,
                                 ) => match deregistration_response {
                                     DeregistrationResponse::Success => {
-                                        requester.request_disconnect();
-                                        self.registration_status = AgentRegistrationStatus::NotRegistered;
-                                            Ok((state, Some(feagi_message)))
-                                    },
+                                        requester.request_disconnect()?;
+                                        self.registration_status =
+                                            AgentRegistrationStatus::NotRegistered;
+                                        Ok(Some(feagi_message))
+                                    }
                                     DeregistrationResponse::NotRegistered => {
-                                        Ok((state, Some(feagi_message)))
+                                        Ok(Some(feagi_message))
                                     }
                                 },
                             }
                         }
-                        _ => {
-                            // just return the message as is
-                            Ok((state, Some(feagi_message)))
-                        }
-                    };
-
-                    // Restore requester before returning
-                    self.requester = Some(requester);
-                    result
+                        _ => Ok(Some(feagi_message)),
+                    }
                 }
                 FeagiEndpointState::Errored(_) => {
                     requester.confirm_error_and_close()?;
-                    // Don't restore requester - it's been closed
                     Err(FeagiAgentError::ConnectionFailed(
                         "Error occurred".to_string(),
                     ))
                 }
-            };
+            }
+        }?;
 
-            result
-        } else {
-            Err(FeagiAgentError::ConnectionFailed(
-                "No socket is active to poll!".to_string(),
-            ))
-        }
+        let state = self
+            .requester
+            .as_mut()
+            .ok_or_else(|| {
+                FeagiAgentError::ConnectionFailed("No socket is active to poll!".to_string())
+            })?
+            .poll();
+
+        Ok((state, maybe_message))
     }
 
     pub fn send_message(&mut self, message: FeagiMessage, increment_value: u16) -> Result<(), FeagiAgentError> {
