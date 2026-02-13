@@ -69,12 +69,14 @@ impl fmt::Display for AuthToken {
 
 //endregion
 
-/// Generate a random FEAGI agent identifier encoded as base64.
-///
-/// This helper standardizes agent ID generation for clients that must pass a
-/// base64 identifier string across process/language boundaries.
-pub fn generate_agent_id_base64() -> String {
-    AgentID::new_random().to_base64()
+/// Determines how agents with nonauthenticated agent IDs will be handled by the server
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub enum UnauthenticatedAgentRejectionBehavior {
+    #[default]
+    Ignore,
+    Error,
+    Log,
+    AllowAnyways
 }
 
 //region Agent Capabilities

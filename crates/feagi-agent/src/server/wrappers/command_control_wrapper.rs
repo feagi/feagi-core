@@ -15,13 +15,13 @@ use std::collections::HashMap;
 pub type IsNewSessionId = bool;
 
 /// Translates the byte data from clients into [FeagiMessage] for ease of use upstream
-pub struct CommandControlTranslator {
+pub struct CommandControlWrapper {
     router: Box<dyn FeagiServerRouter>,
     request_buffer: FeagiByteContainer,
     send_buffer: FeagiByteContainer,
 }
 
-impl CommandControlTranslator {
+impl CommandControlWrapper {
     /// Build an adapter from a boxed router. The router must already be started
     /// (e.g. `request_start()` called and polled to ActiveWaiting) by the caller.
     pub fn new(router: Box<dyn FeagiServerRouter>) -> Self {

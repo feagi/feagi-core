@@ -11,7 +11,7 @@ use tungstenite::{accept, Message, WebSocket};
 
 use crate::{AgentID, FeagiNetworkError};
 use crate::protocol_implementations::websocket::shared::WebSocketUrl;
-use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
+use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::server::{
     FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties,
     FeagiServerPuller, FeagiServerPullerProperties,
@@ -75,6 +75,10 @@ impl FeagiServerPublisherProperties for FeagiWebSocketServerPublisherProperties 
 
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
     }
 }
 
@@ -202,6 +206,10 @@ impl FeagiServer for FeagiWebSocketServerPublisher {
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
     }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
+    }
 }
 
 impl FeagiServerPublisher for FeagiWebSocketServerPublisher {
@@ -301,6 +309,10 @@ impl FeagiServerPullerProperties for FeagiWebSocketServerPullerProperties {
 
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
     }
 }
 
@@ -466,6 +478,10 @@ impl FeagiServer for FeagiWebSocketServerPuller {
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
     }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
+    }
 }
 
 impl FeagiServerPuller for FeagiWebSocketServerPuller {
@@ -558,6 +574,10 @@ impl FeagiServerRouterProperties for FeagiWebSocketServerRouterProperties {
 
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
     }
 }
 
@@ -862,6 +882,10 @@ impl FeagiServer for FeagiWebSocketServerRouter {
 
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
     }
 }
 

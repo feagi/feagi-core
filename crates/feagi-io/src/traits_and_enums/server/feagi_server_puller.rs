@@ -42,4 +42,7 @@ pub trait FeagiServerPullerProperties: Send + Sync {
     /// Gets the bind point that is given to agents (the remote bind point)
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint;
 
+    // What protocols do both endpoints use?
+    fn get_protocol(&self) -> TransportProtocolImplementation;
+
 }

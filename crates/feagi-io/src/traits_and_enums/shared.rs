@@ -214,7 +214,12 @@ impl TransportProtocolEndpoint {
             }
         }
     }
+
+    pub fn as_transport_protocol_implementation(&self) -> TransportProtocolImplementation {
+        self.clone().into()
+    }
 }
+
 
 // ========================================================================
     // Server Properties Factory Methods

@@ -1,6 +1,6 @@
 use crate::FeagiNetworkError;
 use crate::traits_and_enums::client::FeagiClient;
-use crate::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
+use crate::traits_and_enums::shared::TransportProtocolEndpoint;
 
 /// A client that subscribes to data broadcast by a publisher server.
 ///

@@ -59,7 +59,7 @@ pub trait FeagiServerRouter: FeagiServer {
     /// router instance, enabling creation of new routers with the same
     /// configuration.
     fn as_boxed_router_properties(&self) -> Box<dyn FeagiServerRouterProperties>;
-    
+
 
     // TODO functions to add clients, remove clients, lock registering new clients
 }
@@ -73,4 +73,6 @@ pub trait FeagiServerRouterProperties: Send + Sync {
 
     /// Gets the bind point that is given to agents (the remote bind point)
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint;
+
+    fn get_protocol(&self) -> TransportProtocolImplementation;
 }

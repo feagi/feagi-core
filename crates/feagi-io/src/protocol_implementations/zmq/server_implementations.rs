@@ -15,7 +15,7 @@ use zmq::{Context, Message, Socket};
 
 use crate::{AgentID, FeagiNetworkError};
 use crate::protocol_implementations::zmq::shared::ZmqUrl;
-use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
+use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::server::{
     FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties,
     FeagiServerPuller, FeagiServerPullerProperties,
@@ -51,6 +51,7 @@ impl FeagiZmqServerPublisherProperties {
     pub fn new(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
         let local_bind_address = ZmqUrl::new(local_bind_address)?;
         let remote_bind_address =  ZmqUrl::new(remote_bind_address)?;
+
         Ok(Self { local_bind_address, remote_bind_address })
     }
 }
@@ -77,6 +78,10 @@ impl FeagiServerPublisherProperties for FeagiZmqServerPublisherProperties {
 
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
     }
 }
 
@@ -172,7 +177,9 @@ impl FeagiServer for FeagiZmqServerPublisher {
         TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
     }
 
-
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
+    }
 }
 
 impl FeagiServerPublisher for FeagiZmqServerPublisher {
@@ -265,6 +272,10 @@ impl FeagiServerPullerProperties for FeagiZmqServerPullerProperties {
 
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
     }
 }
 
@@ -384,6 +395,10 @@ impl FeagiServer for FeagiZmqServerPuller {
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
     }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
+    }
 }
 
 impl FeagiServerPuller for FeagiZmqServerPuller {
@@ -482,6 +497,10 @@ impl FeagiServerRouterProperties for FeagiZmqServerRouterProperties {
 
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
     }
 }
 
@@ -683,6 +702,10 @@ impl FeagiServer for FeagiZmqServerRouter {
 
     fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
     }
 }
 
