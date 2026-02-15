@@ -15,13 +15,13 @@ use std::collections::HashMap;
 pub type IsNewSessionId = bool;
 
 /// Translates the byte data from clients into [FeagiMessage] for ease of use upstream
-pub struct CommandControlTranslator {
+pub struct CommandControlWrapper {
     router: Box<dyn FeagiServerRouter>,
     request_buffer: FeagiByteContainer,
     send_buffer: FeagiByteContainer,
 }
 
-impl CommandControlTranslator {
+impl CommandControlWrapper {
     /// Build an adapter from a boxed router. The router must already be started
     /// (e.g. `request_start()` called and polled to ActiveWaiting) by the caller.
     pub fn new(router: Box<dyn FeagiServerRouter>) -> Self {
@@ -111,6 +111,9 @@ impl CommandControlTranslator {
         &mut self,
         known_session_ids: &HashMap<AgentID, (AgentDescriptor, Vec<AgentCapabilities>)>,
     ) -> Result<Option<(AgentID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
+
+        // NOTE: Routers are unique that they get session IDs not from the byte data, but from the
+        // connection type itself!
         let (session_id, incoming_data) = self.router.consume_retrieved_request()?;
 
         let is_new_session = !known_session_ids.contains_key(&session_id);

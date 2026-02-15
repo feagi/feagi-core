@@ -1,5 +1,5 @@
 mod feagi_agent_handler;
-mod translators;
+mod wrappers;
 
 pub mod auth;
-pub use feagi_agent_handler::{AgentLivenessConfig, FeagiAgentHandler};
+pub use feagi_agent_handler::{FeagiAgentHandler};

@@ -34,7 +34,8 @@ use crate::traits_and_enums::server::{
 /// enabling creation of new publishers with the same settings.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FeagiZmqServerPublisherProperties {
-    bind_address: ZmqUrl,
+    local_bind_address: ZmqUrl,
+    remote_bind_address: ZmqUrl,
 }
 
 impl FeagiZmqServerPublisherProperties {
@@ -47,9 +48,11 @@ impl FeagiZmqServerPublisherProperties {
     /// # Errors
     ///
     /// Returns an error if the address is invalid.
-    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
-        let zmq_url = ZmqUrl::new(bind_address)?;
-        Ok(Self { bind_address: zmq_url })
+    pub fn new(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        let local_bind_address = ZmqUrl::new(local_bind_address)?;
+        let remote_bind_address =  ZmqUrl::new(remote_bind_address)?;
+
+        Ok(Self { local_bind_address, remote_bind_address })
     }
 }
 
@@ -61,19 +64,24 @@ impl FeagiServerPublisherProperties for FeagiZmqServerPublisherProperties {
             .expect("Failed to create ZMQ PUB socket");
 
         Box::new(FeagiZmqServerPublisher {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
             current_state: FeagiEndpointState::Inactive,
             context,
             socket,
         })
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::Zmq
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.local_bind_address.clone())
     }
 
-    fn get_endpoint(&self) -> TransportProtocolEndpoint {
-        TransportProtocolEndpoint::Zmq(self.bind_address.clone())
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
     }
 }
 
@@ -98,7 +106,8 @@ impl FeagiServerPublisherProperties for FeagiZmqServerPublisherProperties {
 /// publisher.publish_data(b"Hello subscribers!")?;
 /// ```
 pub struct FeagiZmqServerPublisher {
-    bind_address: ZmqUrl,
+    local_bind_address: ZmqUrl,
+    remote_bind_address: ZmqUrl,
     current_state: FeagiEndpointState,
     #[allow(dead_code)] // Context must be kept alive for socket lifetime
     context: Context,
@@ -117,7 +126,7 @@ impl FeagiServer for FeagiZmqServerPublisher {
             FeagiEndpointState::Inactive => {
                 // ZMQ bind is synchronous
                 self.socket
-                    .bind(&self.bind_address.to_string())
+                    .bind(&self.local_bind_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
 
                 self.current_state = FeagiEndpointState::ActiveWaiting;
@@ -134,7 +143,7 @@ impl FeagiServer for FeagiZmqServerPublisher {
             FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
                 // ZMQ unbind is synchronous
                 self.socket
-                    .unbind(&self.bind_address.to_string())
+                    .unbind(&self.local_bind_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
 
                 self.current_state = FeagiEndpointState::Inactive;
@@ -150,7 +159,7 @@ impl FeagiServer for FeagiZmqServerPublisher {
         match &self.current_state {
             FeagiEndpointState::Errored(_) => {
                 // Attempt to unbind if we were bound
-                let _ = self.socket.unbind(&self.bind_address.to_string());
+                let _ = self.socket.unbind(&self.local_bind_address.to_string());
                 self.current_state = FeagiEndpointState::Inactive;
                 Ok(())
             }
@@ -160,12 +169,16 @@ impl FeagiServer for FeagiZmqServerPublisher {
         }
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::Zmq
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.local_bind_address.clone())
     }
 
-    fn get_endpoint(&self) -> TransportProtocolEndpoint {
-        TransportProtocolEndpoint::Zmq(self.bind_address.clone())
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
     }
 }
 
@@ -194,7 +207,8 @@ impl FeagiServerPublisher for FeagiZmqServerPublisher {
 
     fn as_boxed_publisher_properties(&self) -> Box<dyn FeagiServerPublisherProperties> {
         Box::new(FeagiZmqServerPublisherProperties {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
         })
     }
 }
@@ -213,7 +227,8 @@ impl FeagiServerPublisher for FeagiZmqServerPublisher {
 /// enabling creation of new pullers with the same settings.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FeagiZmqServerPullerProperties {
-    bind_address: ZmqUrl,
+    local_bind_address: ZmqUrl,
+    remote_bind_address: ZmqUrl,
 }
 
 impl FeagiZmqServerPullerProperties {
@@ -226,9 +241,10 @@ impl FeagiZmqServerPullerProperties {
     /// # Errors
     ///
     /// Returns an error if the address is invalid.
-    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
-        let zmq_url = ZmqUrl::new(bind_address)?;
-        Ok(Self { bind_address: zmq_url })
+    pub fn new(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        let local_bind_address = ZmqUrl::new(local_bind_address)?;
+        let remote_bind_address =  ZmqUrl::new(remote_bind_address)?;
+        Ok(Self { local_bind_address, remote_bind_address })
     }
 }
 
@@ -240,7 +256,8 @@ impl FeagiServerPullerProperties for FeagiZmqServerPullerProperties {
             .expect("Failed to create ZMQ PULL socket");
 
         Box::new(FeagiZmqServerPuller {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
             current_state: FeagiEndpointState::Inactive,
             context,
             socket,
@@ -249,12 +266,16 @@ impl FeagiServerPullerProperties for FeagiZmqServerPullerProperties {
         })
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::Zmq
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.local_bind_address.clone())
     }
 
-    fn get_endpoint(&self) -> TransportProtocolEndpoint {
-        TransportProtocolEndpoint::Zmq(self.bind_address.clone())
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
     }
 }
 
@@ -285,7 +306,8 @@ impl FeagiServerPullerProperties for FeagiZmqServerPullerProperties {
 /// }
 /// ```
 pub struct FeagiZmqServerPuller {
-    bind_address: ZmqUrl,
+    local_bind_address: ZmqUrl,
+    remote_bind_address: ZmqUrl,
     current_state: FeagiEndpointState,
     #[allow(dead_code)]
     context: Context,
@@ -323,7 +345,7 @@ impl FeagiServer for FeagiZmqServerPuller {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
                 self.socket
-                    .bind(&self.bind_address.to_string())
+                    .bind(&self.local_bind_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
 
                 self.current_state = FeagiEndpointState::ActiveWaiting;
@@ -339,7 +361,7 @@ impl FeagiServer for FeagiZmqServerPuller {
         match &self.current_state {
             FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
                 self.socket
-                    .unbind(&self.bind_address.to_string())
+                    .unbind(&self.local_bind_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
 
                 self.has_data = false;
@@ -355,7 +377,7 @@ impl FeagiServer for FeagiZmqServerPuller {
     fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Errored(_) => {
-                let _ = self.socket.unbind(&self.bind_address.to_string());
+                let _ = self.socket.unbind(&self.local_bind_address.to_string());
                 self.has_data = false;
                 self.current_state = FeagiEndpointState::Inactive;
                 Ok(())
@@ -366,12 +388,16 @@ impl FeagiServer for FeagiZmqServerPuller {
         }
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::Zmq
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.local_bind_address.clone())
     }
 
-    fn get_endpoint(&self) -> TransportProtocolEndpoint {
-        TransportProtocolEndpoint::Zmq(self.bind_address.clone())
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
     }
 }
 
@@ -398,7 +424,8 @@ impl FeagiServerPuller for FeagiZmqServerPuller {
 
     fn as_boxed_puller_properties(&self) -> Box<dyn FeagiServerPullerProperties> {
         Box::new(FeagiZmqServerPullerProperties {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
         })
     }
 }
@@ -417,7 +444,8 @@ impl FeagiServerPuller for FeagiZmqServerPuller {
 /// enabling creation of new routers with the same settings.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FeagiZmqServerRouterProperties {
-    bind_address: ZmqUrl,
+    local_bind_address: ZmqUrl,
+    remote_bind_address: ZmqUrl,
 }
 
 impl FeagiZmqServerRouterProperties {
@@ -430,9 +458,10 @@ impl FeagiZmqServerRouterProperties {
     /// # Errors
     ///
     /// Returns an error if the address is invalid.
-    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
-        let zmq_url = ZmqUrl::new(bind_address)?;
-        Ok(Self { bind_address: zmq_url })
+    pub fn new(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        let local_bind_address = ZmqUrl::new(local_bind_address)?;
+        let remote_bind_address =  ZmqUrl::new(remote_bind_address)?;
+        Ok(Self { local_bind_address, remote_bind_address })
     }
 }
 
@@ -444,7 +473,8 @@ impl FeagiServerRouterProperties for FeagiZmqServerRouterProperties {
             .expect("Failed to create ZMQ ROUTER socket");
 
         Box::new(FeagiZmqServerRouter {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
             current_state: FeagiEndpointState::Inactive,
             context,
             socket,
@@ -459,6 +489,18 @@ impl FeagiServerRouterProperties for FeagiZmqServerRouterProperties {
             identity_to_session: HashMap::new(),
             session_to_identity: HashMap::new(),
         })
+    }
+
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.local_bind_address.clone())
+    }
+
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
     }
 }
 
@@ -491,7 +533,8 @@ impl FeagiServerRouterProperties for FeagiZmqServerRouterProperties {
 /// }
 /// ```
 pub struct FeagiZmqServerRouter {
-    bind_address: ZmqUrl,
+    local_bind_address: ZmqUrl,
+    remote_bind_address: ZmqUrl,
     current_state: FeagiEndpointState,
     #[allow(dead_code)]
     context: Context,
@@ -603,7 +646,7 @@ impl FeagiServer for FeagiZmqServerRouter {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
                 self.socket
-                    .bind(&self.bind_address.to_string())
+                    .bind(&self.local_bind_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
 
                 self.current_state = FeagiEndpointState::ActiveWaiting;
@@ -619,7 +662,7 @@ impl FeagiServer for FeagiZmqServerRouter {
         match &self.current_state {
             FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
                 self.socket
-                    .unbind(&self.bind_address.to_string())
+                    .unbind(&self.local_bind_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotUnbind(e.to_string()))?;
 
                 // Clear all state
@@ -639,7 +682,7 @@ impl FeagiServer for FeagiZmqServerRouter {
     fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Errored(_) => {
-                let _ = self.socket.unbind(&self.bind_address.to_string());
+                let _ = self.socket.unbind(&self.local_bind_address.to_string());
                 self.current_session = None;
                 self.has_data = false;
                 self.identity_to_session.clear();
@@ -653,12 +696,16 @@ impl FeagiServer for FeagiZmqServerRouter {
         }
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::Zmq
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.local_bind_address.clone())
     }
 
-    fn get_endpoint(&self) -> TransportProtocolEndpoint {
-        TransportProtocolEndpoint::Zmq(self.bind_address.clone())
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::Zmq
     }
 }
 
@@ -724,7 +771,8 @@ impl FeagiServerRouter for FeagiZmqServerRouter {
 
     fn as_boxed_router_properties(&self) -> Box<dyn FeagiServerRouterProperties> {
         Box::new(FeagiZmqServerRouterProperties {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
         })
     }
 }

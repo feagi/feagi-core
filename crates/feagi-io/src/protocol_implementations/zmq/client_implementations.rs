@@ -13,7 +13,7 @@ use zmq::{Context, Message, Socket};
 
 use crate::FeagiNetworkError;
 use crate::protocol_implementations::zmq::shared::ZmqUrl;
-use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
+use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
 use crate::traits_and_enums::client::{
     FeagiClient, FeagiClientPusher, FeagiClientPusherProperties,
     FeagiClientRequester, FeagiClientRequesterProperties,
@@ -71,6 +71,10 @@ impl FeagiClientSubscriberProperties for FeagiZmqClientSubscriberProperties {
             recv_msg: Message::new(),
             has_data: false,
         })
+    }
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.server_address.clone())
     }
 }
 
@@ -180,10 +184,6 @@ impl FeagiClient for FeagiZmqClientSubscriber {
         }
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::Zmq
-    }
-
     fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::Zmq(self.server_address.clone())
     }
@@ -263,6 +263,10 @@ impl FeagiClientPusherProperties for FeagiZmqClientPusherProperties {
             socket,
         })
     }
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.server_address.clone())
+    }
 }
 
 //endregion
@@ -341,10 +345,6 @@ impl FeagiClient for FeagiZmqClientPusher {
                 "Cannot confirm error: client is not in Errored state".to_string(),
             )),
         }
-    }
-
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::Zmq
     }
 
     fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
@@ -429,6 +429,10 @@ impl FeagiClientRequesterProperties for FeagiZmqClientRequesterProperties {
             payload_msg: Message::new(),
             has_data: false,
         })
+    }
+
+    fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::Zmq(self.server_address.clone())
     }
 }
 
@@ -577,10 +581,6 @@ impl FeagiClient for FeagiZmqClientRequester {
         }
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::Zmq
-    }
-
     fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
         TransportProtocolEndpoint::Zmq(self.server_address.clone())
     }
@@ -633,6 +633,7 @@ impl FeagiClientRequester for FeagiZmqClientRequester {
             server_address: self.server_address.clone(),
         })
     }
+
 }
 
 //endregion

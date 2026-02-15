@@ -8,5 +8,5 @@ pub mod server;
 pub use feagi_agent_error::FeagiAgentError;
 
 pub use common::{
-    generate_agent_id_base64, AgentCapabilities, AgentDescriptor, AuthToken, FeagiApiVersion,
+    AgentCapabilities, AgentDescriptor, AuthToken, FeagiApiVersion,
 };

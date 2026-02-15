@@ -5,7 +5,9 @@
 //!
 //! Use `connect` for ZMQ or `connect_ws` for WebSocket; flow and API are the same.
 
-use crate::clients::CommandControlSubAgent;
+
+/*
+use crate::clients::CommandControlAgent;
 use crate::command_and_control::agent_registration_message::{
     AgentRegistrationMessage, DeregistrationResponse, RegistrationResponse,
 };
@@ -24,34 +26,16 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-const DEFAULT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
-
-/// Optional background heartbeat helper state.
-///
-/// This is a convenience mode layered on top of the deterministic tick-driven
-/// liveness core. The background thread uses a dedicated command/control requester
-/// so it does not contend with the main data-plane loop.
-struct BackgroundHeartbeatHandle {
-    stop_flag: Arc<AtomicBool>,
-    join_handle: Option<JoinHandle<()>>,
-}
-
-impl BackgroundHeartbeatHandle {
-    fn stop(&mut self) {
-        self.stop_flag.store(true, Ordering::Release);
-        if let Some(join_handle) = self.join_handle.take() {
-            let _ = join_handle.join();
-        }
-    }
-}
-
 /// Established connection to FEAGI after registration: sensory push and motor
 /// Build sensory payloads with the returned session_id (FeagiByteContainer) so the server accepts them.
 pub struct EmbodimentAgent {
     embodiment: ConnectorCache,
+    command_control: Option<CommandControlAgent>,
+
+
+
     client: Option<BlockingEmbodimentClient>,
-    heartbeat_interval: Duration,
-    implicit_background_heartbeat: bool,
+
 }
 
 impl EmbodimentAgent {
@@ -267,18 +251,20 @@ impl EmbodimentAgent {
     // TODO how can we handle motor callback hookups?
 }
 
-struct BlockingEmbodimentClient {
-    command_and_control: CommandControlSubAgent,
+
+
+
+
+struct DataClient {
     sensor_pusher: Box<dyn FeagiClientPusher>,
     motor_subscriber: Box<dyn FeagiClientSubscriber>,
-    session_id: AgentID,
-    heartbeat_interval: Duration,
-    last_heartbeat_sent_at: Instant,
-    command_endpoint: TransportProtocolEndpoint,
-    background_heartbeat: Option<BackgroundHeartbeatHandle>,
 }
 
-impl BlockingEmbodimentClient {
+impl EmbodimentClient {
+    
+
+
+
     pub fn new_and_generic_connect(
         command_and_control_properties: Box<dyn FeagiClientRequesterProperties>,
         agent_descriptor: AgentDescriptor,
@@ -290,8 +276,8 @@ impl BlockingEmbodimentClient {
             AgentCapabilities::SendSensorData,
         ];
 
-        let mut command_control = CommandControlSubAgent::new(command_and_control_properties);
-        let command_endpoint = command_control.endpoint_target();
+        let mut command_control = CommandControlAgent::new(command_and_control_properties);
+        let command_endpoint = command_control.registered_endpoint_target();
 
         command_control.request_connect()?; // TODO shouldn't this be blocking somehow?
 
@@ -391,89 +377,6 @@ impl BlockingEmbodimentClient {
         }
     }
 
-    fn try_send_heartbeat_if_due(&mut self) -> Result<(), FeagiAgentError> {
-        if self.last_heartbeat_sent_at.elapsed() < self.heartbeat_interval {
-            return Ok(());
-        }
-        self.command_and_control
-            .request_heartbeat(self.session_id)?;
-        self.last_heartbeat_sent_at = Instant::now();
-        Ok(())
-    }
 
-    fn start_background_heartbeat(&mut self) -> Result<(), FeagiAgentError> {
-        let stop_flag = Arc::new(AtomicBool::new(false));
-        let stop_flag_clone = Arc::clone(&stop_flag);
-        let endpoint = self.command_endpoint.clone();
-        let session_id = self.session_id;
-        let interval = self.heartbeat_interval;
-
-        let join_handle = thread::Builder::new()
-            .name("feagi-agent-heartbeat".to_string())
-            .spawn(move || {
-                let props = endpoint.create_boxed_client_requester_properties();
-                let mut requester: Box<dyn FeagiClientRequester> =
-                    props.as_boxed_client_requester();
-                if requester.request_connect().is_err() {
-                    return;
-                }
-
-                let mut last_sent = Instant::now();
-                while !stop_flag_clone.load(Ordering::Acquire) {
-                    if last_sent.elapsed() >= interval {
-                        let heartbeat = FeagiMessage::HeartBeat;
-                        let mut payload = FeagiByteContainer::new_empty();
-                        if heartbeat
-                            .serialize_to_byte_container(&mut payload, session_id, 0)
-                            .is_err()
-                        {
-                            break;
-                        }
-                        if requester.publish_request(payload.get_byte_ref()).is_err() {
-                            break;
-                        }
-
-                        // Drain reply for this REQ/REP round.
-                        let wait_start = Instant::now();
-                        while wait_start.elapsed() < Duration::from_secs(2) {
-                            if stop_flag_clone.load(Ordering::Acquire) {
-                                break;
-                            }
-                            match requester.poll().clone() {
-                                FeagiEndpointState::ActiveHasData => {
-                                    let _ = requester.consume_retrieved_response();
-                                    break;
-                                }
-                                FeagiEndpointState::Errored(_) => {
-                                    let _ = requester.confirm_error_and_close();
-                                    return;
-                                }
-                                _ => {
-                                    thread::sleep(Duration::from_millis(10));
-                                }
-                            }
-                        }
-                        last_sent = Instant::now();
-                    } else {
-                        thread::sleep(Duration::from_millis(10));
-                    }
-                }
-                let _ = requester.request_disconnect();
-            })
-            .map_err(|err| {
-                FeagiAgentError::Other(format!("Failed to start heartbeat thread: {}", err))
-            })?;
-
-        self.background_heartbeat = Some(BackgroundHeartbeatHandle {
-            stop_flag,
-            join_handle: Some(join_handle),
-        });
-        Ok(())
-    }
-
-    fn stop_background_heartbeat(&mut self) {
-        if let Some(mut background_heartbeat) = self.background_heartbeat.take() {
-            background_heartbeat.stop();
-        }
-    }
 }
+*/

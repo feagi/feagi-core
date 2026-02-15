@@ -53,7 +53,5 @@ pub trait FeagiClient: Send {
     /// Returns an error if cleanup fails.
     fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError>;
 
-    fn get_protocol(&self) -> TransportProtocolImplementation;
-
     fn get_endpoint_target(&self) -> TransportProtocolEndpoint;
 }

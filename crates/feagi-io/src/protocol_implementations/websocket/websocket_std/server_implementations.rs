@@ -10,7 +10,7 @@ use std::net::{TcpListener, TcpStream};
 use tungstenite::{accept, Message, WebSocket};
 
 use crate::{AgentID, FeagiNetworkError};
-use crate::protocol_implementations::websocket::shared::{validate_bind_address, WebSocketUrl};
+use crate::protocol_implementations::websocket::shared::WebSocketUrl;
 use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::server::{
     FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties,
@@ -41,19 +41,19 @@ enum HandshakeState {
 /// Configuration properties for creating a WebSocket publisher server.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FeagiWebSocketServerPublisherProperties {
-    bind_address: String,
+    local_bind_address: WebSocketUrl,
+    remote_bind_address: WebSocketUrl,
 }
 
 impl FeagiWebSocketServerPublisherProperties {
-    /// Creates new publisher properties with the given bind address.
-    ///
-    /// # Arguments
-    ///
-    /// * `bind_address` - The address to bind to (e.g., "127.0.0.1:8080" or "0.0.0.0:8080").
-    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
-        validate_bind_address(bind_address)?;
+
+    /// Creates new publisher properties with explicit local/remote endpoints.
+    pub fn new(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        let local_bind_address = WebSocketUrl::new(local_bind_address)?;
+        let remote_bind_address = WebSocketUrl::new(remote_bind_address)?;
         Ok(Self {
-            bind_address: bind_address.to_string(),
+            local_bind_address,
+            remote_bind_address,
         })
     }
 }
@@ -61,22 +61,24 @@ impl FeagiWebSocketServerPublisherProperties {
 impl FeagiServerPublisherProperties for FeagiWebSocketServerPublisherProperties {
     fn as_boxed_server_publisher(&self) -> Box<dyn FeagiServerPublisher> {
         Box::new(FeagiWebSocketServerPublisher {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
             current_state: FeagiEndpointState::Inactive,
             listener: None,
             clients: Vec::new(),
         })
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::WebSocket
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.local_bind_address.clone())
     }
 
-    fn get_endpoint(&self) -> TransportProtocolEndpoint {
-        // Create a WebSocketUrl for the endpoint (using ws:// scheme for bind address)
-        TransportProtocolEndpoint::WebSocket(
-            WebSocketUrl::new(&self.bind_address).expect("bind_address already validated")
-        )
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
     }
 }
 
@@ -86,7 +88,8 @@ impl FeagiServerPublisherProperties for FeagiWebSocketServerPublisherProperties 
 
 /// A WebSocket server that broadcasts data to all connected clients.
 pub struct FeagiWebSocketServerPublisher {
-    bind_address: String,
+    local_bind_address: WebSocketUrl,
+    remote_bind_address: WebSocketUrl,
     current_state: FeagiEndpointState,
     listener: Option<TcpListener>,
     clients: Vec<WsStream>,
@@ -145,7 +148,7 @@ impl FeagiServer for FeagiWebSocketServerPublisher {
     fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
-                let listener = TcpListener::bind(&self.bind_address)
+                let listener = TcpListener::bind(self.local_bind_address.host_port())
                     .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
 
                 // Set listener to non-blocking for poll-based accept
@@ -196,14 +199,16 @@ impl FeagiServer for FeagiWebSocketServerPublisher {
         }
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::WebSocket
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.local_bind_address.clone())
     }
 
-    fn get_endpoint(&self) -> TransportProtocolEndpoint {
-        TransportProtocolEndpoint::WebSocket(
-            WebSocketUrl::new(&self.bind_address).expect("bind_address already validated")
-        )
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
     }
 }
 
@@ -245,7 +250,8 @@ impl FeagiServerPublisher for FeagiWebSocketServerPublisher {
 
     fn as_boxed_publisher_properties(&self) -> Box<dyn FeagiServerPublisherProperties> {
         Box::new(FeagiWebSocketServerPublisherProperties {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
         })
     }
 }
@@ -261,15 +267,25 @@ impl FeagiServerPublisher for FeagiWebSocketServerPublisher {
 /// Configuration properties for creating a WebSocket puller server.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FeagiWebSocketServerPullerProperties {
-    bind_address: String,
+    local_bind_address: WebSocketUrl,
+    remote_bind_address: WebSocketUrl,
 }
 
 impl FeagiWebSocketServerPullerProperties {
-    /// Creates new puller properties with the given bind address.
-    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
-        validate_bind_address(bind_address)?;
+    /// Creates new puller properties with local bind address.
+    ///
+    /// The remote endpoint defaults to the same address with `ws://` scheme.
+    pub fn new(local_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        Self::new_with_remote(local_bind_address, local_bind_address)
+    }
+
+    /// Creates new puller properties with explicit local/remote endpoints.
+    pub fn new_with_remote(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        let local_bind_address = WebSocketUrl::new(local_bind_address)?;
+        let remote_bind_address = WebSocketUrl::new(remote_bind_address)?;
         Ok(Self {
-            bind_address: bind_address.to_string(),
+            local_bind_address,
+            remote_bind_address,
         })
     }
 }
@@ -277,7 +293,8 @@ impl FeagiWebSocketServerPullerProperties {
 impl FeagiServerPullerProperties for FeagiWebSocketServerPullerProperties {
     fn as_boxed_server_puller(&self) -> Box<dyn FeagiServerPuller> {
         Box::new(FeagiWebSocketServerPuller {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
             current_state: FeagiEndpointState::Inactive,
             listener: None,
             clients: Vec::new(),
@@ -286,14 +303,16 @@ impl FeagiServerPullerProperties for FeagiWebSocketServerPullerProperties {
         })
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::WebSocket
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.local_bind_address.clone())
     }
 
-    fn get_endpoint(&self) -> TransportProtocolEndpoint {
-        TransportProtocolEndpoint::WebSocket(
-            WebSocketUrl::new(&self.bind_address).expect("bind_address already validated")
-        )
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
     }
 }
 
@@ -303,7 +322,8 @@ impl FeagiServerPullerProperties for FeagiWebSocketServerPullerProperties {
 
 /// A WebSocket server that receives pushed data from clients.
 pub struct FeagiWebSocketServerPuller {
-    bind_address: String,
+    local_bind_address: WebSocketUrl,
+    remote_bind_address: WebSocketUrl,
     current_state: FeagiEndpointState,
     listener: Option<TcpListener>,
     clients: Vec<WsStream>,
@@ -399,7 +419,7 @@ impl FeagiServer for FeagiWebSocketServerPuller {
     fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
-                let listener = TcpListener::bind(&self.bind_address)
+                let listener = TcpListener::bind(self.local_bind_address.host_port())
                     .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
                 listener
                     .set_nonblocking(true)
@@ -451,14 +471,16 @@ impl FeagiServer for FeagiWebSocketServerPuller {
         }
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::WebSocket
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.local_bind_address.clone())
     }
 
-    fn get_endpoint(&self) -> TransportProtocolEndpoint {
-        TransportProtocolEndpoint::WebSocket(
-            WebSocketUrl::new(&self.bind_address).expect("bind_address already validated")
-        )
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
     }
 }
 
@@ -490,7 +512,8 @@ impl FeagiServerPuller for FeagiWebSocketServerPuller {
 
     fn as_boxed_puller_properties(&self) -> Box<dyn FeagiServerPullerProperties> {
         Box::new(FeagiWebSocketServerPullerProperties {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
         })
     }
 }
@@ -506,15 +529,25 @@ impl FeagiServerPuller for FeagiWebSocketServerPuller {
 /// Configuration properties for creating a WebSocket router server.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FeagiWebSocketServerRouterProperties {
-    bind_address: String,
+    local_bind_address: WebSocketUrl,
+    remote_bind_address: WebSocketUrl,
 }
 
 impl FeagiWebSocketServerRouterProperties {
-    /// Creates new router properties with the given bind address.
-    pub fn new(bind_address: &str) -> Result<Self, FeagiNetworkError> {
-        validate_bind_address(bind_address)?;
+    /// Creates new router properties with local bind address.
+    ///
+    /// The remote endpoint defaults to the same address with `ws://` scheme.
+    pub fn new(local_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        Self::new_with_remote(local_bind_address, local_bind_address)
+    }
+
+    /// Creates new router properties with explicit local/remote endpoints.
+    pub fn new_with_remote(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+        let local_bind_address = WebSocketUrl::new(local_bind_address)?;
+        let remote_bind_address = WebSocketUrl::new(remote_bind_address)?;
         Ok(Self {
-            bind_address: bind_address.to_string(),
+            local_bind_address,
+            remote_bind_address,
         })
     }
 }
@@ -522,7 +555,8 @@ impl FeagiWebSocketServerRouterProperties {
 impl FeagiServerRouterProperties for FeagiWebSocketServerRouterProperties {
     fn as_boxed_server_router(&self) -> Box<dyn FeagiServerRouter> {
         Box::new(FeagiWebSocketServerRouter {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
             current_state: FeagiEndpointState::Inactive,
             listener: None,
             clients: Vec::new(),
@@ -533,6 +567,18 @@ impl FeagiServerRouterProperties for FeagiWebSocketServerRouterProperties {
             session_to_index: HashMap::new(),
         })
     }
+
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.local_bind_address.clone())
+    }
+
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
+    }
 }
 
 //endregion
@@ -541,7 +587,8 @@ impl FeagiServerRouterProperties for FeagiWebSocketServerRouterProperties {
 
 /// A WebSocket server that handles request-response communication with multiple clients.
 pub struct FeagiWebSocketServerRouter {
-    bind_address: String,
+    local_bind_address: WebSocketUrl,
+    remote_bind_address: WebSocketUrl,
     current_state: FeagiEndpointState,
     listener: Option<TcpListener>,
     /// Connections in various states (handshaking or ready)
@@ -767,7 +814,7 @@ impl FeagiServer for FeagiWebSocketServerRouter {
     fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
-                let listener = TcpListener::bind(&self.bind_address)
+                let listener = TcpListener::bind(self.local_bind_address.host_port())
                     .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
                 listener
                     .set_nonblocking(true)
@@ -829,14 +876,16 @@ impl FeagiServer for FeagiWebSocketServerRouter {
         }
     }
 
-    fn get_protocol(&self) -> TransportProtocolImplementation {
-        TransportProtocolImplementation::WebSocket
+    fn get_bind_point(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.local_bind_address.clone())
     }
 
-    fn get_endpoint(&self) -> TransportProtocolEndpoint {
-        TransportProtocolEndpoint::WebSocket(
-            WebSocketUrl::new(&self.bind_address).expect("bind_address already validated")
-        )
+    fn get_agent_endpoint(&self) -> TransportProtocolEndpoint {
+        TransportProtocolEndpoint::WebSocket(self.remote_bind_address.clone())
+    }
+
+    fn get_protocol(&self) -> TransportProtocolImplementation {
+        TransportProtocolImplementation::WebSocket
     }
 }
 
@@ -910,7 +959,8 @@ impl FeagiServerRouter for FeagiWebSocketServerRouter {
 
     fn as_boxed_router_properties(&self) -> Box<dyn FeagiServerRouterProperties> {
         Box::new(FeagiWebSocketServerRouterProperties {
-            bind_address: self.bind_address.clone(),
+            local_bind_address: self.local_bind_address.clone(),
+            remote_bind_address: self.remote_bind_address.clone(),
         })
     }
 }

@@ -28,16 +28,13 @@
 use std::env;
 use std::thread;
 use std::time::Duration;
-
-use feagi_io::protocol_implementations::websocket::{
-    FeagiWebSocketClientPusherProperties, FeagiWebSocketServerPullerProperties,
-};
+use feagi_io::protocol_implementations::websocket::websocket_std::{FeagiWebSocketClientPusherProperties, FeagiWebSocketServerPullerProperties};
 use feagi_io::protocol_implementations::zmq::{
     FeagiZmqClientPusherProperties, FeagiZmqServerPullerProperties,
 };
 use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientPusherProperties};
 use feagi_io::traits_and_enums::server::{FeagiServerPuller, FeagiServerPullerProperties};
-use feagi_io::traits_and_enums::FeagiEndpointState;
+use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 
 const ZMQ_ADDRESS: &str = "tcp://127.0.0.1:5556";
 const WS_ADDRESS: &str = "127.0.0.1:8081";
@@ -95,14 +92,14 @@ fn create_server(transport: Transport) -> Box<dyn FeagiServerPuller> {
         Transport::Zmq => {
             println!("=== Server Puller Example (ZMQ Transport) ===\n");
             println!("Binding to {}", ZMQ_ADDRESS);
-            let props = FeagiZmqServerPullerProperties::new(ZMQ_ADDRESS)
+            let props = FeagiZmqServerPullerProperties::new(ZMQ_ADDRESS, ZMQ_ADDRESS)
                 .expect("Failed to create ZMQ server properties");
             props.as_boxed_server_puller()
         }
         Transport::WebSocket => {
             println!("=== Server Puller Example (WebSocket Transport) ===\n");
             println!("Binding to {}", WS_ADDRESS);
-            let props = FeagiWebSocketServerPullerProperties::new(WS_ADDRESS)
+            let props = FeagiWebSocketServerPullerProperties::new_with_remote(WS_ADDRESS, WS_URL)
                 .expect("Failed to create WebSocket server properties");
             props.as_boxed_server_puller()
         }

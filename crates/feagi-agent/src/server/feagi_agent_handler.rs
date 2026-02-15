@@ -3,8 +3,8 @@ use crate::command_and_control::agent_registration_message::{
 };
 use crate::command_and_control::FeagiMessage;
 use crate::server::auth::AgentAuth;
-use crate::server::translators::{
-    CommandControlTranslator, MotorTranslator, SensorTranslator, VisualizationTranslator,
+use crate::server::wrappers::{
+    CommandControlWrapper, MotorTranslator, SensorTranslator, VisualizationTranslator,
 };
 use crate::{AgentCapabilities, AgentDescriptor, FeagiAgentError};
 use feagi_io::traits_and_enums::server::{
@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 use tracing::info;
 
 type CommandServerIndex = usize;
+
 
 /// Server-side liveness configuration for command/control sessions.
 ///
@@ -42,11 +43,12 @@ impl Default for AgentLivenessConfig {
     }
 }
 
+
 pub struct FeagiAgentHandler {
     agent_auth_backend: Box<dyn AgentAuth>,
     available_publishers: Vec<Box<dyn FeagiServerPublisherProperties>>,
     available_pullers: Vec<Box<dyn FeagiServerPullerProperties>>,
-    command_control_servers: Vec<CommandControlTranslator>,
+    command_control_servers: Vec<CommandControlWrapper>,
 
     all_registered_agents: HashMap<AgentID, (AgentDescriptor, Vec<AgentCapabilities>)>,
     agent_mapping_to_command_control_server_index: HashMap<AgentID, CommandServerIndex>,
@@ -200,67 +202,6 @@ impl FeagiAgentHandler {
         }
     }
 
-    /* // Redundant
-       /// Find AgentID by agent_id (base64-encoded AgentDescriptor)
-       /// Returns the first matching agent, or None if agent not connected
-       pub fn find_agent_by_agent_id(&self, agent_id: &str) -> Option<AgentID> {
-           let normalized_agent_id = agent_id.trim();
-
-           // Fast path: parse provided agent ID as descriptor and compare by value.
-           if let Ok(agent_descriptor) = crate::AgentDescriptor::try_from_base64(normalized_agent_id) {
-               for (agent_id, descriptor) in &self.all_registered_agents {
-                   if descriptor == &agent_descriptor {
-                       return Some(*agent_id);
-                   }
-               }
-           }
-
-           // Fallback path: compare textual descriptor representation directly.
-           // This covers benign formatting drift where the input contains extra whitespace
-           // or comes from a source that preserves a pre-encoded descriptor string.
-           for (agent_id, descriptor) in &self.all_registered_agents {
-               if descriptor.as_base64() == normalized_agent_id {
-                   return Some(*agent_id);
-               }
-           }
-           None
-       }
-
-       // TODO unclear! What is for what?
-       /// Get available transport protocols (for REST registration response)
-       pub fn get_available_protocols(&self) -> HashSet<TransportProtocolImplementation> {
-           let mut protocols = HashSet::new();
-           for puller in &self.available_pullers {
-               protocols.insert(puller.get_protocol());
-           }
-           for publisher in &self.available_publishers {
-               protocols.insert(publisher.get_protocol());
-           }
-           protocols
-       }
-
-       // TODO fundimentally flawed. We already passed these to agents, theres no sharing!
-       /// Get transport endpoints for REST registration response
-       pub fn get_transport_endpoints(&self) -> HashMap<TransportProtocolImplementation, Vec<TransportProtocolEndpoint>> {
-           let mut endpoints = HashMap::new();
-
-           for puller in &self.available_pullers {
-               endpoints.entry(puller.get_protocol())
-                   .or_insert_with(Vec::new)
-                   .push(puller.get_endpoint());
-           }
-
-           for publisher in &self.available_publishers {
-               endpoints.entry(publisher.get_protocol())
-                   .or_insert_with(Vec::new)
-                   .push(publisher.get_endpoint());
-           }
-
-           endpoints
-       }
-
-    */
-
     //endregion
 
     //endregion
@@ -268,14 +209,14 @@ impl FeagiAgentHandler {
     //region Add Servers
 
     /// Add a poll-based command/control server (ZMQ/WS). The router is wrapped in a
-    /// [`CommandControlTranslator`] that only exposes messages.
+    /// [`CommandControlWrapper`] that only exposes messages.
     pub fn add_and_start_command_control_server(
         &mut self,
         router_property: Box<dyn FeagiServerRouterProperties>,
     ) -> Result<(), FeagiAgentError> {
         let mut router = router_property.as_boxed_server_router();
         router.request_start()?;
-        let translator = CommandControlTranslator::new(router);
+        let translator = CommandControlWrapper::new(router);
         self.command_control_servers.push(translator);
         Ok(())
     }
@@ -473,7 +414,7 @@ impl FeagiAgentHandler {
     ) -> Result<usize, FeagiAgentError> {
         for i in 0..self.available_pullers.len() {
             let available_puller = &self.available_pullers[i];
-            if &available_puller.get_protocol() != wanted_protocol {
+            if &available_puller.get_bind_point().as_transport_protocol_implementation() != wanted_protocol {
                 // not the protocol we are looking for
                 continue;
             } else {
@@ -719,7 +660,7 @@ impl FeagiAgentHandler {
                     sensor_servers.push(sensor_server);
                     endpoint_mappings.insert(
                         AgentCapabilities::SendSensorData,
-                        puller_property.get_endpoint(),
+                        puller_property.get_agent_endpoint(),
                     );
                     used_puller_indices.push(puller_property_index);
                 }
@@ -732,7 +673,7 @@ impl FeagiAgentHandler {
                     motor_servers.push(publisher_server);
                     endpoint_mappings.insert(
                         AgentCapabilities::ReceiveMotorData,
-                        publisher_property.get_endpoint(),
+                        publisher_property.get_agent_endpoint(),
                     );
                     used_publisher_indices.push(publisher_index);
                 }
@@ -747,7 +688,7 @@ impl FeagiAgentHandler {
                     visualizer_servers.push(publisher_server);
                     endpoint_mappings.insert(
                         AgentCapabilities::ReceiveNeuronVisualizations,
-                        publisher_property.get_endpoint(),
+                        publisher_property.get_agent_endpoint(),
                     );
                     used_publisher_indices.push(publisher_index);
                 }
