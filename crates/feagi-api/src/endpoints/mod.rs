@@ -4,7 +4,8 @@
 // Endpoint implementations
 // Each endpoint file implements specific Python API module routes
 
-//pub mod agent; // ✅ COMPLETE - /v1/agent/* (7 endpoints)
+#[path = "agent.rs.disabled"]
+pub mod agent; // ✅ COMPLETE - /v1/agent/* endpoints
 pub mod burst_engine; // ✅ COMPLETE - /v1/burst_engine/* (14 endpoints)
 pub mod connectome; // ✅ COMPLETE - /v1/connectome/* (3 endpoints)
 pub mod cortical_area; // ✅ COMPLETE - /v1/cortical_area/* (23 endpoints)

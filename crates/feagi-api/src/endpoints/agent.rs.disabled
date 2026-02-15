@@ -1,7 +1,7 @@
 // Copyright 2025 Neuraville Inc.
 // Licensed under the Apache License, Version 2.0
 
-points - Exact port from Python `/v1/agent/*` routes
+//! Agent endpoints - exact port from Python `/v1/agent/*` routes
 //!
 //! These endpoints match the Python implementation at:
 //! feagi-py/feagi/api/v1/feagi_agent.py
@@ -15,27 +15,12 @@ use feagi_services::traits::agent_service::HeartbeatRequest as ServiceHeartbeatR
 use tracing::{info, warn};
 
 #[cfg(feature = "feagi-agent")]
-use feagi_agent::{
-    AgentCapabilities as RegistrationCapabilities, AgentDescriptor, AuthToken,
-};
+use feagi_agent::{AgentCapabilities as RegistrationCapabilities, AuthToken};
+#[cfg(feature = "feagi-agent")]
+use feagi_io::AgentID;
 #[cfg(feature = "feagi-agent")]
 use crate::common::agent_registration::auto_create_cortical_areas_from_device_registrations as auto_create_cortical_areas_shared;
 #[cfg(feature = "feagi-agent")]
-
-fn parse_agent_descriptor(agent_id: &str) -> ApiResult<AgentDescriptor> {
-    #[cfg(feature = "feagi-agent")]
-    {
-        AgentDescriptor::try_from_base64(agent_id).map_err(|e| {
-            ApiError::invalid_input(format!(
-                "Invalid agent_id (expected AgentDescriptor base64): {e}"
-            ))
-        })
-    }
-    #[cfg(not(feature = "feagi-agent"))]
-    {
-        Err(ApiError::internal("feagi-agent feature not enabled"))
-    }
-}
 
 #[cfg(feature = "feagi-agent")]
 #[allow(dead_code)]
@@ -158,24 +143,17 @@ fn capability_key(capability: &RegistrationCapabilities) -> &'static str {
 }
 
 fn get_agent_name_from_id(agent_id: &str) -> ApiResult<String> {
-    #[cfg(feature = "feagi-agent")]
-    {
-        let descriptor = parse_agent_descriptor(agent_id)?;
-        let agent_name = descriptor.agent_name().to_string();
-        if agent_name.is_empty() {
-            return Err(ApiError::invalid_input(format!(
-                "Agent '{}' does not contain a readable name",
-                agent_id
-            )));
-        }
-        Ok(agent_name)
-    }
-    #[cfg(not(feature = "feagi-agent"))]
-    {
-        Err(ApiError::internal(
-            "Agent name requires feagi-agent feature".to_string(),
+    Ok(agent_id.to_string())
+}
+
+#[cfg(feature = "feagi-agent")]
+fn parse_agent_id_base64(agent_id: &str) -> ApiResult<AgentID> {
+    AgentID::try_from_base64(agent_id).map_err(|e| {
+        ApiError::invalid_input(format!(
+            "Invalid agent_id (expected AgentID base64): {}",
+            e
         ))
-    }
+    })
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -215,8 +193,6 @@ pub async fn register_agent(
         request.agent_id, request.agent_type
     );
 
-    let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
-    
     // Extract device_registrations from capabilities
     let device_registrations_opt = request
         .capabilities
@@ -229,11 +205,11 @@ pub async fn register_agent(
     // Store device registrations in handler if provided (no await here)
     let handler_available = if let Some(device_regs) = &device_registrations_opt {
         if let Some(handler) = &state.agent_handler {
+            let agent_id = parse_agent_id_base64(&request.agent_id)?;
             {
                 let mut handler_guard = handler.lock().unwrap();
-                handler_guard.set_device_registrations_by_descriptor(
-                    request.agent_id.clone(),
-                    agent_descriptor.clone(),
+                handler_guard.set_device_registrations_by_agent(
+                    agent_id,
                     device_regs.clone()
                 );
             } // Drop guard before any await
@@ -278,10 +254,7 @@ pub async fn register_agent(
 
     // Get available endpoints from handler and build TransportConfig objects
     use crate::v1::TransportConfig;
-    let transports_array = if let Some(handler) = &state.agent_handler {
-        let handler_guard = handler.lock().unwrap();
-        let available_protocols = handler_guard.get_available_protocols();
-        
+    let transports_array = if state.agent_handler.is_some() {
         // Load config to get port numbers
         use feagi_config::load_config;
         let config = load_config(None, None).map_err(|e| {
@@ -289,25 +262,20 @@ pub async fn register_agent(
         })?;
         
         let mut transport_configs = Vec::new();
-        
-        for protocol in available_protocols {
-            let protocol_name = format!("{:?}", protocol);
-            let transport_type = if protocol_name.contains("Zmq") {
-                "zmq"
-            } else if protocol_name.contains("WebSocket") {
-                "websocket"
-            } else {
+        for transport in &config.transports.available {
+            let transport_type = transport.to_lowercase();
+            if transport_type != "zmq" && transport_type != "websocket" && transport_type != "ws" {
                 continue;
-            };
+            }
             
             // Build ports map from config
             let mut ports = HashMap::new();
-            if transport_type == "websocket" {
+            if transport_type == "websocket" || transport_type == "ws" {
                 ports.insert("registration".to_string(), config.websocket.registration_port);
                 ports.insert("sensory".to_string(), config.websocket.sensory_port);
                 ports.insert("motor".to_string(), config.websocket.motor_port);
                 ports.insert("visualization".to_string(), config.websocket.visualization_port);
-            } else if transport_type == "zmq" {
+            } else {
                 ports.insert("registration".to_string(), config.agent.registration_port);
                 ports.insert("sensory".to_string(), config.ports.zmq_sensory_port);
                 ports.insert("motor".to_string(), config.ports.zmq_motor_port);
@@ -315,10 +283,14 @@ pub async fn register_agent(
             }
             
             transport_configs.push(TransportConfig {
-                transport_type: transport_type.to_string(),
+                transport_type: if transport_type == "ws" {
+                    "websocket".to_string()
+                } else {
+                    transport_type
+                },
                 enabled: true,
                 ports,
-                host: if transport_type == "websocket" {
+                host: if transport == "websocket" || transport == "ws" {
                     config.websocket.host.clone()
                 } else {
                     config.zmq.host.clone()
@@ -363,19 +335,6 @@ pub async fn heartbeat(
     State(state): State<ApiState>,
     Json(request): Json<HeartbeatRequest>,
 ) -> ApiResult<Json<HeartbeatResponse>> {
-    // Check ZMQ/WS sessions first so we never hit the REST registry or log WARN for them
-    #[cfg(feature = "feagi-agent")]
-    if let Some(handler) = &state.agent_handler {
-        if let Ok(guard) = handler.lock() {
-            if guard.find_session_by_agent_id(&request.agent_id).is_some() {
-                return Ok(Json(HeartbeatResponse {
-                    message: "heartbeat_ok".to_string(),
-                    success: true,
-                }));
-            }
-        }
-    }
-
     let agent_service = state
         .agent_service
         .as_ref()
@@ -846,11 +805,10 @@ fn export_device_registrations_from_connector(
     state: &ApiState,
     agent_id: &str,
 ) -> ApiResult<serde_json::Value> {
-    let agent_descriptor = parse_agent_descriptor(agent_id)?;
-    
+    let parsed_agent_id = parse_agent_id_base64(agent_id)?;
     if let Some(handler) = &state.agent_handler {
         let handler_guard = handler.lock().unwrap();
-        if let Some(regs) = handler_guard.get_device_registrations_by_descriptor(&agent_descriptor) {
+        if let Some(regs) = handler_guard.get_device_registrations_by_agent(parsed_agent_id) {
             return Ok(regs.clone());
         }
     }
@@ -1040,11 +998,10 @@ pub async fn export_device_registrations(
     // Get device registrations from agent_handler
     #[cfg(feature = "feagi-agent")]
     let device_registrations = {
-        let agent_descriptor = parse_agent_descriptor(&agent_id)?;
-        
+        let parsed_agent_id = parse_agent_id_base64(&agent_id)?;
         if let Some(handler) = &state.agent_handler {
             let handler_guard = handler.lock().unwrap();
-            if let Some(regs) = handler_guard.get_device_registrations_by_descriptor(&agent_descriptor) {
+            if let Some(regs) = handler_guard.get_device_registrations_by_agent(parsed_agent_id) {
                 info!("📤 [API] Found device registrations for agent '{}'", agent_id);
                 regs.clone()
             } else {
@@ -1154,13 +1111,11 @@ pub async fn import_device_registrations(
     // Store device registrations in agent_handler
     #[cfg(feature = "feagi-agent")]
     {
-        let agent_descriptor = parse_agent_descriptor(&agent_id)?;
-        
+        let parsed_agent_id = parse_agent_id_base64(&agent_id)?;
         if let Some(handler) = &state.agent_handler {
             let mut handler_guard = handler.lock().unwrap();
-            handler_guard.set_device_registrations_by_descriptor(
-                agent_id.to_string(),
-                agent_descriptor,
+            handler_guard.set_device_registrations_by_agent(
+                parsed_agent_id,
                 request.device_registrations.clone()
             );
             info!("📥 [API] Imported device registrations for agent '{}'", agent_id);
