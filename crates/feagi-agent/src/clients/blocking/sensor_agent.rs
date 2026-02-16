@@ -12,7 +12,7 @@ pub struct SensorAgent {
 impl SensorAgent {
     pub fn new(properties: Box<dyn FeagiClientPusherProperties>, agent_id: AgentID) -> SensorAgent {
         let mut buffer = FeagiByteContainer::new_empty();
-        buffer.set_agent_identifier(agent_id);
+        let _ = buffer.set_agent_identifier(agent_id);
 
         SensorAgent {
             properties,
@@ -25,7 +25,7 @@ impl SensorAgent {
             self.pusher = Some(self.properties.as_boxed_client_pusher());
         }
 
-        let mut pusher = self.pusher.as_mut().unwrap();
+        let pusher = self.pusher.as_mut().unwrap();
 
         match pusher.poll() {
             FeagiEndpointState::Inactive => {

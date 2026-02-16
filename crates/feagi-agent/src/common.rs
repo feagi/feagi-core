@@ -1,4 +1,3 @@
-use feagi_io::AgentID;
 use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::fmt;

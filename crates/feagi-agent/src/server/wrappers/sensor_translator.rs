@@ -24,6 +24,7 @@ impl SensorTranslator {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_session_id(&self) -> AgentID {
         self.session_id
     }

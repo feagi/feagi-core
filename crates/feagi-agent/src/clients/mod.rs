@@ -7,7 +7,11 @@
 //! Use `ConnectorAgent::connect` for ZMQ or `ConnectorAgent::connect_ws` for WebSocket.
 
 mod blocking;
-mod async_helpers;
+pub mod async_helpers;
+mod session_state_machine;
 
 pub use blocking::command_control_agent::{AgentRegistrationStatus, CommandControlAgent};
-//pub use blocking::embodiment_agent::EmbodimentAgent;
+pub use session_state_machine::{
+    NowMs, SessionAction, SessionEvent, SessionInit, SessionPhase, SessionStateMachine,
+    SessionTimingConfig,
+};

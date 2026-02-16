@@ -44,5 +44,5 @@ feagi-sensorimotor = { version = "=0.0.1-beta.8", path = "../feagi-sensorimotor"
 base64 = "0.22.1"
 
 # Conditional Dependencies
-tokio = {version = "1.49.0",features = ["time"] ,  optional = true}
+tokio = {version = "1.49.0", features = ["time", "rt", "macros"], optional = true}
 

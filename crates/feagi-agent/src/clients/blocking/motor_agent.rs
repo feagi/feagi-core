@@ -18,7 +18,7 @@ impl MotorAgent {
         agent_id: AgentID,
     ) -> MotorAgent {
         let mut buffer = FeagiByteContainer::new_empty();
-        buffer.set_agent_identifier(agent_id);
+        let _ = buffer.set_agent_identifier(agent_id);
 
         MotorAgent {
             properties,

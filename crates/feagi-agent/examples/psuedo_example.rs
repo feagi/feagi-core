@@ -1,87 +1,78 @@
-use feagi_agent::clients::EmbodimentAgent;
-use feagi_sensorimotor::data_types::descriptors::{
-    ColorChannelLayout, ColorSpace, ImageFrameProperties, ImageXYResolution,
-};
-use feagi_sensorimotor::data_types::ImageFrame;
-use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
-
+#[cfg(not(feature = "agent-client-asynchelper-tokio"))]
 fn main() {
-    let registration_endpoint = "zmq://127.0.0.1".to_string();
-    let mut blocking_agent: EmbodimentAgent = EmbodimentAgent::new().unwrap(); // NOTE: for now this is blocking only!
+    eprintln!(
+        "This example requires feature 'agent-client-asynchelper-tokio'. Enable it when building the crate."
+    );
+}
 
-    // adding devices
-    //blocking_agent.get_embodiment_mut().import_device_registrations_as_config_json("JSON GO HERE").unwrap() // This can be one way of doing it
+#[cfg(feature = "agent-client-asynchelper-tokio")]
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use feagi_agent::clients::async_helpers::tokio_generic_implementations::{
+        TokioDriverConfig, TokioEmbodimentAgent,
+    };
+    use feagi_agent::clients::SessionTimingConfig;
+    use feagi_agent::{AgentCapabilities, AgentDescriptor, AuthToken};
+    use feagi_io::protocol_implementations::websocket::websocket_std::FeagiWebSocketClientRequesterProperties;
+    use feagi_io::protocol_implementations::zmq::FeagiZmqClientRequesterProperties;
 
-    // You can also just define them one at a time
-    blocking_agent
-        .get_embodiment_mut()
-        .get_motor_cache()
-        .gaze_register(
-            0.into(),
-            1.into(),
-            Default::default(),
-            10.into(),
-            (16, 16).into(),
-            Default::default(),
-        )
-        .unwrap();
-    blocking_agent
-        .get_embodiment_mut()
-        .get_motor_cache()
-        .rotary_motor_register(
-            0.into(),
-            1.into(),
-            Default::default(),
-            10.into(),
-            PercentageNeuronPositioning::Linear,
-        )
-        .unwrap();
-    blocking_agent
-        .get_embodiment_mut()
-        .get_sensor_cache()
-        .vision_register(
-            0.into(),
-            1.into(),
-            Default::default(),
-            ImageFrameProperties::new(
-                ImageXYResolution::new(16, 16).unwrap(),
-                ColorSpace::Linear,
-                ColorChannelLayout::GrayScale,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-
-    // Connect to feagi (Note this is long-term blocking, which can be bad in certain systems)
-    blocking_agent
-        .connect_to_feagi_zmq(&registration_endpoint)
-        .unwrap();
-
-    // As this is blocking, the user needs to manually define a loop. This is a really dirty example of doing it. We will likely want a tokio version that handles this nicer
-    loop {
-        blocking_agent.poll().unwrap(); // poll network
-
-        // write sensor data
-        let mut sensors = blocking_agent.get_embodiment_mut().get_sensor_cache();
-        sensors
-            .vision_write(
-                0.into(),
-                0.into(),
-                WrappedIOData::ImageFrame(
-                    ImageFrame::new(
-                        &ColorChannelLayout::GrayScale,
-                        &ColorSpace::Linear,
-                        &ImageXYResolution::new(16, 16).unwrap(),
-                    )
-                    .unwrap(),
-                ),
-            )
-            .unwrap();
-
-        // Send sensor data
-        blocking_agent.send_encoded_sensor_data().unwrap();
-
-        // NOTE: obviously, we should not be sending sensor data every literal nanosecond. A proper loop setup would time this better, but this is just an example of syntax
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 4 {
+        eprintln!(
+            "Usage: {} <registration_endpoint> <heartbeat_interval_ms> <poll_interval_ms>",
+            args.get(0).map(String::as_str).unwrap_or("psuedo_example")
+        );
+        eprintln!("Examples:");
+        eprintln!("  tcp://<host>:<port> (ZMQ)");
+        eprintln!("  <host>:<port> or ws://<host>:<port> (WebSocket)");
+        return Ok(());
     }
+
+    let registration_endpoint = &args[1];
+    let heartbeat_interval_ms: u64 = args[2].parse()?;
+    let poll_interval_ms: u64 = args[3].parse()?;
+
+    let registration_props: Box<dyn feagi_io::traits_and_enums::client::FeagiClientRequesterProperties> =
+        if registration_endpoint.starts_with("tcp://")
+            || registration_endpoint.starts_with("ipc://")
+            || registration_endpoint.starts_with("inproc://")
+            || registration_endpoint.starts_with("pgm://")
+            || registration_endpoint.starts_with("epgm://")
+        {
+            Box::new(FeagiZmqClientRequesterProperties::new(registration_endpoint)?)
+        } else {
+            Box::new(FeagiWebSocketClientRequesterProperties::new(registration_endpoint)?)
+        };
+
+    let agent_descriptor = AgentDescriptor::new("neuraville", "example_agent", 1)?;
+    let auth_token = AuthToken::new([0u8; 32]);
+
+    let driver = TokioDriverConfig {
+        poll_interval: std::time::Duration::from_millis(poll_interval_ms),
+        timing: SessionTimingConfig {
+            heartbeat_interval_ms,
+            registration_deadline_ms: None,
+        },
+    };
+
+    let mut agent = TokioEmbodimentAgent::new_connect_and_register(
+        registration_props,
+        agent_descriptor,
+        auth_token,
+        vec![
+            AgentCapabilities::SendSensorData,
+            AgentCapabilities::ReceiveMotorData,
+        ],
+        driver,
+    )
+    .await?;
+
+    // Application-specific loop would go here.
+    // For demonstration, drive a few maintenance ticks.
+    for _ in 0..3 {
+        agent.tick()?;
+        tokio::time::sleep(std::time::Duration::from_millis(poll_interval_ms)).await;
+    }
+
+    Ok(())
 }

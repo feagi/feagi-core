@@ -1,41 +1,58 @@
-# FEAGI Agent SDK (Rust)
+# `feagi-agent` (Rust)
 
-Production-ready Rust client library for building FEAGI agents.
+Rust client library for building FEAGI agents.
 
-## Features
+This crate is designed to remain **runtime-agnostic** and compatible with future targets such as
+WASM and Embassy/RTOS environments.
 
-✅ **Automatic Registration** - Register with FEAGI with retry/exponential backoff  
-✅ **Tick-Driven Heartbeat Core** - Deterministic keepalive for explicit event loops  
-✅ **Optional Background Heartbeat** - Convenience helper thread for std clients  
-✅ **Reconnection Logic** - Handle network issues gracefully  
-✅ **Sensory Data** - Send neuron activation data to FEAGI (ZMQ PUSH)  
-✅ **Motor Data** - Receive motor commands from FEAGI (ZMQ SUB)  
-✅ **Thread-Safe** - Safe concurrent access across threads  
-✅ **Graceful Shutdown** - Automatic deregistration on drop  
+## What this crate provides
+
+- **Poll-based client primitives** (registration/control + data channels) built on `feagi-io`.
+- **A runtime-agnostic session orchestration state machine** (`clients::SessionStateMachine`).
+- **Optional Tokio adapter layer** (`clients::async_helpers::tokio_generic_implementations`) behind the
+  `agent-client-asynchelper-tokio` feature.
 
 ## Quick Start
 
 ```rust
-use feagi_agent::{AgentClient, AgentConfig, AgentType};
+use feagi_agent::clients::async_helpers::tokio_generic_implementations::{
+    TokioDriverConfig, TokioEmbodimentAgent,
+};
+use feagi_agent::clients::SessionTimingConfig;
+use feagi_agent::{AgentCapabilities, AgentDescriptor, AuthToken};
+use feagi_io::protocol_implementations::zmq::FeagiZmqClientRequesterProperties;
+use std::time::Duration;
 
-// Create configuration
-let config = AgentConfig::new("my_camera", AgentType::Sensory)
-    .with_feagi_host("localhost")
-    .with_vision_capability("camera", (640, 480), 3, "i_vision")
-    .with_heartbeat_interval(5.0);
+// Registration endpoint (example uses ZMQ; WebSocket is also supported).
+let registration_endpoint = "<transport endpoint string>";
+let registration_properties = Box::new(FeagiZmqClientRequesterProperties::new(registration_endpoint)?);
 
-// Create and connect client
-let mut client = AgentClient::new(config)?;
-client.connect()?;
+let agent_descriptor = AgentDescriptor::new("manufacturer", "agent_name", 1)?;
+let auth_token = AuthToken::new([0u8; 32]);
 
-// Send sensory data
-client.send_sensory_data(vec![
-    (0, 50.0),   // neuron_id, potential
-    (1, 75.0),
-    (2, 30.0),
-])?;
+let driver = TokioDriverConfig {
+    poll_interval: Duration::from_millis(5),
+    timing: SessionTimingConfig {
+        heartbeat_interval_ms: 1000,
+        registration_deadline_ms: Some(10_000),
+    },
+};
 
-// Client automatically deregisters on drop
+let requested = vec![
+    AgentCapabilities::SendSensorData,
+    AgentCapabilities::ReceiveMotorData,
+];
+
+let mut agent = TokioEmbodimentAgent::new_connect_and_register(
+    registration_properties,
+    agent_descriptor,
+    auth_token,
+    requested,
+    driver,
+).await?;
+
+// Drive maintenance explicitly.
+agent.tick()?;
 ```
 
 ## Installation
@@ -47,214 +64,29 @@ Add to your `Cargo.toml`:
 feagi-agent = { path = "../feagi-agent" }
 ```
 
-## Configuration
-
-### Agent Types
-
-- `AgentType::Sensory` - Sends sensory data to FEAGI (camera, sensors, etc.)
-- `AgentType::Motor` - Receives motor commands from FEAGI (servos, actuators, etc.)
-- `AgentType::Both` - Bidirectional agent (both sensory input and motor output)
-
-### Capabilities
-
-#### Vision Capability
-```rust
-config.with_vision_capability(
-    "camera",       // modality
-    (640, 480),     // dimensions (width, height)
-    3,              // channels (1=grayscale, 3=RGB)
-    "i_vision"      // target cortical area
-);
-```
-
-#### Motor Capability
-```rust
-config.with_motor_capability(
-    "servo",                          // modality
-    4,                                // output count
-    vec!["o_motor".to_string()]       // source cortical areas
-);
-```
-
-#### Custom Capability
-```rust
-use serde_json::json;
-
-config.with_custom_capability("audio", json!({
-    "sample_rate": 44100,
-    "channels": 2
-}));
-```
-
-### Network Configuration
-
-```rust
-let config = AgentConfig::new("agent_id", AgentType::Sensory)
-    // Option 1: Set FEAGI host (uses default ports)
-    .with_feagi_host("192.168.1.100")
-    
-    // Option 2: Set endpoints individually
-    .with_registration_endpoint("tcp://192.168.1.100:30001")
-    .with_sensory_endpoint("tcp://192.168.1.100:5555")
-    .with_motor_endpoint("tcp://192.168.1.100:5564");
-```
-
-### Reliability Configuration
-
-```rust
-let config = AgentConfig::new("agent_id", AgentType::Sensory)
-    .with_heartbeat_interval(5.0)           // heartbeat every 5 seconds
-    .with_connection_timeout_ms(5000)       // 5 second timeout
-    .with_registration_retries(3);          // retry 3 times before giving up
-```
-
 ## Examples
 
-### Simple Sensory Agent
-```bash
-cargo run --example simple_sensory_agent
-```
-
-See [`examples/simple_sensory_agent.rs`](examples/simple_sensory_agent.rs) for full code.
-
-### Video Camera Agent
-
-```rust
-use feagi_agent::{AgentClient, AgentConfig, AgentType};
-
-let config = AgentConfig::new("video_camera_01", AgentType::Sensory)
-    .with_feagi_host("localhost")
-    .with_vision_capability("camera", (640, 480), 3, "i_vision");
-
-let mut client = AgentClient::new(config)?;
-client.connect()?;
-
-// In your video processing loop:
-for frame in video_frames {
-    let neuron_pairs = convert_frame_to_neurons(frame);
-    client.send_sensory_data(neuron_pairs)?;
-}
-```
-
-### Motor Agent
-
-```rust
-use feagi_agent::{AgentClient, AgentConfig, AgentType};
-
-let config = AgentConfig::new("robotic_arm", AgentType::Motor)
-    .with_feagi_host("localhost")
-    .with_motor_capability("servo", 6, vec!["o_motor".to_string()]);
-
-let mut client = AgentClient::new(config)?;
-client.connect()?;
-
-// Receive motor commands
-loop {
-    if let Some(motor_data) = client.receive_motor_data()? {
-        apply_motor_commands(motor_data);
-    }
-    std::thread::sleep(Duration::from_millis(10));
-}
-```
+This crate includes examples under `examples/`. Some examples require enabling feature flags.
 
 ## Architecture
 
-### ZMQ Communication
+### Session orchestration
 
-The SDK uses ZeroMQ for all communication with FEAGI:
+The preferred orchestration abstraction is `clients::SessionStateMachine`:
 
-| Socket Type | Direction | Purpose |
-|-------------|-----------|---------|
-| REQ/REP | Agent → FEAGI | Registration & Heartbeat |
-| PUSH | Agent → FEAGI | Sensory Data |
-| SUB | FEAGI → Agent | Motor Commands |
-
-### Heartbeat Service
-
-Heartbeat has two modes:
-
-- Implicit background (default): `EmbodimentAgent::connect_to_feagi()` automatically starts background heartbeat so applications do not need an extra setup step.
-- Tick-driven (core): call `tick_liveness()` from your control loop for fully explicit/deterministic scheduling.
-- Explicit background helper: call `start_background_heartbeat()` manually when implicit mode is disabled.
-
-Disable implicit mode before connect with `set_implicit_background_heartbeat(false)` if your runtime requires strict heartbeat control.
-
-Both modes use the same configured heartbeat interval and keep the same liveness semantics on the server.
-
-### Reconnection Strategy
-
-The SDK uses exponential backoff for connection retries:
-
-1. Initial backoff: `retry_backoff_ms` (default: 1000ms)
-2. Each retry doubles the backoff: 1s → 2s → 4s → 8s → ...
-3. Maximum backoff: 60 seconds
-4. Maximum retries: `registration_retries` (default: 3)
+- It is **pure logic** (no I/O, no sleeps).
+- A driver (Tokio/WASM/Embassy/RTOS) feeds events and executes actions.
+- ZMQ and WebSocket are both supported via `TransportProtocolEndpoint`.
 
 ## Error Handling
 
-All operations return `Result<T, SdkError>`:
-
-```rust
-use feagi_agent::SdkError;
-
-match client.connect() {
-    Ok(_) => println!("Connected!"),
-    Err(SdkError::Timeout(msg)) => eprintln!("Connection timeout: {}", msg),
-    Err(SdkError::RegistrationFailed(msg)) => eprintln!("Registration failed: {}", msg),
-    Err(e) => eprintln!("Error: {}", e),
-}
-```
-
-### Error Types
-
-- `SdkError::Zmq` - ZMQ communication error (retryable)
-- `SdkError::Timeout` - Connection timeout (retryable)
-- `SdkError::RegistrationFailed` - FEAGI rejected registration
-- `SdkError::NotRegistered` - Attempted operation before registration
-- `SdkError::InvalidConfig` - Configuration validation failed
-- `SdkError::HeartbeatFailed` - Heartbeat not acknowledged
-
-## Thread Safety
-
-`AgentClient` is safe to share across threads:
-
-```rust
-use std::sync::Arc;
-
-let client = Arc::new(client);
-let client_clone = Arc::clone(&client);
-
-std::thread::spawn(move || {
-    // Send data from another thread
-    client_clone.send_sensory_data(data)?;
-});
-```
-
-## Logging
-
-The SDK uses the `log` crate. Initialize with `env_logger`:
-
-```rust
-env_logger::Builder::from_default_env()
-    .filter_level(log::LevelFilter::Info)
-    .init();
-```
-
-Set log level via environment variable:
-```bash
-RUST_LOG=feagi_agent=debug cargo run
-```
+Errors use `feagi_agent::FeagiAgentError` and `feagi_io::FeagiNetworkError` (via `From` conversions).
 
 ## Testing
 
 Run unit tests:
 ```bash
 cargo test
-```
-
-Integration tests (requires running FEAGI):
-```bash
-cargo test --test integration_tests
 ```
 
 ## License

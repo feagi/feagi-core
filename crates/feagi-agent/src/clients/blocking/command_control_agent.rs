@@ -229,9 +229,22 @@ impl CommandControlAgent {
     }
 
     pub fn send_message(&mut self, message: FeagiMessage, increment_value: u16) -> Result<(), FeagiAgentError> {
-        let agent_id = match self.registration_status {
-            AgentRegistrationStatus::Registered(agent_id, _) => { agent_id },
-            _ => {return Err(FeagiAgentError::UnableToSendData("Nonregistered agent cannot send message!".to_string()))}
+        let agent_id = match &self.registration_status {
+            AgentRegistrationStatus::Registered(agent_id, _) => *agent_id,
+            AgentRegistrationStatus::NotRegistered => {
+                // Registration must be possible before a session id exists.
+                // FEAGI servers accept a blank agent id for registration requests.
+                match &message {
+                    FeagiMessage::AgentRegistration(
+                        AgentRegistrationMessage::ClientRequestRegistration(_),
+                    ) => AgentID::new_blank(),
+                    _ => {
+                        return Err(FeagiAgentError::UnableToSendData(
+                            "Nonregistered agent cannot send message!".to_string(),
+                        ));
+                    }
+                }
+            }
         };
 
         if let Some(requester) = &mut self.requester {
@@ -258,4 +271,115 @@ pub enum AgentRegistrationStatus {
         AgentID,
         HashMap<AgentCapabilities, TransportProtocolEndpoint>,
     ),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use feagi_io::protocol_implementations::zmq::ZmqUrl;
+    use feagi_io::traits_and_enums::shared::{
+        FeagiEndpointState, TransportProtocolEndpoint,
+    };
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone)]
+    struct DummyRequesterProperties {
+        endpoint: TransportProtocolEndpoint,
+        last_request: Arc<Mutex<Vec<u8>>>,
+    }
+
+    struct DummyRequester {
+        endpoint: TransportProtocolEndpoint,
+        state: FeagiEndpointState,
+        last_request: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl feagi_io::traits_and_enums::client::FeagiClient for DummyRequester {
+        fn poll(&mut self) -> &FeagiEndpointState {
+            &self.state
+        }
+
+        fn request_connect(&mut self) -> Result<(), feagi_io::FeagiNetworkError> {
+            self.state = FeagiEndpointState::ActiveWaiting;
+            Ok(())
+        }
+
+        fn request_disconnect(&mut self) -> Result<(), feagi_io::FeagiNetworkError> {
+            self.state = FeagiEndpointState::Inactive;
+            Ok(())
+        }
+
+        fn confirm_error_and_close(&mut self) -> Result<(), feagi_io::FeagiNetworkError> {
+            self.state = FeagiEndpointState::Inactive;
+            Ok(())
+        }
+
+        fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
+            self.endpoint.clone()
+        }
+    }
+
+    impl feagi_io::traits_and_enums::client::FeagiClientRequester for DummyRequester {
+        fn publish_request(&mut self, request: &[u8]) -> Result<(), feagi_io::FeagiNetworkError> {
+            *self.last_request.lock().expect("lock") = request.to_vec();
+            Ok(())
+        }
+
+        fn consume_retrieved_response(&mut self) -> Result<&[u8], feagi_io::FeagiNetworkError> {
+            Err(feagi_io::FeagiNetworkError::ReceiveFailed(
+                "dummy requester has no responses".to_string(),
+            ))
+        }
+
+        fn as_boxed_requester_properties(
+            &self,
+        ) -> Box<dyn feagi_io::traits_and_enums::client::FeagiClientRequesterProperties> {
+            Box::new(DummyRequesterProperties {
+                endpoint: self.endpoint.clone(),
+                last_request: self.last_request.clone(),
+            })
+        }
+    }
+
+    impl feagi_io::traits_and_enums::client::FeagiClientRequesterProperties for DummyRequesterProperties {
+        fn as_boxed_client_requester(&self) -> Box<dyn feagi_io::traits_and_enums::client::FeagiClientRequester> {
+            Box::new(DummyRequester {
+                endpoint: self.endpoint.clone(),
+                state: FeagiEndpointState::Inactive,
+                last_request: self.last_request.clone(),
+            })
+        }
+
+        fn get_endpoint_target(&self) -> TransportProtocolEndpoint {
+            self.endpoint.clone()
+        }
+    }
+
+    #[test]
+    fn registration_request_can_be_sent_before_registration() {
+        let endpoint = TransportProtocolEndpoint::Zmq(
+            ZmqUrl::new("tcp://example:1").expect("valid dummy endpoint"),
+        );
+        let last_request: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+        let props = Box::new(DummyRequesterProperties {
+            endpoint,
+            last_request: last_request.clone(),
+        });
+
+        let mut agent = CommandControlAgent::new(props);
+        agent.request_connect().expect("connect request should succeed");
+
+        agent
+            .request_registration(
+                AgentDescriptor::new("m", "n", 1).expect("descriptor"),
+                AuthToken::new([0u8; 32]),
+                vec![AgentCapabilities::SendSensorData],
+            )
+            .expect("registration request should be sendable with blank id");
+
+        assert!(
+            !last_request.lock().expect("lock").is_empty(),
+            "expected a serialized registration request to be published"
+        );
+    }
 }
