@@ -78,6 +78,28 @@ impl FeagiAgentHandler {
             && existing.iter().all(|capability| requested.contains(capability))
     }
 
+    /// Returns true when an existing descriptor session should be replaced by a new registration.
+    ///
+    /// This suppresses immediate descriptor-replacement churn caused by duplicate
+    /// registration packets that arrive within a very short window for the same
+    /// live agent session.
+    fn should_replace_existing_descriptor_session(&self, existing_agent_id: AgentID) -> bool {
+        let Some(last_seen) = self.last_activity_by_agent.get(&existing_agent_id) else {
+            // Missing liveness state is treated as stale and replaceable.
+            return true;
+        };
+
+        let duplicate_guard_window = self
+            .liveness_config
+            .stale_check_interval
+            .checked_mul(2)
+            .unwrap_or(self.liveness_config.stale_check_interval);
+
+        // If the existing session is still very fresh, treat incoming registration
+        // as duplicate/in-flight reconnect noise and keep the existing mapping.
+        last_seen.elapsed() > duplicate_guard_window
+    }
+
     pub fn new(agent_auth_backend: Box<dyn AgentAuth>) -> FeagiAgentHandler {
         Self::new_with_liveness_config(agent_auth_backend, AgentLivenessConfig::default())
     }
@@ -309,6 +331,26 @@ impl FeagiAgentHandler {
         command_translator.send_message(agent_id, message, increment_counter)
     }
 
+    /// Send a command/control response via the router that received the request.
+    ///
+    /// This is used for unknown sessions (pre-registration), where agent-to-router
+    /// mapping does not exist yet.
+    fn send_message_via_command_server(
+        &mut self,
+        command_server_index: CommandServerIndex,
+        session_id: AgentID,
+        message: FeagiMessage,
+        increment_counter: u16,
+    ) -> Result<(), FeagiAgentError> {
+        let command_translator = self
+            .command_control_servers
+            .get_mut(command_server_index)
+            .ok_or_else(|| {
+                FeagiAgentError::Other("Missing command control server index".to_string())
+            })?;
+        command_translator.send_message(session_id, message, increment_counter)
+    }
+
     pub fn send_motor_data_to_agent(
         &mut self,
         agent_id: AgentID,
@@ -481,14 +523,17 @@ impl FeagiAgentHandler {
                             .agent_auth_backend
                             .verify_agent_allowed_to_connect(registration_request);
                         if auth_result.is_err() {
-                            return Ok(Some((
+                            self.send_message_via_command_server(
+                                command_control_index,
                                 agent_id,
                                 FeagiMessage::AgentRegistration(
                                     AgentRegistrationMessage::ServerRespondsRegistration(
                                         RegistrationResponse::FailedInvalidAuth,
                                     ),
                                 ),
-                            )));
+                                0,
+                            )?;
+                            return Ok(None);
                         }
                         // auth passed; if the same descriptor is already connected, replace it
                         // first so reconnects can reclaim resources immediately.
@@ -507,15 +552,37 @@ impl FeagiAgentHandler {
                                     existing_capabilities,
                                     registration_request.requested_capabilities(),
                                 ) {
-                                    return Ok(Some((
+                                    self.send_message_via_command_server(
+                                        command_control_index,
                                         agent_id,
                                         FeagiMessage::AgentRegistration(
                                             AgentRegistrationMessage::ServerRespondsRegistration(
                                                 RegistrationResponse::AlreadyRegistered,
                                             ),
                                         ),
-                                    )));
+                                        0,
+                                    )?;
+                                    return Ok(None);
                                 }
+                            }
+                            if !self.should_replace_existing_descriptor_session(existing_agent_id) {
+                                info!(
+                                    target: "feagi-agent",
+                                    "Ignoring duplicate registration for descriptor {:?}: existing session {} remains active",
+                                    registration_request.agent_descriptor(),
+                                    existing_agent_id.to_base64()
+                                );
+                                self.send_message_via_command_server(
+                                    command_control_index,
+                                    agent_id,
+                                    FeagiMessage::AgentRegistration(
+                                        AgentRegistrationMessage::ServerRespondsRegistration(
+                                            RegistrationResponse::AlreadyRegistered,
+                                        ),
+                                    ),
+                                    0,
+                                )?;
+                                return Ok(None);
                             }
                             let replacement_reason = format!(
                                 "descriptor replacement by new registration session={}",
@@ -537,22 +604,31 @@ impl FeagiAgentHandler {
                         ) {
                             Ok(mappings) => mappings,
                             Err(_) => {
-                                return Ok(Some((
+                                self.send_message_via_command_server(
+                                    command_control_index,
                                     agent_id,
                                     FeagiMessage::AgentRegistration(
                                         AgentRegistrationMessage::ServerRespondsRegistration(
                                             RegistrationResponse::FailedInvalidRequest,
                                         ),
                                     ),
-                                )));
+                                    0,
+                                )?;
+                                return Ok(None);
                             }
                         };
 
                         let response = RegistrationResponse::Success(agent_id, mappings);
-                        let message = FeagiMessage::AgentRegistration(
+                        let response_message = FeagiMessage::AgentRegistration(
                             AgentRegistrationMessage::ServerRespondsRegistration(response),
                         );
-                        Ok(Some((agent_id, message)))
+                        self.send_message_via_command_server(
+                            command_control_index,
+                            agent_id,
+                            response_message,
+                            0,
+                        )?;
+                        Ok(None)
                     }
                     AgentRegistrationMessage::ClientRequestDeregistration(_) => {
                         let response = FeagiMessage::AgentRegistration(
@@ -560,7 +636,13 @@ impl FeagiAgentHandler {
                                 DeregistrationResponse::NotRegistered,
                             ),
                         );
-                        Ok(Some((agent_id, response)))
+                        self.send_message_via_command_server(
+                            command_control_index,
+                            agent_id,
+                            response,
+                            0,
+                        )?;
+                        Ok(None)
                     }
                     _ => {
                         // If not requesting registration, we dont want to hear it

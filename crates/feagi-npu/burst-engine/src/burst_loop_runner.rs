@@ -1231,6 +1231,10 @@ fn burst_loop(
     let mut total_neurons_fired = 0usize;
     let mut burst_times = Vec::with_capacity(100);
     let mut last_burst_time = None;
+    // Tracks agents that temporarily fail publish because transport mapping is not attached yet.
+    // This avoids log spam during reconnect races while preserving automatic retry behavior.
+    let mut missing_viz_agent_logged: ahash::AHashSet<String> = ahash::AHashSet::new();
+    let mut missing_motor_agent_logged: ahash::AHashSet<String> = ahash::AHashSet::new();
 
     while running.load(Ordering::Acquire) {
         let iteration_start = Instant::now();
@@ -2194,38 +2198,31 @@ fn burst_loop(
                             }
 
                             let publish_start = Instant::now();
-                            let mut stale_viz_agents: Vec<String> = Vec::new();
                             for agent_id in viz_due_agents.iter() {
                                 if let Err(e) = publisher.publish_raw_fire_queue_for_agent(
                                     agent_id,
                                     raw_snapshot.clone(),
                                 ) {
-                                    error!(
-                                        "[BURST-LOOP] ❌ VIZ HANDOFF ERROR for '{}': {}",
-                                        agent_id, e
-                                    );
                                     if is_missing_agent_publish_error(&e) {
-                                        stale_viz_agents.push(agent_id.clone());
+                                        if !missing_viz_agent_logged.contains(agent_id) {
+                                            warn!(
+                                                "[BURST-LOOP] Visualization transport for '{}' not ready yet ({}). Keeping subscription and retrying.",
+                                                agent_id, e
+                                            );
+                                            missing_viz_agent_logged.insert(agent_id.clone());
+                                        }
+                                    } else {
+                                        error!(
+                                            "[BURST-LOOP] ❌ VIZ HANDOFF ERROR for '{}': {}",
+                                            agent_id, e
+                                        );
                                     }
                                     continue;
                                 }
+                                missing_viz_agent_logged.remove(agent_id);
                                 visualization_last_publish_time
                                     .write()
                                     .insert(agent_id.clone(), now);
-                            }
-                            if !stale_viz_agents.is_empty() {
-                                let mut subscriptions = visualization_subscriptions.write();
-                                let mut output_rates = visualization_output_rates_hz.write();
-                                let mut last_publish = visualization_last_publish_time.write();
-                                for stale_agent in stale_viz_agents {
-                                    subscriptions.remove(&stale_agent);
-                                    output_rates.remove(&stale_agent);
-                                    last_publish.remove(&stale_agent);
-                                    warn!(
-                                        "[BURST-LOOP] Removed stale visualization subscription for missing agent '{}'",
-                                        stale_agent
-                                    );
-                                }
                             }
                             let publish_duration = publish_start.elapsed();
                             if publish_duration.as_millis() > 5000 {
@@ -2387,7 +2384,6 @@ fn burst_loop(
                     // Note: We clone motor_snapshot for each agent (acceptable overhead for typical 1-2 agents)
                     let now = Instant::now();
                     let burst_hz = *frequency_hz.lock().unwrap();
-                    let mut stale_motor_agents: Vec<String> = Vec::new();
 
                     for (agent_id, subscribed_cortical_ids) in subscriptions.iter() {
                         let rate_hz = motor_output_rates_hz
@@ -2467,12 +2463,21 @@ fn burst_loop(
                                             published = true;
                                         }
                                         Err(e) => {
-                                            error!(
-                                                "[BURST-LOOP] ❌ MOTOR PUBLISH ERROR for '{}': {}",
-                                                agent_id, e
-                                            );
                                             if is_missing_agent_publish_error(&e) {
-                                                stale_motor_agents.push(agent_id.clone());
+                                                if !missing_motor_agent_logged.contains(agent_id) {
+                                                    warn!(
+                                                        "[BURST-LOOP] Motor transport for '{}' not ready yet ({}). Keeping subscription and retrying.",
+                                                        agent_id, e
+                                                    );
+                                                    missing_motor_agent_logged.insert(
+                                                        agent_id.clone(),
+                                                    );
+                                                }
+                                            } else {
+                                                error!(
+                                                    "[BURST-LOOP] ❌ MOTOR PUBLISH ERROR for '{}': {}",
+                                                    agent_id, e
+                                                );
                                             }
                                         }
                                     }
@@ -2490,6 +2495,7 @@ fn burst_loop(
                                 }
 
                                 if published {
+                                    missing_motor_agent_logged.remove(agent_id);
                                     motor_last_publish_time
                                         .write()
                                         .insert(agent_id.clone(), now);
@@ -2504,20 +2510,6 @@ fn burst_loop(
                         }
                     }
                     drop(subscriptions);
-                    if !stale_motor_agents.is_empty() {
-                        let mut subscriptions = motor_subscriptions.write();
-                        let mut output_rates = motor_output_rates_hz.write();
-                        let mut last_publish = motor_last_publish_time.write();
-                        for stale_agent in stale_motor_agents {
-                            subscriptions.remove(&stale_agent);
-                            output_rates.remove(&stale_agent);
-                            last_publish.remove(&stale_agent);
-                            warn!(
-                                "[BURST-LOOP] Removed stale motor subscription for missing agent '{}'",
-                                stale_agent
-                            );
-                        }
-                    }
                 }
             } else {
                 // No fire data available
