@@ -291,9 +291,9 @@ pub async fn register_agent(
                 enabled: true,
                 ports,
                 host: if transport == "websocket" || transport == "ws" {
-                    config.websocket.host.clone()
+                    config.websocket.advertised_host.clone()
                 } else {
-                    config.zmq.host.clone()
+                    config.zmq.advertised_host.clone()
                 },
             });
         }

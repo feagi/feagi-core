@@ -196,17 +196,27 @@ fn validate_port_conflicts(config: &FeagiConfig, errors: &mut Vec<ConfigValidati
 
 /// Validate required fields are not empty
 fn validate_required_fields(config: &FeagiConfig, errors: &mut Vec<ConfigValidationError>) {
-    // API host required
-    if config.api.host.is_empty() {
+    // API hosts required
+    if config.api.bind_host.is_empty() {
         errors.push(ConfigValidationError::MissingRequired {
-            field: "api.host".to_string(),
+            field: "api.bind_host".to_string(),
+        });
+    }
+    if config.api.advertised_host.is_empty() {
+        errors.push(ConfigValidationError::MissingRequired {
+            field: "api.advertised_host".to_string(),
         });
     }
 
-    // ZMQ host required
-    if config.zmq.host.is_empty() {
+    // ZMQ hosts required
+    if config.zmq.bind_host.is_empty() {
         errors.push(ConfigValidationError::MissingRequired {
-            field: "zmq.host".to_string(),
+            field: "zmq.bind_host".to_string(),
+        });
+    }
+    if config.zmq.advertised_host.is_empty() {
+        errors.push(ConfigValidationError::MissingRequired {
+            field: "zmq.advertised_host".to_string(),
         });
     }
 
@@ -263,6 +273,35 @@ fn validate_value_ranges(config: &FeagiConfig, errors: &mut Vec<ConfigValidation
             });
         }
     }
+
+    // Advertised hosts must be routable; wildcard bind addresses are not valid for discovery.
+    validate_advertised_host("api.advertised_host", &config.api.advertised_host, errors);
+    validate_advertised_host("zmq.advertised_host", &config.zmq.advertised_host, errors);
+    validate_advertised_host(
+        "websocket.advertised_host",
+        &config.websocket.advertised_host,
+        errors,
+    );
+    validate_advertised_host(
+        "agent.advertised_host",
+        &config.agent.advertised_host,
+        errors,
+    );
+}
+
+fn validate_advertised_host(
+    field: &str,
+    host: &str,
+    errors: &mut Vec<ConfigValidationError>,
+) {
+    let trimmed = host.trim();
+    let is_non_routable = matches!(trimmed, "0.0.0.0" | "::" | "[::]" | "*");
+    if is_non_routable {
+        errors.push(ConfigValidationError::InvalidValue {
+            field: field.to_string(),
+            reason: "must be routable; wildcard bind addresses are not allowed".to_string(),
+        });
+    }
 }
 
 #[cfg(test)]
@@ -312,13 +351,13 @@ mod tests {
     #[test]
     fn test_missing_required_field() {
         let mut config = FeagiConfig::default();
-        config.api.host = String::new(); // Empty host
+        config.api.bind_host = String::new(); // Empty bind_host
 
         let result = validate_config(&config);
         assert!(result.is_err());
 
         if let Err(ConfigError::ValidationError(msg)) = result {
-            assert!(msg.contains("api.host"));
+            assert!(msg.contains("api.bind_host"));
         }
     }
 
@@ -348,6 +387,20 @@ mod tests {
             assert!(msg.contains("burst_engine.mode"));
             assert!(msg.contains("inference"));
             assert!(msg.contains("design"));
+        }
+    }
+
+    #[test]
+    fn test_non_routable_advertised_host_is_rejected() {
+        let mut config = FeagiConfig::default();
+        config.websocket.advertised_host = "0.0.0.0".to_string();
+
+        let result = validate_config(&config);
+        assert!(result.is_err());
+
+        if let Err(ConfigError::ValidationError(msg)) = result {
+            assert!(msg.contains("websocket.advertised_host"));
+            assert!(msg.contains("routable"));
         }
     }
 }

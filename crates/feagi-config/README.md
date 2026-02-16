@@ -26,9 +26,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     validate_config(&config)?;
     
     // Access type-safe configuration values
-    println!("API Host: {}", config.api.host);
+    println!("API Bind Host: {}", config.api.bind_host);
+    println!("API Advertised Host: {}", config.api.advertised_host);
     println!("API Port: {}", config.api.port);
-    println!("ZMQ Host: {}", config.zmq.host);
+    println!("ZMQ Bind Host: {}", config.zmq.bind_host);
+    println!("ZMQ Advertised Host: {}", config.zmq.advertised_host);
     
     Ok(())
 }
@@ -49,7 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load with overrides
     let config = load_config(None, Some(&cli_args))?;
     
-    assert_eq!(config.api.host, "192.168.1.100");
+    assert_eq!(config.api.advertised_host, "192.168.1.100");
     assert_eq!(config.api.port, 9000);
     
     Ok(())
@@ -60,7 +62,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```bash
 # Set environment variables
-export FEAGI_API_HOST=0.0.0.0
+export FEAGI_API_HOST=127.0.0.1
+export FEAGI_API_BIND_HOST=0.0.0.0
+export FEAGI_API_ADVERTISED_HOST=127.0.0.1
 export FEAGI_API_PORT=8080
 export FEAGI_ZMQ_HOST=127.0.0.1
 
@@ -75,7 +79,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Environment variables automatically applied
     let config = load_config(None, None)?;
     
-    // config.api.host will be "0.0.0.0" from environment
+    // config.api.bind_host will be "0.0.0.0" from environment
+    // config.api.advertised_host will be "127.0.0.1" from environment
     // config.api.port will be 8080 from environment
     
     Ok(())

@@ -7,11 +7,13 @@ use feagi_io::agent_id::AgentID;
 
 fn build_test_config() -> FeagiConfig {
     let mut config = FeagiConfig::default();
-    config.zmq.host = "192.0.2.10".to_string();
+    config.zmq.bind_host = "0.0.0.0".to_string();
+    config.zmq.advertised_host = "192.0.2.10".to_string();
     config.ports.zmq_sensory_port = 4001;
     config.ports.zmq_motor_port = 4002;
     config.ports.zmq_visualization_port = 4003;
-    config.websocket.host = "example.com".to_string();
+    config.websocket.bind_host = "0.0.0.0".to_string();
+    config.websocket.advertised_host = "example.com".to_string();
     config.websocket.sensory_port = 9001;
     config.websocket.motor_port = 9002;
     config.websocket.visualization_port = 9003;
