@@ -6,6 +6,7 @@ use feagi_io::AgentID;
 use feagi_serialization::FeagiByteContainer;
 use feagi_structures::FeagiJSON;
 use serde::{Deserialize, Serialize};
+use crate::command_and_control::messages::burst_engine::BurstEnginesMessage;
 
 // All Command and Control messages are within this nested enum.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -15,6 +16,7 @@ pub enum FeagiMessage {
     AgentRegistration(AgentRegistrationMessage),
     HealthCheck(HealthCheckMessage),
     AgentConfiguration(AgentEmbodimentConfigurationMessage),
+    BurstEngine(BurstEnginesMessage)
 }
 
 impl FeagiMessage {
