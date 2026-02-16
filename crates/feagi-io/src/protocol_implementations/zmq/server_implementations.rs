@@ -327,7 +327,7 @@ impl FeagiServerPullerProperties for FeagiZmqServerPullerProperties {
             context,
             socket,
             recv_msg: Message::new(),
-            latest_valid_msg: Message::new(),
+            latest_non_empty_valid_msg: Message::new(),
             has_data: false,
         })
     }
@@ -380,8 +380,8 @@ pub struct FeagiZmqServerPuller {
     socket: Socket,
     /// Reusable message buffer - ZMQ handles internal memory management
     recv_msg: Message,
-    /// Reusable buffer that keeps the latest valid FEAGI frame seen in a drain cycle
-    latest_valid_msg: Message,
+    /// Reusable buffer that keeps latest valid FEAGI frame with non-empty payload
+    latest_non_empty_valid_msg: Message,
     /// Whether recv_msg contains valid data ready to consume
     has_data: bool,
 }
@@ -409,33 +409,48 @@ impl FeagiZmqServerPuller {
         bytes.len() >= min_required
     }
 
+    fn has_non_empty_payload(bytes: &[u8]) -> bool {
+        // For sensory channels, empty containers (struct_count=0) are valid protocol frames
+        // but should not eclipse meaningful sensory updates inside the same drain window.
+        bytes.get(3).copied().unwrap_or(0) > 0
+    }
+
     /// Drain all currently-queued frames and keep only the latest payload.
     ///
     /// This avoids replaying stale sensory backlog after reconnect/restart.
-    /// Additionally, it keeps the latest *valid* FEAGI frame so malformed
-    /// trailing frames do not eclipse usable sensory payloads.
+    /// Additionally, it keeps the latest *non-empty valid* FEAGI frame so malformed
+    /// or empty trailing frames do not eclipse usable sensory payloads.
     fn try_recv_latest(&mut self) -> Result<bool, zmq::Error> {
-        let mut has_latest_valid = false;
+        let mut has_latest_non_empty_valid = false;
 
         self.socket.recv(&mut self.recv_msg, zmq::DONTWAIT)?;
-        if Self::is_plausible_feagi_frame(&self.recv_msg) {
-            std::mem::swap(&mut self.recv_msg, &mut self.latest_valid_msg);
-            has_latest_valid = true;
+        if Self::is_plausible_feagi_frame(&self.recv_msg)
+            && Self::has_non_empty_payload(&self.recv_msg)
+        {
+            std::mem::swap(&mut self.recv_msg, &mut self.latest_non_empty_valid_msg);
+            has_latest_non_empty_valid = true;
         }
 
         loop {
             match self.socket.recv(&mut self.recv_msg, zmq::DONTWAIT) {
                 Ok(()) => {
-                    if Self::is_plausible_feagi_frame(&self.recv_msg) {
-                        std::mem::swap(&mut self.recv_msg, &mut self.latest_valid_msg);
-                        has_latest_valid = true;
+                    if Self::is_plausible_feagi_frame(&self.recv_msg)
+                        && Self::has_non_empty_payload(&self.recv_msg)
+                    {
+                        std::mem::swap(&mut self.recv_msg, &mut self.latest_non_empty_valid_msg);
+                        has_latest_non_empty_valid = true;
                     }
                 }
                 Err(zmq::Error::EAGAIN) => {
-                    if has_latest_valid {
-                        std::mem::swap(&mut self.recv_msg, &mut self.latest_valid_msg);
+                    if has_latest_non_empty_valid {
+                        std::mem::swap(
+                            &mut self.recv_msg,
+                            &mut self.latest_non_empty_valid_msg,
+                        );
                         return Ok(true);
                     }
+                    // Drop malformed/empty windows instead of emitting a frame that can
+                    // transiently blank downstream visualization.
                     return Ok(false);
                 }
                 Err(e) => return Err(e),

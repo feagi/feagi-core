@@ -1971,8 +1971,10 @@ version = "0.0.1-beta.12"
 dependencies = [
  "base64 0.22.1",
  "feagi-serialization",
+ "feagi-structures",
  "getrandom 0.2.17",
  "serde",
+ "serde_json",
  "tungstenite",
  "zmq",
 ]
