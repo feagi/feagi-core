@@ -10,7 +10,9 @@
 //! ZMQ handles internal memory pooling and zero-copy optimizations.
 
 use std::collections::HashMap;
+use std::env;
 
+use feagi_serialization::FeagiByteContainer;
 use zmq::{Context, Message, Socket};
 
 use crate::{AgentID, FeagiNetworkError};
@@ -21,6 +23,67 @@ use crate::traits_and_enums::server::{
     FeagiServerPuller, FeagiServerPullerProperties,
     FeagiServerRouter, FeagiServerRouterProperties,
 };
+
+fn parse_bool_env(name: &str) -> Result<Option<bool>, FeagiNetworkError> {
+    let Ok(raw) = env::var(name) else {
+        return Ok(None);
+    };
+    let normalized = raw.trim().to_ascii_lowercase();
+    let value = match normalized.as_str() {
+        "1" | "true" | "yes" | "on" => true,
+        "0" | "false" | "no" | "off" => false,
+        _ => {
+            return Err(FeagiNetworkError::InvalidSocketProperties(format!(
+                "Invalid boolean value for {name}: '{raw}'"
+            )));
+        }
+    };
+    Ok(Some(value))
+}
+
+fn parse_i32_env(name: &str) -> Result<Option<i32>, FeagiNetworkError> {
+    let Ok(raw) = env::var(name) else {
+        return Ok(None);
+    };
+    let parsed = raw.trim().parse::<i32>().map_err(|_| {
+        FeagiNetworkError::InvalidSocketProperties(format!(
+            "Invalid integer value for {name}: '{raw}'"
+        ))
+    })?;
+    Ok(Some(parsed))
+}
+
+fn apply_common_server_zmq_tuning(socket: &Socket) -> Result<(), FeagiNetworkError> {
+    if let Some(linger_ms) = parse_i32_env("FEAGI_ZMQ_LINGER_MS")? {
+        socket
+            .set_linger(linger_ms)
+            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
+    }
+    if let Some(immediate) = parse_bool_env("FEAGI_ZMQ_IMMEDIATE")? {
+        socket
+            .set_immediate(immediate)
+            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
+    }
+    Ok(())
+}
+
+fn apply_server_send_tuning(socket: &Socket) -> Result<(), FeagiNetworkError> {
+    if let Some(sndhwm) = parse_i32_env("FEAGI_ZMQ_SNDHWM")? {
+        socket
+            .set_sndhwm(sndhwm)
+            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
+    }
+    Ok(())
+}
+
+fn apply_server_receive_tuning(socket: &Socket) -> Result<(), FeagiNetworkError> {
+    if let Some(rcvhwm) = parse_i32_env("FEAGI_ZMQ_RCVHWM")? {
+        socket
+            .set_rcvhwm(rcvhwm)
+            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
+    }
+    Ok(())
+}
 
 // ============================================================================
 // Publisher
@@ -124,6 +187,8 @@ impl FeagiServer for FeagiZmqServerPublisher {
     fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
+                apply_common_server_zmq_tuning(&self.socket)?;
+                apply_server_send_tuning(&self.socket)?;
                 // ZMQ bind is synchronous
                 self.socket
                     .bind(&self.local_bind_address.to_string())
@@ -318,15 +383,75 @@ pub struct FeagiZmqServerPuller {
     has_data: bool,
 }
 
+impl FeagiZmqServerPuller {
+    const MIN_FEAGI_FRAME_BYTES: usize = 12;
+    const STRUCT_LOOKUP_BYTES_PER_ENTRY: usize = 4;
+
+    /// Lightweight FEAGI frame sanity check used for latest-wins filtering.
+    ///
+    /// This avoids selecting trailing noise frames that can appear during
+    /// reconnect churn and would otherwise cause downstream decode drops.
+    fn is_plausible_feagi_frame(bytes: &[u8]) -> bool {
+        if bytes.len() < Self::MIN_FEAGI_FRAME_BYTES {
+            return false;
+        }
+        // Byte 0: FEAGI binary structure version
+        if bytes[0] != FeagiByteContainer::CURRENT_FBS_VERSION {
+            return false;
+        }
+        // Byte 3: number of structures in container header
+        let structure_count = bytes[3] as usize;
+        let min_required = Self::MIN_FEAGI_FRAME_BYTES
+            + structure_count.saturating_mul(Self::STRUCT_LOOKUP_BYTES_PER_ENTRY);
+        bytes.len() >= min_required
+    }
+
+    /// Drain all currently-queued frames and keep only the latest payload.
+    ///
+    /// This avoids replaying stale sensory backlog after reconnect/restart.
+    /// Additionally, it keeps the latest *valid* FEAGI frame so malformed
+    /// trailing frames do not eclipse usable sensory payloads.
+    fn try_recv_latest(&mut self) -> Result<bool, zmq::Error> {
+        let mut latest_valid: Option<Vec<u8>> = None;
+
+        self.socket.recv(&mut self.recv_msg, zmq::DONTWAIT)?;
+        if Self::is_plausible_feagi_frame(&self.recv_msg) {
+            latest_valid = Some(self.recv_msg.to_vec());
+        }
+
+        loop {
+            match self.socket.recv(&mut self.recv_msg, zmq::DONTWAIT) {
+                Ok(()) => {
+                    if Self::is_plausible_feagi_frame(&self.recv_msg) {
+                        latest_valid = Some(self.recv_msg.to_vec());
+                    }
+                }
+                Err(zmq::Error::EAGAIN) => {
+                    if let Some(bytes) = latest_valid {
+                        self.recv_msg = Message::from(bytes.as_slice());
+                        return Ok(true);
+                    }
+                    return Ok(false);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+}
+
 impl FeagiServer for FeagiZmqServerPuller {
     fn poll(&mut self) -> &FeagiEndpointState {
         // Only check for data if we're active and don't already have buffered data
         if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
-            // Receive into reusable message - no allocation if message capacity is sufficient
-            match self.socket.recv(&mut self.recv_msg, zmq::DONTWAIT) {
-                Ok(()) => {
+            // Receive into reusable message - no allocation if message capacity is sufficient.
+            // @cursor:critical-path latest-wins drain to prevent startup backlog lag.
+            match self.try_recv_latest() {
+                Ok(true) => {
                     self.has_data = true;
                     self.current_state = FeagiEndpointState::ActiveHasData;
+                }
+                Ok(false) => {
+                    // No payload captured; remain waiting.
                 }
                 Err(zmq::Error::EAGAIN) => {
                     // No data available, stay in ActiveWaiting
@@ -344,6 +469,8 @@ impl FeagiServer for FeagiZmqServerPuller {
     fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
+                apply_common_server_zmq_tuning(&self.socket)?;
+                apply_server_receive_tuning(&self.socket)?;
                 self.socket
                     .bind(&self.local_bind_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;
@@ -645,6 +772,9 @@ impl FeagiServer for FeagiZmqServerRouter {
     fn request_start(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
+                apply_common_server_zmq_tuning(&self.socket)?;
+                apply_server_send_tuning(&self.socket)?;
+                apply_server_receive_tuning(&self.socket)?;
                 self.socket
                     .bind(&self.local_bind_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotBind(e.to_string()))?;

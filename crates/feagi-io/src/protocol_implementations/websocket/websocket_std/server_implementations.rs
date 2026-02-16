@@ -8,6 +8,9 @@ use std::io::ErrorKind;
 use std::net::{TcpListener, TcpStream};
 
 use tungstenite::{accept, Message, WebSocket};
+use tungstenite::handshake::HandshakeError;
+use tungstenite::handshake::MidHandshake;
+use tungstenite::handshake::server::{NoCallback, ServerHandshake};
 
 use crate::{AgentID, FeagiNetworkError};
 use crate::protocol_implementations::websocket::shared::WebSocketUrl;
@@ -21,16 +24,50 @@ use feagi_serialization::FeagiByteContainer;
 
 /// Type alias for WebSocket over TcpStream
 type WsStream = WebSocket<TcpStream>;
+type WsMidServerHandshake = MidHandshake<ServerHandshake<TcpStream, NoCallback>>;
 
 /// State of a WebSocket connection during handshake
 #[allow(dead_code)]
 enum HandshakeState {
     /// TCP accepted, handshake in progress
-    Handshaking(TcpStream),
+    Handshaking(WsMidServerHandshake),
     /// Handshake complete, WebSocket ready
     Ready(WsStream),
     /// Handshake failed
     Failed,
+}
+
+fn begin_nonblocking_handshake(stream: TcpStream) -> Option<HandshakeState> {
+    if stream.set_nonblocking(true).is_err() {
+        return None;
+    }
+    match accept(stream) {
+        Ok(ws) => Some(HandshakeState::Ready(ws)),
+        Err(HandshakeError::Interrupted(mid)) => Some(HandshakeState::Handshaking(mid)),
+        Err(HandshakeError::Failure(_)) => None,
+    }
+}
+
+fn advance_nonblocking_handshake(state: &mut HandshakeState) {
+    if matches!(state, HandshakeState::Handshaking(_)) {
+        let current = std::mem::replace(state, HandshakeState::Failed);
+        let HandshakeState::Handshaking(mid) = current else {
+            return;
+        };
+        match mid.handshake() {
+            Ok(ws) => *state = HandshakeState::Ready(ws),
+            Err(HandshakeError::Interrupted(next_mid)) => {
+                *state = HandshakeState::Handshaking(next_mid);
+            }
+            Err(HandshakeError::Failure(_)) => *state = HandshakeState::Failed,
+        }
+    }
+}
+
+fn close_handshake_state(state: HandshakeState) {
+    if let HandshakeState::Ready(mut ws) = state {
+        let _ = ws.close(None);
+    }
 }
 
 // ============================================================================
@@ -93,7 +130,7 @@ pub struct FeagiWebSocketServerPublisher {
     remote_bind_address: WebSocketUrl,
     current_state: FeagiEndpointState,
     listener: Option<TcpListener>,
-    clients: Vec<WsStream>,
+    clients: Vec<HandshakeState>,
 }
 
 impl FeagiWebSocketServerPublisher {
@@ -108,17 +145,8 @@ impl FeagiWebSocketServerPublisher {
         loop {
             match listener.accept() {
                 Ok((stream, _addr)) => {
-                    // Perform handshake first on blocking stream.
-                    // Setting non-blocking before handshake can cause immediate failures.
-                    match accept(stream) {
-                        Ok(mut ws) => {
-                            // After handshake, switch the socket to non-blocking mode for poll-based operation.
-                            let _ = ws.get_mut().set_nonblocking(true);
-                            self.clients.push(ws);
-                        }
-                        Err(_e) => {
-                            // Handshake failed, skip this connection
-                        }
+                    if let Some(state) = begin_nonblocking_handshake(stream) {
+                        self.clients.push(state);
                     }
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
@@ -132,9 +160,25 @@ impl FeagiWebSocketServerPublisher {
         }
     }
 
+    fn process_handshakes(&mut self) {
+        let mut failed_indices = Vec::new();
+        for (i, state) in self.clients.iter_mut().enumerate() {
+            advance_nonblocking_handshake(state);
+            if matches!(state, HandshakeState::Failed) {
+                failed_indices.push(i);
+            }
+        }
+        for i in failed_indices.into_iter().rev() {
+            let _ = self.clients.remove(i);
+        }
+    }
+
     /// Get the number of connected clients.
     pub fn client_count(&self) -> usize {
-        self.clients.len()
+        self.clients
+            .iter()
+            .filter(|s| matches!(s, HandshakeState::Ready(_)))
+            .count()
     }
 }
 
@@ -142,6 +186,7 @@ impl FeagiServer for FeagiWebSocketServerPublisher {
     fn poll(&mut self) -> &FeagiEndpointState {
         if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) {
             self.accept_pending_connections();
+            self.process_handshakes();
         }
         &self.current_state
     }
@@ -171,8 +216,10 @@ impl FeagiServer for FeagiWebSocketServerPublisher {
         match &self.current_state {
             FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
                 // Close all client connections
-                for mut client in self.clients.drain(..) {
-                    let _ = client.close(None);
+                for state in self.clients.drain(..) {
+                    if let HandshakeState::Ready(mut client) = state {
+                        let _ = client.close(None);
+                    }
                 }
                 self.listener = None;
                 self.current_state = FeagiEndpointState::Inactive;
@@ -187,8 +234,10 @@ impl FeagiServer for FeagiWebSocketServerPublisher {
     fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Errored(_) => {
-                for mut client in self.clients.drain(..) {
-                    let _ = client.close(None);
+                for state in self.clients.drain(..) {
+                    if let HandshakeState::Ready(mut client) = state {
+                        let _ = client.close(None);
+                    }
                 }
                 self.listener = None;
                 self.current_state = FeagiEndpointState::Inactive;
@@ -221,7 +270,15 @@ impl FeagiServerPublisher for FeagiWebSocketServerPublisher {
 
                 // Send to all clients, tracking which ones fail
                 let mut failed_indices = Vec::new();
-                for (i, client) in self.clients.iter_mut().enumerate() {
+                for (i, state) in self.clients.iter_mut().enumerate() {
+                    let client = match state {
+                        HandshakeState::Ready(ws) => ws,
+                        HandshakeState::Handshaking(_) => continue,
+                        HandshakeState::Failed => {
+                            failed_indices.push(i);
+                            continue;
+                        }
+                    };
                     // Try to send, handling WouldBlock gracefully
                     match client.send(message.clone()) {
                         Ok(()) => {}
@@ -238,7 +295,7 @@ impl FeagiServerPublisher for FeagiWebSocketServerPublisher {
 
                 // Remove failed clients (in reverse order to preserve indices)
                 for i in failed_indices.into_iter().rev() {
-                    let _ = self.clients.remove(i).close(None);
+                    close_handshake_state(self.clients.remove(i));
                 }
 
                 Ok(())
@@ -327,7 +384,7 @@ pub struct FeagiWebSocketServerPuller {
     remote_bind_address: WebSocketUrl,
     current_state: FeagiEndpointState,
     listener: Option<TcpListener>,
-    clients: Vec<WsStream>,
+    clients: Vec<HandshakeState>,
     /// Buffer for received data
     receive_buffer: Option<Vec<u8>>,
     has_data: bool,
@@ -343,14 +400,8 @@ impl FeagiWebSocketServerPuller {
         loop {
             match listener.accept() {
                 Ok((stream, _addr)) => {
-                    if stream.set_nonblocking(true).is_err() {
-                        continue;
-                    }
-                    match accept(stream) {
-                        Ok(ws) => {
-                            self.clients.push(ws);
-                        }
-                        Err(_) => {}
+                    if let Some(state) = begin_nonblocking_handshake(stream) {
+                        self.clients.push(state);
                     }
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
@@ -359,24 +410,45 @@ impl FeagiWebSocketServerPuller {
         }
     }
 
+    fn process_handshakes(&mut self) {
+        let mut failed_indices = Vec::new();
+        for (i, state) in self.clients.iter_mut().enumerate() {
+            advance_nonblocking_handshake(state);
+            if matches!(state, HandshakeState::Failed) {
+                failed_indices.push(i);
+            }
+        }
+        for i in failed_indices.into_iter().rev() {
+            let _ = self.clients.remove(i);
+        }
+    }
+
     /// Try to receive data from any client (non-blocking).
     fn try_receive(&mut self) -> bool {
         let mut failed_indices = Vec::new();
 
-        for (i, client) in self.clients.iter_mut().enumerate() {
+        for (i, state) in self.clients.iter_mut().enumerate() {
+            let client = match state {
+                HandshakeState::Ready(ws) => ws,
+                HandshakeState::Handshaking(_) => continue,
+                HandshakeState::Failed => {
+                    failed_indices.push(i);
+                    continue;
+                }
+            };
             match client.read() {
                 Ok(Message::Binary(data)) => {
                     self.receive_buffer = Some(data);
                     // Remove failed clients before returning
                     for idx in failed_indices.into_iter().rev() {
-                        let _ = self.clients.remove(idx).close(None);
+                        close_handshake_state(self.clients.remove(idx));
                     }
                     return true;
                 }
                 Ok(Message::Text(text)) => {
                     self.receive_buffer = Some(text.into_bytes());
                     for idx in failed_indices.into_iter().rev() {
-                        let _ = self.clients.remove(idx).close(None);
+                        close_handshake_state(self.clients.remove(idx));
                     }
                     return true;
                 }
@@ -397,7 +469,7 @@ impl FeagiWebSocketServerPuller {
 
         // Remove failed clients
         for i in failed_indices.into_iter().rev() {
-            let _ = self.clients.remove(i).close(None);
+            close_handshake_state(self.clients.remove(i));
         }
 
         false
@@ -408,6 +480,7 @@ impl FeagiServer for FeagiWebSocketServerPuller {
     fn poll(&mut self) -> &FeagiEndpointState {
         if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
             self.accept_pending_connections();
+            self.process_handshakes();
 
             if self.try_receive() {
                 self.has_data = true;
@@ -439,8 +512,10 @@ impl FeagiServer for FeagiWebSocketServerPuller {
     fn request_stop(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
-                for mut client in self.clients.drain(..) {
-                    let _ = client.close(None);
+                for state in self.clients.drain(..) {
+                    if let HandshakeState::Ready(mut client) = state {
+                        let _ = client.close(None);
+                    }
                 }
                 self.listener = None;
                 self.receive_buffer = None;
@@ -457,8 +532,10 @@ impl FeagiServer for FeagiWebSocketServerPuller {
     fn confirm_error_and_close(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Errored(_) => {
-                for mut client in self.clients.drain(..) {
-                    let _ = client.close(None);
+                for state in self.clients.drain(..) {
+                    if let HandshakeState::Ready(mut client) = state {
+                        let _ = client.close(None);
+                    }
                 }
                 self.listener = None;
                 self.receive_buffer = None;
@@ -651,9 +728,9 @@ impl FeagiWebSocketServerRouter {
         loop {
             match listener.accept() {
                 Ok((stream, _addr)) => {
-                    // Keep stream blocking for handshake (tungstenite requires it)
-                    // We'll switch to non-blocking after handshake completes
-                    self.clients.push(HandshakeState::Handshaking(stream));
+                    if let Some(state) = begin_nonblocking_handshake(stream) {
+                        self.clients.push(state);
+                    }
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
                 Err(_) => break,
@@ -666,40 +743,30 @@ impl FeagiWebSocketServerRouter {
         
         for (i, state) in self.clients.iter_mut().enumerate() {
             match state {
-                HandshakeState::Handshaking(stream) => {
-                    // Try to complete handshake (this may block briefly but should be fast)
-                    match stream.try_clone() {
-                        Ok(cloned_stream) => {
-                            match accept(cloned_stream) {
-                                Ok(ws) => {
-                                    // Handshake successful - generate AgentID
-                                    let session_id = AgentID::new_random();
-                                    
-                                    // Set underlying stream to non-blocking for polling
-                                    if let Ok(tcp_stream) = ws.get_ref().try_clone() {
-                                        let _ = tcp_stream.set_nonblocking(true);
-                                    }
-                                    
-                                    *state = HandshakeState::Ready(ws);
-                                    self.index_to_session.insert(i, session_id);
-                                    self.session_to_index.insert(session_id, i);
-                                }
-                                Err(_e) => {
-                                    // Handshake failed or not ready - mark for removal on next cycle
-                                    // Don't immediately remove to give handshake time to complete
-                                }
-                            }
+                HandshakeState::Handshaking(_) => {
+                    advance_nonblocking_handshake(state);
+                    match state {
+                        HandshakeState::Ready(_) => {
+                            let session_id = AgentID::new_random();
+                            self.index_to_session.insert(i, session_id);
+                            self.session_to_index.insert(session_id, i);
                         }
-                        Err(_) => {
-                            indices_to_remove.push(i);
-                        }
+                        HandshakeState::Failed => indices_to_remove.push(i),
+                        HandshakeState::Handshaking(_) => {}
                     }
                 }
                 HandshakeState::Failed => {
                     indices_to_remove.push(i);
                 }
                 HandshakeState::Ready(_) => {
-                    // Already connected, nothing to do
+                    // Ensure every ready client has a stable session mapping.
+                    // This also covers immediate-handshake success where a client
+                    // was inserted as Ready directly from accept path.
+                    if !self.index_to_session.contains_key(&i) {
+                        let session_id = AgentID::new_random();
+                        self.index_to_session.insert(i, session_id);
+                        self.session_to_index.insert(session_id, i);
+                    }
                 }
             }
         }
