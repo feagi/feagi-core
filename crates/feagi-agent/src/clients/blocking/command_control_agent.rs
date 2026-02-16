@@ -127,6 +127,18 @@ impl CommandControlAgent {
         self.send_message(heartbeat_message, 0)
     }
 
+    /// Request transport disconnect for command/control requester.
+    ///
+    /// This is a best-effort disconnect primitive used by higher-level shutdown
+    /// orchestration to ensure sockets are torn down deterministically.
+    pub fn request_disconnect(&mut self) -> Result<(), FeagiAgentError> {
+        let requester = self.requester.as_mut().ok_or_else(|| {
+            FeagiAgentError::ConnectionFailed("No socket is active to disconnect!".to_string())
+        })?;
+        requester.request_disconnect()?;
+        Ok(())
+    }
+
     //endregion
 
     //region Base Functions

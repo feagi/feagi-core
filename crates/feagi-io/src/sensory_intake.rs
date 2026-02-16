@@ -23,8 +23,12 @@ impl SensoryIntakeQueue {
     }
 
     /// Push a sensory payload (call from transport layer when data is received).
+    ///
+    /// Latest-wins semantics are enforced to avoid unbounded stale-frame buildup
+    /// when producer rate exceeds burst-consumer rate.
     pub fn push(&self, bytes: Vec<u8>) {
         if let Ok(mut q) = self.inner.lock() {
+            q.clear();
             q.push_back(bytes);
         }
     }

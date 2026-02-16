@@ -36,6 +36,7 @@ let driver = TokioDriverConfig {
         heartbeat_interval_ms: 1000,
         registration_deadline_ms: Some(10_000),
     },
+    sensory_rate_negotiation: None,
 };
 
 let requested = vec![

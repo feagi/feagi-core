@@ -19,7 +19,7 @@ platform-wasm = ["feagi-io/platform-wasm"]
 # Feagi Agents
 agent-server = ["feagi-io/feagi-server"]
 agent-client = ["feagi-io/feagi-client"]
-agent-client-asynchelper-tokio = ["tokio"]
+agent-client-asynchelper-tokio = ["tokio", "reqwest"]
 agent-transport-zmq = ["feagi-io/zmq-transport"]
 agent-transport-websocket-std = ["feagi-io/websocket-transport-std"]
 agent-transport-shm = ["feagi-io/shm-transport"]
@@ -45,4 +45,5 @@ base64 = "0.22.1"
 
 # Conditional Dependencies
 tokio = {version = "1.49.0", features = ["time", "rt", "macros"], optional = true}
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"], optional = true }
 

@@ -10,6 +10,7 @@
 //! ZMQ handles internal memory pooling and zero-copy optimizations.
 
 use zmq::{Context, Message, Socket};
+use std::env;
 
 use crate::FeagiNetworkError;
 use crate::protocol_implementations::zmq::shared::ZmqUrl;
@@ -19,6 +20,63 @@ use crate::traits_and_enums::client::{
     FeagiClientRequester, FeagiClientRequesterProperties,
     FeagiClientSubscriber, FeagiClientSubscriberProperties,
 };
+
+fn parse_bool_env(name: &str) -> Result<Option<bool>, FeagiNetworkError> {
+    let Ok(raw) = env::var(name) else {
+        return Ok(None);
+    };
+    let normalized = raw.trim().to_ascii_lowercase();
+    let value = match normalized.as_str() {
+        "1" | "true" | "yes" | "on" => true,
+        "0" | "false" | "no" | "off" => false,
+        _ => {
+            return Err(FeagiNetworkError::InvalidSocketProperties(format!(
+                "Invalid boolean value for {name}: '{raw}'"
+            )));
+        }
+    };
+    Ok(Some(value))
+}
+
+fn parse_i32_env(name: &str) -> Result<Option<i32>, FeagiNetworkError> {
+    let Ok(raw) = env::var(name) else {
+        return Ok(None);
+    };
+    let parsed = raw.trim().parse::<i32>().map_err(|_| {
+        FeagiNetworkError::InvalidSocketProperties(format!(
+            "Invalid integer value for {name}: '{raw}'"
+        ))
+    })?;
+    Ok(Some(parsed))
+}
+
+fn apply_common_client_zmq_tuning(socket: &Socket) -> Result<(), FeagiNetworkError> {
+    if let Some(sndhwm) = parse_i32_env("FEAGI_ZMQ_SNDHWM")? {
+        socket
+            .set_sndhwm(sndhwm)
+            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
+    }
+    if let Some(linger_ms) = parse_i32_env("FEAGI_ZMQ_LINGER_MS")? {
+        socket
+            .set_linger(linger_ms)
+            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
+    }
+    if let Some(immediate) = parse_bool_env("FEAGI_ZMQ_IMMEDIATE")? {
+        socket
+            .set_immediate(immediate)
+            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
+    }
+    Ok(())
+}
+
+fn apply_subscriber_zmq_tuning(socket: &Socket) -> Result<(), FeagiNetworkError> {
+    if let Some(rcvhwm) = parse_i32_env("FEAGI_ZMQ_RCVHWM")? {
+        socket
+            .set_rcvhwm(rcvhwm)
+            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
+    }
+    Ok(())
+}
 
 // ============================================================================
 // Subscriber
@@ -140,6 +198,8 @@ impl FeagiClient for FeagiZmqClientSubscriber {
     fn request_connect(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
+                apply_common_client_zmq_tuning(&self.socket)?;
+                apply_subscriber_zmq_tuning(&self.socket)?;
                 self.socket
                     .connect(&self.server_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
@@ -305,6 +365,7 @@ impl FeagiClient for FeagiZmqClientPusher {
     fn request_connect(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
+                apply_common_client_zmq_tuning(&self.socket)?;
                 self.socket
                     .connect(&self.server_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;
@@ -537,6 +598,7 @@ impl FeagiClient for FeagiZmqClientRequester {
     fn request_connect(&mut self) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::Inactive => {
+                apply_common_client_zmq_tuning(&self.socket)?;
                 self.socket
                     .connect(&self.server_address.to_string())
                     .map_err(|e| FeagiNetworkError::CannotConnect(e.to_string()))?;

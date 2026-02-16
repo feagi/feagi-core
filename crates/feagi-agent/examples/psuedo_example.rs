@@ -53,6 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             heartbeat_interval_ms,
             registration_deadline_ms: None,
         },
+        sensory_rate_negotiation: None,
     };
 
     let mut agent = TokioEmbodimentAgent::new_connect_and_register(
