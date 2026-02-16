@@ -327,6 +327,7 @@ impl FeagiServerPullerProperties for FeagiZmqServerPullerProperties {
             context,
             socket,
             recv_msg: Message::new(),
+            latest_valid_msg: Message::new(),
             has_data: false,
         })
     }
@@ -379,6 +380,8 @@ pub struct FeagiZmqServerPuller {
     socket: Socket,
     /// Reusable message buffer - ZMQ handles internal memory management
     recv_msg: Message,
+    /// Reusable buffer that keeps the latest valid FEAGI frame seen in a drain cycle
+    latest_valid_msg: Message,
     /// Whether recv_msg contains valid data ready to consume
     has_data: bool,
 }
@@ -412,23 +415,25 @@ impl FeagiZmqServerPuller {
     /// Additionally, it keeps the latest *valid* FEAGI frame so malformed
     /// trailing frames do not eclipse usable sensory payloads.
     fn try_recv_latest(&mut self) -> Result<bool, zmq::Error> {
-        let mut latest_valid: Option<Vec<u8>> = None;
+        let mut has_latest_valid = false;
 
         self.socket.recv(&mut self.recv_msg, zmq::DONTWAIT)?;
         if Self::is_plausible_feagi_frame(&self.recv_msg) {
-            latest_valid = Some(self.recv_msg.to_vec());
+            std::mem::swap(&mut self.recv_msg, &mut self.latest_valid_msg);
+            has_latest_valid = true;
         }
 
         loop {
             match self.socket.recv(&mut self.recv_msg, zmq::DONTWAIT) {
                 Ok(()) => {
                     if Self::is_plausible_feagi_frame(&self.recv_msg) {
-                        latest_valid = Some(self.recv_msg.to_vec());
+                        std::mem::swap(&mut self.recv_msg, &mut self.latest_valid_msg);
+                        has_latest_valid = true;
                     }
                 }
                 Err(zmq::Error::EAGAIN) => {
-                    if let Some(bytes) = latest_valid {
-                        self.recv_msg = Message::from(bytes.as_slice());
+                    if has_latest_valid {
+                        std::mem::swap(&mut self.recv_msg, &mut self.latest_valid_msg);
                         return Ok(true);
                     }
                     return Ok(false);
