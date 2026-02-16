@@ -140,6 +140,7 @@ fn validate_ws_url(url: &str) -> Result<(), FeagiNetworkError> {
 /// # Errors
 ///
 /// Returns an error if the address format is invalid.
+#[allow(dead_code)]
 pub fn validate_bind_address(bind_address: &str) -> Result<(), FeagiNetworkError> {
     if bind_address.is_empty() {
         return Err(FeagiNetworkError::InvalidSocketProperties(

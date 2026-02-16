@@ -23,6 +23,7 @@ use feagi_serialization::FeagiByteContainer;
 type WsStream = WebSocket<TcpStream>;
 
 /// State of a WebSocket connection during handshake
+#[allow(dead_code)]
 enum HandshakeState {
     /// TCP accepted, handshake in progress
     Handshaking(TcpStream),
