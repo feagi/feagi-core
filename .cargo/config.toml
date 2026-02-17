@@ -1,0 +1,19 @@
+[patch.crates-io]
+feagi-config = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-config" }
+feagi-npu-neural = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-npu/neural" }
+feagi-observability = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-observability" }
+feagi-state-manager = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-state-manager" }
+feagi-structures = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-structures" }
+feagi-npu-runtime = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-npu/runtime" }
+feagi-evolutionary = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-evolutionary" }
+feagi-serialization = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-serialization" }
+feagi-hal = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-hal" }
+feagi-io = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-io" }
+feagi-npu-burst-engine = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-npu/burst-engine" }
+feagi-sensorimotor = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-sensorimotor" }
+feagi-npu-plasticity = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-npu/plasticity" }
+feagi-brain-development = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-brain-development" }
+feagi-services = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-services" }
+feagi-agent = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-agent" }
+feagi = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/." }
+feagi-api = { path = "/Users/nadji/code/FEAGI-2.0/feagi-core/crates/feagi-api" }
