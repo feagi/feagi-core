@@ -268,7 +268,7 @@ pub fn create_http_server(state: ApiState) -> Router {
 /// Create V1 API router - Match Python structure EXACTLY
 /// Format: /v1/{module}/{snake_case_endpoint}
 fn create_v1_router() -> Router<ApiState> {
-    //use crate::endpoints::agent::*; // Import agent functions for routes
+    use crate::endpoints::agent;
     use crate::endpoints::burst_engine;
     use crate::endpoints::connectome;
     use crate::endpoints::cortical_area;
@@ -290,41 +290,11 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::visualization; //use crate::endpoints::{agent, system};
 
     Router::new()
-        // ===== AGENT MODULE (14 endpoints) =====
-        /*
-        .route("/agent/register", axum::routing::post(register_agent))
-        .route("/agent/heartbeat", axum::routing::post(heartbeat))
-        .route("/agent/list", get(list_agents))
-        .route("/agent/properties", get(get_agent_properties))
-        .route(
-            "/agent/properties/:agent_id",
-            get(agent::get_agent_properties_path),
-        )
-        .route("/agent/shared_mem", get(get_shared_memory))
-        .route("/agent/deregister", axum::routing::delete(deregister_agent))
+        // ===== AGENT MODULE (manual_stimulation for BV shift+click+space) =====
         .route(
             "/agent/manual_stimulation",
-            axum::routing::post(manual_stimulation),
+            axum::routing::post(agent::manual_stimulation),
         )
-        .route(
-            "/agent/fq_sampler_status",
-            get(agent::get_fq_sampler_status),
-        )
-        .route("/agent/capabilities", get(agent::get_capabilities))
-        .route(
-            "/agent/capabilities/all",
-            get(agent::get_all_agent_capabilities),
-        )
-        .route("/agent/info/:agent_id", get(agent::get_agent_info))
-        .route(
-            "/agent/configure",
-            axum::routing::post(agent::post_configure),
-        )
-        .route(
-            "/agent/:agent_id/device_registrations",
-            get(agent::export_device_registrations).post(agent::import_device_registrations),
-        )
-        */
         // ===== SYSTEM MODULE (21 endpoints) =====
         .route("/system/health_check", get(system::get_health_check))
         .route(
