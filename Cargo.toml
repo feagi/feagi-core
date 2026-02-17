@@ -107,6 +107,12 @@ ahash = { workspace = true }
 feagi-config = { version = "=0.0.1-beta.18", path = "crates/feagi-config" }
 parking_lot = "0.12"
 tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros"] }
+# Optional crates needed by root integration tests
+feagi-sensorimotor = { version = "=0.0.1-beta.18", path = "crates/feagi-sensorimotor" }
+feagi-brain-development = { version = "=0.0.1-beta.18", path = "crates/feagi-brain-development" }
+feagi-npu-plasticity = { version = "=0.0.1-beta.18", path = "crates/feagi-npu/plasticity" }
+feagi-io = { version = "=0.0.1-beta.18", path = "crates/feagi-io" }
+feagi-agent = { version = "=0.0.1-beta.18", path = "crates/feagi-agent" }
 
 # ============================================================================
 # WORKSPACE CONFIGURATION

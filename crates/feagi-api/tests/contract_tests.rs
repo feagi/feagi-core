@@ -13,7 +13,9 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 #[cfg(feature = "feagi-agent")]
-use feagi_agent::registration::{AgentDescriptor, AuthToken};
+use feagi_agent::{AgentDescriptor, AuthToken};
+#[cfg(feature = "feagi-agent")]
+use feagi_io::AgentID;
 #[cfg(feature = "feagi-agent")]
 use feagi_api::common::agent_registration::auto_create_cortical_areas_from_device_registrations;
 use feagi_api::common::{Json as ApiJson, State as ApiStateExtract};
@@ -239,6 +241,7 @@ fn build_test_state() -> ApiState {
         .unwrap_or(0);
 
     ApiState {
+        network_connection_info_provider: None,
         agent_service: None,
         analytics_service,
         connectome_service,
@@ -251,9 +254,7 @@ fn build_test_state() -> ApiState {
         memory_stats_cache: None,
         amalgamation_state: ApiState::init_amalgamation_state(),
         #[cfg(feature = "feagi-agent")]
-        agent_connectors: ApiState::init_agent_connectors(),
-        #[cfg(feature = "feagi-agent")]
-        agent_registration_handler: ApiState::init_agent_registration_handler(),
+        agent_handler: Some(ApiState::init_agent_registration_handler()),
     }
 }
 
@@ -441,8 +442,9 @@ async fn test_system_status() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_register_agent_returns_session_and_endpoints() {
-    let state = build_test_state();
-    let descriptor = AgentDescriptor::new(1, "neuraville", "api-test", 1).unwrap();
+    let _state = build_test_state();
+    let _descriptor = AgentDescriptor::new("neuraville", "api-test", 1).unwrap();
+    let agent_id = AgentID::new_random();
     let auth_token = AuthToken::new([1u8; 32]).to_base64();
 
     let device_registrations = json!({
@@ -456,7 +458,7 @@ async fn test_register_agent_returns_session_and_endpoints() {
 
     let request = AgentRegistrationRequest {
         agent_type: "visualization".to_string(),
-        agent_id: descriptor.to_base64(),
+        agent_id: agent_id.to_base64(),
         agent_data_port: 0,
         agent_version: "0.0.0-test".to_string(),
         controller_version: "0.0.0-test".to_string(),
@@ -467,14 +469,14 @@ async fn test_register_agent_returns_session_and_endpoints() {
         chosen_transport: None,
     };
 
-    let response = register_agent(ApiStateExtract(state), ApiJson(request))
+    let response = register_agent(ApiStateExtract(_state), ApiJson(request))
         .await
         .expect("Registration should succeed");
     let body = response.0;
 
     assert!(body.success);
     let transport = body.transport.expect("Expected transport payload");
-    assert!(transport.get("session_id").is_some());
+    assert!(transport.contains_key("session_id"));
     let endpoints = transport
         .get("endpoints")
         .and_then(|value| value.as_object())
@@ -485,8 +487,8 @@ async fn test_register_agent_returns_session_and_endpoints() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_register_visualization_only_agent_returns_session_and_endpoints() {
-    let state = build_test_state();
-    let descriptor = AgentDescriptor::new(4, "neuraville", "bv-viz-only", 1).unwrap();
+    let _state = build_test_state();
+    let agent_id = AgentID::new_random();
     let auth_token = AuthToken::new([4u8; 32]).to_base64();
 
     let mut capabilities: HashMap<String, Value> = HashMap::new();
@@ -497,7 +499,7 @@ async fn test_register_visualization_only_agent_returns_session_and_endpoints() 
 
     let request = AgentRegistrationRequest {
         agent_type: "visualization".to_string(),
-        agent_id: descriptor.to_base64(),
+        agent_id: agent_id.to_base64(),
         agent_data_port: 0,
         agent_version: "0.0.0-test".to_string(),
         controller_version: "0.0.0-test".to_string(),
@@ -508,14 +510,14 @@ async fn test_register_visualization_only_agent_returns_session_and_endpoints() 
         chosen_transport: None,
     };
 
-    let response = register_agent(ApiStateExtract(state), ApiJson(request))
+    let response = register_agent(ApiStateExtract(_state), ApiJson(request))
         .await
         .expect("Visualization-only registration should succeed");
     let body = response.0;
 
     assert!(body.success);
     let transport = body.transport.expect("Expected transport payload");
-    assert!(transport.get("session_id").is_some());
+    assert!(transport.contains_key("session_id"));
     let endpoints = transport
         .get("endpoints")
         .and_then(|value| value.as_object())
@@ -526,8 +528,8 @@ async fn test_register_visualization_only_agent_returns_session_and_endpoints() 
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_register_agent_rejects_rate_above_burst_frequency() {
-    let state = build_test_state();
-    let descriptor = AgentDescriptor::new(2, "neuraville", "rate-test", 1).unwrap();
+    let _state = build_test_state();
+    let agent_id = AgentID::new_random();
     let auth_token = AuthToken::new([2u8; 32]).to_base64();
 
     let mut capabilities: HashMap<String, Value> = HashMap::new();
@@ -539,7 +541,7 @@ async fn test_register_agent_rejects_rate_above_burst_frequency() {
 
     let request = AgentRegistrationRequest {
         agent_type: "motor".to_string(),
-        agent_id: descriptor.to_base64(),
+        agent_id: agent_id.to_base64(),
         agent_data_port: 0,
         agent_version: "0.0.0-test".to_string(),
         controller_version: "0.0.0-test".to_string(),
@@ -550,15 +552,15 @@ async fn test_register_agent_rejects_rate_above_burst_frequency() {
         chosen_transport: None,
     };
 
-    let result = register_agent(ApiStateExtract(state), ApiJson(request)).await;
+    let result = register_agent(ApiStateExtract(_state), ApiJson(request)).await;
     assert!(result.is_err());
 }
 
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_register_agent_rejects_visualization_rate_above_burst_frequency() {
-    let state = build_test_state();
-    let descriptor = AgentDescriptor::new(3, "neuraville", "viz-rate-test", 1).unwrap();
+    let _state = build_test_state();
+    let agent_id = AgentID::new_random();
     let auth_token = AuthToken::new([3u8; 32]).to_base64();
 
     let mut capabilities: HashMap<String, Value> = HashMap::new();
@@ -570,7 +572,7 @@ async fn test_register_agent_rejects_visualization_rate_above_burst_frequency() 
 
     let request = AgentRegistrationRequest {
         agent_type: "visualization".to_string(),
-        agent_id: descriptor.to_base64(),
+        agent_id: agent_id.to_base64(),
         agent_data_port: 0,
         agent_version: "0.0.0-test".to_string(),
         controller_version: "0.0.0-test".to_string(),
@@ -581,18 +583,20 @@ async fn test_register_agent_rejects_visualization_rate_above_burst_frequency() 
         chosen_transport: None,
     };
 
-    let result = register_agent(ApiStateExtract(state), ApiJson(request)).await;
+    let result = register_agent(ApiStateExtract(_state), ApiJson(request)).await;
     assert!(result.is_err());
 }
 
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_disabled_skips_creation() {
-    let _lock = CONFIG_ENV_LOCK
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("Failed to lock config env");
-    let _guard = set_temp_config(false);
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(false)
+    };
     let state = build_test_state();
 
     auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
@@ -609,11 +613,13 @@ async fn test_auto_create_disabled_skips_creation() {
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
 async fn test_auto_create_enabled_creates_areas() {
-    let _lock = CONFIG_ENV_LOCK
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("Failed to lock config env");
-    let _guard = set_temp_config(true);
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
     let state = build_test_state();
 
     auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
