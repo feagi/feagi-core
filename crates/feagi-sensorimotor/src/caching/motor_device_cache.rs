@@ -559,10 +559,6 @@ impl MotorDeviceCache {
 
     //endregion
 
-    //region Feedbacks
-
-    //endregion
-
     //region  JSON import / export
 
     pub fn import_from_output_definition(
