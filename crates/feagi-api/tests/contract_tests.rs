@@ -40,13 +40,22 @@ use tower::ServiceExt;
 // Using axum's test utilities instead
 
 /// Build ApiState with initialized components.
-/// Each test gets a fresh, isolated manager (no singleton conflicts)
+/// Each test gets a fresh, isolated manager (no singleton conflicts).
+/// Agent registration handler uses a test config with high ports to avoid "Address already in use".
+/// Only set FEAGI_CONFIG_PATH when unset so tests that use set_temp_config (e.g. auto_create) are not overwritten.
 fn build_test_state() -> ApiState {
     if std::env::var("FEAGI_CONFIG_PATH").is_err() {
-        std::env::set_var(
-            "FEAGI_CONFIG_PATH",
-            "/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml",
-        );
+        let test_config = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("feagi_configuration_contract_tests.toml");
+        if test_config.exists() {
+            std::env::set_var("FEAGI_CONFIG_PATH", test_config);
+        } else {
+            std::env::set_var(
+                "FEAGI_CONFIG_PATH",
+                "/Users/nadji/code/FEAGI-2.0/feagi-rs/feagi_configuration.toml",
+            );
+        }
     }
 
     // Initialize NPU (fire_ledger_window=10)
@@ -255,7 +264,9 @@ fn build_test_state() -> ApiState {
         #[cfg(feature = "feagi-agent")]
         agent_connectors: ApiState::init_agent_connectors(),
         #[cfg(feature = "feagi-agent")]
-        agent_registration_handler: ApiState::init_agent_registration_handler(),
+        agent_registration_handler: SHARED_AGENT_REGISTRATION_HANDLER
+            .get_or_init(ApiState::init_agent_registration_handler)
+            .clone(),
     }
 }
 
@@ -267,6 +278,13 @@ async fn create_test_server() -> axum::Router {
 
 #[cfg(feature = "feagi-agent")]
 static CONFIG_ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+/// Shared agent registration handler so contract tests only bind ZMQ/WS ports once.
+/// Avoids "Address already in use" when multiple tests call build_test_state().
+#[cfg(feature = "feagi-agent")]
+static SHARED_AGENT_REGISTRATION_HANDLER: OnceLock<
+    Arc<parking_lot::Mutex<feagi_agent::server::FeagiAgentHandler>>,
+> = OnceLock::new();
 
 #[cfg(feature = "feagi-agent")]
 struct ConfigEnvGuard {
