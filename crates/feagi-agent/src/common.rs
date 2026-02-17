@@ -70,6 +70,7 @@ impl fmt::Display for AuthToken {
 
 //region Unauthenticated Agent Rejection Behavior
 /// Determines how agents with nonauthenticated agent IDs will be handled by the server
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub enum UnauthenticatedAgentRejectionBehavior {
     #[default]

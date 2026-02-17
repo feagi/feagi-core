@@ -4,11 +4,13 @@ use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_io::AgentID;
 use feagi_serialization::FeagiByteContainer;
 
+#[allow(dead_code)]
 pub struct SensorAgent {
     properties: Box<dyn FeagiClientPusherProperties>,
     pusher: Option<Box<dyn FeagiClientPusher>>,
 }
 
+#[allow(dead_code)]
 impl SensorAgent {
     pub fn new(properties: Box<dyn FeagiClientPusherProperties>, agent_id: AgentID) -> SensorAgent {
         let mut buffer = FeagiByteContainer::new_empty();
@@ -29,7 +31,7 @@ impl SensorAgent {
 
         match pusher.poll() {
             FeagiEndpointState::Inactive => {
-                _ = pusher.request_connect()?;
+                pusher.request_connect()?;
                 Ok(())
             }
             _ => Err(FeagiAgentError::ConnectionFailed(
@@ -45,29 +47,22 @@ impl SensorAgent {
 
         let state_snapshot = pusher.poll().clone();
         match state_snapshot {
-            FeagiEndpointState::Inactive => {
-                return Err(FeagiAgentError::UnableToSendData(
-                    "Cannot send to inactive socket".to_string(),
-                ));
-            }
-            FeagiEndpointState::Pending => {
-                return Err(FeagiAgentError::UnableToSendData(
-                    "Cannot send to pending socket".to_string(),
-                ));
-            }
+            FeagiEndpointState::Inactive => Err(FeagiAgentError::UnableToSendData(
+                "Cannot send to inactive socket".to_string(),
+            )),
+            FeagiEndpointState::Pending => Err(FeagiAgentError::UnableToSendData(
+                "Cannot send to pending socket".to_string(),
+            )),
             FeagiEndpointState::ActiveWaiting => {
                 pusher.publish_data(buffer.get_byte_ref())?;
                 Ok(())
             }
-            FeagiEndpointState::ActiveHasData => {
-                // Impossible for sensor
-                return Err(FeagiAgentError::UnableToSendData(
-                    "Socket has data!".to_string(),
-                ));
-            }
+            FeagiEndpointState::ActiveHasData => Err(FeagiAgentError::UnableToSendData(
+                "Socket has data!".to_string(),
+            )),
             FeagiEndpointState::Errored(err) => {
                 pusher.confirm_error_and_close()?;
-                return Err(FeagiAgentError::ConnectionFailed(err.to_string()));
+                Err(FeagiAgentError::ConnectionFailed(err.to_string()))
             }
         }
     }
@@ -85,17 +80,14 @@ impl SensorAgent {
                 // Do nothing
                 Ok(())
             }
-            FeagiEndpointState::ActiveHasData => {
-                // Not Possible
-                return Err(FeagiAgentError::UnableToSendData(
-                    "Sensor Socket has recieved data!".to_string(),
-                ));
-            }
+            FeagiEndpointState::ActiveHasData => Err(FeagiAgentError::UnableToSendData(
+                "Sensor Socket has recieved data!".to_string(),
+            )),
             FeagiEndpointState::Errored(_) => {
                 pusher.confirm_error_and_close()?;
-                return Err(FeagiAgentError::ConnectionFailed(
+                Err(FeagiAgentError::ConnectionFailed(
                     "Connection failed".to_string(),
-                ));
+                ))
             }
         }
     }

@@ -56,7 +56,7 @@ impl CommandControlAgent {
 
         match requester.poll() {
             FeagiEndpointState::Inactive => {
-                _ = requester.request_connect()?;
+                requester.request_connect()?;
                 self.requester = Some(requester);
                 Ok(())
             }
@@ -158,7 +158,7 @@ impl CommandControlAgent {
                 FeagiEndpointState::ActiveHasData => {
                     let data = requester.consume_retrieved_response()?;
                     self.request_buffer
-                        .try_write_data_by_copy_and_verify(&data)?;
+                        .try_write_data_by_copy_and_verify(data)?;
                     let feagi_message: FeagiMessage = (&self.request_buffer).try_into()?;
 
                     match &feagi_message {
@@ -191,7 +191,7 @@ impl CommandControlAgent {
                                     RegistrationResponse::Success(session_id, endpoints) => {
                                         self.registration_status =
                                             AgentRegistrationStatus::Registered(
-                                                session_id.clone(),
+                                                *session_id,
                                                 endpoints.clone(),
                                             );
                                         Ok(Some(feagi_message))
@@ -270,7 +270,7 @@ impl CommandControlAgent {
                 agent_id,
                 increment_value,
             )?;
-            requester.publish_request(&mut self.send_buffer.get_byte_ref())?;
+            requester.publish_request(self.send_buffer.get_byte_ref())?;
             Ok(())
         } else {
             // This state should be impossible. something went very wrong

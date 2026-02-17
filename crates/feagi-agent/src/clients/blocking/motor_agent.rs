@@ -4,12 +4,14 @@ use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_io::AgentID;
 use feagi_serialization::FeagiByteContainer;
 
+#[allow(dead_code)]
 pub struct MotorAgent {
     properties: Box<dyn FeagiClientSubscriberProperties>,
     subscriber: Option<Box<dyn FeagiClientSubscriber>>,
     receive_buffer: FeagiByteContainer,
 }
 
+#[allow(dead_code)]
 impl MotorAgent {
     pub fn new(
         properties: Box<dyn FeagiClientSubscriberProperties>,
@@ -94,15 +96,15 @@ impl MotorAgent {
             }
             FeagiEndpointState::ActiveHasData => {
                 // Not Possible
-                return Err(FeagiAgentError::UnableToSendData(
+                Err(FeagiAgentError::UnableToSendData(
                     "Sensor Socket has recieved data!".to_string(),
-                ));
+                ))
             }
             FeagiEndpointState::Errored(_) => {
                 subscriber.confirm_error_and_close()?;
-                return Err(FeagiAgentError::ConnectionFailed(
+                Err(FeagiAgentError::ConnectionFailed(
                     "Connection failed".to_string(),
-                ));
+                ))
             }
         }
     }

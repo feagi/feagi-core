@@ -9,6 +9,7 @@ use feagi_structures::FeagiJSON;
 use serde::{Deserialize, Serialize};
 
 // All Command and Control messages are within this nested enum.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FeagiMessage {
@@ -26,7 +27,7 @@ impl FeagiMessage {
         session_id: AgentID,
         increment_value: u16,
     ) -> Result<(), FeagiAgentError> {
-        let json: serde_json::Value = serde_json::to_value(&self).unwrap();
+        let json: serde_json::Value = serde_json::to_value(self).unwrap();
         let feagi_json: FeagiJSON = FeagiJSON::from_json_value(json);
         container.overwrite_byte_data_with_single_struct_data(&feagi_json, increment_value)?;
         container.set_agent_identifier(session_id)?;
@@ -39,7 +40,7 @@ impl FeagiMessage {
 impl TryFrom<&FeagiByteContainer> for FeagiMessage {
     type Error = FeagiAgentError;
     fn try_from(value: &FeagiByteContainer) -> Result<Self, Self::Error> {
-        let serialized_data = value.try_create_new_struct_from_index(0.into())?;
+        let serialized_data = value.try_create_new_struct_from_index(0)?;
         let feagi_json: FeagiJSON = serialized_data.try_into()?;
         let json = feagi_json.borrow_json_value().clone();
         serde_json::from_value(json)

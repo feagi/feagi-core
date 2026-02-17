@@ -141,6 +141,7 @@
 //!
 //! Apache-2.0
 
+#![allow(unexpected_cfgs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // Re-export foundation

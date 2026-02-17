@@ -21,7 +21,6 @@ use feagi_agent::{AgentCapabilities as RegistrationCapabilities, AuthToken};
 #[cfg(feature = "feagi-agent")]
 use feagi_io::AgentID;
 #[cfg(feature = "feagi-agent")]
-#[cfg(feature = "feagi-agent")]
 #[allow(dead_code)]
 fn parse_auth_token(request: &AgentRegistrationRequest) -> ApiResult<AuthToken> {
     let token_b64 = request

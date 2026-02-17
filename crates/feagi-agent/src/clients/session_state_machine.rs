@@ -150,11 +150,9 @@ impl SessionStateMachine {
         }
 
         // Heartbeat scheduling: driver provides `now_ms`, we emit action only when due.
-        if self.phase == SessionPhase::Active {
-            if self.heartbeat_due(now_ms) {
-                actions.push(SessionAction::ControlSendHeartbeat);
-                self.last_heartbeat_sent_at_ms = Some(now_ms);
-            }
+        if self.phase == SessionPhase::Active && self.heartbeat_due(now_ms) {
+            actions.push(SessionAction::ControlSendHeartbeat);
+            self.last_heartbeat_sent_at_ms = Some(now_ms);
         }
 
         actions
@@ -215,10 +213,11 @@ impl SessionStateMachine {
                 if let Some(FeagiMessage::HeartBeat) = message {
                     // Heartbeat ack; no state change required.
                 }
-                if let Some(FeagiMessage::AgentRegistration(reg_msg)) = message {
-                    if let AgentRegistrationMessage::ServerRespondsDeregistration(resp) = reg_msg {
-                        return self.on_deregistered(resp);
-                    }
+                if let Some(FeagiMessage::AgentRegistration(
+                    AgentRegistrationMessage::ServerRespondsDeregistration(resp),
+                )) = message
+                {
+                    return self.on_deregistered(resp);
                 }
                 if let FeagiEndpointState::Errored(e) = state {
                     self.fail(&format!("control errored: {e}"));
@@ -226,10 +225,11 @@ impl SessionStateMachine {
                 Vec::new()
             }
             SessionPhase::Deregistering => {
-                if let Some(FeagiMessage::AgentRegistration(reg_msg)) = message {
-                    if let AgentRegistrationMessage::ServerRespondsDeregistration(resp) = reg_msg {
-                        return self.on_deregistered(resp);
-                    }
+                if let Some(FeagiMessage::AgentRegistration(
+                    AgentRegistrationMessage::ServerRespondsDeregistration(resp),
+                )) = message
+                {
+                    return self.on_deregistered(resp);
                 }
                 if let FeagiEndpointState::Errored(e) = state {
                     self.fail(&format!("control errored: {e}"));
@@ -351,6 +351,7 @@ impl SessionStateMachine {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum SessionEvent {
     ControlObserved {

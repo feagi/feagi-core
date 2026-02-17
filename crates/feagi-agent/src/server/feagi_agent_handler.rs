@@ -68,6 +68,7 @@ pub struct FeagiAgentHandler {
 }
 
 impl FeagiAgentHandler {
+    #[allow(dead_code)]
     fn capabilities_equivalent(
         existing: &[AgentCapabilities],
         requested: &[AgentCapabilities],
@@ -83,6 +84,7 @@ impl FeagiAgentHandler {
     /// This suppresses immediate descriptor-replacement churn caused by duplicate
     /// registration packets that arrive within a very short window for the same
     /// live agent session.
+    #[allow(dead_code)]
     fn should_replace_existing_descriptor_session(&self, existing_agent_id: AgentID) -> bool {
         let Some(last_seen) = self.last_activity_by_agent.get(&existing_agent_id) else {
             // Missing liveness state is treated as stale and replaceable.
@@ -549,7 +551,7 @@ impl FeagiAgentHandler {
                         if let Some(existing_agent_id) = self
                             .find_agent_id_by_descriptor(registration_request.agent_descriptor())
                         {
-                            if let Some((_, existing_capabilities)) =
+                            if let Some((_, _existing_capabilities)) =
                                 self.all_registered_agents.get(&existing_agent_id)
                             {
                                 // TODO disable colliding agent check for now to temporarily bypass duplicate agent
@@ -751,7 +753,7 @@ impl FeagiAgentHandler {
                         self.try_get_puller_property_index(&wanted_protocol)?;
                     let puller_property = &self.available_pullers[puller_property_index];
                     let mut sensor_server = puller_property.as_boxed_server_puller();
-                    _ = sensor_server.request_start()?;
+                    sensor_server.request_start()?;
                     sensor_servers.push(sensor_server);
                     endpoint_mappings.insert(
                         AgentCapabilities::SendSensorData,
@@ -764,7 +766,7 @@ impl FeagiAgentHandler {
                         self.try_get_publisher_property_index(&wanted_protocol)?;
                     let publisher_property = &self.available_publishers[publisher_index];
                     let mut publisher_server = publisher_property.as_boxed_server_publisher();
-                    _ = publisher_server.request_start()?;
+                    publisher_server.request_start()?;
                     motor_servers.push(publisher_server);
                     endpoint_mappings.insert(
                         AgentCapabilities::ReceiveMotorData,
@@ -779,7 +781,7 @@ impl FeagiAgentHandler {
                         self.try_get_last_publisher_property_index(&wanted_protocol)?;
                     let publisher_property = &self.available_publishers[publisher_index];
                     let mut publisher_server = publisher_property.as_boxed_server_publisher();
-                    _ = publisher_server.request_start()?;
+                    publisher_server.request_start()?;
                     visualizer_servers.push(publisher_server);
                     endpoint_mappings.insert(
                         AgentCapabilities::ReceiveNeuronVisualizations,
