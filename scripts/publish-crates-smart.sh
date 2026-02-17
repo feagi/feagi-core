@@ -101,6 +101,28 @@ CRATE_ORDER=(
     "feagi"
 )
 
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(pwd)}"
+
+# Resolve crate version (workspace or explicit) for unified versioning
+get_crate_version() {
+    local crate_path="$1"
+    local manifest
+    if [ "$crate_path" = "." ]; then
+        manifest="$WORKSPACE_ROOT/Cargo.toml"
+    else
+        manifest="$WORKSPACE_ROOT/$crate_path/Cargo.toml"
+    fi
+    if [ ! -f "$manifest" ]; then
+        echo ""
+        return
+    fi
+    if grep -q '^version\.workspace = true' "$manifest" 2>/dev/null; then
+        awk '/^\[workspace\.package\]/{p=1;next} /^\[/{p=0} p && /^version = /{gsub(/version = |"/,""); print; exit}' "$WORKSPACE_ROOT/Cargo.toml"
+    else
+        grep '^version = ' "$manifest" | head -1 | sed 's/version = "\(.*\)"/\1/' | xargs
+    fi
+}
+
 # ============================================================================
 # Check if crate is already published on crates.io
 # Uses crates.io API first; falls back to cargo search if API fails (e.g. in CI).
@@ -109,12 +131,8 @@ CRATE_ORDER=(
 is_already_published() {
     local crate_name=$1
     local crate_path=$2
-
-    # Get version from Cargo.toml (trim whitespace)
-    cd "$crate_path" 2>/dev/null || return 1
     local version
-    version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/' | xargs)
-    cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+    version="$(get_crate_version "$crate_path")"
 
     [ -n "$version" ] || { echo "false"; return; }
 
@@ -287,8 +305,9 @@ publish_crate() {
         cd "$crate_path"
     fi
     
-    # Get version
-    local version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+    # Get version (workspace or explicit)
+    local version
+    version="$(get_crate_version "$crate_path")"
     echo "   Version: $version"
     
     # Package first to verify
@@ -346,8 +365,6 @@ publish_crate() {
 # Main execution
 # ============================================================================
 
-WORKSPACE_ROOT=$(pwd)
-
 echo -e "${BLUE}Starting publication process...${NC}"
 echo ""
 
@@ -390,11 +407,8 @@ for crate_name in "${CRATE_ORDER[@]}"; do
     publish_decision=$(should_publish_crate "$crate_name" "$crate_path")
     
     if [ "$publish_decision" = "skip_published" ]; then
-        # Get version for display
-        cd "$crate_path" 2>/dev/null || continue
-        version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-        cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
-        echo -e "${YELLOW}⏭️  Skipping $crate_name v$version (already published on crates.io)${NC}"
+        version="$(get_crate_version "$crate_path")"
+        echo -e "${YELLOW}Skipping $crate_name v$version (already published on crates.io)${NC}"
         SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
         continue
     elif [ "$publish_decision" = "skip_unchanged" ]; then
