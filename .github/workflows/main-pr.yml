@@ -55,8 +55,8 @@ jobs:
     
     - name: Check version number increase
       run: |
-        echo "ℹ️  Note: With independent versioning, each crate has its own version"
-        echo "   This check validates workspace.package version only"
+        echo "ℹ️  Unified umbrella versioning is enabled for workspace crates"
+        echo "   This check validates workspace.package version"
         echo ""
         
         # Get current workspace version from PR branch (HEAD)
@@ -112,7 +112,7 @@ jobs:
         fi
         
         echo "✅ Workspace version check passed: $MAIN_VERSION → $CURRENT_VERSION"
-        echo "ℹ️  Individual crate versions are managed independently"
+        echo "ℹ️  Workspace crates are expected to share this version"
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -329,25 +329,11 @@ jobs:
         shared-key: "publish-local-sim-main-pr"
         save-if: true
 
-    - name: Compute and apply independent version bumps (CI-only)
+    - name: Use committed unified versions (CI-only)
       shell: bash
       run: |
         set -euo pipefail
-
-        chmod +x scripts/smart-version-bump.sh
-        chmod +x scripts/apply-version-bumps.sh
-
-        VERSION_OUTPUT="$(./scripts/smart-version-bump.sh)"
-        echo "${VERSION_OUTPUT}"
-
-        VERSIONS_FILE="$(echo "${VERSION_OUTPUT}" | grep "VERSIONS_FILE=" | cut -d'=' -f2)"
-        if [ -z "${VERSIONS_FILE}" ]; then
-          echo "❌ Failed to detect VERSIONS_FILE from smart-version-bump output"
-          exit 1
-        fi
-
-        export VERSIONS_FILE="${VERSIONS_FILE}"
-        ./scripts/apply-version-bumps.sh
+        echo "Using committed Cargo.toml versions without CI auto-bumps."
 
     - name: Package and build published artifacts against local packaged dependencies
       shell: bash
@@ -363,24 +349,24 @@ jobs:
         # Use the publish order baked into the existing smart publish script.
         # Keep this list in sync with scripts/publish-crates-smart.sh CRATE_ORDER.
         CRATE_ORDER=(
-          "feagi-observability"
-          "feagi-structures"
           "feagi-config"
           "feagi-npu-neural"
-          "feagi-npu-runtime"
-          "feagi-serialization"
+          "feagi-observability"
           "feagi-state-manager"
-          "feagi-npu-burst-engine"
-          "feagi-npu-plasticity"
+          "feagi-structures"
+          "feagi-npu-runtime"
           "feagi-evolutionary"
-          "feagi-brain-development"
-          "feagi-sensorimotor"
-          "feagi-services"
-          "feagi-io"
-          "feagi-api"
-          "feagi-agent"
+          "feagi-serialization"
           "feagi-hal"
+          "feagi-io"
+          "feagi-npu-burst-engine"
+          "feagi-sensorimotor"
+          "feagi-npu-plasticity"
+          "feagi-brain-development"
+          "feagi-services"
+          "feagi-agent"
           "feagi"
+          "feagi-api"
         )
 
         crate_path_for() {

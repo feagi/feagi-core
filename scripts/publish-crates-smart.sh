@@ -77,24 +77,24 @@ crate_path_for() {
 
 # Publication order (dependencies first)
 CRATE_ORDER=(
-    "feagi-observability"
-    "feagi-structures"
     "feagi-config"
     "feagi-npu-neural"
-    "feagi-npu-runtime"
-    "feagi-serialization"
+    "feagi-observability"
     "feagi-state-manager"
-    "feagi-npu-burst-engine"
-    "feagi-npu-plasticity"
+    "feagi-structures"
+    "feagi-npu-runtime"
     "feagi-evolutionary"
-    "feagi-brain-development"
-    "feagi-sensorimotor"
-    "feagi-services"
-    "feagi-io"
-    "feagi-agent"
-    "feagi-api"
+    "feagi-serialization"
     "feagi-hal"
+    "feagi-io"
+    "feagi-npu-burst-engine"
+    "feagi-sensorimotor"
+    "feagi-npu-plasticity"
+    "feagi-brain-development"
+    "feagi-services"
+    "feagi-agent"
     "feagi"
+    "feagi-api"
 )
 
 # ============================================================================

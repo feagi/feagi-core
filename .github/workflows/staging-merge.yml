@@ -46,36 +46,15 @@ jobs:
           shared-key: staging-merge-${{ hashFiles('**/Cargo.lock') }}
           save-if: true
       
-      - name: Smart version detection and bumping
+      - name: Read workspace version
         id: version
         run: |
-          echo "🔍 Detecting changed crates and computing independent version bumps..."
-          echo ""
-          
-          # Run smart version bump detection
-          chmod +x scripts/smart-version-bump.sh
-          chmod +x scripts/apply-version-bumps.sh
-          
-          # Detect changes and compute new versions
-          VERSION_OUTPUT=$(./scripts/smart-version-bump.sh)
-          echo "$VERSION_OUTPUT"
-          
-          # Extract version file path and changed crates list from output
-          VERSIONS_FILE=$(echo "$VERSION_OUTPUT" | grep "VERSIONS_FILE=" | cut -d'=' -f2)
-          CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
-          
-          echo ""
-          echo "versions_file=$VERSIONS_FILE" >> $GITHUB_OUTPUT
-          echo "changed_crates=$CHANGED_CRATES" >> $GITHUB_OUTPUT
-          
-          # Apply version bumps to Cargo.toml files
-          echo ""
-          echo "📝 Applying version updates to Cargo.toml files..."
-          export VERSIONS_FILE="$VERSIONS_FILE"
-          ./scripts/apply-version-bumps.sh
-          
-          echo ""
-          echo "✅ Smart independent versioning complete"
+          VERSION=$(grep '^\[workspace\.package\]' -A 10 Cargo.toml | grep '^version = ' | head -1 | sed 's/version = "\(.*\)"/\1/')
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Workspace Version: $VERSION"
       
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -190,60 +169,28 @@ jobs:
       - name: Build release
         run: cargo build --release --lib --verbose
       
-      - name: Publish changed crates to crates.io (smart independent versioning)
+      - name: Publish workspace crates to crates.io
         run: |
-          CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
-          echo "📦 Publishing changed feagi-core workspace crates..."
-          echo "Changed crates: $CHANGED_CRATES"
+          echo "📦 Publishing feagi-core workspace crates using committed umbrella versions..."
           echo ""
           
-          # Run the smart publish script (only publishes changed crates)
+          # Run publisher with current committed versions. Without CHANGED_CRATES,
+          # the script publishes all unpublished crates in dependency order.
           chmod +x scripts/publish-crates-smart.sh
-          export CHANGED_CRATES="$CHANGED_CRATES"
           ./scripts/publish-crates-smart.sh
           
           echo ""
-          echo "✅ Successfully published changed workspace crates"
+          echo "✅ Successfully published workspace crates"
         continue-on-error: false
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
-      
-      - name: Commit version updates
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
-          CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
-          
-          # Commit the version updates
-          git add Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml
-          
-          # Create meaningful commit message listing changed crates
-          if [ -n "$CHANGED_CRATES" ]; then
-            echo "chore: bump versions for staging release (independent versioning)" > commit_msg.txt
-            echo "" >> commit_msg.txt
-            echo "Changed crates: $CHANGED_CRATES" >> commit_msg.txt
-            echo "" >> commit_msg.txt
-            echo "This release uses smart independent versioning - only changed crates" >> commit_msg.txt
-            echo "and their dependents have version bumps." >> commit_msg.txt
-            COMMIT_MSG=$(cat commit_msg.txt)
-          else
-            COMMIT_MSG="chore: staging release (no version changes)"
-          fi
-          
-          git commit -m "$COMMIT_MSG" || echo "No changes to commit"
-          git push origin staging || echo "Push failed (may already be up to date)"
-          
-          echo "✅ Version updates committed to staging branch"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Create prerelease tag
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # Use timestamp-based tag for independent versioning
+          # Use timestamp-based tag for staging prereleases
           TIMESTAMP=$(date +%Y%m%d-%H%M%S)
           TAG_NAME="staging-${TIMESTAMP}"
           echo "Creating prerelease tag: $TAG_NAME"
@@ -264,17 +211,9 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag_name }}
           release_name: Staging Release ${{ steps.tag.outputs.tag_name }}
           body: |
-            🚀 **FEAGI Core Staging Release (Smart Independent Versioning)**
+            🚀 **FEAGI Core Staging Release**
             
-            This is a beta/staging release from the staging branch. Only changed crates have been published to crates.io with independent version numbers.
-            
-            ## Changed Crates
-            
-            The following crates were updated in this release:
-            
-            ${{ steps.version.outputs.changed_crates }}
-            
-            **Note:** Each crate maintains its own independent version number. Only crates with actual changes (or dependency updates) are published.
+            This is a beta/staging release from the staging branch. Workspace crates are published with a unified umbrella version.
             
             ## Installation
             
@@ -298,32 +237,29 @@ jobs:
             - **Tag:** ${{ steps.tag.outputs.tag_name }}
             - **Branch:** staging
             - **Commit:** ${{ github.sha }}
-            - **Versioning Strategy:** Independent per-crate versioning
+            - **Versioning Strategy:** Unified umbrella versioning
             
             ## Testing Status
             
             - ✅ All workspace tests passed
             - ✅ Package builds successfully
-            - ✅ Changed crates published to crates.io
+            - ✅ Workspace crates published to crates.io
             - ✅ Ready for testing and integration
             
-            ## About Independent Versioning
+            ## About Versioning
             
-            This release uses **smart independent versioning**:
-            - Each crate has its own version number
-            - Only changed crates get version bumps
-            - Dependent crates are automatically updated
-            - Unchanged crates remain at their current version
-            
-            This approach reduces version pollution and provides clearer semantic versioning.
+            This release uses **unified umbrella versioning**:
+            - All workspace crates share the same release version
+            - Dependency pins remain deterministic across crates
+            - CI publishes unpublished crates in dependency order
           draft: false
           prerelease: true
       
       - name: Notify success
         run: |
           echo "🎉 Staging release ${{ steps.tag.outputs.tag_name }} completed successfully!"
-          echo "✅ Published changed crates: ${{ steps.version.outputs.changed_crates }}"
+          echo "✅ Published workspace crates using unified versioning"
           echo "🏷️ Tagged as: ${{ steps.tag.outputs.tag_name }}"
           echo ""
-          echo "📊 Independent versioning ensures only changed crates were published"
+          echo "📊 Unified umbrella versioning applied across workspace crates"
   

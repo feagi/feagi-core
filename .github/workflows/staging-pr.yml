@@ -222,37 +222,13 @@ jobs:
         shared-key: "publish-local-sim-staging-pr"
         save-if: true
 
-    - name: Compute and apply independent version bumps (CI-only)
-      id: version-bump
+    - name: Use committed unified versions (CI-only)
       shell: bash
       run: |
         set -euo pipefail
-
-        chmod +x scripts/smart-version-bump.sh
-        chmod +x scripts/apply-version-bumps.sh
-
-        VERSION_OUTPUT="$(./scripts/smart-version-bump.sh)"
-        echo "${VERSION_OUTPUT}"
-
-        VERSIONS_FILE="$(echo "${VERSION_OUTPUT}" | grep "VERSIONS_FILE=" | cut -d'=' -f2)"
-        if [ -z "${VERSIONS_FILE}" ]; then
-          echo "❌ Failed to detect VERSIONS_FILE from smart-version-bump output"
-          exit 1
-        fi
-
-        CHANGED_CRATES_LINE="$(echo "${VERSION_OUTPUT}" | grep "^CHANGED_CRATES=" || true)"
-        if [ -n "${CHANGED_CRATES_LINE}" ]; then
-          CHANGED_CRATES="${CHANGED_CRATES_LINE#CHANGED_CRATES=}"
-          echo "changed_crates=${CHANGED_CRATES}" >> "${GITHUB_OUTPUT}"
-        else
-          echo "changed_crates=()" >> "${GITHUB_OUTPUT}"
-        fi
-
-        export VERSIONS_FILE="${VERSIONS_FILE}"
-        ./scripts/apply-version-bumps.sh
+        echo "Using committed Cargo.toml versions without CI auto-bumps."
 
     - name: Fast-fail dependency feature validation
-      if: ${{ steps.version-bump.outputs.changed_crates != '()' && steps.version-bump.outputs.changed_crates != '' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -363,15 +339,10 @@ jobs:
         PY
     
     - name: Package and build published artifacts against local packaged dependencies
-      if: ${{ steps.version-bump.outputs.changed_crates != '()' && steps.version-bump.outputs.changed_crates != '' }}
       shell: bash
-      env:
-        CHANGED_CRATES: ${{ steps.version-bump.outputs.changed_crates }}
       run: |
         set -euo pipefail
-
-        CHANGED_SET="${CHANGED_CRATES:-()}"
-        echo "Changed crates: ${CHANGED_SET}"
+        echo "Packaging and building workspace crates with committed unified versions."
 
         # This directory is created at runtime in CI only (not committed).
         ROOT="/tmp/feagi_local_publish_sim"
@@ -382,24 +353,24 @@ jobs:
         # Use the publish order baked into the existing smart publish script.
         # Keep this list in sync with scripts/publish-crates-smart.sh CRATE_ORDER.
         CRATE_ORDER=(
-          "feagi-observability"
-          "feagi-structures"
           "feagi-config"
           "feagi-npu-neural"
-          "feagi-npu-runtime"
-          "feagi-serialization"
+          "feagi-observability"
           "feagi-state-manager"
-          "feagi-npu-burst-engine"
-          "feagi-npu-plasticity"
+          "feagi-structures"
+          "feagi-npu-runtime"
           "feagi-evolutionary"
-          "feagi-brain-development"
-          "feagi-sensorimotor"
-          "feagi-services"
-          "feagi-io"
-          "feagi-agent"
-          "feagi-api"
+          "feagi-serialization"
           "feagi-hal"
+          "feagi-io"
+          "feagi-npu-burst-engine"
+          "feagi-sensorimotor"
+          "feagi-npu-plasticity"
+          "feagi-brain-development"
+          "feagi-services"
+          "feagi-agent"
           "feagi"
+          "feagi-api"
         )
 
         crate_path_for() {
@@ -502,9 +473,6 @@ jobs:
         cd "${DRIVER}"
 
         for crate in "${CRATE_ORDER[@]}"; do
-          if [[ " ${CHANGED_SET} " != *" ${crate} "* ]]; then
-            continue
-          fi
           # Find the extracted dir (we know the version from the repo Cargo.toml)
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${GITHUB_WORKSPACE}/${path}/Cargo.toml" ] || continue

@@ -64,15 +64,15 @@ jobs:
             CRATE_FAILED=true
           fi
           
-          # Independent versioning enforcement:
+          # Unified umbrella enforcement:
           # - Every crate MUST have explicit `version = "..."` (no workspace inheritance)
           if grep -q '^version\.workspace = true' "$crate_dir/Cargo.toml"; then
-            echo "  ❌ Forbidden: 'version.workspace = true' (independent versioning required)"
+            echo "  ❌ Forbidden: 'version.workspace = true' (explicit crate version required)"
             CRATE_FAILED=true
           fi
           
           if ! grep -q '^version = ' "$crate_dir/Cargo.toml"; then
-            echo "  ❌ Missing explicit 'version = \"...\"' field (independent versioning requires explicit version)"
+            echo "  ❌ Missing explicit 'version = \"...\"' field (required for unified umbrella versioning)"
             CRATE_FAILED=true
           fi
           
@@ -240,14 +240,19 @@ jobs:
           echo "✅ Ready for publication to crates.io"
         fi
     
-    - name: Verify versioning policy (independent versioning)
+    - name: Verify versioning policy (unified umbrella versioning)
       run: |
-        echo "🔗 Verifying independent versioning policy..."
+        echo "🔗 Verifying unified umbrella versioning policy..."
         echo ""
-        
+        WORKSPACE_VERSION=$(grep '^\[workspace\.package\]' -A 10 Cargo.toml | grep '^version = ' | head -1 | sed 's/version = "\(.*\)"/\1/')
+        if [ -z "$WORKSPACE_VERSION" ]; then
+          echo "❌ Failed to detect workspace version from Cargo.toml"
+          exit 1
+        fi
+
         FAILED=()
-        
-        for crate_dir in crates/*/; do
+
+        for crate_dir in crates/*/ crates/feagi-npu/*/; do
           if [ ! -f "$crate_dir/Cargo.toml" ]; then
             continue
           fi
@@ -263,17 +268,22 @@ jobs:
             FAILED+=("$crate_name: missing explicit version")
             continue
           fi
+
+          CRATE_VERSION=$(grep '^version = ' "$crate_dir/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
+          if [ "$CRATE_VERSION" != "$WORKSPACE_VERSION" ]; then
+            FAILED+=("$crate_name: version '$CRATE_VERSION' does not match workspace '$WORKSPACE_VERSION'")
+          fi
         done
         
         if [ ${#FAILED[@]} -gt 0 ]; then
-          echo "❌ Independent versioning policy violations:"
+          echo "❌ Unified umbrella versioning policy violations:"
           for item in "${FAILED[@]}"; do
             echo "  - $item"
           done
           exit 1
         fi
         
-        echo "✅ Independent versioning policy enforced (explicit versions; no version.workspace)"
+        echo "✅ Unified umbrella versioning policy enforced (single workspace version across crates)"
     
     - name: Summary
       if: success()
@@ -286,7 +296,7 @@ jobs:
         echo "✅ Metadata complete for all crates"
         echo "✅ All crates build independently"
         echo "✅ All crates package successfully"
-        echo "✅ Independent versioning policy verified"
+        echo "✅ Unified umbrella versioning policy verified"
         echo ""
         echo "🎉 Workspace is ready for publication to crates.io"
 
