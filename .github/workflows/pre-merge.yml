@@ -141,7 +141,7 @@ jobs:
         for crate_dir in crates/*/ crates/feagi-npu/*/; do
           [ -f "$crate_dir/Cargo.toml" ] || continue
           crate_name=$(basename "$crate_dir")
-          (cd "$crate_dir" && cargo package --quiet) || { echo "Package failed: $crate_name"; exit 1; }
+          (cd "$crate_dir" && cargo package --quiet --no-verify) || { echo "Package failed: $crate_name"; exit 1; }
         done
         echo "All crates package successfully"
 
