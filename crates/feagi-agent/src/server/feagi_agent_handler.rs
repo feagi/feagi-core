@@ -548,6 +548,8 @@ impl FeagiAgentHandler {
                             if let Some((_, existing_capabilities)) =
                                 self.all_registered_agents.get(&existing_agent_id)
                             {
+                                // TODO disable colliding agent check for now to temporarily bypass duplicate agent
+                                /*
                                 if !Self::capabilities_equivalent(
                                     existing_capabilities,
                                     registration_request.requested_capabilities(),
@@ -564,7 +566,11 @@ impl FeagiAgentHandler {
                                     )?;
                                     return Ok(None);
                                 }
+                                */
                             }
+                            // TODO prevent duplicate agent
+                            /*
+
                             if !self.should_replace_existing_descriptor_session(existing_agent_id) {
                                 info!(
                                     target: "feagi-agent",
@@ -584,6 +590,8 @@ impl FeagiAgentHandler {
                                 )?;
                                 return Ok(None);
                             }
+
+                             */
                             let replacement_reason = format!(
                                 "descriptor replacement by new registration session={}",
                                 agent_id.to_base64()
@@ -716,11 +724,15 @@ impl FeagiAgentHandler {
         descriptor: AgentDescriptor,
         command_server_index: CommandServerIndex,
     ) -> Result<HashMap<AgentCapabilities, TransportProtocolEndpoint>, FeagiAgentError> {
+        // TODO prevent duplicate registration
+        /*
         if self.all_registered_agents.contains_key(&agent_id) {
             return Err(FeagiAgentError::ConnectionFailed(
                 "Agent Already registered".to_string(),
             ));
         }
+
+         */
 
         let mut used_puller_indices: Vec<usize> = Vec::new();
         let mut used_publisher_indices: Vec<usize> = Vec::new();
