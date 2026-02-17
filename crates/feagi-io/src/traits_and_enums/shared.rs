@@ -1,51 +1,46 @@
 //! Shared types for FEAGI networking traits.
 
-use serde::{Deserialize, Serialize};
 use crate::FeagiNetworkError;
+use serde::{Deserialize, Serialize};
 
+#[cfg(any(
+    feature = "websocket-transport-std",
+    feature = "websocket-transport-wasm"
+))]
+use crate::protocol_implementations::websocket::WebSocketUrl;
 #[cfg(feature = "zmq-transport")]
 use crate::protocol_implementations::zmq::ZmqUrl;
-#[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
-use crate::protocol_implementations::websocket::WebSocketUrl;
 
 // Client properties imports
 #[cfg(feature = "websocket-transport-std")]
 use crate::protocol_implementations::websocket::websocket_std::{
+    FeagiWebSocketClientPusherProperties, FeagiWebSocketClientRequesterProperties,
     FeagiWebSocketClientSubscriberProperties,
-    FeagiWebSocketClientPusherProperties,
-    FeagiWebSocketClientRequesterProperties,
 };
 #[cfg(feature = "zmq-transport")]
 use crate::protocol_implementations::zmq::{
+    FeagiZmqClientPusherProperties, FeagiZmqClientRequesterProperties,
     FeagiZmqClientSubscriberProperties,
-    FeagiZmqClientPusherProperties,
-    FeagiZmqClientRequesterProperties,
 };
 
 // Server properties imports
 #[cfg(feature = "websocket-transport-std")]
 use crate::protocol_implementations::websocket::websocket_std::{
-    FeagiWebSocketServerPublisherProperties,
-    FeagiWebSocketServerPullerProperties,
+    FeagiWebSocketServerPublisherProperties, FeagiWebSocketServerPullerProperties,
     FeagiWebSocketServerRouterProperties,
 };
 #[cfg(feature = "zmq-transport")]
 use crate::protocol_implementations::zmq::{
-    FeagiZmqServerPublisherProperties,
-    FeagiZmqServerPullerProperties,
+    FeagiZmqServerPublisherProperties, FeagiZmqServerPullerProperties,
     FeagiZmqServerRouterProperties,
 };
 
 // Trait imports
 use crate::traits_and_enums::client::{
-    FeagiClientSubscriberProperties,
-    FeagiClientPusherProperties,
-    FeagiClientRequesterProperties,
+    FeagiClientPusherProperties, FeagiClientRequesterProperties, FeagiClientSubscriberProperties,
 };
 use crate::traits_and_enums::server::{
-    FeagiServerPublisherProperties,
-    FeagiServerPullerProperties,
-    FeagiServerRouterProperties,
+    FeagiServerPublisherProperties, FeagiServerPullerProperties, FeagiServerRouterProperties,
 };
 
 /// Represents the current state of a FEAGI network endpoint (client or server).
@@ -137,24 +132,21 @@ pub enum TransportProtocolImplementation {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TransportProtocolEndpoint {
-    #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+    #[cfg(any(
+        feature = "websocket-transport-std",
+        feature = "websocket-transport-wasm"
+    ))]
     WebSocket(WebSocketUrl),
 
     #[cfg(feature = "zmq-transport")]
-    Zmq(ZmqUrl)
-
-    // TODO other implementations
+    Zmq(ZmqUrl), // TODO other implementations
 }
 
 impl From<TransportProtocolEndpoint> for TransportProtocolImplementation {
     fn from(t: TransportProtocolEndpoint) -> Self {
         match t {
-            TransportProtocolEndpoint::Zmq(_) => {
-                TransportProtocolImplementation::Zmq
-            }
-            TransportProtocolEndpoint::WebSocket(_) => {
-                TransportProtocolImplementation::WebSocket
-            }
+            TransportProtocolEndpoint::Zmq(_) => TransportProtocolImplementation::Zmq,
+            TransportProtocolEndpoint::WebSocket(_) => TransportProtocolImplementation::WebSocket,
         }
     }
 }
@@ -165,12 +157,19 @@ impl TransportProtocolEndpoint {
     // ========================================================================
 
     /// Creates a boxed client subscriber properties from this endpoint.
-    pub fn create_boxed_client_subscriber_properties(&self) -> Box<dyn FeagiClientSubscriberProperties> {
+    pub fn create_boxed_client_subscriber_properties(
+        &self,
+    ) -> Box<dyn FeagiClientSubscriberProperties> {
         match self {
-            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            #[cfg(any(
+                feature = "websocket-transport-std",
+                feature = "websocket-transport-wasm"
+            ))]
             TransportProtocolEndpoint::WebSocket(endpoint) => {
                 #[cfg(feature = "websocket-transport-std")]
-                return Box::new(FeagiWebSocketClientSubscriberProperties::new(endpoint.as_str()).unwrap());
+                return Box::new(
+                    FeagiWebSocketClientSubscriberProperties::new(endpoint.as_str()).unwrap(),
+                );
                 #[cfg(not(feature = "websocket-transport-std"))]
                 panic!("WebSocket std is not included in this build!")
             }
@@ -188,7 +187,10 @@ impl TransportProtocolEndpoint {
         &self,
     ) -> Result<Box<dyn FeagiClientSubscriberProperties>, FeagiNetworkError> {
         match self {
-            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            #[cfg(any(
+                feature = "websocket-transport-std",
+                feature = "websocket-transport-wasm"
+            ))]
             TransportProtocolEndpoint::WebSocket(endpoint) => {
                 #[cfg(feature = "websocket-transport-std")]
                 {
@@ -213,10 +215,15 @@ impl TransportProtocolEndpoint {
     /// Creates a boxed client pusher properties from this endpoint.
     pub fn create_boxed_client_pusher_properties(&self) -> Box<dyn FeagiClientPusherProperties> {
         match self {
-            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            #[cfg(any(
+                feature = "websocket-transport-std",
+                feature = "websocket-transport-wasm"
+            ))]
             TransportProtocolEndpoint::WebSocket(endpoint) => {
                 #[cfg(feature = "websocket-transport-std")]
-                return Box::new(FeagiWebSocketClientPusherProperties::new(endpoint.as_str()).unwrap());
+                return Box::new(
+                    FeagiWebSocketClientPusherProperties::new(endpoint.as_str()).unwrap(),
+                );
                 #[cfg(not(feature = "websocket-transport-std"))]
                 panic!("WebSocket std is not included in this build!")
             }
@@ -234,7 +241,10 @@ impl TransportProtocolEndpoint {
         &self,
     ) -> Result<Box<dyn FeagiClientPusherProperties>, FeagiNetworkError> {
         match self {
-            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            #[cfg(any(
+                feature = "websocket-transport-std",
+                feature = "websocket-transport-wasm"
+            ))]
             TransportProtocolEndpoint::WebSocket(endpoint) => {
                 #[cfg(feature = "websocket-transport-std")]
                 {
@@ -257,12 +267,19 @@ impl TransportProtocolEndpoint {
     }
 
     /// Creates a boxed client requester properties from this endpoint.
-    pub fn create_boxed_client_requester_properties(&self) -> Box<dyn FeagiClientRequesterProperties> {
+    pub fn create_boxed_client_requester_properties(
+        &self,
+    ) -> Box<dyn FeagiClientRequesterProperties> {
         match self {
-            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            #[cfg(any(
+                feature = "websocket-transport-std",
+                feature = "websocket-transport-wasm"
+            ))]
             TransportProtocolEndpoint::WebSocket(endpoint) => {
                 #[cfg(feature = "websocket-transport-std")]
-                return Box::new(FeagiWebSocketClientRequesterProperties::new(endpoint.as_str()).unwrap());
+                return Box::new(
+                    FeagiWebSocketClientRequesterProperties::new(endpoint.as_str()).unwrap(),
+                );
                 #[cfg(not(feature = "websocket-transport-std"))]
                 panic!("WebSocket std is not included in this build!")
             }
@@ -280,7 +297,10 @@ impl TransportProtocolEndpoint {
         &self,
     ) -> Result<Box<dyn FeagiClientRequesterProperties>, FeagiNetworkError> {
         match self {
-            #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
+            #[cfg(any(
+                feature = "websocket-transport-std",
+                feature = "websocket-transport-wasm"
+            ))]
             TransportProtocolEndpoint::WebSocket(endpoint) => {
                 #[cfg(feature = "websocket-transport-std")]
                 {
@@ -307,88 +327,105 @@ impl TransportProtocolEndpoint {
     }
 }
 
-
 // ========================================================================
-    // Server Properties Factory Methods
-    // ========================================================================
+// Server Properties Factory Methods
+// ========================================================================
 
-pub fn create_default_boxed_server_publisher_properties(server_bind: TransportProtocolEndpoint, agent_remote: TransportProtocolEndpoint) -> Result<Box<dyn FeagiServerPublisherProperties>, FeagiNetworkError> {
-
+pub fn create_default_boxed_server_publisher_properties(
+    server_bind: TransportProtocolEndpoint,
+    agent_remote: TransportProtocolEndpoint,
+) -> Result<Box<dyn FeagiServerPublisherProperties>, FeagiNetworkError> {
     match server_bind {
-        #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
-        TransportProtocolEndpoint::WebSocket(server_bind) => {
-            match agent_remote {
-                TransportProtocolEndpoint::WebSocket(agent_remote) => {
-                    Ok(Box::new(FeagiWebSocketServerPublisherProperties::new(
-                        server_bind.as_str(),
-                        agent_remote.as_str(),
-                    )?))
-                }
-                _ => Err(FeagiNetworkError::InvalidSocketProperties("Server bind and Agent remote cannot use different protocols!".to_string()))
+        #[cfg(any(
+            feature = "websocket-transport-std",
+            feature = "websocket-transport-wasm"
+        ))]
+        TransportProtocolEndpoint::WebSocket(server_bind) => match agent_remote {
+            TransportProtocolEndpoint::WebSocket(agent_remote) => {
+                Ok(Box::new(FeagiWebSocketServerPublisherProperties::new(
+                    server_bind.as_str(),
+                    agent_remote.as_str(),
+                )?))
             }
-        }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Server bind and Agent remote cannot use different protocols!".to_string(),
+            )),
+        },
         #[cfg(feature = "zmq-transport")]
-        TransportProtocolEndpoint::Zmq(server_bind) => {
-            match agent_remote {
-                TransportProtocolEndpoint::Zmq(agent_endpoint) => {
-                    Ok(Box::new(FeagiZmqServerPublisherProperties::new(server_bind.as_str(), agent_endpoint.as_str())?))
-                }
-                _ => Err(FeagiNetworkError::InvalidSocketProperties("Server bind and Agent remote cannot use different protocols!".to_string()))
+        TransportProtocolEndpoint::Zmq(server_bind) => match agent_remote {
+            TransportProtocolEndpoint::Zmq(agent_endpoint) => {
+                Ok(Box::new(FeagiZmqServerPublisherProperties::new(
+                    server_bind.as_str(),
+                    agent_endpoint.as_str(),
+                )?))
             }
-        }
-    }
-
-
-}
-
-pub fn create_default_boxed_server_puller_properties(server_bind: TransportProtocolEndpoint, agent_remote: TransportProtocolEndpoint) -> Result<Box<dyn FeagiServerPullerProperties>, FeagiNetworkError> {
-    match server_bind {
-        #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
-        TransportProtocolEndpoint::WebSocket(server_bind) => {
-            match agent_remote {
-                TransportProtocolEndpoint::WebSocket(agent_remote) => {
-                    Ok(Box::new(FeagiWebSocketServerPullerProperties::new_with_remote(
-                        server_bind.as_str(),
-                        agent_remote.as_str(),
-                    )?))
-                }
-                _ => Err(FeagiNetworkError::InvalidSocketProperties("Server bind and Agent remote cannot use different protocols!".to_string()))
-            }
-        }
-        #[cfg(feature = "zmq-transport")]
-        TransportProtocolEndpoint::Zmq(server_bind) => {
-            match agent_remote {
-                TransportProtocolEndpoint::Zmq(agent_endpoint) => {
-                    Ok(Box::new(FeagiZmqServerPullerProperties::new(server_bind.as_str(), agent_endpoint.as_str())?))
-                }
-                _ => Err(FeagiNetworkError::InvalidSocketProperties("Server bind and Agent remote cannot use different protocols!".to_string()))
-            }
-        }
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Server bind and Agent remote cannot use different protocols!".to_string(),
+            )),
+        },
     }
 }
 
-pub fn create_default_boxed_server_router_properties(server_bind: TransportProtocolEndpoint, agent_remote: TransportProtocolEndpoint) -> Result<Box<dyn FeagiServerRouterProperties>, FeagiNetworkError> {
+pub fn create_default_boxed_server_puller_properties(
+    server_bind: TransportProtocolEndpoint,
+    agent_remote: TransportProtocolEndpoint,
+) -> Result<Box<dyn FeagiServerPullerProperties>, FeagiNetworkError> {
     match server_bind {
-        #[cfg(any(feature = "websocket-transport-std", feature = "websocket-transport-wasm"))]
-        TransportProtocolEndpoint::WebSocket(server_bind) => {
-            match agent_remote {
-                TransportProtocolEndpoint::WebSocket(agent_remote) => {
-                    Ok(Box::new(FeagiWebSocketServerRouterProperties::new_with_remote(
-                        server_bind.as_str(),
-                        agent_remote.as_str(),
-                    )?))
-                }
-                _ => Err(FeagiNetworkError::InvalidSocketProperties("Server bind and Agent remote cannot use different protocols!".to_string()))
-            }
-        }
+        #[cfg(any(
+            feature = "websocket-transport-std",
+            feature = "websocket-transport-wasm"
+        ))]
+        TransportProtocolEndpoint::WebSocket(server_bind) => match agent_remote {
+            TransportProtocolEndpoint::WebSocket(agent_remote) => Ok(Box::new(
+                FeagiWebSocketServerPullerProperties::new_with_remote(
+                    server_bind.as_str(),
+                    agent_remote.as_str(),
+                )?,
+            )),
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Server bind and Agent remote cannot use different protocols!".to_string(),
+            )),
+        },
         #[cfg(feature = "zmq-transport")]
-        TransportProtocolEndpoint::Zmq(server_bind) => {
-            match agent_remote {
-                TransportProtocolEndpoint::Zmq(agent_endpoint) => {
-                    Ok(Box::new(FeagiZmqServerRouterProperties::new(server_bind.as_str(), agent_endpoint.as_str())?))
-                }
-                _ => Err(FeagiNetworkError::InvalidSocketProperties("Server bind and Agent remote cannot use different protocols!".to_string()))
-            }
-        }
+        TransportProtocolEndpoint::Zmq(server_bind) => match agent_remote {
+            TransportProtocolEndpoint::Zmq(agent_endpoint) => Ok(Box::new(
+                FeagiZmqServerPullerProperties::new(server_bind.as_str(), agent_endpoint.as_str())?,
+            )),
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Server bind and Agent remote cannot use different protocols!".to_string(),
+            )),
+        },
+    }
+}
+
+pub fn create_default_boxed_server_router_properties(
+    server_bind: TransportProtocolEndpoint,
+    agent_remote: TransportProtocolEndpoint,
+) -> Result<Box<dyn FeagiServerRouterProperties>, FeagiNetworkError> {
+    match server_bind {
+        #[cfg(any(
+            feature = "websocket-transport-std",
+            feature = "websocket-transport-wasm"
+        ))]
+        TransportProtocolEndpoint::WebSocket(server_bind) => match agent_remote {
+            TransportProtocolEndpoint::WebSocket(agent_remote) => Ok(Box::new(
+                FeagiWebSocketServerRouterProperties::new_with_remote(
+                    server_bind.as_str(),
+                    agent_remote.as_str(),
+                )?,
+            )),
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Server bind and Agent remote cannot use different protocols!".to_string(),
+            )),
+        },
+        #[cfg(feature = "zmq-transport")]
+        TransportProtocolEndpoint::Zmq(server_bind) => match agent_remote {
+            TransportProtocolEndpoint::Zmq(agent_endpoint) => Ok(Box::new(
+                FeagiZmqServerRouterProperties::new(server_bind.as_str(), agent_endpoint.as_str())?,
+            )),
+            _ => Err(FeagiNetworkError::InvalidSocketProperties(
+                "Server bind and Agent remote cannot use different protocols!".to_string(),
+            )),
+        },
     }
 }

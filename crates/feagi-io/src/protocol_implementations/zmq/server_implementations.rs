@@ -15,14 +15,15 @@ use std::env;
 use feagi_serialization::FeagiByteContainer;
 use zmq::{Context, Message, Socket};
 
-use crate::{AgentID, FeagiNetworkError};
 use crate::protocol_implementations::zmq::shared::ZmqUrl;
-use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::server::{
-    FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties,
-    FeagiServerPuller, FeagiServerPullerProperties,
-    FeagiServerRouter, FeagiServerRouterProperties,
+    FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller,
+    FeagiServerPullerProperties, FeagiServerRouter, FeagiServerRouterProperties,
 };
+use crate::traits_and_enums::shared::{
+    FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation,
+};
+use crate::{AgentID, FeagiNetworkError};
 
 fn parse_bool_env(name: &str) -> Result<Option<bool>, FeagiNetworkError> {
     let Ok(raw) = env::var(name) else {
@@ -111,11 +112,17 @@ impl FeagiZmqServerPublisherProperties {
     /// # Errors
     ///
     /// Returns an error if the address is invalid.
-    pub fn new(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+    pub fn new(
+        local_bind_address: &str,
+        remote_bind_address: &str,
+    ) -> Result<Self, FeagiNetworkError> {
         let local_bind_address = ZmqUrl::new(local_bind_address)?;
-        let remote_bind_address =  ZmqUrl::new(remote_bind_address)?;
+        let remote_bind_address = ZmqUrl::new(remote_bind_address)?;
 
-        Ok(Self { local_bind_address, remote_bind_address })
+        Ok(Self {
+            local_bind_address,
+            remote_bind_address,
+        })
     }
 }
 
@@ -253,15 +260,13 @@ impl FeagiServerPublisher for FeagiZmqServerPublisher {
             FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
                 // Use DONTWAIT for non-blocking send
                 // For PUB sockets, this typically succeeds immediately (queues the message)
-                self.socket
-                    .send(data, zmq::DONTWAIT)
-                    .map_err(|e| {
-                        if e == zmq::Error::EAGAIN {
-                            FeagiNetworkError::SendFailed("Socket would block".to_string())
-                        } else {
-                            FeagiNetworkError::SendFailed(e.to_string())
-                        }
-                    })?;
+                self.socket.send(data, zmq::DONTWAIT).map_err(|e| {
+                    if e == zmq::Error::EAGAIN {
+                        FeagiNetworkError::SendFailed("Socket would block".to_string())
+                    } else {
+                        FeagiNetworkError::SendFailed(e.to_string())
+                    }
+                })?;
                 Ok(())
             }
             _ => Err(FeagiNetworkError::SendFailed(
@@ -306,10 +311,16 @@ impl FeagiZmqServerPullerProperties {
     /// # Errors
     ///
     /// Returns an error if the address is invalid.
-    pub fn new(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+    pub fn new(
+        local_bind_address: &str,
+        remote_bind_address: &str,
+    ) -> Result<Self, FeagiNetworkError> {
         let local_bind_address = ZmqUrl::new(local_bind_address)?;
-        let remote_bind_address =  ZmqUrl::new(remote_bind_address)?;
-        Ok(Self { local_bind_address, remote_bind_address })
+        let remote_bind_address = ZmqUrl::new(remote_bind_address)?;
+        Ok(Self {
+            local_bind_address,
+            remote_bind_address,
+        })
     }
 }
 
@@ -443,10 +454,7 @@ impl FeagiZmqServerPuller {
                 }
                 Err(zmq::Error::EAGAIN) => {
                     if has_latest_non_empty_valid {
-                        std::mem::swap(
-                            &mut self.recv_msg,
-                            &mut self.latest_non_empty_valid_msg,
-                        );
+                        std::mem::swap(&mut self.recv_msg, &mut self.latest_non_empty_valid_msg);
                         return Ok(true);
                     }
                     // Drop malformed/empty windows instead of emitting a frame that can
@@ -605,10 +613,16 @@ impl FeagiZmqServerRouterProperties {
     /// # Errors
     ///
     /// Returns an error if the address is invalid.
-    pub fn new(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+    pub fn new(
+        local_bind_address: &str,
+        remote_bind_address: &str,
+    ) -> Result<Self, FeagiNetworkError> {
         let local_bind_address = ZmqUrl::new(local_bind_address)?;
-        let remote_bind_address =  ZmqUrl::new(remote_bind_address)?;
-        Ok(Self { local_bind_address, remote_bind_address })
+        let remote_bind_address = ZmqUrl::new(remote_bind_address)?;
+        Ok(Self {
+            local_bind_address,
+            remote_bind_address,
+        })
     }
 }
 
@@ -712,8 +726,10 @@ impl FeagiZmqServerRouter {
     /// Uses cryptographically random session IDs to prevent enumeration attacks.
     fn create_session_id(&mut self, identity: Vec<u8>) -> AgentID {
         let session_id = AgentID::new_random();
-        self.identity_to_session.insert(identity.clone(), session_id);
-        self.session_to_identity.insert(*session_id.bytes(), identity);
+        self.identity_to_session
+            .insert(identity.clone(), session_id);
+        self.session_to_identity
+            .insert(*session_id.bytes(), identity);
         session_id
     }
 
@@ -736,7 +752,7 @@ impl FeagiZmqServerRouter {
         if self.socket.get_rcvmore()? {
             // delimiter_msg was the empty delimiter, receive actual payload
             self.socket.recv(&mut self.payload_msg, 0)?;
-            
+
             // Drain any extra frames (shouldn't happen in normal use)
             while self.socket.get_rcvmore()? {
                 let mut discard = Message::new();
@@ -772,9 +788,10 @@ impl FeagiServer for FeagiZmqServerRouter {
                 }
                 Ok(false) => {
                     // Incomplete message - treat as error
-                    self.current_state = FeagiEndpointState::Errored(
-                        FeagiNetworkError::ReceiveFailed("Incomplete multipart message".to_string()),
-                    );
+                    self.current_state =
+                        FeagiEndpointState::Errored(FeagiNetworkError::ReceiveFailed(
+                            "Incomplete multipart message".to_string(),
+                        ));
                 }
                 Err(zmq::Error::EAGAIN) => {
                     // No data available
@@ -897,7 +914,10 @@ impl FeagiServerRouter for FeagiZmqServerRouter {
                     .session_to_identity
                     .get(session_id.bytes())
                     .ok_or_else(|| {
-                        FeagiNetworkError::SendFailed(format!("Unknown session ID: {:?}", session_id))
+                        FeagiNetworkError::SendFailed(format!(
+                            "Unknown session ID: {:?}",
+                            session_id
+                        ))
                     })?;
 
                 // ROUTER response: [identity, empty delimiter, payload]

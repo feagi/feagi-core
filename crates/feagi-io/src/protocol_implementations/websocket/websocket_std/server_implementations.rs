@@ -7,19 +7,20 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::net::{TcpListener, TcpStream};
 
-use tungstenite::{accept, Message, WebSocket};
+use tungstenite::handshake::server::{NoCallback, ServerHandshake};
 use tungstenite::handshake::HandshakeError;
 use tungstenite::handshake::MidHandshake;
-use tungstenite::handshake::server::{NoCallback, ServerHandshake};
+use tungstenite::{accept, Message, WebSocket};
 
-use crate::{AgentID, FeagiNetworkError};
 use crate::protocol_implementations::websocket::shared::WebSocketUrl;
-use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::server::{
-    FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties,
-    FeagiServerPuller, FeagiServerPullerProperties,
-    FeagiServerRouter, FeagiServerRouterProperties,
+    FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller,
+    FeagiServerPullerProperties, FeagiServerRouter, FeagiServerRouterProperties,
 };
+use crate::traits_and_enums::shared::{
+    FeagiEndpointState, TransportProtocolEndpoint, TransportProtocolImplementation,
+};
+use crate::{AgentID, FeagiNetworkError};
 use feagi_serialization::FeagiByteContainer;
 
 /// Type alias for WebSocket over TcpStream
@@ -84,9 +85,11 @@ pub struct FeagiWebSocketServerPublisherProperties {
 }
 
 impl FeagiWebSocketServerPublisherProperties {
-
     /// Creates new publisher properties with explicit local/remote endpoints.
-    pub fn new(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+    pub fn new(
+        local_bind_address: &str,
+        remote_bind_address: &str,
+    ) -> Result<Self, FeagiNetworkError> {
         let local_bind_address = WebSocketUrl::new(local_bind_address)?;
         let remote_bind_address = WebSocketUrl::new(remote_bind_address)?;
         Ok(Self {
@@ -338,7 +341,10 @@ impl FeagiWebSocketServerPullerProperties {
     }
 
     /// Creates new puller properties with explicit local/remote endpoints.
-    pub fn new_with_remote(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+    pub fn new_with_remote(
+        local_bind_address: &str,
+        remote_bind_address: &str,
+    ) -> Result<Self, FeagiNetworkError> {
         let local_bind_address = WebSocketUrl::new(local_bind_address)?;
         let remote_bind_address = WebSocketUrl::new(remote_bind_address)?;
         Ok(Self {
@@ -620,7 +626,10 @@ impl FeagiWebSocketServerRouterProperties {
     }
 
     /// Creates new router properties with explicit local/remote endpoints.
-    pub fn new_with_remote(local_bind_address: &str, remote_bind_address: &str) -> Result<Self, FeagiNetworkError> {
+    pub fn new_with_remote(
+        local_bind_address: &str,
+        remote_bind_address: &str,
+    ) -> Result<Self, FeagiNetworkError> {
         let local_bind_address = WebSocketUrl::new(local_bind_address)?;
         let remote_bind_address = WebSocketUrl::new(remote_bind_address)?;
         Ok(Self {
@@ -737,10 +746,10 @@ impl FeagiWebSocketServerRouter {
             }
         }
     }
-    
+
     fn process_handshakes(&mut self) {
         let mut indices_to_remove = Vec::new();
-        
+
         for (i, state) in self.clients.iter_mut().enumerate() {
             match state {
                 HandshakeState::Handshaking(_) => {
@@ -772,7 +781,7 @@ impl FeagiWebSocketServerRouter {
                 }
             }
         }
-        
+
         // Remove failed handshakes
         for &i in indices_to_remove.iter().rev() {
             if i < self.clients.len() {
@@ -857,7 +866,11 @@ impl FeagiWebSocketServerRouter {
         let mut new_session_to_index = HashMap::new();
 
         for (old_idx, session_id) in self.index_to_session.drain() {
-            let new_idx = if old_idx > index { old_idx - 1 } else { old_idx };
+            let new_idx = if old_idx > index {
+                old_idx - 1
+            } else {
+                old_idx
+            };
             new_index_to_session.insert(new_idx, session_id);
             new_session_to_index.insert(session_id, new_idx);
         }
@@ -1006,12 +1019,16 @@ impl FeagiServerRouter for FeagiWebSocketServerRouter {
                 }
 
                 let ws_message = Message::Binary(message.to_vec());
-                
+
                 let client = match &mut self.clients[client_index] {
                     HandshakeState::Ready(ws) => ws,
-                    _ => return Err(FeagiNetworkError::SendFailed("Client not ready".to_string())),
+                    _ => {
+                        return Err(FeagiNetworkError::SendFailed(
+                            "Client not ready".to_string(),
+                        ))
+                    }
                 };
-                
+
                 client
                     .send(ws_message)
                     .map_err(|e| FeagiNetworkError::SendFailed(e.to_string()))?;

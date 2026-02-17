@@ -1,6 +1,6 @@
-use crate::{FeagiNetworkError};
-use crate::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
 use crate::traits_and_enums::server::FeagiServer;
+use crate::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
+use crate::FeagiNetworkError;
 
 /// A server that broadcasts data to all connected subscribers.
 ///

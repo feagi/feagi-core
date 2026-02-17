@@ -1,6 +1,6 @@
-use crate::FeagiNetworkError;
+use crate::traits_and_enums::server::FeagiServer;
 use crate::traits_and_enums::shared::{TransportProtocolEndpoint, TransportProtocolImplementation};
-use crate::traits_and_enums::server::{FeagiServer};
+use crate::FeagiNetworkError;
 
 /// A server that receives pushed data from clients.
 ///
@@ -44,5 +44,4 @@ pub trait FeagiServerPullerProperties: Send + Sync {
 
     // What protocols do both endpoints use?
     fn get_protocol(&self) -> TransportProtocolImplementation;
-
 }

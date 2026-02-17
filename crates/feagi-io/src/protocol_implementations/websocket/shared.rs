@@ -1,7 +1,7 @@
 //! Shared utilities for WebSocket implementations.
 
-use serde::{Deserialize, Serialize};
 use crate::FeagiNetworkError;
+use serde::{Deserialize, Serialize};
 
 /// URL endpoint struct for WebSocket endpoints with validation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -40,9 +40,10 @@ impl WebSocketUrl {
     /// If no port is specified, defaults to port 80 for ws:// or 443 for wss://.
     pub fn host_port(&self) -> String {
         let is_secure = self.url.starts_with("wss://");
-        
+
         // Remove ws:// or wss:// prefix
-        let without_scheme = self.url
+        let without_scheme = self
+            .url
             .strip_prefix("ws://")
             .or_else(|| self.url.strip_prefix("wss://"))
             .unwrap_or(&self.url);
@@ -118,18 +119,20 @@ fn validate_ws_url(url: &str) -> Result<(), FeagiNetworkError> {
         })?;
 
     if addr_part.is_empty() {
-        return Err(FeagiNetworkError::InvalidSocketProperties(
-            format!("Invalid WebSocket URL '{}': empty address after scheme", url),
-        ));
+        return Err(FeagiNetworkError::InvalidSocketProperties(format!(
+            "Invalid WebSocket URL '{}': empty address after scheme",
+            url
+        )));
     }
 
     // Extract host:port (before any path)
     let host_port = addr_part.split('/').next().unwrap_or(addr_part);
-    
+
     if host_port.is_empty() {
-        return Err(FeagiNetworkError::InvalidSocketProperties(
-            format!("Invalid WebSocket URL '{}': empty host", url),
-        ));
+        return Err(FeagiNetworkError::InvalidSocketProperties(format!(
+            "Invalid WebSocket URL '{}': empty host",
+            url
+        )));
     }
 
     Ok(())
@@ -153,8 +156,11 @@ pub fn validate_bind_address(bind_address: &str) -> Result<(), FeagiNetworkError
     }
 
     // Check for scheme prefixes that shouldn't be in bind addresses
-    if bind_address.starts_with("ws://") || bind_address.starts_with("wss://") 
-        || bind_address.starts_with("http://") || bind_address.starts_with("https://") {
+    if bind_address.starts_with("ws://")
+        || bind_address.starts_with("wss://")
+        || bind_address.starts_with("http://")
+        || bind_address.starts_with("https://")
+    {
         return Err(FeagiNetworkError::InvalidSocketProperties(format!(
             "Invalid bind address '{}': should be host:port without scheme",
             bind_address

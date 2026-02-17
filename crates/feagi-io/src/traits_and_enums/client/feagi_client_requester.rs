@@ -1,6 +1,6 @@
-use crate::FeagiNetworkError;
 use crate::traits_and_enums::client::FeagiClient;
 use crate::traits_and_enums::shared::TransportProtocolEndpoint;
+use crate::FeagiNetworkError;
 
 /// A client that sends requests and receives responses from a server.
 ///
@@ -75,7 +75,7 @@ pub trait FeagiClientRequester: FeagiClient {
 ///
 /// This enables storing client configuration separately from active instances,
 /// allowing new requesters to be created on demand with the same settings.
-/// 
+///
 /// Must be Send to allow usage in multi-threaded contexts (e.g., Tauri desktop apps).
 pub trait FeagiClientRequesterProperties: Send {
     /// Creates a new boxed requester client from these properties.

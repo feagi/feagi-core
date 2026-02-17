@@ -8,14 +8,13 @@ use std::net::TcpStream;
 
 use tungstenite::{connect, Message, WebSocket};
 
-use crate::FeagiNetworkError;
 use crate::protocol_implementations::websocket::WebSocketUrl;
-use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
 use crate::traits_and_enums::client::{
-    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties,
-    FeagiClientRequester, FeagiClientRequesterProperties,
-    FeagiClientSubscriber, FeagiClientSubscriberProperties,
+    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester,
+    FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties,
 };
+use crate::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
+use crate::FeagiNetworkError;
 
 /// Type alias for WebSocket over TcpStream
 type WsStream = WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
@@ -92,23 +91,21 @@ impl FeagiWebSocketClientSubscriber {
                 true
             }
             Ok(Message::Close(_)) => {
-                self.current_state = FeagiEndpointState::Errored(
-                    FeagiNetworkError::ReceiveFailed("Connection closed".to_string()),
-                );
+                self.current_state = FeagiEndpointState::Errored(FeagiNetworkError::ReceiveFailed(
+                    "Connection closed".to_string(),
+                ));
                 false
             }
             Ok(_) => false, // Ping/Pong
             Err(tungstenite::Error::Io(ref e)) if e.kind() == ErrorKind::WouldBlock => false,
             Err(e) => {
-                self.current_state = FeagiEndpointState::Errored(
-                    FeagiNetworkError::ReceiveFailed(e.to_string()),
-                );
+                self.current_state =
+                    FeagiEndpointState::Errored(FeagiNetworkError::ReceiveFailed(e.to_string()));
                 false
             }
         }
     }
 }
-
 
 impl FeagiClient for FeagiWebSocketClientSubscriber {
     fn poll(&mut self) -> &FeagiEndpointState {
@@ -431,17 +428,16 @@ impl FeagiWebSocketClientRequester {
                 true
             }
             Ok(Message::Close(_)) => {
-                self.current_state = FeagiEndpointState::Errored(
-                    FeagiNetworkError::ReceiveFailed("Connection closed".to_string()),
-                );
+                self.current_state = FeagiEndpointState::Errored(FeagiNetworkError::ReceiveFailed(
+                    "Connection closed".to_string(),
+                ));
                 false
             }
             Ok(_) => false,
             Err(tungstenite::Error::Io(ref e)) if e.kind() == ErrorKind::WouldBlock => false,
             Err(e) => {
-                self.current_state = FeagiEndpointState::Errored(
-                    FeagiNetworkError::ReceiveFailed(e.to_string()),
-                );
+                self.current_state =
+                    FeagiEndpointState::Errored(FeagiNetworkError::ReceiveFailed(e.to_string()));
                 false
             }
         }
@@ -576,7 +572,6 @@ impl FeagiClientRequester for FeagiWebSocketClientRequester {
             server_address: self.server_address.clone(),
         })
     }
-
 }
 
 //endregion
