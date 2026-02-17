@@ -63,8 +63,7 @@ fn test_byte_container_overwrite_bytes() {
     let empty_bytes_len = empty_bytes.len();
     assert_eq!(
         empty_bytes_len,
-        FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
-            + FeagiByteContainer::AGENT_ID_BYTE_COUNT
+        FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT
     ); // Global header + session ID
     byte_container
         .overwrite_byte_data_with_single_struct_data(&source_neurons, 0)
@@ -295,8 +294,7 @@ fn test_empty_byte_container() {
     assert_eq!(container.try_get_number_contained_structures().unwrap(), 0);
     assert_eq!(
         container.get_number_of_bytes_used(),
-        FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
-            + FeagiByteContainer::AGENT_ID_BYTE_COUNT
+        FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT
     );
     assert!(container.get_contained_struct_types().is_empty());
 }

@@ -762,9 +762,11 @@ impl FeagiWebSocketServerRouter {
                     // Ensure every ready client has a stable session mapping.
                     // This also covers immediate-handshake success where a client
                     // was inserted as Ready directly from accept path.
-                    if !self.index_to_session.contains_key(&i) {
+                    if let std::collections::hash_map::Entry::Vacant(e) =
+                        self.index_to_session.entry(i)
+                    {
                         let session_id = AgentID::new_random();
-                        self.index_to_session.insert(i, session_id);
+                        e.insert(session_id);
                         self.session_to_index.insert(session_id, i);
                     }
                 }

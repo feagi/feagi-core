@@ -1,7 +1,5 @@
 use crate::FeagiAgentError;
-use feagi_io::traits_and_enums::client::{
-    FeagiClientSubscriber, FeagiClientSubscriberProperties,
-};
+use feagi_io::traits_and_enums::client::{FeagiClientSubscriber, FeagiClientSubscriberProperties};
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
 use feagi_io::AgentID;
 use feagi_serialization::FeagiByteContainer;
@@ -23,7 +21,7 @@ impl MotorAgent {
         MotorAgent {
             properties,
             subscriber: None,
-            receive_buffer:buffer,
+            receive_buffer: buffer,
         }
     }
 
@@ -85,21 +83,26 @@ impl MotorAgent {
 
         let state = subscriber.poll().clone();
         match state {
-            FeagiEndpointState::Inactive => {Ok(None)}
-            FeagiEndpointState::Pending => {Ok(None)}
+            FeagiEndpointState::Inactive => Ok(None),
+            FeagiEndpointState::Pending => Ok(None),
             FeagiEndpointState::ActiveWaiting => {
                 // return data
                 let data = subscriber.consume_retrieved_data()?;
-                self.receive_buffer.try_write_data_by_copy_and_verify(data)?;
+                self.receive_buffer
+                    .try_write_data_by_copy_and_verify(data)?;
                 Ok(Some(&self.receive_buffer))
             }
             FeagiEndpointState::ActiveHasData => {
                 // Not Possible
-                return Err(FeagiAgentError::UnableToSendData("Sensor Socket has recieved data!".to_string()));
+                return Err(FeagiAgentError::UnableToSendData(
+                    "Sensor Socket has recieved data!".to_string(),
+                ));
             }
             FeagiEndpointState::Errored(_) => {
                 subscriber.confirm_error_and_close()?;
-                return Err(FeagiAgentError::ConnectionFailed("Connection failed".to_string()));
+                return Err(FeagiAgentError::ConnectionFailed(
+                    "Connection failed".to_string(),
+                ));
             }
         }
     }

@@ -76,7 +76,7 @@ pub enum UnauthenticatedAgentRejectionBehavior {
     Ignore,
     Error,
     Log,
-    AllowAnyways
+    AllowAnyways,
 }
 
 //endregion

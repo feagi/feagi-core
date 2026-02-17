@@ -82,9 +82,7 @@ impl SessionStateMachine {
         self.session_id
     }
 
-    pub fn endpoints(
-        &self,
-    ) -> Option<&HashMap<AgentCapabilities, TransportProtocolEndpoint>> {
+    pub fn endpoints(&self) -> Option<&HashMap<AgentCapabilities, TransportProtocolEndpoint>> {
         self.endpoints.as_ref()
     }
 
@@ -119,7 +117,10 @@ impl SessionStateMachine {
         let mut actions: Vec<SessionAction> = Vec::new();
 
         // Optional registration deadline enforcement (policy from config, not hardcoded).
-        if matches!(self.phase, SessionPhase::ControlConnecting | SessionPhase::Registering) {
+        if matches!(
+            self.phase,
+            SessionPhase::ControlConnecting | SessionPhase::Registering
+        ) {
             if let (Some(start_ms), Some(deadline_ms)) = (
                 self.connect_started_at_ms,
                 self.init.timing.registration_deadline_ms,
@@ -386,4 +387,3 @@ pub enum SessionAction {
         endpoint: TransportProtocolEndpoint,
     },
 }
-

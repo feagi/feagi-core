@@ -64,7 +64,7 @@ impl AgentID {
 
     /// Encodes the agent ID bytes as a base64 string.
     pub fn to_base64(&self) -> String {
-        BASE64_STANDARD.encode(&self.bytes)
+        BASE64_STANDARD.encode(self.bytes)
     }
 }
 

@@ -5,9 +5,9 @@
 //!
 //! Provides file logging with rotation, per-crate log files, and configurable retention.
 
+use anyhow::anyhow;
 #[cfg(feature = "file-logging")]
 use anyhow::Context;
-use anyhow::anyhow;
 use anyhow::Result;
 #[cfg(feature = "file-logging")]
 use chrono::Utc;

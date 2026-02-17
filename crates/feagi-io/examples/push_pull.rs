@@ -25,16 +25,18 @@
 //! cargo run --example push_pull --features "zmq-transport ws-transport" -- --transport ws client
 //! ```
 
-use std::env;
-use std::thread;
-use std::time::Duration;
-use feagi_io::protocol_implementations::websocket::websocket_std::{FeagiWebSocketClientPusherProperties, FeagiWebSocketServerPullerProperties};
+use feagi_io::protocol_implementations::websocket::websocket_std::{
+    FeagiWebSocketClientPusherProperties, FeagiWebSocketServerPullerProperties,
+};
 use feagi_io::protocol_implementations::zmq::{
     FeagiZmqClientPusherProperties, FeagiZmqServerPullerProperties,
 };
 use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientPusherProperties};
 use feagi_io::traits_and_enums::server::{FeagiServerPuller, FeagiServerPullerProperties};
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
+use std::env;
+use std::thread;
+use std::time::Duration;
 
 const ZMQ_ADDRESS: &str = "tcp://127.0.0.1:5556";
 const WS_ADDRESS: &str = "127.0.0.1:8081";
@@ -169,17 +171,15 @@ fn run_server(mut server: Box<dyn FeagiServerPuller>) {
     // Receive loop
     loop {
         match server.poll() {
-            FeagiEndpointState::ActiveHasData => {
-                match server.consume_retrieved_data() {
-                    Ok(data) => {
-                        let message = String::from_utf8_lossy(data);
-                        println!("[SERVER] Received: {}", message);
-                    }
-                    Err(e) => {
-                        eprintln!("[SERVER] Error consuming data: {}", e);
-                    }
+            FeagiEndpointState::ActiveHasData => match server.consume_retrieved_data() {
+                Ok(data) => {
+                    let message = String::from_utf8_lossy(data);
+                    println!("[SERVER] Received: {}", message);
                 }
-            }
+                Err(e) => {
+                    eprintln!("[SERVER] Error consuming data: {}", e);
+                }
+            },
             FeagiEndpointState::ActiveWaiting => {
                 // No data yet, keep polling
                 thread::sleep(Duration::from_millis(10));
@@ -202,7 +202,9 @@ fn run_server(mut server: Box<dyn FeagiServerPuller>) {
 /// transport implementation.
 fn run_client(mut client: Box<dyn FeagiClientPusher>) {
     // Connect to the server
-    client.request_connect().expect("Failed to request connection");
+    client
+        .request_connect()
+        .expect("Failed to request connection");
     println!("Client connection requested...");
 
     // Wait for the connection to become active

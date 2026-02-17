@@ -112,11 +112,12 @@ impl FeagiWebSocketClientSubscriber {
 
 impl FeagiClient for FeagiWebSocketClientSubscriber {
     fn poll(&mut self) -> &FeagiEndpointState {
-        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
-            if self.try_receive() {
-                self.has_data = true;
-                self.current_state = FeagiEndpointState::ActiveHasData;
-            }
+        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting)
+            && !self.has_data
+            && self.try_receive()
+        {
+            self.has_data = true;
+            self.current_state = FeagiEndpointState::ActiveHasData;
         }
         &self.current_state
     }
@@ -449,11 +450,12 @@ impl FeagiWebSocketClientRequester {
 
 impl FeagiClient for FeagiWebSocketClientRequester {
     fn poll(&mut self) -> &FeagiEndpointState {
-        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
-            if self.try_receive() {
-                self.has_data = true;
-                self.current_state = FeagiEndpointState::ActiveHasData;
-            }
+        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting)
+            && !self.has_data
+            && self.try_receive()
+        {
+            self.has_data = true;
+            self.current_state = FeagiEndpointState::ActiveHasData;
         }
         &self.current_state
     }

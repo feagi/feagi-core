@@ -22,7 +22,6 @@ use tracing::info;
 
 type CommandServerIndex = usize;
 
-
 /// Server-side liveness configuration for command/control sessions.
 ///
 /// `heartbeat_timeout` defines when a client is considered stale if no
@@ -42,7 +41,6 @@ impl Default for AgentLivenessConfig {
         }
     }
 }
-
 
 pub struct FeagiAgentHandler {
     agent_auth_backend: Box<dyn AgentAuth>,
@@ -75,7 +73,9 @@ impl FeagiAgentHandler {
         requested: &[AgentCapabilities],
     ) -> bool {
         existing.len() == requested.len()
-            && existing.iter().all(|capability| requested.contains(capability))
+            && existing
+                .iter()
+                .all(|capability| requested.contains(capability))
     }
 
     /// Returns true when an existing descriptor session should be replaced by a new registration.
@@ -456,7 +456,11 @@ impl FeagiAgentHandler {
     ) -> Result<usize, FeagiAgentError> {
         for i in 0..self.available_pullers.len() {
             let available_puller = &self.available_pullers[i];
-            if &available_puller.get_bind_point().as_transport_protocol_implementation() != wanted_protocol {
+            if &available_puller
+                .get_bind_point()
+                .as_transport_protocol_implementation()
+                != wanted_protocol
+            {
                 // not the protocol we are looking for
                 continue;
             } else {
@@ -596,10 +600,7 @@ impl FeagiAgentHandler {
                                 "descriptor replacement by new registration session={}",
                                 agent_id.to_base64()
                             );
-                            self.deregister_agent_internal(
-                                existing_agent_id,
-                                &replacement_reason,
-                            );
+                            self.deregister_agent_internal(existing_agent_id, &replacement_reason);
                         }
 
                         // register and always respond deterministically (avoid client timeouts).

@@ -42,9 +42,10 @@ impl CommandControlAgent {
     //region Helpers
 
     pub fn request_connect(&mut self) -> Result<(), FeagiAgentError> {
-
         if self.registration_status != AgentRegistrationStatus::NotRegistered {
-            return Err(FeagiAgentError::ConnectionFailed("Agent already connected and registered!".to_string()))
+            return Err(FeagiAgentError::ConnectionFailed(
+                "Agent already connected and registered!".to_string(),
+            ));
         }
 
         if self.requester.is_none() {
@@ -74,14 +75,14 @@ impl CommandControlAgent {
         auth_token: AuthToken,
         requested_capabilities: Vec<AgentCapabilities>,
     ) -> Result<(), FeagiAgentError> {
-
-
         let transport_protocol = if let Some(requester) = &mut self.requester {
-            requester.get_endpoint_target().as_transport_protocol_implementation()
+            requester
+                .get_endpoint_target()
+                .as_transport_protocol_implementation()
         } else {
             return Err(FeagiAgentError::ConnectionFailed(
                 "Cannot register to endpoint when not connected!".to_string(),
-            ))
+            ));
         };
 
         let request = RegistrationRequest::new(
@@ -105,9 +106,8 @@ impl CommandControlAgent {
     /// alter deregistration behavior on the server.
     pub fn request_deregistration(
         &mut self,
-        reason: Option<String>,  // TODO Please dont use strings, use ENUMS!
+        reason: Option<String>, // TODO Please dont use strings, use ENUMS!
     ) -> Result<(), FeagiAgentError> {
-
         let request = DeregistrationRequest::new(reason);
         let message = FeagiMessage::AgentRegistration(
             AgentRegistrationMessage::ClientRequestDeregistration(request),
@@ -116,7 +116,6 @@ impl CommandControlAgent {
         self.send_message(message, 0)?;
         Ok(())
     }
-
 
     /// Send a heartbeat over the command/control channel for the provided session.
     ///
@@ -143,7 +142,9 @@ impl CommandControlAgent {
 
     //region Base Functions
 
-    pub fn poll_for_messages(&mut self) -> Result<(&FeagiEndpointState, Option<FeagiMessage>), FeagiAgentError> {
+    pub fn poll_for_messages(
+        &mut self,
+    ) -> Result<(&FeagiEndpointState, Option<FeagiMessage>), FeagiAgentError> {
         let maybe_message = {
             let requester = self.requester.as_mut().ok_or_else(|| {
                 FeagiAgentError::ConnectionFailed("No socket is active to poll!".to_string())
@@ -164,29 +165,29 @@ impl CommandControlAgent {
                         FeagiMessage::HeartBeat => Ok(Some(FeagiMessage::HeartBeat)),
                         FeagiMessage::AgentRegistration(registration_message) => {
                             match registration_message {
-                                AgentRegistrationMessage::ClientRequestRegistration(_) => Err(
-                                    FeagiAgentError::ConnectionFailed(
+                                AgentRegistrationMessage::ClientRequestRegistration(_) => {
+                                    Err(FeagiAgentError::ConnectionFailed(
                                         "Client cannot register agents!".to_string(),
-                                    ),
-                                ),
+                                    ))
+                                }
                                 AgentRegistrationMessage::ServerRespondsRegistration(
                                     registration_response,
                                 ) => match registration_response {
-                                    RegistrationResponse::FailedInvalidRequest => Err(
-                                        FeagiAgentError::ConnectionFailed(
+                                    RegistrationResponse::FailedInvalidRequest => {
+                                        Err(FeagiAgentError::ConnectionFailed(
                                             "Invalid server responses!".to_string(),
-                                        ),
-                                    ),
-                                    RegistrationResponse::FailedInvalidAuth => Err(
-                                        FeagiAgentError::ConnectionFailed(
+                                        ))
+                                    }
+                                    RegistrationResponse::FailedInvalidAuth => {
+                                        Err(FeagiAgentError::ConnectionFailed(
                                             "Invalid auth token!".to_string(),
-                                        ),
-                                    ),
-                                    RegistrationResponse::AlreadyRegistered => Err(
-                                        FeagiAgentError::ConnectionFailed(
+                                        ))
+                                    }
+                                    RegistrationResponse::AlreadyRegistered => {
+                                        Err(FeagiAgentError::ConnectionFailed(
                                             "Client already registered!".to_string(),
-                                        ),
-                                    ),
+                                        ))
+                                    }
                                     RegistrationResponse::Success(session_id, endpoints) => {
                                         self.registration_status =
                                             AgentRegistrationStatus::Registered(
@@ -196,12 +197,12 @@ impl CommandControlAgent {
                                         Ok(Some(feagi_message))
                                     }
                                 },
-                                AgentRegistrationMessage::ClientRequestDeregistration(_) => Err(
-                                    FeagiAgentError::ConnectionFailed(
+                                AgentRegistrationMessage::ClientRequestDeregistration(_) => {
+                                    Err(FeagiAgentError::ConnectionFailed(
                                         "Client cannot receive deregistration request from server!"
                                             .to_string(),
-                                    ),
-                                ),
+                                    ))
+                                }
                                 AgentRegistrationMessage::ServerRespondsDeregistration(
                                     deregistration_response,
                                 ) => match deregistration_response {
@@ -240,7 +241,11 @@ impl CommandControlAgent {
         Ok((state, maybe_message))
     }
 
-    pub fn send_message(&mut self, message: FeagiMessage, increment_value: u16) -> Result<(), FeagiAgentError> {
+    pub fn send_message(
+        &mut self,
+        message: FeagiMessage,
+        increment_value: u16,
+    ) -> Result<(), FeagiAgentError> {
         let agent_id = match &self.registration_status {
             AgentRegistrationStatus::Registered(agent_id, _) => *agent_id,
             AgentRegistrationStatus::NotRegistered => {
@@ -260,20 +265,20 @@ impl CommandControlAgent {
         };
 
         if let Some(requester) = &mut self.requester {
-            message.serialize_to_byte_container(&mut self.send_buffer, agent_id, increment_value)?;
+            message.serialize_to_byte_container(
+                &mut self.send_buffer,
+                agent_id,
+                increment_value,
+            )?;
             requester.publish_request(&mut self.send_buffer.get_byte_ref())?;
             Ok(())
-        }
-        else {
+        } else {
             // This state should be impossible. something went very wrong
             panic!("Active state but no socket!!")
         }
-
-
     }
 
     //endregion
-
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -289,9 +294,7 @@ pub enum AgentRegistrationStatus {
 mod tests {
     use super::*;
     use feagi_io::protocol_implementations::zmq::ZmqUrl;
-    use feagi_io::traits_and_enums::shared::{
-        FeagiEndpointState, TransportProtocolEndpoint,
-    };
+    use feagi_io::traits_and_enums::shared::{FeagiEndpointState, TransportProtocolEndpoint};
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]
@@ -353,8 +356,12 @@ mod tests {
         }
     }
 
-    impl feagi_io::traits_and_enums::client::FeagiClientRequesterProperties for DummyRequesterProperties {
-        fn as_boxed_client_requester(&self) -> Box<dyn feagi_io::traits_and_enums::client::FeagiClientRequester> {
+    impl feagi_io::traits_and_enums::client::FeagiClientRequesterProperties
+        for DummyRequesterProperties
+    {
+        fn as_boxed_client_requester(
+            &self,
+        ) -> Box<dyn feagi_io::traits_and_enums::client::FeagiClientRequester> {
             Box::new(DummyRequester {
                 endpoint: self.endpoint.clone(),
                 state: FeagiEndpointState::Inactive,
@@ -379,7 +386,9 @@ mod tests {
         });
 
         let mut agent = CommandControlAgent::new(props);
-        agent.request_connect().expect("connect request should succeed");
+        agent
+            .request_connect()
+            .expect("connect request should succeed");
 
         agent
             .request_registration(

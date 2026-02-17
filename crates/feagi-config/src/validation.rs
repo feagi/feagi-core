@@ -289,11 +289,7 @@ fn validate_value_ranges(config: &FeagiConfig, errors: &mut Vec<ConfigValidation
     );
 }
 
-fn validate_advertised_host(
-    field: &str,
-    host: &str,
-    errors: &mut Vec<ConfigValidationError>,
-) {
+fn validate_advertised_host(field: &str, host: &str, errors: &mut Vec<ConfigValidationError>) {
     let trimmed = host.trim();
     let is_non_routable = matches!(trimmed, "0.0.0.0" | "::" | "[::]" | "*");
     if is_non_routable {

@@ -32,17 +32,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_interval_ms: u64 = args[2].parse()?;
     let poll_interval_ms: u64 = args[3].parse()?;
 
-    let registration_props: Box<dyn feagi_io::traits_and_enums::client::FeagiClientRequesterProperties> =
-        if registration_endpoint.starts_with("tcp://")
-            || registration_endpoint.starts_with("ipc://")
-            || registration_endpoint.starts_with("inproc://")
-            || registration_endpoint.starts_with("pgm://")
-            || registration_endpoint.starts_with("epgm://")
-        {
-            Box::new(FeagiZmqClientRequesterProperties::new(registration_endpoint)?)
-        } else {
-            Box::new(FeagiWebSocketClientRequesterProperties::new(registration_endpoint)?)
-        };
+    let registration_props: Box<
+        dyn feagi_io::traits_and_enums::client::FeagiClientRequesterProperties,
+    > = if registration_endpoint.starts_with("tcp://")
+        || registration_endpoint.starts_with("ipc://")
+        || registration_endpoint.starts_with("inproc://")
+        || registration_endpoint.starts_with("pgm://")
+        || registration_endpoint.starts_with("epgm://")
+    {
+        Box::new(FeagiZmqClientRequesterProperties::new(
+            registration_endpoint,
+        )?)
+    } else {
+        Box::new(FeagiWebSocketClientRequesterProperties::new(
+            registration_endpoint,
+        )?)
+    };
 
     let agent_descriptor = AgentDescriptor::new("neuraville", "example_agent", 1)?;
     let auth_token = AuthToken::new([0u8; 32]);

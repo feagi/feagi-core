@@ -4,9 +4,10 @@
 //! startup backlog replay and malformed-frame interference regressions.
 
 #![cfg(feature = "zmq-transport")]
+#![allow(clippy::manual_is_multiple_of)]
 
-use std::net::TcpListener;
 use std::env;
+use std::net::TcpListener;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -85,7 +86,9 @@ fn zmq_puller_keeps_latest_valid_frame_in_burst_with_noise() {
     let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint)
         .expect("Failed to create ZMQ server puller properties");
     let mut server = server_props.as_boxed_server_puller();
-    server.request_start().expect("Failed to start server puller");
+    server
+        .request_start()
+        .expect("Failed to start server puller");
 
     let client_props = FeagiZmqClientPusherProperties::new(&endpoint)
         .expect("Failed to create ZMQ client pusher properties");
@@ -144,7 +147,9 @@ fn zmq_stream_stays_responsive_and_fresh_under_sustained_noise() {
     let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint)
         .expect("Failed to create ZMQ server puller properties");
     let mut server = server_props.as_boxed_server_puller();
-    server.request_start().expect("Failed to start server puller");
+    server
+        .request_start()
+        .expect("Failed to start server puller");
 
     let client_props = FeagiZmqClientPusherProperties::new(&endpoint)
         .expect("Failed to create ZMQ client pusher properties");
@@ -212,7 +217,9 @@ fn zmq_stream_stays_responsive_and_fresh_under_sustained_noise() {
                     last_received_counter = Some(counter_from_frame(data));
                 }
             }
-            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::Pending | FeagiEndpointState::Inactive => {
+            FeagiEndpointState::ActiveWaiting
+            | FeagiEndpointState::Pending
+            | FeagiEndpointState::Inactive => {
                 thread::sleep(Duration::from_millis(1));
             }
             FeagiEndpointState::Errored(err) => {
@@ -262,7 +269,9 @@ fn zmq_puller_prefers_non_empty_sensory_frame_over_empty_container_in_same_drain
     let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint)
         .expect("Failed to create ZMQ server puller properties");
     let mut server = server_props.as_boxed_server_puller();
-    server.request_start().expect("Failed to start server puller");
+    server
+        .request_start()
+        .expect("Failed to start server puller");
 
     let client_props = FeagiZmqClientPusherProperties::new(&endpoint)
         .expect("Failed to create ZMQ client pusher properties");
@@ -323,7 +332,9 @@ fn zmq_stream_soak_detects_blackout_or_degradation_windows() {
     let server_props = FeagiZmqServerPullerProperties::new(&endpoint, &endpoint)
         .expect("Failed to create ZMQ server puller properties");
     let mut server = server_props.as_boxed_server_puller();
-    server.request_start().expect("Failed to start server puller");
+    server
+        .request_start()
+        .expect("Failed to start server puller");
 
     let client_props = FeagiZmqClientPusherProperties::new(&endpoint)
         .expect("Failed to create ZMQ client pusher properties");
@@ -393,7 +404,9 @@ fn zmq_stream_soak_detects_blackout_or_degradation_windows() {
                     last_received_counter = Some(counter_from_frame(data));
                 }
             }
-            FeagiEndpointState::ActiveWaiting | FeagiEndpointState::Pending | FeagiEndpointState::Inactive => {
+            FeagiEndpointState::ActiveWaiting
+            | FeagiEndpointState::Pending
+            | FeagiEndpointState::Inactive => {
                 thread::sleep(Duration::from_millis(1));
             }
             FeagiEndpointState::Errored(err) => {
@@ -403,7 +416,8 @@ fn zmq_stream_soak_detects_blackout_or_degradation_windows() {
     }
 
     let last_sent_counter = sender.join().expect("Sender thread panicked");
-    let first_valid_at = first_valid_at.expect("No non-empty valid sensory frame received during soak");
+    let first_valid_at =
+        first_valid_at.expect("No non-empty valid sensory frame received during soak");
 
     let startup_latency = first_valid_at.saturating_duration_since(recv_start);
     assert!(
@@ -437,4 +451,3 @@ fn zmq_stream_soak_detects_blackout_or_degradation_windows() {
         freshness_delta
     );
 }
-

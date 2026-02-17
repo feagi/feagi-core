@@ -7,13 +7,19 @@ fn main() {
     // This is a compile-time check to prevent incompatible feature combinations.
 
     let wasm_features: &[(&str, bool)] = &[
-        ("websocket-transport-wasm", cfg!(feature = "websocket-transport-wasm")),
+        (
+            "websocket-transport-wasm",
+            cfg!(feature = "websocket-transport-wasm"),
+        ),
         ("js-bridge-wasm", cfg!(feature = "js-bridge-wasm")),
     ];
 
     let native_features: &[(&str, bool)] = &[
         ("zmq-transport", cfg!(feature = "zmq-transport")),
-        ("websocket-transport-std", cfg!(feature = "websocket-transport-std")),
+        (
+            "websocket-transport-std",
+            cfg!(feature = "websocket-transport-std"),
+        ),
         ("shm-transport", cfg!(feature = "shm-transport")),
         ("bluetooth-transport", cfg!(feature = "bluetooth-transport")),
     ];

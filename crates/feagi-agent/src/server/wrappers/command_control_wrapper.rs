@@ -111,7 +111,6 @@ impl CommandControlWrapper {
         &mut self,
         known_session_ids: &HashMap<AgentID, (AgentDescriptor, Vec<AgentCapabilities>)>,
     ) -> Result<Option<(AgentID, FeagiMessage, IsNewSessionId)>, FeagiAgentError> {
-
         // NOTE: Routers are unique that they get session IDs not from the byte data, but from the
         // connection type itself!
         let (session_id, incoming_data) = self.router.consume_retrieved_request()?;

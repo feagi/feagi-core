@@ -32,6 +32,13 @@ use std::time::{Duration, Instant};
 
 /// Type alias for fire queue sample data structure
 type FireQueueSample = ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
+
+/// Decoded sensory data: list of (cortical ID, XYZP list per cortical area)
+type SensoryXyzpDecoded = Vec<(
+    feagi_structures::genomic::cortical_area::CorticalID,
+    Vec<(u32, u32, u32, f32)>,
+)>;
+
 use tracing::{debug, error, info, trace, warn};
 
 use std::thread;
@@ -1098,15 +1105,7 @@ fn get_timestamp() -> String {
 
 /// Decode sensory bytes (FeagiByteContainer) into cortical XYZP list.
 /// Transport-agnostic; same format whether source is ZMQ, WebSocket, or SHM.
-fn decode_sensory_bytes(
-    bytes: &[u8],
-) -> Result<
-    Vec<(
-        feagi_structures::genomic::cortical_area::CorticalID,
-        Vec<(u32, u32, u32, f32)>,
-    )>,
-    String,
-> {
+fn decode_sensory_bytes(bytes: &[u8]) -> Result<SensoryXyzpDecoded, String> {
     use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
     let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
@@ -1157,7 +1156,7 @@ fn decode_sensory_bytes(
                 .map(|(((x, y), z), p)| (*x, *y, *z, *p))
                 .collect();
             if !xyzp_data.is_empty() {
-                out.push((cortical_id.clone(), xyzp_data));
+                out.push((*cortical_id, xyzp_data));
             }
         }
     }
@@ -1292,12 +1291,7 @@ fn burst_loop(
         }
 
         // Poll transport-agnostic sensory intake (feagi-io) before acquiring NPU lock
-        let sensory_xyzp: Option<
-            Vec<(
-                feagi_structures::genomic::cortical_area::CorticalID,
-                Vec<(u32, u32, u32, f32)>,
-            )>,
-        > = sensory_intake.as_ref().and_then(|intake| {
+        let sensory_xyzp: Option<SensoryXyzpDecoded> = sensory_intake.as_ref().and_then(|intake| {
             let mut guard = intake.lock().ok()?;
             let bytes = guard.poll_sensory_data().ok().flatten()?;
             match decode_sensory_bytes(&bytes) {
@@ -2469,9 +2463,8 @@ fn burst_loop(
                                                         "[BURST-LOOP] Motor transport for '{}' not ready yet ({}). Keeping subscription and retrying.",
                                                         agent_id, e
                                                     );
-                                                    missing_motor_agent_logged.insert(
-                                                        agent_id.clone(),
-                                                    );
+                                                    missing_motor_agent_logged
+                                                        .insert(agent_id.clone());
                                                 }
                                             } else {
                                                 error!(

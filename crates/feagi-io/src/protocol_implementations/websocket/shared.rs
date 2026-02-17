@@ -107,11 +107,15 @@ fn validate_ws_url(url: &str) -> Result<(), FeagiNetworkError> {
     }
 
     // Extract the part after the scheme
-    let addr_part = if url.starts_with("wss://") {
-        &url[6..] // Skip "wss://"
-    } else {
-        &url[5..] // Skip "ws://"
-    };
+    let addr_part = url
+        .strip_prefix("wss://")
+        .or_else(|| url.strip_prefix("ws://"))
+        .ok_or_else(|| {
+            FeagiNetworkError::InvalidSocketProperties(format!(
+                "Invalid WebSocket URL '{}': expected {:?}",
+                url, VALID_PREFIXES
+            ))
+        })?;
 
     if addr_part.is_empty() {
         return Err(FeagiNetworkError::InvalidSocketProperties(

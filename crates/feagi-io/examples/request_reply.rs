@@ -25,16 +25,18 @@
 //! cargo run --example request_reply --features "zmq-transport ws-transport" -- --transport ws client
 //! ```
 
-use std::env;
-use std::thread;
-use std::time::Duration;
-use feagi_io::protocol_implementations::websocket::websocket_std::{FeagiWebSocketClientRequesterProperties, FeagiWebSocketServerRouterProperties};
+use feagi_io::protocol_implementations::websocket::websocket_std::{
+    FeagiWebSocketClientRequesterProperties, FeagiWebSocketServerRouterProperties,
+};
 use feagi_io::protocol_implementations::zmq::{
     FeagiZmqClientRequesterProperties, FeagiZmqServerRouterProperties,
 };
 use feagi_io::traits_and_enums::client::{FeagiClientRequester, FeagiClientRequesterProperties};
 use feagi_io::traits_and_enums::server::{FeagiServerRouter, FeagiServerRouterProperties};
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
+use std::env;
+use std::thread;
+use std::time::Duration;
 
 const ZMQ_ADDRESS: &str = "tcp://127.0.0.1:5557";
 const WS_ADDRESS: &str = "127.0.0.1:8082";
@@ -217,7 +219,9 @@ fn run_server(mut server: Box<dyn FeagiServerRouter>) {
 /// transport implementation.
 fn run_client(mut client: Box<dyn FeagiClientRequester>) {
     // Connect to the server
-    client.request_connect().expect("Failed to request connection");
+    client
+        .request_connect()
+        .expect("Failed to request connection");
     println!("Client connection requested...");
 
     // Wait for the connection to become active

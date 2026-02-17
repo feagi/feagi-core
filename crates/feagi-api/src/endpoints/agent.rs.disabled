@@ -15,13 +15,12 @@ use feagi_services::traits::agent_service::HeartbeatRequest as ServiceHeartbeatR
 use tracing::{info, warn};
 
 #[cfg(feature = "feagi-agent")]
+use crate::common::agent_registration::auto_create_cortical_areas_from_device_registrations as auto_create_cortical_areas_shared;
+#[cfg(feature = "feagi-agent")]
 use feagi_agent::{AgentCapabilities as RegistrationCapabilities, AuthToken};
 #[cfg(feature = "feagi-agent")]
 use feagi_io::AgentID;
 #[cfg(feature = "feagi-agent")]
-use crate::common::agent_registration::auto_create_cortical_areas_from_device_registrations as auto_create_cortical_areas_shared;
-#[cfg(feature = "feagi-agent")]
-
 #[cfg(feature = "feagi-agent")]
 #[allow(dead_code)]
 fn parse_auth_token(request: &AgentRegistrationRequest) -> ApiResult<AuthToken> {
@@ -39,9 +38,9 @@ fn parse_auth_token(request: &AgentRegistrationRequest) -> ApiResult<AuthToken> 
 fn derive_capabilities_from_device_registrations(
     device_registrations: &serde_json::Value,
 ) -> ApiResult<Vec<RegistrationCapabilities>> {
-    let obj = device_registrations.as_object().ok_or_else(|| {
-        ApiError::invalid_input("device_registrations must be a JSON object")
-    })?;
+    let obj = device_registrations
+        .as_object()
+        .ok_or_else(|| ApiError::invalid_input("device_registrations must be a JSON object"))?;
 
     let input_units = obj
         .get("input_units_and_encoder_properties")
@@ -88,9 +87,7 @@ fn derive_capabilities_from_visualization_capability(
             )
         })?;
     let rate_hz = viz.get("rate_hz").and_then(|v| v.as_f64()).ok_or_else(|| {
-        ApiError::invalid_input(
-            "capabilities.visualization must include rate_hz (number > 0)",
-        )
+        ApiError::invalid_input("capabilities.visualization must include rate_hz (number > 0)")
     })?;
     if rate_hz <= 0.0 {
         return Err(ApiError::invalid_input(
@@ -149,10 +146,7 @@ fn get_agent_name_from_id(agent_id: &str) -> ApiResult<String> {
 #[cfg(feature = "feagi-agent")]
 fn parse_agent_id_base64(agent_id: &str) -> ApiResult<AgentID> {
     AgentID::try_from_base64(agent_id).map_err(|e| {
-        ApiError::invalid_input(format!(
-            "Invalid agent_id (expected AgentID base64): {}",
-            e
-        ))
+        ApiError::invalid_input(format!("Invalid agent_id (expected AgentID base64): {}", e))
     })
 }
 
@@ -171,7 +165,6 @@ async fn auto_create_cortical_areas_from_device_registrations(
 ) {
     // No-op when feature is disabled
 }
-
 
 /// Register a new agent with FEAGI and receive connection details including transport configuration and ports.
 #[utoipa::path(
@@ -208,12 +201,12 @@ pub async fn register_agent(
             let agent_id = parse_agent_id_base64(&request.agent_id)?;
             {
                 let mut handler_guard = handler.lock().unwrap();
-                handler_guard.set_device_registrations_by_agent(
-                    agent_id,
-                    device_regs.clone()
-                );
+                handler_guard.set_device_registrations_by_agent(agent_id, device_regs.clone());
             } // Drop guard before any await
-            info!("✅ [API] Stored device registrations for agent '{}'", request.agent_id);
+            info!(
+                "✅ [API] Stored device registrations for agent '{}'",
+                request.agent_id
+            );
             true
         } else {
             false
@@ -231,10 +224,11 @@ pub async fn register_agent(
     if let Some(viz) = request.capabilities.get("visualization") {
         if let Some(rate_hz) = viz.get("rate_hz").and_then(|v| v.as_f64()) {
             if rate_hz > 0.0 {
-                match state.runtime_service.register_visualization_subscriptions(
-                    &request.agent_id,
-                    rate_hz
-                ).await {
+                match state
+                    .runtime_service
+                    .register_visualization_subscriptions(&request.agent_id, rate_hz)
+                    .await
+                {
                     Ok(_) => {
                         info!(
                             "✅ [API] Registered visualization subscription for agent '{}' at {}Hz",
@@ -257,31 +251,39 @@ pub async fn register_agent(
     let transports_array = if state.agent_handler.is_some() {
         // Load config to get port numbers
         use feagi_config::load_config;
-        let config = load_config(None, None).map_err(|e| {
-            ApiError::internal(format!("Failed to load config: {}", e))
-        })?;
-        
+        let config = load_config(None, None)
+            .map_err(|e| ApiError::internal(format!("Failed to load config: {}", e)))?;
+
         let mut transport_configs = Vec::new();
         for transport in &config.transports.available {
             let transport_type = transport.to_lowercase();
             if transport_type != "zmq" && transport_type != "websocket" && transport_type != "ws" {
                 continue;
             }
-            
+
             // Build ports map from config
             let mut ports = HashMap::new();
             if transport_type == "websocket" || transport_type == "ws" {
-                ports.insert("registration".to_string(), config.websocket.registration_port);
+                ports.insert(
+                    "registration".to_string(),
+                    config.websocket.registration_port,
+                );
                 ports.insert("sensory".to_string(), config.websocket.sensory_port);
                 ports.insert("motor".to_string(), config.websocket.motor_port);
-                ports.insert("visualization".to_string(), config.websocket.visualization_port);
+                ports.insert(
+                    "visualization".to_string(),
+                    config.websocket.visualization_port,
+                );
             } else {
                 ports.insert("registration".to_string(), config.agent.registration_port);
                 ports.insert("sensory".to_string(), config.ports.zmq_sensory_port);
                 ports.insert("motor".to_string(), config.ports.zmq_motor_port);
-                ports.insert("visualization".to_string(), config.ports.zmq_visualization_port);
+                ports.insert(
+                    "visualization".to_string(),
+                    config.ports.zmq_visualization_port,
+                );
             }
-            
+
             transport_configs.push(TransportConfig {
                 transport_type: if transport_type == "ws" {
                     "websocket".to_string()
@@ -297,7 +299,7 @@ pub async fn register_agent(
                 },
             });
         }
-        
+
         transport_configs
     } else {
         if !handler_available {
@@ -308,7 +310,8 @@ pub async fn register_agent(
 
     Ok(Json(AgentRegistrationResponse {
         status: "success".to_string(),
-        message: "Agent configuration stored. Connect via ZMQ/WebSocket for full registration".to_string(),
+        message: "Agent configuration stored. Connect via ZMQ/WebSocket for full registration"
+            .to_string(),
         success: true,
         transport: None, // Legacy field - deprecated
         rates: None,
@@ -812,7 +815,7 @@ fn export_device_registrations_from_connector(
             return Ok(regs.clone());
         }
     }
-    
+
     Err(ApiError::not_found(
         "device_registrations",
         &format!("No device registrations found for agent '{}'", agent_id),
@@ -1002,10 +1005,16 @@ pub async fn export_device_registrations(
         if let Some(handler) = &state.agent_handler {
             let handler_guard = handler.lock().unwrap();
             if let Some(regs) = handler_guard.get_device_registrations_by_agent(parsed_agent_id) {
-                info!("📤 [API] Found device registrations for agent '{}'", agent_id);
+                info!(
+                    "📤 [API] Found device registrations for agent '{}'",
+                    agent_id
+                );
                 regs.clone()
             } else {
-                warn!("⚠️ [API] No device registrations found for agent '{}'", agent_id);
+                warn!(
+                    "⚠️ [API] No device registrations found for agent '{}'",
+                    agent_id
+                );
                 serde_json::json!({
                     "input_units_and_encoder_properties": {},
                     "output_units_and_decoder_properties": {},
@@ -1116,9 +1125,12 @@ pub async fn import_device_registrations(
             let mut handler_guard = handler.lock().unwrap();
             handler_guard.set_device_registrations_by_agent(
                 parsed_agent_id,
-                request.device_registrations.clone()
+                request.device_registrations.clone(),
             );
-            info!("📥 [API] Imported device registrations for agent '{}'", agent_id);
+            info!(
+                "📥 [API] Imported device registrations for agent '{}'",
+                agent_id
+            );
         } else {
             warn!("⚠️ [API] No agent_handler available to store device registrations");
         }
