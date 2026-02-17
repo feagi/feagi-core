@@ -1640,6 +1640,41 @@ impl RegistrationHandler {
             );
         }
 
+        // Register visualization subscriptions with burst engine (so WebSocket-registered agents receive neuron data)
+        if agent_info.capabilities.visualization.is_some() {
+            if let Some(burst_runner_lock) = self.burst_runner.lock().as_ref() {
+                let runner = burst_runner_lock.read();
+                let burst_hz = runner.get_frequency();
+                let rate_hz = agent_info
+                    .capabilities
+                    .visualization
+                    .as_ref()
+                    .and_then(|v| v.refresh_rate)
+                    .filter(|r| *r > 0.0)
+                    .unwrap_or(burst_hz)
+                    .min(burst_hz);
+                if let Err(e) = runner.register_visualization_subscriptions_with_rate(
+                    request.agent_id.clone(),
+                    rate_hz,
+                ) {
+                    warn!(
+                        "🦀 [REGISTRATION] Failed to register visualization subscription for '{}': {}",
+                        request.agent_id, e
+                    );
+                } else {
+                    info!(
+                        "🦀 [REGISTRATION] ✅ Visualization subscription registered for '{}' at {:.2}Hz",
+                        request.agent_id, rate_hz
+                    );
+                }
+            } else {
+                warn!(
+                    "🦀 [REGISTRATION] Agent '{}' has visualization capability but burst runner not connected",
+                    request.agent_id
+                );
+            }
+        }
+
         // Invoke Python callback if set
         if let Some(ref callback) = *self.on_agent_registered.lock() {
             // Serialize capabilities to JSON string for Python
