@@ -26,5 +26,8 @@ target
 # macOS
 .DS_Store
 
+# Local cargo overrides (machine-specific)
+.cargo/config.toml
+
 # Autosaved genomes
 .genome/

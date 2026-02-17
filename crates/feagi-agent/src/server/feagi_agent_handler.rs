@@ -215,16 +215,14 @@ impl FeagiAgentHandler {
         &mut self,
         data: Option<&FeagiByteContainer>,
     ) -> Result<(), FeagiAgentServerError> {
-        let Some(bytes) = data else {
-            return Ok(()); // Nothing to publish
-        };
-
         for i in 0..self.active_motor_servers.len() {
             match self.active_motor_servers[i].poll() {
                 FeagiEndpointState::ActiveWaiting => {
-                    self.active_motor_servers[i]
-                        .publish_data(bytes.get_byte_ref())
-                        .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
+                    if let Some(bytes) = data {
+                        self.active_motor_servers[i]
+                            .publish_data(bytes.get_byte_ref())
+                            .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
+                    }
                 }
                 FeagiEndpointState::Errored(_e) => {
                     self.active_motor_servers[i]
@@ -244,16 +242,14 @@ impl FeagiAgentHandler {
         &mut self,
         data: Option<&FeagiByteContainer>,
     ) -> Result<(), FeagiAgentServerError> {
-        let Some(bytes) = data else {
-            return Ok(()); // Nothing to publish
-        };
-
         for i in 0..self.active_visualizer_servers.len() {
             match self.active_visualizer_servers[i].poll() {
                 FeagiEndpointState::ActiveWaiting => {
-                    self.active_visualizer_servers[i]
-                        .publish_data(bytes.get_byte_ref())
-                        .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
+                    if let Some(bytes) = data {
+                        self.active_visualizer_servers[i]
+                            .publish_data(bytes.get_byte_ref())
+                            .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
+                    }
                 }
                 FeagiEndpointState::Errored(_e) => {
                     self.active_visualizer_servers[i]
