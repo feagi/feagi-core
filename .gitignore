@@ -28,3 +28,6 @@ target
 
 # Autosaved genomes
 .genome/
+
+# Local cargo overrides (patch.crates-io with local paths - do not commit)
+.cargo/config.toml

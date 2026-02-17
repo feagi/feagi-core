@@ -15,8 +15,6 @@ use axum::http::{Request, StatusCode};
 #[cfg(feature = "feagi-agent")]
 use feagi_agent::{AgentDescriptor, AuthToken};
 #[cfg(feature = "feagi-agent")]
-use feagi_io::AgentID;
-#[cfg(feature = "feagi-agent")]
 use feagi_api::common::agent_registration::auto_create_cortical_areas_from_device_registrations;
 use feagi_api::common::{Json as ApiJson, State as ApiStateExtract};
 use feagi_api::endpoints::agent::register_agent;
@@ -24,6 +22,8 @@ use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_api::v1::AgentRegistrationRequest;
 use feagi_brain_development::ConnectomeManager;
 use feagi_evolutionary::templates::create_genome_with_core_areas;
+#[cfg(feature = "feagi-agent")]
+use feagi_io::AgentID;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::TracingMutex;
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
