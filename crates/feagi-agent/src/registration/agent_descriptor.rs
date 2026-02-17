@@ -49,7 +49,8 @@ impl TryFrom<AgentDescriptorRaw> for AgentDescriptor {
 
 impl AgentDescriptor {
     /// Total size in bytes when serialized to binary format
-    pub const SIZE_BYTES: usize = 4 + MAX_MANUFACTURER_NAME_BYTE_COUNT + MAX_AGENT_NAME_BYTE_COUNT + 4;
+    pub const SIZE_BYTES: usize =
+        4 + MAX_MANUFACTURER_NAME_BYTE_COUNT + MAX_AGENT_NAME_BYTE_COUNT + 4;
 
     /// Create a new AgentDescriptor with validation.
     ///
@@ -92,8 +93,11 @@ impl AgentDescriptor {
         offset += 4;
 
         let manufacturer_bytes = self.manufacturer.as_bytes();
-        let manufacturer_len = manufacturer_bytes.len().min(MAX_MANUFACTURER_NAME_BYTE_COUNT);
-        bytes[offset..offset + manufacturer_len].copy_from_slice(&manufacturer_bytes[..manufacturer_len]);
+        let manufacturer_len = manufacturer_bytes
+            .len()
+            .min(MAX_MANUFACTURER_NAME_BYTE_COUNT);
+        bytes[offset..offset + manufacturer_len]
+            .copy_from_slice(&manufacturer_bytes[..manufacturer_len]);
         offset += MAX_MANUFACTURER_NAME_BYTE_COUNT;
 
         let agent_name_bytes = self.agent_name.as_bytes();

@@ -12,18 +12,18 @@ pub use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 pub use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
 #[cfg(feature = "sdk-io")]
+pub use feagi_sensorimotor::caching::SensorDeviceCache;
+#[cfg(feature = "sdk-io")]
+pub use feagi_sensorimotor::data_types::descriptors::MiscDataDimensions;
+#[cfg(feature = "sdk-io")]
 pub use feagi_sensorimotor::data_types::descriptors::{
     ColorChannelLayout, ColorSpace, ImageFrameProperties, ImageXYResolution,
     SegmentedImageFrameProperties,
 };
-#[cfg(feature = "sdk-io")]
-pub use feagi_sensorimotor::data_types::descriptors::MiscDataDimensions;
+#[cfg(feature = "sdk-text")]
+pub use feagi_sensorimotor::data_types::encode_token_id_to_misc_data;
 pub use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, MiscData};
-#[cfg(feature = "sdk-io")]
-pub use feagi_sensorimotor::caching::SensorDeviceCache;
 #[cfg(feature = "sdk-io")]
 pub use feagi_sensorimotor::feedbacks::{FeedBackRegistration, FeedbackRegistrationTargets};
 #[cfg(feature = "sdk-io")]
 pub use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
-#[cfg(feature = "sdk-text")]
-pub use feagi_sensorimotor::data_types::encode_token_id_to_misc_data;

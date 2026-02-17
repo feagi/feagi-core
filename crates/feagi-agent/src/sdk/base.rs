@@ -34,28 +34,26 @@ impl TopologyCache {
                 ))
             })?;
 
-        let (width, height, depth, channels) = if let Some(dims) = obj.get("cortical_dimensions_per_device") {
-            let arr = dims
-                .as_array()
-                .ok_or_else(|| {
-                    crate::FeagiAgentClientError::UnableToDecodeReceivedData(
-                        "cortical_dimensions_per_device must be array".to_string(),
-                    )
-                })?;
-            let w = arr.get(0).and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+        let (width, height, depth, channels) = if let Some(dims) =
+            obj.get("cortical_dimensions_per_device")
+        {
+            let arr = dims.as_array().ok_or_else(|| {
+                crate::FeagiAgentClientError::UnableToDecodeReceivedData(
+                    "cortical_dimensions_per_device must be array".to_string(),
+                )
+            })?;
+            let w = arr.first().and_then(|v| v.as_u64()).unwrap_or(1) as u32;
             let h = arr.get(1).and_then(|v| v.as_u64()).unwrap_or(1) as u32;
             let d = arr.get(2).and_then(|v| v.as_u64()).unwrap_or(1) as u32;
             let dev_count = obj.get("dev_count").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
             (w, h, d, dev_count)
         } else if let Some(dims) = obj.get("dimensions") {
-            let arr = dims
-                .as_array()
-                .ok_or_else(|| {
-                    crate::FeagiAgentClientError::UnableToDecodeReceivedData(
-                        "dimensions must be array".to_string(),
-                    )
-                })?;
-            let w = arr.get(0).and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+            let arr = dims.as_array().ok_or_else(|| {
+                crate::FeagiAgentClientError::UnableToDecodeReceivedData(
+                    "dimensions must be array".to_string(),
+                )
+            })?;
+            let w = arr.first().and_then(|v| v.as_u64()).unwrap_or(1) as u32;
             let h = arr.get(1).and_then(|v| v.as_u64()).unwrap_or(1) as u32;
             let d = arr.get(2).and_then(|v| v.as_u64()).unwrap_or(1) as u32;
             let dev_count = obj.get("dev_count").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
@@ -73,7 +71,6 @@ impl TopologyCache {
             channels,
         })
     }
-
 }
 
 /// Client that fetches topology from the FEAGI API. Returned by `AgentRegistrar::topology_cache()`.
@@ -97,7 +94,10 @@ impl TopologyClient {
         &self,
         id: &CorticalID,
     ) -> Result<TopologyCache, crate::FeagiAgentClientError> {
-        let url = format!("{}/v1/connectome/topology", self.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/v1/connectome/topology",
+            self.base_url.trim_end_matches('/')
+        );
         let client = reqwest::Client::new();
         let resp = client
             .get(&url)

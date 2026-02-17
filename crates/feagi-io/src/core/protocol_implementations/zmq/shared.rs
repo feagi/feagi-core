@@ -20,7 +20,9 @@ impl ZmqUrl {
     /// Returns an error if the URL format is invalid.
     pub fn new(url: &str) -> Result<Self, FeagiNetworkError> {
         validate_zmq_url(url)?;
-        Ok(ZmqUrl { url: url.to_string() })
+        Ok(ZmqUrl {
+            url: url.to_string(),
+        })
     }
 
     /// Returns the URL as a string slice.
@@ -51,8 +53,7 @@ fn validate_zmq_url(url: &str) -> Result<(), FeagiNetworkError> {
     }
 
     // Basic format validation for tcp URLs
-    if url.starts_with("tcp://") {
-        let addr_part = &url[6..]; // Skip "tcp://"
+    if let Some(addr_part) = url.strip_prefix("tcp://") {
         if addr_part.is_empty() {
             return Err(FeagiNetworkError::InvalidSocketProperties(
                 "Invalid ZMQ URL: empty address after tcp://".to_string(),

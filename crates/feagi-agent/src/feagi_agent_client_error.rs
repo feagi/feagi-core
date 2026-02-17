@@ -28,10 +28,18 @@ impl Display for FeagiAgentClientError {
                 write!(f, "FeagiAgentClientError: Authentication failed: {}", msg)
             }
             FeagiAgentClientError::UnableToDecodeReceivedData(msg) => {
-                write!(f, "FeagiAgentClientError: Unable to decode data from server: {}", msg)
+                write!(
+                    f,
+                    "FeagiAgentClientError: Unable to decode data from server: {}",
+                    msg
+                )
             }
             FeagiAgentClientError::UnableToSendData(msg) => {
-                write!(f, "FeagiAgentClientError: Unable to send data to server: {}", msg)
+                write!(
+                    f,
+                    "FeagiAgentClientError: Unable to send data to server: {}",
+                    msg
+                )
             }
             FeagiAgentClientError::Other(msg) => {
                 write!(f, "FeagiAgentClientError: {}", msg)

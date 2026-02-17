@@ -1,5 +1,5 @@
-use crate::FeagiNetworkError;
 use crate::core::traits_and_enums::client::FeagiClient;
+use crate::FeagiNetworkError;
 
 /// A client that pushes data to a server in a fire-and-forget pattern.
 ///

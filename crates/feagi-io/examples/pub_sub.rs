@@ -33,8 +33,12 @@ use feagi_io::core::protocol_implementations::websocket::{
 use feagi_io::core::protocol_implementations::zmq::{
     FeagiZmqClientSubscriberProperties, FeagiZmqServerPublisherProperties,
 };
-use feagi_io::core::traits_and_enums::client::{FeagiClientSubscriber, FeagiClientSubscriberProperties};
-use feagi_io::core::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties};
+use feagi_io::core::traits_and_enums::client::{
+    FeagiClientSubscriber, FeagiClientSubscriberProperties,
+};
+use feagi_io::core::traits_and_enums::server::{
+    FeagiServerPublisher, FeagiServerPublisherProperties,
+};
 use feagi_io::core::traits_and_enums::FeagiEndpointState;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -129,7 +133,10 @@ fn parse_args() -> Option<(Transport, String)> {
 
 /// Creates the appropriate publisher implementation based on transport type.
 /// Returns a boxed trait object that can be used with transport-agnostic code.
-fn create_publisher(transport: Transport, endpoints: &ExampleEndpoints) -> Box<dyn FeagiServerPublisher> {
+fn create_publisher(
+    transport: Transport,
+    endpoints: &ExampleEndpoints,
+) -> Box<dyn FeagiServerPublisher> {
     match transport {
         Transport::Zmq => {
             println!("=== Publisher Example (ZMQ Transport) ===\n");
@@ -150,7 +157,10 @@ fn create_publisher(transport: Transport, endpoints: &ExampleEndpoints) -> Box<d
 
 /// Creates the appropriate subscriber implementation based on transport type.
 /// Returns a boxed trait object that can be used with transport-agnostic code.
-fn create_subscriber(transport: Transport, endpoints: &ExampleEndpoints) -> Box<dyn FeagiClientSubscriber> {
+fn create_subscriber(
+    transport: Transport,
+    endpoints: &ExampleEndpoints,
+) -> Box<dyn FeagiClientSubscriber> {
     match transport {
         Transport::Zmq => {
             println!("=== Subscriber Example (ZMQ Transport) ===\n");
@@ -184,7 +194,9 @@ fn create_subscriber(transport: Transport, endpoints: &ExampleEndpoints) -> Box<
 /// transport implementation.
 fn run_publisher(mut publisher: Box<dyn FeagiServerPublisher>) {
     // Start the server (binds to address)
-    publisher.request_start().expect("Failed to start publisher");
+    publisher
+        .request_start()
+        .expect("Failed to start publisher");
     println!("Publisher start requested...");
 
     // Wait for the server to become active
@@ -263,17 +275,15 @@ fn run_subscriber(mut subscriber: Box<dyn FeagiClientSubscriber>) {
     // Receive loop
     loop {
         match subscriber.poll() {
-            FeagiEndpointState::ActiveHasData => {
-                match subscriber.consume_retrieved_data() {
-                    Ok(data) => {
-                        let message = String::from_utf8_lossy(data);
-                        println!("[SUB] Received: {}", message);
-                    }
-                    Err(e) => {
-                        eprintln!("[SUB] Error consuming data: {}", e);
-                    }
+            FeagiEndpointState::ActiveHasData => match subscriber.consume_retrieved_data() {
+                Ok(data) => {
+                    let message = String::from_utf8_lossy(data);
+                    println!("[SUB] Received: {}", message);
                 }
-            }
+                Err(e) => {
+                    eprintln!("[SUB] Error consuming data: {}", e);
+                }
+            },
             FeagiEndpointState::ActiveWaiting => {
                 // No data yet, keep polling
                 thread::sleep(Duration::from_millis(10));

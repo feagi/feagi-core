@@ -32,20 +32,13 @@ mod shared;
 
 // Client implementations and properties
 pub use client_implementations::{
-    FeagiZmqClientPusher,
-    FeagiZmqClientPusherProperties,
-    FeagiZmqClientRequester,
-    FeagiZmqClientRequesterProperties,
-    FeagiZmqClientSubscriber,
+    FeagiZmqClientPusher, FeagiZmqClientPusherProperties, FeagiZmqClientRequester,
+    FeagiZmqClientRequesterProperties, FeagiZmqClientSubscriber,
     FeagiZmqClientSubscriberProperties,
 };
 
 // Server implementations and properties
 pub use server_implementations::{
-    FeagiZmqServerPublisher,
-    FeagiZmqServerPublisherProperties,
-    FeagiZmqServerPuller,
-    FeagiZmqServerPullerProperties,
-    FeagiZmqServerRouter,
-    FeagiZmqServerRouterProperties,
+    FeagiZmqServerPublisher, FeagiZmqServerPublisherProperties, FeagiZmqServerPuller,
+    FeagiZmqServerPullerProperties, FeagiZmqServerRouter, FeagiZmqServerRouterProperties,
 };

@@ -24,16 +24,10 @@ use tower_http::{
 use utoipa::OpenApi;
 
 use crate::amalgamation;
-#[cfg(feature = "feagi-agent")]
-use feagi_config::load_config;
 #[cfg(feature = "http")]
 use crate::openapi::ApiDoc;
-#[cfg(feature = "services")]
-use feagi_services::traits::{AgentService, SystemService};
-#[cfg(feature = "services")]
-use feagi_services::{
-    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
-};
+#[cfg(feature = "feagi-agent")]
+use feagi_config::load_config;
 #[cfg(feature = "feagi-agent")]
 use feagi_io::core::protocol_implementations::websocket::{
     FeagiWebSocketServerPublisherProperties, FeagiWebSocketServerPullerProperties,
@@ -41,6 +35,12 @@ use feagi_io::core::protocol_implementations::websocket::{
 #[cfg(feature = "feagi-agent")]
 use feagi_io::core::protocol_implementations::zmq::{
     FeagiZmqServerPublisherProperties, FeagiZmqServerPullerProperties,
+};
+#[cfg(feature = "services")]
+use feagi_services::traits::{AgentService, SystemService};
+#[cfg(feature = "services")]
+use feagi_services::{
+    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
 };
 
 /// Application state shared across all HTTP handlers
@@ -76,8 +76,7 @@ pub struct ApiState {
     >,
     /// Unified registration handler (REST/ZMQ/WS share this pipeline)
     #[cfg(feature = "feagi-agent")]
-    pub agent_registration_handler:
-        Arc<parking_lot::Mutex<feagi_agent::server::FeagiAgentHandler>>,
+    pub agent_registration_handler: Arc<parking_lot::Mutex<feagi_agent::server::FeagiAgentHandler>>,
 }
 
 impl ApiState {
@@ -110,13 +109,15 @@ impl ApiState {
             .map(|transport| transport.to_lowercase())
             .collect();
 
-        if available_transports.iter().any(|transport| transport == "zmq") {
-            let sensory_address = format_tcp_endpoint(&config.zmq.host, config.ports.zmq_sensory_port);
+        if available_transports
+            .iter()
+            .any(|transport| transport == "zmq")
+        {
+            let sensory_address =
+                format_tcp_endpoint(&config.zmq.host, config.ports.zmq_sensory_port);
             let motor_address = format_tcp_endpoint(&config.zmq.host, config.ports.zmq_motor_port);
-            let visualization_address = format_tcp_endpoint(
-                &config.zmq.host,
-                config.ports.zmq_visualization_port,
-            );
+            let visualization_address =
+                format_tcp_endpoint(&config.zmq.host, config.ports.zmq_visualization_port);
 
             let sensory = FeagiZmqServerPullerProperties::new(&sensory_address)
                 .expect("Failed to create ZMQ sensory puller properties");
@@ -134,12 +135,12 @@ impl ApiState {
             .iter()
             .any(|transport| transport == "websocket" || transport == "ws")
         {
-            let sensory_address = format_ws_address(&config.websocket.host, config.websocket.sensory_port);
-            let motor_address = format_ws_address(&config.websocket.host, config.websocket.motor_port);
-            let visualization_address = format_ws_address(
-                &config.websocket.host,
-                config.websocket.visualization_port,
-            );
+            let sensory_address =
+                format_ws_address(&config.websocket.host, config.websocket.sensory_port);
+            let motor_address =
+                format_ws_address(&config.websocket.host, config.websocket.motor_port);
+            let visualization_address =
+                format_ws_address(&config.websocket.host, config.websocket.visualization_port);
 
             let sensory = FeagiWebSocketServerPullerProperties::new(&sensory_address)
                 .expect("Failed to create WebSocket sensory puller properties");
@@ -147,8 +148,9 @@ impl ApiState {
 
             let motor = FeagiWebSocketServerPublisherProperties::new(&motor_address)
                 .expect("Failed to create WebSocket motor publisher properties");
-            let visualization = FeagiWebSocketServerPublisherProperties::new(&visualization_address)
-                .expect("Failed to create WebSocket visualization publisher properties");
+            let visualization =
+                FeagiWebSocketServerPublisherProperties::new(&visualization_address)
+                    .expect("Failed to create WebSocket visualization publisher properties");
             handler.add_publisher_server(Box::new(motor));
             handler.add_publisher_server(Box::new(visualization));
         }

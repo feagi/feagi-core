@@ -16,20 +16,8 @@ echo "Running feagi-core pre-release checks (no publish, no git writes)."
 
 rustup component add rustfmt clippy
 
-chmod +x scripts/smart-version-bump.sh
-chmod +x scripts/apply-version-bumps.sh
-
-VERSION_OUTPUT="$(./scripts/smart-version-bump.sh)"
-echo "${VERSION_OUTPUT}"
-
-VERSIONS_FILE="$(echo "${VERSION_OUTPUT}" | /usr/bin/grep "VERSIONS_FILE=" | /usr/bin/cut -d'=' -f2)"
-if [ -z "${VERSIONS_FILE}" ]; then
-  echo "ERROR: failed to detect VERSIONS_FILE from smart-version-bump output."
-  exit 1
-fi
-
-export VERSIONS_FILE="${VERSIONS_FILE}"
-./scripts/apply-version-bumps.sh
+# Unified umbrella versioning: pre-release checks must validate committed manifests
+# without mutating versions inside CI/local validation runs.
 
 cargo fmt --all -- --check
 

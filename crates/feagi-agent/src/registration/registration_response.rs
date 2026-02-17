@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use feagi_serialization::SessionID;
 use crate::registration::AgentCapabilities;
+use feagi_serialization::SessionID;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum RegistrationResponse {

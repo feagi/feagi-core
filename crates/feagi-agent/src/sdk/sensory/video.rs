@@ -64,9 +64,7 @@ impl VideoEncoder {
         config: VideoEncoderConfig,
         _topology_cache: &TopologyClient,
     ) -> Result<Self, crate::FeagiAgentClientError> {
-        Ok(Self {
-            _config: config,
-        })
+        Ok(Self { _config: config })
     }
 
     pub fn apply_gaze(
@@ -98,10 +96,7 @@ impl VideoEncoder {
         Ok(())
     }
 
-    pub fn set_brightness(
-        &mut self,
-        _brightness: u8,
-    ) -> Result<(), crate::FeagiAgentClientError> {
+    pub fn set_brightness(&mut self, _brightness: u8) -> Result<(), crate::FeagiAgentClientError> {
         Ok(())
     }
 

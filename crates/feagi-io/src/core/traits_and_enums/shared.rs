@@ -79,4 +79,3 @@ pub enum FeagiEndpointState {
     /// operations.
     Errored(FeagiNetworkError),
 }
-

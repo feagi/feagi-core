@@ -36,7 +36,9 @@ use feagi_io::core::protocol_implementations::websocket::{
 use feagi_io::core::protocol_implementations::zmq::{
     FeagiZmqClientRequesterProperties, FeagiZmqServerRouterProperties,
 };
-use feagi_io::core::traits_and_enums::client::{FeagiClientRequester, FeagiClientRequesterProperties};
+use feagi_io::core::traits_and_enums::client::{
+    FeagiClientRequester, FeagiClientRequesterProperties,
+};
 use feagi_io::core::traits_and_enums::server::{FeagiServerRouter, FeagiServerRouterProperties};
 use feagi_io::core::traits_and_enums::FeagiEndpointState;
 
@@ -153,7 +155,10 @@ fn create_server(transport: Transport, endpoints: &ExampleEndpoints) -> Box<dyn 
 
 /// Creates the appropriate client (requester) implementation based on transport type.
 /// Returns a boxed trait object that can be used with transport-agnostic code.
-fn create_client(transport: Transport, endpoints: &ExampleEndpoints) -> Box<dyn FeagiClientRequester> {
+fn create_client(
+    transport: Transport,
+    endpoints: &ExampleEndpoints,
+) -> Box<dyn FeagiClientRequester> {
     match transport {
         Transport::Zmq => {
             println!("=== Client Requester Example (ZMQ Transport) ===\n");
@@ -262,7 +267,9 @@ fn run_server(mut server: Box<dyn FeagiServerRouter>) {
 /// transport implementation.
 fn run_client(mut client: Box<dyn FeagiClientRequester>) {
     // Connect to the server
-    client.request_connect().expect("Failed to request connection");
+    client
+        .request_connect()
+        .expect("Failed to request connection");
     println!("Client connection requested...");
 
     // Wait for the connection to become active

@@ -74,9 +74,9 @@ where
     T::Err: std::fmt::Display,
 {
     match env::var(name) {
-        Ok(raw) => raw.parse::<T>().map_err(|e| {
-            anyhow::anyhow!("{name} must be a valid value; got '{raw}'; error: {e}")
-        }),
+        Ok(raw) => raw
+            .parse::<T>()
+            .map_err(|e| anyhow::anyhow!("{name} must be a valid value; got '{raw}'; error: {e}")),
         Err(_) => Ok(default_value),
     }
 }
@@ -166,7 +166,10 @@ fn load_image_frame(path: &Path, color_space: &ColorSpace) -> Result<ImageFrame>
 }
 
 /// Load frames and validate consistent dimensions.
-fn load_frame_sequence(frame_paths: &[PathBuf], color_space: &ColorSpace) -> Result<Vec<ImageFrame>> {
+fn load_frame_sequence(
+    frame_paths: &[PathBuf],
+    color_space: &ColorSpace,
+) -> Result<Vec<ImageFrame>> {
     if frame_paths.is_empty() {
         return Err(anyhow::anyhow!("No frame paths provided"));
     }
@@ -243,8 +246,7 @@ fn build_agent_config(
             "config.zmq.socket_connect_timeout must be > 0"
         ));
     }
-    let registration_retries =
-        (service_startup_ms / connect_timeout_ms as f64).ceil() as u32;
+    let registration_retries = (service_startup_ms / connect_timeout_ms as f64).ceil() as u32;
     if registration_retries == 0 {
         return Err(anyhow::anyhow!(
             "Derived feagi_registration_retries must be > 0"
@@ -260,31 +262,32 @@ fn build_agent_config(
         format_tcp_endpoint(&config.agent.host, config.agent.registration_port);
     let sensory_endpoint = format_tcp_endpoint(&config.zmq.host, config.ports.zmq_sensory_port);
     let motor_endpoint = format_tcp_endpoint(&config.zmq.host, config.ports.zmq_motor_port);
-    let viz_endpoint =
-        format_tcp_endpoint(&config.zmq.host, config.ports.zmq_visualization_port);
+    let viz_endpoint = format_tcp_endpoint(&config.zmq.host, config.ports.zmq_visualization_port);
     let control_endpoint = format_tcp_endpoint(&config.zmq.host, config.ports.zmq_rest_port);
 
-    Ok(AgentConfig::new(settings.agent_id.clone(), AgentType::Sensory)
-        .with_vision_unit(
-            "segmented-vision",
-            (width as usize, height as usize),
-            3,
-            SensoryUnit::SegmentedVision,
-            settings.cortical_unit_id,
-        )
-        .with_registration_endpoint(registration_endpoint)
-        .with_sensory_endpoint(sensory_endpoint)
-        .with_motor_endpoint(motor_endpoint)
-        .with_visualization_endpoint(viz_endpoint)
-        .with_control_endpoint(control_endpoint)
-        .with_sensory_socket_config(
-            sensory_hwm,
-            sensory_linger,
-            config.zmq.streams.sensory.immediate,
-        )
-        .with_heartbeat_interval(config.zmq.client_heartbeat_timeout as f64 / 1000.0)
-        .with_connection_timeout_ms(connect_timeout_ms)
-        .with_registration_retries(registration_retries))
+    Ok(
+        AgentConfig::new(settings.agent_id.clone(), AgentType::Sensory)
+            .with_vision_unit(
+                "segmented-vision",
+                (width as usize, height as usize),
+                3,
+                SensoryUnit::SegmentedVision,
+                settings.cortical_unit_id,
+            )
+            .with_registration_endpoint(registration_endpoint)
+            .with_sensory_endpoint(sensory_endpoint)
+            .with_motor_endpoint(motor_endpoint)
+            .with_visualization_endpoint(viz_endpoint)
+            .with_control_endpoint(control_endpoint)
+            .with_sensory_socket_config(
+                sensory_hwm,
+                sensory_linger,
+                config.zmq.streams.sensory.immediate,
+            )
+            .with_heartbeat_interval(config.zmq.client_heartbeat_timeout as f64 / 1000.0)
+            .with_connection_timeout_ms(connect_timeout_ms)
+            .with_registration_retries(registration_retries),
+    )
 }
 
 /// Register the vision device for this example using the SDK connector cache.
@@ -295,16 +298,14 @@ fn register_vision_device(
 ) -> Result<()> {
     let mut sensor_cache = connector.get_sensor_cache();
     let unit_index = CorticalUnitIndex::from(settings.cortical_unit_id);
-    let channel_count =
-        CorticalChannelCount::new(1).context("CorticalChannelCount must be > 0")?;
+    let channel_count = CorticalChannelCount::new(1).context("CorticalChannelCount must be > 0")?;
     let frame_change_handling = FrameChangeHandling::Absolute;
     let image_props = frame.get_image_frame_properties();
     let input_resolution = image_props.get_image_resolution();
-    let segmented_resolutions =
-        SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-            input_resolution,
-            input_resolution,
-        );
+    let segmented_resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+        input_resolution,
+        input_resolution,
+    );
     let segmented_props = SegmentedImageFrameProperties::new(
         segmented_resolutions,
         image_props.get_color_channel_layout(),
@@ -320,10 +321,7 @@ fn register_vision_device(
     let gaze_modulation = Percentage::new_from_0_1(settings.gaze_modulation)
         .map_err(|e| anyhow::anyhow!("{e}"))
         .context("Invalid FEAGI_TEST_GAZE_MODULATION (expected 0.0-1.0)")?;
-    let initial_gaze = GazeProperties::new(
-        Percentage2D::new(gaze_x, gaze_y),
-        gaze_modulation,
-    );
+    let initial_gaze = GazeProperties::new(Percentage2D::new(gaze_x, gaze_y), gaze_modulation);
 
     sensor_cache
         .segmented_vision_register(
@@ -348,8 +346,8 @@ fn build_registrar(config: &FeagiConfig) -> Result<AgentRegistrar> {
         config.api.port,
         timeout,
     ))
-        .map_err(|e| anyhow::anyhow!("{e}"))
-        .context("Failed to create AgentRegistrar")
+    .map_err(|e| anyhow::anyhow!("{e}"))
+    .context("Failed to create AgentRegistrar")
 }
 
 fn run_example_next() {
@@ -369,7 +367,8 @@ fn run_example() -> Result<()> {
         .context("Loaded frames list is empty after validation")?;
 
     let resolution = first_frame.get_xy_resolution();
-    let agent_config = build_agent_config(&config, &settings, (resolution.width, resolution.height))?;
+    let agent_config =
+        build_agent_config(&config, &settings, (resolution.width, resolution.height))?;
 
     let agent_descriptor = AgentDescriptor::try_from_base64(&settings.agent_id)
         .map_err(|e| anyhow::anyhow!("{e}"))
@@ -377,8 +376,7 @@ fn run_example() -> Result<()> {
     let mut connector = ConnectorAgent::new_empty(agent_descriptor);
     register_vision_device(&mut connector, &settings, first_frame)?;
 
-    let mut client =
-        AgentClient::new(agent_config).context("Failed to create AgentClient")?;
+    let mut client = AgentClient::new(agent_config).context("Failed to create AgentClient")?;
     client.connect().context("Failed to connect to FEAGI")?;
 
     let registrar = build_registrar(&config)?;
@@ -388,9 +386,7 @@ fn run_example() -> Result<()> {
 
     let runtime = Runtime::new().context("Failed to create Tokio runtime")?;
     runtime
-        .block_on(
-            registrar.sync_device_registrations(device_registrations, &settings.agent_id),
-        )
+        .block_on(registrar.sync_device_registrations(device_registrations, &settings.agent_id))
         .map_err(|e| anyhow::anyhow!("{e}"))
         .context("Failed to sync device registrations to FEAGI")?;
 

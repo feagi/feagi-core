@@ -339,7 +339,9 @@ impl BurstLoopRunner {
             motor_last_publish_time: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
             visualization_subscriptions: Arc::new(ParkingLotRwLock::new(ahash::AHashSet::new())),
             visualization_output_rates_hz: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
-            visualization_last_publish_time: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
+            visualization_last_publish_time: Arc::new(
+                ParkingLotRwLock::new(ahash::AHashMap::new()),
+            ),
             fcl_sampler_frequency: Arc::new(Mutex::new(30.0)), // Default 30Hz for visualization
             fcl_sampler_consumer: Arc::new(Mutex::new(1)),     // Default: 1 = visualization only
             cached_burst_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
@@ -516,7 +518,9 @@ impl BurstLoopRunner {
     pub fn unregister_visualization_subscriptions(&self, agent_id: &str) {
         if self.visualization_subscriptions.write().remove(agent_id) {
             self.visualization_output_rates_hz.write().remove(agent_id);
-            self.visualization_last_publish_time.write().remove(agent_id);
+            self.visualization_last_publish_time
+                .write()
+                .remove(agent_id);
             info!(
                 "[BURST-RUNNER] Removed visualization subscription for agent '{}'",
                 agent_id
@@ -2044,12 +2048,10 @@ fn burst_loop(
 
                             let publish_start = Instant::now();
                             for agent_id in viz_due_agents.iter() {
-                                if let Err(e) = publisher
-                                    .publish_raw_fire_queue_for_agent(
-                                        agent_id,
-                                        raw_snapshot.clone(),
-                                    )
-                                {
+                                if let Err(e) = publisher.publish_raw_fire_queue_for_agent(
+                                    agent_id,
+                                    raw_snapshot.clone(),
+                                ) {
                                     error!(
                                         "[BURST-LOOP] ❌ VIZ HANDOFF ERROR for '{}': {}",
                                         agent_id, e

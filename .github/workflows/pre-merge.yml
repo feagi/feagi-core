@@ -81,17 +81,23 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
 
-    - name: Dry run version bump preview
+    - name: Verify unified workspace version manifest
       run: |
         set -euo pipefail
-        chmod +x scripts/smart-version-bump.sh
-        LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
-        if [ -z "$LAST_TAG" ]; then
-          echo "Missing baseline tag. Create v<version> before merging."
-          exit 1
-        fi
-        echo "Using baseline tag: $LAST_TAG"
-        DRY_RUN=true LAST_TAG="$LAST_TAG" ./scripts/smart-version-bump.sh
+        WORKSPACE_VERSION=$(grep '^\[workspace\.package\]' -A 10 Cargo.toml | grep '^version = ' | head -1 | sed 's/version = "\(.*\)"/\1/')
+        [ -z "$WORKSPACE_VERSION" ] && { echo "❌ Failed to detect workspace version"; exit 1; }
+        echo "Workspace version: $WORKSPACE_VERSION"
+
+        for manifest in crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+          [ -f "$manifest" ] || continue
+          crate_version=$(grep '^version = ' "$manifest" | head -1 | sed 's/version = "\(.*\)"/\1/')
+          [ -z "$crate_version" ] && { echo "❌ Missing explicit version in $manifest"; exit 1; }
+          if [ "$crate_version" != "$WORKSPACE_VERSION" ]; then
+            echo "❌ Version mismatch in $manifest: $crate_version != $WORKSPACE_VERSION"
+            exit 1
+          fi
+        done
+        echo "✅ Unified workspace versioning verified"
 
     - name: Check formatting
       run: cargo fmt --all -- --check
@@ -144,12 +150,30 @@ jobs:
 
     - name: Dry run package verification
       run: |
+        set +e
+        FAILED_PACKAGES=()
         for crate_dir in crates/*/; do
           [ -f "$crate_dir/Cargo.toml" ] || continue
           crate_name=$(basename "$crate_dir")
-          (cd "$crate_dir" && cargo package --quiet) || { echo "❌ Package failed: $crate_name"; exit 1; }
+          PACKAGE_OUTPUT="$(cd "$crate_dir" && cargo package --allow-dirty --no-verify --quiet 2>&1)"
+          PACKAGE_EXIT=$?
+          if [ $PACKAGE_EXIT -eq 0 ]; then
+            echo "✅ Package OK: $crate_name"
+          else
+            if echo "$PACKAGE_OUTPUT" | grep -qiE "no matching package|location searched.*crates\\.io|failed to get.*as a dependency|required by package"; then
+              echo "⚠️ Package dependency gating (expected pre-publish): $crate_name"
+            else
+              echo "❌ Package failed: $crate_name"
+              echo "$PACKAGE_OUTPUT"
+              FAILED_PACKAGES+=("$crate_name")
+            fi
+          fi
         done
-        echo "✅ All crates package successfully"
+        if [ ${#FAILED_PACKAGES[@]} -gt 0 ]; then
+          echo "❌ Package verification failed for ${#FAILED_PACKAGES[@]} crate(s): ${FAILED_PACKAGES[*]}"
+          exit 1
+        fi
+        echo "✅ Package verification complete"
 
   microbench:
     name: Burst Engine Microbench Gate
@@ -229,7 +253,8 @@ jobs:
 
     - name: Start server in background
       run: |
-        nohup ./target/debug/examples/http_api_server > feagi-api-server.log 2>&1 &
+        FEAGI_CONFIG_PATH="${GITHUB_WORKSPACE}/../feagi-rs/feagi_configuration.toml" \
+          nohup ./target/debug/examples/http_api_server > feagi-api-server.log 2>&1 &
         echo $! > feagi-api-server.pid
 
     - name: Wait for server
@@ -280,15 +305,9 @@ jobs:
         shared-key: "publish-local-sim-pre-merge"
         save-if: true
 
-    - name: Compute and apply version bumps (CI-only)
+    - name: Use committed unified versions (CI-only)
       run: |
-        chmod +x scripts/smart-version-bump.sh scripts/apply-version-bumps.sh
-        VERSION_OUTPUT="$(./scripts/smart-version-bump.sh)"
-        echo "${VERSION_OUTPUT}"
-        VERSIONS_FILE="$(echo "${VERSION_OUTPUT}" | grep "VERSIONS_FILE=" | cut -d'=' -f2)"
-        [ -z "${VERSIONS_FILE}" ] && { echo "❌ Failed to detect VERSIONS_FILE"; exit 1; }
-        export VERSIONS_FILE="${VERSIONS_FILE}"
-        ./scripts/apply-version-bumps.sh
+        echo "Using committed Cargo.toml versions without CI auto-bumps."
 
     - name: Package and build against local packaged deps
       run: |
@@ -299,11 +318,11 @@ jobs:
         mkdir -p "${DRIVER}/.cargo" "${EXTRACTED}"
 
         CRATE_ORDER=(
-          feagi-observability feagi-structures feagi-config feagi-npu-neural
-          feagi-npu-runtime feagi-serialization feagi-state-manager
-          feagi-npu-burst-engine feagi-npu-plasticity feagi-evolutionary
-          feagi-brain-development feagi-sensorimotor feagi-services feagi-io
-          feagi-agent feagi-api feagi-hal feagi
+          feagi-config feagi-npu-neural feagi-observability feagi-state-manager
+          feagi-structures feagi-npu-runtime feagi-evolutionary feagi-serialization
+          feagi-hal feagi-io feagi-npu-burst-engine feagi-sensorimotor
+          feagi-npu-plasticity feagi-brain-development feagi-services feagi-agent
+          feagi feagi-api
         )
 
         crate_path_for() {

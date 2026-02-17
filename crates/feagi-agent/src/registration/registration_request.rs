@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use feagi_io::core::protocol_implementations::ProtocolImplementation;
-use crate::registration::{AgentDescriptor};
 use crate::registration::common::{AgentCapabilities, AuthToken};
+use crate::registration::AgentDescriptor;
+use feagi_io::core::protocol_implementations::ProtocolImplementation;
+use serde::{Deserialize, Serialize};
 
 /// A request from an agent to register with FEAGI.
 ///

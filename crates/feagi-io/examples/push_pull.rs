@@ -214,17 +214,15 @@ fn run_server(mut server: Box<dyn FeagiServerPuller>) {
     // Receive loop
     loop {
         match server.poll() {
-            FeagiEndpointState::ActiveHasData => {
-                match server.consume_retrieved_data() {
-                    Ok(data) => {
-                        let message = String::from_utf8_lossy(data);
-                        println!("[SERVER] Received: {}", message);
-                    }
-                    Err(e) => {
-                        eprintln!("[SERVER] Error consuming data: {}", e);
-                    }
+            FeagiEndpointState::ActiveHasData => match server.consume_retrieved_data() {
+                Ok(data) => {
+                    let message = String::from_utf8_lossy(data);
+                    println!("[SERVER] Received: {}", message);
                 }
-            }
+                Err(e) => {
+                    eprintln!("[SERVER] Error consuming data: {}", e);
+                }
+            },
             FeagiEndpointState::ActiveWaiting => {
                 // No data yet, keep polling
                 thread::sleep(Duration::from_millis(10));
@@ -247,7 +245,9 @@ fn run_server(mut server: Box<dyn FeagiServerPuller>) {
 /// transport implementation.
 fn run_client(mut client: Box<dyn FeagiClientPusher>) {
     // Connect to the server
-    client.request_connect().expect("Failed to request connection");
+    client
+        .request_connect()
+        .expect("Failed to request connection");
     println!("Client connection requested...");
 
     // Wait for the connection to become active

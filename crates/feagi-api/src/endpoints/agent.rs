@@ -11,19 +11,19 @@ use std::collections::HashMap;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use crate::v1::agent_dtos::*;
-use feagi_services::traits::agent_service::HeartbeatRequest as ServiceHeartbeatRequest;
 use base64::Engine;
+use feagi_services::traits::agent_service::HeartbeatRequest as ServiceHeartbeatRequest;
 use tracing::{error, info, warn};
 
-#[cfg(feature = "feagi-agent")]
-use feagi_agent::registration::{
-    AgentCapabilities as RegistrationCapabilities, AgentDescriptor, AuthToken, RegistrationRequest,
-    RegistrationResponse,
-};
 #[cfg(feature = "feagi-agent")]
 use crate::common::agent_registration::{
     auto_create_cortical_areas_from_device_registrations as auto_create_cortical_areas_shared,
     derive_motor_cortical_ids_from_device_registrations,
+};
+#[cfg(feature = "feagi-agent")]
+use feagi_agent::registration::{
+    AgentCapabilities as RegistrationCapabilities, AgentDescriptor, AuthToken, RegistrationRequest,
+    RegistrationResponse,
 };
 #[cfg(feature = "feagi-agent")]
 use feagi_agent::sdk::ConnectorAgent;
@@ -54,9 +54,9 @@ fn parse_auth_token(request: &AgentRegistrationRequest) -> ApiResult<AuthToken> 
 fn derive_capabilities_from_device_registrations(
     device_registrations: &serde_json::Value,
 ) -> ApiResult<Vec<RegistrationCapabilities>> {
-    let obj = device_registrations.as_object().ok_or_else(|| {
-        ApiError::invalid_input("device_registrations must be a JSON object")
-    })?;
+    let obj = device_registrations
+        .as_object()
+        .ok_or_else(|| ApiError::invalid_input("device_registrations must be a JSON object"))?;
 
     let input_units = obj
         .get("input_units_and_encoder_properties")
@@ -102,9 +102,7 @@ fn derive_capabilities_from_visualization_capability(
             )
         })?;
     let rate_hz = viz.get("rate_hz").and_then(|v| v.as_f64()).ok_or_else(|| {
-        ApiError::invalid_input(
-            "capabilities.visualization must include rate_hz (number > 0)",
-        )
+        ApiError::invalid_input("capabilities.visualization must include rate_hz (number > 0)")
     })?;
     if rate_hz <= 0.0 {
         return Err(ApiError::invalid_input(
@@ -227,11 +225,10 @@ pub async fn register_agent(
 
         let (requested_capabilities, visualization_requested) = match &device_registrations_opt {
             Some(device_registrations) => {
-                let caps =
-                    derive_capabilities_from_device_registrations(device_registrations)?;
-                let viz = caps.iter().any(|c| {
-                    matches!(c, RegistrationCapabilities::ReceiveNeuronVisualizations)
-                });
+                let caps = derive_capabilities_from_device_registrations(device_registrations)?;
+                let viz = caps
+                    .iter()
+                    .any(|c| matches!(c, RegistrationCapabilities::ReceiveNeuronVisualizations));
                 (caps, viz)
             }
             None => {
@@ -240,9 +237,11 @@ pub async fn register_agent(
             }
         };
 
-        let runtime_status = state.runtime_service.get_status().await.map_err(|e| {
-            ApiError::internal(format!("Failed to read runtime status: {}", e))
-        })?;
+        let runtime_status = state
+            .runtime_service
+            .get_status()
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to read runtime status: {}", e)))?;
         let burst_frequency_hz = runtime_status.frequency_hz;
         if burst_frequency_hz <= 0.0 {
             return Err(ApiError::internal(
@@ -273,9 +272,9 @@ pub async fn register_agent(
 
         let mut handler_guard = registration_handler.lock();
         let protocol = match request.chosen_transport.as_deref() {
-            Some(transport) => handler_guard.parse_protocol(transport).map_err(|e| {
-                ApiError::invalid_input(format!("Unsupported transport: {e}"))
-            })?,
+            Some(transport) => handler_guard
+                .parse_protocol(transport)
+                .map_err(|e| ApiError::invalid_input(format!("Unsupported transport: {e}")))?,
             None => handler_guard
                 .default_protocol()
                 .map_err(|e| ApiError::internal(format!("Missing default transport: {e}")))?,
@@ -363,13 +362,11 @@ pub async fn register_agent(
                             .unwrap_or(false);
 
                         if output_units_present {
-                            let cortical_ids =
-                                derive_motor_cortical_ids_from_device_registrations(
-                                    &device_registrations_for_autocreate,
-                                )
-                                .map_err(ApiError::invalid_input)?;
-                            let rate_hz =
-                                motor_rate_hz.unwrap_or(burst_frequency_hz);
+                            let cortical_ids = derive_motor_cortical_ids_from_device_registrations(
+                                &device_registrations_for_autocreate,
+                            )
+                            .map_err(ApiError::invalid_input)?;
+                            let rate_hz = motor_rate_hz.unwrap_or(burst_frequency_hz);
                             state
                                 .runtime_service
                                 .register_motor_subscriptions(
@@ -385,27 +382,30 @@ pub async fn register_agent(
             } else {
                 let agent_descriptor = parse_agent_descriptor(&request.agent_id)?;
                 let mut connectors = state.agent_connectors.write();
-                connectors.entry(agent_descriptor.clone()).or_insert_with(|| {
-                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor.clone())))
-                });
+                connectors
+                    .entry(agent_descriptor.clone())
+                    .or_insert_with(|| {
+                        Arc::new(Mutex::new(ConnectorAgent::new_empty(
+                            agent_descriptor.clone(),
+                        )))
+                    });
             }
 
             if visualization_requested {
-                let rate_hz =
-                    visualization_rate_hz.unwrap_or(burst_frequency_hz);
+                let rate_hz = visualization_rate_hz.unwrap_or(burst_frequency_hz);
                 state
                     .runtime_service
-                    .register_visualization_subscriptions(
-                        &request.agent_id,
-                        rate_hz,
-                    )
+                    .register_visualization_subscriptions(&request.agent_id, rate_hz)
                     .await
                     .map_err(ApiError::from)?;
             }
 
             let mut endpoint_map = HashMap::new();
             for (capability, endpoint) in endpoints {
-                endpoint_map.insert(capability_key(&capability).to_string(), serde_json::json!(endpoint));
+                endpoint_map.insert(
+                    capability_key(&capability).to_string(),
+                    serde_json::json!(endpoint),
+                );
             }
 
             let session_b64 = base64::engine::general_purpose::STANDARD.encode(session_id.bytes());
@@ -1312,7 +1312,9 @@ pub async fn import_device_registrations(
                         "🔧 [API] Creating new ConnectorAgent for agent '{}'",
                         agent_id
                     );
-                    Arc::new(Mutex::new(ConnectorAgent::new_empty(agent_descriptor.clone())))
+                    Arc::new(Mutex::new(ConnectorAgent::new_empty(
+                        agent_descriptor.clone(),
+                    )))
                 })
                 .clone();
             if was_existing {

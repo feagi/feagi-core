@@ -1,5 +1,5 @@
-mod feagi_agent_handler;
 pub mod auth;
+mod feagi_agent_handler;
 mod registration_transport;
 
 pub use feagi_agent_handler::FeagiAgentHandler;

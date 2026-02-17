@@ -14,7 +14,11 @@ pub struct FeagiApiConfig {
 
 impl FeagiApiConfig {
     pub fn new(host: String, port: u16, timeout: Duration) -> Self {
-        Self { host, port, timeout }
+        Self {
+            host,
+            port,
+            timeout,
+        }
     }
 
     fn base_url(&self) -> String {
@@ -57,7 +61,11 @@ impl AgentRegistrar {
 
     /// Returns a client that can fetch topology from GET /v1/connectome/topology.
     #[cfg(feature = "sdk-io")]
-    pub fn topology_cache(&self) -> Result<crate::sdk::base::TopologyClient, FeagiAgentClientError> {
-        Ok(crate::sdk::base::TopologyClient::new(self.config.base_url()))
+    pub fn topology_cache(
+        &self,
+    ) -> Result<crate::sdk::base::TopologyClient, FeagiAgentClientError> {
+        Ok(crate::sdk::base::TopologyClient::new(
+            self.config.base_url(),
+        ))
     }
 }

@@ -1,6 +1,6 @@
+use feagi_agent::registration::AgentCapabilities;
 use feagi_agent::server::auth::DummyAuth;
 use feagi_agent::server::FeagiAgentHandler;
-use feagi_agent::registration::AgentCapabilities;
 use feagi_config::FeagiConfig;
 use feagi_io::core::protocol_implementations::ProtocolImplementation;
 use feagi_serialization::SessionID;

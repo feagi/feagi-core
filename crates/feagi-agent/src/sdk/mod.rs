@@ -123,5 +123,5 @@ pub mod motor;
 #[cfg(feature = "sdk")]
 pub mod sensory;
 
-pub use crate::registration::AuthToken;
 pub use crate::registration::AgentDescriptor;
+pub use crate::registration::AuthToken;

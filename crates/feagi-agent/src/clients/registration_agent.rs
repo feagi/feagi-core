@@ -11,8 +11,8 @@ use feagi_io::core::traits_and_enums::client::FeagiClientRequester;
 use feagi_io::core::traits_and_enums::FeagiEndpointState;
 use feagi_serialization::SessionID;
 
-use crate::FeagiAgentClientError;
 use crate::registration::{AgentCapabilities, RegistrationRequest, RegistrationResponse};
+use crate::FeagiAgentClientError;
 
 pub struct RegistrationAgent {
     io_client: Box<dyn FeagiClientRequester>,
@@ -44,8 +44,9 @@ impl RegistrationAgent {
         &mut self,
         registration_request: RegistrationRequest,
     ) -> Result<(SessionID, HashMap<AgentCapabilities, String>), FeagiAgentClientError> {
-        let request_bytes = serde_json::to_vec(&registration_request)
-            .map_err(|e| FeagiAgentClientError::UnableToSendData(format!("Failed to serialize request: {}", e)))?;
+        let request_bytes = serde_json::to_vec(&registration_request).map_err(|e| {
+            FeagiAgentClientError::UnableToSendData(format!("Failed to serialize request: {}", e))
+        })?;
 
         self.io_client
             .publish_request(&request_bytes)
@@ -61,24 +62,29 @@ impl RegistrationAgent {
                     let response_bytes = response_slice.to_vec();
 
                     let response: RegistrationResponse = serde_json::from_slice(&response_bytes)
-                        .map_err(|e| FeagiAgentClientError::UnableToDecodeReceivedData(format!("Unable to parse response: {}", e)))?;
+                        .map_err(|e| {
+                            FeagiAgentClientError::UnableToDecodeReceivedData(format!(
+                                "Unable to parse response: {}",
+                                e
+                            ))
+                        })?;
 
                     return match response {
-                        RegistrationResponse::FailedInvalidRequest => Err(
-                            FeagiAgentClientError::ConnectionFailed(
+                        RegistrationResponse::FailedInvalidRequest => {
+                            Err(FeagiAgentClientError::ConnectionFailed(
                                 "Server rejected request as invalid!".to_string(),
-                            ),
-                        ),
-                        RegistrationResponse::FailedInvalidAuth => Err(
-                            FeagiAgentClientError::ConnectionFailed(
+                            ))
+                        }
+                        RegistrationResponse::FailedInvalidAuth => {
+                            Err(FeagiAgentClientError::ConnectionFailed(
                                 "Server rejected authentication!".to_string(),
-                            ),
-                        ),
-                        RegistrationResponse::AlreadyRegistered => Err(
-                            FeagiAgentClientError::ConnectionFailed(
+                            ))
+                        }
+                        RegistrationResponse::AlreadyRegistered => {
+                            Err(FeagiAgentClientError::ConnectionFailed(
                                 "Agent is already registered with this server!".to_string(),
-                            ),
-                        ),
+                            ))
+                        }
                         RegistrationResponse::Success(session_id, mapped_capabilities) => {
                             Ok((session_id, mapped_capabilities))
                         }

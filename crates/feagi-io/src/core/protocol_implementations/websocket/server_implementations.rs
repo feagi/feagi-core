@@ -10,15 +10,14 @@ use std::net::{TcpListener, TcpStream};
 use feagi_serialization::SessionID;
 use tungstenite::{accept, Message, WebSocket};
 
-use crate::FeagiNetworkError;
-use crate::core::protocol_implementations::ProtocolImplementation;
 use crate::core::protocol_implementations::websocket::shared_functions::extract_host_port;
-use crate::core::traits_and_enums::FeagiEndpointState;
+use crate::core::protocol_implementations::ProtocolImplementation;
 use crate::core::traits_and_enums::server::{
-    FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties,
-    FeagiServerPuller, FeagiServerPullerProperties,
-    FeagiServerRouter, FeagiServerRouterProperties,
+    FeagiServer, FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller,
+    FeagiServerPullerProperties, FeagiServerRouter, FeagiServerRouterProperties,
 };
+use crate::core::traits_and_enums::FeagiEndpointState;
+use crate::FeagiNetworkError;
 
 /// Type alias for WebSocket over TcpStream
 type WsStream = WebSocket<TcpStream>;
@@ -296,11 +295,8 @@ impl FeagiWebSocketServerPuller {
                     if stream.set_nonblocking(true).is_err() {
                         continue;
                     }
-                    match accept(stream) {
-                        Ok(ws) => {
-                            self.clients.push(ws);
-                        }
-                        Err(_) => {}
+                    if let Ok(ws) = accept(stream) {
+                        self.clients.push(ws);
                     }
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
@@ -528,16 +524,13 @@ impl FeagiWebSocketServerRouter {
                     if stream.set_nonblocking(true).is_err() {
                         continue;
                     }
-                    match accept(stream) {
-                        Ok(ws) => {
-                            let index = self.clients.len();
-                            let session_id = SessionID::new_random();
+                    if let Ok(ws) = accept(stream) {
+                        let index = self.clients.len();
+                        let session_id = SessionID::new_random();
 
-                            self.clients.push(ws);
-                            self.index_to_session.insert(index, session_id);
-                            self.session_to_index.insert(session_id, index);
-                        }
-                        Err(_) => {}
+                        self.clients.push(ws);
+                        self.index_to_session.insert(index, session_id);
+                        self.session_to_index.insert(session_id, index);
                     }
                 }
                 Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
@@ -608,7 +601,11 @@ impl FeagiWebSocketServerRouter {
         let mut new_session_to_index = HashMap::new();
 
         for (old_idx, session_id) in self.index_to_session.drain() {
-            let new_idx = if old_idx > index { old_idx - 1 } else { old_idx };
+            let new_idx = if old_idx > index {
+                old_idx - 1
+            } else {
+                old_idx
+            };
             new_index_to_session.insert(new_idx, session_id);
             new_session_to_index.insert(session_id, new_idx);
         }

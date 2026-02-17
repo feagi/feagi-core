@@ -5,13 +5,13 @@
 //!
 //! Use `connect` for ZMQ or `connect_ws` for WebSocket; flow and API are the same.
 
-use feagi_io::core::protocol_implementations::zmq::{
-    FeagiZmqClientPusherProperties, FeagiZmqClientRequesterProperties,
-    FeagiZmqClientSubscriberProperties,
-};
 use feagi_io::core::protocol_implementations::websocket::{
     FeagiWebSocketClientPusherProperties, FeagiWebSocketClientRequesterProperties,
     FeagiWebSocketClientSubscriberProperties,
+};
+use feagi_io::core::protocol_implementations::zmq::{
+    FeagiZmqClientPusherProperties, FeagiZmqClientRequesterProperties,
+    FeagiZmqClientSubscriberProperties,
 };
 use feagi_io::core::traits_and_enums::client::{
     FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequesterProperties,
@@ -22,10 +22,8 @@ use feagi_io::FeagiNetworkError;
 use feagi_serialization::SessionID;
 
 use crate::clients::registration_agent::RegistrationAgent;
+use crate::registration::{AgentCapabilities, AgentDescriptor, AuthToken, RegistrationRequest};
 use crate::FeagiAgentClientError;
-use crate::registration::{
-    AgentCapabilities, AgentDescriptor, AuthToken, RegistrationRequest,
-};
 
 /// Optional device_registrations JSON for auto IPU/OPU creation (when server allows).
 pub type DeviceRegistrations = Option<serde_json::Value>;
@@ -240,12 +238,13 @@ impl ConnectorAgent {
     /// (including session_id in the header). Use `session_id()` and
     /// `feagi_serialization::FeagiByteContainer::set_session_id` when building the payload.
     pub fn push_sensor_data(&mut self, data: &[u8]) -> Result<(), FeagiNetworkError> {
-        if !matches!(self.sensor_pusher.poll(), FeagiEndpointState::ActiveWaiting) {
-            if matches!(self.sensor_pusher.poll(), FeagiEndpointState::Errored(_)) {
-                return Err(FeagiNetworkError::SendFailed(
-                    "Sensory channel in error state".to_string(),
-                ));
-            }
+        let state = self.sensor_pusher.poll();
+        if !matches!(state, FeagiEndpointState::ActiveWaiting)
+            && matches!(state, FeagiEndpointState::Errored(_))
+        {
+            return Err(FeagiNetworkError::SendFailed(
+                "Sensory channel in error state".to_string(),
+            ));
         }
         self.sensor_pusher.publish_data(data)
     }

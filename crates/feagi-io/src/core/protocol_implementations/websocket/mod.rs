@@ -33,20 +33,14 @@ pub mod shared_functions;
 
 // Client implementations and properties
 pub use client_implementations::{
-    FeagiWebSocketClientPusher,
-    FeagiWebSocketClientPusherProperties,
-    FeagiWebSocketClientRequester,
-    FeagiWebSocketClientRequesterProperties,
-    FeagiWebSocketClientSubscriber,
-    FeagiWebSocketClientSubscriberProperties,
+    FeagiWebSocketClientPusher, FeagiWebSocketClientPusherProperties,
+    FeagiWebSocketClientRequester, FeagiWebSocketClientRequesterProperties,
+    FeagiWebSocketClientSubscriber, FeagiWebSocketClientSubscriberProperties,
 };
 
 // Server implementations and properties
 pub use server_implementations::{
-    FeagiWebSocketServerPublisher,
-    FeagiWebSocketServerPublisherProperties,
-    FeagiWebSocketServerPuller,
-    FeagiWebSocketServerPullerProperties,
-    FeagiWebSocketServerRouter,
+    FeagiWebSocketServerPublisher, FeagiWebSocketServerPublisherProperties,
+    FeagiWebSocketServerPuller, FeagiWebSocketServerPullerProperties, FeagiWebSocketServerRouter,
     FeagiWebSocketServerRouterProperties,
 };

@@ -4,5 +4,5 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, Serialize, Deserialize)]
 pub enum ProtocolImplementation {
     WebSocket,
-    ZMQ
+    ZMQ,
 }

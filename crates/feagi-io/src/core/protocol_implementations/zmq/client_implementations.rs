@@ -11,14 +11,13 @@
 
 use zmq::{Context, Message, Socket};
 
-use crate::FeagiNetworkError;
 use crate::core::protocol_implementations::zmq::shared::ZmqUrl;
-use crate::core::traits_and_enums::FeagiEndpointState;
 use crate::core::traits_and_enums::client::{
-    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties,
-    FeagiClientRequester, FeagiClientRequesterProperties,
-    FeagiClientSubscriber, FeagiClientSubscriberProperties,
+    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester,
+    FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties,
 };
+use crate::core::traits_and_enums::FeagiEndpointState;
+use crate::FeagiNetworkError;
 
 // ============================================================================
 // Subscriber
@@ -47,7 +46,9 @@ impl FeagiZmqClientSubscriberProperties {
     /// Returns an error if the address is invalid.
     pub fn new(server_address: &str) -> Result<Self, FeagiNetworkError> {
         let zmq_url = ZmqUrl::new(server_address)?;
-        Ok(Self { server_address: zmq_url })
+        Ok(Self {
+            server_address: zmq_url,
+        })
     }
 }
 
@@ -231,7 +232,9 @@ impl FeagiZmqClientPusherProperties {
     /// Returns an error if the address is invalid.
     pub fn new(server_address: &str) -> Result<Self, FeagiNetworkError> {
         let zmq_url = ZmqUrl::new(server_address)?;
-        Ok(Self { server_address: zmq_url })
+        Ok(Self {
+            server_address: zmq_url,
+        })
     }
 }
 
@@ -334,15 +337,13 @@ impl FeagiClientPusher for FeagiZmqClientPusher {
     fn publish_data(&mut self, data: &[u8]) -> Result<(), FeagiNetworkError> {
         match &self.current_state {
             FeagiEndpointState::ActiveWaiting | FeagiEndpointState::ActiveHasData => {
-                self.socket
-                    .send(data, zmq::DONTWAIT)
-                    .map_err(|e| {
-                        if e == zmq::Error::EAGAIN {
-                            FeagiNetworkError::SendFailed("Socket would block".to_string())
-                        } else {
-                            FeagiNetworkError::SendFailed(e.to_string())
-                        }
-                    })?;
+                self.socket.send(data, zmq::DONTWAIT).map_err(|e| {
+                    if e == zmq::Error::EAGAIN {
+                        FeagiNetworkError::SendFailed("Socket would block".to_string())
+                    } else {
+                        FeagiNetworkError::SendFailed(e.to_string())
+                    }
+                })?;
                 Ok(())
             }
             _ => Err(FeagiNetworkError::SendFailed(
@@ -381,7 +382,9 @@ impl FeagiZmqClientRequesterProperties {
     /// Returns an error if the address is invalid.
     pub fn new(server_address: &str) -> Result<Self, FeagiNetworkError> {
         let zmq_url = ZmqUrl::new(server_address)?;
-        Ok(Self { server_address: zmq_url })
+        Ok(Self {
+            server_address: zmq_url,
+        })
     }
 }
 
@@ -463,7 +466,7 @@ impl FeagiZmqClientRequester {
         if self.socket.get_rcvmore()? {
             // First frame was delimiter, receive payload
             self.socket.recv(&mut self.payload_msg, 0)?;
-            
+
             // Drain any extra frames
             while self.socket.get_rcvmore()? {
                 let mut discard = Message::new();

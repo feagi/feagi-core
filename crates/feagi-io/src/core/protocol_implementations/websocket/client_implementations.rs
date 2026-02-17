@@ -8,16 +8,15 @@ use std::net::TcpStream;
 
 use tungstenite::{connect, Message, WebSocket};
 
-use crate::FeagiNetworkError;
 use crate::core::protocol_implementations::websocket::shared_functions::{
     extract_host_port, normalize_ws_url,
 };
-use crate::core::traits_and_enums::FeagiEndpointState;
 use crate::core::traits_and_enums::client::{
-    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties,
-    FeagiClientRequester, FeagiClientRequesterProperties,
-    FeagiClientSubscriber, FeagiClientSubscriberProperties,
+    FeagiClient, FeagiClientPusher, FeagiClientPusherProperties, FeagiClientRequester,
+    FeagiClientRequesterProperties, FeagiClientSubscriber, FeagiClientSubscriberProperties,
 };
+use crate::core::traits_and_enums::FeagiEndpointState;
+use crate::FeagiNetworkError;
 
 /// Type alias for WebSocket over TcpStream
 type WsStream = WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
@@ -91,17 +90,16 @@ impl FeagiWebSocketClientSubscriber {
                 true
             }
             Ok(Message::Close(_)) => {
-                self.current_state = FeagiEndpointState::Errored(
-                    FeagiNetworkError::ReceiveFailed("Connection closed".to_string()),
-                );
+                self.current_state = FeagiEndpointState::Errored(FeagiNetworkError::ReceiveFailed(
+                    "Connection closed".to_string(),
+                ));
                 false
             }
             Ok(_) => false, // Ping/Pong
             Err(tungstenite::Error::Io(ref e)) if e.kind() == ErrorKind::WouldBlock => false,
             Err(e) => {
-                self.current_state = FeagiEndpointState::Errored(
-                    FeagiNetworkError::ReceiveFailed(e.to_string()),
-                );
+                self.current_state =
+                    FeagiEndpointState::Errored(FeagiNetworkError::ReceiveFailed(e.to_string()));
                 false
             }
         }
@@ -110,11 +108,12 @@ impl FeagiWebSocketClientSubscriber {
 
 impl FeagiClient for FeagiWebSocketClientSubscriber {
     fn poll(&mut self) -> &FeagiEndpointState {
-        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
-            if self.try_receive() {
-                self.has_data = true;
-                self.current_state = FeagiEndpointState::ActiveHasData;
-            }
+        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting)
+            && !self.has_data
+            && self.try_receive()
+        {
+            self.has_data = true;
+            self.current_state = FeagiEndpointState::ActiveHasData;
         }
         &self.current_state
     }
@@ -402,17 +401,16 @@ impl FeagiWebSocketClientRequester {
                 true
             }
             Ok(Message::Close(_)) => {
-                self.current_state = FeagiEndpointState::Errored(
-                    FeagiNetworkError::ReceiveFailed("Connection closed".to_string()),
-                );
+                self.current_state = FeagiEndpointState::Errored(FeagiNetworkError::ReceiveFailed(
+                    "Connection closed".to_string(),
+                ));
                 false
             }
             Ok(_) => false,
             Err(tungstenite::Error::Io(ref e)) if e.kind() == ErrorKind::WouldBlock => false,
             Err(e) => {
-                self.current_state = FeagiEndpointState::Errored(
-                    FeagiNetworkError::ReceiveFailed(e.to_string()),
-                );
+                self.current_state =
+                    FeagiEndpointState::Errored(FeagiNetworkError::ReceiveFailed(e.to_string()));
                 false
             }
         }
@@ -421,11 +419,12 @@ impl FeagiWebSocketClientRequester {
 
 impl FeagiClient for FeagiWebSocketClientRequester {
     fn poll(&mut self) -> &FeagiEndpointState {
-        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting) && !self.has_data {
-            if self.try_receive() {
-                self.has_data = true;
-                self.current_state = FeagiEndpointState::ActiveHasData;
-            }
+        if matches!(self.current_state, FeagiEndpointState::ActiveWaiting)
+            && !self.has_data
+            && self.try_receive()
+        {
+            self.has_data = true;
+            self.current_state = FeagiEndpointState::ActiveHasData;
         }
         &self.current_state
     }

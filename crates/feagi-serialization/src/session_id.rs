@@ -14,7 +14,9 @@ impl SessionID {
     }
 
     pub const fn new_null() -> Self {
-        Self { bytes: [0; SessionID::NUMBER_BYTES] }
+        Self {
+            bytes: [0; SessionID::NUMBER_BYTES],
+        }
     }
 
     pub fn new_random() -> Self {

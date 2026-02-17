@@ -1,13 +1,13 @@
-mod feagi_agent_client_error;
 #[cfg(feature = "sdk")]
 pub mod core;
+mod feagi_agent_client_error;
 #[cfg(feature = "sdk")]
 pub use core::{AgentClient, AgentConfig, AgentType};
-pub mod server;
 pub mod clients;
+mod feagi_agent_server_error;
 pub mod registration;
 pub mod sdk;
-mod feagi_agent_server_error;
+pub mod server;
 
 pub use feagi_agent_client_error::FeagiAgentClientError;
 

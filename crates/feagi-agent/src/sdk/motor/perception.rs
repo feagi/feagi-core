@@ -23,8 +23,11 @@ pub struct PerceptionDecoderConfig {
 
 impl PerceptionDecoderConfig {
     pub fn to_agent_config(&self) -> Result<AgentConfig, crate::FeagiAgentClientError> {
-        Ok(AgentConfig::new(self.agent_id.clone(), AgentType::Motor)
-            .with_registration_endpoint(format!("tcp://{}:{}", self.feagi_host, self.feagi_api_port)))
+        Ok(
+            AgentConfig::new(self.agent_id.clone(), AgentType::Motor).with_registration_endpoint(
+                format!("tcp://{}:{}", self.feagi_host, self.feagi_api_port),
+            ),
+        )
     }
 
     pub fn cortical_ids(&self) -> &[CorticalID] {

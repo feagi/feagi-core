@@ -62,10 +62,9 @@ impl PollableRegistrationSource for RouterRegistrationAdapter {
         let state = self.router.poll();
         match state {
             FeagiEndpointState::ActiveHasData => {
-                let (session_id, bytes) = self
-                    .router
-                    .consume_retrieved_request()
-                    .map_err(|e| FeagiAgentServerError::UnableToDecodeReceivedData(e.to_string()))?;
+                let (session_id, bytes) = self.router.consume_retrieved_request().map_err(|e| {
+                    FeagiAgentServerError::UnableToDecodeReceivedData(e.to_string())
+                })?;
                 self.request_buffer.clear();
                 self.request_buffer.extend_from_slice(bytes);
                 let request: RegistrationRequest = serde_json::from_slice(&self.request_buffer)

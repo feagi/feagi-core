@@ -1,20 +1,29 @@
+use crate::feagi_agent_server_error::FeagiAgentServerError;
+use crate::registration::{
+    AgentCapabilities, AgentDescriptor, RegistrationRequest, RegistrationResponse,
+};
+use crate::server::auth::AgentAuth;
+use crate::server::registration_transport::PollableRegistrationSource;
+use crate::server::registration_transport::RouterRegistrationAdapter;
+use feagi_config::{load_config, FeagiConfig};
+use feagi_evolutionary::{save_genome_to_file, RuntimeGenome};
+use feagi_io::core::protocol_implementations::ProtocolImplementation;
+use feagi_io::core::traits_and_enums::server::{
+    FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller,
+    FeagiServerPullerProperties, FeagiServerRouterProperties,
+};
+use feagi_io::core::traits_and_enums::FeagiEndpointState;
+use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
+use feagi_serialization::{FeagiByteContainer, SessionID};
+use feagi_services::connectome::save_connectome;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use tracing::warn;
-use feagi_config::{load_config, FeagiConfig};
-use feagi_evolutionary::{save_genome_to_file, RuntimeGenome};
-use feagi_io::core::protocol_implementations::ProtocolImplementation;
-use feagi_io::core::traits_and_enums::FeagiEndpointState;
-use feagi_io::core::traits_and_enums::server::{FeagiServerPublisher, FeagiServerPublisherProperties, FeagiServerPuller, FeagiServerPullerProperties, FeagiServerRouterProperties};
-use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
-use feagi_serialization::{FeagiByteContainer, SessionID};
-use feagi_services::connectome::save_connectome;
-use crate::feagi_agent_server_error::FeagiAgentServerError;
-use crate::registration::{AgentCapabilities, AgentDescriptor, RegistrationRequest, RegistrationResponse};
-use crate::server::auth::AgentAuth;
-use crate::server::registration_transport::PollableRegistrationSource;
-use crate::server::registration_transport::RouterRegistrationAdapter;
+
+type RegistrationHook = dyn Fn(SessionID, AgentDescriptor, Vec<AgentCapabilities>, Option<serde_json::Value>)
+    + Send
+    + Sync;
 
 pub struct FeagiAgentHandler {
     config: FeagiConfig,
@@ -35,24 +44,23 @@ pub struct FeagiAgentHandler {
 
     /// Invoked when an agent registers successfully with capabilities and optional device_registrations.
     /// Used by the host (e.g. feagi-rs) for auto IPU/OPU creation and session-aware FCL/FQ subscriptions.
-    registration_hook: Option<
-        Arc<
-            dyn Fn(SessionID, AgentDescriptor, Vec<AgentCapabilities>, Option<serde_json::Value>)
-                + Send
-                + Sync,
-        >,
-    >,
+    registration_hook: Option<Arc<RegistrationHook>>,
 }
 
 impl FeagiAgentHandler {
-
-    pub fn new(agent_auth_backend: Box<dyn AgentAuth>) -> Result<FeagiAgentHandler, FeagiAgentServerError> {
-        let config = load_config(None, None)
-            .map_err(|e| FeagiAgentServerError::InitFail(format!("Failed to load FEAGI configuration: {e}")))?;
+    pub fn new(
+        agent_auth_backend: Box<dyn AgentAuth>,
+    ) -> Result<FeagiAgentHandler, FeagiAgentServerError> {
+        let config = load_config(None, None).map_err(|e| {
+            FeagiAgentServerError::InitFail(format!("Failed to load FEAGI configuration: {e}"))
+        })?;
         Ok(Self::new_with_config(agent_auth_backend, config))
     }
 
-    pub fn new_with_config(agent_auth_backend: Box<dyn AgentAuth>, config: FeagiConfig) -> FeagiAgentHandler {
+    pub fn new_with_config(
+        agent_auth_backend: Box<dyn AgentAuth>,
+        config: FeagiConfig,
+    ) -> FeagiAgentHandler {
         FeagiAgentHandler {
             config,
             agent_auth_backend,
@@ -70,14 +78,7 @@ impl FeagiAgentHandler {
 
     /// Set a hook invoked when an agent registers successfully (capabilities + optional device_registrations).
     /// The host uses this for auto IPU/OPU creation and session-aware motor/visualization subscriptions.
-    pub fn set_registration_hook(
-        &mut self,
-        hook: Arc<
-            dyn Fn(SessionID, AgentDescriptor, Vec<AgentCapabilities>, Option<serde_json::Value>)
-                + Send
-                + Sync,
-        >,
-    ) {
+    pub fn set_registration_hook(&mut self, hook: Arc<RegistrationHook>) {
         self.registration_hook = Some(hook);
     }
 
@@ -85,10 +86,12 @@ impl FeagiAgentHandler {
 
     // add at least one registration server  that acts as the endpoint to register, and the publisher pullers you can add a bunch which will act as endpoints for agent capabilties such as sensor motor and visualization
 
-
     /// Add a poll-based registration server (ZMQ/WS). The router is wrapped in a
     /// [`RouterRegistrationAdapter`] so the handler only deals with registration types.
-    pub fn add_and_start_registration_server(&mut self, router_property: Box<dyn FeagiServerRouterProperties>) -> Result<(), FeagiAgentServerError> {
+    pub fn add_and_start_registration_server(
+        &mut self,
+        router_property: Box<dyn FeagiServerRouterProperties>,
+    ) -> Result<(), FeagiAgentServerError> {
         let protocol_name = format!("{:?}", router_property.get_protocol());
         let mut router = router_property.as_boxed_server_router();
         router
@@ -100,7 +103,10 @@ impl FeagiAgentHandler {
     }
 
     /// Add a custom poll-based registration source (e.g. for future transports).
-    pub fn add_pollable_registration_source(&mut self, source: Box<dyn PollableRegistrationSource>) {
+    pub fn add_pollable_registration_source(
+        &mut self,
+        source: Box<dyn PollableRegistrationSource>,
+    ) {
         self.pollable_registration_sources.push(source);
     }
 
@@ -169,9 +175,15 @@ impl FeagiAgentHandler {
         for i in 0..self.active_sensor_servers.len() {
             match self.active_sensor_servers[i].poll() {
                 FeagiEndpointState::ActiveHasData => {
-                    if self.sensory_cache.try_write_data_by_copy_and_verify(
-                        self.active_sensor_servers[i].consume_retrieved_data().unwrap() // TODO error handling
-                    ).is_err() {
+                    if self
+                        .sensory_cache
+                        .try_write_data_by_copy_and_verify(
+                            self.active_sensor_servers[i]
+                                .consume_retrieved_data()
+                                .unwrap(), // TODO error handling
+                        )
+                        .is_err()
+                    {
                         warn!("Failed to decode incoming sensory bytes into FeagiByteContainer");
                         return None;
                     }
@@ -199,7 +211,10 @@ impl FeagiAgentHandler {
         None
     }
 
-    pub fn poll_motor_handlers(&mut self, data: Option<&FeagiByteContainer>) -> Result<(), FeagiAgentServerError> {
+    pub fn poll_motor_handlers(
+        &mut self,
+        data: Option<&FeagiByteContainer>,
+    ) -> Result<(), FeagiAgentServerError> {
         let Some(bytes) = data else {
             return Ok(()); // Nothing to publish
         };
@@ -212,9 +227,9 @@ impl FeagiAgentHandler {
                         .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
                 }
                 FeagiEndpointState::Errored(_e) => {
-                    self.active_motor_servers[i].confirm_error_and_close().map_err(
-                        |e| FeagiAgentServerError::ConnectionFailed(e.to_string())
-                    )?;
+                    self.active_motor_servers[i]
+                        .confirm_error_and_close()
+                        .map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
                     // TODO we need to do better here
                 }
                 _ => {
@@ -225,7 +240,10 @@ impl FeagiAgentHandler {
         Ok(())
     }
 
-    pub fn poll_visualization_handlers(&mut self, data: Option<&FeagiByteContainer>) -> Result<(), FeagiAgentServerError> {
+    pub fn poll_visualization_handlers(
+        &mut self,
+        data: Option<&FeagiByteContainer>,
+    ) -> Result<(), FeagiAgentServerError> {
         let Some(bytes) = data else {
             return Ok(()); // Nothing to publish
         };
@@ -238,9 +256,9 @@ impl FeagiAgentHandler {
                         .map_err(|e| FeagiAgentServerError::UnableToSendData(e.to_string()))?;
                 }
                 FeagiEndpointState::Errored(_e) => {
-                    self.active_visualizer_servers[i].confirm_error_and_close().map_err(
-                        |e| FeagiAgentServerError::ConnectionFailed(e.to_string())
-                    )?;
+                    self.active_visualizer_servers[i]
+                        .confirm_error_and_close()
+                        .map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
                     // TODO we need to do better here
                 }
                 _ => {
@@ -257,11 +275,16 @@ impl FeagiAgentHandler {
 
     //region Registration
 
-    fn verify_agent_request_and_make_response(&mut self, session_id: &SessionID, registration_request: RegistrationRequest) -> Result<RegistrationResponse, FeagiAgentServerError> {
-
-        let verify_auth = self.agent_auth_backend.verify_agent_allowed_to_connect(&registration_request);  // TODO how do we make this non blocking????
+    fn verify_agent_request_and_make_response(
+        &mut self,
+        session_id: &SessionID,
+        registration_request: RegistrationRequest,
+    ) -> Result<RegistrationResponse, FeagiAgentServerError> {
+        let verify_auth = self
+            .agent_auth_backend
+            .verify_agent_allowed_to_connect(&registration_request); // TODO how do we make this non blocking????
         if verify_auth.is_err() {
-            return Ok(RegistrationResponse::FailedInvalidAuth)
+            return Ok(RegistrationResponse::FailedInvalidAuth);
         }
 
         // TODO verify no duplicates!
@@ -271,14 +294,20 @@ impl FeagiAgentHandler {
             match requested_capability {
                 AgentCapabilities::SendSensorData => {
                     if self.active_sensor_servers.is_empty() {
-                        let property = self.try_get_puller_property(registration_request.connection_protocol())?;
+                        let property = self
+                            .try_get_puller_property(registration_request.connection_protocol())?;
                         let mut puller = property.as_boxed_server_puller();
-                        puller.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
+                        puller
+                            .request_start()
+                            .map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
                         self.active_sensor_servers.push(puller);
                     }
                     endpoints.insert(
                         AgentCapabilities::SendSensorData,
-                        self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::SendSensorData),
+                        self.build_capability_endpoint(
+                            registration_request.connection_protocol(),
+                            AgentCapabilities::SendSensorData,
+                        ),
                     );
                 }
                 AgentCapabilities::ReceiveMotorData => {
@@ -288,12 +317,17 @@ impl FeagiAgentHandler {
                             AgentCapabilities::ReceiveMotorData,
                         )?;
                         let mut publisher = property.as_boxed_server_publisher();
-                        publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
+                        publisher
+                            .request_start()
+                            .map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
                         self.active_motor_servers.push(publisher);
                     }
                     endpoints.insert(
                         AgentCapabilities::ReceiveMotorData,
-                        self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::ReceiveMotorData),
+                        self.build_capability_endpoint(
+                            registration_request.connection_protocol(),
+                            AgentCapabilities::ReceiveMotorData,
+                        ),
                     );
                 }
                 AgentCapabilities::ReceiveNeuronVisualizations => {
@@ -303,38 +337,48 @@ impl FeagiAgentHandler {
                             AgentCapabilities::ReceiveNeuronVisualizations,
                         )?;
                         let mut publisher = property.as_boxed_server_publisher();
-                        publisher.request_start().map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
+                        publisher
+                            .request_start()
+                            .map_err(|e| FeagiAgentServerError::ConnectionFailed(e.to_string()))?;
                         self.active_visualizer_servers.push(publisher);
                     }
                     endpoints.insert(
                         AgentCapabilities::ReceiveNeuronVisualizations,
-                        self.build_capability_endpoint(registration_request.connection_protocol(), AgentCapabilities::ReceiveNeuronVisualizations),
+                        self.build_capability_endpoint(
+                            registration_request.connection_protocol(),
+                            AgentCapabilities::ReceiveNeuronVisualizations,
+                        ),
                     );
                 }
             }
         }
 
-
-
-        self.registered_agents.insert(session_id.clone(), (
-            registration_request.agent_descriptor().clone(),
-            registration_request.requested_capabilities().to_vec()));
+        self.registered_agents.insert(
+            *session_id,
+            (
+                registration_request.agent_descriptor().clone(),
+                registration_request.requested_capabilities().to_vec(),
+            ),
+        );
 
         if let Some(hook) = &self.registration_hook {
             let dr = registration_request.device_registrations().cloned();
             let capabilities = registration_request.requested_capabilities().to_vec();
             hook(
-                session_id.clone(),
+                *session_id,
                 registration_request.agent_descriptor().clone(),
                 capabilities,
                 dr,
             );
         }
 
-        Ok(RegistrationResponse::Success(session_id.clone(), endpoints))
+        Ok(RegistrationResponse::Success(*session_id, endpoints))
     }
 
-    fn try_get_puller_property(&mut self, wanted_protocol: &ProtocolImplementation) -> Result<Box<dyn FeagiServerPullerProperties>, FeagiAgentServerError> {
+    fn try_get_puller_property(
+        &mut self,
+        wanted_protocol: &ProtocolImplementation,
+    ) -> Result<Box<dyn FeagiServerPullerProperties>, FeagiAgentServerError> {
         for i in 0..self.available_pullers.len() {
             let available_puller = &self.available_pullers[i];
             if &available_puller.get_protocol() != wanted_protocol {
@@ -345,7 +389,9 @@ impl FeagiAgentHandler {
                 return Ok(self.available_pullers.remove(i));
             }
         }
-        Err(FeagiAgentServerError::InitFail("Missing required protocol puller".to_string()))
+        Err(FeagiAgentServerError::InitFail(
+            "Missing required protocol puller".to_string(),
+        ))
     }
 
     /// Returns the publisher property for the given protocol and capability.
@@ -384,7 +430,10 @@ impl FeagiAgentHandler {
         self.registered_agents.contains_key(session_id)
     }
 
-    pub fn parse_protocol(&self, transport: &str) -> Result<ProtocolImplementation, FeagiAgentServerError> {
+    pub fn parse_protocol(
+        &self,
+        transport: &str,
+    ) -> Result<ProtocolImplementation, FeagiAgentServerError> {
         match transport.to_lowercase().as_str() {
             "zmq" => Ok(ProtocolImplementation::ZMQ),
             "ws" | "websocket" => Ok(ProtocolImplementation::WebSocket),
@@ -409,7 +458,9 @@ impl FeagiAgentHandler {
                 let port = match capability {
                     AgentCapabilities::SendSensorData => self.config.ports.zmq_sensory_port,
                     AgentCapabilities::ReceiveMotorData => self.config.ports.zmq_motor_port,
-                    AgentCapabilities::ReceiveNeuronVisualizations => self.config.ports.zmq_visualization_port,
+                    AgentCapabilities::ReceiveNeuronVisualizations => {
+                        self.config.ports.zmq_visualization_port
+                    }
                 };
                 Self::format_tcp_endpoint(host, port)
             }
@@ -418,7 +469,9 @@ impl FeagiAgentHandler {
                 let port = match capability {
                     AgentCapabilities::SendSensorData => self.config.websocket.sensory_port,
                     AgentCapabilities::ReceiveMotorData => self.config.websocket.motor_port,
-                    AgentCapabilities::ReceiveNeuronVisualizations => self.config.websocket.visualization_port,
+                    AgentCapabilities::ReceiveNeuronVisualizations => {
+                        self.config.websocket.visualization_port
+                    }
                 };
                 Self::format_ws_endpoint(host, port)
             }
@@ -478,10 +531,7 @@ impl FeagiAgentHandler {
         })
     }
 
-
     //endregion
 
     //endregion
-
 }
-
