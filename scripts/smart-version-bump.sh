@@ -16,6 +16,8 @@ set -e  # Exit on error
 WORKSPACE_ROOT=$(pwd)
 LAST_TAG="${LAST_TAG:-}"
 DRY_RUN="${DRY_RUN:-false}"
+ALLOW_DIRTY="${ALLOW_DIRTY:-false}"
+ALLOW_NO_REGISTRY="${ALLOW_NO_REGISTRY:-false}"
 
 # ANSI color codes
 RED='\033[0;31m'
@@ -27,6 +29,38 @@ NC='\033[0m' # No Color
 
 echo -e "${CYAN}🔍 FEAGI Smart Independent Versioning System${NC}"
 echo ""
+
+# ============================================================================
+# Preflight guardrails
+# ============================================================================
+
+# Require clean working tree unless explicitly allowed
+if [ "$ALLOW_DIRTY" != "true" ]; then
+    if [ -n "$(git status --porcelain 2>/dev/null || echo "")" ]; then
+        echo -e "${RED}ERROR: Working tree is dirty.${NC}" >&2
+        echo -e "       Commit or stash changes, or set ALLOW_DIRTY=true to override." >&2
+        exit 1
+    fi
+fi
+
+# Require tag baseline unless explicitly allowed
+if [ -z "$LAST_TAG" ]; then
+    LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+fi
+if [ -z "$LAST_TAG" ]; then
+    echo -e "${RED}ERROR: No git tags found for baseline comparison.${NC}" >&2
+    echo -e "       Create a tag or set LAST_TAG to a baseline tag/commit." >&2
+    exit 1
+fi
+
+# Require crates.io reachability unless explicitly allowed
+if [ "$ALLOW_NO_REGISTRY" != "true" ]; then
+    if ! curl -sL --max-time 10 "https://crates.io/api/v1/crates/serde" >/dev/null 2>&1; then
+        echo -e "${RED}ERROR: crates.io is unreachable.${NC}" >&2
+        echo -e "       Check network or set ALLOW_NO_REGISTRY=true to override." >&2
+        exit 1
+    fi
+fi
 
 # ============================================================================
 # Define all crates in dependency order (same as publish-crates.sh)
@@ -240,6 +274,7 @@ declare -A CHANGED_CRATES
 declare -A CURRENT_VERSIONS
 declare -A NEW_VERSIONS
 declare -A CHANGE_REASONS
+declare -A MIN_REQUIRED_VERSIONS
 
 # First pass: Detect direct changes
 for crate_name in "${CRATE_ORDER[@]}"; do
@@ -285,7 +320,7 @@ while [ $changed_count -gt 0 ]; do
         fi
         
         # Check if any dependencies changed
-        local deps="${DEPENDENCIES[$crate_name]}"
+        deps="${DEPENDENCIES[$crate_name]}"
         for dep in $deps; do
             if [ -n "${CHANGED_CRATES[$dep]}" ]; then
                 CHANGED_CRATES["$crate_name"]="propagated"
@@ -303,6 +338,102 @@ while [ $changed_count -gt 0 ]; do
     fi
 done
 
+# ============================================================================
+# Step 2.5: Close dependency version gaps from published crates
+# ============================================================================
+echo ""
+echo -e "${BLUE}Step 2.5: Checking published dependency version gaps...${NC}"
+echo ""
+
+CRATE_LIST="${CRATE_ORDER[*]}"
+export CRATE_LIST
+
+DEPENDENCY_GAPS=$(
+python3 - <<'PY'
+import json
+import os
+import re
+from urllib.request import urlopen
+
+crate_list = os.environ.get("CRATE_LIST", "").split()
+crate_set = set(crate_list)
+
+def semver_key(s):
+    parts = re.split(r"[-.]", s)
+    return [int(p) if p.isdigit() else p for p in parts]
+
+def latest_version(crate: str) -> str | None:
+    url = f"https://crates.io/api/v1/crates/{crate}"
+    with urlopen(url, timeout=20) as resp:
+        data = json.load(resp)
+    candidates = [v.get("num", "") for v in data.get("versions", [])
+                  if not v.get("yanked", False) and v.get("num")]
+    if not candidates:
+        return None
+    candidates.sort(key=semver_key, reverse=True)
+    return candidates[0]
+
+def deps_for(crate: str, version: str) -> list[dict]:
+    url = f"https://crates.io/api/v1/crates/{crate}/{version}/dependencies"
+    with urlopen(url, timeout=20) as resp:
+        data = json.load(resp)
+    return data.get("dependencies", [])
+
+def extract_min_version(req: str) -> str | None:
+    if not req:
+        return None
+    token = req.split(",")[0].strip()
+    token = re.sub(r"^[=^~<> ]+", "", token)
+    return token or None
+
+def version_exists(crate: str, version: str) -> bool:
+    url = f"https://crates.io/api/v1/crates/{crate}/{version}"
+    try:
+        with urlopen(url, timeout=20) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+gaps = []
+for crate in crate_list:
+    latest = latest_version(crate)
+    if not latest:
+        continue
+    for dep in deps_for(crate, latest):
+        dep_name = dep.get("crate_id", "")
+        if dep_name not in crate_set:
+            continue
+        req = dep.get("req", "")
+        min_version = extract_min_version(req)
+        if not min_version:
+            continue
+        if not version_exists(dep_name, min_version):
+            gaps.append((dep_name, min_version, crate, req))
+
+for dep_name, min_version, required_by, req in gaps:
+    print(f"{dep_name}|{min_version}|{required_by}|{req}")
+PY
+)
+
+if [ -n "$DEPENDENCY_GAPS" ]; then
+    while IFS="|" read -r dep_name min_version required_by req; do
+        if [ -z "$dep_name" ] || [ -z "$min_version" ]; then
+            continue
+        fi
+        if [ -z "${CHANGED_CRATES[$dep_name]}" ]; then
+            CHANGED_CRATES["$dep_name"]="dependency_gap"
+            CHANGE_REASONS["$dep_name"]="Published $required_by requires $dep_name $req (missing $min_version)"
+            echo "  ${YELLOW}Gap:${NC} $dep_name missing $min_version (required by $required_by $req)"
+        fi
+        current_min="${MIN_REQUIRED_VERSIONS[$dep_name]}"
+        if [ -z "$current_min" ] || version_gt "$min_version" "$current_min"; then
+            MIN_REQUIRED_VERSIONS["$dep_name"]="$min_version"
+        fi
+    done <<< "$DEPENDENCY_GAPS"
+else
+    echo "  No published dependency gaps detected."
+fi
+
 # If nothing changed, we're done
 if [ ${#CHANGED_CRATES[@]} -eq 0 ]; then
     echo -e "${GREEN}✅ No crates have changed. Nothing to version bump!${NC}"
@@ -318,9 +449,29 @@ for crate_name in "${CRATE_ORDER[@]}"; do
     if [ -n "${CHANGED_CRATES[$crate_name]}" ]; then
         current_version="${CURRENT_VERSIONS[$crate_name]}"
         new_version=$(increment_beta_version "$current_version" "$crate_name")
+        min_required="${MIN_REQUIRED_VERSIONS[$crate_name]}"
+        if [ -n "$min_required" ] && version_gt "$min_required" "$new_version"; then
+            new_version="$min_required"
+        fi
         NEW_VERSIONS["$crate_name"]="$new_version"
         
         echo -e "  ${GREEN}📦${NC} $crate_name: $current_version → $new_version"
+    fi
+done
+
+# Validate computed versions are greater than published versions
+for crate_name in "${CRATE_ORDER[@]}"; do
+    if [ -n "${CHANGED_CRATES[$crate_name]}" ]; then
+        published_version=$(get_highest_published_version "$crate_name")
+        new_version="${NEW_VERSIONS[$crate_name]}"
+        if [ "$published_version" != "none" ]; then
+            if ! version_gt "$new_version" "$published_version"; then
+                echo -e "${RED}ERROR: Computed version not greater than published for $crate_name${NC}" >&2
+                echo -e "       Published: $published_version" >&2
+                echo -e "       Computed:  $new_version" >&2
+                exit 1
+            fi
+        fi
     fi
 done
 

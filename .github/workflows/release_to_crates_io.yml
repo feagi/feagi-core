@@ -1,0 +1,803 @@
+# Copyright 2025 Neuraville Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release to crates.io
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or ref to checkout and publish from'
+        required: false
+        default: 'staging'
+      reason:
+        description: 'Reason for manual publish (optional)'
+        required: false
+        default: ''
+      indexing_delay_seconds:
+        description: 'Seconds to wait after each publish for crates.io indexing'
+        required: false
+        default: '90'
+      verify_timeout_seconds:
+        description: 'Max seconds to wait for crates.io verification'
+        required: false
+        default: '900'
+      verify_poll_seconds:
+        description: 'Seconds between crates.io verification polls'
+        required: false
+        default: '15'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prep:
+    name: validate & version bump
+    runs-on: ubuntu-latest
+    outputs:
+      changed_crates: ${{ steps.version.outputs.changed_crates }}
+      release_sha: ${{ steps.release_sha.outputs.release_sha }}
+      bump_pr_created: ${{ steps.bump_pr.outputs.bump_pr_created }}
+      bump_pr_url: ${{ steps.bump_pr.outputs.bump_pr_url }}
+    env:
+      PUBLISH_REF: ${{ github.event.inputs.ref || 'staging' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PUBLISH_REF }}
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Install Rust components
+        run: rustup component add rustfmt clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+          save-if: true
+
+      - name: Guard - require baseline tag
+        run: |
+          set -euo pipefail
+          BASELINE_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
+          if [ -z "$BASELINE_TAG" ]; then
+            echo "Missing baseline tag. Create v<version> before releasing."
+            exit 1
+          fi
+          echo "Using baseline tag: $BASELINE_TAG"
+
+      - name: Sync workspace from crates.io
+        run: |
+          echo "Syncing root and crate versions to match current crates.io..."
+          chmod +x scripts/sync-from-crates-io.sh
+          ./scripts/sync-from-crates-io.sh
+
+      - name: Smart version detection and bumping
+        id: version
+        run: |
+          echo "Detecting changed crates and computing independent version bumps..."
+          chmod +x scripts/smart-version-bump.sh
+          chmod +x scripts/apply-version-bumps.sh
+          LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
+          VERSION_OUTPUT=$(ALLOW_DIRTY=true LAST_TAG="$LAST_TAG" ./scripts/smart-version-bump.sh)
+          echo "$VERSION_OUTPUT"
+          VERSIONS_FILE=$(echo "$VERSION_OUTPUT" | grep "VERSIONS_FILE=" | cut -d'=' -f2)
+          CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
+          echo "versions_file=$VERSIONS_FILE" >> $GITHUB_OUTPUT
+          echo "changed_crates=$CHANGED_CRATES" >> $GITHUB_OUTPUT
+          if [ -n "$VERSIONS_FILE" ] && [ -f "$VERSIONS_FILE" ]; then
+            echo "Applying version updates to Cargo.toml files..."
+            export VERSIONS_FILE="$VERSIONS_FILE"
+            ./scripts/apply-version-bumps.sh
+          else
+            echo "No version updates to apply."
+          fi
+          echo "Smart independent versioning complete"
+      - name: Build release manifest
+        id: manifest
+        run: |
+          set -euo pipefail
+          MANIFEST_PATH="/tmp/feagi-release--temp.json"
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+
+          def read_workspace_version(root: Path) -> str:
+              text = (root / "Cargo.toml").read_text(encoding="utf-8")
+              m = re.search(r"(?ms)^\[workspace\.package\].*?^version\s*=\s*\"([^\"]+)\"", text)
+              if not m:
+                  raise SystemExit("Failed to read [workspace.package] version")
+              return m.group(1)
+
+
+          def read_crate_version(root: Path, manifest: Path, workspace_version: str) -> str:
+              text = manifest.read_text(encoding="utf-8")
+              if re.search(r"(?m)^version\.workspace\s*=\s*true\s*$", text):
+                  return workspace_version
+              m = re.search(r"(?m)^version\s*=\s*\"([^\"]+)\"", text)
+              if not m:
+                  raise SystemExit(f"Failed to read version from {manifest}")
+              return m.group(1)
+
+
+          def main() -> None:
+              root = Path(".").resolve()
+              raw = os.environ.get("CHANGED_CRATES", "")
+              changed = [c for c in raw.replace("(", " ").replace(")", " ").split() if c]
+
+              crate_paths = {
+                  "feagi-observability": "crates/feagi-observability",
+                  "feagi-structures": "crates/feagi-structures",
+                  "feagi-config": "crates/feagi-config",
+                  "feagi-npu-neural": "crates/feagi-npu/neural",
+                  "feagi-npu-runtime": "crates/feagi-npu/runtime",
+                  "feagi-serialization": "crates/feagi-serialization",
+                  "feagi-state-manager": "crates/feagi-state-manager",
+                  "feagi-npu-burst-engine": "crates/feagi-npu/burst-engine",
+                  "feagi-npu-plasticity": "crates/feagi-npu/plasticity",
+                  "feagi-evolutionary": "crates/feagi-evolutionary",
+                  "feagi-brain-development": "crates/feagi-brain-development",
+                  "feagi-io": "crates/feagi-io",
+                  "feagi-sensorimotor": "crates/feagi-sensorimotor",
+                  "feagi-services": "crates/feagi-services",
+                  "feagi-api": "crates/feagi-api",
+                  "feagi-agent": "crates/feagi-agent",
+                  "feagi-hal": "crates/feagi-hal",
+                  "feagi": ".",
+              }
+
+              workspace_version = read_workspace_version(root)
+              versions = {}
+              for crate in changed:
+                  rel = crate_paths.get(crate)
+                  if not rel:
+                      raise SystemExit(f"Unknown crate: {crate}")
+                  manifest = root / rel / "Cargo.toml" if rel != "." else root / "Cargo.toml"
+                  if not manifest.exists():
+                      raise SystemExit(f"Missing Cargo.toml for {crate} at {manifest}")
+                  versions[crate] = read_crate_version(root, manifest, workspace_version)
+
+              data = {
+                  "changed_crates": changed,
+                  "versions": versions,
+              }
+              Path(os.environ["MANIFEST_PATH"]).write_text(
+                  json.dumps(data, indent=2, sort_keys=True), encoding="utf-8"
+              )
+
+
+          if __name__ == "__main__":
+              main()
+          PY
+          echo "manifest_path=$MANIFEST_PATH" >> "$GITHUB_OUTPUT"
+        env:
+          CHANGED_CRATES: ${{ steps.version.outputs.changed_crates }}
+          MANIFEST_PATH: /tmp/feagi-release--temp.json
+      - name: Upload release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: feagi-release-manifest
+          path: ${{ steps.manifest.outputs.manifest_path }}
+
+      - name: Guard - enforce bumps for changed crates
+        run: |
+          set -euo pipefail
+          echo "Verifying changed crates are version-bumped vs crates.io..."
+          LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
+          from urllib.request import urlopen
+
+          root = Path(".").resolve()
+          last_tag = subprocess.check_output(["git", "tag", "--list", "v*", "--sort=-v:refname"]).decode().splitlines()[0]
+          changed_files = subprocess.check_output(["git", "diff", "--name-only", last_tag, "HEAD"]).decode().splitlines()
+
+          crate_paths = set()
+          root_changed = False
+          for f in changed_files:
+              p = Path(f)
+              if p.parts[:2] == ("crates",) and len(p.parts) > 2:
+                  crate_paths.add(root / "crates" / p.parts[1])
+              else:
+                  root_changed = True
+
+          def crate_name_and_version(manifest: Path):
+              name = None
+              version = None
+              for line in manifest.read_text(encoding="utf-8").splitlines():
+                  if line.startswith("name = "):
+                      name = line.split('"', 2)[1]
+                  if line.startswith("version = "):
+                      version = line.split('"', 2)[1]
+                  if name and version:
+                      break
+              return name, version
+
+          def latest_on_crates_io(name: str):
+              import re as _re
+              url = f"https://crates.io/api/v1/crates/{name}"
+              with urlopen(url, timeout=20) as resp:
+                  data = json.load(resp)
+              candidates = [v.get("num", "") for v in data.get("versions", [])
+                            if not v.get("yanked", False) and v.get("num")]
+              if not candidates:
+                  return ""
+              def _semver_key(s):
+                  return [int(p) if p.isdigit() else p for p in _re.split(r"[-.]", s)]
+              candidates.sort(key=_semver_key, reverse=True)
+              return candidates[0]
+
+          def version_gt(a: str, b: str) -> bool:
+              if a == b:
+                  return False
+              return sorted([a, b], key=lambda s: [int(x) if x.isdigit() else x for x in s.replace("-", ".").split(".")])[-1] == a
+
+          violations = []
+
+          for crate_dir in sorted(crate_paths):
+              manifest = crate_dir / "Cargo.toml"
+              if not manifest.exists():
+                  continue
+              name, version = crate_name_and_version(manifest)
+              if not name or not version:
+                  continue
+              published = latest_on_crates_io(name)
+              if published and not version_gt(version, published):
+                  violations.append(f"{name} local {version} not > crates.io {published}")
+
+          if root_changed:
+              name, version = crate_name_and_version(root / "Cargo.toml")
+              if name and version:
+                  published = latest_on_crates_io(name)
+                  if published and not version_gt(version, published):
+                      violations.append(f"{name} local {version} not > crates.io {published}")
+
+          if violations:
+              print("Version bump enforcement failed:")
+              for v in violations:
+                  print(f"  - {v}")
+              sys.exit(1)
+          print("Version bump enforcement passed.")
+          PY
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Guard - verify path dependency versions consistent
+        run: |
+          set -euo pipefail
+          echo "Verifying workspace path dependency version consistency..."
+          WORKSPACE_VERSION="$(
+            awk '
+              BEGIN { in_ws=0 }
+              /^\[workspace\.package\]/ { in_ws=1; next }
+              /^\[/ { if (in_ws==1) exit }
+              in_ws==1 && /^version = / {
+                gsub(/version = /, "", $0);
+                gsub(/"/, "", $0);
+                print $0;
+                exit
+              }
+            ' Cargo.toml
+          )"
+          if [ -z "${WORKSPACE_VERSION}" ]; then
+            echo "Failed to detect [workspace.package] version from Cargo.toml"
+            exit 1
+          fi
+          declare -A CRATE_VERSIONS
+          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+            [ -f "$manifest" ] || continue
+            name="$(grep -E '^name = ' "$manifest" | head -1 | sed 's/name = \"\\(.*\\)\"/\\1/')"
+            [ -n "$name" ] || continue
+            if grep -qE '^version\\.workspace = true' "$manifest"; then
+              ver="$WORKSPACE_VERSION"
+            else
+              ver="$(grep -E '^version = ' "$manifest" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+            fi
+            [ -n "$ver" ] && CRATE_VERSIONS["$name"]="$ver"
+          done
+          mismatches=0
+          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+            [ -f "$manifest" ] || continue
+            # Match both path="../..." (subcrates) and path="crates/..." (root)
+            while IFS= read -r line; do
+              dep="$(echo "$line" | sed -n 's/^[[:space:]]*\([A-Za-z0-9_-][A-Za-z0-9_-]*\)[[:space:]]*=.*/\1/p')"
+              req="$(echo "$line" | sed -n 's/.*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
+              path="$(echo "$line" | sed -n 's/.*path[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
+              [ -n "$dep" ] && [ -n "$req" ] && [ -n "$path" ] || continue
+              case "$path" in ../*|crates/*) ;; *) continue ;; esac
+              req="${req#=}"; req="${req#^}"
+              actual="${CRATE_VERSIONS[$dep]:-}"
+              [ -z "$actual" ] && continue
+              if [ "$req" != "$actual" ]; then
+                echo "Version mismatch in $manifest: $dep required $req actual $actual"
+                mismatches=$((mismatches + 1))
+              fi
+            done < <(grep -E 'path[[:space:]]*=[[:space:]]*"(\.\./|crates/)[^"]+"' "$manifest" || true)
+          done
+          [ "$mismatches" -eq 0 ] || exit 1
+          echo "Workspace path dependency versions are consistent."
+
+      - name: Run Clippy (lib and tests only)
+        run: cargo clippy --workspace --lib --tests -- -D warnings
+
+      - name: Run tests (lib only)
+        run: cargo test --workspace --lib --verbose
+
+      - name: Run tests in release mode (lib only)
+        run: cargo test --workspace --lib --release --verbose
+
+      - name: Build release
+        run: cargo build --release --lib --verbose
+
+      - name: Commit and push version updates
+        id: bump_pr
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
+          git add Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml
+          if [ -n "$CHANGED_CRATES" ]; then
+            if git diff --cached --quiet; then
+              echo "Changed crates detected but no version updates staged"
+              exit 1
+            fi
+            echo "chore: bump versions for release (independent versioning)" > commit_msg.txt
+            echo "" >> commit_msg.txt
+            echo "Changed crates: $CHANGED_CRATES" >> commit_msg.txt
+            COMMIT_MSG=$(cat commit_msg.txt)
+          else
+            if git diff --cached --quiet; then
+              echo "No changes to commit"
+              exit 0
+            fi
+            COMMIT_MSG="chore: release (no version changes)"
+          fi
+          git commit -m "$COMMIT_MSG"
+
+          if [ -n "$CHANGED_CRATES" ]; then
+            BRANCH_NAME="release/bump-${{ github.run_id }}"
+            git checkout -b "$BRANCH_NAME"
+            git push origin "$BRANCH_NAME"
+
+            PR_TITLE="chore: bump versions for release"
+            PR_BODY="Automated version bumps for crates changed on staging."
+            PR_URL=""
+            attempt=1
+            max_attempts=6
+            while [ "$attempt" -le "$max_attempts" ]; do
+              set +e
+              PR_URL="$(gh pr create --base "${{ env.PUBLISH_REF }}" --head "$BRANCH_NAME" --title "$PR_TITLE" --body "$PR_BODY" 2>/tmp/gh_pr_create_err.txt)"
+              pr_create_rc=$?
+              if [ "$pr_create_rc" -ne 0 ]; then
+                PR_URL="$(gh pr list --state open --head "$BRANCH_NAME" --json url -q '.[0].url' 2>/tmp/gh_pr_list_err.txt)"
+              fi
+              set -e
+
+              if [ -n "$PR_URL" ]; then
+                break
+              fi
+
+              if grep -q "HTTP 429" /tmp/gh_pr_create_err.txt /tmp/gh_pr_list_err.txt 2>/dev/null; then
+                echo "GitHub API throttled (attempt $attempt/$max_attempts). Waiting 60s..."
+                sleep 60
+              else
+                echo "Failed to create or find PR for $BRANCH_NAME"
+                cat /tmp/gh_pr_create_err.txt /tmp/gh_pr_list_err.txt 2>/dev/null || true
+                exit 1
+              fi
+              attempt=$((attempt + 1))
+            done
+
+            if [ -z "$PR_URL" ]; then
+              echo "Failed to create or find PR after retries"
+              exit 1
+            fi
+
+            echo "Using PR: $PR_URL"
+            echo "bump_pr_created=true" >> "$GITHUB_OUTPUT"
+            echo "bump_pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+            attempt=1
+            while [ "$attempt" -le "$max_attempts" ]; do
+              set +e
+              gh pr merge "$PR_URL" --merge --delete-branch 2>/tmp/gh_pr_merge_err.txt
+              pr_merge_rc=$?
+              set -e
+              if [ "$pr_merge_rc" -eq 0 ]; then
+                break
+              fi
+              if grep -q "HTTP 429" /tmp/gh_pr_merge_err.txt 2>/dev/null; then
+                echo "GitHub API throttled on merge (attempt $attempt/$max_attempts). Waiting 60s..."
+                sleep 60
+              else
+                echo "Failed to merge PR $PR_URL"
+                cat /tmp/gh_pr_merge_err.txt 2>/dev/null || true
+                exit 1
+              fi
+              attempt=$((attempt + 1))
+            done
+
+            if [ "$pr_merge_rc" -ne 0 ]; then
+              echo "Failed to merge PR after retries"
+              exit 1
+            fi
+            git fetch origin "${{ env.PUBLISH_REF }}"
+            git checkout "${{ env.PUBLISH_REF }}"
+            git pull --ff-only origin "${{ env.PUBLISH_REF }}"
+          else
+            git checkout "${{ env.PUBLISH_REF }}"
+            git pull --ff-only origin "${{ env.PUBLISH_REF }}"
+            echo "bump_pr_created=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set release SHA
+        id: release_sha
+        run: |
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  publish_crates:
+    name: publish crates
+    needs: [prep]
+    runs-on: ubuntu-latest
+    if: false
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
+      DELAY_SECONDS: ${{ github.event.inputs.indexing_delay_seconds }}
+      RELEASE_SHA: ${{ needs.prep.outputs.release_sha }}
+      VERIFY_TIMEOUT_SECONDS: ${{ github.event.inputs.verify_timeout_seconds }}
+      VERIFY_POLL_SECONDS: ${{ github.event.inputs.verify_poll_seconds }}
+    steps:
+      - name: Guard - require release SHA
+        run: |
+          if [ -z "${RELEASE_SHA}" ]; then
+            echo "Missing release SHA from prep job"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prep.outputs.release_sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+      - name: Download release manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: feagi-release-manifest
+          path: /tmp
+      - name: Validate manifest matches workspace
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+
+          def read_workspace_version(root: Path) -> str:
+              text = (root / "Cargo.toml").read_text(encoding="utf-8")
+              m = re.search(r"(?ms)^\[workspace\.package\].*?^version\s*=\s*\"([^\"]+)\"", text)
+              if not m:
+                  raise SystemExit("Failed to read [workspace.package] version")
+              return m.group(1)
+
+
+          def read_crate_version(root: Path, manifest: Path, workspace_version: str) -> str:
+              text = manifest.read_text(encoding="utf-8")
+              if re.search(r"(?m)^version\.workspace\s*=\s*true\s*$", text):
+                  return workspace_version
+              m = re.search(r"(?m)^version\s*=\s*\"([^\"]+)\"", text)
+              if not m:
+                  raise SystemExit(f"Failed to read version from {manifest}")
+              return m.group(1)
+
+
+          def main() -> None:
+              manifest = Path("/tmp/feagi-release--temp.json")
+              if not manifest.exists():
+                  raise SystemExit("Missing release manifest")
+              data = json.loads(manifest.read_text(encoding="utf-8"))
+              changed = data.get("changed_crates", [])
+              versions = data.get("versions", {})
+
+              crate_paths = {
+                  "feagi-observability": "crates/feagi-observability",
+                  "feagi-structures": "crates/feagi-structures",
+                  "feagi-config": "crates/feagi-config",
+                  "feagi-npu-neural": "crates/feagi-npu/neural",
+                  "feagi-npu-runtime": "crates/feagi-npu/runtime",
+                  "feagi-serialization": "crates/feagi-serialization",
+                  "feagi-state-manager": "crates/feagi-state-manager",
+                  "feagi-npu-burst-engine": "crates/feagi-npu/burst-engine",
+                  "feagi-npu-plasticity": "crates/feagi-npu/plasticity",
+                  "feagi-evolutionary": "crates/feagi-evolutionary",
+                  "feagi-brain-development": "crates/feagi-brain-development",
+                  "feagi-io": "crates/feagi-io",
+                  "feagi-sensorimotor": "crates/feagi-sensorimotor",
+                  "feagi-services": "crates/feagi-services",
+                  "feagi-api": "crates/feagi-api",
+                  "feagi-agent": "crates/feagi-agent",
+                  "feagi-hal": "crates/feagi-hal",
+                  "feagi": ".",
+              }
+
+              root = Path(".").resolve()
+              ws_version = read_workspace_version(root)
+              mismatches = []
+              for crate in changed:
+                  rel = crate_paths.get(crate)
+                  if not rel:
+                      mismatches.append(f"unknown crate {crate}")
+                      continue
+                  manifest_path = root / rel / "Cargo.toml" if rel != "." else root / "Cargo.toml"
+                  actual = read_crate_version(root, manifest_path, ws_version)
+                  expected = versions.get(crate)
+                  if not expected:
+                      mismatches.append(f"{crate}: missing expected version in manifest")
+                  elif actual != expected:
+                      mismatches.append(f"{crate}: manifest {expected} != workspace {actual}")
+
+              if mismatches:
+                  print("Manifest verification failed:")
+                  for m in mismatches:
+                      print(f"  - {m}")
+                  raise SystemExit(1)
+
+              print("Manifest matches workspace versions.")
+
+
+          if __name__ == "__main__":
+              main()
+          PY
+      - name: Publish feagi-observability
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-observability
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-structures
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-structures
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-config
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-config
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-npu-neural
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-npu-neural
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-npu-runtime
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-npu-runtime
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-serialization
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-serialization
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-state-manager
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-state-manager
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-npu-burst-engine
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-npu-burst-engine
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-npu-plasticity
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-npu-plasticity
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-evolutionary
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-evolutionary
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-brain-development
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-brain-development
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-sensorimotor
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-sensorimotor
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-services
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-services
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-io
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-io
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-agent
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-agent
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-api
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-api
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi-hal
+        env:
+          PUBLISH_SINGLE_CRATE: feagi-hal
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Publish feagi
+        env:
+          PUBLISH_SINGLE_CRATE: feagi
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          ./scripts/publish-crates-smart.sh
+      - name: Verify crates.io reflects release
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import time
+          from urllib.request import urlopen
+
+
+          def latest_versions(name: str, http_timeout: int) -> set[str]:
+              url = f"https://crates.io/api/v1/crates/{name}"
+              with urlopen(url, timeout=http_timeout) as resp:
+                  data = json.load(resp)
+              return {v.get("num", "") for v in data.get("versions", []) if not v.get("yanked", False)}
+
+
+          def main() -> None:
+              manifest_path = "/tmp/feagi-release--temp.json"
+              data = json.loads(open(manifest_path, "r", encoding="utf-8").read())
+              changed = data.get("changed_crates", [])
+              versions = data.get("versions", {})
+
+              if not changed:
+                  print("No changed crates to verify.")
+                  return
+
+              timeout = int(os.environ["VERIFY_TIMEOUT_SECONDS"])
+              interval = int(os.environ["VERIFY_POLL_SECONDS"])
+              http_timeout = interval
+              deadline = time.time() + timeout
+
+              remaining = {c: versions.get(c) for c in changed}
+              while time.time() < deadline:
+                  missing = {}
+                  for crate, expected in remaining.items():
+                      if not expected:
+                          missing[crate] = expected
+                          continue
+                      published = latest_versions(crate, http_timeout)
+                      if expected not in published:
+                          missing[crate] = expected
+                  if not missing:
+                      print("All changed crates are visible on crates.io.")
+                      return
+                  remaining = missing
+                  time.sleep(interval)
+
+              print("crates.io verification failed (missing versions):")
+              for crate, expected in remaining.items():
+                  print(f"  - {crate}: {expected}")
+              raise SystemExit(1)
+
+
+          if __name__ == "__main__":
+              main()
+          PY
+
+  release:
+    name: tag & GitHub release
+    needs: [prep, publish_crates]
+    runs-on: ubuntu-latest
+    if: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || 'staging' }}
+          fetch-depth: 0
+
+      - name: Create release tag
+        id: tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          FEAGI_VERSION="$(awk -F'\"' '/^version = / { print $2; exit }' Cargo.toml)"
+          if [ -z "$FEAGI_VERSION" ]; then
+            echo "Failed to detect feagi version from Cargo.toml"
+            exit 1
+          fi
+          TAG_NAME="v${FEAGI_VERSION}"
+          if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
+            echo "Release tag already exists: $TAG_NAME"
+          else
+            echo "Creating release tag: $TAG_NAME"
+            git tag "$TAG_NAME"
+            git push origin "$TAG_NAME"
+          fi
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Prerelease
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          release_name: Release ${{ steps.tag.outputs.tag_name }}
+          body: |
+            **FEAGI Core release (independent versioning)**
+
+            Only changed crates have been published to crates.io.
+
+            ## Changed crates
+
+            ${{ needs.prep.outputs.changed_crates }}
+
+            ## Installation
+
+            Check [crates.io](https://crates.io/search?q=feagi) for latest versions.
+
+            ## Release info
+
+            - **Tag:** ${{ steps.tag.outputs.tag_name }}
+            - **Ref:** ${{ github.event.inputs.ref || 'staging' }}
+            - **Commit:** ${{ github.sha }}
+          draft: false
+          prerelease: true
+
+      - name: Notify success
+        run: |
+          echo "Release ${{ steps.tag.outputs.tag_name }} completed."
+          echo "Changed crates: ${{ needs.prep.outputs.changed_crates }}"

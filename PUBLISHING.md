@@ -6,15 +6,15 @@
 1. A **main facade crate** (`feagi`) - What users import
 2. **Individual component crates** - Can be used independently
 
-## 🔢 VERSIONING STRATEGY: INDEPENDENT
+## VERSIONING STRATEGY: INDEPENDENT
 
 **CRITICAL:** Each crate maintains its OWN independent version number.
 
 ### Rules:
-- ✅ Each crate has explicit `version = "X.Y.Z"` in its Cargo.toml
-- ✅ Only bump version for crates that changed
-- ✅ Version numbers can differ across crates
-- ❌ **NEVER use `version.workspace = true`**
+- Each crate has explicit `version = "X.Y.Z"` in its Cargo.toml
+- Only bump version for crates that changed
+- Version numbers can differ across crates
+- Never use `version.workspace = true`
 
 ### Example:
 ```toml
@@ -310,6 +310,15 @@ jobs:
       
       - name: Publish main feagi crate
         run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+```
+
+### Release Tags
+
+Release tags must match the umbrella crate version:
+
+- Tag format: `v<feagi_version>`
+- Example: `v0.0.1-beta.8`
+- Baseline for version detection in `smart-version-bump.sh`
 ```
 
 ## Documentation

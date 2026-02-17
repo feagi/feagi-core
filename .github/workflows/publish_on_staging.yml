@@ -1,0 +1,185 @@
+name: Publish on staging
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - staging
+  workflow_dispatch:
+    inputs:
+      indexing_delay_seconds:
+        description: 'Seconds to wait after each publish for crates.io indexing'
+        required: false
+        default: '90'
+      verify_timeout_seconds:
+        description: 'Max seconds to wait for crates.io verification'
+        required: false
+        default: '900'
+      verify_poll_seconds:
+        description: 'Seconds between crates.io verification polls'
+        required: false
+        default: '15'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: publish crates and verify
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(join(github.event.commits.*.message, '\n'), 'bump versions for release')
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+      DELAY_SECONDS: ${{ github.event.inputs.indexing_delay_seconds || '90' }}
+      VERIFY_TIMEOUT_SECONDS: ${{ github.event.inputs.verify_timeout_seconds || '900' }}
+      VERIFY_POLL_SECONDS: ${{ github.event.inputs.verify_poll_seconds || '15' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: staging
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-crates-io-${{ hashFiles('**/Cargo.lock') }}
+          save-if: true
+      - name: Sync workspace from crates.io
+        run: |
+          chmod +x scripts/sync-from-crates-io.sh
+          ./scripts/sync-from-crates-io.sh
+
+      - name: Publish unpublished crates
+        run: |
+          chmod +x scripts/publish-crates-smart.sh
+          CHANGED_CRATES="" ./scripts/publish-crates-smart.sh
+
+      - name: Verify crates.io reflects staging
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import time
+          from pathlib import Path
+          from urllib.request import urlopen
+
+
+          def read_workspace_version(root: Path) -> str:
+              text = (root / "Cargo.toml").read_text(encoding="utf-8")
+              m = re.search(r"(?ms)^\[workspace\.package\].*?^version\s*=\s*\"([^\"]+)\"", text)
+              if not m:
+                  raise SystemExit("Failed to read [workspace.package] version")
+              return m.group(1)
+
+
+          def read_crate_name_and_version(manifest: Path, workspace_version: str) -> tuple[str, str]:
+              text = manifest.read_text(encoding="utf-8")
+              name_m = re.search(r"(?m)^name\s*=\s*\"([^\"]+)\"", text)
+              if not name_m:
+                  raise SystemExit(f"Failed to read name from {manifest}")
+              name = name_m.group(1)
+              if re.search(r"(?m)^version\.workspace\s*=\s*true\s*$", text):
+                  return name, workspace_version
+              ver_m = re.search(r"(?m)^version\s*=\s*\"([^\"]+)\"", text)
+              if not ver_m:
+                  raise SystemExit(f"Failed to read version from {manifest}")
+              return name, ver_m.group(1)
+
+
+          def published_versions(crate_name: str, http_timeout: int) -> set[str]:
+              url = f"https://crates.io/api/v1/crates/{crate_name}"
+              with urlopen(url, timeout=http_timeout) as resp:
+                  data = json.load(resp)
+              return {v.get("num", "") for v in data.get("versions", []) if not v.get("yanked", False)}
+
+
+          def collect_workspace_versions() -> dict[str, str]:
+              root = Path(".").resolve()
+              workspace_version = read_workspace_version(root)
+              manifests = [root / "Cargo.toml"]
+              manifests += sorted((root / "crates").glob("*/Cargo.toml"))
+              manifests += sorted((root / "crates" / "feagi-npu").glob("*/Cargo.toml"))
+              versions: dict[str, str] = {}
+              for mf in manifests:
+                  if not mf.exists():
+                      continue
+                  name, ver = read_crate_name_and_version(mf, workspace_version)
+                  versions[name] = ver
+              return versions
+
+
+          def main() -> None:
+              timeout = int(os.environ["VERIFY_TIMEOUT_SECONDS"])
+              interval = int(os.environ["VERIFY_POLL_SECONDS"])
+              http_timeout = interval
+              deadline = time.time() + timeout
+
+              expected = collect_workspace_versions()
+              remaining = dict(expected)
+
+              while time.time() < deadline:
+                  missing: dict[str, str] = {}
+                  for name, ver in remaining.items():
+                      published = published_versions(name, http_timeout)
+                      if ver not in published:
+                          missing[name] = ver
+                  if not missing:
+                      print("Crates.io verification passed.")
+                      return
+                  remaining = missing
+                  time.sleep(interval)
+
+              print("Crates.io verification failed for:")
+              for name, ver in remaining.items():
+                  print(f"  - {name}: {ver}")
+              raise SystemExit(1)
+
+
+          if __name__ == "__main__":
+              main()
+          PY
+
+      - name: Create release tag
+        id: tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          FEAGI_VERSION="$(awk -F'\"' '/^version = / { print $2; exit }' Cargo.toml)"
+          if [ -z "$FEAGI_VERSION" ]; then
+            echo "Failed to detect feagi version from Cargo.toml"
+            exit 1
+          fi
+          TAG_NAME="v${FEAGI_VERSION}"
+          if git rev-parse -q --verify "refs/tags/${TAG_NAME}" >/dev/null; then
+            echo "Release tag already exists: $TAG_NAME"
+          else
+            echo "Creating release tag: $TAG_NAME"
+            git tag "$TAG_NAME"
+            git push origin "$TAG_NAME"
+          fi
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub prerelease
+        run: |
+          TAG_NAME="${{ steps.tag.outputs.tag_name }}"
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Release already exists: $TAG_NAME"
+            exit 0
+          fi
+          gh release create "$TAG_NAME" --title "Release $TAG_NAME" --notes "Automated release for staging." --prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

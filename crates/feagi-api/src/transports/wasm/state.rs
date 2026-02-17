@@ -23,6 +23,7 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
     let system_service = Arc::new(WasmSystemService::new());
 
     ApiState {
+        network_connection_info_provider: None,
         agent_service: None, // No agents in WASM standalone mode
         genome_service: genome_service
             as Arc<dyn feagi_services::traits::GenomeService + Send + Sync>,
