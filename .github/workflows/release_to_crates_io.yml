@@ -76,6 +76,64 @@ jobs:
           fi
           echo "Using baseline tag: $BASELINE_TAG"
 
+      - name: Guard - verify path dependency versions consistent
+        run: |
+          set -euo pipefail
+          echo "Verifying workspace path dependency version consistency..."
+          WORKSPACE_VERSION="$(
+            awk '
+              BEGIN { in_ws=0 }
+              /^\[workspace\.package\]/ { in_ws=1; next }
+              /^\[/ { if (in_ws==1) exit }
+              in_ws==1 && /^version = / {
+                gsub(/version = /, "", $0);
+                gsub(/"/, "", $0);
+                print $0;
+                exit
+              }
+            ' Cargo.toml
+          )"
+          if [ -z "${WORKSPACE_VERSION}" ]; then
+            echo "Failed to detect [workspace.package] version from Cargo.toml"
+            exit 1
+          fi
+          declare -A CRATE_VERSIONS
+          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+            [ -f "$manifest" ] || continue
+            name="$(grep -E '^name = ' "$manifest" | head -1 | sed 's/name = \"\\(.*\\)\"/\\1/')"
+            [ -n "$name" ] || continue
+            if grep -qE '^version\\.workspace = true' "$manifest"; then
+              ver="$WORKSPACE_VERSION"
+            else
+              ver="$(grep -E '^version = ' "$manifest" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
+            fi
+            [ -n "$ver" ] && CRATE_VERSIONS["$name"]="$ver"
+          done
+          mismatches=0
+          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
+            [ -f "$manifest" ] || continue
+            # Match both path="../..." (subcrates) and path="crates/..." (root)
+            while IFS= read -r line; do
+              dep="$(echo "$line" | sed -n 's/^[[:space:]]*\([A-Za-z0-9_-][A-Za-z0-9_-]*\)[[:space:]]*=.*/\1/p')"
+              req="$(echo "$line" | sed -n 's/.*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
+              path="$(echo "$line" | sed -n 's/.*path[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
+              [ -n "$dep" ] && [ -n "$req" ] && [ -n "$path" ] || continue
+              case "$path" in ../*|crates/*) ;; *) continue ;; esac
+              req="${req#=}"; req="${req#^}"
+              actual="${CRATE_VERSIONS[$dep]:-}"
+              [ -z "$actual" ] && continue
+              if [ "$req" != "$actual" ]; then
+                echo "Version mismatch in $manifest: $dep required $req actual $actual"
+                mismatches=$((mismatches + 1))
+              fi
+            done < <(grep -E 'path[[:space:]]*=[[:space:]]*"(\.\./|crates/)[^"]+"' "$manifest" || true)
+          done
+          if [ "$mismatches" -ne 0 ]; then
+            echo "Path dependency version consistency failed ($mismatches mismatch(es)). Fix Cargo.toml path deps to match crate versions."
+            exit 1
+          fi
+          echo "Workspace path dependency versions are consistent."
+
       - name: Sync workspace from crates.io
         run: |
           echo "Syncing root dependency versions to match current crates.io..."
@@ -278,61 +336,6 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --all -- --check
-
-      - name: Guard - verify path dependency versions consistent
-        run: |
-          set -euo pipefail
-          echo "Verifying workspace path dependency version consistency..."
-          WORKSPACE_VERSION="$(
-            awk '
-              BEGIN { in_ws=0 }
-              /^\[workspace\.package\]/ { in_ws=1; next }
-              /^\[/ { if (in_ws==1) exit }
-              in_ws==1 && /^version = / {
-                gsub(/version = /, "", $0);
-                gsub(/"/, "", $0);
-                print $0;
-                exit
-              }
-            ' Cargo.toml
-          )"
-          if [ -z "${WORKSPACE_VERSION}" ]; then
-            echo "Failed to detect [workspace.package] version from Cargo.toml"
-            exit 1
-          fi
-          declare -A CRATE_VERSIONS
-          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
-            [ -f "$manifest" ] || continue
-            name="$(grep -E '^name = ' "$manifest" | head -1 | sed 's/name = \"\\(.*\\)\"/\\1/')"
-            [ -n "$name" ] || continue
-            if grep -qE '^version\\.workspace = true' "$manifest"; then
-              ver="$WORKSPACE_VERSION"
-            else
-              ver="$(grep -E '^version = ' "$manifest" | head -1 | sed 's/version = \"\\(.*\\)\"/\\1/')"
-            fi
-            [ -n "$ver" ] && CRATE_VERSIONS["$name"]="$ver"
-          done
-          mismatches=0
-          for manifest in Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml; do
-            [ -f "$manifest" ] || continue
-            # Match both path="../..." (subcrates) and path="crates/..." (root)
-            while IFS= read -r line; do
-              dep="$(echo "$line" | sed -n 's/^[[:space:]]*\([A-Za-z0-9_-][A-Za-z0-9_-]*\)[[:space:]]*=.*/\1/p')"
-              req="$(echo "$line" | sed -n 's/.*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
-              path="$(echo "$line" | sed -n 's/.*path[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')"
-              [ -n "$dep" ] && [ -n "$req" ] && [ -n "$path" ] || continue
-              case "$path" in ../*|crates/*) ;; *) continue ;; esac
-              req="${req#=}"; req="${req#^}"
-              actual="${CRATE_VERSIONS[$dep]:-}"
-              [ -z "$actual" ] && continue
-              if [ "$req" != "$actual" ]; then
-                echo "Version mismatch in $manifest: $dep required $req actual $actual"
-                mismatches=$((mismatches + 1))
-              fi
-            done < <(grep -E 'path[[:space:]]*=[[:space:]]*"(\.\./|crates/)[^"]+"' "$manifest" || true)
-          done
-          [ "$mismatches" -eq 0 ] || exit 1
-          echo "Workspace path dependency versions are consistent."
 
       - name: Run Clippy (lib and tests only)
         run: cargo clippy --workspace --lib --tests -- -D warnings
