@@ -36,13 +36,11 @@ env:
 
 jobs:
   prep:
-    name: validate & version bump
+    name: validate & prepare
     runs-on: ubuntu-latest
     outputs:
       changed_crates: ${{ steps.version.outputs.changed_crates }}
       release_sha: ${{ steps.release_sha.outputs.release_sha }}
-      bump_pr_created: ${{ steps.bump_pr.outputs.bump_pr_created }}
-      bump_pr_url: ${{ steps.bump_pr.outputs.bump_pr_url }}
     env:
       PUBLISH_REF: ${{ github.event.inputs.ref || 'staging' }}
     steps:
@@ -134,24 +132,24 @@ jobs:
           fi
           echo "Workspace path dependency versions are consistent."
 
-      - name: Sync workspace from crates.io
-        run: |
-          echo "Syncing root dependency versions to match current crates.io..."
-          chmod +x scripts/sync-from-crates-io.sh
-          ./scripts/sync-from-crates-io.sh
-
-      - name: Bump umbrella version
+      - name: Read workspace version (no bump; publish exact version from repo)
         id: version
         run: |
-          echo "Bumping unified umbrella version..."
-          chmod +x scripts/bump-umbrella-version.sh
-          VERSION_OUTPUT=$(./scripts/bump-umbrella-version.sh)
-          echo "$VERSION_OUTPUT"
-          NEW_VERSION=$(echo "$VERSION_OUTPUT" | grep "NEW_VERSION=" | cut -d'=' -f2-)
-          CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "changed_crates=$CHANGED_CRATES" >> $GITHUB_OUTPUT
-          echo "Unified version bump complete: $NEW_VERSION"
+          set -euo pipefail
+          CURRENT=$(awk '
+            /^\[workspace\.package\]/ { in_ws=1; next }
+            /^\[/ { if (in_ws==1) exit }
+            in_ws==1 && /^version\s*=\s*"/ { gsub(/^version\s*=\s*"|"$/, ""); print; exit }
+          ' Cargo.toml)
+          if [ -z "$CURRENT" ]; then
+            echo "Failed to read [workspace.package] version from Cargo.toml"
+            exit 1
+          fi
+          CHANGED_CRATES="feagi-observability feagi-structures feagi-config feagi-npu-neural feagi-npu-runtime feagi-serialization feagi-state-manager feagi-npu-burst-engine feagi-npu-plasticity feagi-evolutionary feagi-brain-development feagi-sensorimotor feagi-services feagi-io feagi-agent feagi-api feagi-hal feagi"
+          echo "current_version=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "changed_crates=$CHANGED_CRATES" >> "$GITHUB_OUTPUT"
+          echo "Publishing exact workspace version: $CURRENT (no sync, no bump)"
+
       - name: Build release manifest
         id: manifest
         run: |
@@ -241,10 +239,10 @@ jobs:
           name: feagi-release-manifest
           path: ${{ steps.manifest.outputs.manifest_path }}
 
-      - name: Guard - enforce bumps for changed crates
+      - name: Guard - workspace version must be newer than crates.io (developer must bump before run)
         run: |
           set -euo pipefail
-          echo "Verifying changed crates are version-bumped vs crates.io..."
+          echo "Verifying workspace version is greater than crates.io for changed crates..."
           LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
           python3 - <<'PY'
           import json
@@ -349,108 +347,7 @@ jobs:
       - name: Build release
         run: cargo build --release --lib --verbose
 
-      - name: Commit and push version updates
-        id: bump_pr
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
-          git add Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml
-          if [ -n "$CHANGED_CRATES" ]; then
-            if git diff --cached --quiet; then
-              echo "Changed crates detected but no version updates staged"
-              exit 1
-            fi
-            echo "chore: bump umbrella version for release (unified versioning)" > commit_msg.txt
-            echo "" >> commit_msg.txt
-            echo "Changed crates: $CHANGED_CRATES" >> commit_msg.txt
-            COMMIT_MSG=$(cat commit_msg.txt)
-          else
-            if git diff --cached --quiet; then
-              echo "No changes to commit"
-              exit 0
-            fi
-            COMMIT_MSG="chore: release (no version changes)"
-          fi
-          git commit -m "$COMMIT_MSG"
-
-          if [ -n "$CHANGED_CRATES" ]; then
-            BRANCH_NAME="release/bump-${{ github.run_id }}"
-            git checkout -b "$BRANCH_NAME"
-            git push origin "$BRANCH_NAME"
-
-            PR_TITLE="chore: bump versions for release"
-            PR_BODY="Automated version bumps for crates changed on staging."
-            PR_URL=""
-            attempt=1
-            max_attempts=6
-            while [ "$attempt" -le "$max_attempts" ]; do
-              set +e
-              PR_URL="$(gh pr create --base "${{ env.PUBLISH_REF }}" --head "$BRANCH_NAME" --title "$PR_TITLE" --body "$PR_BODY" 2>/tmp/gh_pr_create_err.txt)"
-              pr_create_rc=$?
-              if [ "$pr_create_rc" -ne 0 ]; then
-                PR_URL="$(gh pr list --state open --head "$BRANCH_NAME" --json url -q '.[0].url' 2>/tmp/gh_pr_list_err.txt)"
-              fi
-              set -e
-
-              if [ -n "$PR_URL" ]; then
-                break
-              fi
-
-              if grep -q "HTTP 429" /tmp/gh_pr_create_err.txt /tmp/gh_pr_list_err.txt 2>/dev/null; then
-                echo "GitHub API throttled (attempt $attempt/$max_attempts). Waiting 60s..."
-                sleep 60
-              else
-                echo "Failed to create or find PR for $BRANCH_NAME"
-                cat /tmp/gh_pr_create_err.txt /tmp/gh_pr_list_err.txt 2>/dev/null || true
-                exit 1
-              fi
-              attempt=$((attempt + 1))
-            done
-
-            if [ -z "$PR_URL" ]; then
-              echo "Failed to create or find PR after retries"
-              exit 1
-            fi
-
-            echo "Using PR: $PR_URL"
-            echo "bump_pr_created=true" >> "$GITHUB_OUTPUT"
-            echo "bump_pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
-            attempt=1
-            while [ "$attempt" -le "$max_attempts" ]; do
-              set +e
-              gh pr merge "$PR_URL" --merge --delete-branch 2>/tmp/gh_pr_merge_err.txt
-              pr_merge_rc=$?
-              set -e
-              if [ "$pr_merge_rc" -eq 0 ]; then
-                break
-              fi
-              if grep -q "HTTP 429" /tmp/gh_pr_merge_err.txt 2>/dev/null; then
-                echo "GitHub API throttled on merge (attempt $attempt/$max_attempts). Waiting 60s..."
-                sleep 60
-              else
-                echo "Failed to merge PR $PR_URL"
-                cat /tmp/gh_pr_merge_err.txt 2>/dev/null || true
-                exit 1
-              fi
-              attempt=$((attempt + 1))
-            done
-
-            if [ "$pr_merge_rc" -ne 0 ]; then
-              echo "Failed to merge PR after retries"
-              exit 1
-            fi
-            git fetch origin "${{ env.PUBLISH_REF }}"
-            git checkout "${{ env.PUBLISH_REF }}"
-            git pull --ff-only origin "${{ env.PUBLISH_REF }}"
-          else
-            git checkout "${{ env.PUBLISH_REF }}"
-            git pull --ff-only origin "${{ env.PUBLISH_REF }}"
-            echo "bump_pr_created=false" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set release SHA
+      - name: Set release SHA (ref being published; no commit)
         id: release_sha
         run: |
           echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"

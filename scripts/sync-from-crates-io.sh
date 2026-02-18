@@ -81,6 +81,16 @@ if [ ! -f "$ROOT_CARGO" ]; then
     exit 1
 fi
 
+# Read [workspace.package].version for crates that use version.workspace = true
+WORKSPACE_VERSION=""
+if [ -f "$ROOT_CARGO" ]; then
+    WORKSPACE_VERSION=$(awk '
+        /^\[workspace\.package\]/ { in_ws=1; next }
+        /^\[/ { if (in_ws==1) exit }
+        in_ws==1 && /^version = / { gsub(/version = |"/, "", $0); print $0; exit }
+    ' "$ROOT_CARGO")
+fi
+
 # Fetch highest semver version from crates.io API.
 # NOTE: The API returns versions by publication date, NOT semver order.
 # A lower version can be published after a higher one (version regression).
@@ -120,17 +130,21 @@ for crate in "${CRATE_ORDER[@]}"; do
         continue
     fi
 
-    # Get local version for this crate
+    # Get local version for this crate (explicit version = "..." or workspace version)
     path=$(crate_path_for "$crate" 2>/dev/null) || path=""
     local_version=""
     if [ -n "$path" ]; then
         crate_toml="$WORKSPACE_ROOT/$path/Cargo.toml"
         if [ -f "$crate_toml" ]; then
-            local_version=$(grep '^version = "' "$crate_toml" | head -1 | sed 's/version = "\(.*\)"/\1/' | xargs)
+            if grep -q '^version = "' "$crate_toml" 2>/dev/null; then
+                local_version=$(grep '^version = "' "$crate_toml" | head -1 | sed 's/version = "\(.*\)"/\1/' | xargs)
+            elif [ -n "$WORKSPACE_VERSION" ] && grep -q '^version\.workspace = true' "$crate_toml" 2>/dev/null; then
+                local_version="$WORKSPACE_VERSION"
+            fi
         fi
     fi
 
-    # Only upgrade: skip if local version is already >= crates.io
+    # Only upgrade: skip if local version is already >= crates.io (never downgrade)
     if [ -n "$local_version" ]; then
         higher=$(printf '%s\n' "$local_version" "$latest" | sort -V | tail -1)
         if [ "$higher" = "$local_version" ] && [ "$local_version" != "$latest" ]; then
