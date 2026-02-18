@@ -23,8 +23,8 @@ use std::time::{Duration, Instant};
 
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{
-    BurstLoopRunner, DynamicNPU, MotorPublisher, RawFireQueueSnapshot, RustNPU,
-    TracingMutex, VisualizationPublisher,
+    BurstLoopRunner, DynamicNPU, MotorPublisher, RawFireQueueSnapshot, RustNPU, TracingMutex,
+    VisualizationPublisher,
 };
 use feagi_npu_neural::types::NeuronId;
 use feagi_npu_runtime::StdRuntime;
@@ -81,11 +81,18 @@ fn burst_engine_jitter_under_stress() {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let rust_npu = RustNPU::new(runtime, backend, 2000, 20_000, 20).expect("create NPU");
-    let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "JitterTestNPU"));
+    let npu = Arc::new(TracingMutex::new(
+        DynamicNPU::F32(rust_npu),
+        "JitterTestNPU",
+    ));
     let runner = BurstLoopRunner::new::<NoViz, NoMotor>(npu.clone(), None, None, frequency_hz);
     let runner_shared = Arc::new(std::sync::RwLock::new(runner));
 
-    runner_shared.write().unwrap().start().expect("burst loop start");
+    runner_shared
+        .write()
+        .unwrap()
+        .start()
+        .expect("burst loop start");
 
     let timestamps: Arc<Mutex<Vec<Instant>>> = Arc::new(Mutex::new(Vec::new()));
     let timestamps_obs = timestamps.clone();
@@ -174,7 +181,10 @@ fn burst_engine_jitter_under_stress() {
     };
 
     println!("Burst engine jitter (stress={}):", stress_enabled);
-    println!("  Target interval: {:.2} ms ({} Hz)", target_interval_ms, frequency_hz);
+    println!(
+        "  Target interval: {:.2} ms ({} Hz)",
+        target_interval_ms, frequency_hz
+    );
     println!("  Samples: {} intervals", intervals_ms.len());
     println!("  Mean interval:   {:.2} ms", mean_ms);
     println!("  Std dev:         {:.2} ms", std_ms);
@@ -260,22 +270,14 @@ fn burst_engine_jitter_with_injection() {
                 RustNPU::new(runtime, backend, neuron_capacity, synapse_capacity, 20)
                     .expect("create NPU");
 
-            rust_npu.register_cortical_area(
-                0,
-                CoreCorticalType::Death.to_cortical_id().as_base_64(),
-            );
-            rust_npu.register_cortical_area(
-                1,
-                CoreCorticalType::Power.to_cortical_id().as_base_64(),
-            );
-            rust_npu.register_cortical_area(
-                2,
-                CoreCorticalType::Death.to_cortical_id().as_base_64(),
-            );
-            rust_npu.register_cortical_area(
-                10,
-                CoreCorticalType::Death.to_cortical_id().as_base_64(),
-            );
+            rust_npu
+                .register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
+            rust_npu
+                .register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+            rust_npu
+                .register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+            rust_npu
+                .register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
             if injection_count <= 1000 {
                 for i in 0..injection_count {
@@ -334,7 +336,11 @@ fn burst_engine_jitter_with_injection() {
                 BurstLoopRunner::new::<NoViz, NoMotor>(npu.clone(), None, None, frequency_hz);
             let runner_shared = Arc::new(std::sync::RwLock::new(runner));
 
-            runner_shared.write().unwrap().start().expect("burst loop start");
+            runner_shared
+                .write()
+                .unwrap()
+                .start()
+                .expect("burst loop start");
 
             let timestamps: Arc<Mutex<Vec<Instant>>> = Arc::new(Mutex::new(Vec::new()));
             let timestamps_obs = timestamps.clone();

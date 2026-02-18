@@ -1937,9 +1937,11 @@ fn burst_loop(
                 // This eliminates NPU lock acquisitions that were causing 1-3s delays!
                 // Area names are stored in ConnectomeManager, not NPU - we cache them here
                 //
-                // NOTE: Cache is refreshed externally via refresh_cortical_id_mappings() when areas are created/updated
-                // For now, if cache is empty, we'll use fallback (area_{idx}) - this is acceptable as visualization
-                // only needs cortical_id once, and it will be refreshed on next area creation/update
+                // NOTE: Cache is refreshed via refresh_cortical_id_mappings() when areas are created/updated
+                // or on genome load. If the NPU is not reset on genome load (see ConnectomeManager
+                // prepare_for_new_genome), fire queue (area_id, coords) can be from the OLD genome
+                // while cache has NEW genome idx->id; that causes out-of-region visualization until
+                // feagi-rs is restarted.
 
                 // CRITICAL PERFORMANCE: Clone both maps to release locks immediately
                 // This prevents holding locks during expensive visualization aggregation and vector cloning
