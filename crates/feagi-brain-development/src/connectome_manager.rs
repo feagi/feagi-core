@@ -6185,27 +6185,27 @@ mod tests {
         use feagi_structures::genomic::cortical_area::{
             CorticalAreaType, IOCorticalAreaConfigurationFlag,
         };
-        let cortical_id1 = CoreCorticalType::Power.to_cortical_id();
-        let cortical_type1 = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
+        // Use a unique ID only for this test to avoid collisions with other tests (e.g. Power)
+        // when tests run in parallel; we still test duplicate by adding the same ID twice.
+        let cortical_id = CorticalID::try_from_bytes(b"cst_dup1").unwrap();
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area1 = CorticalArea::new(
-            cortical_id1,
+            cortical_id,
             0,
             "First".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0).into(),
-            cortical_type1,
+            cortical_type,
         )
         .unwrap();
 
-        let cortical_id2 = CoreCorticalType::Power.to_cortical_id();
-        let cortical_type2 = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area2 = CorticalArea::new(
-            cortical_id2, // Same ID
+            cortical_id, // Same ID - duplicate
             1,
             "Second".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0).into(),
-            cortical_type2,
+            cortical_type,
         )
         .unwrap();
 
