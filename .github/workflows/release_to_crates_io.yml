@@ -356,7 +356,6 @@ jobs:
     name: publish crates
     needs: [prep]
     runs-on: ubuntu-latest
-    if: false
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
       CHANGED_CRATES: ${{ needs.prep.outputs.changed_crates }}
@@ -639,7 +638,6 @@ jobs:
     name: tag & GitHub release
     needs: [prep, publish_crates]
     runs-on: ubuntu-latest
-    if: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
