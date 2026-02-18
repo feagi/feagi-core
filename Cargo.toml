@@ -190,6 +190,7 @@ feagi-structures = { version = "=0.0.1-beta.18", path = "crates/feagi-structures
 feagi-serialization = { version = "=0.0.1-beta.18", path = "crates/feagi-serialization" }
 
 # Workspace-internal crates
+feagi-npu-neural = { version = "=0.0.1-beta.18", path = "crates/feagi-npu/neural" }
 feagi-observability = { version = "=0.0.1-beta.18", path = "crates/feagi-observability" }
 
 [profile.release]
