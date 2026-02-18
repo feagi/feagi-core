@@ -4653,12 +4653,15 @@ impl ConnectomeManager {
         // Clear brain regions
         self.brain_regions = BrainRegionHierarchy::new();
 
-        // Reset NPU if present
-        // TODO: Add reset() method to RustNPU
-        // if let Some(ref npu) = self.npu {
-        //     let mut npu_lock = npu.lock().unwrap();
-        //     npu_lock.reset();
-        // }
+        // CRITICAL: NPU is NOT reset here. Until NPU has a reset() and we call it:
+        // - ConnectomeManager gets new cortical_idx_to_id from the new genome.
+        // - Burst loop cache is refreshed from ConnectomeManager (refresh_burst_runner_cache).
+        // - NPU still holds neurons from the OLD genome with OLD cortical_idx.
+        // - Fire queue (area_id, x, y, z) uses old indices; we label with NEW cortical_id.
+        // Result: wrong area's coordinates sent under another area's id -> BV shows
+        // out-of-region / wrong-scale activations. Restarting feagi-rs fixes it (full sync).
+        // Fix: implement NPU reset (clear neuron storage + area_id_to_name), then:
+        //   if let Some(ref npu) = self.npu { npu.lock().map_err(...)?.reset(); }
 
         info!(target: "feagi-bdu","✅ Connectome cleared and ready for new genome");
         Ok(())
