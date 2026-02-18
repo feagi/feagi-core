@@ -136,6 +136,7 @@ jobs:
         done
         echo "Crate metadata OK"
 
+    # --no-verify required: verify step would resolve deps from crates.io (0.0.1-beta.18 not published yet)
     - name: Dry run package verification
       run: |
         for crate_dir in crates/*/ crates/feagi-npu/*/; do
