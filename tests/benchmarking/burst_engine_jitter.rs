@@ -128,7 +128,7 @@ fn burst_engine_jitter_under_stress() {
     let deadline = Instant::now() + Duration::from_secs(duration_secs);
     while deadline > Instant::now() {
         let n = timestamps.lock().unwrap().len();
-        if n >= min_intervals + 1 {
+        if n > min_intervals {
             break;
         }
         thread::sleep(Duration::from_millis(50));
@@ -373,7 +373,7 @@ fn burst_engine_jitter_with_injection() {
             let deadline = Instant::now() + Duration::from_secs(duration_secs);
             while deadline > Instant::now() {
                 let n = timestamps.lock().unwrap().len();
-                if n >= min_intervals + 1 {
+                if n > min_intervals {
                     break;
                 }
                 thread::sleep(Duration::from_millis(100));
