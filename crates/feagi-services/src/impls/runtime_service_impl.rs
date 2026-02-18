@@ -12,6 +12,7 @@ Licensed under the Apache License, Version 2.0
 
 use std::sync::Arc;
 
+use ahash::AHashSet;
 use async_trait::async_trait;
 use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_structures::genomic::cortical_area::CorticalID;
@@ -179,6 +180,42 @@ impl RuntimeService for RuntimeServiceImpl {
         Err(ServiceError::NotImplemented(
             "Burst count reset not yet implemented".to_string(),
         ))
+    }
+
+    async fn register_motor_subscriptions(
+        &self,
+        agent_id: &str,
+        cortical_ids: Vec<String>,
+        rate_hz: f64,
+    ) -> ServiceResult<()> {
+        if rate_hz <= 0.0 {
+            return Err(ServiceError::InvalidInput(
+                "Motor rate must be greater than 0".to_string(),
+            ));
+        }
+
+        let cortical_set: AHashSet<String> = cortical_ids.into_iter().collect();
+        let runner = self.burst_runner.read();
+        runner
+            .register_motor_subscriptions_with_rate(agent_id.to_string(), cortical_set, rate_hz)
+            .map_err(|e| ServiceError::InvalidInput(e.to_string()))
+    }
+
+    async fn register_visualization_subscriptions(
+        &self,
+        agent_id: &str,
+        rate_hz: f64,
+    ) -> ServiceResult<()> {
+        if rate_hz <= 0.0 {
+            return Err(ServiceError::InvalidInput(
+                "Visualization rate must be greater than 0".to_string(),
+            ));
+        }
+
+        let runner = self.burst_runner.read();
+        runner
+            .register_visualization_subscriptions_with_rate(agent_id.to_string(), rate_hz)
+            .map_err(|e| ServiceError::InvalidInput(e.to_string()))
     }
 
     async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>> {

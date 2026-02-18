@@ -141,6 +141,7 @@
 //!
 //! Apache-2.0
 
+#![allow(unexpected_cfgs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // Re-export foundation
@@ -162,7 +163,7 @@ pub use feagi_brain_development as bdu;
 pub use feagi_npu_plasticity as plasticity;
 
 #[cfg(feature = "serialization")]
-pub use feagi_io::connectome as serialization;
+pub use feagi_services::connectome as serialization;
 
 // Re-export I/O layer
 #[cfg(feature = "sensorimotor")]

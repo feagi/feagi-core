@@ -362,13 +362,13 @@ pub(crate) fn verify_replacing_stage_properties(
     let is_last = *new_stage_index == (current_stages.len() - 1) as u32;
 
     // Determine what input type we're comparing against
-    let comparing_input = match direction {
+    let comparing_input: Option<WrappedIOType> = match direction {
         PipelineDirection::Motor => {
             // For motor: index 0 must match the fixed input type
             if is_first {
-                Some(fixed_type)
+                Some(*fixed_type)
             } else {
-                Some(&current_stages[*new_stage_index as usize - 1].get_output_data_type())
+                Some(current_stages[*new_stage_index as usize - 1].get_output_data_type())
             }
         }
         PipelineDirection::Sensory => {
@@ -376,34 +376,34 @@ pub(crate) fn verify_replacing_stage_properties(
             if is_first {
                 None
             } else {
-                Some(&current_stages[*new_stage_index as usize - 1].get_output_data_type())
+                Some(current_stages[*new_stage_index as usize - 1].get_output_data_type())
             }
         }
     };
 
     // Determine what output type we're comparing against
-    let comparing_output = match direction {
+    let comparing_output: Option<WrappedIOType> = match direction {
         PipelineDirection::Motor => {
             // For motor: last index has no output constraint from pipeline
             if is_last {
                 None
             } else {
-                Some(&current_stages[*new_stage_index as usize + 1].get_input_data_type())
+                Some(current_stages[*new_stage_index as usize + 1].get_input_data_type())
             }
         }
         PipelineDirection::Sensory => {
             // For sensory: last index must match the fixed output type
             if is_last {
-                Some(fixed_type)
+                Some(*fixed_type)
             } else {
-                Some(&current_stages[*new_stage_index as usize + 1].get_input_data_type())
+                Some(current_stages[*new_stage_index as usize + 1].get_input_data_type())
             }
         }
     };
 
     // Validate input compatibility
     if let Some(expected_input) = comparing_input {
-        if expected_input != &new_stage_properties.get_input_data_type() {
+        if expected_input != new_stage_properties.get_input_data_type() {
             return Err(FeagiDataError::BadParameters(format!(
                 "Precursor to stage at index {} outputs data type {} but given stage accepts {}!",
                 *new_stage_index,
@@ -415,7 +415,7 @@ pub(crate) fn verify_replacing_stage_properties(
 
     // Validate output compatibility
     if let Some(expected_output) = comparing_output {
-        if expected_output != &new_stage_properties.get_output_data_type() {
+        if expected_output != new_stage_properties.get_output_data_type() {
             return Err(FeagiDataError::BadParameters(format!(
                 "Postcursor to stage at index {} receives data type {} but given stage outputs {}!",
                 *new_stage_index,

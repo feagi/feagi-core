@@ -1,5 +1,7 @@
 use crate::FeagiDataError;
 
+// TODO serialize from json serializable directly
+
 /// A wrapper around serde_json::Value for handling JSON data in FEAGI.
 ///
 /// Provides methods to create, parse, and manipulate JSON data with error handling.

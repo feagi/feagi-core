@@ -5,7 +5,7 @@ use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct FeedbackRegistrar {
     registered_feedbacks: Vec<(FeedbackRegistrationTargets, FeedBackRegistration)>,
 }

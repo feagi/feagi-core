@@ -1,6 +1,6 @@
 [package]
 name = "feagi-agent"
-version = "0.0.1-beta.8"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -9,62 +9,41 @@ homepage.workspace = true
 description = "Client library for building FEAGI agents in Rust"
 readme = "README.md"
 
+[features]
+
+# Platform targets
+platform-std = ["feagi-io/platform-std"]
+platform-no-std = ["feagi-io/platform-no-std"]
+platform-wasm = ["feagi-io/platform-wasm"]
+
+# Feagi Agents
+agent-server = ["feagi-io/feagi-server"]
+agent-client = ["feagi-io/feagi-client"]
+agent-client-asynchelper-tokio = ["tokio", "reqwest"]
+agent-transport-zmq = ["feagi-io/zmq-transport"]
+agent-transport-websocket-std = ["feagi-io/websocket-transport-std"]
+agent-transport-shm = ["feagi-io/shm-transport"]
+agent-transport-bluetooth = ["feagi-io/bluetooth-transport"]
+# WASM features cannot be mixed with any of the default ones
+agent-transport-websocket-wasm = ["feagi-io/websocket-transport-wasm"]
+agent-js-bridge-wasm = ["feagi-io/js-bridge-wasm"]
+
 [dependencies]
-# Observability
-feagi-observability = { workspace = true }
-tracing = "0.1"  # Required for tracing macros
+
 
 # Core dependencies (always included)
-zeromq = "0.4.1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"  # Still needed for registration/heartbeat messages
-thiserror = "1.0"
-base64 = "0.22"
-
-# Async runtime
-tokio = { version = "1.0", features = ["full"] }
-async-trait = { version = "0.1", optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
 
 # FEAGI internal crates (core)
-feagi-io = { version = "=0.0.1-beta.11", path = "../feagi-io" }
-feagi-structures = { version = "=0.0.1-beta.8", path = "../feagi-structures" }
-feagi-serialization = { version = "=0.0.1-beta.8", path = "../feagi-serialization" }
+feagi-io = { version = "=0.0.1-beta.18", path = "../feagi-io" }
+feagi-serialization = { version = "=0.0.1-beta.18", path = "../feagi-serialization" }
+feagi-structures = { version = "=0.0.1-beta.18", path = "../feagi-structures" }
+feagi-sensorimotor = { version = "=0.0.1-beta.18", path = "../feagi-sensorimotor" }
+base64 = "0.22.1"
 
-# SDK dependencies (optional, behind feature flags)
-feagi-sensorimotor = { version = "=0.0.1-beta.8", path = "../feagi-sensorimotor", optional = true }
-reqwest = { version = "0.12", optional = true, features = ["json"] }
-image = { version = "0.25", optional = true }
-tokenizers = { version = "0.19", optional = true }
-futures = { version = "0.3", optional = true }
-anyhow = { version = "1.0", optional = true }
-
-[dev-dependencies]
-env_logger = "0.11"
-criterion = "0.5"
-tokio-test = "0.4"
-feagi-sensorimotor = { version = "=0.0.1-beta.8", path = "../feagi-sensorimotor" }
-
-[features]
-default = ["sdk"]
-
-# Async support
-async = ["async-trait", "futures"]
-
-# SDK features
-sdk = ["sdk-video", "sdk-text", "async", "anyhow"]
-
-# Shared SDK support for ConnectorAgent + device registration sync.
-# This is not video-specific; it is used by multiple controller types.
-sdk-io = ["feagi-sensorimotor", "reqwest"]
-
-sdk-video = ["sdk-io", "image"]
-sdk-text = ["sdk-io", "tokenizers"]
-sdk-audio = []  # Future
-
-# Blocking variants
-blocking = []
-
-[[example]]
-name = "simple_sensory_agent"
-path = "examples/simple_sensory_agent.rs"
+# Conditional Dependencies
+tokio = {version = "1.49.0", features = ["time", "rt", "macros"], optional = true}
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"], optional = true }
 

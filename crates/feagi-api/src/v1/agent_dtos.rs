@@ -36,6 +36,10 @@ pub struct AgentRegistrationRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 
+    /// Optional: Auth token (base64, required by unified registration)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth_token: Option<String>,
+
     /// Optional: Transport the agent chose to use ("zmq", "websocket", "shm", etc.)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chosen_transport: Option<String>,

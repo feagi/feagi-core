@@ -1,6 +1,6 @@
 [package]
 name = "feagi-npu-burst-engine"
-version = "0.0.1-beta.12"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -10,13 +10,13 @@ description = "High-performance burst engine for FEAGI neural processing"
 
 [dependencies]
 # Platform-agnostic core (types + algorithms + models, includes synapse logic)
-feagi-npu-neural = { version = "=0.0.1-beta.8", path = "../neural" }
+feagi-npu-neural = { version = "=0.0.1-beta.18", path = "../neural" }
 
 # Runtime trait abstraction (generic over any runtime implementation)
 # Standard runtime implementation available via "std" feature
-feagi-npu-runtime = { version = "=0.0.1-beta.8", path = "../runtime", optional = true }
+feagi-npu-runtime = { version = "=0.0.1-beta.18", path = "../runtime", optional = true }
 
-feagi-state-manager = { version = "=0.0.1-beta.8", path = "../../feagi-state-manager" }  # For BurstEngineState enum
+feagi-state-manager = { version = "=0.0.1-beta.18", path = "../../feagi-state-manager" }  # For BurstEngineState enum
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
 feagi-serialization = { workspace = true }  # For decoding sensory data

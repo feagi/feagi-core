@@ -83,7 +83,7 @@ use crate::{
         (url = "http://localhost:8080", description = "Alternative port")
     ),
     paths(
-        // Agent endpoints (14 total)
+        // Agent endpoints
         crate::endpoints::agent::register_agent,
         crate::endpoints::agent::heartbeat,
         crate::endpoints::agent::list_agents,
@@ -499,6 +499,17 @@ use crate::{
             // Network
             crate::v1::NetworkStatusResponse,
             crate::v1::NetworkConnectionInfo,
+            crate::v1::ConnectionInfoApi,
+            crate::v1::ConnectionInfoZmq,
+            crate::v1::ConnectionInfoZmqPorts,
+            crate::v1::ConnectionInfoZmqEndpoints,
+            crate::v1::ConnectionInfoWebSocket,
+            crate::v1::ConnectionInfoWebSocketPorts,
+            crate::v1::ConnectionInfoWebSocketEndpoints,
+            crate::v1::ConnectionInfoShm,
+            crate::v1::ConnectionInfoUdp,
+            crate::v1::ConnectionInfoBluetooth,
+            crate::v1::ConnectionInfoStreamStatus,
             crate::v1::NetworkConfigRequest,
             crate::v1::NetworkSuccessResponse,
             crate::v1::AgentRegistrationResponse,

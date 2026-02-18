@@ -125,11 +125,21 @@ pub fn load_config(
 /// Apply environment variable overrides to configuration
 ///
 /// Supported environment variables:
-/// - `FEAGI_API_HOST` -> `api.host`
+/// - `FEAGI_API_HOST` -> `api.bind_host` + `api.advertised_host` (sets both)
+/// - `FEAGI_API_BIND_HOST` -> `api.bind_host`
+/// - `FEAGI_API_ADVERTISED_HOST` -> `api.advertised_host`
 /// - `FEAGI_API_PORT` -> `api.port`
 /// - `FEAGI_API_WORKERS` -> `api.workers`
 /// - `FEAGI_API_RELOAD` -> `api.reload`
-/// - `FEAGI_ZMQ_HOST` -> `zmq.host`
+/// - `FEAGI_ZMQ_HOST` -> `zmq.bind_host` + `zmq.advertised_host` (sets both)
+/// - `FEAGI_ZMQ_BIND_HOST` -> `zmq.bind_host`
+/// - `FEAGI_ZMQ_ADVERTISED_HOST` -> `zmq.advertised_host`
+/// - `FEAGI_WS_HOST` -> `websocket.bind_host` + `websocket.advertised_host` (sets both)
+/// - `FEAGI_WS_BIND_HOST` -> `websocket.bind_host`
+/// - `FEAGI_WS_ADVERTISED_HOST` -> `websocket.advertised_host`
+/// - `FEAGI_AGENT_HOST` -> `agent.bind_host` + `agent.advertised_host` (sets both)
+/// - `FEAGI_AGENT_BIND_HOST` -> `agent.bind_host`
+/// - `FEAGI_AGENT_ADVERTISED_HOST` -> `agent.advertised_host`
 /// - `FEAGI_DATA_DIR` -> `system.data_dir`
 /// - `FEAGI_MAX_CORES` -> `system.max_cores`
 /// - `FEAGI_LOG_LEVEL` -> `system.log_level`
@@ -137,7 +147,14 @@ pub fn load_config(
 pub fn apply_environment_overrides(config: &mut FeagiConfig) {
     // API settings
     if let Ok(value) = env::var("FEAGI_API_HOST") {
-        config.api.host = value;
+        config.api.bind_host = value.clone();
+        config.api.advertised_host = value;
+    }
+    if let Ok(value) = env::var("FEAGI_API_BIND_HOST") {
+        config.api.bind_host = value;
+    }
+    if let Ok(value) = env::var("FEAGI_API_ADVERTISED_HOST") {
+        config.api.advertised_host = value;
     }
     if let Ok(value) = env::var("FEAGI_API_PORT") {
         if let Ok(port) = value.parse::<u16>() {
@@ -156,7 +173,38 @@ pub fn apply_environment_overrides(config: &mut FeagiConfig) {
 
     // ZMQ settings
     if let Ok(value) = env::var("FEAGI_ZMQ_HOST") {
-        config.zmq.host = value;
+        config.zmq.bind_host = value.clone();
+        config.zmq.advertised_host = value;
+    }
+    if let Ok(value) = env::var("FEAGI_ZMQ_BIND_HOST") {
+        config.zmq.bind_host = value;
+    }
+    if let Ok(value) = env::var("FEAGI_ZMQ_ADVERTISED_HOST") {
+        config.zmq.advertised_host = value;
+    }
+
+    // WebSocket settings
+    if let Ok(value) = env::var("FEAGI_WS_HOST") {
+        config.websocket.bind_host = value.clone();
+        config.websocket.advertised_host = value;
+    }
+    if let Ok(value) = env::var("FEAGI_WS_BIND_HOST") {
+        config.websocket.bind_host = value;
+    }
+    if let Ok(value) = env::var("FEAGI_WS_ADVERTISED_HOST") {
+        config.websocket.advertised_host = value;
+    }
+
+    // Agent endpoint settings
+    if let Ok(value) = env::var("FEAGI_AGENT_HOST") {
+        config.agent.bind_host = value.clone();
+        config.agent.advertised_host = value;
+    }
+    if let Ok(value) = env::var("FEAGI_AGENT_BIND_HOST") {
+        config.agent.bind_host = value;
+    }
+    if let Ok(value) = env::var("FEAGI_AGENT_ADVERTISED_HOST") {
+        config.agent.advertised_host = value;
     }
 
     // System settings
@@ -224,7 +272,14 @@ pub fn apply_environment_overrides(config: &mut FeagiConfig) {
 pub fn apply_cli_overrides(config: &mut FeagiConfig, cli_args: &HashMap<String, String>) {
     // API settings
     if let Some(value) = cli_args.get("api_host") {
-        config.api.host = value.clone();
+        config.api.bind_host = value.clone();
+        config.api.advertised_host = value.clone();
+    }
+    if let Some(value) = cli_args.get("api_bind_host") {
+        config.api.bind_host = value.clone();
+    }
+    if let Some(value) = cli_args.get("api_advertised_host") {
+        config.api.advertised_host = value.clone();
     }
     if let Some(value) = cli_args.get("api_port") {
         if let Ok(port) = value.parse::<u16>() {
@@ -239,7 +294,38 @@ pub fn apply_cli_overrides(config: &mut FeagiConfig, cli_args: &HashMap<String, 
 
     // ZMQ settings
     if let Some(value) = cli_args.get("zmq_host") {
-        config.zmq.host = value.clone();
+        config.zmq.bind_host = value.clone();
+        config.zmq.advertised_host = value.clone();
+    }
+    if let Some(value) = cli_args.get("zmq_bind_host") {
+        config.zmq.bind_host = value.clone();
+    }
+    if let Some(value) = cli_args.get("zmq_advertised_host") {
+        config.zmq.advertised_host = value.clone();
+    }
+
+    // WebSocket settings
+    if let Some(value) = cli_args.get("ws_host") {
+        config.websocket.bind_host = value.clone();
+        config.websocket.advertised_host = value.clone();
+    }
+    if let Some(value) = cli_args.get("ws_bind_host") {
+        config.websocket.bind_host = value.clone();
+    }
+    if let Some(value) = cli_args.get("ws_advertised_host") {
+        config.websocket.advertised_host = value.clone();
+    }
+
+    // Agent endpoint settings
+    if let Some(value) = cli_args.get("agent_host") {
+        config.agent.bind_host = value.clone();
+        config.agent.advertised_host = value.clone();
+    }
+    if let Some(value) = cli_args.get("agent_bind_host") {
+        config.agent.bind_host = value.clone();
+    }
+    if let Some(value) = cli_args.get("agent_advertised_host") {
+        config.agent.advertised_host = value.clone();
     }
 
     // System settings
@@ -349,14 +435,19 @@ mod tests {
 
         env::set_var("FEAGI_API_HOST", "192.168.1.100");
         env::set_var("FEAGI_API_PORT", "9999");
+        env::set_var("FEAGI_AGENT_HOST", "10.0.0.5");
 
         apply_environment_overrides(&mut config);
 
         env::remove_var("FEAGI_API_HOST");
         env::remove_var("FEAGI_API_PORT");
+        env::remove_var("FEAGI_AGENT_HOST");
 
-        assert_eq!(config.api.host, "192.168.1.100");
+        assert_eq!(config.api.bind_host, "192.168.1.100");
+        assert_eq!(config.api.advertised_host, "192.168.1.100");
         assert_eq!(config.api.port, 9999);
+        assert_eq!(config.agent.bind_host, "10.0.0.5");
+        assert_eq!(config.agent.advertised_host, "10.0.0.5");
     }
 
     #[test]
@@ -365,11 +456,15 @@ mod tests {
         let mut cli_args = HashMap::new();
         cli_args.insert("api_host".to_string(), "10.0.0.1".to_string());
         cli_args.insert("api_port".to_string(), "7777".to_string());
+        cli_args.insert("agent_host".to_string(), "10.0.0.7".to_string());
 
         apply_cli_overrides(&mut config, &cli_args);
 
-        assert_eq!(config.api.host, "10.0.0.1");
+        assert_eq!(config.api.bind_host, "10.0.0.1");
+        assert_eq!(config.api.advertised_host, "10.0.0.1");
         assert_eq!(config.api.port, 7777);
+        assert_eq!(config.agent.bind_host, "10.0.0.7");
+        assert_eq!(config.agent.advertised_host, "10.0.0.7");
     }
 
     #[test]
@@ -381,7 +476,8 @@ mod tests {
 
         let mut file = File::create(&config_path).unwrap();
         writeln!(file, "[api]").unwrap();
-        writeln!(file, "host = \"file-host\"").unwrap();
+        writeln!(file, "bind_host = \"file-bind-host\"").unwrap();
+        writeln!(file, "advertised_host = \"file-adv-host\"").unwrap();
         writeln!(file, "port = 8000").unwrap();
 
         env::set_var("FEAGI_API_HOST", "env-host");
@@ -396,7 +492,8 @@ mod tests {
         env::remove_var("FEAGI_API_PORT");
 
         // CLI wins for host, env wins for port (no CLI override)
-        assert_eq!(config.api.host, "cli-host");
+        assert_eq!(config.api.bind_host, "cli-host");
+        assert_eq!(config.api.advertised_host, "cli-host");
         assert_eq!(config.api.port, 9000);
     }
 }

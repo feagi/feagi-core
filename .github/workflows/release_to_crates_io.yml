@@ -78,31 +78,22 @@ jobs:
 
       - name: Sync workspace from crates.io
         run: |
-          echo "Syncing root and crate versions to match current crates.io..."
+          echo "Syncing root dependency versions to match current crates.io..."
           chmod +x scripts/sync-from-crates-io.sh
           ./scripts/sync-from-crates-io.sh
 
-      - name: Smart version detection and bumping
+      - name: Bump umbrella version
         id: version
         run: |
-          echo "Detecting changed crates and computing independent version bumps..."
-          chmod +x scripts/smart-version-bump.sh
-          chmod +x scripts/apply-version-bumps.sh
-          LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
-          VERSION_OUTPUT=$(ALLOW_DIRTY=true LAST_TAG="$LAST_TAG" ./scripts/smart-version-bump.sh)
+          echo "Bumping unified umbrella version..."
+          chmod +x scripts/bump-umbrella-version.sh
+          VERSION_OUTPUT=$(./scripts/bump-umbrella-version.sh)
           echo "$VERSION_OUTPUT"
-          VERSIONS_FILE=$(echo "$VERSION_OUTPUT" | grep "VERSIONS_FILE=" | cut -d'=' -f2)
+          NEW_VERSION=$(echo "$VERSION_OUTPUT" | grep "NEW_VERSION=" | cut -d'=' -f2-)
           CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
-          echo "versions_file=$VERSIONS_FILE" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "changed_crates=$CHANGED_CRATES" >> $GITHUB_OUTPUT
-          if [ -n "$VERSIONS_FILE" ] && [ -f "$VERSIONS_FILE" ]; then
-            echo "Applying version updates to Cargo.toml files..."
-            export VERSIONS_FILE="$VERSIONS_FILE"
-            ./scripts/apply-version-bumps.sh
-          else
-            echo "No version updates to apply."
-          fi
-          echo "Smart independent versioning complete"
+          echo "Unified version bump complete: $NEW_VERSION"
       - name: Build release manifest
         id: manifest
         run: |
@@ -199,6 +190,7 @@ jobs:
           LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
           python3 - <<'PY'
           import json
+          import re
           import subprocess
           import sys
           from pathlib import Path
@@ -217,13 +209,20 @@ jobs:
               else:
                   root_changed = True
 
-          def crate_name_and_version(manifest: Path):
+          def read_workspace_version(root: Path) -> str:
+              text = (root / "Cargo.toml").read_text(encoding="utf-8")
+              m = re.search(r"(?ms)^\[workspace\.package\].*?^version\s*=\s*\"([^\"]+)\"", text)
+              return m.group(1) if m else ""
+
+          def crate_name_and_version(manifest: Path, workspace_version: str):
               name = None
               version = None
               for line in manifest.read_text(encoding="utf-8").splitlines():
                   if line.startswith("name = "):
                       name = line.split('"', 2)[1]
-                  if line.startswith("version = "):
+                  if line.strip() == "version.workspace = true":
+                      version = workspace_version
+                  elif line.startswith("version = "):
                       version = line.split('"', 2)[1]
                   if name and version:
                       break
@@ -249,12 +248,13 @@ jobs:
               return sorted([a, b], key=lambda s: [int(x) if x.isdigit() else x for x in s.replace("-", ".").split(".")])[-1] == a
 
           violations = []
+          workspace_version = read_workspace_version(root)
 
           for crate_dir in sorted(crate_paths):
               manifest = crate_dir / "Cargo.toml"
               if not manifest.exists():
                   continue
-              name, version = crate_name_and_version(manifest)
+              name, version = crate_name_and_version(manifest, workspace_version)
               if not name or not version:
                   continue
               published = latest_on_crates_io(name)
@@ -262,7 +262,7 @@ jobs:
                   violations.append(f"{name} local {version} not > crates.io {published}")
 
           if root_changed:
-              name, version = crate_name_and_version(root / "Cargo.toml")
+              name, version = crate_name_and_version(root / "Cargo.toml", workspace_version)
               if name and version:
                   published = latest_on_crates_io(name)
                   if published and not version_gt(version, published):
@@ -358,7 +358,7 @@ jobs:
               echo "Changed crates detected but no version updates staged"
               exit 1
             fi
-            echo "chore: bump versions for release (independent versioning)" > commit_msg.txt
+            echo "chore: bump umbrella version for release (unified versioning)" > commit_msg.txt
             echo "" >> commit_msg.txt
             echo "Changed crates: $CHANGED_CRATES" >> commit_msg.txt
             COMMIT_MSG=$(cat commit_msg.txt)
@@ -777,9 +777,9 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag_name }}
           release_name: Release ${{ steps.tag.outputs.tag_name }}
           body: |
-            **FEAGI Core release (independent versioning)**
+            **FEAGI Core release (unified versioning)**
 
-            Only changed crates have been published to crates.io.
+            All crates published with the same umbrella version.
 
             ## Changed crates
 

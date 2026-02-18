@@ -680,14 +680,14 @@ pub async fn post_save(
 
     // Determine file path
     let save_path = if let Some(path) = file_path {
-        path
+        std::path::PathBuf::from(path)
     } else {
-        // Default to genomes directory with timestamp
+        // Default to hidden genome directory with timestamp.
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        format!("genomes/saved_genome_{}.json", timestamp)
+        std::path::PathBuf::from(".genome").join(format!("saved_genome_{}.json", timestamp))
     };
 
     // Ensure parent directory exists
@@ -700,14 +700,14 @@ pub async fn post_save(
     fs::write(&save_path, genome_json)
         .map_err(|e| ApiError::internal(format!("Failed to write file: {}", e)))?;
 
-    info!("✅ Genome saved successfully to: {}", save_path);
+    info!("✅ Genome saved successfully to: {}", save_path.display());
 
     Ok(Json(HashMap::from([
         (
             "message".to_string(),
             "Genome saved successfully".to_string(),
         ),
-        ("file_path".to_string(), save_path),
+        ("file_path".to_string(), save_path.display().to_string()),
     ])))
 }
 

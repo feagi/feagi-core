@@ -32,6 +32,13 @@ use std::time::{Duration, Instant};
 
 /// Type alias for fire queue sample data structure
 type FireQueueSample = ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
+
+/// Decoded sensory data: list of (cortical ID, XYZP list per cortical area)
+type SensoryXyzpDecoded = Vec<(
+    feagi_structures::genomic::cortical_area::CorticalID,
+    Vec<(u32, u32, u32, f32)>,
+)>;
+
 use tracing::{debug, error, info, trace, warn};
 
 use std::thread;
@@ -57,12 +64,32 @@ pub type RawFireQueueSnapshot = ahash::AHashMap<u32, RawFireQueueData>;
 pub trait VisualizationPublisher: Send + Sync {
     /// Publish raw fire queue data (PNS will serialize and compress)
     /// This keeps serialization out of the burst engine hot path
-    fn publish_raw_fire_queue(&self, fire_data: RawFireQueueSnapshot) -> Result<(), String>;
+    fn publish_raw_fire_queue_for_agent(
+        &self,
+        agent_id: &str,
+        fire_data: RawFireQueueSnapshot,
+    ) -> Result<(), String>;
 }
 
 pub trait MotorPublisher: Send + Sync {
     /// Publish motor data to a specific agent (XYZP format)
     fn publish_motor(&self, agent_id: &str, data: &[u8]) -> Result<(), String>;
+}
+
+/// Returns true when a publish error indicates FEAGI no longer has that agent.
+///
+/// Upstream error strings currently include a historical typo ("Nonexistant").
+/// We match both spellings so stale subscriptions are pruned reliably.
+fn is_missing_agent_publish_error(error_message: &str) -> bool {
+    error_message.contains("Nonexistant Agent ID") || error_message.contains("Nonexistent Agent ID")
+}
+
+/// Transport-agnostic source of sensory bytes (FeagiByteContainer format).
+/// Implemented by feagi-io; fed by any transport (ZMQ, WebSocket, SHM, etc.).
+pub trait SensoryIntake: Send {
+    /// Poll for next sensory payload if available.
+    /// Returns serialized FeagiByteContainer bytes.
+    fn poll_sensory_data(&mut self) -> Result<Option<Vec<u8>>, String>;
 }
 
 /// Burst loop runner - manages the main neural processing loop
@@ -80,8 +107,10 @@ pub struct BurstLoopRunner {
     running: Arc<AtomicBool>,
     /// Thread handle (for graceful shutdown)
     thread_handle: Option<thread::JoinHandle<()>>,
-    /// Sensory agent manager (per-agent injection threads)
+    /// Sensory agent manager (per-agent injection threads - SHM-based agents)
     pub sensory_manager: Arc<Mutex<AgentManager>>,
+    /// Transport-agnostic sensory intake (feagi-io); fed by any transport, consumed by burst loop
+    pub sensory_intake: Option<Arc<Mutex<dyn SensoryIntake>>>,
     /// Visualization SHM writer (optional, None if not configured)
     pub viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
     /// Motor SHM writer (optional, None if not configured)
@@ -94,6 +123,16 @@ pub struct BurstLoopRunner {
     /// Motor area subscriptions: agent_id → Set<cortical_id>
     /// Stores cortical_id strings (e.g., "omot00"), matching sensory stream pattern
     motor_subscriptions: Arc<ParkingLotRwLock<ahash::AHashMap<String, ahash::AHashSet<String>>>>,
+    /// Per-agent motor output rates (Hz)
+    motor_output_rates_hz: Arc<ParkingLotRwLock<ahash::AHashMap<String, f64>>>,
+    /// Per-agent motor output last publish timestamps
+    motor_last_publish_time: Arc<ParkingLotRwLock<ahash::AHashMap<String, Instant>>>,
+    /// Visualization subscriptions (agent IDs)
+    visualization_subscriptions: Arc<ParkingLotRwLock<ahash::AHashSet<String>>>,
+    /// Per-agent visualization output rates (Hz)
+    visualization_output_rates_hz: Arc<ParkingLotRwLock<ahash::AHashMap<String, f64>>>,
+    /// Per-agent visualization last publish timestamps
+    visualization_last_publish_time: Arc<ParkingLotRwLock<ahash::AHashMap<String, Instant>>>,
     /// FCL/FQ sampler configuration
     fcl_sampler_frequency: Arc<Mutex<f64>>, // Sampling frequency in Hz
     fcl_sampler_consumer: Arc<Mutex<u32>>, // Consumer type: 1=visualization, 2=motor, 3=both
@@ -282,11 +321,15 @@ impl BurstLoopRunner {
             // Wrap Arc<Mutex<V>> to implement VisualizationPublisher
             struct VisualizerWrapper<V: VisualizationPublisher>(Arc<Mutex<V>>);
             impl<V: VisualizationPublisher> VisualizationPublisher for VisualizerWrapper<V> {
-                fn publish_raw_fire_queue(
+                fn publish_raw_fire_queue_for_agent(
                     &self,
+                    agent_id: &str,
                     fire_data: RawFireQueueSnapshot,
                 ) -> Result<(), String> {
-                    self.0.lock().unwrap().publish_raw_fire_queue(fire_data)
+                    self.0
+                        .lock()
+                        .unwrap()
+                        .publish_raw_fire_queue_for_agent(agent_id, fire_data)
                 }
             }
             Arc::new(VisualizerWrapper(p)) as Arc<dyn VisualizationPublisher>
@@ -309,6 +352,7 @@ impl BurstLoopRunner {
             running: Arc::new(AtomicBool::new(false)),
             thread_handle: None,
             sensory_manager: Arc::new(Mutex::new(sensory_manager)),
+            sensory_intake: None, // Can be set later via set_sensory_intake()
             cached_cortical_id_mappings: Arc::new(Mutex::new(ahash::AHashMap::new())),
             last_cortical_id_refresh: Arc::new(Mutex::new(0)),
             cached_visualization_granularities: Arc::new(Mutex::new(ahash::AHashMap::new())),
@@ -317,6 +361,13 @@ impl BurstLoopRunner {
             viz_publisher: viz_publisher_trait, // Trait object for visualization (NO PYTHON CALLBACKS!)
             motor_publisher: motor_publisher_trait, // Trait object for motor (NO PYTHON CALLBACKS!)
             motor_subscriptions: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
+            motor_output_rates_hz: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
+            motor_last_publish_time: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
+            visualization_subscriptions: Arc::new(ParkingLotRwLock::new(ahash::AHashSet::new())),
+            visualization_output_rates_hz: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
+            visualization_last_publish_time: Arc::new(
+                ParkingLotRwLock::new(ahash::AHashMap::new()),
+            ),
             fcl_sampler_frequency: Arc::new(Mutex::new(30.0)), // Default 30Hz for visualization
             fcl_sampler_consumer: Arc::new(Mutex::new(1)),     // Default: 1 = visualization only
             cached_burst_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
@@ -383,6 +434,12 @@ impl BurstLoopRunner {
         Ok(())
     }
 
+    /// Set transport-agnostic sensory intake (feagi-io; fed by ZMQ, WebSocket, etc.)
+    pub fn set_sensory_intake(&mut self, intake: Arc<Mutex<dyn SensoryIntake>>) {
+        self.sensory_intake = Some(intake);
+        info!("[BURST-RUNNER] Sensory intake attached");
+    }
+
     /// Register an agent's motor subscriptions
     /// Called when an agent registers with motor capability
     /// Stores cortical_id strings (e.g., "omot00"), matching sensory stream pattern
@@ -401,12 +458,103 @@ impl BurstLoopRunner {
         );
     }
 
+    /// Register an agent's motor subscriptions with a rate limit (Hz).
+    ///
+    /// # Errors
+    /// - Returns Err if the requested rate is invalid or exceeds burst frequency.
+    pub fn register_motor_subscriptions_with_rate(
+        &self,
+        agent_id: String,
+        cortical_ids: ahash::AHashSet<String>,
+        rate_hz: f64,
+    ) -> Result<(), String> {
+        if rate_hz <= 0.0 {
+            return Err("Motor rate must be greater than 0".to_string());
+        }
+
+        let burst_hz = self.get_frequency();
+        if rate_hz > burst_hz {
+            return Err(format!(
+                "Requested motor rate {}Hz exceeds burst frequency {}Hz",
+                rate_hz, burst_hz
+            ));
+        }
+
+        self.motor_subscriptions
+            .write()
+            .insert(agent_id.clone(), cortical_ids.clone());
+        self.motor_output_rates_hz
+            .write()
+            .insert(agent_id.clone(), rate_hz);
+        self.motor_last_publish_time.write().remove(&agent_id);
+
+        info!(
+            "[BURST-RUNNER] Registered motor subscriptions for agent '{}' at {:.2}Hz: {:?}",
+            agent_id, rate_hz, cortical_ids
+        );
+
+        Ok(())
+    }
+
     /// Unregister an agent's motor subscriptions
     /// Called when an agent disconnects
     pub fn unregister_motor_subscriptions(&self, agent_id: &str) {
         if self.motor_subscriptions.write().remove(agent_id).is_some() {
+            self.motor_output_rates_hz.write().remove(agent_id);
+            self.motor_last_publish_time.write().remove(agent_id);
             info!(
                 "[BURST-RUNNER] Removed motor subscriptions for agent '{}'",
+                agent_id
+            );
+        }
+    }
+
+    /// Register a visualization agent with a rate limit (Hz).
+    ///
+    /// # Errors
+    /// - Returns Err if the requested rate is invalid or exceeds burst frequency.
+    pub fn register_visualization_subscriptions_with_rate(
+        &self,
+        agent_id: String,
+        rate_hz: f64,
+    ) -> Result<(), String> {
+        if rate_hz <= 0.0 {
+            return Err("Visualization rate must be greater than 0".to_string());
+        }
+
+        let burst_hz = self.get_frequency();
+        if rate_hz > burst_hz {
+            return Err(format!(
+                "Requested visualization rate {}Hz exceeds burst frequency {}Hz",
+                rate_hz, burst_hz
+            ));
+        }
+
+        self.visualization_subscriptions
+            .write()
+            .insert(agent_id.clone());
+        self.visualization_output_rates_hz
+            .write()
+            .insert(agent_id.clone(), rate_hz);
+        self.visualization_last_publish_time
+            .write()
+            .remove(&agent_id);
+        info!(
+            "[BURST-RUNNER] Registered visualization subscription for agent '{}' at {:.2}Hz",
+            agent_id, rate_hz
+        );
+        Ok(())
+    }
+
+    /// Unregister a visualization agent subscription.
+    pub fn unregister_visualization_subscriptions(&self, agent_id: &str) {
+        if self.visualization_subscriptions.write().remove(agent_id) {
+            self.visualization_output_rates_hz.write().remove(agent_id);
+            self.visualization_last_publish_time
+                .write()
+                .remove(agent_id);
+            info!(
+                "[BURST-RUNNER] Removed visualization subscription for agent '{}'",
                 agent_id
             );
         }
@@ -443,6 +591,11 @@ impl BurstLoopRunner {
         let viz_publisher = self.viz_publisher.clone(); // Direct Rust-to-Rust trait reference (NO PYTHON CALLBACKS!)
         let motor_publisher = self.motor_publisher.clone(); // Direct Rust-to-Rust trait reference (NO PYTHON CALLBACKS!)
         let motor_subs = self.motor_subscriptions.clone();
+        let motor_rates = self.motor_output_rates_hz.clone();
+        let motor_last_publish = self.motor_last_publish_time.clone();
+        let viz_subs = self.visualization_subscriptions.clone();
+        let viz_rates = self.visualization_output_rates_hz.clone();
+        let viz_last_publish = self.visualization_last_publish_time.clone();
         let cached_burst_count = self.cached_burst_count.clone(); // For lock-free burst count reads
         let cached_fire_queue = self.cached_fire_queue.clone(); // For caching fire queue data
         let param_queue = self.parameter_queue.clone(); // Parameter update queue
@@ -451,6 +604,7 @@ impl BurstLoopRunner {
         let cached_cortical_id_mappings = self.cached_cortical_id_mappings.clone();
         let last_cortical_id_refresh = self.last_cortical_id_refresh.clone();
         let cached_visualization_granularities = self.cached_visualization_granularities.clone();
+        let sensory_intake = self.sensory_intake.clone();
 
         self.thread_handle = Some(
             thread::Builder::new()
@@ -465,6 +619,11 @@ impl BurstLoopRunner {
                         viz_publisher,
                         motor_publisher,
                         motor_subs,
+                        motor_rates,
+                        motor_last_publish,
+                        viz_subs,
+                        viz_rates,
+                        viz_last_publish,
                         cached_burst_count,
                         cached_fire_queue,
                         param_queue,
@@ -473,6 +632,7 @@ impl BurstLoopRunner {
                         cached_cortical_id_mappings,
                         last_cortical_id_refresh,
                         cached_visualization_granularities,
+                        sensory_intake,
                     );
                 })
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
@@ -943,6 +1103,85 @@ fn get_timestamp() -> String {
     dt.format("%Y-%m-%dT%H:%M:%S%.3f").to_string()
 }
 
+/// Decode sensory bytes (FeagiByteContainer) into cortical XYZP list.
+/// Transport-agnostic; same format whether source is ZMQ, WebSocket, or SHM.
+fn decode_sensory_bytes(bytes: &[u8]) -> Result<SensoryXyzpDecoded, String> {
+    use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+
+    let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
+    let mut data_vec = bytes.to_vec();
+    byte_container
+        .try_write_data_to_container_and_verify(&mut |container_bytes| {
+            std::mem::swap(container_bytes, &mut data_vec);
+            Ok(())
+        })
+        .map_err(|e| format!("FeagiByteContainer load failed: {:?}", e))?;
+
+    let num_structures = byte_container
+        .try_get_number_contained_structures()
+        .map_err(|e| format!("get_number_contained_structures failed: {:?}", e))?;
+
+    let mut out = Vec::new();
+    for struct_idx in 0..num_structures {
+        let boxed_struct = byte_container
+            .try_create_new_struct_from_index(struct_idx as u8)
+            .map_err(|e| {
+                format!(
+                    "create_new_struct_from_index {} failed: {:?}",
+                    struct_idx, e
+                )
+            })?;
+
+        let cortical_mapped = match boxed_struct
+            .as_any()
+            .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()
+        {
+            Some(cm) => cm,
+            None => {
+                trace!(
+                    "[SENSORY-DECODE] Structure {} is not CorticalMappedXYZPNeuronVoxels, skipping",
+                    struct_idx
+                );
+                continue;
+            }
+        };
+
+        for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
+            let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
+            let xyzp_data: Vec<(u32, u32, u32, f32)> = x_coords
+                .iter()
+                .zip(y_coords.iter())
+                .zip(z_coords.iter())
+                .zip(potentials.iter())
+                .map(|(((x, y), z), p)| (*x, *y, *z, *p))
+                .collect();
+            if !xyzp_data.is_empty() {
+                out.push((*cortical_id, xyzp_data));
+            }
+        }
+    }
+
+    static FIRST_DECODE_LOGGED: std::sync::atomic::AtomicBool =
+        std::sync::atomic::AtomicBool::new(false);
+    if !out.is_empty() && !FIRST_DECODE_LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        let total: usize = out.iter().map(|(_, xyzp)| xyzp.len()).sum();
+        info!(
+            "[SENSORY-DECODE] First decode: {} areas, {} total neurons",
+            out.len(),
+            total
+        );
+        for (cortical_id, xyzp) in &out {
+            info!(
+                "[SENSORY-DECODE]   area base64={} neurons={}",
+                cortical_id.as_base_64(),
+                xyzp.len()
+            );
+        }
+    }
+
+    Ok(out)
+}
+
 /// Main burst processing loop (runs in dedicated thread)
 ///
 /// This is the HOT PATH - zero Python involvement!
@@ -958,6 +1197,11 @@ fn burst_loop(
     viz_publisher: Option<Arc<dyn VisualizationPublisher>>, // Trait object for visualization (NO PYTHON CALLBACKS!)
     motor_publisher: Option<Arc<dyn MotorPublisher>>, // Trait object for motor (NO PYTHON CALLBACKS!)
     motor_subscriptions: Arc<ParkingLotRwLock<ahash::AHashMap<String, ahash::AHashSet<String>>>>,
+    motor_output_rates_hz: Arc<ParkingLotRwLock<ahash::AHashMap<String, f64>>>,
+    motor_last_publish_time: Arc<ParkingLotRwLock<ahash::AHashMap<String, Instant>>>,
+    visualization_subscriptions: Arc<ParkingLotRwLock<ahash::AHashSet<String>>>,
+    visualization_output_rates_hz: Arc<ParkingLotRwLock<ahash::AHashMap<String, f64>>>,
+    visualization_last_publish_time: Arc<ParkingLotRwLock<ahash::AHashMap<String, Instant>>>,
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>, // For lock-free burst count reads
     cached_fire_queue: Arc<Mutex<Option<Arc<FireQueueSample>>>>, // For caching fire queue data (Arc-wrapped to avoid cloning)
     parameter_queue: ParameterUpdateQueue, // Asynchronous parameter update queue
@@ -966,6 +1210,7 @@ fn burst_loop(
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>, // Cached cortical_idx -> cortical_id
     _last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
     cached_visualization_granularities: Arc<Mutex<VisualizationGranularityCache>>, // Cached cortical_idx -> visualization_granularity
+    sensory_intake: Option<Arc<Mutex<dyn SensoryIntake>>>, // Transport-agnostic (feagi-io)
 ) {
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
@@ -985,6 +1230,10 @@ fn burst_loop(
     let mut total_neurons_fired = 0usize;
     let mut burst_times = Vec::with_capacity(100);
     let mut last_burst_time = None;
+    // Tracks agents that temporarily fail publish because transport mapping is not attached yet.
+    // This avoids log spam during reconnect races while preserving automatic retry behavior.
+    let mut missing_viz_agent_logged: ahash::AHashSet<String> = ahash::AHashSet::new();
+    let mut missing_motor_agent_logged: ahash::AHashSet<String> = ahash::AHashSet::new();
 
     while running.load(Ordering::Acquire) {
         let iteration_start = Instant::now();
@@ -1040,6 +1289,23 @@ fn burst_loop(
         if !running.load(Ordering::Relaxed) {
             break;
         }
+
+        // Poll transport-agnostic sensory intake (feagi-io) before acquiring NPU lock
+        let sensory_xyzp: Option<SensoryXyzpDecoded> = sensory_intake.as_ref().and_then(|intake| {
+            let mut guard = intake.lock().ok()?;
+            let bytes = guard.poll_sensory_data().ok().flatten()?;
+            match decode_sensory_bytes(&bytes) {
+                Ok(decoded) => Some(decoded),
+                Err(e) => {
+                    warn!(
+                        "[SENSORY-DECODE] Failed to decode {} bytes: {}",
+                        bytes.len(),
+                        e
+                    );
+                    None
+                }
+            }
+        });
 
         // Track time since last lock release to detect if something held it
         static LAST_LOCK_RELEASE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
@@ -1365,6 +1631,15 @@ fn burst_loop(
                     }
                 }
 
+                // Inject sensory from intake (any transport) into NPU for this burst.
+                // Clear pending first so only the latest frame is applied (avoids accumulation).
+                if let Some(ref list) = sensory_xyzp {
+                    npu_lock.clear_pending_sensory_injections();
+                    for (cortical_id, xyzp) in list {
+                        npu_lock.inject_sensory_xyzp_by_id(cortical_id, xyzp);
+                    }
+                }
+
                 let process_start = Instant::now();
                 debug!("[BURST-TIMING] Starting process_burst()...");
 
@@ -1554,20 +1829,44 @@ fn burst_loop(
 
         // CRITICAL FIX: Check throttle BEFORE sampling/encoding (avoid wasted work!)
         // Only sample and encode when we're actually going to publish
-        static LAST_VIZ_PUBLISH: std::sync::atomic::AtomicU64 =
-            std::sync::atomic::AtomicU64::new(0);
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
-        let last_viz = LAST_VIZ_PUBLISH.load(std::sync::atomic::Ordering::Relaxed);
-        // Use saturating_sub to prevent panic on clock adjustments (NTP sync, suspend/resume, etc.)
-        let should_publish_viz = (now_ms.saturating_sub(last_viz) >= 33) && has_viz_publisher;
+        let now = Instant::now();
+        let mut viz_due_agents: Vec<String> = Vec::new();
+        if has_viz_publisher {
+            let subs = visualization_subscriptions.read();
+            if !subs.is_empty() {
+                let rates = visualization_output_rates_hz.read();
+                let last_publish = visualization_last_publish_time.read();
+                let burst_hz = *frequency_hz.lock().unwrap();
+
+                for agent_id in subs.iter() {
+                    let rate_hz = rates.get(agent_id).copied().unwrap_or(burst_hz);
+                    if rate_hz <= 0.0 {
+                        warn!(
+                            "[BURST-LOOP] Visualization: skipping agent '{}' due to invalid rate {}Hz",
+                            agent_id, rate_hz
+                        );
+                        continue;
+                    }
+
+                    let interval = Duration::from_secs_f64(1.0 / rate_hz);
+                    if let Some(last_sent) = last_publish.get(agent_id).copied() {
+                        if now.duration_since(last_sent) < interval {
+                            continue;
+                        }
+                    }
+
+                    viz_due_agents.push(agent_id.clone());
+                }
+            }
+        }
+
+        let should_publish_viz = has_viz_publisher && !viz_due_agents.is_empty();
 
         // Sample fire queue ONCE and share between viz and motor using Arc (zero-cost sharing!)
         let has_motor_publisher = motor_publisher.is_some();
         let has_motor_shm = motor_shm_writer.lock().unwrap().is_some();
-        let needs_motor = has_motor_publisher || has_motor_shm;
+        let has_motor_subscriptions = !motor_subscriptions.read().is_empty();
+        let needs_motor = has_motor_shm || (has_motor_publisher && has_motor_subscriptions);
         let needs_fire_data = has_shm_writer || should_publish_viz || needs_motor;
 
         if burst_num % 100 == 0 {
@@ -1882,9 +2181,6 @@ fn burst_loop(
                             static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 =
                                 std::sync::atomic::AtomicU64::new(0);
 
-                            // Update shared timestamp (used for throttle check above)
-                            LAST_VIZ_PUBLISH.store(now_ms, std::sync::atomic::Ordering::Relaxed);
-
                             let count =
                                 PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             if count % 30 == 0 {
@@ -1896,8 +2192,31 @@ fn burst_loop(
                             }
 
                             let publish_start = Instant::now();
-                            if let Err(e) = publisher.publish_raw_fire_queue(raw_snapshot) {
-                                error!("[BURST-LOOP] ❌ VIZ HANDOFF ERROR: {}", e);
+                            for agent_id in viz_due_agents.iter() {
+                                if let Err(e) = publisher.publish_raw_fire_queue_for_agent(
+                                    agent_id,
+                                    raw_snapshot.clone(),
+                                ) {
+                                    if is_missing_agent_publish_error(&e) {
+                                        if !missing_viz_agent_logged.contains(agent_id) {
+                                            warn!(
+                                                "[BURST-LOOP] Visualization transport for '{}' not ready yet ({}). Keeping subscription and retrying.",
+                                                agent_id, e
+                                            );
+                                            missing_viz_agent_logged.insert(agent_id.clone());
+                                        }
+                                    } else {
+                                        error!(
+                                            "[BURST-LOOP] ❌ VIZ HANDOFF ERROR for '{}': {}",
+                                            agent_id, e
+                                        );
+                                    }
+                                    continue;
+                                }
+                                missing_viz_agent_logged.remove(agent_id);
+                                visualization_last_publish_time
+                                    .write()
+                                    .insert(agent_id.clone(), now);
                             }
                             let publish_duration = publish_start.elapsed();
                             if publish_duration.as_millis() > 5000 {
@@ -1937,9 +2256,13 @@ fn burst_loop(
 
             // Use shared fire data from above (Arc - zero cost!)
             if let Some(ref fire_data_arc) = shared_fire_data_opt {
+                // Read subscriptions first so logs reflect whether motor output is actually in use.
+                let subscriptions = motor_subscriptions.read();
+                let has_motor_subscriptions = !subscriptions.is_empty();
                 debug!(
-                    "[BURST-LOOP] 🎮 MOTOR: Processing fire data with {} cortical areas",
-                    (**fire_data_arc).len()
+                    "[BURST-LOOP] 🎮 MOTOR: Fire snapshot has {} cortical areas (all active areas, motor subscriptions active={})",
+                    (**fire_data_arc).len(),
+                    has_motor_subscriptions
                 );
 
                 // CRITICAL PERFORMANCE FIX: Clone mappings to release lock immediately
@@ -1993,12 +2316,14 @@ fn burst_loop(
                         }
                     };
 
-                    debug!(
-                        "[BURST-LOOP] 🎮 MOTOR: Area {} ('{}') has {} neurons firing",
-                        area_id,
-                        cortical_id.escape_debug(),
-                        neuron_ids.len()
-                    );
+                    if has_motor_subscriptions || has_motor_shm {
+                        debug!(
+                            "[BURST-LOOP] 🎮 MOTOR: Fire snapshot area {} ('{}') has {} neurons firing",
+                            area_id,
+                            cortical_id.escape_debug(),
+                            neuron_ids.len()
+                        );
+                    }
 
                     motor_snapshot.insert(
                         *area_id,
@@ -2018,9 +2343,6 @@ fn burst_loop(
                     "[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas",
                     motor_snapshot.len()
                 );
-
-                // Get motor subscriptions
-                let subscriptions = motor_subscriptions.read();
 
                 // DEBUG: Log subscription state every 30 bursts
                 if burst_num % 30 == 0 {
@@ -2054,7 +2376,33 @@ fn burst_loop(
 
                     // Generate motor output for each subscribed agent
                     // Note: We clone motor_snapshot for each agent (acceptable overhead for typical 1-2 agents)
+                    let now = Instant::now();
+                    let burst_hz = *frequency_hz.lock().unwrap();
+
                     for (agent_id, subscribed_cortical_ids) in subscriptions.iter() {
+                        let rate_hz = motor_output_rates_hz
+                            .read()
+                            .get(agent_id)
+                            .copied()
+                            .unwrap_or(burst_hz);
+
+                        if rate_hz <= 0.0 {
+                            warn!(
+                                "[BURST-LOOP] 🎮 MOTOR: Skipping agent '{}' due to invalid rate {}Hz",
+                                agent_id, rate_hz
+                            );
+                            continue;
+                        }
+
+                        let interval = Duration::from_secs_f64(1.0 / rate_hz);
+                        if let Some(last_sent) =
+                            motor_last_publish_time.read().get(agent_id).copied()
+                        {
+                            if now.duration_since(last_sent) < interval {
+                                continue;
+                            }
+                        }
+
                         debug!(
                             "[BURST-LOOP] 🎮 MOTOR: Encoding for agent '{}' with filter: {:?}",
                             agent_id,
@@ -2095,6 +2443,8 @@ fn burst_loop(
                                         .store(true, std::sync::atomic::Ordering::Relaxed);
                                 }
 
+                                let mut published = false;
+
                                 // Publish via ZMQ to agent
                                 if let Some(ref publisher) = motor_publisher {
                                     match publisher.publish_motor(agent_id, &motor_bytes) {
@@ -2104,12 +2454,24 @@ fn burst_loop(
                                                 "[BURST-LOOP] ✅ PUBLISHED motor data to agent '{}': {} bytes",
                                                 agent_id, motor_bytes.len()
                                             );
+                                            published = true;
                                         }
                                         Err(e) => {
-                                            error!(
-                                                "[BURST-LOOP] ❌ MOTOR PUBLISH ERROR for '{}': {}",
-                                                agent_id, e
-                                            );
+                                            if is_missing_agent_publish_error(&e) {
+                                                if !missing_motor_agent_logged.contains(agent_id) {
+                                                    warn!(
+                                                        "[BURST-LOOP] Motor transport for '{}' not ready yet ({}). Keeping subscription and retrying.",
+                                                        agent_id, e
+                                                    );
+                                                    missing_motor_agent_logged
+                                                        .insert(agent_id.clone());
+                                                }
+                                            } else {
+                                                error!(
+                                                    "[BURST-LOOP] ❌ MOTOR PUBLISH ERROR for '{}': {}",
+                                                    agent_id, e
+                                                );
+                                            }
                                         }
                                     }
                                 } else {
@@ -2120,7 +2482,16 @@ fn burst_loop(
                                 if let Some(writer) = motor_shm_writer.lock().unwrap().as_mut() {
                                     if let Err(e) = writer.write_payload(&motor_bytes) {
                                         error!("[BURST-LOOP] ❌ Failed to write motor SHM: {}", e);
+                                    } else {
+                                        published = true;
                                     }
+                                }
+
+                                if published {
+                                    missing_motor_agent_logged.remove(agent_id);
+                                    motor_last_publish_time
+                                        .write()
+                                        .insert(agent_id.clone(), now);
                                 }
                             }
                             Err(e) => {
@@ -2131,6 +2502,7 @@ fn burst_loop(
                             }
                         }
                     }
+                    drop(subscriptions);
                 }
             } else {
                 // No fire data available
@@ -2330,8 +2702,9 @@ mod tests {
         // Use a unit type for the generic parameter since we're not testing visualization/motor
         struct NoViz;
         impl VisualizationPublisher for NoViz {
-            fn publish_raw_fire_queue(
+            fn publish_raw_fire_queue_for_agent(
                 &self,
+                _agent_id: &str,
                 _fire_data: RawFireQueueSnapshot,
             ) -> Result<(), String> {
                 Ok(())
@@ -2381,8 +2754,9 @@ mod tests {
 
         struct NoViz;
         impl VisualizationPublisher for NoViz {
-            fn publish_raw_fire_queue(
+            fn publish_raw_fire_queue_for_agent(
                 &self,
+                _agent_id: &str,
                 _fire_data: RawFireQueueSnapshot,
             ) -> Result<(), String> {
                 Ok(())
@@ -2459,5 +2833,41 @@ mod tests {
             "Expected neuron {} to appear in cached fire queue for cortical_idx=3",
             neuron.0
         );
+    }
+
+    #[test]
+    fn test_visualization_rate_validation() {
+        struct NoViz;
+        impl VisualizationPublisher for NoViz {
+            fn publish_raw_fire_queue_for_agent(
+                &self,
+                _agent_id: &str,
+                _fire_data: RawFireQueueSnapshot,
+            ) -> Result<(), String> {
+                Ok(())
+            }
+        }
+
+        struct NoMotor;
+        impl MotorPublisher for NoMotor {
+            fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> {
+                Ok(())
+            }
+        }
+
+        let rust_npu = <crate::RustNPU<
+            feagi_npu_runtime::StdRuntime,
+            f32,
+            crate::backend::CPUBackend,
+        >>::new_cpu_only(1000, 10000, 20);
+        let npu = Arc::new(TracingMutex::new(DynamicNPU::F32(rust_npu), "TestNPU"));
+        let runner = BurstLoopRunner::new::<NoViz, NoMotor>(npu, None, None, 10.0);
+
+        assert!(runner
+            .register_visualization_subscriptions_with_rate("viz-agent".to_string(), 20.0)
+            .is_err());
+        assert!(runner
+            .register_visualization_subscriptions_with_rate("viz-agent".to_string(), 5.0)
+            .is_ok());
     }
 }

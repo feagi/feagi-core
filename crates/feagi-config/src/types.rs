@@ -94,7 +94,15 @@ impl Default for GenomeConfig {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ApiConfig {
-    pub host: String,
+    /// Host/IP to bind the API server listener to.
+    ///
+    /// For local development, default is loopback (`127.0.0.1`) to reduce OS firewall prompts.
+    /// For external access, set to `0.0.0.0` (and configure `advertised_host` to a routable address).
+    pub bind_host: String,
+    /// Host/IP advertised to clients (e.g., via `/v1/network/connection_info`).
+    ///
+    /// This must be a routable address (never `0.0.0.0` / `::` / `*`).
+    pub advertised_host: String,
     pub port: u16,
     pub workers: usize,
     pub reload: bool,
@@ -103,7 +111,8 @@ pub struct ApiConfig {
 impl Default for ApiConfig {
     fn default() -> Self {
         Self {
-            host: "0.0.0.0".to_string(),
+            bind_host: "127.0.0.1".to_string(),
+            advertised_host: "127.0.0.1".to_string(),
             port: 8000,
             workers: 1,
             reload: false,
@@ -118,7 +127,10 @@ pub struct AgentConfig {
     pub registration_port: u16,
     pub sensory_port: u16,
     pub motor_port: u16,
-    pub host: String,
+    /// Host/IP to bind ZMQ agent endpoints to.
+    pub bind_host: String,
+    /// Host/IP advertised to agents for connecting to ZMQ agent endpoints.
+    pub advertised_host: String,
     /// Enable auto-creation of missing IPU/OPU cortical areas during agent registration
     pub auto_create_missing_cortical_areas: bool,
 }
@@ -129,7 +141,8 @@ impl Default for AgentConfig {
             registration_port: 30001,
             sensory_port: 5555, // NOTE: This is agent config (different from ports.zmq_sensory_port)
             motor_port: 5564,
-            host: "0.0.0.0".to_string(),
+            bind_host: "127.0.0.1".to_string(),
+            advertised_host: "127.0.0.1".to_string(),
             auto_create_missing_cortical_areas: true,
         }
     }
@@ -181,7 +194,10 @@ impl PortsConfig {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ZmqConfig {
-    pub host: String,
+    /// Host/IP to bind ZMQ transport endpoints to.
+    pub bind_host: String,
+    /// Host/IP advertised to clients for connecting to ZMQ transport endpoints.
+    pub advertised_host: String,
     pub enabled: bool,
     pub polling_timeout: u64,
     pub message_buffer_size: usize,
@@ -196,7 +212,8 @@ pub struct ZmqConfig {
 impl Default for ZmqConfig {
     fn default() -> Self {
         Self {
-            host: "0.0.0.0".to_string(),
+            bind_host: "127.0.0.1".to_string(),
+            advertised_host: "127.0.0.1".to_string(),
             enabled: true,
             polling_timeout: 100,
             message_buffer_size: 100,
@@ -291,7 +308,10 @@ impl Default for RestStreamConfig {
 #[serde(default)]
 pub struct WebSocketConfig {
     pub enabled: bool,
-    pub host: String,
+    /// Host/IP to bind WebSocket transport endpoints to.
+    pub bind_host: String,
+    /// Host/IP advertised to clients for connecting to WebSocket transport endpoints.
+    pub advertised_host: String,
     pub sensory_port: u16,
     pub motor_port: u16,
     pub visualization_port: u16,
@@ -309,7 +329,8 @@ impl Default for WebSocketConfig {
     fn default() -> Self {
         Self {
             enabled: false, // Disabled by default
-            host: "0.0.0.0".to_string(),
+            bind_host: "127.0.0.1".to_string(),
+            advertised_host: "127.0.0.1".to_string(),
             sensory_port: 9051,
             motor_port: 9052,
             visualization_port: 9050,

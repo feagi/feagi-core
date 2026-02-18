@@ -146,4 +146,25 @@ impl RuntimeService for WasmRuntimeService {
             "WASM mode sensory injection not yet implemented".to_string(),
         ))
     }
+
+    async fn register_motor_subscriptions(
+        &self,
+        _agent_id: &str,
+        _cortical_ids: Vec<String>,
+        _rate_hz: f64,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode motor subscription not yet implemented".to_string(),
+        ))
+    }
+
+    async fn register_visualization_subscriptions(
+        &self,
+        _agent_id: &str,
+        _rate_hz: f64,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode visualization subscription not yet implemented".to_string(),
+        ))
+    }
 }

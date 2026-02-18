@@ -167,8 +167,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Dummy publishers for testing
     struct DummyViz;
     impl feagi_npu_burst_engine::VisualizationPublisher for DummyViz {
-        fn publish_raw_fire_queue(
+        fn publish_raw_fire_queue_for_agent(
             &self,
+            _agent_id: &str,
             _fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
         ) -> Result<(), String> {
             Ok(())
@@ -245,7 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         memory_stats_cache: None,
         amalgamation_state: ApiState::init_amalgamation_state(),
         #[cfg(feature = "feagi-agent")]
-        agent_connectors: ApiState::init_agent_connectors(),
+        agent_handler: Some(ApiState::init_agent_registration_handler()),
     };
 
     println!(

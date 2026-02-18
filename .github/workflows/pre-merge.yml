@@ -81,17 +81,11 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
 
-    - name: Dry run version bump preview
+    - name: Dry run umbrella version bump preview
       run: |
         set -euo pipefail
-        chmod +x scripts/smart-version-bump.sh
-        LAST_TAG="$(git tag --list "v*" --sort=-v:refname | head -1)"
-        if [ -z "$LAST_TAG" ]; then
-          echo "Missing baseline tag. Create v<version> before merging."
-          exit 1
-        fi
-        echo "Using baseline tag: $LAST_TAG"
-        DRY_RUN=true LAST_TAG="$LAST_TAG" ./scripts/smart-version-bump.sh
+        chmod +x scripts/bump-umbrella-version.sh
+        DRY_RUN=true ./scripts/bump-umbrella-version.sh
 
     - name: Check formatting
       run: cargo fmt --all -- --check
@@ -134,22 +128,23 @@ jobs:
 
     - name: Verify crate metadata
       run: |
-        for crate_dir in crates/*/; do
+        for crate_dir in crates/*/ crates/feagi-npu/*/; do
           [ -f "$crate_dir/Cargo.toml" ] || continue
           crate_name=$(basename "$crate_dir")
-          grep -q '^description = ' "$crate_dir/Cargo.toml" || { echo "❌ Missing description in $crate_name"; exit 1; }
-          grep -q '^license = ' "$crate_dir/Cargo.toml" || { echo "❌ Missing license in $crate_name"; exit 1; }
+          grep -q '^description = ' "$crate_dir/Cargo.toml" || { echo "Missing description in $crate_name"; exit 1; }
+          grep -qE '^license(\.workspace)?\s*=\s*' "$crate_dir/Cargo.toml" || { echo "Missing license in $crate_name"; exit 1; }
         done
-        echo "✅ Crate metadata OK"
+        echo "Crate metadata OK"
 
+    # --no-verify required: verify step would resolve deps from crates.io (0.0.1-beta.18 not published yet)
     - name: Dry run package verification
       run: |
-        for crate_dir in crates/*/; do
+        for crate_dir in crates/*/ crates/feagi-npu/*/; do
           [ -f "$crate_dir/Cargo.toml" ] || continue
           crate_name=$(basename "$crate_dir")
-          (cd "$crate_dir" && cargo package --quiet) || { echo "❌ Package failed: $crate_name"; exit 1; }
+          (cd "$crate_dir" && cargo package --quiet --no-verify) || { echo "Package failed: $crate_name"; exit 1; }
         done
-        echo "✅ All crates package successfully"
+        echo "All crates package successfully"
 
   microbench:
     name: Burst Engine Microbench Gate
@@ -280,15 +275,10 @@ jobs:
         shared-key: "publish-local-sim-pre-merge"
         save-if: true
 
-    - name: Compute and apply version bumps (CI-only)
+    - name: Bump umbrella version (CI-only, for publish simulation)
       run: |
-        chmod +x scripts/smart-version-bump.sh scripts/apply-version-bumps.sh
-        VERSION_OUTPUT="$(./scripts/smart-version-bump.sh)"
-        echo "${VERSION_OUTPUT}"
-        VERSIONS_FILE="$(echo "${VERSION_OUTPUT}" | grep "VERSIONS_FILE=" | cut -d'=' -f2)"
-        [ -z "${VERSIONS_FILE}" ] && { echo "❌ Failed to detect VERSIONS_FILE"; exit 1; }
-        export VERSIONS_FILE="${VERSIONS_FILE}"
-        ./scripts/apply-version-bumps.sh
+        chmod +x scripts/bump-umbrella-version.sh
+        ./scripts/bump-umbrella-version.sh
 
     - name: Package and build against local packaged deps
       run: |
@@ -330,6 +320,20 @@ jobs:
           esac
         }
 
+        WORKSPACE_VERSION=$(awk '/^\[workspace\.package\]/{p=1;next} /^\[/{p=0} p && /^version = /{gsub(/version = |"/,""); print; exit}' Cargo.toml)
+        # Resolve version for a crate (workspace or explicit)
+        crate_version() {
+          local path="$1"
+          local crate="$2"
+          if [ "$crate" = "feagi" ]; then
+            awk -F'"' '/^version = / { print $2; exit }' "${path}/Cargo.toml"
+          elif grep -q '^version\.workspace = true' "${path}/Cargo.toml" 2>/dev/null; then
+            echo "$WORKSPACE_VERSION"
+          else
+            awk -F'"' '/^version = / { print $2; exit }' "${path}/Cargo.toml"
+          fi
+        }
+
         mkdir -p .cargo
         {
           echo "[patch.crates-io]"
@@ -346,7 +350,7 @@ jobs:
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${path}/Cargo.toml" ] || continue
           cargo package --allow-dirty --no-verify --package "${crate}" --quiet
-          version="$(awk -F'"' '/^version = / { print $2; exit }' "${path}/Cargo.toml")"
+          version="$(crate_version "${path}" "${crate}")"
           mv "target/package/${crate}-${version}.crate" "${PACKAGES_DIR}/"
         done
 
@@ -355,15 +359,15 @@ jobs:
           for crate in "${CRATE_ORDER[@]}"; do
             path="$(crate_path_for "${crate}")" || continue
             [ -f "${path}/Cargo.toml" ] || continue
-            version="$(awk -F'"' '/^version = / { print $2; exit }' "${path}/Cargo.toml")"
+            version="$(crate_version "${path}" "${crate}")"
             crate_file="${PACKAGES_DIR}/${crate}-${version}.crate"
-            [ -f "${crate_file}" ] || { echo "❌ Missing ${crate_file}"; exit 1; }
+            [ -f "${crate_file}" ] || { echo "Missing ${crate_file}"; exit 1; }
             dest="${EXTRACTED}/${crate}-${version}"
             rm -rf "${dest}"
             mkdir -p "${dest}"
             tar -xf "${crate_file}" -C "${dest}"
             src_dir="${dest}/${crate}-${version}"
-            [ -f "${src_dir}/Cargo.toml" ] || { echo "❌ Missing manifest in ${src_dir}"; exit 1; }
+            [ -f "${src_dir}/Cargo.toml" ] || { echo "Missing manifest in ${src_dir}"; exit 1; }
             echo "${crate} = { path = \"${src_dir}\" }"
           done
         } > "${DRIVER}/.cargo/config.toml"
@@ -372,10 +376,10 @@ jobs:
         for crate in "${CRATE_ORDER[@]}"; do
           path="$(crate_path_for "${crate}")" || continue
           [ -f "${GITHUB_WORKSPACE}/${path}/Cargo.toml" ] || continue
-          version="$(awk -F'"' '/^version = / { print $2; exit }' "${GITHUB_WORKSPACE}/${path}/Cargo.toml")"
+          version="$(crate_version "${GITHUB_WORKSPACE}/${path}" "${crate}")"
           manifest="${EXTRACTED}/${crate}-${version}/${crate}-${version}/Cargo.toml"
-          [ -f "${manifest}" ] || { echo "❌ Missing ${manifest}"; exit 1; }
+          [ -f "${manifest}" ] || { echo "Missing ${manifest}"; exit 1; }
           cargo generate-lockfile --manifest-path "${manifest}"
           cargo build --manifest-path "${manifest}" --locked --quiet
         done
-        echo "🎉 Publish simulation OK"
+        echo "Publish simulation OK"
