@@ -167,4 +167,12 @@ impl RuntimeService for WasmRuntimeService {
             "WASM mode visualization subscription not yet implemented".to_string(),
         ))
     }
+
+    fn unregister_motor_subscriptions(&self, _agent_id: &str) {
+        // No-op: WASM mode does not support agent subscriptions
+    }
+
+    fn unregister_visualization_subscriptions(&self, _agent_id: &str) {
+        // No-op: WASM mode does not support agent subscriptions
+    }
 }

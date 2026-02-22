@@ -115,6 +115,17 @@ impl CommandControlWrapper {
         // connection type itself!
         let (session_id, incoming_data) = self.router.consume_retrieved_request()?;
 
+        let min_len =
+            FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT;
+        if incoming_data.len() < min_len {
+            tracing::warn!(
+                "Rejecting command/control payload: {} bytes (minimum {} for 48-byte AgentDescriptor)",
+                incoming_data.len(),
+                min_len
+            );
+            return Ok(None);
+        }
+
         let is_new_session = !known_session_ids.contains_key(&session_id);
 
         if is_new_session {

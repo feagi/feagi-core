@@ -128,8 +128,8 @@ fn zmq_puller_keeps_latest_valid_frame_in_burst_with_noise() {
         .expect("Server failed to consume retrieved data");
 
     assert!(
-        consumed.len() >= 12,
-        "Expected FEAGI frame length >= 12, got {} bytes",
+        consumed.len() >= FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT,
+        "Expected FEAGI frame length >= 52 (header+agent_id), got {} bytes",
         consumed.len()
     );
     assert_eq!(
@@ -201,7 +201,10 @@ fn zmq_stream_stays_responsive_and_fresh_under_sustained_noise() {
                 let data = server
                     .consume_retrieved_data()
                     .expect("Server failed to consume retrieved data");
-                if data.len() >= 12 {
+                if data.len()
+                    >= FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
+                        + FeagiByteContainer::AGENT_ID_BYTE_COUNT
+                {
                     let now = Instant::now();
                     if first_valid_at.is_none() {
                         first_valid_at = Some(now);
@@ -308,8 +311,10 @@ fn zmq_puller_prefers_non_empty_sensory_frame_over_empty_container_in_same_drain
     let consumed = server
         .consume_retrieved_data()
         .expect("Server failed to consume retrieved data");
+    let min_frame = FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
+        + FeagiByteContainer::AGENT_ID_BYTE_COUNT;
     assert!(
-        consumed.len() > 12,
+        consumed.len() > min_frame,
         "Expected non-empty sensory payload to be preferred, got empty container len={}",
         consumed.len()
     );
@@ -388,7 +393,10 @@ fn zmq_stream_soak_detects_blackout_or_degradation_windows() {
                 let data = server
                     .consume_retrieved_data()
                     .expect("Server failed to consume retrieved data");
-                if data.len() > 12 {
+                if data.len()
+                    > FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
+                        + FeagiByteContainer::AGENT_ID_BYTE_COUNT
+                {
                     let now = Instant::now();
                     if first_valid_at.is_none() {
                         first_valid_at = Some(now);

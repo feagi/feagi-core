@@ -83,8 +83,7 @@ use crate::{
         (url = "http://localhost:8080", description = "Alternative port")
     ),
     paths(
-        // Agent endpoints
-        crate::endpoints::agent::register_agent,
+        // Agent endpoints (registration uses ZMQ/WebSocket only)
         crate::endpoints::agent::heartbeat,
         crate::endpoints::agent::list_agents,
         crate::endpoints::agent::get_agent_properties,
@@ -97,8 +96,6 @@ use crate::{
         crate::endpoints::agent::get_all_agent_capabilities,
         crate::endpoints::agent::get_agent_info,
         crate::endpoints::agent::post_configure,
-        crate::endpoints::agent::export_device_registrations,
-        crate::endpoints::agent::import_device_registrations,
 
         // System endpoints (21 total)
         crate::endpoints::system::get_health_check,

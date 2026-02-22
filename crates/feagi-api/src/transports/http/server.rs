@@ -292,10 +292,15 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::visualization; //use crate::endpoints::{agent, system};
 
     Router::new()
-        // ===== AGENT MODULE (manual_stimulation for BV shift+click+space) =====
+        // ===== AGENT MODULE =====
+        // Registration uses ZMQ/WebSocket only; no HTTP REST registration endpoints.
         .route(
             "/agent/manual_stimulation",
             axum::routing::post(agent::manual_stimulation),
+        )
+        .route(
+            "/agent/{agent_id}/device_registrations",
+            axum::routing::post(agent::import_device_registrations),
         )
         // ===== SYSTEM MODULE (21 endpoints) =====
         .route("/system/health_check", get(system::get_health_check))

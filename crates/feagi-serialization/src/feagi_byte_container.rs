@@ -4,7 +4,9 @@ use byteorder::{ByteOrder, LittleEndian};
 use feagi_structures::FeagiDataError;
 
 const MAX_NUMBER_OF_STRUCTS: usize = u8::MAX as usize;
-const NUMBER_BYTES_IN_AGENT_IDENTIFIER: usize = 8;
+/// Agent identifier is 48-byte AgentDescriptor (instance_id(4) + manufacturer(20) + agent_name(20) + version(4)).
+/// Single format - no 8-byte legacy.
+const NUMBER_BYTES_IN_AGENT_IDENTIFIER: usize = 48;
 
 type StructureIndex = u8;
 type ByteIndexReadingStart = u32;
@@ -20,7 +22,7 @@ type NumberBytesToRead = u32;
 ///
 /// # Format
 /// - Global header: version (1 byte) + increment counter (2 bytes) + struct count (1 byte)
-/// - Session ID (8 bytes)
+/// - Agent ID (48 bytes, AgentDescriptor format)
 /// - Per-structure headers: data length (4 bytes each)
 /// - Structure data: serialized structure bytes
 ///
@@ -30,7 +32,7 @@ type NumberBytesToRead = u32;
 ///
 /// let mut container = FeagiByteContainer::new_empty();
 /// assert!(container.is_valid());
-/// assert_eq!(container.get_number_of_bytes_used(), 12); // Header + session ID
+/// assert_eq!(container.get_number_of_bytes_used(), 52); // Header (4) + Agent ID (48)
 /// ```
 #[derive(Debug, Clone)]
 pub struct FeagiByteContainer {
@@ -47,7 +49,7 @@ impl FeagiByteContainer {
 
     pub const GLOBAL_BYTE_HEADER_BYTE_COUNT: usize = 4; // 1 u8, 1 u16, 1 u8
 
-    pub const AGENT_ID_BYTE_COUNT: usize = NUMBER_BYTES_IN_AGENT_IDENTIFIER; // 8 bytes
+    pub const AGENT_ID_BYTE_COUNT: usize = NUMBER_BYTES_IN_AGENT_IDENTIFIER; // 48 bytes (AgentDescriptor)
 
     pub const STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE: usize = 4; // 1 u32
 
@@ -57,8 +59,8 @@ impl FeagiByteContainer {
 
     /// Creates a new empty container with default header.
     ///
-    /// The container starts with a 4-byte header + 8 byte session ID containing version, zero increment counter,
-    /// and zero structure count and a blank session ID. The container is initially valid with just a 4 byte header
+    /// The container starts with a 4-byte header + 48-byte agent ID containing version, zero increment counter,
+    /// and zero structure count and a blank agent ID. The container is initially valid with just a 4 byte header
     /// stating 0 contained structures
     ///
     /// # Example
@@ -67,7 +69,7 @@ impl FeagiByteContainer {
     ///
     /// let container = FeagiByteContainer::new_empty();
     /// assert!(container.is_valid());
-    /// assert_eq!(container.get_number_of_bytes_used(), 12); // Header + session ID
+    /// assert_eq!(container.get_number_of_bytes_used(), 52); // Header (4) + Agent ID (48)
     /// ```
     pub fn new_empty() -> Self {
         Self {
@@ -92,8 +94,8 @@ impl FeagiByteContainer {
     ///
     /// let container = FeagiByteContainer::new_empty();
     /// let bytes = container.get_byte_ref();
-    /// assert_eq!(bytes.len(), 12);
-    /// assert_eq!(bytes[0], 3); // Current version (CURRENT_FBS_VERSION)
+    /// assert_eq!(bytes.len(), 52); // Header (4) + Agent ID (48)
+    /// assert_eq!(bytes[0], 4); // Current version (CURRENT_FBS_VERSION)
     /// ```
     pub fn get_byte_ref(&self) -> &[u8] {
         &self.bytes
@@ -223,7 +225,7 @@ impl FeagiByteContainer {
     /// use feagi_serialization::FeagiByteContainer;
     ///
     /// let container = FeagiByteContainer::new_empty();
-    /// assert_eq!(container.get_number_of_bytes_used(), 12); // Header + session ID
+    /// assert_eq!(container.get_number_of_bytes_used(), 52); // Header (4) + Agent ID (48)
     /// ```
     pub fn get_number_of_bytes_used(&self) -> usize {
         self.bytes.len()
@@ -606,7 +608,7 @@ impl FeagiByteContainer {
         if byte_length < Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT {
             // If we cant even fit the global header + session ID, something is wrong
             return Err(FeagiDataError::DeserializationError(
-                "Given Feagi Byte Structure byte length is too short! (Less than 12!)".into(),
+                "Given Feagi Byte Structure byte length is too short! (Less than global header + 48-byte agent id)".into(),
             ));
         }
         if self.bytes[0] != Self::CURRENT_FBS_VERSION {

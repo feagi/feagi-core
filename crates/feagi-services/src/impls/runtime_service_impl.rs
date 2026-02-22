@@ -218,6 +218,16 @@ impl RuntimeService for RuntimeServiceImpl {
             .map_err(|e| ServiceError::InvalidInput(e.to_string()))
     }
 
+    fn unregister_motor_subscriptions(&self, agent_id: &str) {
+        let runner = self.burst_runner.read();
+        runner.unregister_motor_subscriptions(agent_id);
+    }
+
+    fn unregister_visualization_subscriptions(&self, agent_id: &str) {
+        let runner = self.burst_runner.read();
+        runner.unregister_visualization_subscriptions(agent_id);
+    }
+
     async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>> {
         let runner = self.burst_runner.read();
         let fcl_data = runner.get_fcl_snapshot();

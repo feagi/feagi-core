@@ -237,4 +237,14 @@ pub trait RuntimeService: Send + Sync {
         agent_id: &str,
         rate_hz: f64,
     ) -> ServiceResult<()>;
+
+    /// Unregister motor subscriptions for a disconnected agent.
+    ///
+    /// Called when an agent is deregistered (e.g. descriptor replacement, timeout).
+    fn unregister_motor_subscriptions(&self, agent_id: &str);
+
+    /// Unregister visualization subscriptions for a disconnected agent.
+    ///
+    /// Called when an agent is deregistered (e.g. descriptor replacement, timeout).
+    fn unregister_visualization_subscriptions(&self, agent_id: &str);
 }
