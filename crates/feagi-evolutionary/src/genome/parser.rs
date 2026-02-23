@@ -225,6 +225,10 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
     if id_str == "___power" {
         return Ok(CoreCorticalType::Power.to_cortical_id());
     }
+    // 8-char padded form of ___pwr (from 6-char padding in legacy flat genomes)
+    if id_str == "___pwr__" {
+        return Ok(CoreCorticalType::Power.to_cortical_id());
+    }
     if id_str == "___death" {
         return Ok(CoreCorticalType::Death.to_cortical_id());
     }
@@ -769,6 +773,17 @@ mod tests {
         // Migration must map this deterministically to the core Power cortical ID.
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let id = string_to_cortical_id("___pwr").unwrap();
+        assert_eq!(
+            id.as_base_64(),
+            CoreCorticalType::Power.to_cortical_id().as_base_64()
+        );
+    }
+
+    #[test]
+    fn test_string_to_cortical_id_legacy_power_padded() {
+        // 8-char padded form ___pwr__ (from 6-char padding in legacy flat genomes).
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        let id = string_to_cortical_id("___pwr__").unwrap();
         assert_eq!(
             id.as_base_64(),
             CoreCorticalType::Power.to_cortical_id().as_base_64()

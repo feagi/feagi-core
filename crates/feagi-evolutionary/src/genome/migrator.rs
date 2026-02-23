@@ -480,6 +480,11 @@ fn needs_migration(id: &str) -> bool {
         return true;
     }
 
+    // Legacy 8-char padded core shorthands (e.g. ___pwr padded to ___pwr__)
+    if id == "___pwr__" {
+        return true;
+    }
+
     // Legacy IO shorthands (6-char ASCII) lacking FDP IO metadata (bytes 4-5).
     // Examples: iv00_C, i___id, o___id
     if is_legacy_io_shorthand(id) {
@@ -607,6 +612,16 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
     }
     // Legacy shorthand used by older FEAGI genomes: "___pwr" (6-char) refers to core Power.
     if old_id == "___pwr" {
+        let new_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
+        tracing::debug!(
+            "🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)",
+            old_id,
+            new_id
+        );
+        return Some(new_id);
+    }
+    // 8-char padded form of ___pwr (from parser 6-char padding path in legacy genomes)
+    if old_id == "___pwr__" {
         let new_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
         tracing::debug!(
             "🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)",
@@ -840,6 +855,14 @@ mod tests {
             Some(CoreCorticalType::Power.to_cortical_id().as_base_64())
         );
         assert_eq!(
+            map_old_id_to_new("___pwr"),
+            Some(CoreCorticalType::Power.to_cortical_id().as_base_64())
+        );
+        assert_eq!(
+            map_old_id_to_new("___pwr__"),
+            Some(CoreCorticalType::Power.to_cortical_id().as_base_64())
+        );
+        assert_eq!(
             map_old_id_to_new("_death"),
             Some(CoreCorticalType::Death.to_cortical_id().as_base_64())
         );
@@ -860,6 +883,7 @@ mod tests {
         assert!(needs_migration("iic000"));
         assert!(needs_migration("omot00"));
         assert!(needs_migration("_power"));
+        assert!(needs_migration("___pwr__"));
 
         // Should NOT migrate - use types from feagi-data-processing
         assert!(!needs_migration("svi0____"));

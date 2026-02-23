@@ -847,7 +847,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         };
         if is_io_area {
             if let Some(opts) = &coding_options {
-                info!(
+                trace!(
                     target: "feagi-services",
                     "[IO-CODING] {} options signage={:?} behavior={:?} type={:?} io_flag={:?}",
                     cortical_id,
@@ -1109,7 +1109,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn cortical_area_exists(&self, cortical_id: &str) -> ServiceResult<bool> {
-        debug!(target: "feagi-services","Checking if cortical area exists: {}", cortical_id);
+        trace!(target: "feagi-services","Checking if cortical area exists: {}", cortical_id);
 
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)

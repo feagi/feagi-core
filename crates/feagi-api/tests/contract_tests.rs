@@ -228,6 +228,8 @@ fn build_test_state() -> ApiState {
         ) -> feagi_services::ServiceResult<()> {
             Ok(())
         }
+        fn unregister_motor_subscriptions(&self, _agent_id: &str) {}
+        fn unregister_visualization_subscriptions(&self, _agent_id: &str) {}
     }
 
     let runtime_service =
@@ -365,6 +367,46 @@ fn sample_device_registrations() -> Value {
                     {
                         "cortical_unit_index": 0,
                         "device_grouping": [{"id": 0}]
+                    },
+                    {}
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+/// Multi-limb device_registrations: 4 limbs (groups 0-3), 3 PositionalServo channels per limb.
+#[cfg(feature = "feagi-agent")]
+fn sample_multi_limb_device_registrations() -> Value {
+    json!({
+        "output_units_and_decoder_properties": {
+            "PositionalServo": [
+                [
+                    {
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
+                    },
+                    {}
+                ],
+                [
+                    {
+                        "cortical_unit_index": 1,
+                        "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
+                    },
+                    {}
+                ],
+                [
+                    {
+                        "cortical_unit_index": 2,
+                        "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
+                    },
+                    {}
+                ],
+                [
+                    {
+                        "cortical_unit_index": 3,
+                        "device_grouping": [{"id": 0}, {"id": 1}, {"id": 2}]
                     },
                     {}
                 ]
@@ -631,6 +673,53 @@ async fn test_auto_create_enabled_creates_areas() {
         .await
         .expect("Failed to list cortical areas");
     assert!(!areas.is_empty());
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_creates_all_limb_cortical_areas() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_multi_limb_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let motor_areas: Vec<_> = areas
+        .iter()
+        .filter(|a| a.area_type == "motor" || a.cortical_group == "OPU")
+        .collect();
+    assert_eq!(
+        motor_areas.len(),
+        4,
+        "Expected 4 PositionalServo areas (one per limb), got {}",
+        motor_areas.len()
+    );
+    for area in &motor_areas {
+        assert_eq!(
+            area.dimensions.0,
+            6,
+            "Each limb area should have width=6 (2*3 channels for SignedPercentage)"
+        );
+        assert_eq!(
+            area.properties.get("dev_count").and_then(|v| v.as_u64()),
+            Some(3),
+            "Each limb area should have dev_count=3"
+        );
+    }
 }
 
 // ============================================================================
