@@ -12,6 +12,7 @@ use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use crate::v1::agent_dtos::*;
 use feagi_services::traits::agent_service::HeartbeatRequest as ServiceHeartbeatRequest;
+use feagi_services::traits::agent_service::ManualStimulationMode;
 use tracing::{info, warn};
 
 #[cfg(feature = "feagi-agent")]
@@ -162,10 +163,16 @@ fn registration_capabilities_to_map(
                     "receive_neuron_visualizations".to_string(),
                     serde_json::json!(true),
                 );
-                out.insert("visualization".to_string(), serde_json::json!({"rate_hz": 0.0}));
+                out.insert(
+                    "visualization".to_string(),
+                    serde_json::json!({"rate_hz": 0.0}),
+                );
             }
             RegistrationCapabilities::ReceiveSystemMessages => {
-                out.insert("receive_system_messages".to_string(), serde_json::json!(true));
+                out.insert(
+                    "receive_system_messages".to_string(),
+                    serde_json::json!(true),
+                );
             }
         }
     }
@@ -193,7 +200,9 @@ fn get_handler_capabilities_for_agent(
     let parsed_agent_id = parse_agent_id_base64(agent_id).ok()?;
     let handler = state.agent_handler.as_ref()?;
     let handler_guard = handler.lock().unwrap();
-    let (_, capabilities) = handler_guard.get_all_registered_agents().get(&parsed_agent_id)?;
+    let (_, capabilities) = handler_guard
+        .get_all_registered_agents()
+        .get(&parsed_agent_id)?;
     Some(registration_capabilities_to_map(capabilities))
 }
 
@@ -572,8 +581,19 @@ pub async fn manual_stimulation(
     // This allows runtime_service to be set after AgentServiceImpl is wrapped in Arc
     agent_service.try_set_runtime_service(state.runtime_service.clone());
 
+    let mode = match request.mode.as_deref() {
+        Some("force_fire") => ManualStimulationMode::ForceFire,
+        Some("candidate") | None => ManualStimulationMode::Candidate,
+        Some(other) => {
+            return Err(ApiError::invalid_input(format!(
+                "Invalid stimulation mode '{}'; expected 'candidate' or 'force_fire'",
+                other
+            )));
+        }
+    };
+
     match agent_service
-        .manual_stimulation(request.stimulation_payload)
+        .manual_stimulation(request.stimulation_payload, mode)
         .await
     {
         Ok(result) => {
@@ -589,6 +609,23 @@ pub async fn manual_stimulation(
                 .get("successful_areas")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0) as usize;
+            let requested_coordinates = result
+                .get("requested_coordinates")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as usize;
+            let matched_coordinates = result
+                .get("matched_coordinates")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as usize;
+            let unique_neuron_ids = result
+                .get("unique_neuron_ids")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as usize;
+            let mode = result
+                .get("mode")
+                .and_then(|v| v.as_str())
+                .unwrap_or("candidate")
+                .to_string();
             let failed_areas = result
                 .get("failed_areas")
                 .and_then(|v| v.as_array())
@@ -606,6 +643,10 @@ pub async fn manual_stimulation(
             Ok(Json(ManualStimulationResponse {
                 success,
                 total_coordinates,
+                requested_coordinates,
+                matched_coordinates,
+                unique_neuron_ids,
+                mode,
                 successful_areas,
                 failed_areas,
                 error,

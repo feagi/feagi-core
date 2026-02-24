@@ -293,7 +293,10 @@ fn create_v1_router() -> Router<ApiState> {
 
     Router::new()
         // ===== AGENT MODULE =====
-        .route("/agent/register", axum::routing::post(agent::register_agent))
+        .route(
+            "/agent/register",
+            axum::routing::post(agent::register_agent),
+        )
         .route("/agent/heartbeat", axum::routing::post(agent::heartbeat))
         .route("/agent/list", get(agent::list_agents))
         .route("/agent/properties", get(agent::get_agent_properties))
@@ -320,11 +323,13 @@ fn create_v1_router() -> Router<ApiState> {
             "/agent/properties/{agent_id}",
             get(agent::get_agent_properties_path),
         )
-        .route("/agent/configure", axum::routing::post(agent::post_configure))
+        .route(
+            "/agent/configure",
+            axum::routing::post(agent::post_configure),
+        )
         .route(
             "/agent/{agent_id}/device_registrations",
-            get(agent::export_device_registrations)
-                .post(agent::import_device_registrations),
+            get(agent::export_device_registrations).post(agent::import_device_registrations),
         )
         // ===== SYSTEM MODULE (21 endpoints) =====
         .route("/system/health_check", get(system::get_health_check))

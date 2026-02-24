@@ -206,6 +206,7 @@ fn build_test_state() -> ApiState {
             &self,
             _cortical_area_name: &str,
             _coordinates: &[(u32, u32, u32, f32)],
+            _mode: feagi_services::traits::runtime_service::ManualStimulationMode,
         ) -> feagi_services::ServiceResult<usize> {
             Err(feagi_services::ServiceError::NotImplemented(
                 "MockRuntimeService".to_string(),
@@ -704,22 +705,31 @@ async fn test_auto_create_creates_all_limb_cortical_areas() {
         .collect();
     assert_eq!(
         motor_areas.len(),
-        4,
-        "Expected 4 PositionalServo areas (one per limb), got {}",
+        8,
+        "Expected 8 PositionalServo areas (abs+inc per limb), got {}",
         motor_areas.len()
     );
+    let mut abs_width_count = 0;
+    let mut inc_width_count = 0;
     for area in &motor_areas {
-        assert_eq!(
-            area.dimensions.0,
-            6,
-            "Each limb area should have width=6 (2*3 channels for SignedPercentage)"
-        );
+        if area.name.ends_with("-1") {
+            assert_eq!(
+                area.dimensions.0, 6,
+                "Incremental subunit width should be 6"
+            );
+            inc_width_count += 1;
+        } else if area.name.ends_with("-0") {
+            assert_eq!(area.dimensions.0, 3, "Absolute subunit width should be 3");
+            abs_width_count += 1;
+        }
         assert_eq!(
             area.properties.get("dev_count").and_then(|v| v.as_u64()),
             Some(3),
             "Each limb area should have dev_count=3"
         );
     }
+    assert_eq!(abs_width_count, 4, "Expected 4 absolute limb areas");
+    assert_eq!(inc_width_count, 4, "Expected 4 incremental limb areas");
 }
 
 // ============================================================================

@@ -130,6 +130,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     continue;
                 }
             };
+            let topology = motor_unit.get_unit_default_topology();
 
             let cortical_ids = match motor_unit
                 .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
@@ -144,8 +145,6 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     continue;
                 }
             };
-
-            let topology = motor_unit.get_unit_default_topology();
 
             for (i, cortical_id) in cortical_ids.iter().enumerate() {
                 let cortical_id_b64 = cortical_id.as_base_64();
@@ -163,23 +162,20 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     }
                 };
 
-                // Place grouped motor cortical units in a row by cortical_unit_index so each
-                // limb group is visually separated in BV.
-                let motor_group_gap_x: i32 = 10;
                 let sub_index = CorticalSubUnitIndex::from(i as u8);
                 let unit_topology = match topology.get(&sub_index) {
                     Some(t) => t,
                     None => {
                         warn!(
-                            "⚠️ [API] Missing unit topology for motor unit '{}' subunit {}; skipping",
-                            motor_unit_key, i
-                        );
+                                "⚠️ [API] Missing unit topology for motor unit '{}' subunit {}; skipping",
+                                motor_unit_key, i
+                            );
                         continue;
                     }
                 };
                 let expected_position = (
-                    unit_topology.relative_position[0] + (group_u8 as i32 * motor_group_gap_x),
-                    unit_topology.relative_position[1],
+                    unit_topology.relative_position[0],
+                    unit_topology.relative_position[1] + (group_u8 as i32 * 20),
                     unit_topology.relative_position[2],
                 );
 
@@ -204,11 +200,8 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         unit_topology.channel_dimensions_default[1] as usize,
                         unit_topology.channel_dimensions_default[2] as usize,
                     );
-                    let is_signed_percentage = motor_unit_key == "PositionalServo"
-                        || motor_unit_key == "RotaryMotor";
-                    let width_mult = if is_signed_percentage { 2 } else { 1 };
                     let expected_dimensions = (
-                        (per_channel_width * width_mult * device_count).max(1),
+                        (per_channel_width * device_count).max(1),
                         per_channel_height,
                         per_channel_depth,
                     );
@@ -220,8 +213,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         .map(|u| u as usize)
                         .or(current.dev_count);
                     let dimensions_mismatch = current.dimensions != expected_dimensions;
-                    let dev_count_mismatch =
-                        current_dev_count.map_or(true, |c| c != device_count);
+                    let dev_count_mismatch = current_dev_count.map_or(true, |c| c != device_count);
                     let position_mismatch = current.position != expected_position;
 
                     if dimensions_mismatch || dev_count_mismatch || position_mismatch {
@@ -253,14 +245,14 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             .await
                         {
                             warn!(
-                                "⚠️ [API] Failed to update cortical area '{}' dimensions/dev_count/position: {}",
-                                cortical_id_b64, e
-                            );
+                                    "⚠️ [API] Failed to update cortical area '{}' dimensions/dev_count/position: {}",
+                                    cortical_id_b64, e
+                                );
                         } else {
                             info!(
-                                "[API] Updated cortical area '{}' to {} channels (dimensions {:?}, position {:?})",
-                                cortical_id_b64, device_count, expected_dimensions, expected_position
-                            );
+                                    "[API] Updated cortical area '{}' to {} channels (dimensions {:?}, position {:?})",
+                                    cortical_id_b64, device_count, expected_dimensions, expected_position
+                                );
                         }
                     }
 
@@ -275,9 +267,9 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             .await
                         {
                             warn!(
-                                "⚠️ [API] Failed to auto-rename existing motor cortical area '{}': {}",
-                                cortical_id_b64, e
-                            );
+                                    "⚠️ [API] Failed to auto-rename existing motor cortical area '{}': {}",
+                                    cortical_id_b64, e
+                                );
                         }
                     }
                     continue;
@@ -285,27 +277,19 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
 
                 let friendly_name =
                     build_friendly_unit_name(motor_unit.get_friendly_name(), group_u8, i);
-                // Use device_count from device_grouping to set correct channel count.
-                // For SignedPercentage (PositionalServo, RotaryMotor): per-channel width = 2.
-                // Total dimensions = (per_channel_width * device_count, 1, z_resolution).
+                // Use template-defined per-channel topology and scale by device_count.
+                // This keeps sizing fully template-driven and consistent across all unit types.
                 let (per_channel_width, per_channel_height, per_channel_depth) = (
                     unit_topology.channel_dimensions_default[0] as usize,
                     unit_topology.channel_dimensions_default[1] as usize,
                     unit_topology.channel_dimensions_default[2] as usize,
                 );
-                let is_signed_percentage = motor_unit_key == "PositionalServo"
-                    || motor_unit_key == "RotaryMotor";
-                let width_mult = if is_signed_percentage { 2 } else { 1 };
                 let dimensions = (
-                    (per_channel_width * width_mult * device_count).max(1),
+                    (per_channel_width * device_count).max(1),
                     per_channel_height,
                     per_channel_depth,
                 );
-                let per_device_dims = (
-                    per_channel_width * width_mult,
-                    per_channel_height,
-                    per_channel_depth,
-                );
+                let per_device_dims = (per_channel_width, per_channel_height, per_channel_depth);
                 let position = expected_position;
 
                 let mut properties = HashMap::new();
@@ -612,23 +596,11 @@ pub fn derive_motor_cortical_ids_from_device_registrations(
                 ));
             }
 
-            let mut config = serde_json::Map::new();
-            config.insert(
-                "frame_change_handling".to_string(),
-                serde_json::to_value(FrameChangeHandling::Absolute)
-                    .map_err(|e| format!("Failed to serialize FrameChangeHandling: {}", e))?,
-            );
-            config.insert(
-                "percentage_neuron_positioning".to_string(),
-                serde_json::to_value(PercentageNeuronPositioning::Linear).map_err(|e| {
-                    format!("Failed to serialize PercentageNeuronPositioning: {}", e)
-                })?,
-            );
-
+            let config = build_io_config_map()
+                .map_err(|e| format!("Failed to build motor IO config map: {}", e))?;
             let unit_cortical_ids = motor_unit
                 .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(group, config)
                 .map_err(|e| format!("Failed to derive cortical IDs: {}", e))?;
-
             for cortical_id in unit_cortical_ids {
                 cortical_ids.insert(cortical_id.as_base_64());
             }

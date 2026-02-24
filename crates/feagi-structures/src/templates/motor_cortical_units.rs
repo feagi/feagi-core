@@ -24,13 +24,14 @@ macro_rules! motor_cortical_units {
                     friendly_name: "Positional Servo",
                     accepted_wrapped_io_data_type: SignedPercentage,
                     cortical_id_unit_reference: *b"pse",
-                    number_cortical_areas: 1,
+                    number_cortical_areas: 2,
                     cortical_type_parameters: {
-                        frame_change_handling: FrameChangeHandling,
+                        _frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage(frame_change_handling, percentage_neuron_positioning), relative_position: [-10, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage(FrameChangeHandling::Absolute, percentage_neuron_positioning), relative_position: [-20, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]),
+                        1 => (IOCorticalAreaConfigurationFlag::SignedPercentage(FrameChangeHandling::Incremental, percentage_neuron_positioning), relative_position: [-40, 0, -10], channel_dimensions_default: [2, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 

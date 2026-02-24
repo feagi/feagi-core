@@ -2790,7 +2790,8 @@ impl GenomeServiceImpl {
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata update complete");
 
         // Return updated info
-        self.get_cortical_area_info(&effective_cortical_id_str).await
+        self.get_cortical_area_info(&effective_cortical_id_str)
+            .await
     }
 
     /// Structural rebuild: For dimension/density changes requiring synapse rebuild

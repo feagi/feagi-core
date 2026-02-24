@@ -1982,22 +1982,53 @@ fn burst_loop(
                                 1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
                                 2 => CoreCorticalType::Fatigue.to_cortical_id().as_base_64(),
                                 _ => {
-                                    // Skip areas not in cache (cache should be populated from ConnectomeManager)
-                                    // Log warning only once per area to avoid spam
-                                    static WARNED_AREAS: std::sync::LazyLock<
-                                        std::sync::Mutex<ahash::AHashSet<u32>>,
-                                    > = std::sync::LazyLock::new(|| {
-                                        std::sync::Mutex::new(ahash::AHashSet::new())
-                                    });
-                                    let mut warned = WARNED_AREAS.lock().unwrap();
-                                    if !warned.contains(area_id) {
-                                        warn!(
+                                    // Self-heal cache drift: resolve missing mapping directly from NPU area registry.
+                                    // This keeps behavior deterministic while avoiding a full cache rebuild in the hot path.
+                                    if let Ok(npu_lock) = npu.lock() {
+                                        if let Some(resolved_id) =
+                                            npu_lock.get_cortical_area_name(*area_id)
+                                        {
+                                            cached_cortical_id_mappings
+                                                .lock()
+                                                .unwrap()
+                                                .insert(*area_id, resolved_id.clone());
+                                            resolved_id
+                                        } else {
+                                            // Skip areas not in cache (cache should be populated from ConnectomeManager)
+                                            // Log warning only once per area to avoid spam
+                                            static WARNED_AREAS: std::sync::LazyLock<
+                                                std::sync::Mutex<ahash::AHashSet<u32>>,
+                                            > = std::sync::LazyLock::new(|| {
+                                                std::sync::Mutex::new(ahash::AHashSet::new())
+                                            });
+                                            let mut warned = WARNED_AREAS.lock().unwrap();
+                                            if !warned.contains(area_id) {
+                                                warn!(
+                                                    "[BURST-LOOP] ⚠️ Area {} not in cortical_id cache - skipping visualization. Cache should be refreshed from ConnectomeManager.",
+                                                    area_id
+                                                );
+                                                warned.insert(*area_id);
+                                            }
+                                            continue; // Skip this area - can't visualize without valid cortical_id
+                                        }
+                                    } else {
+                                        // Skip areas not in cache (cache should be populated from ConnectomeManager)
+                                        // Log warning only once per area to avoid spam
+                                        static WARNED_AREAS: std::sync::LazyLock<
+                                            std::sync::Mutex<ahash::AHashSet<u32>>,
+                                        > = std::sync::LazyLock::new(|| {
+                                            std::sync::Mutex::new(ahash::AHashSet::new())
+                                        });
+                                        let mut warned = WARNED_AREAS.lock().unwrap();
+                                        if !warned.contains(area_id) {
+                                            warn!(
                                             "[BURST-LOOP] ⚠️ Area {} not in cortical_id cache - skipping visualization. Cache should be refreshed from ConnectomeManager.",
                                             area_id
                                         );
-                                        warned.insert(*area_id);
+                                            warned.insert(*area_id);
+                                        }
+                                        continue; // Skip this area - can't visualize without valid cortical_id
                                     }
-                                    continue; // Skip this area - can't visualize without valid cortical_id
                                 }
                             }
                         }
@@ -2297,22 +2328,53 @@ fn burst_loop(
                                 1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
                                 2 => CoreCorticalType::Fatigue.to_cortical_id().as_base_64(),
                                 _ => {
-                                    // Skip areas not in cache (cache should be populated from ConnectomeManager)
-                                    // Log warning only once per area to avoid spam
-                                    static WARNED_AREAS_MOTOR: std::sync::LazyLock<
-                                        std::sync::Mutex<ahash::AHashSet<u32>>,
-                                    > = std::sync::LazyLock::new(|| {
-                                        std::sync::Mutex::new(ahash::AHashSet::new())
-                                    });
-                                    let mut warned = WARNED_AREAS_MOTOR.lock().unwrap();
-                                    if !warned.contains(area_id) {
-                                        warn!(
+                                    // Self-heal cache drift: resolve missing mapping directly from NPU area registry.
+                                    // This keeps behavior deterministic while avoiding a full cache rebuild in the hot path.
+                                    if let Ok(npu_lock) = npu.lock() {
+                                        if let Some(resolved_id) =
+                                            npu_lock.get_cortical_area_name(*area_id)
+                                        {
+                                            cached_cortical_id_mappings
+                                                .lock()
+                                                .unwrap()
+                                                .insert(*area_id, resolved_id.clone());
+                                            resolved_id
+                                        } else {
+                                            // Skip areas not in cache (cache should be populated from ConnectomeManager)
+                                            // Log warning only once per area to avoid spam
+                                            static WARNED_AREAS_MOTOR: std::sync::LazyLock<
+                                                std::sync::Mutex<ahash::AHashSet<u32>>,
+                                            > = std::sync::LazyLock::new(|| {
+                                                std::sync::Mutex::new(ahash::AHashSet::new())
+                                            });
+                                            let mut warned = WARNED_AREAS_MOTOR.lock().unwrap();
+                                            if !warned.contains(area_id) {
+                                                warn!(
+                                                    "[BURST-LOOP] ⚠️ Area {} not in cortical_id cache - skipping motor. Cache should be refreshed from ConnectomeManager.",
+                                                    area_id
+                                                );
+                                                warned.insert(*area_id);
+                                            }
+                                            continue; // Skip this area - can't process without valid cortical_id
+                                        }
+                                    } else {
+                                        // Skip areas not in cache (cache should be populated from ConnectomeManager)
+                                        // Log warning only once per area to avoid spam
+                                        static WARNED_AREAS_MOTOR: std::sync::LazyLock<
+                                            std::sync::Mutex<ahash::AHashSet<u32>>,
+                                        > = std::sync::LazyLock::new(|| {
+                                            std::sync::Mutex::new(ahash::AHashSet::new())
+                                        });
+                                        let mut warned = WARNED_AREAS_MOTOR.lock().unwrap();
+                                        if !warned.contains(area_id) {
+                                            warn!(
                                             "[BURST-LOOP] ⚠️ Area {} not in cortical_id cache - skipping motor. Cache should be refreshed from ConnectomeManager.",
                                             area_id
                                         );
-                                        warned.insert(*area_id);
+                                            warned.insert(*area_id);
+                                        }
+                                        continue; // Skip this area - can't process without valid cortical_id
                                     }
-                                    continue; // Skip this area - can't process without valid cortical_id
                                 }
                             }
                         }

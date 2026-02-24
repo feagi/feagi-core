@@ -159,6 +159,9 @@ pub struct SuccessResponse {
 pub struct ManualStimulationRequest {
     /// Map of cortical area IDs to lists of coordinates [[x, y, z], ...]
     pub stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
+    /// Optional stimulation mode: "candidate" (default) or "force_fire"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
 }
 
 /// Manual stimulation response
@@ -166,6 +169,10 @@ pub struct ManualStimulationRequest {
 pub struct ManualStimulationResponse {
     pub success: bool,
     pub total_coordinates: usize,
+    pub requested_coordinates: usize,
+    pub matched_coordinates: usize,
+    pub unique_neuron_ids: usize,
+    pub mode: String,
     pub successful_areas: usize,
     pub failed_areas: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
