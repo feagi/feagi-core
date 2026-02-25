@@ -128,7 +128,9 @@ fn zmq_puller_keeps_latest_valid_frame_in_burst_with_noise() {
         .expect("Server failed to consume retrieved data");
 
     assert!(
-        consumed.len() >= FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT,
+        consumed.len()
+            >= FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
+                + FeagiByteContainer::AGENT_ID_BYTE_COUNT,
         "Expected FEAGI frame length >= 52 (header+agent_id), got {} bytes",
         consumed.len()
     );
@@ -311,8 +313,8 @@ fn zmq_puller_prefers_non_empty_sensory_frame_over_empty_container_in_same_drain
     let consumed = server
         .consume_retrieved_data()
         .expect("Server failed to consume retrieved data");
-    let min_frame = FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT
-        + FeagiByteContainer::AGENT_ID_BYTE_COUNT;
+    let min_frame =
+        FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT;
     assert!(
         consumed.len() > min_frame,
         "Expected non-empty sensory payload to be preferred, got empty container len={}",

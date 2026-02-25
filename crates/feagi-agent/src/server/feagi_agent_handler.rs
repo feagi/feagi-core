@@ -709,9 +709,9 @@ impl FeagiAgentHandler {
                 self.send_message_to_agent(agent_id, FeagiMessage::HeartBeat, 0)?;
                 Ok(None)
             }
-            FeagiMessage::AgentConfiguration(AgentEmbodimentConfigurationMessage::AgentConfigurationDetails(
-                device_def,
-            )) => {
+            FeagiMessage::AgentConfiguration(
+                AgentEmbodimentConfigurationMessage::AgentConfigurationDetails(device_def),
+            ) => {
                 let device_regs = serde_json::to_value(device_def).unwrap_or_else(|_| {
                     tracing::warn!(
                         target: "feagi-agent",

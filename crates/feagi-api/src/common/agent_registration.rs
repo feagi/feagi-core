@@ -213,7 +213,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         .map(|u| u as usize)
                         .or(current.dev_count);
                     let dimensions_mismatch = current.dimensions != expected_dimensions;
-                    let dev_count_mismatch = current_dev_count.map_or(true, |c| c != device_count);
+                    let dev_count_mismatch = current_dev_count != Some(device_count);
                     let position_mismatch = current.position != expected_position;
 
                     if dimensions_mismatch || dev_count_mismatch || position_mismatch {

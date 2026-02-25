@@ -448,7 +448,7 @@ pub async fn list_agents(State(state): State<ApiState>) -> ApiResult<Json<Vec<St
 
     #[cfg(feature = "feagi-agent")]
     {
-        return Ok(Json(list_agent_ids_from_handler(&state)));
+        Ok(Json(list_agent_ids_from_handler(&state)))
     }
 
     #[cfg(not(feature = "feagi-agent"))]

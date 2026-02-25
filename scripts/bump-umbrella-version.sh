@@ -23,7 +23,7 @@ fi
 CURRENT=$(awk '
     /^\[workspace\.package\]/ { in_ws = 1; next }
     /^\[/ { if (in_ws) exit }
-    in_ws && /^version\s*=\s*"/ { gsub(/^version\s*=\s*"|"$/, ""); print; exit }
+    in_ws && /^version[[:space:]]*=[[:space:]]*"/ { gsub(/^version[[:space:]]*=[[:space:]]*"|"$/, ""); print; exit }
 ' "$ROOT_CARGO")
 
 if [ -z "$CURRENT" ]; then

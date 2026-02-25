@@ -11,17 +11,12 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ManualStimulationMode {
+    #[default]
     Candidate,
     ForceFire,
-}
-
-impl Default for ManualStimulationMode {
-    fn default() -> Self {
-        Self::Candidate
-    }
 }
 
 /// Result type for agent service operations
