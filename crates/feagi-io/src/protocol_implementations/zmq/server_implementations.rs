@@ -398,7 +398,9 @@ pub struct FeagiZmqServerPuller {
 }
 
 impl FeagiZmqServerPuller {
-    const MIN_FEAGI_FRAME_BYTES: usize = 12;
+    /// Minimum frame: 4-byte header + 48-byte agent ID (AgentDescriptor format)
+    const MIN_FEAGI_FRAME_BYTES: usize =
+        FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT;
     const STRUCT_LOOKUP_BYTES_PER_ENTRY: usize = 4;
 
     /// Lightweight FEAGI frame sanity check used for latest-wins filtering.

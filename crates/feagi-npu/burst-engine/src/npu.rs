@@ -1458,6 +1458,61 @@ impl<
         ));
     }
 
+    /// Stage regular cortical-area neurons for guaranteed fire in next burst.
+    ///
+    /// This uses the same generic forced-fire pipeline as memory candidates by
+    /// assigning temporary IDs in the reserved memory range and storing cortical
+    /// index metadata, without modifying normal neuron storage.
+    pub fn inject_force_fire_by_coordinates(
+        &mut self,
+        cortical_id: &CorticalID,
+        xyzp_data: &[(u32, u32, u32, f32)],
+    ) -> usize {
+        let cortical_id_str = cortical_id.to_string();
+        let cortical_id_base64 = cortical_id.as_base_64();
+        let cortical_area = match self.get_cortical_area_id(&cortical_id_str) {
+            Some(id) => id,
+            None => match self.get_cortical_area_id(&cortical_id_base64) {
+                Some(id) => id,
+                None => return 0,
+            },
+        };
+
+        let coords: Vec<(u32, u32, u32)> =
+            xyzp_data.iter().map(|(x, y, z, _)| (*x, *y, *z)).collect();
+        let neuron_ids = self
+            .neuron_storage
+            .read()
+            .unwrap()
+            .batch_coordinate_lookup(cortical_area, &coords);
+
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        let existing_len = fire_structures.pending_memory_injections.len() as u32;
+        let mut injected_count = 0usize;
+        const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+        const MANUAL_STIM_OFFSET: u32 = 10_000_000;
+        for (i, maybe_idx) in neuron_ids.iter().enumerate() {
+            if maybe_idx.is_none() {
+                continue;
+            }
+            let potential = xyzp_data.get(i).map_or(100.0, |(_, _, _, p)| *p);
+            if !potential.is_finite() || potential == 0.0 {
+                continue;
+            }
+            let forced_id = MEMORY_NEURON_ID_START
+                .saturating_add(MANUAL_STIM_OFFSET)
+                .saturating_add(existing_len)
+                .saturating_add(injected_count as u32);
+            fire_structures.pending_memory_injections.push((
+                NeuronId(forced_id),
+                cortical_area,
+                potential,
+            ));
+            injected_count += 1;
+        }
+        injected_count
+    }
+
     /// Register a dynamic (non-storage-backed) neuron’s cortical mapping for synaptic propagation.
     ///
     /// Required for memory neuron IDs (50_000_000+) so propagation can resolve source/destination areas.

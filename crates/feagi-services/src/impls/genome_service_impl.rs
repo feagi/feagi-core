@@ -846,20 +846,50 @@ impl GenomeService for GenomeServiceImpl {
         let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
-        // Verify cortical area exists
-        {
-            let manager = self.connectome.read();
-            if !manager.has_cortical_area(&cortical_id_typed) {
-                return Err(ServiceError::NotFound {
-                    resource: "CorticalArea".to_string(),
-                    id: cortical_id.to_string(),
-                });
-            }
-        }
-
         let mut changes = changes;
         let mut effective_cortical_id = cortical_id_typed;
         let mut effective_cortical_id_str = cortical_id.to_string();
+
+        // Verify cortical area exists.
+        // If not found, best-effort resolve IO cortical IDs that were recently remapped
+        // by coding changes (Absolute/Incremental, Linear/Fractional), where bytes 4-5
+        // change but the unit identifier + group/subunit stay the same.
+        {
+            let manager = self.connectome.read();
+            if !manager.has_cortical_area(&effective_cortical_id) {
+                let target_bytes = effective_cortical_id.as_bytes();
+                let mut candidates: Vec<_> = manager
+                    .get_cortical_area_ids()
+                    .iter()
+                    .map(|c| **c)
+                    .filter(|candidate| {
+                        let c = candidate.as_bytes();
+                        c[0] == target_bytes[0] // i/o namespace
+                            && c[1] == target_bytes[1]
+                            && c[2] == target_bytes[2]
+                            && c[3] == target_bytes[3] // cortical unit identifier
+                            && c[6] == target_bytes[6] // sub-unit index
+                            && c[7] == target_bytes[7] // unit(group) index
+                    })
+                    .collect();
+                if candidates.len() == 1 {
+                    let resolved = candidates.remove(0);
+                    info!(
+                        target: "feagi-services",
+                        "[GENOME-UPDATE] Resolved remapped cortical ID '{}' -> '{}'",
+                        cortical_id,
+                        resolved.as_base_64()
+                    );
+                    effective_cortical_id = resolved;
+                    effective_cortical_id_str = resolved.as_base_64();
+                } else {
+                    return Err(ServiceError::NotFound {
+                        resource: "CorticalArea".to_string(),
+                        id: cortical_id.to_string(),
+                    });
+                }
+            }
+        }
 
         if changes.contains_key("group_id") {
             let new_id = self.apply_unit_index_update(
@@ -2760,7 +2790,8 @@ impl GenomeServiceImpl {
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata update complete");
 
         // Return updated info
-        self.get_cortical_area_info(cortical_id).await
+        self.get_cortical_area_info(&effective_cortical_id_str)
+            .await
     }
 
     /// Structural rebuild: For dimension/density changes requiring synapse rebuild

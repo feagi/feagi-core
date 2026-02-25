@@ -630,7 +630,7 @@ impl Neuroembryogenesis {
                 // Create subregion
                 let mut subregion = BrainRegion::new(
                     RegionID::new(), // Generate new UUID instead of using string
-                    "Autogen Region".to_string(),
+                    "Autogen Circuit".to_string(),
                     RegionType::Undefined, // RegionType no longer has Custom variant
                 )
                 .expect("Failed to create subregion")

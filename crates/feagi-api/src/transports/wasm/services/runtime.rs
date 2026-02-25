@@ -141,6 +141,7 @@ impl RuntimeService for WasmRuntimeService {
         &self,
         _cortical_id: &str,
         _xyzp_data: &[(u32, u32, u32, f32)],
+        _mode: feagi_services::traits::ManualStimulationMode,
     ) -> ServiceResult<usize> {
         Err(ServiceError::NotImplemented(
             "WASM mode sensory injection not yet implemented".to_string(),
@@ -166,5 +167,13 @@ impl RuntimeService for WasmRuntimeService {
         Err(ServiceError::NotImplemented(
             "WASM mode visualization subscription not yet implemented".to_string(),
         ))
+    }
+
+    fn unregister_motor_subscriptions(&self, _agent_id: &str) {
+        // No-op: WASM mode does not support agent subscriptions
+    }
+
+    fn unregister_visualization_subscriptions(&self, _agent_id: &str) {
+        // No-op: WASM mode does not support agent subscriptions
     }
 }

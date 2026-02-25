@@ -130,6 +130,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     continue;
                 }
             };
+            let topology = motor_unit.get_unit_default_topology();
 
             let cortical_ids = match motor_unit
                 .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
@@ -144,8 +145,6 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     continue;
                 }
             };
-
-            let topology = motor_unit.get_unit_default_topology();
 
             for (i, cortical_id) in cortical_ids.iter().enumerate() {
                 let cortical_id_b64 = cortical_id.as_base_64();
@@ -163,23 +162,101 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     }
                 };
 
+                let sub_index = CorticalSubUnitIndex::from(i as u8);
+                let unit_topology = match topology.get(&sub_index) {
+                    Some(t) => t,
+                    None => {
+                        warn!(
+                                "⚠️ [API] Missing unit topology for motor unit '{}' subunit {}; skipping",
+                                motor_unit_key, i
+                            );
+                        continue;
+                    }
+                };
+                let expected_position = (
+                    unit_topology.relative_position[0],
+                    unit_topology.relative_position[1] + (group_u8 as i32 * 20),
+                    unit_topology.relative_position[2],
+                );
+
                 if exists {
-                    // If the area already exists but still has a placeholder name (often equal to the cortical_id),
-                    // update it to a deterministic friendly name so UIs (e.g., Brain Visualizer) show readable labels.
-                    //
-                    // IMPORTANT: We only auto-rename if the current name is clearly a placeholder (== cortical_id).
-                    // This avoids clobbering user-defined names.
+                    // Area exists: ensure dimensions and dev_count match device_registrations.
+                    // If a genome was loaded with wrong dimensions (e.g. 1 channel per limb),
+                    // update to the correct channel count from device_grouping.
                     let current = match connectome_service.get_cortical_area(&cortical_id_b64).await
                     {
                         Ok(v) => v,
                         Err(e) => {
                             warn!(
-                                "⚠️ [API] Failed to fetch existing cortical area '{}' for potential rename: {}",
+                                "⚠️ [API] Failed to fetch existing cortical area '{}': {}",
                                 cortical_id_b64, e
                             );
                             continue;
                         }
                     };
+
+                    let (per_channel_width, per_channel_height, per_channel_depth) = (
+                        unit_topology.channel_dimensions_default[0] as usize,
+                        unit_topology.channel_dimensions_default[1] as usize,
+                        unit_topology.channel_dimensions_default[2] as usize,
+                    );
+                    let expected_dimensions = (
+                        (per_channel_width * device_count).max(1),
+                        per_channel_height,
+                        per_channel_depth,
+                    );
+
+                    let current_dev_count = current
+                        .properties
+                        .get("dev_count")
+                        .and_then(|v| v.as_u64())
+                        .map(|u| u as usize)
+                        .or(current.dev_count);
+                    let dimensions_mismatch = current.dimensions != expected_dimensions;
+                    let dev_count_mismatch = current_dev_count != Some(device_count);
+                    let position_mismatch = current.position != expected_position;
+
+                    if dimensions_mismatch || dev_count_mismatch || position_mismatch {
+                        let mut changes: HashMap<String, serde_json::Value> = HashMap::new();
+                        // Pass total dimensions. Do NOT pass cortical_dimensions_per_device here:
+                        // genome service would treat it as per-device and multiply depth by dev_count.
+                        changes.insert(
+                            "dimensions".to_string(),
+                            serde_json::json!([
+                                expected_dimensions.0,
+                                expected_dimensions.1,
+                                expected_dimensions.2
+                            ]),
+                        );
+                        changes.insert(
+                            "dev_count".to_string(),
+                            serde_json::Value::Number(serde_json::Number::from(device_count)),
+                        );
+                        changes.insert(
+                            "position".to_string(),
+                            serde_json::json!([
+                                expected_position.0,
+                                expected_position.1,
+                                expected_position.2
+                            ]),
+                        );
+                        if let Err(e) = genome_service
+                            .update_cortical_area(&cortical_id_b64, changes)
+                            .await
+                        {
+                            warn!(
+                                    "⚠️ [API] Failed to update cortical area '{}' dimensions/dev_count/position: {}",
+                                    cortical_id_b64, e
+                                );
+                        } else {
+                            info!(
+                                    "[API] Updated cortical area '{}' to {} channels (dimensions {:?}, position {:?})",
+                                    cortical_id_b64, device_count, expected_dimensions, expected_position
+                                );
+                        }
+                    }
+
+                    // Auto-rename if current name is placeholder (== cortical_id).
                     if current.name == cortical_id_b64 {
                         let desired_name =
                             build_friendly_unit_name(motor_unit.get_friendly_name(), group_u8, i);
@@ -190,9 +267,9 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             .await
                         {
                             warn!(
-                                "⚠️ [API] Failed to auto-rename existing motor cortical area '{}': {}",
-                                cortical_id_b64, e
-                            );
+                                    "⚠️ [API] Failed to auto-rename existing motor cortical area '{}': {}",
+                                    cortical_id_b64, e
+                                );
                         }
                     }
                     continue;
@@ -200,27 +277,29 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
 
                 let friendly_name =
                     build_friendly_unit_name(motor_unit.get_friendly_name(), group_u8, i);
-                let sub_index = CorticalSubUnitIndex::from(i as u8);
-                let unit_topology = match topology.get(&sub_index) {
-                    Some(topology) => topology,
-                    None => {
-                        warn!(
-                            "⚠️ [API] Missing unit topology for motor unit '{}' subunit {} (agent device_registrations); cannot auto-create '{}'",
-                            motor_unit_key, i, friendly_name
-                        );
-                        continue;
-                    }
-                };
-
-                let dimensions = (
+                // Use template-defined per-channel topology and scale by device_count.
+                // This keeps sizing fully template-driven and consistent across all unit types.
+                let (per_channel_width, per_channel_height, per_channel_depth) = (
                     unit_topology.channel_dimensions_default[0] as usize,
                     unit_topology.channel_dimensions_default[1] as usize,
                     unit_topology.channel_dimensions_default[2] as usize,
                 );
-                let position = (
-                    unit_topology.relative_position[0],
-                    unit_topology.relative_position[1],
-                    unit_topology.relative_position[2],
+                let dimensions = (
+                    (per_channel_width * device_count).max(1),
+                    per_channel_height,
+                    per_channel_depth,
+                );
+                let per_device_dims = (per_channel_width, per_channel_height, per_channel_depth);
+                let position = expected_position;
+
+                let mut properties = HashMap::new();
+                properties.insert(
+                    "dev_count".to_string(),
+                    serde_json::Value::Number(serde_json::Number::from(device_count)),
+                );
+                properties.insert(
+                    "cortical_dimensions_per_device".to_string(),
+                    serde_json::json!([per_device_dims.0, per_device_dims.1, per_device_dims.2]),
                 );
 
                 to_create.push(CreateCorticalAreaParams {
@@ -244,7 +323,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     leak_coefficient: None,
                     leak_variability: None,
                     burst_engine_active: None,
-                    properties: None,
+                    properties: Some(properties),
                 });
             }
         }
@@ -517,23 +596,11 @@ pub fn derive_motor_cortical_ids_from_device_registrations(
                 ));
             }
 
-            let mut config = serde_json::Map::new();
-            config.insert(
-                "frame_change_handling".to_string(),
-                serde_json::to_value(FrameChangeHandling::Absolute)
-                    .map_err(|e| format!("Failed to serialize FrameChangeHandling: {}", e))?,
-            );
-            config.insert(
-                "percentage_neuron_positioning".to_string(),
-                serde_json::to_value(PercentageNeuronPositioning::Linear).map_err(|e| {
-                    format!("Failed to serialize PercentageNeuronPositioning: {}", e)
-                })?,
-            );
-
+            let config = build_io_config_map()
+                .map_err(|e| format!("Failed to build motor IO config map: {}", e))?;
             let unit_cortical_ids = motor_unit
                 .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(group, config)
                 .map_err(|e| format!("Failed to derive cortical IDs: {}", e))?;
-
             for cortical_id in unit_cortical_ids {
                 cortical_ids.insert(cortical_id.as_base_64());
             }

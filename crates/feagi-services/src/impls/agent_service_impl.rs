@@ -330,6 +330,7 @@ impl AgentService for AgentServiceImpl {
     async fn manual_stimulation(
         &self,
         stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
+        mode: ManualStimulationMode,
     ) -> AgentResult<HashMap<String, serde_json::Value>> {
         // Use RuntimeService for sensory injection (service layer, not direct NPU access)
         let runtime_service = self
@@ -344,7 +345,8 @@ impl AgentService for AgentServiceImpl {
             .clone();
 
         let mut result = HashMap::new();
-        let mut total_stimulated = 0;
+        let mut total_stimulated = 0usize;
+        let mut requested_coordinates = 0usize;
         let mut successful_areas = 0;
         let mut failed_areas = Vec::new();
         let mut coordinates_not_found = 0;
@@ -359,6 +361,7 @@ impl AgentService for AgentServiceImpl {
             let manager = self.connectome_manager.read();
 
             for (cortical_id, coordinates) in stimulation_payload.iter() {
+                requested_coordinates += coordinates.len();
                 let cortical_id_typed = match CorticalID::try_from_base_64(cortical_id) {
                     Ok(id) => id,
                     Err(e) => {
@@ -406,7 +409,18 @@ impl AgentService for AgentServiceImpl {
         // Second pass: perform injections (no locks held)
         for (cortical_id, xyzp_data) in injection_requests {
             match runtime_service
-                .inject_sensory_by_coordinates(&cortical_id, &xyzp_data)
+                .inject_sensory_by_coordinates(
+                    &cortical_id,
+                    &xyzp_data,
+                    match mode {
+                        ManualStimulationMode::Candidate => {
+                            crate::traits::runtime_service::ManualStimulationMode::Candidate
+                        }
+                        ManualStimulationMode::ForceFire => {
+                            crate::traits::runtime_service::ManualStimulationMode::ForceFire
+                        }
+                    },
+                )
                 .await
             {
                 Ok(injected_count) => {
@@ -432,6 +446,25 @@ impl AgentService for AgentServiceImpl {
         result.insert(
             "total_coordinates".to_string(),
             serde_json::json!(total_stimulated),
+        );
+        result.insert(
+            "requested_coordinates".to_string(),
+            serde_json::json!(requested_coordinates),
+        );
+        result.insert(
+            "matched_coordinates".to_string(),
+            serde_json::json!(total_stimulated),
+        );
+        result.insert(
+            "unique_neuron_ids".to_string(),
+            serde_json::json!(total_stimulated),
+        );
+        result.insert(
+            "mode".to_string(),
+            serde_json::json!(match mode {
+                ManualStimulationMode::Candidate => "candidate",
+                ManualStimulationMode::ForceFire => "force_fire",
+            }),
         );
         result.insert(
             "successful_areas".to_string(),

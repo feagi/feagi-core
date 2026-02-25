@@ -1,3 +1,4 @@
+use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
 use crate::command_and_control::agent_registration_message::{
     AgentRegistrationMessage, DeregistrationResponse, RegistrationResponse,
 };
@@ -705,6 +706,33 @@ impl FeagiAgentHandler {
             FeagiMessage::HeartBeat => {
                 // We can handle heartbeat here
                 // TODO or maybe we should let the higher levels handle it?
+                self.send_message_to_agent(agent_id, FeagiMessage::HeartBeat, 0)?;
+                Ok(None)
+            }
+            FeagiMessage::AgentConfiguration(
+                AgentEmbodimentConfigurationMessage::AgentConfigurationDetails(device_def),
+            ) => {
+                let device_regs = serde_json::to_value(device_def).unwrap_or_else(|_| {
+                    tracing::warn!(
+                        target: "feagi-agent",
+                        "Failed to serialize AgentConfigurationDetails to JSON"
+                    );
+                    serde_json::Value::Object(serde_json::Map::new())
+                });
+                self.set_device_registrations_by_agent(agent_id, device_regs.clone());
+                if let Some((descriptor, _)) = self.all_registered_agents.get(&agent_id) {
+                    self.set_device_registrations_by_descriptor(
+                        agent_id.to_base64(),
+                        descriptor.clone(),
+                        device_regs,
+                    );
+                }
+                info!(
+                    target: "feagi-agent",
+                    "Stored device registrations for agent {}",
+                    agent_id.to_base64()
+                );
+                // Send acknowledgment so REQ/REP clients can complete the request
                 self.send_message_to_agent(agent_id, FeagiMessage::HeartBeat, 0)?;
                 Ok(None)
             }

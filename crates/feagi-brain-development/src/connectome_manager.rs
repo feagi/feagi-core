@@ -1004,12 +1004,14 @@ impl ConnectomeManager {
                 continue;
             };
 
-            let src_region_id = self.brain_regions.find_region_containing_area(src_id).ok_or_else(|| {
-                BduError::InvalidArea(format!(
-                    "Unable to recompute region IO: source cortical area {} is not assigned to any region",
+            let Some(src_region_id) = self.brain_regions.find_region_containing_area(src_id) else {
+                warn!(
+                    target: "feagi-bdu",
+                    "Skipping region IO for source area {} (not in any region)",
                     src_id.as_base_64()
-                ))
-            })?;
+                );
+                continue;
+            };
 
             for dst_id_str in dstmap.keys() {
                 let dst_id = CorticalID::try_from_base_64(dst_id_str).map_err(|e| {
@@ -1021,13 +1023,15 @@ impl ConnectomeManager {
                     ))
                 })?;
 
-                let dst_region_id =
-                    self.brain_regions.find_region_containing_area(&dst_id).ok_or_else(|| {
-                        BduError::InvalidArea(format!(
-                            "Unable to recompute region IO: destination cortical area {} is not assigned to any region",
-                            dst_id.as_base_64()
-                        ))
-                    })?;
+                let Some(dst_region_id) = self.brain_regions.find_region_containing_area(&dst_id)
+                else {
+                    warn!(
+                        target: "feagi-bdu",
+                        "Skipping region IO for destination area {} (not in any region)",
+                        dst_id.as_base_64()
+                    );
+                    continue;
+                };
 
                 if src_region_id == dst_region_id {
                     continue;

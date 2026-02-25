@@ -1,12 +1,32 @@
 use crate::FeagiNetworkError;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use feagi_serialization::{AgentIdentifier, FeagiByteContainer};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-/// Used to identify a connected client to the server. A random identifier
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Agent identifier: 48-byte AgentDescriptor (instance_id(4) + manufacturer(20) + agent_name(20) + version(4)).
+/// Single format - no 8-byte legacy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AgentID {
     bytes: [u8; AgentID::NUMBER_BYTES],
+}
+
+impl Serialize for AgentID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_base64())
+    }
+}
+
+impl<'de> Deserialize<'de> for AgentID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::try_from_base64(&s).map_err(serde::de::Error::custom)
+    }
 }
 
 impl AgentID {

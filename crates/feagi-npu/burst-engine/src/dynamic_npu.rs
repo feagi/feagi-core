@@ -274,6 +274,17 @@ where
         dispatch_mut!(self, inject_sensory_xyzp_by_id(cortical_id, xyzp_data))
     }
 
+    pub fn inject_force_fire_by_coordinates(
+        &mut self,
+        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+        xyzp_data: &[(u32, u32, u32, f32)],
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            inject_force_fire_by_coordinates(cortical_id, xyzp_data)
+        )
+    }
+
     pub fn inject_sensory_xyzp_arrays_by_id(
         &mut self,
         cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
