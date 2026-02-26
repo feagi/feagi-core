@@ -256,8 +256,11 @@ impl SensoryCorticalUnit {
                 Self::get_cortical_ids_array_for_servo_with_parameters(fh, pos, group_index)[0]
             }
             SensoryCorticalUnit::AnalogGPIO => {
-                Self::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(fh, pos, group_index)
-                    [0]
+                Self::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(
+                    fh,
+                    pos,
+                    group_index,
+                )[0]
             }
             SensoryCorticalUnit::DigitalGPIO => {
                 Self::get_cortical_ids_array_for_digital_g_p_i_o_with_parameters(group_index)[0]
@@ -266,16 +269,19 @@ impl SensoryCorticalUnit {
                 Self::get_cortical_ids_array_for_misc_data_with_parameters(fh, group_index)[0]
             }
             SensoryCorticalUnit::TextEnglishInput => {
-                Self::get_cortical_ids_array_for_text_english_input_with_parameters(fh, group_index)[0]
+                Self::get_cortical_ids_array_for_text_english_input_with_parameters(fh, group_index)
+                    [0]
             }
             SensoryCorticalUnit::CountInput => {
-                Self::get_cortical_ids_array_for_count_input_with_parameters(fh, pos, group_index)[0]
+                Self::get_cortical_ids_array_for_count_input_with_parameters(fh, pos, group_index)
+                    [0]
             }
             SensoryCorticalUnit::Vision => {
                 Self::get_cortical_ids_array_for_vision_with_parameters(fh, group_index)[0]
             }
             SensoryCorticalUnit::SegmentedVision => {
-                Self::get_cortical_ids_array_for_segmented_vision_with_parameters(fh, group_index)[0]
+                Self::get_cortical_ids_array_for_segmented_vision_with_parameters(fh, group_index)
+                    [0]
             }
             SensoryCorticalUnit::Accelerometer => {
                 Self::get_cortical_ids_array_for_accelerometer_with_parameters(fh, pos, group_index)

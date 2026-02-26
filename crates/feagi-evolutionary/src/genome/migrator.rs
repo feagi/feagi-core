@@ -1001,7 +1001,10 @@ mod tests {
         let result = migrate_genome(&genome).expect("Migration failed");
 
         assert_eq!(result.cortical_ids_migrated, 1);
-        let new_id = result.id_mapping.get("custom").expect("custom should be mapped");
+        let new_id = result
+            .id_mapping
+            .get("custom")
+            .expect("custom should be mapped");
         // New ID must be valid base64 (CorticalID format) via string_to_cortical_id
         assert!(
             string_to_cortical_id(new_id).is_ok(),

@@ -248,11 +248,13 @@ impl MotorCorticalUnit {
                 Self::get_cortical_ids_array_for_rotary_motor_with_parameters(fh, pos, group_index)
                     [0]
             }
-            MotorCorticalUnit::PositionalServo => Self::get_cortical_ids_array_for_positional_servo_with_parameters(
-                FrameChangeHandling::Absolute,
-                pos,
-                group_index,
-            )[0],
+            MotorCorticalUnit::PositionalServo => {
+                Self::get_cortical_ids_array_for_positional_servo_with_parameters(
+                    FrameChangeHandling::Absolute,
+                    pos,
+                    group_index,
+                )[0]
+            }
             MotorCorticalUnit::Gaze => {
                 Self::get_cortical_ids_array_for_gaze_with_parameters(fh, pos, group_index)[0]
             }
@@ -260,25 +262,32 @@ impl MotorCorticalUnit {
                 Self::get_cortical_ids_array_for_misc_data_with_parameters(fh, group_index)[0]
             }
             MotorCorticalUnit::TextEnglishOutput => {
-                Self::get_cortical_ids_array_for_text_english_output_with_parameters(fh, group_index)
-                    [0]
+                Self::get_cortical_ids_array_for_text_english_output_with_parameters(
+                    fh,
+                    group_index,
+                )[0]
             }
             MotorCorticalUnit::CountOutput => {
                 Self::get_cortical_ids_array_for_count_output_with_parameters(fh, pos, group_index)
                     [0]
             }
             MotorCorticalUnit::ObjectSegmentation => {
-                Self::get_cortical_ids_array_for_object_segmentation_with_parameters(fh, group_index)
-                    [0]
+                Self::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                    fh,
+                    group_index,
+                )[0]
             }
             MotorCorticalUnit::SimpleVisionOutput => {
                 Self::get_cortical_ids_array_for_simple_vision_output_with_parameters(
-                    fh, group_index,
+                    fh,
+                    group_index,
                 )[0]
             }
             MotorCorticalUnit::DynamicImageProcessing => {
                 Self::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
-                    fh, pos, group_index,
+                    fh,
+                    pos,
+                    group_index,
                 )[0]
             }
         }
