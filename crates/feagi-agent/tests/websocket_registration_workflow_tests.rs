@@ -5,9 +5,9 @@
 ))]
 
 use std::net::TcpListener;
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-use std::sync::mpsc;
 
 use feagi_agent::clients::{AgentRegistrationStatus, CommandControlAgent};
 use feagi_agent::server::auth::DummyAuth;
@@ -24,7 +24,10 @@ use feagi_io::AgentID;
 
 fn reserve_free_port() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").expect("failed to bind ephemeral port");
-    listener.local_addr().expect("failed to read local addr").port()
+    listener
+        .local_addr()
+        .expect("failed to read local addr")
+        .port()
 }
 
 fn endpoint_as_string(endpoint: &TransportProtocolEndpoint) -> String {
@@ -130,8 +133,7 @@ fn websocket_registration_workflow_succeeds_end_to_end() {
                 client_result.expect("client registration flow failed");
 
             assert_eq!(
-                returned_viz_endpoint,
-                visualization_remote,
+                returned_viz_endpoint, visualization_remote,
                 "server should return websocket visualization endpoint"
             );
 
@@ -172,9 +174,11 @@ fn websocket_registration_times_out_when_server_does_not_respond() {
     let registration_bind = format!("127.0.0.1:{registration_port}");
     let registration_remote = format!("ws://127.0.0.1:{registration_port}");
 
-    let router_props =
-        FeagiWebSocketServerRouterProperties::new_with_remote(&registration_bind, &registration_remote)
-            .expect("failed to create websocket router properties");
+    let router_props = FeagiWebSocketServerRouterProperties::new_with_remote(
+        &registration_bind,
+        &registration_remote,
+    )
+    .expect("failed to create websocket router properties");
     let mut router = router_props.as_boxed_server_router();
     router
         .request_start()
@@ -207,8 +211,13 @@ fn websocket_registration_times_out_when_server_does_not_respond() {
                     .poll_for_messages()
                     .map_err(|e| format!("client poll_for_messages failed: {e}"))?;
 
-                if matches!(client.registration_status(), AgentRegistrationStatus::Registered(_, _)) {
-                    return Err("client unexpectedly registered without server response".to_string());
+                if matches!(
+                    client.registration_status(),
+                    AgentRegistrationStatus::Registered(_, _)
+                ) {
+                    return Err(
+                        "client unexpectedly registered without server response".to_string()
+                    );
                 }
                 if Instant::now() >= deadline {
                     // Expected: no registration response received within deadline.
@@ -366,7 +375,10 @@ fn websocket_registration_returns_all_requested_capability_endpoints() {
         if let Ok(client_result) = client_result_rx.try_recv() {
             let (agent_id, sensory_endpoint, motor_endpoint, viz_endpoint) =
                 client_result.expect("client all-capabilities registration failed");
-            assert_eq!(sensory_endpoint, sensory_remote, "sensory endpoint mismatch");
+            assert_eq!(
+                sensory_endpoint, sensory_remote,
+                "sensory endpoint mismatch"
+            );
             assert_eq!(motor_endpoint, motor_remote, "motor endpoint mismatch");
             assert_eq!(
                 viz_endpoint, visualization_remote,
@@ -445,11 +457,15 @@ fn websocket_deregistration_removes_registered_agent_from_server() {
                 client
                     .poll_for_messages()
                     .map_err(|e| format!("client poll_for_messages failed: {e}"))?;
-                if let AgentRegistrationStatus::Registered(agent_id, _) = client.registration_status() {
+                if let AgentRegistrationStatus::Registered(agent_id, _) =
+                    client.registration_status()
+                {
                     break *agent_id;
                 }
                 if Instant::now() >= reg_deadline {
-                    return Err("timed out waiting for registration before deregistration".to_string());
+                    return Err(
+                        "timed out waiting for registration before deregistration".to_string()
+                    );
                 }
                 thread::sleep(Duration::from_millis(2));
             };
@@ -463,7 +479,10 @@ fn websocket_deregistration_removes_registered_agent_from_server() {
                 client
                     .poll_for_messages()
                     .map_err(|e| format!("client poll_for_messages failed during dereg: {e}"))?;
-                if matches!(client.registration_status(), AgentRegistrationStatus::NotRegistered) {
+                if matches!(
+                    client.registration_status(),
+                    AgentRegistrationStatus::NotRegistered
+                ) {
                     return Ok(registered_agent);
                 }
                 if Instant::now() >= dereg_deadline {
