@@ -404,7 +404,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       border-bottom: 1px solid #ccc;
       background: var(--header-bg, #f9f9f9);
     }
@@ -419,7 +419,7 @@
     .header-actions {
       display: flex;
       gap: 12px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       align-items: center;
     }
     
@@ -436,20 +436,20 @@
     
     .header-button:hover { background-color: #005fa3; }
     
-    .header-button.load-essential {
-      background-color: #dc3545;
+    .header-button.genome-action {
+      background-color: #17a2b8;
     }
-    .header-button.load-essential:hover {
-      background-color: #c82333;
+    .header-button.genome-action:hover {
+      background-color: #138496;
     }
-    
-    .header-button.load-barebones {
-      background-color: #28a745;
+
+    .header-button.health-check {
+      background-color: #6f42c1;
     }
-    .header-button.load-barebones:hover {
-      background-color: #218838;
+    .header-button.health-check:hover {
+      background-color: #5a32a3;
     }
-    
+
     .theme-selector {
       display: flex;
       align-items: center;
@@ -501,6 +501,68 @@
     [data-theme="light"] .custom-filter-input:focus {
       box-shadow: 0 0 0 2px rgba(0, 123, 138, 0.3);
     }
+
+    .feagi-dialog-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+    }
+    .feagi-dialog-overlay.visible {
+      display: flex;
+    }
+    .feagi-dialog {
+      background: var(--background-medium);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      max-width: 90vw;
+      max-height: 85vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 20px var(--shadow-color);
+    }
+    .feagi-dialog-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .feagi-dialog-title {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .feagi-dialog-close {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 1.2em;
+      padding: 4px 8px;
+    }
+    .feagi-dialog-close:hover {
+      color: var(--text-primary);
+    }
+    .feagi-dialog-body {
+      padding: 16px;
+      overflow: auto;
+      flex: 1;
+    }
+    .feagi-dialog-body pre {
+      margin: 0;
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      color: var(--text-primary);
+    }
     
     .custom-filter-label {
       font-weight: 600;
@@ -511,12 +573,16 @@
 </head>
 <body>
   <div class="custom-header">
-    <h1>FEAGI API Documentation - Rust Edition</h1>
+    <h1>FEAGI API Documentation</h1>
     <div class="header-actions">
       <button class="header-button" id="expand-all">Expand All</button>
       <button class="header-button" id="collapse-all">Collapse All</button>
-      <button class="header-button load-essential" id="load-essential">Load Essential</button>
-      <button class="header-button load-barebones" id="load-barebones">Load Barebones</button>
+      <button class="header-button genome-action" id="load-essential">Load Essential</button>
+      <button class="header-button genome-action" id="load-barebones">Load Barebones</button>
+      <button class="header-button genome-action" id="download-genome">Download Genome</button>
+      <button class="header-button genome-action" id="upload-genome">Upload Genome</button>
+      <input type="file" id="upload-genome-input" accept=".json,application/json" style="display:none">
+      <button class="header-button health-check" id="health-check">Health Check</button>
       <div class="theme-selector">
         <span class="theme-selector-label">Theme:</span>
         <select id="theme-select">
@@ -534,6 +600,18 @@
   </div>
 
   <div id="swagger-ui"></div>
+
+  <div class="feagi-dialog-overlay" id="health-dialog-overlay">
+    <div class="feagi-dialog">
+      <div class="feagi-dialog-header">
+        <span class="feagi-dialog-title">Health Check Response</span>
+        <button class="feagi-dialog-close" id="health-dialog-close" type="button">&times;</button>
+      </div>
+      <div class="feagi-dialog-body">
+        <pre id="health-dialog-content"></pre>
+      </div>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
   <script>
@@ -704,6 +782,101 @@
         } catch (error) {
           console.error('Error loading barebones genome:', error);
           alert('Failed to load barebones genome:\n' + error.message);
+        }
+      });
+
+      // Health Check button
+      document.getElementById('health-check').addEventListener('click', async () => {
+        try {
+          const baseUrl = window.location.origin + window.location.pathname.split('/swagger-ui')[0];
+          const response = await fetch(baseUrl + '/v1/system/health_check');
+          const text = await response.text();
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch (_) {
+            data = { status: response.status, statusText: response.statusText, body: text };
+          }
+          if (!response.ok) {
+            data = { error: 'HTTP ' + response.status, ...data };
+          }
+          const formatted = JSON.stringify(data, null, 2);
+          document.getElementById('health-dialog-content').textContent = formatted;
+          document.getElementById('health-dialog-overlay').classList.add('visible');
+        } catch (error) {
+          console.error('Error fetching health check:', error);
+          alert('Failed to fetch health check:\n' + error.message);
+        }
+      });
+
+      document.getElementById('health-dialog-close').addEventListener('click', () => {
+        document.getElementById('health-dialog-overlay').classList.remove('visible');
+      });
+      document.getElementById('health-dialog-overlay').addEventListener('click', (e) => {
+        if (e.target.id === 'health-dialog-overlay') {
+          document.getElementById('health-dialog-overlay').classList.remove('visible');
+        }
+      });
+
+      // Download Genome button
+      document.getElementById('download-genome').addEventListener('click', async () => {
+        try {
+          const baseUrl = window.location.origin + window.location.pathname.split('/swagger-ui')[0];
+          const response = await fetch(baseUrl + '/v1/genome/download');
+          if (!response.ok) {
+            throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+          }
+          const data = await response.json();
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'genome.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          console.log('Genome downloaded successfully');
+        } catch (error) {
+          console.error('Error downloading genome:', error);
+          alert('Failed to download genome:\n' + error.message);
+        }
+      });
+
+      // Upload Genome button
+      const uploadGenomeInput = document.getElementById('upload-genome-input');
+      document.getElementById('upload-genome').addEventListener('click', () => {
+        uploadGenomeInput.click();
+      });
+      uploadGenomeInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = '';
+        try {
+          const baseUrl = window.location.origin + window.location.pathname.split('/swagger-ui')[0];
+          const formData = new FormData();
+          formData.append('file', file);
+          const response = await fetch(baseUrl + '/v1/genome/upload/file', {
+            method: 'POST',
+            body: formData
+          });
+          const text = await response.text();
+          let result;
+          try {
+            result = JSON.parse(text);
+          } catch (_) {
+            throw new Error(text || 'HTTP ' + response.status);
+          }
+          if (!response.ok) {
+            throw new Error(result.message || result.details || result.detail || 'HTTP ' + response.status);
+          }
+          alert('Genome uploaded successfully.\n\n' +
+                'Cortical areas: ' + (result.cortical_area_count ?? 'N/A') + '\n' +
+                'Brain regions: ' + (result.brain_region_count ?? 'N/A'));
+          console.log('Genome uploaded:', result);
+        } catch (error) {
+          console.error('Error uploading genome:', error);
+          alert('Failed to upload genome:\n' + error.message);
         }
       });
 
