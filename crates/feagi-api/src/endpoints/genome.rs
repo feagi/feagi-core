@@ -772,10 +772,10 @@ pub async fn post_upload(
         .map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
 
     let params = LoadGenomeParams { json_str };
-    let genome_info = genome_service
-        .load_genome(params)
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to upload genome: {}", e)))?;
+    let genome_info = genome_service.load_genome(params).await.map_err(|e| {
+        tracing::error!(target: "feagi-api", "Genome load failed: {}", e);
+        ApiError::internal(format!("Failed to upload genome: {}", e))
+    })?;
 
     let mut response = HashMap::new();
     response.insert("success".to_string(), serde_json::json!(true));

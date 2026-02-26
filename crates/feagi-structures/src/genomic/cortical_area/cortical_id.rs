@@ -93,6 +93,24 @@ impl CorticalID {
         bytes.copy_from_slice(&decoded);
         Self::try_from_bytes(&bytes)
     }
+
+    /// Parse legacy 6-char or 8-char ASCII cortical ID strings.
+    /// Normalizes uppercase first byte (C/M/I/O) to lowercase for compatibility with legacy genomes.
+    /// Any other invalid first byte (e.g. v, 0) is treated as custom cortical area ('c').
+    pub fn try_from_legacy_ascii(id_str: &str) -> Result<Self, FeagiDataError> {
+        let mut bytes = [b'_'; Self::CORTICAL_ID_LENGTH];
+        let len = id_str.len().min(8);
+        bytes[..len].copy_from_slice(&id_str.as_bytes()[..len]);
+        bytes[0] = match bytes[0] {
+            b'C' => b'c',
+            b'M' => b'm',
+            b'I' => b'i',
+            b'O' => b'o',
+            b'c' | b'm' | b'_' | b'i' | b'o' => bytes[0],
+            _ => b'c',
+        };
+        Self::try_from_bytes(&bytes)
+    }
     //endregion
 
     //region export
@@ -292,6 +310,23 @@ mod tests {
         let short_base64 = general_purpose::STANDARD.encode([1u8, 2, 3, 4]);
         let result = CorticalID::try_from_base_64(&short_base64);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_try_from_legacy_ascii_uppercase() {
+        // Legacy genomes may use uppercase C/M/I/O for custom/memory/IPU/OPU
+        let id = CorticalID::try_from_legacy_ascii("C03bbb").unwrap();
+        assert_eq!(id.bytes[0], b'c');
+        assert_eq!(&id.bytes[1..6], b"03bbb");
+    }
+
+    #[test]
+    fn test_try_from_legacy_ascii_invalid_as_custom() {
+        // visioA, visioB, 0_45de etc. treated as custom cortical areas
+        for s in ["visioA", "visioB", "0_45de"] {
+            let id = CorticalID::try_from_legacy_ascii(s).unwrap();
+            assert_eq!(id.bytes[0], b'c');
+        }
     }
 
     #[test]

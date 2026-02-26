@@ -362,9 +362,15 @@ impl GenomeService for GenomeServiceImpl {
                     (prepare_result, resize_result)
                 }; // Lock released here
 
-                prepare_result.map_err(ServiceError::from)?;
+                prepare_result.map_err(|e| {
+                    tracing::error!(target: "feagi-services", "prepare_for_new_genome failed: {}", e);
+                    ServiceError::from(e)
+                })?;
                 if let Some(resize_result) = resize_result {
-                    resize_result.map_err(ServiceError::from)?;
+                    resize_result.map_err(|e| {
+                        tracing::error!(target: "feagi-services", "resize_for_genome failed: {}", e);
+                        ServiceError::from(e)
+                    })?;
                 }
 
                 // Now call develop_from_genome without holding the lock
@@ -372,6 +378,7 @@ impl GenomeService for GenomeServiceImpl {
                 let manager_arc = feagi_brain_development::ConnectomeManager::instance();
                 let mut neuro = Neuroembryogenesis::new(manager_arc.clone());
                 neuro.develop_from_genome(&genome_clone).map_err(|e| {
+                    tracing::error!(target: "feagi-services", "Neuroembryogenesis failed: {}", e);
                     ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e))
                 })?;
 
@@ -380,6 +387,7 @@ impl GenomeService for GenomeServiceImpl {
                 {
                     let mut manager = manager_arc.write();
                     manager.ensure_core_cortical_areas().map_err(|e| {
+                        tracing::error!(target: "feagi-services", "ensure_core_cortical_areas failed: {}", e);
                         ServiceError::Backend(format!("Failed to ensure core cortical areas: {}", e))
                     })?;
                 }
