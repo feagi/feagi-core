@@ -2,18 +2,15 @@
 #![doc = include_str!("../docs/readme.md")]
 
 pub mod common_macros;
-mod error;
+mod feagi_data_error;
 mod feagi_json;
 mod feagi_signal;
 pub mod genomic;
 pub mod neuron_voxels;
 mod templates;
+mod common_descriptors;
 
-// Async runtime abstraction (optional, behind "async" feature)
-#[cfg(feature = "async")]
-pub mod r#async;
-
-pub use error::FeagiDataError;
+pub use feagi_data_error::FeagiDataError;
 pub use feagi_json::FeagiJSON;
 pub use feagi_signal::{FeagiSignal, FeagiSignalIndex};
 

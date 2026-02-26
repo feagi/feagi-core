@@ -4,3 +4,4 @@
 /// where each voxel can contain one or more neurons. This module provides structures for
 /// handling neuron voxel representations in various formats and containers.
 pub mod xyzp;
+mod feagi_neuron_error;

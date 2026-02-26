@@ -2,24 +2,6 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 /// Common error type for FEAGI data operations.
-///
-/// Provides structured error handling for serialization, deserialization,
-/// validation, and internal errors across the FEAGI data processing pipeline.
-///
-/// # Examples
-/// ```
-/// use feagi_structures::FeagiDataError;
-///
-/// fn validate_count(count: u32) -> Result<(), FeagiDataError> {
-///     if count == 0 {
-///         return Err(FeagiDataError::BadParameters("Count must be > 0".into()));
-///     }
-///     Ok(())
-/// }
-///
-/// assert!(validate_count(0).is_err());
-/// assert!(validate_count(5).is_ok());
-/// ```
 #[derive(Debug)]
 pub enum FeagiDataError {
     /// Failed to deserialize bytes into data structures
