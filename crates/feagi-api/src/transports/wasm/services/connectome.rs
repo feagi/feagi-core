@@ -439,6 +439,16 @@ impl ConnectomeService for WasmConnectomeService {
         ))
     }
 
+    async fn rename_morphology(
+        &self,
+        _old_id: &str,
+        _new_id: &str,
+    ) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
     async fn update_cortical_mapping(
         &self,
         _src_area_id: String,

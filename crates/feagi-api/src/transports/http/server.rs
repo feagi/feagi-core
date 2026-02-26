@@ -557,6 +557,10 @@ fn create_v1_router() -> Router<ApiState> {
                 .delete(morphology::delete_morphology_by_name),
         )
         .route(
+            "/morphology/rename",
+            axum::routing::put(morphology::put_rename_morphology),
+        )
+        .route(
             "/morphology/morphology_properties",
             axum::routing::post(morphology::post_morphology_properties),
         )
