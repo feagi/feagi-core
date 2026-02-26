@@ -19,7 +19,7 @@ use feagi_io::AgentID;
 use feagi_serialization::FeagiByteContainer;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
-use tracing::info;
+use tracing::{error, info, warn};
 
 type CommandServerIndex = usize;
 
@@ -526,10 +526,24 @@ impl FeagiAgentHandler {
             FeagiMessage::AgentRegistration(register_message) => {
                 match &register_message {
                     AgentRegistrationMessage::ClientRequestRegistration(registration_request) => {
+                        info!(
+                            target: "feagi-agent",
+                            "WS registration request received: session={} descriptor={:?} caps={:?} protocol={:?}",
+                            agent_id.to_base64(),
+                            registration_request.agent_descriptor(),
+                            registration_request.requested_capabilities(),
+                            registration_request.connection_protocol()
+                        );
                         let auth_result = self
                             .agent_auth_backend
                             .verify_agent_allowed_to_connect(registration_request);
                         if auth_result.is_err() {
+                            warn!(
+                                target: "feagi-agent",
+                                "WS registration rejected by auth backend: session={} descriptor={:?}",
+                                agent_id.to_base64(),
+                                registration_request.agent_descriptor()
+                            );
                             self.send_message_via_command_server(
                                 command_control_index,
                                 agent_id,
@@ -616,6 +630,12 @@ impl FeagiAgentHandler {
                         ) {
                             Ok(mappings) => mappings,
                             Err(_) => {
+                                error!(
+                                    target: "feagi-agent",
+                                    "WS registration failed while creating transport mappings: session={} descriptor={:?}",
+                                    agent_id.to_base64(),
+                                    registration_request.agent_descriptor()
+                                );
                                 self.send_message_via_command_server(
                                     command_control_index,
                                     agent_id,
@@ -630,6 +650,7 @@ impl FeagiAgentHandler {
                             }
                         };
 
+                        let mapped_caps: Vec<_> = mappings.keys().cloned().collect();
                         let response = RegistrationResponse::Success(agent_id, mappings);
                         let response_message = FeagiMessage::AgentRegistration(
                             AgentRegistrationMessage::ServerRespondsRegistration(response),
@@ -640,6 +661,13 @@ impl FeagiAgentHandler {
                             response_message,
                             0,
                         )?;
+                        info!(
+                            target: "feagi-agent",
+                            "WS registration success response sent: session={} descriptor={:?} mapped_caps={:?}",
+                            agent_id.to_base64(),
+                            registration_request.agent_descriptor(),
+                            mapped_caps
+                        );
                         Ok(None)
                     }
                     AgentRegistrationMessage::ClientRequestDeregistration(_) => {
