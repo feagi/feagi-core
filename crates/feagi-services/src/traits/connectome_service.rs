@@ -320,11 +320,7 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::NotFound` - Old morphology does not exist
     /// * `ServiceError::AlreadyExists` - New morphology ID already exists
     /// * `ServiceError::InvalidInput` - Invalid old_id or new_id
-    async fn rename_morphology(
-        &self,
-        old_id: &str,
-        new_id: &str,
-    ) -> ServiceResult<()>;
+    async fn rename_morphology(&self, old_id: &str, new_id: &str) -> ServiceResult<()>;
 
     // ========================================================================
     // CORTICAL MAPPING OPERATIONS

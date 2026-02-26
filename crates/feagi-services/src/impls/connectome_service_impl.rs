@@ -1702,11 +1702,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         Ok(())
     }
 
-    async fn rename_morphology(
-        &self,
-        old_id: &str,
-        new_id: &str,
-    ) -> ServiceResult<()> {
+    async fn rename_morphology(&self, old_id: &str, new_id: &str) -> ServiceResult<()> {
         let old_id = old_id.trim();
         let new_id = new_id.trim();
 
@@ -1733,14 +1729,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
             ));
         };
 
-        let morphology = genome
-            .morphologies
-            .get(old_id)
-            .cloned()
-            .ok_or_else(|| ServiceError::NotFound {
-                resource: "morphology".to_string(),
-                id: old_id.to_string(),
-            })?;
+        let morphology =
+            genome
+                .morphologies
+                .get(old_id)
+                .cloned()
+                .ok_or_else(|| ServiceError::NotFound {
+                    resource: "morphology".to_string(),
+                    id: old_id.to_string(),
+                })?;
 
         if morphology.class == "core" {
             return Err(ServiceError::InvalidInput(format!(
@@ -1764,23 +1761,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let mut replaced_count: usize = 0;
         for area in genome.cortical_areas.values_mut() {
             for prop_value in area.properties.values_mut() {
-                replace_morphology_id_in_value(
-                    prop_value,
-                    old_id,
-                    new_id,
-                    &mut replaced_count,
-                );
+                replace_morphology_id_in_value(prop_value, old_id, new_id, &mut replaced_count);
             }
         }
 
         for region in genome.brain_regions.values_mut() {
             for prop_value in region.properties.values_mut() {
-                replace_morphology_id_in_value(
-                    prop_value,
-                    old_id,
-                    new_id,
-                    &mut replaced_count,
-                );
+                replace_morphology_id_in_value(prop_value, old_id, new_id, &mut replaced_count);
             }
         }
 
@@ -2386,10 +2373,7 @@ mod tests {
                 timestamp: 0.0,
                 brain_regions_root: None,
             },
-            cortical_areas: HashMap::from([
-                (src_id, src_area.clone()),
-                (dst_id, dst_area.clone()),
-            ]),
+            cortical_areas: HashMap::from([(src_id, src_area.clone()), (dst_id, dst_area.clone())]),
             brain_regions: HashMap::new(),
             morphologies,
             physiology: feagi_evolutionary::PhysiologyConfig::default(),
@@ -2418,7 +2402,10 @@ mod tests {
             assert!(!genome.morphologies.contains("m_old"));
             assert!(genome.morphologies.contains("m_new"));
 
-            let area = genome.cortical_areas.get(&src_id).expect("src area must exist");
+            let area = genome
+                .cortical_areas
+                .get(&src_id)
+                .expect("src area must exist");
             let dstmap = area
                 .properties
                 .get("cortical_mapping_dst")
@@ -2429,8 +2416,17 @@ mod tests {
                 .and_then(|v| v.as_array())
                 .expect("rules must exist");
             assert_eq!(rules.len(), 2);
-            assert_eq!(rules[0].get("morphology_id").and_then(|v| v.as_str()), Some("m_new"));
-            assert_eq!(rules[1].as_array().and_then(|a| a.first()).and_then(|v| v.as_str()), Some("m_new"));
+            assert_eq!(
+                rules[0].get("morphology_id").and_then(|v| v.as_str()),
+                Some("m_new")
+            );
+            assert_eq!(
+                rules[1]
+                    .as_array()
+                    .and_then(|a| a.first())
+                    .and_then(|v| v.as_str()),
+                Some("m_new")
+            );
         }
 
         {

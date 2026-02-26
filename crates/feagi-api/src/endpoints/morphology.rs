@@ -311,10 +311,14 @@ pub async fn put_rename_morphology(
     let new_id = req.new_morphology_id.trim();
 
     if old_id.is_empty() {
-        return Err(ApiError::invalid_input("old_morphology_id must be non-empty"));
+        return Err(ApiError::invalid_input(
+            "old_morphology_id must be non-empty",
+        ));
     }
     if new_id.is_empty() {
-        return Err(ApiError::invalid_input("new_morphology_id must be non-empty"));
+        return Err(ApiError::invalid_input(
+            "new_morphology_id must be non-empty",
+        ));
     }
 
     state

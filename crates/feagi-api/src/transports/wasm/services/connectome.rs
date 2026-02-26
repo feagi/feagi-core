@@ -439,11 +439,7 @@ impl ConnectomeService for WasmConnectomeService {
         ))
     }
 
-    async fn rename_morphology(
-        &self,
-        _old_id: &str,
-        _new_id: &str,
-    ) -> ServiceResult<()> {
+    async fn rename_morphology(&self, _old_id: &str, _new_id: &str) -> ServiceResult<()> {
         Err(ServiceError::NotImplemented(
             "WASM mode is read-only".to_string(),
         ))
