@@ -310,6 +310,18 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::NotFound` - Morphology does not exist
     async fn delete_morphology(&self, morphology_id: &str) -> ServiceResult<()>;
 
+    /// Rename a morphology definition.
+    ///
+    /// Updates the morphology registry and all references in cortical mappings
+    /// (cortical_mapping_dst rules) across the loaded genome.
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidState` - No genome loaded
+    /// * `ServiceError::NotFound` - Old morphology does not exist
+    /// * `ServiceError::AlreadyExists` - New morphology ID already exists
+    /// * `ServiceError::InvalidInput` - Invalid old_id or new_id
+    async fn rename_morphology(&self, old_id: &str, new_id: &str) -> ServiceResult<()>;
+
     // ========================================================================
     // CORTICAL MAPPING OPERATIONS
     // ========================================================================

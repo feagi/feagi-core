@@ -338,6 +338,43 @@ fn get_cortical_mapping_dst_from_properties(
         .map(|rules| rules.to_vec())
 }
 
+/// Recursively replace morphology_id in JSON values.
+///
+/// Handles object format `{"morphology_id": "x", ...}` and array format
+/// `["morphology_id", scalar, ...]` where morphology_id is the first element.
+fn replace_morphology_id_in_value(
+    value: &mut Value,
+    old_id: &str,
+    new_id: &str,
+    replaced_count: &mut usize,
+) {
+    match value {
+        Value::Object(obj) => {
+            if let Some(morphology_id) = obj.get_mut("morphology_id") {
+                if morphology_id.as_str() == Some(old_id) {
+                    *morphology_id = Value::String(new_id.to_string());
+                    *replaced_count += 1;
+                }
+            }
+            for child in obj.values_mut() {
+                replace_morphology_id_in_value(child, old_id, new_id, replaced_count);
+            }
+        }
+        Value::Array(arr) => {
+            if let Some(first) = arr.first_mut() {
+                if first.as_str() == Some(old_id) {
+                    *first = Value::String(new_id.to_string());
+                    *replaced_count += 1;
+                }
+            }
+            for child in arr.iter_mut() {
+                replace_morphology_id_in_value(child, old_id, new_id, replaced_count);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
@@ -1665,6 +1702,92 @@ impl ConnectomeService for ConnectomeServiceImpl {
         Ok(())
     }
 
+    async fn rename_morphology(&self, old_id: &str, new_id: &str) -> ServiceResult<()> {
+        let old_id = old_id.trim();
+        let new_id = new_id.trim();
+
+        if old_id.is_empty() {
+            return Err(ServiceError::InvalidInput(
+                "old_id must be non-empty".to_string(),
+            ));
+        }
+        if new_id.is_empty() {
+            return Err(ServiceError::InvalidInput(
+                "new_id must be non-empty".to_string(),
+            ));
+        }
+        if old_id == new_id {
+            return Err(ServiceError::InvalidInput(
+                "old_id and new_id must differ".to_string(),
+            ));
+        }
+
+        let mut genome_guard = self.current_genome.write();
+        let Some(genome) = genome_guard.as_mut() else {
+            return Err(ServiceError::InvalidState(
+                "No RuntimeGenome loaded - cannot rename morphology".to_string(),
+            ));
+        };
+
+        let morphology =
+            genome
+                .morphologies
+                .get(old_id)
+                .cloned()
+                .ok_or_else(|| ServiceError::NotFound {
+                    resource: "morphology".to_string(),
+                    id: old_id.to_string(),
+                })?;
+
+        if morphology.class == "core" {
+            return Err(ServiceError::InvalidInput(format!(
+                "Core morphologies cannot be renamed: '{}'",
+                old_id
+            )));
+        }
+
+        if genome.morphologies.contains(new_id) {
+            return Err(ServiceError::AlreadyExists {
+                resource: "morphology".to_string(),
+                id: new_id.to_string(),
+            });
+        }
+
+        genome.morphologies.remove_morphology(old_id);
+        genome
+            .morphologies
+            .add_morphology(new_id.to_string(), morphology.clone());
+
+        let mut replaced_count: usize = 0;
+        for area in genome.cortical_areas.values_mut() {
+            for prop_value in area.properties.values_mut() {
+                replace_morphology_id_in_value(prop_value, old_id, new_id, &mut replaced_count);
+            }
+        }
+
+        for region in genome.brain_regions.values_mut() {
+            for prop_value in region.properties.values_mut() {
+                replace_morphology_id_in_value(prop_value, old_id, new_id, &mut replaced_count);
+            }
+        }
+
+        drop(genome_guard);
+
+        let mut manager = self.connectome.write();
+        manager.remove_morphology(old_id);
+        manager.upsert_morphology(new_id.to_string(), morphology);
+
+        info!(
+            target: "feagi-services",
+            "Renamed morphology '{}' to '{}' ({} references updated)",
+            old_id,
+            new_id,
+            replaced_count
+        );
+
+        Ok(())
+    }
+
     async fn update_cortical_mapping(
         &self,
         src_area_id: String,
@@ -2030,7 +2153,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
 #[cfg(test)]
 mod tests {
-    use super::update_cortical_mapping_dst_in_properties;
+    use super::{replace_morphology_id_in_value, update_cortical_mapping_dst_in_properties};
     use crate::types::ServiceResult;
     use std::collections::HashMap;
 
@@ -2176,6 +2299,217 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn morphology_rename_updates_registry_and_cortical_mapping_references(
+    ) -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+        };
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let connectome = Arc::new(RwLock::new(
+            feagi_brain_development::ConnectomeManager::new_for_testing(),
+        ));
+
+        let src_id = CorticalID::try_from_bytes(b"csrc0001").unwrap();
+        let dst_id = CorticalID::try_from_bytes(b"csrc0002").unwrap();
+
+        let mut src_area = CorticalArea::new(
+            src_id,
+            0,
+            "Source".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(
+                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+            ),
+        )
+        .unwrap();
+        src_area.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                dst_id.as_base_64(): [
+                    {"morphology_id": "m_old", "morphology_scalar": 1},
+                    ["m_old", 2, 1.0, false]
+                ]
+            }),
+        );
+
+        let dst_area = CorticalArea::new(
+            dst_id,
+            1,
+            "Target".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(
+                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+            ),
+        )
+        .unwrap();
+
+        let morph = feagi_evolutionary::Morphology {
+            morphology_type: feagi_evolutionary::MorphologyType::Vectors,
+            parameters: feagi_evolutionary::MorphologyParameters::Vectors {
+                vectors: vec![[1, 0, 0]],
+            },
+            class: "custom".to_string(),
+        };
+
+        let mut morphologies = feagi_evolutionary::MorphologyRegistry::new();
+        morphologies.add_morphology("m_old".to_string(), morph.clone());
+
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: "".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::from([(src_id, src_area.clone()), (dst_id, dst_area.clone())]),
+            brain_regions: HashMap::new(),
+            morphologies,
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+
+        {
+            let mut manager = connectome.write();
+            manager.upsert_morphology("m_old".to_string(), morph);
+        }
+
+        let current_genome = Arc::new(RwLock::new(Some(genome)));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+
+        svc.rename_morphology("m_old", "m_new").await?;
+
+        {
+            let genome_guard = current_genome.read();
+            let genome = genome_guard.as_ref().expect("genome must exist");
+            assert!(!genome.morphologies.contains("m_old"));
+            assert!(genome.morphologies.contains("m_new"));
+
+            let area = genome
+                .cortical_areas
+                .get(&src_id)
+                .expect("src area must exist");
+            let dstmap = area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+                .expect("cortical_mapping_dst must exist");
+            let rules = dstmap
+                .get(&dst_id.as_base_64())
+                .and_then(|v| v.as_array())
+                .expect("rules must exist");
+            assert_eq!(rules.len(), 2);
+            assert_eq!(
+                rules[0].get("morphology_id").and_then(|v| v.as_str()),
+                Some("m_new")
+            );
+            assert_eq!(
+                rules[1]
+                    .as_array()
+                    .and_then(|a| a.first())
+                    .and_then(|v| v.as_str()),
+                Some("m_new")
+            );
+        }
+
+        {
+            let mgr = connectome.read();
+            assert!(!mgr.get_morphologies().contains("m_old"));
+            assert!(mgr.get_morphologies().contains("m_new"));
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn morphology_rename_rejects_core_morphologies() -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use crate::types::ServiceError;
+        use parking_lot::RwLock;
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        let connectome = Arc::new(RwLock::new(
+            feagi_brain_development::ConnectomeManager::new_for_testing(),
+        ));
+        {
+            let mut manager = connectome.write();
+            manager.setup_core_morphologies_for_testing();
+        }
+
+        let mut morphologies = feagi_evolutionary::MorphologyRegistry::new();
+        feagi_evolutionary::add_core_morphologies(&mut morphologies);
+
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: "".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            morphologies,
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+
+        let current_genome = Arc::new(RwLock::new(Some(genome)));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+
+        let err = svc
+            .rename_morphology("projector", "projector_renamed")
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, ServiceError::InvalidInput(_)),
+            "Expected InvalidInput, got {:?}",
+            err
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn replace_morphology_id_in_value_handles_object_and_array_formats() {
+        let mut value = serde_json::json!({
+            "nested": {
+                "morphology_id": "old_id",
+                "other": "x"
+            },
+            "arr": ["old_id", 1, 2]
+        });
+        let mut count = 0;
+        replace_morphology_id_in_value(&mut value, "old_id", "new_id", &mut count);
+        assert_eq!(count, 2);
+        assert_eq!(value["nested"]["morphology_id"], "new_id");
+        assert_eq!(value["arr"][0], "new_id");
     }
 
     #[tokio::test]
