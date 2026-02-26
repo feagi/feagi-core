@@ -443,6 +443,13 @@
       background-color: #138496;
     }
 
+    .header-button.download-genome {
+      background-color: #dc3545;
+    }
+    .header-button.download-genome:hover {
+      background-color: #c82333;
+    }
+
     .header-button.health-check {
       background-color: #6f42c1;
     }
@@ -579,9 +586,9 @@
       <button class="header-button" id="collapse-all">Collapse All</button>
       <button class="header-button genome-action" id="load-essential">Load Essential</button>
       <button class="header-button genome-action" id="load-barebones">Load Barebones</button>
-      <button class="header-button genome-action" id="download-genome">Download Genome</button>
       <button class="header-button genome-action" id="upload-genome">Upload Genome</button>
       <input type="file" id="upload-genome-input" accept=".json,application/json" style="display:none">
+      <button class="header-button genome-action download-genome" id="download-genome">Download Genome</button>
       <button class="header-button health-check" id="health-check">Health Check</button>
       <div class="theme-selector">
         <span class="theme-selector-label">Theme:</span>

@@ -517,16 +517,24 @@ fn process_dstmap(
             // [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag,
             //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window]
             //
-            // NOTE: We do not maintain backward compatibility here. If a genome uses the array
-            // representation it must include the full parameter set (including plasticity_window).
-            if rule_array.len() < 8 {
-                warn!(
-                    target: "feagi-evo",
-                    "Invalid mapping recipe format (need 8 elements, including plasticity_window): {:?}",
-                    rule_array
-                );
-                continue;
-            }
+            // Backward compatibility: 4-element legacy format is extended with defaults
+            // (plasticity_constant=0, ltp_multiplier=0, ltd_multiplier=0, plasticity_window=0).
+            let plasticity_constant = rule_array
+                .get(4)
+                .cloned()
+                .unwrap_or(serde_json::Value::Number(serde_json::Number::from(0)));
+            let ltp_multiplier = rule_array
+                .get(5)
+                .cloned()
+                .unwrap_or(serde_json::Value::Number(serde_json::Number::from(0)));
+            let ltd_multiplier = rule_array
+                .get(6)
+                .cloned()
+                .unwrap_or(serde_json::Value::Number(serde_json::Number::from(0)));
+            let plasticity_window = rule_array
+                .get(7)
+                .cloned()
+                .unwrap_or(serde_json::Value::Number(serde_json::Number::from(0)));
 
             let mut rule_dict = serde_json::Map::new();
 
@@ -537,12 +545,10 @@ fn process_dstmap(
                 rule_array[2].clone(),
             );
             rule_dict.insert("plasticity_flag".to_string(), rule_array[3].clone());
-
-            // Plasticity parameters (required in new design)
-            rule_dict.insert("plasticity_constant".to_string(), rule_array[4].clone());
-            rule_dict.insert("ltp_multiplier".to_string(), rule_array[5].clone());
-            rule_dict.insert("ltd_multiplier".to_string(), rule_array[6].clone());
-            rule_dict.insert("plasticity_window".to_string(), rule_array[7].clone());
+            rule_dict.insert("plasticity_constant".to_string(), plasticity_constant);
+            rule_dict.insert("ltp_multiplier".to_string(), ltp_multiplier);
+            rule_dict.insert("ltd_multiplier".to_string(), ltd_multiplier);
+            rule_dict.insert("plasticity_window".to_string(), plasticity_window);
 
             converted_rules.push(Value::Object(rule_dict));
         }
@@ -599,6 +605,31 @@ mod tests {
         assert_eq!(dest_rules[1]["morphology_id"], "projector");
         assert_eq!(dest_rules[1]["plasticity_constant"], 1);
         assert_eq!(dest_rules[1]["plasticity_window"], 1);
+    }
+
+    #[test]
+    fn test_dstmap_parsing_legacy_4_element_backward_compat() {
+        // Legacy 4-element format: [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag]
+        let dstmap_flat = json!({
+            "dest_area": [
+                ["motor_backward", [1, 1, 1], 1, false],
+                ["block_to_block", [1, 1, 1], 1, false]
+            ]
+        });
+
+        let mut area_data = serde_json::Map::new();
+        process_dstmap(&dstmap_flat, &mut area_data).unwrap();
+
+        let dstmap = area_data.get("cortical_mapping_dst").unwrap();
+        let dest_rules = dstmap.get("dest_area").unwrap().as_array().unwrap();
+
+        assert_eq!(dest_rules.len(), 2);
+        assert_eq!(dest_rules[0]["morphology_id"], "motor_backward");
+        assert_eq!(dest_rules[0]["plasticity_flag"], false);
+        assert_eq!(dest_rules[0]["plasticity_constant"], 0);
+        assert_eq!(dest_rules[0]["ltp_multiplier"], 0);
+        assert_eq!(dest_rules[0]["ltd_multiplier"], 0);
+        assert_eq!(dest_rules[0]["plasticity_window"], 0);
     }
 
     #[test]
