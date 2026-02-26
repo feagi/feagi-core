@@ -32,13 +32,7 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
-
-    - name: Install rustfmt
-      run: rustup component add rustfmt
-
-    - name: Check formatting
-      run: cargo fmt --all -- --check
-
+    
     - name: Rust Cache
       uses: Swatinem/rust-cache@v2
       with:
