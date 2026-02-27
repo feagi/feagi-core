@@ -2140,34 +2140,6 @@ fn burst_loop(
                         );
                     }
 
-                    // Minimal, high-signal debugging for BV "no power" issues:
-                    // Log whether the outgoing visualization snapshot contains the Power cortical area (core idx=1).
-                    // This pinpoints whether the failure is upstream (sampling/packaging) or downstream (BV decode/apply).
-                    if burst_num % 30 == 0 {
-                        use feagi_structures::genomic::cortical_area::CoreCorticalType;
-                        static POWER_ID_B64: std::sync::LazyLock<String> =
-                            std::sync::LazyLock::new(|| {
-                                CoreCorticalType::Power.to_cortical_id().as_base_64()
-                            });
-
-                        let power_neurons = raw_snapshot
-                            .values()
-                            .find(|d| d.cortical_id == *POWER_ID_B64)
-                            .map(|d| d.neuron_ids.len())
-                            .unwrap_or(0);
-
-                        info!(
-                                "[VIZ-DEBUG] burst={} transports: shm={} publisher={} should_publish_viz={} areas={} total_neurons={} power_neurons={}",
-                                burst_num,
-                                has_shm_writer,
-                                has_viz_publisher,
-                                should_publish_viz,
-                                raw_snapshot.len(),
-                                total_neurons,
-                                power_neurons
-                            );
-                    }
-
                     // IMPORTANT: Single visualization pipeline per burst.
                     // If SHM is attached, we write to SHM and skip publisher handoff to avoid doing
                     // two independent serialization paths (maintenance + performance nightmare).
