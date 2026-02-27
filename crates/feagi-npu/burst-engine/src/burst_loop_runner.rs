@@ -1243,10 +1243,7 @@ fn burst_loop(
         let current_frequency_hz = *frequency_hz.lock().unwrap();
         update_sim_timestep_from_hz(current_frequency_hz);
 
-        // DIAGNOSTIC: Log that we're alive
-        if burst_num % 100 == 0 {
-            trace!("[BURST-LOOP] Burst {} starting (loop is alive)", burst_num);
-        }
+        // Per-burst heartbeat removed (was every 100 bursts)
 
         // Track time since last burst (to detect blocking)
         static LAST_ITERATION_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
@@ -1330,7 +1327,7 @@ fn burst_loop(
             }
         }
 
-        if burst_num < 5 || burst_num % 100 == 0 {
+        if burst_num < 5 {
             trace!(
                 "[BURST-LOOP-DIAGNOSTIC] Burst {}: Attempting NPU lock...",
                 burst_num
@@ -1386,7 +1383,7 @@ fn burst_loop(
                     lock_wait_duration.as_millis()
                 );
             }
-            if burst_num < 5 || burst_num % 100 == 0 {
+            if burst_num < 5 {
                 trace!(
                     "[BURST-TIMING] Burst {}: NPU lock acquired in {:?}",
                     burst_num,
@@ -1660,7 +1657,7 @@ fn burst_loop(
                             result.neurons_in_refractory,
                         ));
 
-                        if burst_num < 5 || burst_num % 100 == 0 {
+                        if burst_num < 5 {
                             trace!(
                                 "[BURST-TIMING] Burst {}: process_burst() completed in {:?}, {} neurons fired",
                                 burst_num,
@@ -1777,8 +1774,8 @@ fn burst_loop(
                 );
             }
         }
-        if lock_hold_duration.as_millis() > 5 || burst_num < 5 || burst_num % 100 == 0 {
-            debug!(
+        if lock_hold_duration.as_millis() > 50 || burst_num < 5 {
+            trace!(
                 "[NPU-LOCK] Burst {} (thread={:?}): Lock RELEASED (held for {:.2}ms, total from acquisition: {:.2}ms)",
                 burst_num,
                 release_thread_id,
@@ -2163,15 +2160,9 @@ fn burst_loop(
                             static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 =
                                 std::sync::atomic::AtomicU64::new(0);
 
-                            let count =
+                            let _count =
                                 PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            if count % 30 == 0 {
-                                trace!(
-                                    "[BURST-LOOP] Viz handoff #{}: {} neurons -> publisher (serialization off-thread)",
-                                    count,
-                                    total_neurons
-                                );
-                            }
+                            // Viz handoff logging removed (was every 30 handoffs)
 
                             let publish_start = Instant::now();
                             for agent_id in viz_due_agents.iter() {
@@ -2224,8 +2215,8 @@ fn burst_loop(
         // Motor output generation and publishing (per-agent, filtered by subscriptions)
         // NOTE: has_motor_publisher and has_motor_shm already computed above for shared_fire_data_opt
 
-        // CRITICAL: Log motor publisher state every 100 bursts (using INFO to guarantee visibility)
-        if burst_num % 100 == 0 {
+        // Motor publisher state: only trace for first 5 bursts
+        if burst_num < 5 {
             trace!(
                 "[BURST-LOOP] MOTOR PUBLISHER STATE: has_publisher={}, has_shm={}",
                 has_motor_publisher,
@@ -2352,21 +2343,11 @@ fn burst_loop(
                     );
                 }
 
-                debug!(
-                    "[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas",
-                    motor_snapshot.len()
-                );
-
-                // DEBUG: Log subscription state every 30 bursts
-                if burst_num % 30 == 0 {
-                    if subscriptions.is_empty() {
-                        trace!("[BURST-LOOP] No motor subscriptions");
-                    } else {
-                        trace!("[BURST-LOOP] {} motor subscriptions", subscriptions.len());
-                        for (agent_id, cortical_ids) in subscriptions.iter() {
-                            trace!("[BURST-LOOP] Agent '{}' -> {:?}", agent_id, cortical_ids);
-                        }
-                    }
+                if burst_num < 5 {
+                    trace!(
+                        "[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas",
+                        motor_snapshot.len()
+                    );
                 }
 
                 if subscriptions.is_empty() {
