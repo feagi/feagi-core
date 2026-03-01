@@ -1739,21 +1739,40 @@ fn burst_loop(
             *last_release = Some(npu_lock_release_time);
         }
 
-        // Log lock release timing for diagnostics
+        // Log lock release timing for diagnostics (scaled to burst budget).
+        // This keeps diagnostics meaningful across different simulation timesteps.
+        let burst_budget_ms = (1.0 / current_frequency_hz) * 1000.0;
+        let lock_wait_warn_threshold_ms = burst_budget_ms * 0.25;
+        let lock_hold_warn_threshold_ms = burst_budget_ms * 0.80;
+        let lock_hold_overrun_threshold_ms = burst_budget_ms;
         let lock_hold_duration = npu_lock_release_time.duration_since(lock_acquired);
-        if lock_wait_duration.as_millis() > 50 {
+        let lock_wait_ms = lock_wait_duration.as_secs_f64() * 1000.0;
+        let lock_hold_ms = lock_hold_duration.as_secs_f64() * 1000.0;
+        if lock_wait_ms > lock_wait_warn_threshold_ms {
             warn!(
-                "[NPU-LOCK] Burst {} waited {:.2}ms to acquire lock",
+                "[NPU-LOCK] Burst {} waited {:.2}ms to acquire lock (threshold {:.2}ms, budget {:.2}ms)",
                 burst_num,
-                lock_wait_duration.as_secs_f64() * 1000.0
+                lock_wait_ms,
+                lock_wait_warn_threshold_ms,
+                burst_budget_ms
             );
         }
-        if lock_hold_duration.as_millis() > 50 {
+        let hold_severity = if lock_hold_ms > lock_hold_overrun_threshold_ms {
+            Some("overrun")
+        } else if lock_hold_ms > lock_hold_warn_threshold_ms {
+            Some("high")
+        } else {
+            None
+        };
+        if let Some(severity) = hold_severity {
             if let Some((fired, power, synaptic, processed, refractory)) = last_burst_stats {
                 warn!(
-                    "[NPU-LOCK] Burst {} held lock {:.2}ms | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
+                    "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
                     burst_num,
-                    lock_hold_duration.as_secs_f64() * 1000.0,
+                    lock_hold_ms,
+                    severity,
+                    lock_hold_warn_threshold_ms,
+                    burst_budget_ms,
                     last_process_duration
                         .map(|d| d.as_secs_f64() * 1000.0)
                         .unwrap_or(0.0),
@@ -1765,21 +1784,24 @@ fn burst_loop(
                 );
             } else {
                 warn!(
-                    "[NPU-LOCK] Burst {} held lock {:.2}ms | process_burst {:.2}ms",
+                    "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
                     burst_num,
-                    lock_hold_duration.as_secs_f64() * 1000.0,
+                    lock_hold_ms,
+                    severity,
+                    lock_hold_warn_threshold_ms,
+                    burst_budget_ms,
                     last_process_duration
                         .map(|d| d.as_secs_f64() * 1000.0)
                         .unwrap_or(0.0)
                 );
             }
         }
-        if lock_hold_duration.as_millis() > 50 || burst_num < 5 {
+        if lock_hold_ms > lock_hold_warn_threshold_ms || burst_num < 5 {
             trace!(
                 "[NPU-LOCK] Burst {} (thread={:?}): Lock RELEASED (held for {:.2}ms, total from acquisition: {:.2}ms)",
                 burst_num,
                 release_thread_id,
-                lock_hold_duration.as_secs_f64() * 1000.0,
+                lock_hold_ms,
                 npu_lock_release_time.duration_since(lock_start).as_secs_f64() * 1000.0
             );
         }
