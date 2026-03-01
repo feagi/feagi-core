@@ -530,6 +530,30 @@ async fn load_default_genome(
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     tracing::info!(target: "feagi-api", "🔄 Loading {} genome from embedded Rust genomes", genome_name);
     tracing::debug!(target: "feagi-api", "   State components available: genome_service=true, runtime_service=true");
+    let runtime_service = state.runtime_service.as_ref();
+
+    // Runtime lifecycle guard:
+    // Genome load mutates connectome/NPU state and must not race with active burst processing.
+    let runtime_status = runtime_service
+        .get_status()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get runtime status: {}", e)))?;
+    let runtime_was_running = runtime_status.is_running;
+    if runtime_was_running {
+        tracing::info!(
+            target: "feagi-api",
+            "Stopping burst engine before genome load (stage transition: Running -> Stopped)"
+        );
+        runtime_service
+            .stop()
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to stop burst engine before genome load: {}", e)))?;
+    } else {
+        tracing::debug!(
+            target: "feagi-api",
+            "Burst engine already stopped before genome load"
+        );
+    }
 
     // Load genome from embedded Rust templates (no file I/O!)
     let genome_json = match genome_name {
@@ -570,13 +594,28 @@ async fn load_default_genome(
                    genome_info.simulation_timestep, burst_frequency_hz);
 
     // Update runtime service with new frequency
-    let runtime_service = state.runtime_service.as_ref();
     runtime_service
         .set_frequency(burst_frequency_hz)
         .await
         .map_err(|e| ApiError::internal(format!("Failed to update burst frequency: {}", e)))?;
 
     tracing::info!(target: "feagi-api","✅ Burst frequency updated to {:.0} Hz from genome physiology", burst_frequency_hz);
+
+    if runtime_was_running {
+        tracing::info!(
+            target: "feagi-api",
+            "Restarting burst engine after genome load (stage transition: Stopped -> Running)"
+        );
+        runtime_service
+            .start()
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to restart burst engine after genome load: {}", e)))?;
+    } else {
+        tracing::debug!(
+            target: "feagi-api",
+            "Leaving burst engine in stopped state after genome load"
+        );
+    }
 
     // Return response matching Python format
     let mut response = HashMap::new();
