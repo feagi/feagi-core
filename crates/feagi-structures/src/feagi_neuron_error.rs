@@ -1,6 +1,6 @@
 
 
 pub enum FeagiNeuronError {
-    NeuronCoordinateOutOfRange(),
+    NeuronCoordinateOutOfRange{given_coordinate: Coordinate3D},
     IncompatibleNeuronDataFormat()
 }
