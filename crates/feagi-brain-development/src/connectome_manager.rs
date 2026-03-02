@@ -3237,10 +3237,62 @@ impl ConnectomeManager {
                     }
                     Ok(count as usize)
                 }
-                _ => {
-                    use tracing::debug;
-                    debug!(target: "feagi-bdu", "Morphology type {:?} not yet fully implemented", morphology.morphology_type);
-                    Ok(0)
+                feagi_evolutionary::MorphologyType::Composite => {
+                    let feagi_evolutionary::MorphologyParameters::Composite { .. } =
+                        morphology.parameters
+                    else {
+                        return Ok(0);
+                    };
+
+                    if morphology_id != "tile" {
+                        use tracing::debug;
+                        debug!(
+                            target: "feagi-bdu",
+                            "Composite morphology {} not yet implemented",
+                            morphology_id
+                        );
+                        return Ok(0);
+                    }
+
+                    let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+                        crate::types::BduError::InvalidArea(format!(
+                            "Source area not found: {}",
+                            src_area_id
+                        ))
+                    })?;
+                    let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                        crate::types::BduError::InvalidArea(format!(
+                            "Destination area not found: {}",
+                            dst_area_id
+                        ))
+                    })?;
+                    let src_dimensions = (
+                        src_area.dimensions.width as usize,
+                        src_area.dimensions.height as usize,
+                        src_area.dimensions.depth as usize,
+                    );
+                    let dst_dimensions = (
+                        dst_area.dimensions.width as usize,
+                        dst_area.dimensions.height as usize,
+                        dst_area.dimensions.depth as usize,
+                    );
+
+                    let count =
+                        crate::connectivity::core_morphologies::apply_tile_morphology_with_dimensions(
+                            &mut npu,
+                            *src_idx,
+                            *dst_idx,
+                            src_dimensions,
+                            dst_dimensions,
+                            weight,
+                            psp,
+                            synapse_attractivity,
+                            synapse_type,
+                        )?;
+                    if count > 0 {
+                        npu.rebuild_synapse_index();
+                    }
+                    Ok(count as usize)
                 }
             }
         } else {

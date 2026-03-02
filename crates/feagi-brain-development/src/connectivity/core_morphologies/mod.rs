@@ -16,6 +16,7 @@ mod last_to_first;
 mod patterns;
 mod projector;
 mod sweeper;
+mod tile;
 mod vectors;
 
 pub use bitmask::apply_bitmask_morphology_with_dimensions;
@@ -28,4 +29,5 @@ pub use patterns::apply_patterns_morphology;
 pub use projector::apply_projector_morphology;
 pub use projector::apply_projector_morphology_with_dimensions;
 pub use sweeper::apply_sweeper_morphology_with_dimensions;
+pub use tile::apply_tile_morphology_with_dimensions;
 pub use vectors::{apply_vectors_morphology, apply_vectors_morphology_with_dimensions};

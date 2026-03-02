@@ -265,6 +265,7 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         "associative_memory",
         "all_to_0-0-0",
         "0-0-0_to_all",
+        "tile",
         "lateral_+x",
         "lateral_-x",
         "lateral_+y",
@@ -465,6 +466,20 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
                         crate::PatternElement::Wildcard,
                     ],
                 ]],
+            },
+            class: "core".to_string(),
+        },
+    );
+
+    // tile - Composite tiling morphology (mapper + subregion parameters)
+    registry.add_morphology(
+        "tile".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Composite,
+            parameters: MorphologyParameters::Composite {
+                src_seed: [16, 16, 1],
+                src_pattern: vec![[1, 0], [1, 0], [1, 0]],
+                mapper_morphology: "projector".to_string(),
             },
             class: "core".to_string(),
         },
