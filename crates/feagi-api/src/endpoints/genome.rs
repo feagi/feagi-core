@@ -544,10 +544,12 @@ async fn load_default_genome(
             target: "feagi-api",
             "Stopping burst engine before genome load (stage transition: Running -> Stopped)"
         );
-        runtime_service
-            .stop()
-            .await
-            .map_err(|e| ApiError::internal(format!("Failed to stop burst engine before genome load: {}", e)))?;
+        runtime_service.stop().await.map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to stop burst engine before genome load: {}",
+                e
+            ))
+        })?;
     } else {
         tracing::debug!(
             target: "feagi-api",
@@ -606,10 +608,12 @@ async fn load_default_genome(
             target: "feagi-api",
             "Restarting burst engine after genome load (stage transition: Stopped -> Running)"
         );
-        runtime_service
-            .start()
-            .await
-            .map_err(|e| ApiError::internal(format!("Failed to restart burst engine after genome load: {}", e)))?;
+        runtime_service.start().await.map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to restart burst engine after genome load: {}",
+                e
+            ))
+        })?;
     } else {
         tracing::debug!(
             target: "feagi-api",

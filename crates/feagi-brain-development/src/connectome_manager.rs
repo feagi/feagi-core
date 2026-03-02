@@ -2866,6 +2866,148 @@ impl ConnectomeManager {
 
                 Ok(count)
             }
+            "bitmask_encoder_x" | "bitmask_encoder_y" | "bitmask_encoder_z"
+            | "bitmask_decoder_x" | "bitmask_decoder_y" | "bitmask_decoder_z" => {
+                let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Source area not found: {}",
+                        src_area_id
+                    ))
+                })?;
+                let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Destination area not found: {}",
+                        dst_area_id
+                    ))
+                })?;
+
+                let src_dimensions = (
+                    src_area.dimensions.width as usize,
+                    src_area.dimensions.height as usize,
+                    src_area.dimensions.depth as usize,
+                );
+                let dst_dimensions = (
+                    dst_area.dimensions.width as usize,
+                    dst_area.dimensions.height as usize,
+                    dst_area.dimensions.depth as usize,
+                );
+
+                let (axis, mode) = match morphology_id {
+                    "bitmask_encoder_x" => (
+                        crate::connectivity::core_morphologies::BitmaskAxis::X,
+                        crate::connectivity::core_morphologies::BitmaskMode::Encoder,
+                    ),
+                    "bitmask_encoder_y" => (
+                        crate::connectivity::core_morphologies::BitmaskAxis::Y,
+                        crate::connectivity::core_morphologies::BitmaskMode::Encoder,
+                    ),
+                    "bitmask_encoder_z" => (
+                        crate::connectivity::core_morphologies::BitmaskAxis::Z,
+                        crate::connectivity::core_morphologies::BitmaskMode::Encoder,
+                    ),
+                    "bitmask_decoder_x" => (
+                        crate::connectivity::core_morphologies::BitmaskAxis::X,
+                        crate::connectivity::core_morphologies::BitmaskMode::Decoder,
+                    ),
+                    "bitmask_decoder_y" => (
+                        crate::connectivity::core_morphologies::BitmaskAxis::Y,
+                        crate::connectivity::core_morphologies::BitmaskMode::Decoder,
+                    ),
+                    "bitmask_decoder_z" => (
+                        crate::connectivity::core_morphologies::BitmaskAxis::Z,
+                        crate::connectivity::core_morphologies::BitmaskMode::Decoder,
+                    ),
+                    _ => unreachable!("matched bitmask morphology above"),
+                };
+
+                let count =
+                    crate::connectivity::core_morphologies::apply_bitmask_morphology_with_dimensions(
+                        npu,
+                        src_idx,
+                        dst_idx,
+                        src_dimensions,
+                        dst_dimensions,
+                        axis,
+                        mode,
+                        weight,
+                        psp,
+                        synapse_attractivity,
+                        synapse_type,
+                    )?;
+                if count > 0 {
+                    npu.rebuild_synapse_index();
+                }
+                Ok(count as usize)
+            }
+            "sweeper" => {
+                let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Destination area not found: {}",
+                        dst_area_id
+                    ))
+                })?;
+                let dst_dimensions = (
+                    dst_area.dimensions.width as usize,
+                    dst_area.dimensions.height as usize,
+                    dst_area.dimensions.depth as usize,
+                );
+
+                let count =
+                    crate::connectivity::core_morphologies::apply_sweeper_morphology_with_dimensions(
+                        npu,
+                        src_idx,
+                        dst_idx,
+                        dst_dimensions,
+                        weight,
+                        psp,
+                        synapse_attractivity,
+                        synapse_type,
+                    )?;
+                if count > 0 {
+                    npu.rebuild_synapse_index();
+                }
+                Ok(count as usize)
+            }
+            "last_to_first" => {
+                let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Source area not found: {}",
+                        src_area_id
+                    ))
+                })?;
+                let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Destination area not found: {}",
+                        dst_area_id
+                    ))
+                })?;
+                let src_dimensions = (
+                    src_area.dimensions.width as usize,
+                    src_area.dimensions.height as usize,
+                    src_area.dimensions.depth as usize,
+                );
+                let dst_dimensions = (
+                    dst_area.dimensions.width as usize,
+                    dst_area.dimensions.height as usize,
+                    dst_area.dimensions.depth as usize,
+                );
+
+                let count = crate::connectivity::core_morphologies::apply_last_to_first_morphology_with_dimensions(
+                    npu,
+                    src_idx,
+                    dst_idx,
+                    src_dimensions,
+                    dst_dimensions,
+                    weight,
+                    psp,
+                    synapse_attractivity,
+                    synapse_type,
+                )?;
+                if count > 0 {
+                    npu.rebuild_synapse_index();
+                }
+                Ok(count as usize)
+            }
             _ => {
                 // Other function morphologies not yet implemented
                 // NOTE: To add a new function-type morphology, add a case here

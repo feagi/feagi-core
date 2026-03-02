@@ -1230,6 +1230,7 @@ fn burst_loop(
     let mut total_neurons_fired = 0usize;
     let mut burst_times = Vec::with_capacity(100);
     let mut last_burst_time = None;
+    let mut top_firing_areas_last_burst: Vec<(u32, usize)> = Vec::new();
     // Tracks agents that temporarily fail publish because transport mapping is not attached yet.
     // This avoids log spam during reconnect races while preserving automatic retry behavior.
     let mut missing_viz_agent_logged: ahash::AHashSet<String> = ahash::AHashSet::new();
@@ -1667,6 +1668,19 @@ fn burst_loop(
                         }
 
                         total_neurons_fired += result.neuron_count;
+                        top_firing_areas_last_burst.clear();
+                        if let Some(ref sample) = result.fire_queue_sample {
+                            top_firing_areas_last_burst.extend(sample.iter().map(
+                                |(cortical_idx, (xs, _ys, _zs, _neurons, _pots))| {
+                                    (*cortical_idx, xs.len())
+                                },
+                            ));
+                            top_firing_areas_last_burst
+                                .sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+                            if top_firing_areas_last_burst.len() > 5 {
+                                top_firing_areas_last_burst.truncate(5);
+                            }
+                        }
                         // Update cached burst count for lock-free reads
                         let current_burst = npu_lock.get_burst_count();
                         cached_burst_count
@@ -1793,6 +1807,36 @@ fn burst_loop(
                     last_process_duration
                         .map(|d| d.as_secs_f64() * 1000.0)
                         .unwrap_or(0.0)
+                );
+            }
+
+            // Root-cause diagnostics for sustained overruns: identify hottest cortical areas.
+            // Throttled to every 25 bursts to avoid excessive log volume.
+            if severity == "overrun"
+                && burst_num % 25 == 0
+                && !top_firing_areas_last_burst.is_empty()
+            {
+                let cortical_id_map = cached_cortical_id_mappings.lock().unwrap();
+                let top_areas = top_firing_areas_last_burst
+                    .iter()
+                    .map(|(idx, count)| {
+                        let area_id = cortical_id_map
+                            .get(idx)
+                            .cloned()
+                            .unwrap_or_else(|| format!("idx_{}", idx));
+                        format!("{}:{}:{}", idx, area_id, count)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                warn!(
+                    "[BURST-ROOTCAUSE] Burst {} overrun snapshot | budget_ms={:.2} lock_hold_ms={:.2} process_burst_ms={:.2} top_firing_areas=[{}]",
+                    burst_num,
+                    burst_budget_ms,
+                    lock_hold_ms,
+                    last_process_duration
+                        .map(|d| d.as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0),
+                    top_areas
                 );
             }
         }

@@ -1328,12 +1328,42 @@
       "type": "functions",
       "class": "core"
     },
-    "expander_x": {
+    "sweeper": {
       "parameters": {},
       "type": "functions",
       "class": "core"
     },
-    "reducer_x": {
+    "last_to_first": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_encoder_x": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_encoder_y": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_encoder_z": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_decoder_x": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_decoder_y": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_decoder_z": {
       "parameters": {},
       "type": "functions",
       "class": "core"
