@@ -192,6 +192,18 @@ feagi-serialization = { version = "=0.0.1-beta.18", path = "crates/feagi-seriali
 # Workspace-internal crates
 feagi-npu-neural = { version = "=0.0.1-beta.18", path = "crates/feagi-npu/neural" }
 feagi-observability = { version = "=0.0.1-beta.18", path = "crates/feagi-observability" }
+feagi-config = { version = "=0.0.1-beta.18", path = "crates/feagi-config" }
+feagi-state-manager = { version = "=0.0.1-beta.18", path = "crates/feagi-state-manager" }
+feagi-evolutionary = { version = "=0.0.1-beta.18", path = "crates/feagi-evolutionary" }
+feagi-services = { version = "=0.0.1-beta.18", path = "crates/feagi-services" }
+feagi-agent = { version = "=0.0.1-beta.18", path = "crates/feagi-agent" }
+feagi-io = { version = "=0.0.1-beta.18", path = "crates/feagi-io" }
+feagi-sensorimotor = { version = "=0.0.1-beta.18", path = "crates/feagi-sensorimotor" }
+feagi-brain-development = { version = "=0.0.1-beta.18", path = "crates/feagi-brain-development" }
+feagi-npu-runtime = { version = "=0.0.1-beta.18", path = "crates/feagi-npu/runtime" }
+feagi-npu-burst-engine = { version = "=0.0.1-beta.18", path = "crates/feagi-npu/burst-engine" }
+feagi-npu-plasticity = { version = "=0.0.1-beta.18", path = "crates/feagi-npu/plasticity" }
+feagi-hal = { version = "=0.0.1-beta.18", path = "crates/feagi-hal" }
 
 [profile.release]
 lto = true           # Link-time optimization

@@ -1,13 +1,12 @@
+use crate::FeagiBaseError;
+
 #[repr(transparent)]
 #[derive(
     Debug,
     Clone,
     Copy,
     PartialEq,
-    Eq,
     Hash,
-    PartialOrd,
-    Ord,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -32,6 +31,13 @@ impl std::fmt::Display for Index {
         write!(f, "{}", self.0)
     }
 }
+
+
+
+
+
+
+
 
 #[derive(
     Debug,

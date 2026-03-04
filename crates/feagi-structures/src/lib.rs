@@ -1,16 +1,17 @@
 //! The core crate for FEAGI. Defines the most common data structures used throughout
 #![doc = include_str!("../docs/readme.md")]
 
-pub mod common_macros;
-mod feagi_data_error;
 mod feagi_json;
 mod feagi_signal;
-pub mod genomic;
-pub mod neuron_voxels;
 mod templates;
 mod common_descriptors;
+mod feagi_base_error;
 
-pub use feagi_data_error::FeagiDataError;
+pub mod common_macros;
+pub mod genomic;
+pub mod neuron;
+
+pub use feagi_base_error::FeagiBaseError;
 pub use feagi_json::FeagiJSON;
 pub use feagi_signal::{FeagiSignal, FeagiSignalIndex};
 

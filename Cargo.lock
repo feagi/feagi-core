@@ -2147,21 +2147,12 @@ name = "feagi-structures"
 version = "0.0.1-beta.18"
 dependencies = [
  "base64 0.22.1",
- "futures-channel",
- "futures-util",
- "js-sys",
  "ndarray",
  "paste",
  "rayon",
  "serde",
  "serde_json",
- "tokio",
  "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "wasm-rs-async-executor",
- "web-sys",
 ]
 
 [[package]]
@@ -3608,16 +3599,6 @@ checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
 dependencies = [
  "mime",
  "unicase",
-]
-
-[[package]]
-name = "minicov"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4869b6a491569605d66d3952bcdf03df789e5b536e5f0cf7758a7f08a55ae24d"
-dependencies = [
- "cc",
- "walkdir",
 ]
 
 [[package]]
@@ -6655,45 +6636,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-bindgen-test"
-version = "0.3.58"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45649196a53b0b7a15101d845d44d2dda7374fc1b5b5e2bbf58b7577ff4b346d"
-dependencies = [
- "async-trait",
- "cast",
- "js-sys",
- "libm",
- "minicov",
- "nu-ansi-term",
- "num-traits",
- "oorandom",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test-macro",
- "wasm-bindgen-test-shared",
-]
-
-[[package]]
-name = "wasm-bindgen-test-macro"
-version = "0.3.58"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f579cdd0123ac74b94e1a4a72bd963cf30ebac343f2df347da0b8df24cdebed2"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.114",
-]
-
-[[package]]
-name = "wasm-bindgen-test-shared"
-version = "0.2.108"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8145dd1593bf0fb137dbfa85b8be79ec560a447298955877804640e40c2d6ea"
-
-[[package]]
 name = "wasm-encoder"
 version = "0.244.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6713,15 +6655,6 @@ dependencies = [
  "indexmap 2.13.0",
  "wasm-encoder",
  "wasmparser",
-]
-
-[[package]]
-name = "wasm-rs-async-executor"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fed8e8c10166d28c68859dd5d159d408fa50fdf668ae39461f2ea41148655d52"
-dependencies = [
- "futures",
 ]
 
 [[package]]
