@@ -2,7 +2,16 @@
 // TODO more proper implementation
 // TODO think about this carefully
 
-pub trait NeuralPotentialValue: Copy + Clone + Send + Sync + fmt::Debug + 'static {
+#[cfg(feature = "alloc")]
+use core::fmt::{Debug, Display};
+
+pub type NeuronPotentialF32 = f32;
+
+#[cfg(not(feature = "alloc"))]
+pub trait NeuralPotentialValue:
+    Copy + Clone + Send + Sync + 'static
+{
+    const NUMBER_OF_BYTES: usize;
     fn from_f32(value: f32) -> Self;
     fn to_f32(self) -> f32;
     fn saturating_add(self, other: Self) -> Self;
@@ -15,7 +24,27 @@ pub trait NeuralPotentialValue: Copy + Clone + Send + Sync + fmt::Debug + 'stati
     fn min_value() -> Self;
 }
 
-impl NeuralValue for f32 {
+#[cfg(feature = "alloc")]
+pub trait NeuralPotentialValue:
+Copy + Clone + Send + Sync + Debug + Display + Default + 'static
+{
+    const NUMBER_OF_BYTES: usize;
+    fn from_f32(value: f32) -> Self;
+    fn to_f32(self) -> f32;
+    fn saturating_add(self, other: Self) -> Self;
+    fn mul_leak(self, leak_coefficient: f32) -> Self;
+    fn ge(self, other: Self) -> bool;
+    fn lt(self, other: Self) -> bool;
+    fn zero() -> Self;
+    fn one() -> Self;
+    fn max_value() -> Self;
+    fn min_value() -> Self;
+}
+
+
+impl NeuralPotentialValue for f32 {
+    const NUMBER_OF_BYTES: usize = size_of::<f32>();
+
     #[inline(always)]
     fn from_f32(value: f32) -> Self {
         value
@@ -66,3 +95,4 @@ impl NeuralValue for f32 {
         f32::MIN
     }
 }
+

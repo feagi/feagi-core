@@ -1,44 +1,51 @@
 use crate::FeagiBaseError;
 
+
+//region NonZeroIndex
 #[repr(transparent)]
 #[derive(
     Debug,
     Clone,
     Copy,
     PartialEq,
+    Eq,
     Hash,
+    PartialOrd,
+    Ord,
     serde::Serialize,
     serde::Deserialize,
 )]
-pub struct NonzeroCount(usize);
+pub struct NonzeroCount(u32);
 
 impl NonzeroCount {
-    pub fn new(n: usize) -> Result<Self, FeagiBaseError> {
+
+    pub const NUMBER_OF_BYTES: usize = size_of::<u32>();
+
+    pub fn new(n: u32) -> Result<Self, FeagiBaseError> {
         if n == 0 {
             return Err(FeagiBaseError::ValueCannotBeZero);
         }
+        Ok(Self(n))
     }
 }
-impl std::ops::Deref for NonzeroCount {
-    type Target = NonzeroCount;
+
+impl core::ops::Deref for NonzeroCount {
+    type Target = u32;
+
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl std::fmt::Display for Index {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for NonzeroCount {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
+//endregion
 
-
-
-
-
-
-
+//region 2D
 #[derive(
     Debug,
     Clone,
@@ -52,26 +59,31 @@ impl std::fmt::Display for Index {
     serde::Deserialize,
 )]
 pub struct Coordinate2D {
-    pub x: usize,
-    pub y: usize,
+    pub x: u32,
+    pub y: u32,
 }
 
 impl Coordinate2D {
-    pub fn new(x: usize, y: usize) -> Self {
+
+    pub const NUMBER_OF_BYTES: usize = size_of::<u32>() * 2;
+
+    pub fn new(x: u32, y: u32) -> Self {
         Self { x, y }
     }
 
-    pub fn new_with_fit_check(x: usize, y: usize, bounds: &Dimension2D) -> Result<Self, FeagiBaseError> {
+    pub fn new_with_fit_check(
+        x: u32,
+        y: u32,
+        bounds: &Dimension2D,
+    ) -> Result<Self, FeagiBaseError> {
         let coords = Self::new(x, y);
-        bounds.verify_fit(coords)?;
+        bounds.verify_fit(&coords)?;
         Ok(coords)
     }
-
-
 }
 
-impl std::fmt::Display for Coordinate2D {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Coordinate2D {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "Coordinate2D<{}, {}>", self.x, self.y)
     }
 }
@@ -94,38 +106,50 @@ pub struct Dimension2D {
 }
 
 impl Dimension2D {
-    pub fn new(x: usize, y: usize) -> Result<Self, FeagiBaseError> {
+
+    pub const NUMBER_OF_BYTES: usize = size_of::<u32>() * 2;
+
+    pub fn new(x: u32, y: u32) -> Result<Self, FeagiBaseError> {
         let x = NonzeroCount::new(x)?;
         let y = NonzeroCount::new(y)?;
         Ok(Self { x, y })
-
     }
 
-    pub fn new_square(n: usize) -> Result<Self, FeagiBaseError> {
+    pub fn new_square(n: u32) -> Result<Self, FeagiBaseError> {
         let x = NonzeroCount::new(n)?;
-        let y = x.clone();
+        let y = x;
         Ok(Self { x, y })
     }
 
     pub fn does_fit(&self, coordinate: &Coordinate2D) -> bool {
-        coordinate.x < self.x && coordinate.y < self.y
+        coordinate.x < self.x.get() && coordinate.y < self.y.get()
     }
 
     pub fn verify_fit(&self, coordinate: &Coordinate2D) -> Result<(), FeagiBaseError> {
         if self.does_fit(coordinate) {
-            Ok(())
+            return Ok(());
         }
-        Err(FeagiBaseError::Coordinate2DOutOfBounds{coordinate, dimensions: &self})
+        Err(FeagiBaseError::Coordinate2DOutOfBounds {
+            coordinate,
+            dimensions: self,
+        })
+    }
+
+    pub fn number_elements(&self) -> u32 {
+        // TODO what if there is an overflow?
+        *self.x * *self.y
     }
 }
 
-impl std::fmt::Display for Dimension2D {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Dimension2D {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "Dimensions2D<{}, {}>", self.x, self.y)
     }
 }
 
+//endregion
 
+//region  3D
 
 #[derive(
     Debug,
@@ -140,27 +164,33 @@ impl std::fmt::Display for Dimension2D {
     serde::Deserialize,
 )]
 pub struct Coordinate3D {
-    pub x: usize,
-    pub y: usize,
-    pub z: usize,
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
 }
 
 impl Coordinate3D {
-    pub fn new(x: usize, y: usize, z: usize) -> Self {
-        Self { x, y }
+
+    pub const NUMBER_OF_BYTES: usize = size_of::<u32>() * 3;
+
+    pub fn new(x: u32, y: u32, z: u32) -> Self {
+        Self { x, y, z }
     }
 
-    pub fn new_with_fit_check(x: usize, y: usize, z: usize, bounds: &Dimension3D) -> Result<Self, FeagiBaseError> {
+    pub fn new_with_fit_check(
+        x: u32,
+        y: u32,
+        z: u32,
+        bounds: &Dimension3D,
+    ) -> Result<Self, FeagiBaseError> {
         let coords = Self::new(x, y, z);
-        bounds.verify_fit(coords)?;
+        bounds.verify_fit(&coords)?;
         Ok(coords)
     }
-
-
 }
 
-impl std::fmt::Display for Coordinate3D {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Coordinate3D {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "Coordinate3D<{}, {}, {}>", self.x, self.y, self.z)
     }
 }
@@ -184,35 +214,49 @@ pub struct Dimension3D {
 }
 
 impl Dimension3D {
-    pub fn new(x: usize, y: usize, z: usize) -> Result<Self, FeagiBaseError> {
+
+    pub const NUMBER_OF_BYTES: usize = size_of::<u32>() * 3;
+
+    pub fn new(x: u32, y: u32, z: u32) -> Result<Self, FeagiBaseError> {
         let x = NonzeroCount::new(x)?;
         let y = NonzeroCount::new(y)?;
         let z = NonzeroCount::new(z)?;
         Ok(Self { x, y, z })
-
     }
 
-    pub fn new_cube(n: usize) -> Result<Self, FeagiBaseError> {
+    pub fn new_cube(n: u32) -> Result<Self, FeagiBaseError> {
         let x = NonzeroCount::new(n)?;
-        let y = x.clone();
-        let z = x.clone();
+        let y = x;
+        let z = x;
         Ok(Self { x, y, z })
     }
 
     pub fn does_fit(&self, coordinate: &Coordinate3D) -> bool {
-        coordinate.x < self.x && coordinate.y < self.y && coordinate.z < self.z
+        coordinate.x < self.x.get()
+            && coordinate.y < self.y.get()
+            && coordinate.z < self.z.get()
     }
 
     pub fn verify_fit(&self, coordinate: &Coordinate3D) -> Result<(), FeagiBaseError> {
         if self.does_fit(coordinate) {
-            Ok(())
+            return Ok(());
         }
-        Err(FeagiBaseError::Coordinate3DOutOfBounds{coordinate, dimensions: &self})
+        Err(FeagiBaseError::Coordinate3DOutOfBounds {
+            coordinate,
+            dimensions: self,
+        })
+    }
+
+    pub fn number_elements(&self) -> u32 {
+        // TODO what if there is an overflow?
+        *self.x * *self.y * *self.z
     }
 }
 
-impl std::fmt::Display for Dimension3D {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Dimension3D {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "Dimensions3D<{}, {}, {}>", self.x, self.y, self.z)
     }
 }
+
+//endregion
