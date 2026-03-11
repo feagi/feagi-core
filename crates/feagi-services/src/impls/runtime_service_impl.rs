@@ -62,7 +62,9 @@ impl RuntimeService for RuntimeServiceImpl {
         info!(target: "feagi-services", "Stopping burst engine");
 
         let mut runner = self.burst_runner.write();
-        runner.stop();
+        runner
+            .stop_strict()
+            .map_err(|e| ServiceError::Backend(format!("Failed to stop burst engine: {}", e)))?;
 
         // Clear paused flag
         *self.paused.write() = false;

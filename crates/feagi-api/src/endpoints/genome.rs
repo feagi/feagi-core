@@ -7,8 +7,10 @@
 use crate::amalgamation;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Query, State};
-use feagi_services::types::LoadGenomeParams;
+use feagi_services::types::{GenomeInfo, LoadGenomeParams};
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use tracing::info;
 use uuid::Uuid;
 
@@ -84,6 +86,108 @@ fn queue_amalgamation_from_genome_json_str(
     );
 
     Ok(amalgamation_id)
+}
+
+struct GenomeTransitionFlagGuard {
+    in_progress: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl Drop for GenomeTransitionFlagGuard {
+    fn drop(&mut self) {
+        self.in_progress.store(false, Ordering::SeqCst);
+    }
+}
+
+/// Execute a genome load with strict priority over concurrent operations.
+///
+/// Guarantees:
+/// - Only one genome transition may run at a time.
+/// - Runtime is quiesced before load starts.
+/// - Runtime frequency is updated from genome physiology.
+/// - Runtime is restored to running state if it was running before transition.
+async fn load_genome_with_priority(
+    state: &ApiState,
+    params: LoadGenomeParams,
+    source: &str,
+) -> ApiResult<GenomeInfo> {
+    let _transition_lock = state.genome_transition_lock.try_lock().map_err(|_| {
+        ApiError::conflict(
+            "Another genome transition is already in progress; wait for it to finish",
+        )
+    })?;
+    state
+        .genome_transition_in_progress
+        .store(true, Ordering::SeqCst);
+    let _guard = GenomeTransitionFlagGuard {
+        in_progress: Arc::clone(&state.genome_transition_in_progress),
+    };
+
+    tracing::info!(
+        target: "feagi-api",
+        "🛑 Entering prioritized genome transition from {}",
+        source
+    );
+
+    let runtime_service = state.runtime_service.as_ref();
+    let runtime_status = runtime_service
+        .get_status()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get runtime status: {}", e)))?;
+    let runtime_was_running = runtime_status.is_running;
+
+    if runtime_was_running {
+        tracing::info!(
+            target: "feagi-api",
+            "Stopping burst engine before prioritized genome transition"
+        );
+        runtime_service.stop().await.map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to stop burst engine before genome transition: {}",
+                e
+            ))
+        })?;
+    }
+
+    let genome_service = state.genome_service.as_ref();
+    let load_result = genome_service.load_genome(params).await;
+    let genome_info = match load_result {
+        Ok(info) => info,
+        Err(e) => {
+            if runtime_was_running {
+                if let Err(restart_err) = runtime_service.start().await {
+                    tracing::warn!(
+                        target: "feagi-api",
+                        "Failed to restore runtime after failed genome load (source={}): {}",
+                        source,
+                        restart_err
+                    );
+                }
+            }
+            return Err(ApiError::internal(format!("Failed to load genome: {}", e)));
+        }
+    };
+
+    let burst_frequency_hz = 1.0 / genome_info.simulation_timestep;
+    runtime_service
+        .set_frequency(burst_frequency_hz)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to update burst frequency: {}", e)))?;
+
+    if runtime_was_running {
+        runtime_service.start().await.map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to restart burst engine after genome transition: {}",
+                e
+            ))
+        })?;
+    }
+
+    tracing::info!(
+        target: "feagi-api",
+        "✅ Prioritized genome transition completed from {}",
+        source
+    );
+    Ok(genome_info)
 }
 
 /// Inject the current runtime simulation timestep (seconds) into a genome JSON value.
@@ -530,33 +634,6 @@ async fn load_default_genome(
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     tracing::info!(target: "feagi-api", "🔄 Loading {} genome from embedded Rust genomes", genome_name);
     tracing::debug!(target: "feagi-api", "   State components available: genome_service=true, runtime_service=true");
-    let runtime_service = state.runtime_service.as_ref();
-
-    // Runtime lifecycle guard:
-    // Genome load mutates connectome/NPU state and must not race with active burst processing.
-    let runtime_status = runtime_service
-        .get_status()
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to get runtime status: {}", e)))?;
-    let runtime_was_running = runtime_status.is_running;
-    if runtime_was_running {
-        tracing::info!(
-            target: "feagi-api",
-            "Stopping burst engine before genome load (stage transition: Running -> Stopped)"
-        );
-        runtime_service.stop().await.map_err(|e| {
-            ApiError::internal(format!(
-                "Failed to stop burst engine before genome load: {}",
-                e
-            ))
-        })?;
-    } else {
-        tracing::debug!(
-            target: "feagi-api",
-            "Burst engine already stopped before genome load"
-        );
-    }
-
     // Load genome from embedded Rust templates (no file I/O!)
     let genome_json = match genome_name {
         "barebones" => feagi_evolutionary::BAREBONES_GENOME_JSON,
@@ -574,52 +651,15 @@ async fn load_default_genome(
     tracing::info!(target: "feagi-api","Using embedded {} genome ({} bytes), starting conversion...",
                    genome_name, genome_json.len());
 
-    // Load genome via service (which will automatically ensure core components)
-    let genome_service = state.genome_service.as_ref();
     let params = LoadGenomeParams {
         json_str: genome_json.to_string(),
     };
 
-    tracing::info!(target: "feagi-api","Calling genome service load_genome...");
-    let genome_info = genome_service
-        .load_genome(params)
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to load genome: {}", e)))?;
+    tracing::info!(target: "feagi-api","Calling prioritized genome transition loader...");
+    let genome_info = load_genome_with_priority(&state, params, "default_genome_endpoint").await?;
 
     tracing::info!(target: "feagi-api","Successfully loaded {} genome: {} cortical areas, {} brain regions",
                genome_name, genome_info.cortical_area_count, genome_info.brain_region_count);
-
-    // CRITICAL: Update burst frequency from genome's simulation_timestep
-    // Genome specifies timestep in seconds, convert to Hz: frequency = 1 / timestep
-    let burst_frequency_hz = 1.0 / genome_info.simulation_timestep;
-    tracing::info!(target: "feagi-api","Updating burst frequency from genome: {} seconds timestep → {:.0} Hz",
-                   genome_info.simulation_timestep, burst_frequency_hz);
-
-    // Update runtime service with new frequency
-    runtime_service
-        .set_frequency(burst_frequency_hz)
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to update burst frequency: {}", e)))?;
-
-    tracing::info!(target: "feagi-api","✅ Burst frequency updated to {:.0} Hz from genome physiology", burst_frequency_hz);
-
-    if runtime_was_running {
-        tracing::info!(
-            target: "feagi-api",
-            "Restarting burst engine after genome load (stage transition: Stopped -> Running)"
-        );
-        runtime_service.start().await.map_err(|e| {
-            ApiError::internal(format!(
-                "Failed to restart burst engine after genome load: {}",
-                e
-            ))
-        })?;
-    } else {
-        tracing::debug!(
-            target: "feagi-api",
-            "Leaving burst engine in stopped state after genome load"
-        );
-    }
 
     // Return response matching Python format
     let mut response = HashMap::new();
@@ -772,15 +812,11 @@ pub async fn post_load(
         .ok_or_else(|| ApiError::invalid_input("genome_name required"))?;
 
     // Load genome from defaults
-    let genome_service = state.genome_service.as_ref();
     let params = feagi_services::LoadGenomeParams {
         json_str: format!("{{\"genome_title\": \"{}\"}}", genome_name),
     };
 
-    let genome_info = genome_service
-        .load_genome(params)
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to load genome: {}", e)))?;
+    let genome_info = load_genome_with_priority(&state, params, "post_load").await?;
 
     let mut response = HashMap::new();
     response.insert(
@@ -808,17 +844,12 @@ pub async fn post_upload(
     State(state): State<ApiState>,
     Json(genome_json): Json<serde_json::Value>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    let genome_service = state.genome_service.as_ref();
-
     // Convert to JSON string
     let json_str = serde_json::to_string(&genome_json)
         .map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
 
     let params = LoadGenomeParams { json_str };
-    let genome_info = genome_service.load_genome(params).await.map_err(|e| {
-        tracing::error!(target: "feagi-api", "Genome load failed: {}", e);
-        ApiError::internal(format!("Failed to upload genome: {}", e))
-    })?;
+    let genome_info = load_genome_with_priority(&state, params, "post_upload").await?;
 
     let mut response = HashMap::new();
     response.insert("success".to_string(), serde_json::json!(true));
@@ -1639,11 +1670,9 @@ pub async fn post_upload_file(
     let json_str =
         genome_json.ok_or_else(|| ApiError::invalid_input("Missing multipart field 'file'"))?;
 
-    let genome_service = state.genome_service.as_ref();
-    let genome_info = genome_service
-        .load_genome(LoadGenomeParams { json_str })
-        .await
-        .map_err(|e| ApiError::internal(format!("Failed to upload genome from file: {}", e)))?;
+    let genome_info =
+        load_genome_with_priority(&state, LoadGenomeParams { json_str }, "post_upload_file")
+            .await?;
 
     let mut response = HashMap::new();
     response.insert("success".to_string(), serde_json::json!(true));

@@ -422,6 +422,79 @@ impl<
         self.burst_count.load(std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// Reset all runtime state so a new genome can be loaded cleanly.
+    ///
+    /// This clears neuron/synapse storage and all derived runtime caches/indexes while
+    /// preserving allocated capacities to avoid repeated large allocations between reloads.
+    pub fn reset_for_new_genome(&mut self) -> Result<()> {
+        let neuron_capacity = self.neuron_storage.read().unwrap().capacity();
+        let synapse_capacity = self.synapse_storage.read().unwrap().capacity();
+
+        let new_neuron_storage = self
+            .runtime
+            .create_neuron_storage(neuron_capacity)
+            .map_err(|e| {
+                FeagiError::RuntimeError(format!("Failed to reset neuron storage: {:?}", e))
+            })?;
+        let new_synapse_storage = self
+            .runtime
+            .create_synapse_storage(synapse_capacity)
+            .map_err(|e| {
+                FeagiError::RuntimeError(format!("Failed to reset synapse storage: {:?}", e))
+            })?;
+
+        {
+            let mut neurons = self.neuron_storage.write().unwrap();
+            *neurons = new_neuron_storage;
+        }
+        {
+            let mut synapses = self.synapse_storage.write().unwrap();
+            *synapses = new_synapse_storage;
+        }
+
+        let fire_ledger_capacity_hint = {
+            let fire_structures = self.fire_structures.lock().unwrap();
+            fire_structures
+                .fire_ledger
+                .get_tracked_windows()
+                .iter()
+                .map(|(_, window)| *window)
+                .max()
+                .unwrap_or(16)
+        };
+
+        {
+            let mut fire_structures = self.fire_structures.lock().unwrap();
+            *fire_structures = FireStructures {
+                fire_candidate_list: FireCandidateList::new(),
+                current_fire_queue: FireQueue::new(),
+                previous_fire_queue: FireQueue::new(),
+                fire_ledger: FireLedger::new(fire_ledger_capacity_hint),
+                fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
+                pending_sensory_injections: Vec::with_capacity(10000),
+                pending_memory_injections: Vec::with_capacity(1024),
+                memory_candidate_cortical_idx: AHashMap::new(),
+                last_fcl_snapshot: Vec::new(),
+                pending_replay_injections: Vec::new(),
+            };
+        }
+
+        self.area_id_to_name.write().unwrap().clear();
+        *self.propagation_engine.write().unwrap() = SynapticPropagationEngine::new();
+        self.stdp_mappings.write().unwrap().clear();
+        self.stdp_mapping_index.write().unwrap().clear();
+        self.memory_replay_frames.write().unwrap().clear();
+        self.memory_replay_twin_map.write().unwrap().clear();
+        self.burst_count
+            .store(0, std::sync::atomic::Ordering::SeqCst);
+        self.fatigue_active
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.power_neuron_id
+            .store(POWER_NEURON_UNSET, std::sync::atomic::Ordering::SeqCst);
+
+        Ok(())
+    }
+
     /// Increment burst count (lock-free atomic operation)
     fn increment_burst_count(&self) -> u64 {
         self.burst_count
@@ -4689,6 +4762,76 @@ mod tests {
                 1_000_000, 10_000_000, 100,
             );
         assert_eq!(npu.get_neuron_count(), 0);
+    }
+
+    #[test]
+    fn test_reset_for_new_genome_clears_runtime_state() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                128, 128, 20,
+            );
+
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(4, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
+        let src = npu
+            .add_neuron(
+                1.0,
+                f32::MAX,
+                0.1,
+                0.0,
+                0,
+                1,
+                1.0,
+                u16::MAX,
+                0,
+                true,
+                3,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+        let dst = npu
+            .add_neuron(
+                1.0,
+                f32::MAX,
+                0.1,
+                0.0,
+                0,
+                1,
+                1.0,
+                u16::MAX,
+                0,
+                true,
+                4,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        npu.add_synapse(
+            src,
+            dst,
+            SynapticWeight(1),
+            SynapticPsp(1),
+            SynapseType::Excitatory,
+        )
+        .unwrap();
+        npu.process_burst().unwrap();
+
+        assert!(npu.get_neuron_count() > 0);
+        assert!(npu.get_synapse_count() > 0);
+        assert!(npu.get_burst_count() > 0);
+
+        npu.reset_for_new_genome().unwrap();
+
+        assert_eq!(npu.get_neuron_count(), 0);
+        assert_eq!(npu.get_synapse_count(), 0);
+        assert_eq!(npu.get_burst_count(), 0);
+        assert!(npu.get_neurons_in_cortical_area(3).is_empty());
+        assert!(npu.get_neurons_in_cortical_area(4).is_empty());
     }
 
     // ═══════════════════════════════════════════════════════════

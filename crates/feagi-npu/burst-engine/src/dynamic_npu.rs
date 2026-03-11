@@ -319,6 +319,11 @@ where
         dispatch!(self, get_burst_count())
     }
 
+    /// Reset all NPU runtime state for loading a fresh genome.
+    pub fn reset_for_new_genome(&mut self) -> Result<()> {
+        dispatch_mut!(self, reset_for_new_genome())
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn create_cortical_area_neurons(
         &mut self,

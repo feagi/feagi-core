@@ -642,14 +642,13 @@ impl BurstLoopRunner {
         Ok(())
     }
 
-    /// Stop the burst loop gracefully
+    /// Stop the burst loop strictly and verify thread termination.
     ///
     /// This method sets the shutdown flag and waits up to 2 seconds for the thread to finish.
-    /// If the thread doesn't finish within the timeout, it's considered non-responsive
-    /// and we proceed with shutdown anyway.
-    pub fn stop(&mut self) {
+    /// If the thread doesn't finish within the timeout, an error is returned.
+    pub fn stop_strict(&mut self) -> Result<(), String> {
         if !self.running.load(Ordering::Acquire) {
-            return; // Already stopped
+            return Ok(()); // Already stopped
         }
 
         info!("[BURST-RUNNER] Stopping burst loop...");
@@ -678,6 +677,7 @@ impl BurstLoopRunner {
                 }
                 Ok(Err(_)) => {
                     warn!("[BURST-RUNNER] ⚠️ Burst loop thread panicked during shutdown");
+                    return Err("Burst loop thread panicked during shutdown".to_string());
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     let elapsed = start.elapsed();
@@ -685,11 +685,27 @@ impl BurstLoopRunner {
                         "[BURST-RUNNER] ⚠️ Burst loop did not stop within {:?}, proceeding with shutdown",
                         elapsed
                     );
+                    return Err(format!(
+                        "Burst loop did not stop within {:?}",
+                        stop_timeout
+                    ));
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     warn!("[BURST-RUNNER] ⚠️ Join thread disconnected unexpectedly");
+                    return Err("Burst loop join thread disconnected unexpectedly".to_string());
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// Stop the burst loop gracefully (best effort).
+    pub fn stop(&mut self) {
+        if let Err(e) = self.stop_strict() {
+            warn!(
+                "[BURST-RUNNER] ⚠️ Non-strict stop encountered an error: {}",
+                e
+            );
         }
     }
 
