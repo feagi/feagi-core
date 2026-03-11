@@ -5,7 +5,6 @@
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
-extern crate core;
 
 mod feagi_json;
 mod templates;
@@ -14,6 +13,8 @@ mod feagi_base_error;
 
 pub mod genomic;
 pub mod neuron;
+pub mod base_quantizable;
+pub mod cortical_area;
 
 pub use feagi_base_error::FeagiBaseError;
 pub use feagi_json::FeagiJSON;

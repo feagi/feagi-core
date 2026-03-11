@@ -13,7 +13,7 @@ description = "The most core library, defines the basic data types used by FEAGI
 [features]
 default = ["std"]
 
-std = ["alloc"] # allows use of the std library
+std = ["alloc", "dep:ahash"] # allows use of the std library
 alloc = [] # allows use of alloc (through core, not strictly std)
 defmt = ["dep:defmt"]
 ndarray = ["dep:ndarray"]
@@ -21,11 +21,14 @@ rayon = ["dep:rayon", "std"]
 
 [dependencies]
 defmt = {workspace = true, optional = true}
+ahash = { workspace = true, optional = true}
 serde = { workspace = true }
 serde_json = { workspace = true}
 ndarray = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 uuid = { workspace = true } # TODO check STD compabtility
-paste = "1.0.15" # TODO Dev dependency?
+
 base64 = "0.22.1" # TODO move to workspace
 
+[dev-dependencies]
+paste = "1.0.15"

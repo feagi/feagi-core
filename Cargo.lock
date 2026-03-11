@@ -2178,6 +2178,7 @@ dependencies = [
 name = "feagi-structures"
 version = "0.0.1-beta.18"
 dependencies = [
+ "ahash",
  "base64 0.22.1",
  "defmt",
  "ndarray",

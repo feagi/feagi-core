@@ -41,52 +41,67 @@ pub struct NeuronArray<T: NeuralValue, const N: usize> {
     pub count: usize,
 
     /// Membrane potentials (quantized to T)
-    pub membrane_potentials: [T; N],
+    pub membrane_potentials: [T; N], // NL both all the time , read / changed often
 
     /// Firing thresholds (quantized to T) - minimum MP to fire
-    pub thresholds: [T; N],
+    pub thresholds: [T; N], // NL  only changed in bv, mostly read
 
     /// Firing threshold limits (quantized to T) - maximum MP to fire (0 = no limit)
-    pub threshold_limits: [T; N],
+    pub threshold_limits: [T; N], // mostly read
+
+    // firing threshold increment - create a gradiant across a cortical area, changes "threshold" when set in bv in a gradient manner (each neuron unique vale)
 
     /// Leak coefficients (kept as f32 for precision)
-    pub leak_coefficients: [f32; N],
+    pub leak_coefficients: [f32; N], // per neuron (initial by ca, below changes it), mostly read
+
+    // leak variability, not in neuron array
 
     /// Resting potentials
-    pub resting_potentials: [T; N],
+    pub resting_potentials: [T; N], // delete this one
 
     /// Neuron types (0=excitatory, 1=inhibitory)
-    pub neuron_types: [i32; N],
+    pub neuron_types: [i32; N], // get rid of this?
 
     /// Refractory periods
-    pub refractory_periods: [u16; N],
+    pub refractory_periods: [u16; N], // cortical level?, mostly read
 
     /// Refractory countdowns (state)
-    pub refractory_countdowns: [u16; N],
+    pub refractory_countdowns: [u16; N], // read write, per neuron
 
     /// Excitability factors
-    pub excitabilities: [f32; N],
+    pub excitabilities: [f32; N], // per cortical area, is a percentage, mostly read
 
     /// Consecutive fire counts
-    pub consecutive_fire_counts: [u16; N],
+    pub consecutive_fire_counts: [u16; N], // per neuron, (bv has how many times neuron fires before snooze), read write
 
     /// Consecutive fire limits
-    pub consecutive_fire_limits: [u16; N],
+    pub consecutive_fire_limits: [u16; N], // cortical level? read
+
+
+    //pub snooze counter // read write, per neruon
+    // pub snooze limit (coritcal) // cortical level, read
 
     /// Snooze periods (extended refractory)
-    pub snooze_periods: [u16; N],
+    pub snooze_periods: [u16; N], // cortical level, read, del
+
+
 
     /// Membrane potential charge accumulation flags
-    pub mp_charge_accumulation: [bool; N],
+    pub mp_charge_accumulation: [bool; N], // bitpacking? is cortical level, mostly read
 
     /// Cortical area IDs
-    pub cortical_areas: [u32; N],
+    pub cortical_areas: [u32; N], // idx, u16 only read
 
     /// 3D coordinates (flat: [x0,y0,z0, x1,y1,z1, ...])
-    pub coordinates: [u32; N], // Will need N*3, simplified for now
+    pub coordinates: [u32; N], // Will need N*3, simplified for now // we dont need to store this
 
     /// Valid mask
-    pub valid_mask: [bool; N],
+    pub valid_mask: [bool; N], // bitpacking - neuron level,  read, written semi oftren (memory very often)
+
+    // memory doesnt have fire threshold, doesnt have snooze, sleep, consecutive_fire_counts, leak_coefficients
+    // has post synaptic potentials
+
+
 }
 
 impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
