@@ -3008,6 +3008,46 @@ impl ConnectomeManager {
                 }
                 Ok(count as usize)
             }
+            "rotator_z" => {
+                let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Source area not found: {}",
+                        src_area_id
+                    ))
+                })?;
+                let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Destination area not found: {}",
+                        dst_area_id
+                    ))
+                })?;
+                let src_dimensions = (
+                    src_area.dimensions.width as usize,
+                    src_area.dimensions.height as usize,
+                    src_area.dimensions.depth as usize,
+                );
+                let dst_dimensions = (
+                    dst_area.dimensions.width as usize,
+                    dst_area.dimensions.height as usize,
+                    dst_area.dimensions.depth as usize,
+                );
+
+                let count = crate::connectivity::core_morphologies::apply_rotator_z_morphology_with_dimensions(
+                    npu,
+                    src_idx,
+                    dst_idx,
+                    src_dimensions,
+                    dst_dimensions,
+                    weight,
+                    psp,
+                    synapse_attractivity,
+                    synapse_type,
+                )?;
+                if count > 0 {
+                    npu.rebuild_synapse_index();
+                }
+                Ok(count as usize)
+            }
             _ => {
                 // Other function morphologies not yet implemented
                 // NOTE: To add a new function-type morphology, add a case here
@@ -4770,15 +4810,15 @@ impl ConnectomeManager {
         // Clear brain regions
         self.brain_regions = BrainRegionHierarchy::new();
 
-        // CRITICAL: NPU is NOT reset here. Until NPU has a reset() and we call it:
-        // - ConnectomeManager gets new cortical_idx_to_id from the new genome.
-        // - Burst loop cache is refreshed from ConnectomeManager (refresh_burst_runner_cache).
-        // - NPU still holds neurons from the OLD genome with OLD cortical_idx.
-        // - Fire queue (area_id, x, y, z) uses old indices; we label with NEW cortical_id.
-        // Result: wrong area's coordinates sent under another area's id -> BV shows
-        // out-of-region / wrong-scale activations. Restarting feagi-rs fixes it (full sync).
-        // Fix: implement NPU reset (clear neuron storage + area_id_to_name), then:
-        //   if let Some(ref npu) = self.npu { npu.lock().map_err(...)?.reset(); }
+        // Reset NPU runtime state to prevent old neurons/synapses from leaking into the next genome.
+        if let Some(ref npu) = self.npu {
+            let mut npu_lock = npu
+                .lock()
+                .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+            npu_lock
+                .reset_for_new_genome()
+                .map_err(|e| BduError::Internal(format!("Failed to reset NPU: {}", e)))?;
+        }
 
         info!(target: "feagi-bdu","✅ Connectome cleared and ready for new genome");
         Ok(())

@@ -263,6 +263,7 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         "episodic_memory",
         "memory_replay",
         "associative_memory",
+        "rotator_z",
         "all_to_0-0-0",
         "0-0-0_to_all",
         "tile",
@@ -358,6 +359,16 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
     // associative_memory (bi-directional STDP) - Function-based morphology
     registry.add_morphology(
         "associative_memory".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // rotator_z - Function-based morphology for z-layered XY rotations [-90,+90]
+    registry.add_morphology(
+        "rotator_z".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},
