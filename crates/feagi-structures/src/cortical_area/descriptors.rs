@@ -33,3 +33,36 @@ impl CorticalAreaIndex for u8 {
 }
 
 //endregion
+
+//region Cortical Area Count
+pub type CorticalAreaCountU32 = u32;
+pub type CorticalAreaCountU16 = u16;
+pub type CorticalAreaCountU8 = u8;
+
+#[cfg(not(feature = "alloc"))]
+pub trait CorticalAreaCount:
+Copy + Clone + Send + Sync + QuantizableUInt + 'static
+{
+
+}
+
+#[cfg(feature = "alloc")]
+pub trait CorticalAreaCount:
+Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'static
+{
+
+}
+
+impl CorticalAreaCount for u32 {
+
+}
+
+impl CorticalAreaCount for u16 {
+
+}
+
+impl CorticalAreaCount for u8 {
+
+}
+
+//endregion

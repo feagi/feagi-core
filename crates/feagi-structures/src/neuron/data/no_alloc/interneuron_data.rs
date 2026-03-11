@@ -1,18 +1,14 @@
-use ahash::AHashMap;
 use crate::cortical_area::descriptors::{CorticalAreaCount, CorticalAreaIndex};
 use crate::neuron::data::{InterNeuronData, NeuronFlag};
 use crate::neuron::descriptors::{ConsecutiveFireCountdown, ConsecutiveFireLimit, Excitability, LeakCoefficient, NeuralPotentialValue, NeuronCount, NeuronId, RefractoryCountdown, RefractoryPeriod, SnoozePeriodCountdown, SnoozePeriodLimit};
 use crate::neuron::FeagiNeuronError;
 
-// TODO Rayon? Could the trait perhaps implement some sort of iterator support for rayon?
-// TODO return mut refs to indexes?
-// TODO slice structure with lifetimes to this?
+// NOTE: neuron_count_per_cortical_index: As interneuron count and cortical area count cannot change,
+// we init this array with neurons grouped in xyz (incrementing in order) by cortical area,
+// those groupings being ordered by cortical are size biggest to smallest (in terms of neuron count)
+// such that the most common areas to hit (by chance) are at the start
 
-// NOTE: it makes more sense space AND compute wise to simply index the cortical area index for
-// each neuron instead of having a neuron to cortical map. However, there are times a cortical to
-// neuron map are useful in cases of reference speed when we can afford the memory
-
-pub struct InterNeuronDataDynamic<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL>
+pub struct InterNeuronDataStatic<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL, const NEURON_COUNT: NC, const CORTICAL_AREA_COUNT: CAC>
 where
     NC: NeuronCount,
     NID: NeuronId,
@@ -28,30 +24,27 @@ where
     SPC: SnoozePeriodCountdown,
     SPL: SnoozePeriodLimit,
 {
-    cortical_2_neuron: AHashMap<CAI, Vec<NID>>,
-    // See note at top about lack of cortical_2_neuron
+    neuron_count_per_cortical_index: [NC; CORTICAL_AREA_COUNT], // See note at top
 
     // Per Neuron
-    neuron_cortical_area_index: Vec<CAI>,
-    neuron_membrane_potential: Vec<NPV>,
-    neuron_threshold: Vec<NPV>,
-    neuron_threshold_limit: Vec<NPV>,
-    neuron_leak_coefficient: Vec<LC>,
-    neuron_flags: Vec<NeuronFlag>,
-    neuron_refractory_countdown: Vec<RC>,
-    consecutive_fire_count: Vec<CFC>,
-    consecutive_fire_limit: Vec<CFL>,
-    snooze_period_countdown: Vec<SPC>,
-    snooze_period_limit: Vec<SPL>,
-    add coordinates
+    neuron_cortical_area_index: [CAI; NEURON_COUNT],
+    neuron_membrane_potential: [NPV; NEURON_COUNT],
+    neuron_threshold: [NPV; NEURON_COUNT],
+    neuron_threshold_limit: [NPV; NEURON_COUNT],
+    neuron_leak_coefficient: [LC; NEURON_COUNT],
+    neuron_flags: [NeuronFlag; NEURON_COUNT],
+    neuron_refractory_countdown:[RC; NEURON_COUNT],
+    consecutive_fire_count: [CFC; NEURON_COUNT],
+    consecutive_fire_limit: [CFL; NEURON_COUNT],
+    snooze_period_countdown: [SPC; NEURON_COUNT],
+    snooze_period_limit: [SPL; NEURON_COUNT],
 
     // Per Cortical Area
-    cortical_refractory_period: Vec<RP>,
-    cortical_excitability: Vec<EX>,
-    mp_charge_accumulation_enabled: Vec<bool>,
+    cortical_refractory_period: [RP; CORTICAL_AREA_COUNT],
+    cortical_excitability: [EX; CORTICAL_AREA_COUNT],
 }
 
-impl<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> InterNeuronData<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> for InterNeuronDataDynamic<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> {
+impl<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL, const NEURON_COUNT: NC, const CORTICAL_AREA_COUNT: CAC> InterNeuronData<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> for InterNeuronDataStatic<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL, const NEURON_COUNT: NC, const CORTICAL_AREA_COUNT: CAC> {
     fn get_total_number_of_neurons(&self) -> NC {
         todo!()
     }
@@ -168,6 +161,3 @@ impl<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> InterNeuronData
         todo!()
     }
 }
-
-
-// TODO separate dynamic implementations

@@ -1,13 +1,14 @@
-use crate::cortical_area::descriptors::CorticalAreaIndex;
+use crate::cortical_area::descriptors::{CorticalAreaCount, CorticalAreaIndex};
 use crate::neuron::{FeagiNeuronError};
 use crate::neuron::descriptors::{ConsecutiveFireCountdown, ConsecutiveFireLimit, Excitability, LeakCoefficient, NeuralPotentialValue, NeuronCount, NeuronId, RefractoryCountdown, RefractoryPeriod, SnoozePeriodCountdown, SnoozePeriodLimit};
 // TODO some of these error checks may be excessive, as we may already check for it at runtime!
 // TODO Shouldnt we have a Percentage Base type?
 
-pub trait InterNeuronData<NC, NID, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL>
+pub trait InterNeuronData<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL>
 where
     NC: NeuronCount,
     NID: NeuronId,
+    CAC: CorticalAreaCount,
     CAI: CorticalAreaIndex,
     NPV: NeuralPotentialValue,
     LC: LeakCoefficient,
