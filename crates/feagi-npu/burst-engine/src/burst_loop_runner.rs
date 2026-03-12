@@ -685,10 +685,7 @@ impl BurstLoopRunner {
                         "[BURST-RUNNER] ⚠️ Burst loop did not stop within {:?}, proceeding with shutdown",
                         elapsed
                     );
-                    return Err(format!(
-                        "Burst loop did not stop within {:?}",
-                        stop_timeout
-                    ));
+                    return Err(format!("Burst loop did not stop within {:?}", stop_timeout));
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     warn!("[BURST-RUNNER] ⚠️ Join thread disconnected unexpectedly");
