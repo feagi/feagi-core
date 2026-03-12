@@ -252,11 +252,21 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
     let required_morphologies = vec![
         "block_to_block",
         "projector",
+        "sweeper",
+        "last_to_first",
+        "bitmask_encoder_x",
+        "bitmask_encoder_y",
+        "bitmask_encoder_z",
+        "bitmask_decoder_x",
+        "bitmask_decoder_y",
+        "bitmask_decoder_z",
         "episodic_memory",
         "memory_replay",
         "associative_memory",
+        "rotator_z",
         "all_to_0-0-0",
         "0-0-0_to_all",
+        "tile",
         "lateral_+x",
         "lateral_-x",
         "lateral_+y",
@@ -306,6 +316,26 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
         },
     );
 
+    // sweeper - Function-based sequential sweep mapping morphology
+    registry.add_morphology(
+        "sweeper".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // last_to_first - connect highest source voxel to destination origin
+    registry.add_morphology(
+        "last_to_first".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
     // episodic_memory - Function-based morphology
     registry.add_morphology(
         "episodic_memory".to_string(),
@@ -329,6 +359,76 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
     // associative_memory (bi-directional STDP) - Function-based morphology
     registry.add_morphology(
         "associative_memory".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // rotator_z - Function-based morphology for z-layered XY rotations [-90,+90]
+    registry.add_morphology(
+        "rotator_z".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // bitmask_encoder_x - Bitmask encode along X axis
+    registry.add_morphology(
+        "bitmask_encoder_x".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // bitmask_encoder_y - Bitmask encode along Y axis
+    registry.add_morphology(
+        "bitmask_encoder_y".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // bitmask_encoder_z - Bitmask encode along Z axis
+    registry.add_morphology(
+        "bitmask_encoder_z".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // bitmask_decoder_x - Bitmask decode along X axis
+    registry.add_morphology(
+        "bitmask_decoder_x".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // bitmask_decoder_y - Bitmask decode along Y axis
+    registry.add_morphology(
+        "bitmask_decoder_y".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // bitmask_decoder_z - Bitmask decode along Z axis
+    registry.add_morphology(
+        "bitmask_decoder_z".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},
@@ -377,6 +477,20 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
                         crate::PatternElement::Wildcard,
                     ],
                 ]],
+            },
+            class: "core".to_string(),
+        },
+    );
+
+    // tile - Composite tiling morphology (mapper + subregion parameters)
+    registry.add_morphology(
+        "tile".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Composite,
+            parameters: MorphologyParameters::Composite {
+                src_seed: [16, 16, 1],
+                src_pattern: vec![[1, 0], [1, 0], [1, 0]],
+                mapper_morphology: "projector".to_string(),
             },
             class: "core".to_string(),
         },

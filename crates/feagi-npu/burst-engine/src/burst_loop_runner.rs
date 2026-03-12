@@ -642,14 +642,13 @@ impl BurstLoopRunner {
         Ok(())
     }
 
-    /// Stop the burst loop gracefully
+    /// Stop the burst loop strictly and verify thread termination.
     ///
     /// This method sets the shutdown flag and waits up to 2 seconds for the thread to finish.
-    /// If the thread doesn't finish within the timeout, it's considered non-responsive
-    /// and we proceed with shutdown anyway.
-    pub fn stop(&mut self) {
+    /// If the thread doesn't finish within the timeout, an error is returned.
+    pub fn stop_strict(&mut self) -> Result<(), String> {
         if !self.running.load(Ordering::Acquire) {
-            return; // Already stopped
+            return Ok(()); // Already stopped
         }
 
         info!("[BURST-RUNNER] Stopping burst loop...");
@@ -678,6 +677,7 @@ impl BurstLoopRunner {
                 }
                 Ok(Err(_)) => {
                     warn!("[BURST-RUNNER] ⚠️ Burst loop thread panicked during shutdown");
+                    return Err("Burst loop thread panicked during shutdown".to_string());
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     let elapsed = start.elapsed();
@@ -685,11 +685,27 @@ impl BurstLoopRunner {
                         "[BURST-RUNNER] ⚠️ Burst loop did not stop within {:?}, proceeding with shutdown",
                         elapsed
                     );
+                    return Err(format!(
+                        "Burst loop did not stop within {:?}",
+                        stop_timeout
+                    ));
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     warn!("[BURST-RUNNER] ⚠️ Join thread disconnected unexpectedly");
+                    return Err("Burst loop join thread disconnected unexpectedly".to_string());
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// Stop the burst loop gracefully (best effort).
+    pub fn stop(&mut self) {
+        if let Err(e) = self.stop_strict() {
+            warn!(
+                "[BURST-RUNNER] ⚠️ Non-strict stop encountered an error: {}",
+                e
+            );
         }
     }
 
@@ -1230,6 +1246,7 @@ fn burst_loop(
     let mut total_neurons_fired = 0usize;
     let mut burst_times = Vec::with_capacity(100);
     let mut last_burst_time = None;
+    let mut top_firing_areas_last_burst: Vec<(u32, usize)> = Vec::new();
     // Tracks agents that temporarily fail publish because transport mapping is not attached yet.
     // This avoids log spam during reconnect races while preserving automatic retry behavior.
     let mut missing_viz_agent_logged: ahash::AHashSet<String> = ahash::AHashSet::new();
@@ -1243,10 +1260,7 @@ fn burst_loop(
         let current_frequency_hz = *frequency_hz.lock().unwrap();
         update_sim_timestep_from_hz(current_frequency_hz);
 
-        // DIAGNOSTIC: Log that we're alive
-        if burst_num % 100 == 0 {
-            trace!("[BURST-LOOP] Burst {} starting (loop is alive)", burst_num);
-        }
+        // Per-burst heartbeat removed (was every 100 bursts)
 
         // Track time since last burst (to detect blocking)
         static LAST_ITERATION_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
@@ -1330,7 +1344,7 @@ fn burst_loop(
             }
         }
 
-        if burst_num < 5 || burst_num % 100 == 0 {
+        if burst_num < 5 {
             trace!(
                 "[BURST-LOOP-DIAGNOSTIC] Burst {}: Attempting NPU lock...",
                 burst_num
@@ -1386,7 +1400,7 @@ fn burst_loop(
                     lock_wait_duration.as_millis()
                 );
             }
-            if burst_num < 5 || burst_num % 100 == 0 {
+            if burst_num < 5 {
                 trace!(
                     "[BURST-TIMING] Burst {}: NPU lock acquired in {:?}",
                     burst_num,
@@ -1660,7 +1674,7 @@ fn burst_loop(
                             result.neurons_in_refractory,
                         ));
 
-                        if burst_num < 5 || burst_num % 100 == 0 {
+                        if burst_num < 5 {
                             trace!(
                                 "[BURST-TIMING] Burst {}: process_burst() completed in {:?}, {} neurons fired",
                                 burst_num,
@@ -1670,6 +1684,19 @@ fn burst_loop(
                         }
 
                         total_neurons_fired += result.neuron_count;
+                        top_firing_areas_last_burst.clear();
+                        if let Some(ref sample) = result.fire_queue_sample {
+                            top_firing_areas_last_burst.extend(sample.iter().map(
+                                |(cortical_idx, (xs, _ys, _zs, _neurons, _pots))| {
+                                    (*cortical_idx, xs.len())
+                                },
+                            ));
+                            top_firing_areas_last_burst
+                                .sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+                            if top_firing_areas_last_burst.len() > 5 {
+                                top_firing_areas_last_burst.truncate(5);
+                            }
+                        }
                         // Update cached burst count for lock-free reads
                         let current_burst = npu_lock.get_burst_count();
                         cached_burst_count
@@ -1742,21 +1769,40 @@ fn burst_loop(
             *last_release = Some(npu_lock_release_time);
         }
 
-        // Log lock release timing for diagnostics
+        // Log lock release timing for diagnostics (scaled to burst budget).
+        // This keeps diagnostics meaningful across different simulation timesteps.
+        let burst_budget_ms = (1.0 / current_frequency_hz) * 1000.0;
+        let lock_wait_warn_threshold_ms = burst_budget_ms * 0.25;
+        let lock_hold_warn_threshold_ms = burst_budget_ms * 0.80;
+        let lock_hold_overrun_threshold_ms = burst_budget_ms;
         let lock_hold_duration = npu_lock_release_time.duration_since(lock_acquired);
-        if lock_wait_duration.as_millis() > 50 {
+        let lock_wait_ms = lock_wait_duration.as_secs_f64() * 1000.0;
+        let lock_hold_ms = lock_hold_duration.as_secs_f64() * 1000.0;
+        if lock_wait_ms > lock_wait_warn_threshold_ms {
             warn!(
-                "[NPU-LOCK] Burst {} waited {:.2}ms to acquire lock",
+                "[NPU-LOCK] Burst {} waited {:.2}ms to acquire lock (threshold {:.2}ms, budget {:.2}ms)",
                 burst_num,
-                lock_wait_duration.as_secs_f64() * 1000.0
+                lock_wait_ms,
+                lock_wait_warn_threshold_ms,
+                burst_budget_ms
             );
         }
-        if lock_hold_duration.as_millis() > 50 {
+        let hold_severity = if lock_hold_ms > lock_hold_overrun_threshold_ms {
+            Some("overrun")
+        } else if lock_hold_ms > lock_hold_warn_threshold_ms {
+            Some("high")
+        } else {
+            None
+        };
+        if let Some(severity) = hold_severity {
             if let Some((fired, power, synaptic, processed, refractory)) = last_burst_stats {
                 warn!(
-                    "[NPU-LOCK] Burst {} held lock {:.2}ms | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
+                    "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
                     burst_num,
-                    lock_hold_duration.as_secs_f64() * 1000.0,
+                    lock_hold_ms,
+                    severity,
+                    lock_hold_warn_threshold_ms,
+                    burst_budget_ms,
                     last_process_duration
                         .map(|d| d.as_secs_f64() * 1000.0)
                         .unwrap_or(0.0),
@@ -1768,21 +1814,54 @@ fn burst_loop(
                 );
             } else {
                 warn!(
-                    "[NPU-LOCK] Burst {} held lock {:.2}ms | process_burst {:.2}ms",
+                    "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
                     burst_num,
-                    lock_hold_duration.as_secs_f64() * 1000.0,
+                    lock_hold_ms,
+                    severity,
+                    lock_hold_warn_threshold_ms,
+                    burst_budget_ms,
                     last_process_duration
                         .map(|d| d.as_secs_f64() * 1000.0)
                         .unwrap_or(0.0)
                 );
             }
+
+            // Root-cause diagnostics for sustained overruns: identify hottest cortical areas.
+            // Throttled to every 25 bursts to avoid excessive log volume.
+            if severity == "overrun"
+                && burst_num % 25 == 0
+                && !top_firing_areas_last_burst.is_empty()
+            {
+                let cortical_id_map = cached_cortical_id_mappings.lock().unwrap();
+                let top_areas = top_firing_areas_last_burst
+                    .iter()
+                    .map(|(idx, count)| {
+                        let area_id = cortical_id_map
+                            .get(idx)
+                            .cloned()
+                            .unwrap_or_else(|| format!("idx_{}", idx));
+                        format!("{}:{}:{}", idx, area_id, count)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                warn!(
+                    "[BURST-ROOTCAUSE] Burst {} overrun snapshot | budget_ms={:.2} lock_hold_ms={:.2} process_burst_ms={:.2} top_firing_areas=[{}]",
+                    burst_num,
+                    burst_budget_ms,
+                    lock_hold_ms,
+                    last_process_duration
+                        .map(|d| d.as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0),
+                    top_areas
+                );
+            }
         }
-        if lock_hold_duration.as_millis() > 5 || burst_num < 5 || burst_num % 100 == 0 {
-            debug!(
+        if lock_hold_ms > lock_hold_warn_threshold_ms || burst_num < 5 {
+            trace!(
                 "[NPU-LOCK] Burst {} (thread={:?}): Lock RELEASED (held for {:.2}ms, total from acquisition: {:.2}ms)",
                 burst_num,
                 release_thread_id,
-                lock_hold_duration.as_secs_f64() * 1000.0,
+                lock_hold_ms,
                 npu_lock_release_time.duration_since(lock_start).as_secs_f64() * 1000.0
             );
         }
@@ -2140,34 +2219,6 @@ fn burst_loop(
                         );
                     }
 
-                    // Minimal, high-signal debugging for BV "no power" issues:
-                    // Log whether the outgoing visualization snapshot contains the Power cortical area (core idx=1).
-                    // This pinpoints whether the failure is upstream (sampling/packaging) or downstream (BV decode/apply).
-                    if burst_num % 30 == 0 {
-                        use feagi_structures::genomic::cortical_area::CoreCorticalType;
-                        static POWER_ID_B64: std::sync::LazyLock<String> =
-                            std::sync::LazyLock::new(|| {
-                                CoreCorticalType::Power.to_cortical_id().as_base_64()
-                            });
-
-                        let power_neurons = raw_snapshot
-                            .values()
-                            .find(|d| d.cortical_id == *POWER_ID_B64)
-                            .map(|d| d.neuron_ids.len())
-                            .unwrap_or(0);
-
-                        info!(
-                                "[VIZ-DEBUG] burst={} transports: shm={} publisher={} should_publish_viz={} areas={} total_neurons={} power_neurons={}",
-                                burst_num,
-                                has_shm_writer,
-                                has_viz_publisher,
-                                should_publish_viz,
-                                raw_snapshot.len(),
-                                total_neurons,
-                                power_neurons
-                            );
-                    }
-
                     // IMPORTANT: Single visualization pipeline per burst.
                     // If SHM is attached, we write to SHM and skip publisher handoff to avoid doing
                     // two independent serialization paths (maintenance + performance nightmare).
@@ -2191,15 +2242,9 @@ fn burst_loop(
                             static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 =
                                 std::sync::atomic::AtomicU64::new(0);
 
-                            let count =
+                            let _count =
                                 PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            if count % 30 == 0 {
-                                trace!(
-                                    "[BURST-LOOP] Viz handoff #{}: {} neurons -> publisher (serialization off-thread)",
-                                    count,
-                                    total_neurons
-                                );
-                            }
+                            // Viz handoff logging removed (was every 30 handoffs)
 
                             let publish_start = Instant::now();
                             for agent_id in viz_due_agents.iter() {
@@ -2252,8 +2297,8 @@ fn burst_loop(
         // Motor output generation and publishing (per-agent, filtered by subscriptions)
         // NOTE: has_motor_publisher and has_motor_shm already computed above for shared_fire_data_opt
 
-        // CRITICAL: Log motor publisher state every 100 bursts (using INFO to guarantee visibility)
-        if burst_num % 100 == 0 {
+        // Motor publisher state: only trace for first 5 bursts
+        if burst_num < 5 {
             trace!(
                 "[BURST-LOOP] MOTOR PUBLISHER STATE: has_publisher={}, has_shm={}",
                 has_motor_publisher,
@@ -2380,21 +2425,11 @@ fn burst_loop(
                     );
                 }
 
-                debug!(
-                    "[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas",
-                    motor_snapshot.len()
-                );
-
-                // DEBUG: Log subscription state every 30 bursts
-                if burst_num % 30 == 0 {
-                    if subscriptions.is_empty() {
-                        trace!("[BURST-LOOP] No motor subscriptions");
-                    } else {
-                        trace!("[BURST-LOOP] {} motor subscriptions", subscriptions.len());
-                        for (agent_id, cortical_ids) in subscriptions.iter() {
-                            trace!("[BURST-LOOP] Agent '{}' -> {:?}", agent_id, cortical_ids);
-                        }
-                    }
+                if burst_num < 5 {
+                    trace!(
+                        "[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas",
+                        motor_snapshot.len()
+                    );
                 }
 
                 if subscriptions.is_empty() {

@@ -243,6 +243,8 @@ fn build_test_state() -> ApiState {
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
 
+    let (genome_transition_lock, genome_transition_in_progress) =
+        ApiState::init_genome_transition_controls();
     ApiState {
         network_connection_info_provider: None,
         agent_service: None,
@@ -256,6 +258,8 @@ fn build_test_state() -> ApiState {
         feagi_session_timestamp,
         memory_stats_cache: None,
         amalgamation_state: ApiState::init_amalgamation_state(),
+        genome_transition_lock,
+        genome_transition_in_progress,
         #[cfg(feature = "feagi-agent")]
         agent_handler: Some(ApiState::init_agent_registration_handler()),
     }
