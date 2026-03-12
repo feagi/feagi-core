@@ -1,7 +1,7 @@
 use core::fmt::{Debug, Display};
 use crate::base_quantizable::quantizable_floats::QuantizableFloat;
 use crate::base_quantizable::quantizable_uints::QuantizableUInt;
-use crate::common_descriptors::{Coordinate3D, UnsignedCoordinate3DType, Dimension3D};
+use crate::descriptors::{Coordinate3D, UnsignedCoordinate3DType, Dimension3D};
 
 pub type NeuronVoxelCoordinate<T: QuantizableUInt> = UnsignedCoordinate3DType<T>;
 

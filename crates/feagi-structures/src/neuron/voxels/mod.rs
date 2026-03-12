@@ -4,6 +4,8 @@
 /// where each voxel can contain one or more neurons. This module provides structures for
 /// handling neuron voxel representations in various formats and containers.
 pub mod xyzp;
-mod p;
-mod ip;
+
+// TODO remove the other implementations for a bit. We will rebuild them as we get closer to getting the neuron stuff done
+//mod p;
+//mod ip;
 

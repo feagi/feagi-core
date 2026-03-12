@@ -8,7 +8,7 @@ extern crate alloc;
 
 mod feagi_json;
 mod templates;
-mod common_descriptors;
+mod descriptors;
 mod feagi_base_error;
 
 pub mod genomic;

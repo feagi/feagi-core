@@ -1,7 +1,7 @@
 use ahash::AHashMap;
 use crate::cortical_area::descriptors::{CorticalAreaCount, CorticalAreaIndex};
 use crate::neuron::data::{InterNeuronData, NeuronFlag};
-use crate::neuron::descriptors::{ConsecutiveFireCountdown, ConsecutiveFireLimit, Excitability, LeakCoefficient, NeuralPotentialValue, NeuronCount, NeuronId, RefractoryCountdown, RefractoryPeriod, SnoozePeriodCountdown, SnoozePeriodLimit};
+use crate::neuron::descriptors::{ConsecutiveFireCountdown, ConsecutiveFireLimit, Excitability, LeakCoefficient, NeuralPotentialValue, NeuronCount, NeuroNAI, RefractoryCountdown, RefractoryPeriod, SnoozePeriodCountdown, SnoozePeriodLimit};
 use crate::neuron::FeagiNeuronError;
 
 // TODO Rayon? Could the trait perhaps implement some sort of iterator support for rayon?
@@ -12,10 +12,9 @@ use crate::neuron::FeagiNeuronError;
 // each neuron instead of having a neuron to cortical map. However, there are times a cortical to
 // neuron map are useful in cases of reference speed when we can afford the memory
 
-pub struct InterNeuronDataDynamic<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL>
+pub struct InterNeuronDataDynamic<NAI, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL>
 where
-    NC: NeuronCount,
-    NID: NeuronId,
+    NAI: NeuronCountAndIndex,
     CAC: CorticalAreaCount,
     CAI: CorticalAreaIndex,
     NPV: NeuralPotentialValue,
@@ -28,7 +27,7 @@ where
     SPC: SnoozePeriodCountdown,
     SPL: SnoozePeriodLimit,
 {
-    cortical_2_neuron: AHashMap<CAI, Vec<NID>>,
+    cortical_2_neuron: AHashMap<CAI, Vec<NAI>>,
     // See note at top about lack of cortical_2_neuron
 
     // Per Neuron
@@ -48,75 +47,75 @@ where
     // Per Cortical Area
     cortical_refractory_period: Vec<RP>,
     cortical_excitability: Vec<EX>,
-    neurons_per_voxel: Vec<NC>,
+    neurons_per_voxel: Vec<NAI>,
 }
 
-impl<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> InterNeuronData<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> for InterNeuronDataDynamic<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> {
-    fn get_total_number_of_neurons(&self) -> NC {
+impl<NAI, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> InterNeuronData<NAI, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> for InterNeuronDataDynamic<NAI, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> {
+    fn get_total_number_of_neurons(&self) -> NAI {
         todo!()
     }
 
-    fn get_cortical_index(&self, neuron_id: NID) -> Result<CAI, FeagiNeuronError> {
+    fn get_cortical_index(&self, neuron_id: NAI) -> Result<CAI, FeagiNeuronError> {
         todo!()
     }
 
-    fn get_neuron_ids(&self, cortical_index: CAI) -> Result<&[NID], FeagiNeuronError> {
+    fn get_neuron_ids(&self, cortical_index: CAI) -> Result<&[NAI], FeagiNeuronError> {
         todo!()
     }
 
-    fn get_neuron_membrane_potential(&self, neuron_id: NID) -> Result<NPV, FeagiNeuronError> {
+    fn get_neuron_membrane_potential(&self, neuron_id: NAI) -> Result<NPV, FeagiNeuronError> {
         todo!()
     }
 
-    fn set_neuron_membrane_potential(&mut self, neuron_id: NID, potential: NPV) -> Result<(), FeagiNeuronError> {
+    fn set_neuron_membrane_potential(&mut self, neuron_id: NAI, potential: NPV) -> Result<(), FeagiNeuronError> {
         todo!()
     }
 
-    fn get_neuron_threshold(&self, neuron_id: NID) -> Result<NPV, FeagiNeuronError> {
+    fn get_neuron_threshold(&self, neuron_id: NAI) -> Result<NPV, FeagiNeuronError> {
         todo!()
     }
 
-    fn set_neuron_threshold(&mut self, neuron_id: NID, threshold: NPV) -> Result<(), FeagiNeuronError> {
+    fn set_neuron_threshold(&mut self, neuron_id: NAI, threshold: NPV) -> Result<(), FeagiNeuronError> {
         todo!()
     }
 
-    fn get_neuron_threshold_limit(&self, neuron_id: NID) -> Result<NPV, FeagiNeuronError> {
+    fn get_neuron_threshold_limit(&self, neuron_id: NAI) -> Result<NPV, FeagiNeuronError> {
         todo!()
     }
 
-    fn set_neuron_threshold_limit(&mut self, neuron_id: NID, threshold_limit: NPV) -> Result<(), FeagiNeuronError> {
+    fn set_neuron_threshold_limit(&mut self, neuron_id: NAI, threshold_limit: NPV) -> Result<(), FeagiNeuronError> {
         todo!()
     }
 
-    fn get_neuron_leak_coefficient(&self, neuron_id: NID) -> Result<LC, FeagiNeuronError> {
+    fn get_neuron_leak_coefficient(&self, neuron_id: NAI) -> Result<LC, FeagiNeuronError> {
         todo!()
     }
 
-    fn set_neuron_leak_coefficient(&mut self, neuron_id: NID, leak_coefficient: LC) -> Result<(), FeagiNeuronError> {
+    fn set_neuron_leak_coefficient(&mut self, neuron_id: NAI, leak_coefficient: LC) -> Result<(), FeagiNeuronError> {
         todo!()
     }
 
-    fn get_neuron_validity(&self, neuron_id: NID) -> Result<bool, FeagiNeuronError> {
+    fn get_neuron_validity(&self, neuron_id: NAI) -> Result<bool, FeagiNeuronError> {
         todo!()
     }
 
-    fn set_neuron_validity(&self, neuron_id: NID, is_valid: bool) -> Result<(), FeagiNeuronError> {
+    fn set_neuron_validity(&self, neuron_id: NAI, is_valid: bool) -> Result<(), FeagiNeuronError> {
         todo!()
     }
 
-    fn get_neuron_refractory_countdown(&self, neuron_id: NID) -> Result<RC, FeagiNeuronError> {
+    fn get_neuron_refractory_countdown(&self, neuron_id: NAI) -> Result<RC, FeagiNeuronError> {
         todo!()
     }
 
-    fn set_neuron_refractory_countdown(&mut self, neuron_id: NID, countdown: RC) -> Result<(), FeagiNeuronError> {
+    fn set_neuron_refractory_countdown(&mut self, neuron_id: NAI, countdown: RC) -> Result<(), FeagiNeuronError> {
         todo!()
     }
 
-    fn get_consecutive_fire_count(&self, neuron_id: NID) -> Result<CFC, FeagiNeuronError> {
+    fn get_consecutive_fire_count(&self, neuron_id: NAI) -> Result<CFC, FeagiNeuronError> {
         todo!()
     }
 
-    fn set_consecutive_fire_count(&mut self, neuron_id: NID, countdown: CFC) -> Result<(), FeagiNeuronError> {
+    fn set_consecutive_fire_count(&mut self, neuron_id: NAI, countdown: CFC) -> Result<(), FeagiNeuronError> {
         todo!()
     }
 
@@ -128,19 +127,19 @@ impl<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> InterNeuronData
         todo!()
     }
 
-    fn get_snooze_period_countdown(&self, neuron_id: NID) -> Result<SPC, FeagiNeuronError> {
+    fn get_snooze_period_countdown(&self, neuron_id: NAI) -> Result<SPC, FeagiNeuronError> {
         todo!()
     }
 
-    fn set_snooze_period_countdown(&mut self, neuron_id: NID, countdown: SPC) -> Result<(), FeagiNeuronError> {
+    fn set_snooze_period_countdown(&mut self, neuron_id: NAI, countdown: SPC) -> Result<(), FeagiNeuronError> {
         todo!()
     }
 
-    fn get_snooze_period_limit(&self, neuron_id: NID) -> Result<SPL, FeagiNeuronError> {
+    fn get_snooze_period_limit(&self, neuron_id: NAI) -> Result<SPL, FeagiNeuronError> {
         todo!()
     }
 
-    fn set_snooze_period_limit(&mut self, neuron_id: NID, countdown: SPL) -> Result<(), FeagiNeuronError> {
+    fn set_snooze_period_limit(&mut self, neuron_id: NAI, countdown: SPL) -> Result<(), FeagiNeuronError> {
         todo!()
     }
 

@@ -1,8 +1,8 @@
-use crate::common_descriptors::{Coordinate2DU32, Coordinate3DU32, Dimension2DU32, Dimension3DU32};
+use crate::descriptors::{Dimension2DUSize, Dimension3DUSize, UnsignedCoordinate2DUSize, UnsignedCoordinate3DUSize};
 
 pub enum FeagiBaseError {
     ValueCannotBeZero,
     ValuesMustBeEqual,
-    Coordinate2DOutOfBounds{coordinate: Coordinate2DU32, dimensions: Dimension2DU32},
-    Coordinate3DOutOfBounds{coordinate: Coordinate3DU32, dimensions: Dimension3DU32}
+    Coordinate2DOutOfBounds{coordinate: UnsignedCoordinate2DUSize, dimensions: Dimension2DUSize},
+    Coordinate3DOutOfBounds{coordinate: UnsignedCoordinate3DUSize, dimensions: Dimension3DUSize},
 }

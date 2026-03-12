@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use crate::base_quantizable::quantizable_uints::QuantizableUInt;
 use crate::genomic::cortical_area::CorticalID;
-use crate::neuron::NeuralPotentialValue;
+use crate::neuron::descriptors::NeuralPotentialValue;
 use crate::neuron::voxels::xyzp::NeuronVoxelXYZPArrays;
 
 /// Neuron voxel data organized by cortical area.
@@ -9,18 +10,19 @@ use crate::neuron::voxels::xyzp::NeuronVoxelXYZPArrays;
 /// allowing efficient storage and retrieval of neural activity across different
 /// brain regions.
 #[derive(Debug, Clone, PartialEq)]
-pub struct CorticalMappedXYZPNeuronVoxels<Potential = f32>
+pub struct CorticalMappedXYZPNeuronVoxels<Potential, CoordQuant>
 where
     Potential: NeuralPotentialValue,
+    CoordQuant: QuantizableUInt
 {
     /// Hash map storing neuron collections for each cortical area.
     ///
     /// The key is a unique cortical area identifier, and the value contains
     /// all neuron_voxels belonging to that cortical area.
-    pub mappings: HashMap<CorticalID, NeuronVoxelXYZPArrays<Potential>>,
+    pub mappings: HashMap<CorticalID, NeuronVoxelXYZPArrays<Potential, CoordQuant>>,
 }
 
-impl<Potential: NeuralPotentialValue> CorticalMappedXYZPNeuronVoxels<Potential> {
+impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> CorticalMappedXYZPNeuronVoxels<Potential, CoordQuant> {
     /// Size in bytes of each cortical area header in binary format.
     pub const NUMBER_BYTES_PER_CORTICAL_ID_HEADER: usize =
         CorticalID::NUMBER_OF_BYTES + size_of::<u32>() + size_of::<u32>();
@@ -40,20 +42,20 @@ impl<Potential: NeuralPotentialValue> CorticalMappedXYZPNeuronVoxels<Potential> 
     /// let neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// assert_eq!(neuron_data.len(), 0);
     /// ```
-    pub fn new() -> CorticalMappedXYZPNeuronVoxels<Potential> {
+    pub fn new() -> CorticalMappedXYZPNeuronVoxels<Potential, CoordQuant> {
         CorticalMappedXYZPNeuronVoxels {
             mappings: HashMap::new(),
         }
     }
 }
 
-impl<Potential: NeuralPotentialValue> Default for CorticalMappedXYZPNeuronVoxels<Potential> {
+impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> Default for CorticalMappedXYZPNeuronVoxels<Potential, CoordQuant> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<Potential: NeuralPotentialValue> CorticalMappedXYZPNeuronVoxels<Potential> {
+impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> CorticalMappedXYZPNeuronVoxels<Potential, CoordQuant> {
     //region HashMap like implementation
     /// Creates a new neuron data collection with pre-allocated capacity.
     ///
@@ -73,7 +75,7 @@ impl<Potential: NeuralPotentialValue> CorticalMappedXYZPNeuronVoxels<Potential> 
     /// let neuron_data = CorticalMappedXYZPNeuronVoxels::new_with_capacity(100);
     /// assert_eq!(neuron_data.len(), 0);
     /// ```
-    pub fn new_with_capacity(capacity: usize) -> CorticalMappedXYZPNeuronVoxels<Potential> {
+    pub fn new_with_capacity(capacity: usize) -> CorticalMappedXYZPNeuronVoxels<Potential, CoordQuant> {
         CorticalMappedXYZPNeuronVoxels {
             mappings: HashMap::with_capacity(capacity),
         }
@@ -175,7 +177,7 @@ impl<Potential: NeuralPotentialValue> CorticalMappedXYZPNeuronVoxels<Potential> 
     pub fn get_neurons_of(
         &self,
         cortical_id: &CorticalID,
-    ) -> Option<&NeuronVoxelXYZPArrays<Potential>> {
+    ) -> Option<&NeuronVoxelXYZPArrays<Potential, CoordQuant>> {
         self.mappings.get(cortical_id)
     }
 
@@ -191,7 +193,7 @@ impl<Potential: NeuralPotentialValue> CorticalMappedXYZPNeuronVoxels<Potential> 
     pub fn get_neurons_of_mut(
         &mut self,
         cortical_id: &CorticalID,
-    ) -> Option<&mut NeuronVoxelXYZPArrays<Potential>> {
+    ) -> Option<&mut NeuronVoxelXYZPArrays<Potential, CoordQuant>> {
         self.mappings.get_mut(cortical_id)
     }
 
@@ -224,8 +226,8 @@ impl<Potential: NeuralPotentialValue> CorticalMappedXYZPNeuronVoxels<Potential> 
     pub fn insert(
         &mut self,
         cortical_id: CorticalID,
-        neuron_data: NeuronVoxelXYZPArrays<Potential>,
-    ) -> Option<NeuronVoxelXYZPArrays<Potential>> {
+        neuron_data: NeuronVoxelXYZPArrays<Potential, CoordQuant>,
+    ) -> Option<NeuronVoxelXYZPArrays<Potential, CoordQuant>> {
         self.mappings.insert(cortical_id, neuron_data)
     }
 
@@ -239,7 +241,7 @@ impl<Potential: NeuralPotentialValue> CorticalMappedXYZPNeuronVoxels<Potential> 
     ///
     /// `Some(NeuronVoxelXYZPArrays)` of the removed data if the cortical area existed,
     /// `None` if the cortical area was not found.
-    pub fn remove(&mut self, cortical_id: CorticalID) -> Option<NeuronVoxelXYZPArrays<Potential>> {
+    pub fn remove(&mut self, cortical_id: CorticalID) -> Option<NeuronVoxelXYZPArrays<Potential, CoordQuant>> {
         self.mappings.remove(&cortical_id)
     }
 
@@ -289,7 +291,7 @@ impl<Potential: NeuralPotentialValue> CorticalMappedXYZPNeuronVoxels<Potential> 
     ///     println!("Cortical area has {} neurons", neurons.len());
     /// }
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item = &NeuronVoxelXYZPArrays<Potential>> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = &NeuronVoxelXYZPArrays<Potential, CoordQuant>> + '_ {
         self.mappings.values()
     }
 
@@ -312,7 +314,7 @@ impl<Potential: NeuralPotentialValue> CorticalMappedXYZPNeuronVoxels<Potential> 
     ///     neurons.clear(); // Clear all neuron arrays
     /// }
     /// ```
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut NeuronVoxelXYZPArrays<Potential>> + '_ {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut NeuronVoxelXYZPArrays<Potential, CoordQuant>> + '_ {
         self.mappings.values_mut()
     }
 
@@ -354,7 +356,7 @@ impl<Potential: NeuralPotentialValue> CorticalMappedXYZPNeuronVoxels<Potential> 
     pub fn ensure_clear_and_borrow_mut(
         &mut self,
         cortical_id: &CorticalID,
-    ) -> &mut NeuronVoxelXYZPArrays<Potential> {
+    ) -> &mut NeuronVoxelXYZPArrays<Potential, CoordQuant> {
         if self.mappings.contains_key(cortical_id) {
             // If already contains neuron array, clear it and return it
             let neurons = self.mappings.get_mut(cortical_id).unwrap();
@@ -503,9 +505,9 @@ impl FeagiByteStructureCompatible for CorticalMappedXYZPNeuronData {
 
 //region Iterators
 
-impl<Potential: NeuralPotentialValue> IntoIterator for CorticalMappedXYZPNeuronVoxels<Potential> {
-    type Item = (CorticalID, NeuronVoxelXYZPArrays<Potential>);
-    type IntoIter = std::collections::hash_map::IntoIter<CorticalID, NeuronVoxelXYZPArrays<Potential>>;
+impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> IntoIterator for CorticalMappedXYZPNeuronVoxels<Potential, CoordQuant> {
+    type Item = (CorticalID, NeuronVoxelXYZPArrays<Potential, CoordQuant>);
+    type IntoIter = std::collections::hash_map::IntoIter<CorticalID, NeuronVoxelXYZPArrays<Potential, CoordQuant>>;
 
     /// Consumes the collection and returns an iterator over owned (CorticalID, NeuronVoxelXYZPArrays) pairs.
     ///
@@ -524,9 +526,9 @@ impl<Potential: NeuralPotentialValue> IntoIterator for CorticalMappedXYZPNeuronV
     }
 }
 
-impl<'a, Potential: NeuralPotentialValue> IntoIterator for &'a CorticalMappedXYZPNeuronVoxels<Potential> {
-    type Item = (&'a CorticalID, &'a NeuronVoxelXYZPArrays<Potential>);
-    type IntoIter = std::collections::hash_map::Iter<'a, CorticalID, NeuronVoxelXYZPArrays<Potential>>;
+impl<'a, Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> IntoIterator for &'a CorticalMappedXYZPNeuronVoxels<Potential, CoordQuant> {
+    type Item = (&'a CorticalID, &'a NeuronVoxelXYZPArrays<Potential, CoordQuant>);
+    type IntoIter = std::collections::hash_map::Iter<'a, CorticalID, NeuronVoxelXYZPArrays<Potential, CoordQuant>>;
 
     /// Returns an iterator over references to (CorticalID, NeuronVoxelXYZPArrays) pairs.
     ///
@@ -545,9 +547,9 @@ impl<'a, Potential: NeuralPotentialValue> IntoIterator for &'a CorticalMappedXYZ
     }
 }
 
-impl<'a, Potential: NeuralPotentialValue> IntoIterator for &'a mut CorticalMappedXYZPNeuronVoxels<Potential> {
-    type Item = (&'a CorticalID, &'a mut NeuronVoxelXYZPArrays<Potential>);
-    type IntoIter = std::collections::hash_map::IterMut<'a, CorticalID, NeuronVoxelXYZPArrays<Potential>>;
+impl<'a, Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> IntoIterator for &'a mut CorticalMappedXYZPNeuronVoxels<Potential, CoordQuant> {
+    type Item = (&'a CorticalID, &'a mut NeuronVoxelXYZPArrays<Potential, CoordQuant>);
+    type IntoIter = std::collections::hash_map::IterMut<'a, CorticalID, NeuronVoxelXYZPArrays<Potential, CoordQuant>>;
 
     /// Returns a mutable iterator over (CorticalID, NeuronVoxelXYZPArrays) pairs.
     ///
@@ -566,7 +568,7 @@ impl<'a, Potential: NeuralPotentialValue> IntoIterator for &'a mut CorticalMappe
     }
 }
 
-impl<Potential: NeuralPotentialValue> std::fmt::Display for CorticalMappedXYZPNeuronVoxels<Potential> {
+impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> std::fmt::Display for CorticalMappedXYZPNeuronVoxels<Potential, CoordQuant> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut inner: String = String::new();
         for cortical_id_and_data in self {

@@ -1,3 +1,4 @@
+use crate::base_quantizable::quantizable_ints::QuantizableInt;
 use crate::FeagiBaseError;
 use crate::base_quantizable::quantizable_uints::QuantizableUInt;
 
@@ -81,7 +82,7 @@ pub struct UnsignedCoordinate2DType<T: QuantizableUInt> {
     pub y: T,
 }
 
-pub type UnsignedCoordinate2DISize = UnsignedCoordinate2DType<isize>;
+pub type UnsignedCoordinate2DUSize = UnsignedCoordinate2DType<usize>;
 pub type UnsignedCoordinate2DU64 = UnsignedCoordinate2DType<u64>;
 pub type UnsignedCoordinate2DU32 = UnsignedCoordinate2DType<u32>;
 pub type UnsignedCoordinate2DU16 = UnsignedCoordinate2DType<u16>;
@@ -112,19 +113,25 @@ impl<T: QuantizableUInt> core::fmt::Display for UnsignedCoordinate2DType<T> {
     }
 }
 
+impl<T: QuantizableUInt> Into<UnsignedCoordinate2DUSize> for UnsignedCoordinate2DType<T> {
+    fn into(self) -> UnsignedCoordinate2DISize {
+        UnsignedCoordinate2DISize::new(self.x as usize, self.y as usize)
+    }
+}
+
 //endregion
 
 //region Signed Coordinate 2D
-pub struct SignedCoordinate2DType<T: QuantizableUInt> {
+pub struct SignedCoordinate2DType<T: QuantizableInt> {
     pub x: T,
     pub y: T,
 }
 
 pub type SignedCoordinate2DISize = SignedCoordinate2DType<isize>;
-pub type SignedCoordinate2DU64 = SignedCoordinate2DType<u64>;
-pub type SignedCoordinate2DU32 = SignedCoordinate2DType<u32>;
-pub type SignedCoordinate2DU16 = SignedCoordinate2DType<u16>;
-pub type SignedCoordinate2DU8 = SignedCoordinate2DType<u8>;
+pub type SignedCoordinate2DI64 = SignedCoordinate2DType<i64>;
+pub type SignedCoordinate2DI32 = SignedCoordinate2DType<i32>;
+pub type SignedCoordinate2DI16 = SignedCoordinate2DType<i16>;
+pub type SignedCoordinate2DI8 = SignedCoordinate2DType<i8>;
 
 impl<T: QuantizableUInt> SignedCoordinate2DType<T> {
 
@@ -137,6 +144,12 @@ impl<T: QuantizableUInt> SignedCoordinate2DType<T> {
 impl<T: QuantizableUInt> core::fmt::Display for SignedCoordinate2DType<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "SignedCoordinate2D<{}, {}>", self.x, self.y)
+    }
+}
+
+impl<T: QuantizableUInt> Into<SignedCoordinate2DISize> for SignedCoordinate2DType<T> {
+    fn into(self) -> SignedCoordinate2DISize {
+        SignedCoordinate2DISize::new(self.x as isize, self.y as isize)
     }
 }
 
@@ -209,6 +222,12 @@ impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for Dimension2D
     }
 }
 
+impl<T: QuantizableUInt> Into<Dimension2DUSize> for Dimension2DType<T> {
+    fn into(self) -> Dimension2DUSize {
+        Dimension2DUSize::new_unchecked(self.x as usize, self.y as usize)
+    }
+}
+
 //endregion
 
 //endregion
@@ -265,6 +284,12 @@ impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for UnsignedCoo
         write!(f, "UnsignedCoordinate3D<{}, {}, {}>", self.x, self.y, self.z)
     }
 }
+
+impl<T: QuantizableUInt> Into<UnsignedCoordinate3DUSize> for UnsignedCoordinate3DType<T> {
+    fn into(self) -> UnsignedCoordinate3DUSize {
+        UnsignedCoordinate3DUSize::new(self.x as usize, self as usize, self as usize)
+    }
+}
 //endregion
 
 //region Signed Coordinate 3D
@@ -280,17 +305,17 @@ impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for UnsignedCoo
     serde::Serialize,
     serde::Deserialize,
 )]
-pub struct SignedCoordinate3DType<T: QuantizableUInt> {
+pub struct SignedCoordinate3DType<T: QuantizableInt> {
     pub x: T,
     pub y: T,
     pub z: T,
 }
 
-pub type SignedCoordinate3DUSize = SignedCoordinate3DType<usize>;
-pub type SignedCoordinate3DU64 = SignedCoordinate3DType<u64>;
-pub type SignedCoordinate3DU32 = SignedCoordinate3DType<u32>;
-pub type SignedCoordinate3DU16 = SignedCoordinate3DType<u16>;
-pub type SignedCoordinate3DU8 = SignedCoordinate3DType<u8>;
+pub type SignedCoordinate3DISize = SignedCoordinate3DType<isize>;
+pub type SignedCoordinate3DI64 = SignedCoordinate3DType<i64>;
+pub type SignedCoordinate3DI32 = SignedCoordinate3DType<i32>;
+pub type SignedCoordinate3DI16 = SignedCoordinate3DType<i16>;
+pub type SignedCoordinate3DI8 = SignedCoordinate3DType<i8>;
 
 impl<T: QuantizableUInt> SignedCoordinate3DType<T> {
 
@@ -303,7 +328,13 @@ impl<T: QuantizableUInt> SignedCoordinate3DType<T> {
 
 impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for SignedCoordinate3DType<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "UnsignedCoordinate3D<{}, {}, {}>", self.x, self.y, self.z)
+        write!(f, "SignedCoordinate3D<{}, {}, {}>", self.x, self.y, self.z)
+    }
+}
+
+impl<T: QuantizableUInt> Into<SignedCoordinate3DISize> for SignedCoordinate3DType<T> {
+    fn into(self) -> SignedCoordinate3DISize {
+        SignedCoordinate3DISize::new(self.x as isize, self as isize, self as isize)
     }
 }
 //endregion
@@ -378,6 +409,12 @@ impl<T: QuantizableUInt> Dimension3DType<T> {
 impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for Dimension3DType<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "Dimensions3D<{}, {}, {}>", self.x, self.y, self.z)
+    }
+}
+
+impl<T: QuantizableUInt> Into<Dimension3DUSize> for Dimension3DType<T> {
+    fn into(self) -> Dimension3DUSize {
+        Dimension3DUSize::new_unchecked(self.x as usize, self.y as usize, self.z as usize)
     }
 }
 
