@@ -9,8 +9,8 @@ use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Query, State};
 use feagi_services::types::{GenomeInfo, LoadGenomeParams};
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
 
