@@ -17,7 +17,7 @@ pub trait QuantizableInt:
 
 #[cfg(feature = "alloc")]
 pub trait QuantizableInt:
-    Copy + Clone + Send + Sync + Debug + Display + Default + 'static
+    Copy + Clone + Send + Sync + Debug + Display + Default + Into<isize> + 'static
 {
     const NUMBER_OF_BYTES: usize;
     fn ge(self, other: Self) -> bool;
@@ -27,6 +27,45 @@ pub trait QuantizableInt:
     fn max_value() -> Self;
     fn min_value() -> Self;
 }
+
+impl QuantizableInt for isize {
+    const NUMBER_OF_BYTES: usize = size_of::<isize>();
+
+    #[inline(always)]
+    fn ge(self, other: Self) -> bool {
+        self >= other
+    }
+
+    #[inline(always)]
+    fn lt(self, other: Self) -> bool {
+        self < other
+    }
+
+    #[inline(always)]
+    fn zero() -> Self {
+        0
+    }
+
+    #[inline(always)]
+    fn one() -> Self {
+        1
+    }
+
+    #[inline(always)]
+    fn max_value() -> Self {
+        isize::MAX
+    }
+
+    #[inline(always)]
+    fn min_value() -> Self {
+        isize::MIN
+    }
+}
+
+impl Into<isize> for isize {
+    fn into(self) -> isize { self } // lol
+}
+
 
 impl QuantizableInt for i8 {
     const NUMBER_OF_BYTES: usize = size_of::<i8>();
@@ -60,6 +99,10 @@ impl QuantizableInt for i8 {
     fn min_value() -> Self {
         i8::MIN
     }
+}
+
+impl Into<isize> for i8 {
+    fn into(self) -> isize { self as isize} // lol
 }
 
 impl QuantizableInt for i16 {
@@ -96,6 +139,10 @@ impl QuantizableInt for i16 {
     }
 }
 
+impl Into<isize> for i16 {
+    fn into(self) -> isize { self as isize } // lol
+}
+
 impl QuantizableInt for i32 {
     const NUMBER_OF_BYTES: usize = size_of::<i32>();
 
@@ -130,6 +177,10 @@ impl QuantizableInt for i32 {
     }
 }
 
+impl Into<isize> for i32 {
+    fn into(self) -> isize { self as isize } // lol
+}
+
 impl QuantizableInt for i64 {
     const NUMBER_OF_BYTES: usize = size_of::<i64>();
 
@@ -162,6 +213,10 @@ impl QuantizableInt for i64 {
     fn min_value() -> Self {
         i64::MIN
     }
+}
+
+impl Into<isize> for i64 {
+    fn into(self) -> isize { self as isize } // lol
 }
 
 //endregion

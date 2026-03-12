@@ -21,6 +21,11 @@ use std::vec::Vec;
 
 /// Dynamic synapse array for desktop/server environments
 pub struct SynapseArray {
+    // need to know the number of destination neurons a source neuron has at burst (due to psp) (maybe a neuron property?)
+    // number of synapses is dynamic with memory neurons (dynamics can be at end)
+    // for embedded, smart ordering?
+
+
     /// Current number of synapses
     pub count: usize,
 
@@ -31,16 +36,16 @@ pub struct SynapseArray {
     pub target_neurons: Vec<u32>,
 
     /// Synaptic weights (0-255)
-    pub weights: Vec<u8>,
+    pub weights: Vec<u8>, // should be quantizable uint
 
     /// Postsynaptic potentials / Conductances (0-255)
-    pub postsynaptic_potentials: Vec<u8>,
+    pub postsynaptic_potentials: Vec<u8>, // should be quantizable uint
 
     /// Synapse types (0=excitatory, 1=inhibitory)
-    pub types: Vec<u8>,
+    pub types: Vec<u8>, // remove this for below
 
     /// Valid synapse mask
-    pub valid_mask: Vec<bool>,
+    pub valid_mask: Vec<bool>, // bitpack this, valid mask (not flagged for deletion) + types
 
     /// Source index for fast lookup
     pub source_index: AHashMap<u32, Vec<usize>>,

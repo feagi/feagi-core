@@ -30,6 +30,44 @@ pub trait QuantizableUInt:
     fn min_value() -> Self;
 }
 
+impl QuantizableUInt for usize {
+    const NUMBER_OF_BYTES: usize = size_of::<usize>();
+
+    #[inline(always)]
+    fn ge(self, other: Self) -> bool {
+        self >= other
+    }
+
+    #[inline(always)]
+    fn lt(self, other: Self) -> bool {
+        self < other
+    }
+
+    #[inline(always)]
+    fn zero() -> Self {
+        0
+    }
+
+    #[inline(always)]
+    fn one() -> Self {
+        1
+    }
+
+    #[inline(always)]
+    fn max_value() -> Self {
+        usize::MAX
+    }
+
+    #[inline(always)]
+    fn min_value() -> Self {
+        usize::MIN
+    }
+}
+
+impl Into<usize> for usize {
+    fn into(self) -> usize { self } // lol
+}
+
 impl QuantizableUInt for u8 {
     const NUMBER_OF_BYTES: usize = size_of::<u8>();
 

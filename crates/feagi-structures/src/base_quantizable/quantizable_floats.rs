@@ -1,5 +1,4 @@
 use core::fmt::{Debug, Display};
-use crate::neuron::NeuralPotentialValue;
 
 //region Floats
 

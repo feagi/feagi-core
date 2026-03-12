@@ -18,6 +18,7 @@ use crate::base_quantizable::quantizable_uints::QuantizableUInt;
 )]
 pub struct NonzeroCountType<T: QuantizableUInt>(T);
 
+pub type NonzeroCountISize = NonzeroCountType<isize>;
 pub type NonzeroCountU64 = NonzeroCountType<u64>;
 pub type NonzeroCountU32 = NonzeroCountType<u32>;
 pub type NonzeroCountU16 = NonzeroCountType<u16>;
@@ -60,6 +61,8 @@ impl<T: QuantizableUInt> core::fmt::Display for NonzeroCountType<T> {
 //endregion
 
 //region 2D
+
+//region Unsigned Coordinate 2D
 #[derive(
     Debug,
     Clone,
@@ -72,17 +75,19 @@ impl<T: QuantizableUInt> core::fmt::Display for NonzeroCountType<T> {
     serde::Serialize,
     serde::Deserialize,
 )]
-pub struct Coordinate2DType<T: QuantizableUInt> {
+
+pub struct UnsignedCoordinate2DType<T: QuantizableUInt> {
     pub x: T,
     pub y: T,
 }
 
-pub type Coordinate2DU64 = Coordinate2DType<u64>;
-pub type Coordinate2DU32 = Coordinate2DType<u32>;
-pub type Coordinate2DU16 = Coordinate2DType<u16>;
-pub type Coordinate2DU8 = Coordinate2DType<u8>;
+pub type UnsignedCoordinate2DISize = UnsignedCoordinate2DType<isize>;
+pub type UnsignedCoordinate2DU64 = UnsignedCoordinate2DType<u64>;
+pub type UnsignedCoordinate2DU32 = UnsignedCoordinate2DType<u32>;
+pub type UnsignedCoordinate2DU16 = UnsignedCoordinate2DType<u16>;
+pub type UnsignedCoordinate2DU8 = UnsignedCoordinate2DType<u8>;
 
-impl<T: QuantizableUInt> Coordinate2DType<T> {
+impl<T: QuantizableUInt> UnsignedCoordinate2DType<T> {
 
     pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
 
@@ -101,12 +106,43 @@ impl<T: QuantizableUInt> Coordinate2DType<T> {
     }
 }
 
-impl<T: QuantizableUInt> core::fmt::Display for Coordinate2DType<T> {
+impl<T: QuantizableUInt> core::fmt::Display for UnsignedCoordinate2DType<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Coordinate2D<{}, {}>", self.x, self.y)
+        write!(f, "UnsignedCoordinate2D<{}, {}>", self.x, self.y)
     }
 }
 
+//endregion
+
+//region Signed Coordinate 2D
+pub struct SignedCoordinate2DType<T: QuantizableUInt> {
+    pub x: T,
+    pub y: T,
+}
+
+pub type SignedCoordinate2DISize = SignedCoordinate2DType<isize>;
+pub type SignedCoordinate2DU64 = SignedCoordinate2DType<u64>;
+pub type SignedCoordinate2DU32 = SignedCoordinate2DType<u32>;
+pub type SignedCoordinate2DU16 = SignedCoordinate2DType<u16>;
+pub type SignedCoordinate2DU8 = SignedCoordinate2DType<u8>;
+
+impl<T: QuantizableUInt> SignedCoordinate2DType<T> {
+
+    pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
+    pub fn new(x: T, y: T) -> Self {
+        Self { x, y }
+    }
+}
+
+impl<T: QuantizableUInt> core::fmt::Display for SignedCoordinate2DType<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "SignedCoordinate2D<{}, {}>", self.x, self.y)
+    }
+}
+
+//endregion
+
+//region Dimension 2D
 #[derive(
     Debug,
     Clone,
@@ -124,6 +160,7 @@ pub struct Dimension2DType<T: QuantizableUInt> {
     pub y: NonzeroCountType<T>,
 }
 
+pub type Dimension2DUSize = Dimension2DType<usize>;
 pub type Dimension2DU64 = Dimension2DType<u64>;
 pub type Dimension2DU32 = Dimension2DType<u32>;
 pub type Dimension2DU16 = Dimension2DType<u16>;
@@ -151,11 +188,11 @@ impl<T: QuantizableUInt> Dimension2DType<T> {
         Ok(Self { x, y })
     }
 
-    pub fn does_fit(&self, coordinate: &Coordinate2DType<T>) -> bool {
+    pub fn does_fit(&self, coordinate: &UnsignedCoordinate2DType<T>) -> bool {
         coordinate.x.lt(self.x.get()) && coordinate.y.lt(self.y.get())
     }
 
-    pub fn verify_fit(&self, coordinate: &Coordinate2DType<T>) -> Result<(), FeagiBaseError> {
+    pub fn verify_fit(&self, coordinate: &UnsignedCoordinate2DType<T>) -> Result<(), FeagiBaseError> {
         if self.does_fit(coordinate) {
             return Ok(());
         }
@@ -174,8 +211,11 @@ impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for Dimension2D
 
 //endregion
 
+//endregion
+
 //region  3D
 
+//region Unsigned Coordinate 3D
 #[derive(
     Debug,
     Clone,
@@ -188,18 +228,19 @@ impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for Dimension2D
     serde::Serialize,
     serde::Deserialize,
 )]
-pub struct Coordinate3DType<T: QuantizableUInt> {
+pub struct UnsignedCoordinate3DType<T: QuantizableUInt> {
     pub x: T,
     pub y: T,
     pub z: T,
 }
 
-pub type Coordinate3DU64 = Coordinate3DType<u64>;
-pub type Coordinate3DU32 = Coordinate3DType<u32>;
-pub type Coordinate3DU16 = Coordinate3DType<u16>;
-pub type Coordinate3DU8 = Coordinate3DType<u8>;
+pub type UnsignedCoordinate3DUSize = UnsignedCoordinate3DType<usize>;
+pub type UnsignedCoordinate3DU64 = UnsignedCoordinate3DType<u64>;
+pub type UnsignedCoordinate3DU32 = UnsignedCoordinate3DType<u32>;
+pub type UnsignedCoordinate3DU16 = UnsignedCoordinate3DType<u16>;
+pub type UnsignedCoordinate3DU8 = UnsignedCoordinate3DType<u8>;
 
-impl<T: QuantizableUInt> Coordinate3DType<T> {
+impl<T: QuantizableUInt> UnsignedCoordinate3DType<T> {
 
     pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
 
@@ -219,12 +260,55 @@ impl<T: QuantizableUInt> Coordinate3DType<T> {
     }
 }
 
-impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for Coordinate3DType<T> {
+impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for UnsignedCoordinate3DType<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Coordinate3D<{}, {}, {}>", self.x, self.y, self.z)
+        write!(f, "UnsignedCoordinate3D<{}, {}, {}>", self.x, self.y, self.z)
+    }
+}
+//endregion
+
+//region Signed Coordinate 3D
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub struct SignedCoordinate3DType<T: QuantizableUInt> {
+    pub x: T,
+    pub y: T,
+    pub z: T,
+}
+
+pub type SignedCoordinate3DUSize = SignedCoordinate3DType<usize>;
+pub type SignedCoordinate3DU64 = SignedCoordinate3DType<u64>;
+pub type SignedCoordinate3DU32 = SignedCoordinate3DType<u32>;
+pub type SignedCoordinate3DU16 = SignedCoordinate3DType<u16>;
+pub type SignedCoordinate3DU8 = SignedCoordinate3DType<u8>;
+
+impl<T: QuantizableUInt> SignedCoordinate3DType<T> {
+
+    pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
+
+    pub fn new(x: T, y: T, z: T) -> Self {
+        Self { x, y, z }
     }
 }
 
+impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for SignedCoordinate3DType<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "UnsignedCoordinate3D<{}, {}, {}>", self.x, self.y, self.z)
+    }
+}
+//endregion
+
+//region Dimension 3D
 #[derive(
     Debug,
     Clone,
@@ -243,6 +327,7 @@ pub struct Dimension3DType<T: QuantizableUInt> {
     pub z: NonzeroCountType<T>,
 }
 
+pub type Dimension3DUSize = Dimension3DType<usize>;
 pub type Dimension3DU64 = Dimension3DType<u64>;
 pub type Dimension3DU32 = Dimension3DType<u32>;
 pub type Dimension3DU16 = Dimension3DType<u16>;
@@ -273,13 +358,13 @@ impl<T: QuantizableUInt> Dimension3DType<T> {
         Ok(Self { x, y, z })
     }
 
-    pub fn does_fit(&self, coordinate: &Coordinate3DType<T>) -> bool {
+    pub fn does_fit(&self, coordinate: &UnsignedCoordinate3DType<T>) -> bool {
         coordinate.x.lt(self.x.get())
             && coordinate.y.lt(self.y.get())
             && coordinate.z.lt(self.z.get())
     }
 
-    pub fn verify_fit(&self, coordinate: &Coordinate3DType<T>) -> Result<(), FeagiBaseError> {
+    pub fn verify_fit(&self, coordinate: &UnsignedCoordinate3DType<T>) -> Result<(), FeagiBaseError> {
         if self.does_fit(coordinate) {
             return Ok(());
         }
@@ -295,5 +380,7 @@ impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for Dimension3D
         write!(f, "Dimensions3D<{}, {}, {}>", self.x, self.y, self.z)
     }
 }
+
+//endregion
 
 //endregion
