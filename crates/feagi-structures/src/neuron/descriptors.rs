@@ -1,14 +1,16 @@
 use core::fmt::{Debug, Display};
 use crate::base_quantizable::quantizable_floats::QuantizableFloat;
 use crate::base_quantizable::quantizable_uints::QuantizableUInt;
-use crate::common_descriptors::{Coordinate3D, Dimension3D};
+use crate::common_descriptors::{Coordinate3D, Coordinate3DType, Dimension3D};
 
-pub type NeuronVoxelCoordinate = Coordinate3D;
+pub type NeuronVoxelCoordinate<T: QuantizableUInt> = Coordinate3DType<T: QuantizableUInt>;
 
 //region Neuron ID
-pub type NeuronIdU32 = u32;
-pub type NeuronIdU16 = u16;
-pub type NeuronIdU8 = u8;
+pub type NeuronIdType<T> = T;
+pub type NeuronIdU64 = NeuronIdType<u64>;
+pub type NeuronIdU32 = NeuronIdType<u32>;
+pub type NeuronIdU16 = NeuronIdType<u16>;
+pub type NeuronIdU8 = NeuronIdType<u8>;
 
 #[cfg(not(feature = "alloc"))]
 pub trait NeuronId:
@@ -21,6 +23,10 @@ Copy + Clone + Send + Sync + QuantizableUInt + 'static
 pub trait NeuronId:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'static
 {
+
+}
+
+impl NeuronId for u64 {
 
 }
 
@@ -39,9 +45,11 @@ impl NeuronId for u8 {
 //endregion
 
 //region Neuron Count
-pub type NeuronCountU32 = u32;
-pub type NeuronCountU16 = u16;
-pub type NeuronCountU8 = u8;
+pub type NeuronCountType<T> = T;
+pub type NeuronCountU64 = NeuronCountType<u64>;
+pub type NeuronCountU32 = NeuronCountType<u32>;
+pub type NeuronCountU16 = NeuronCountType<u16>;
+pub type NeuronCountU8 = NeuronCountType<u8>;
 
 #[cfg(not(feature = "alloc"))]
 pub trait NeurCountId:
@@ -54,6 +62,10 @@ Copy + Clone + Send + Sync + QuantizableUInt + 'static
 pub trait NeuronCount:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'static
 {
+
+}
+
+impl NeuronCount for u64 {
 
 }
 
@@ -161,9 +173,11 @@ impl LeakCoefficient for f32 {
 
 //region Refractory Period
 
-pub type RefractoryPeriodU32 = u32;
-pub type RefractoryPeriodU16 = u16;
-pub type RefractoryPeriodU8 = u8;
+pub type RefractoryPeriodType<T> = T;
+pub type RefractoryPeriodU64 = RefractoryPeriodType<u64>;
+pub type RefractoryPeriodU32 = RefractoryPeriodType<u32>;
+pub type RefractoryPeriodU16 = RefractoryPeriodType<u16>;
+pub type RefractoryPeriodU8 = RefractoryPeriodType<u8>;
 
 #[cfg(not(feature = "alloc"))]
 pub trait RefractoryPeriod:
@@ -176,6 +190,10 @@ Copy + Clone + Send + Sync + QuantizableUInt + 'static
 pub trait RefractoryPeriod:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'static
 {
+
+}
+
+impl RefractoryPeriod for u64 {
 
 }
 
@@ -195,9 +213,11 @@ impl RefractoryPeriod for u8 {
 
 //region Refractory Countdown
 
-pub type RefractoryCountdownU32 = u32;
-pub type RefractoryCountdownU16 = u16;
-pub type RefractoryCountdownU8 = u8;
+pub type RefractoryCountdownType<T> = T;
+pub type RefractoryCountdownU64 = RefractoryCountdownType<u64>;
+pub type RefractoryCountdownU32 = RefractoryCountdownType<u32>;
+pub type RefractoryCountdownU16 = RefractoryCountdownType<u16>;
+pub type RefractoryCountdownU8 = RefractoryCountdownType<u8>;
 
 #[cfg(not(feature = "alloc"))]
 pub trait RefractoryCountdown:
@@ -210,6 +230,10 @@ Copy + Clone + Send + Sync + QuantizableUInt + 'static
 pub trait RefractoryCountdown:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'static
 {
+
+}
+
+impl RefractoryCountdown for u64 {
 
 }
 
@@ -258,9 +282,11 @@ impl Excitability for f32 {
 
 //region Consecutive Fire Countdown
 
-pub type ConsecutiveFireCountdownU32 = u32;
-pub type ConsecutiveFireCountdownU16 = u16;
-pub type ConsecutiveFireCountdownU8 = u8;
+pub type ConsecutiveFireCountdownType<T> = T;
+pub type ConsecutiveFireCountdownU64 = ConsecutiveFireCountdownType<u64>;
+pub type ConsecutiveFireCountdownU32 = ConsecutiveFireCountdownType<u32>;
+pub type ConsecutiveFireCountdownU16 = ConsecutiveFireCountdownType<u16>;
+pub type ConsecutiveFireCountdownU8 = ConsecutiveFireCountdownType<u8>;
 
 #[cfg(not(feature = "alloc"))]
 pub trait ConsecutiveFireCountdown:
@@ -273,6 +299,10 @@ Copy + Clone + Send + Sync + QuantizableUInt + 'static
 pub trait ConsecutiveFireCountdown:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'static
 {
+
+}
+
+impl ConsecutiveFireCountdown for u64 {
 
 }
 
@@ -292,9 +322,11 @@ impl ConsecutiveFireCountdown for u8 {
 
 //region Consecutive Fire Limit
 
-pub type ConsecutiveFireLimitU32 = u32;
-pub type ConsecutiveFireLimitU16 = u16;
-pub type ConsecutiveFireLimitU8 = u8;
+pub type ConsecutiveFireLimitType<T> = T;
+pub type ConsecutiveFireLimitU64 = ConsecutiveFireLimitType<u64>;
+pub type ConsecutiveFireLimitU32 = ConsecutiveFireLimitType<u32>;
+pub type ConsecutiveFireLimitU16 = ConsecutiveFireLimitType<u16>;
+pub type ConsecutiveFireLimitU8 = ConsecutiveFireLimitType<u8>;
 
 #[cfg(not(feature = "alloc"))]
 pub trait ConsecutiveFireLimit:
@@ -307,6 +339,10 @@ Copy + Clone + Send + Sync + QuantizableUInt + 'static
 pub trait ConsecutiveFireLimit:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'static
 {
+
+}
+
+impl ConsecutiveFireLimit for u64 {
 
 }
 
@@ -326,9 +362,11 @@ impl ConsecutiveFireLimit for u8 {
 
 //region Snooze Period Countdown
 
-pub type SnoozePeriodCountdownU32 = u32;
-pub type SnoozePeriodCountdownU16 = u16;
-pub type SnoozePeriodCountdownU8 = u8;
+pub type SnoozePeriodCountdownType<T> = T;
+pub type SnoozePeriodCountdownU64 = SnoozePeriodCountdownType<u64>;
+pub type SnoozePeriodCountdownU32 = SnoozePeriodCountdownType<u32>;
+pub type SnoozePeriodCountdownU16 = SnoozePeriodCountdownType<u16>;
+pub type SnoozePeriodCountdownU8 = SnoozePeriodCountdownType<u8>;
 
 #[cfg(not(feature = "alloc"))]
 pub trait SnoozePeriodCountdown:
@@ -348,6 +386,10 @@ impl SnoozePeriodCountdown for u32 {
 
 }
 
+impl SnoozePeriodCountdown for u64 {
+
+}
+
 impl SnoozePeriodCountdown for u16 {
 
 }
@@ -360,9 +402,11 @@ impl SnoozePeriodCountdown for u8 {
 
 //region Snooze Period Limit
 
-pub type SnoozePeriodLimitU32 = u32;
-pub type SnoozePeriodLimitU16 = u16;
-pub type SnoozePeriodLimitU8 = u8;
+pub type SnoozePeriodLimitType<T> = T;
+pub type SnoozePeriodLimitU64 = SnoozePeriodLimitType<u64>;
+pub type SnoozePeriodLimitU32 = SnoozePeriodLimitType<u32>;
+pub type SnoozePeriodLimitU16 = SnoozePeriodLimitType<u16>;
+pub type SnoozePeriodLimitU8 = SnoozePeriodLimitType<u8>;
 
 #[cfg(not(feature = "alloc"))]
 pub trait SnoozePeriodLimit:
@@ -375,6 +419,10 @@ Copy + Clone + Send + Sync + QuantizableUInt + 'static
 pub trait SnoozePeriodLimit:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'static
 {
+
+}
+
+impl SnoozePeriodLimit for u64 {
 
 }
 

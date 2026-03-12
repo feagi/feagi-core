@@ -42,6 +42,8 @@ where
     // Per Cortical Area
     cortical_refractory_period: [RP; CORTICAL_AREA_COUNT],
     cortical_excitability: [EX; CORTICAL_AREA_COUNT],
+    neurons_per_voxel: [NC; CORTICAL_AREA_COUNT],
+
 }
 
 impl<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL, const NEURON_COUNT: NC, const CORTICAL_AREA_COUNT: CAC> InterNeuronData<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> for InterNeuronDataStatic<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL, const NEURON_COUNT: NC, const CORTICAL_AREA_COUNT: CAC> {

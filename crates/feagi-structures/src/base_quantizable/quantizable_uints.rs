@@ -1,5 +1,7 @@
 use core::fmt::{Debug, Display};
 
+// TODO implement display on alloc builds
+
 //region UInts
 
 #[cfg(not(feature = "alloc"))]

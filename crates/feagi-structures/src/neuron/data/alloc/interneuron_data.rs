@@ -43,12 +43,12 @@ where
     consecutive_fire_limit: Vec<CFL>,
     snooze_period_countdown: Vec<SPC>,
     snooze_period_limit: Vec<SPL>,
-    add coordinates
+    coordinates: Vec
 
     // Per Cortical Area
     cortical_refractory_period: Vec<RP>,
     cortical_excitability: Vec<EX>,
-    mp_charge_accumulation_enabled: Vec<bool>,
+    neurons_per_voxel: Vec<NC>,
 }
 
 impl<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> InterNeuronData<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> for InterNeuronDataDynamic<NC, NID, CAC, CAI, NPV, LC, RP, RC, EX, CFC, CFL, SPC, SPL> {
