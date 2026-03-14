@@ -175,6 +175,7 @@ rayon = "1.11"
 ndarray = { version = "0.17.1", features = ["rayon"] }
 ahash = { version = "0.8", default-features = false, features = ["std", "serde", "compile-time-rng"] }  # Fast non-cryptographic hashing (no runtime-rng for WASM)
 tracing = "0.1"  # Structured logging and diagnostics
+half = "2.7.1"
 
 # Additional dependencies from feagi-data-processing
 image = "0.25.9"

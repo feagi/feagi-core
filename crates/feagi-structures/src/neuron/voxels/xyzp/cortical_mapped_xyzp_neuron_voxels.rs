@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::base_quantizable::quantizable_uints::QuantizableUInt;
+use crate::base_quantizable::unsigned_integer::QuantizableUInt;
 use crate::genomic::cortical_area::CorticalID;
 use crate::neuron::descriptors::NeuralPotentialValue;
 use crate::neuron::voxels::xyzp::NeuronVoxelXYZPArrays;

@@ -9,7 +9,7 @@ use ndarray::Array1;
 
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
-use crate::base_quantizable::quantizable_uints::QuantizableUInt;
+use crate::base_quantizable::unsigned_integer::QuantizableUInt;
 use crate::neuron::descriptors::{NeuralPotentialValue, NeuronVoxelCoordinate};
 
 /// Structure-of-arrays storage for neuron voxel data.

@@ -2181,6 +2181,7 @@ dependencies = [
  "ahash",
  "base64 0.22.1",
  "defmt",
+ "half",
  "ndarray",
  "paste",
  "rayon",

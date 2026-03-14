@@ -5,10 +5,11 @@
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
+extern crate core;
+extern crate core;
 
 mod feagi_json;
 mod templates;
-mod descriptors;
 mod feagi_base_error;
 
 pub mod genomic;

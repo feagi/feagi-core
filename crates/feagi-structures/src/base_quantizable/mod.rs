@@ -1,3 +1,5 @@
-pub mod quantizable_floats;
-pub mod quantizable_uints;
-pub mod quantizable_ints;
+pub mod unsigned_integer;
+pub mod signed_integer;
+pub mod nonzero_count;
+pub mod value;
+pub mod coordinate;

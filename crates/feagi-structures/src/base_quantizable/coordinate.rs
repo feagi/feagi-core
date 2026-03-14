@@ -1,65 +1,8 @@
-use crate::base_quantizable::quantizable_ints::QuantizableInt;
+use crate::base_quantizable::signed_integer::QuantizableInt;
+use crate::base_quantizable::nonzero_count::NonzeroCountType;
 use crate::FeagiBaseError;
-use crate::base_quantizable::quantizable_uints::QuantizableUInt;
+use crate::base_quantizable::unsigned_integer::QuantizableUInt;
 
-
-//region NonZeroIndex
-#[repr(transparent)]
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    serde::Serialize,
-    serde::Deserialize,
-)]
-pub struct NonzeroCountType<T: QuantizableUInt>(T);
-
-pub type NonzeroCountISize = NonzeroCountType<isize>;
-pub type NonzeroCountU64 = NonzeroCountType<u64>;
-pub type NonzeroCountU32 = NonzeroCountType<u32>;
-pub type NonzeroCountU16 = NonzeroCountType<u16>;
-pub type NonzeroCountU8 = NonzeroCountType<u8>;
-
-impl<T: QuantizableUInt> NonzeroCountType<T> {
-
-    pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
-
-    pub(crate) fn new_unchecked(n: T) -> Self {
-        Self(n)
-    }
-
-    pub fn new(n: T) -> Result<Self, FeagiBaseError> {
-        if n.lt(T::one()) {
-            return Err(FeagiBaseError::ValueCannotBeZero);
-        }
-        Ok(Self(n))
-    }
-
-    pub fn get(self) -> T {
-        self.0
-    }
-}
-
-impl<T: QuantizableUInt> core::ops::Deref for NonzeroCountType<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T: QuantizableUInt> core::fmt::Display for NonzeroCountType<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-//endregion
 
 //region 2D
 
@@ -114,8 +57,8 @@ impl<T: QuantizableUInt> core::fmt::Display for UnsignedCoordinate2DType<T> {
 }
 
 impl<T: QuantizableUInt> Into<UnsignedCoordinate2DUSize> for UnsignedCoordinate2DType<T> {
-    fn into(self) -> UnsignedCoordinate2DISize {
-        UnsignedCoordinate2DISize::new(self.x as usize, self.y as usize)
+    fn into(self) -> UnsignedCoordinate2DUSize {
+        UnsignedCoordinate2DUSize::new(self.x as usize, self.y as usize)
     }
 }
 
@@ -210,8 +153,8 @@ impl<T: QuantizableUInt> Dimension2DType<T> {
             return Ok(());
         }
         Err(FeagiBaseError::Coordinate2DOutOfBounds {
-            coordinate,
-            dimensions: self,
+            coordinate.clone().into(),
+            dimensions: self.into(),
         })
     }
 }

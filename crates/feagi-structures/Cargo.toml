@@ -27,6 +27,8 @@ serde_json = { workspace = true}
 ndarray = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 uuid = { workspace = true } # TODO check STD compabtility
+half = {workspace = true, default-features = false, features = []} # STD enables autoarch detection, which we may not want
+
 
 base64 = "0.22.1" # TODO move to workspace
 

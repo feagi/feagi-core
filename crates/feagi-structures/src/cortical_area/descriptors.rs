@@ -1,5 +1,5 @@
 use core::fmt::{Debug, Display};
-use crate::base_quantizable::quantizable_uints::QuantizableUInt;
+use crate::base_quantizable::unsigned_integer::QuantizableUInt;
 
 //region Cortical Area Index
 pub type CorticalAreaIndexU32 = u32;

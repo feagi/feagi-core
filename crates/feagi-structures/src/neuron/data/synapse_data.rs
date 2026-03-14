@@ -1,12 +1,12 @@
-use crate::base_quantizable::quantizable_floats::QuantizableFloat;
-use crate::base_quantizable::quantizable_uints::QuantizableUInt;
+use crate::base_quantizable::unsigned_integer::QuantizableUInt;
+use crate::base_quantizable::value::QuantizableValue;
 use crate::neuron::data::SynapseFlag;
 
 pub trait SynapseData<SynapseIndexAndSize, NeuronIndex, Weight, Potential>
 where
     SynapseIndexAndSize: QuantizableUInt,
     NeuronIndex: QuantizableUInt,
-    Weight: QuantizableFloat, // TODO float??
+    Weight: QuantizableValue, // TODO float??
     Potential: QuantizableUInt,
 {
     fn current_synapse_capacity(&self) -> SynapseIndexAndSize;
@@ -26,5 +26,4 @@ where
 
     fn get_synapse_flag(&self, synapse_index: SynapseIndexAndSize) -> SynapseFlag;
     fn set_synapse_flag(&mut self, synapse_index: SynapseIndexAndSize, synapse_flag: SynapseFlag);
-
 }

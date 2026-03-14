@@ -1,4 +1,4 @@
-use crate::descriptors::{Dimension2DUSize, Dimension3DUSize, UnsignedCoordinate2DUSize, UnsignedCoordinate3DUSize};
+use crate::base_quantizable::coordinate::{Dimension2DUSize, Dimension3DUSize, UnsignedCoordinate2DUSize, UnsignedCoordinate3DUSize};
 
 pub enum FeagiBaseError {
     ValueCannotBeZero,

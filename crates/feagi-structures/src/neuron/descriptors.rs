@@ -1,7 +1,7 @@
 use core::fmt::{Debug, Display};
-use crate::base_quantizable::quantizable_floats::QuantizableFloat;
-use crate::base_quantizable::quantizable_uints::QuantizableUInt;
-use crate::descriptors::{Coordinate3D, UnsignedCoordinate3DType, Dimension3D};
+use crate::base_quantizable::coordinate::UnsignedCoordinate3DType;
+use crate::base_quantizable::unsigned_integer::QuantizableUInt;
+use crate::base_quantizable::value::QuantizableValue;
 
 pub type NeuronVoxelCoordinate<T: QuantizableUInt> = UnsignedCoordinate3DType<T>;
 
@@ -89,7 +89,7 @@ pub type NeuronPotentialF32 = f32;
 
 #[cfg(not(feature = "alloc"))]
 pub trait NeuralPotentialValue:
-Copy + Clone + Send + Sync + QuantizableFloat + 'static
+Copy + Clone + Send + Sync + QuantizableValue + 'static
 {
     fn from_f32(value: f32) -> Self;
     fn to_f32(self) -> f32;
@@ -99,7 +99,7 @@ Copy + Clone + Send + Sync + QuantizableFloat + 'static
 
 #[cfg(feature = "alloc")]
 pub trait NeuralPotentialValue:
-Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableFloat + 'static
+Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableValue + 'static
 {
     fn from_f32(value: f32) -> Self;
     fn to_f32(self) -> f32;
@@ -139,7 +139,7 @@ pub type LeakCoefficientF32 = f32;
 
 #[cfg(not(feature = "alloc"))]
 pub trait LeakCoefficientF32:
-Copy + Clone + Send + Sync + QuantizableFloat + 'static
+Copy + Clone + Send + Sync + QuantizableValue + 'static
 {
     fn from_f32(value: f32) -> Self;
     fn to_f32(self) -> f32;
@@ -149,7 +149,7 @@ Copy + Clone + Send + Sync + QuantizableFloat + 'static
 
 #[cfg(feature = "alloc")]
 pub trait LeakCoefficient:
-Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableFloat + 'static
+Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableValue + 'static
 {
     fn from_f32(value: f32) -> Self;
     fn to_f32(self) -> f32;
@@ -258,7 +258,7 @@ pub type ExcitabilityF32 = f32;
 
 #[cfg(not(feature = "alloc"))]
 pub trait Excitability:
-Copy + Clone + Send + Sync + QuantizableFloat + 'static
+Copy + Clone + Send + Sync + QuantizableValue + 'static
 {
     fn from_f32(value: f32) -> Self;
     fn to_f32(self) -> f32;
@@ -268,7 +268,7 @@ Copy + Clone + Send + Sync + QuantizableFloat + 'static
 
 #[cfg(feature = "alloc")]
 pub trait Excitability:
-Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableFloat + 'static
+Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableValue + 'static
 {
 
 }
