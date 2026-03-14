@@ -15,7 +15,10 @@ use axum::http::{Request, StatusCode};
 #[cfg(feature = "feagi-agent")]
 use feagi_agent::{AgentDescriptor, AuthToken};
 #[cfg(feature = "feagi-agent")]
-use feagi_api::common::agent_registration::auto_create_cortical_areas_from_device_registrations;
+use feagi_api::common::agent_registration::{
+    auto_create_cortical_areas_from_device_registrations,
+    derive_sensory_cortical_ids_from_device_registrations,
+};
 use feagi_api::common::{Json as ApiJson, State as ApiStateExtract};
 use feagi_api::endpoints::agent::register_agent;
 use feagi_api::transports::http::server::{create_http_server, ApiState};
@@ -32,6 +35,8 @@ use feagi_services::impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     SystemServiceImpl,
 };
+#[cfg(feature = "feagi-agent")]
+use feagi_services::types::CreateCorticalAreaParams;
 use parking_lot::RwLock;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -421,6 +426,95 @@ fn sample_multi_limb_device_registrations() -> Value {
     })
 }
 
+#[cfg(feature = "feagi-agent")]
+fn sample_named_motor_device_registrations() -> Value {
+    json!({
+        "output_units_and_decoder_properties": {
+            "PositionalServo": [
+                [
+                    {
+                        "friendly_name": "front_left_leg",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [
+                            {
+                                "friendly_name": "front_left_hip",
+                                "device_properties": {
+                                    "bundle_id": "front_left_leg",
+                                    "bundle_type": "leg"
+                                }
+                            },
+                            {
+                                "friendly_name": "front_left_knee",
+                                "device_properties": {
+                                    "bundle_id": "front_left_leg",
+                                    "bundle_type": "leg"
+                                }
+                            }
+                        ]
+                    },
+                    {}
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_named_sensory_only_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "Vision": [
+                [
+                    {
+                        "friendly_name": "head_camera",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [
+                            {
+                                "friendly_name": "rgb_camera",
+                                "device_properties": {
+                                    "bundle_id": "head_camera",
+                                    "bundle_type": "camera_rig"
+                                }
+                            }
+                        ]
+                    },
+                    {}
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_sensory_device_registrations_with_large_vision_encoder() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "Vision": [
+                [
+                    {
+                        "friendly_name": "head_camera",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {
+                        "CartesianPlane": {
+                            "image_resolution": {
+                                "width": 128,
+                                "height": 96
+                            },
+                            "color_space": "Gamma",
+                            "color_channel_layout": "RGBA"
+                        }
+                    }
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
 /// Helper to make a request and get response as JSON
 async fn request_json(
     app: axum::Router,
@@ -734,6 +828,133 @@ async fn test_auto_create_creates_all_limb_cortical_areas() {
     }
     assert_eq!(abs_width_count, 4, "Expected 4 absolute limb areas");
     assert_eq!(inc_width_count, 4, "Expected 4 incremental limb areas");
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_uses_registration_friendly_name_for_motor_areas() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_named_motor_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    assert!(
+        areas
+            .iter()
+            .any(|area| area.name.starts_with("front_left_leg")),
+        "Expected created motor area names to use registration friendly name"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_supports_sensory_only_registrations() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_named_sensory_only_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    assert!(
+        areas.iter().any(|area| area.name == "head_camera"),
+        "Expected sensory-only registration to create sensory area with registration name"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_updates_existing_sensory_area_dimensions_from_encoder_properties() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_sensory_device_registrations_with_large_vision_encoder();
+    let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
+        .expect("Failed deriving sensory cortical IDs");
+    let cortical_id = sensory_ids
+        .into_iter()
+        .next()
+        .expect("Expected a vision cortical ID");
+
+    // Pre-create an undersized sensory area to verify auto-create update logic expands it.
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "legacy_vision".to_string(),
+            dimensions: (64, 64, 3),
+            position: (-100, 30, 0),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("Failed to pre-create sensory area");
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let resized = areas
+        .iter()
+        .find(|area| area.cortical_id == cortical_id)
+        .expect("Expected sensory area to exist after auto-create");
+
+    assert_eq!(
+        resized.dimensions,
+        (128, 96, 4),
+        "Expected sensory area dimensions to expand to encoder properties"
+    );
 }
 
 // ============================================================================

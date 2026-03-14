@@ -43,7 +43,9 @@ type BrainRegionIoRegistry = HashMap<String, (Vec<String>, Vec<String>)>;
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use crate::types::{BduError, BduResult};
 use feagi_npu_neural::types::NeuronId;
-use feagi_structures::genomic::cortical_area::{CorticalAreaType, CorticalID, CustomCorticalType};
+use feagi_structures::genomic::cortical_area::{
+    CoreCorticalType, CorticalAreaType, CorticalID, CustomCorticalType,
+};
 use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
 
 // State manager access for fatigue calculation
@@ -4976,11 +4978,16 @@ impl ConnectomeManager {
                 let mut mp_driven_psp_flags = ahash::AHashMap::new();
 
                 for (cortical_id, area) in &self.cortical_areas {
-                    // Get psp_uniform_distribution flag (default to false)
+                    // Power area defaults to uniform PSP distribution when property is absent.
+                    let default_psp_uniform = if *cortical_id == CoreCorticalType::Power.to_cortical_id() {
+                        true
+                    } else {
+                        false
+                    };
                     let psp_uniform = area
                         .get_property("psp_uniform_distribution")
                         .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
+                        .unwrap_or(default_psp_uniform);
                     psp_uniform_flags.insert(*cortical_id, psp_uniform);
 
                     // Get mp_driven_psp flag (default to false)

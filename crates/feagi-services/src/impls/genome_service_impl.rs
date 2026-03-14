@@ -31,7 +31,7 @@ use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::genome::{ChangeType, CorticalChangeClassifier};
 
@@ -501,7 +501,7 @@ impl GenomeService for GenomeServiceImpl {
         // Debug: Check all property values in RuntimeGenome before saving
         for (cortical_id, area) in &genome.cortical_areas {
             let area_id_str = cortical_id.as_base_64();
-            info!(
+            debug!(
                 target: "feagi-services",
                 "[GENOME-SAVE] Area {} has {} properties in RuntimeGenome",
                 area_id_str,
@@ -524,7 +524,7 @@ impl GenomeService for GenomeServiceImpl {
 
             for prop_name in &key_props {
                 if let Some(prop_value) = area.properties.get(*prop_name) {
-                    info!(
+                    debug!(
                         target: "feagi-services",
                         "[GENOME-SAVE] Area {} property {}={}",
                         area_id_str, prop_name, prop_value
