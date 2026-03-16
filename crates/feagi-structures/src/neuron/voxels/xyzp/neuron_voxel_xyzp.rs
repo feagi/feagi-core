@@ -1,5 +1,5 @@
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::neuron::descriptors::{NeuralPotentialValue, NeuronVoxelCoordinate};
+use crate::neuron::descriptors::{NeuralMembranePotential, NeuronVoxelCoordinate};
 
 /// A single neuron voxel storing spatial coordinates and activation potential in XYZP format.
 ///
@@ -7,7 +7,7 @@ use crate::neuron::descriptors::{NeuralPotentialValue, NeuronVoxelCoordinate};
 /// a cortical area, along with its current activation/voltage level.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NeuronVoxelXYZP<Potential, CoordQuant> where
-    Potential: NeuralPotentialValue,
+    Potential: NeuralMembranePotential,
     CoordQuant: QuantizableUInt
 {
 
@@ -17,7 +17,7 @@ pub struct NeuronVoxelXYZP<Potential, CoordQuant> where
     pub potential: Potential, // TODO: We may decided to have multiple ways to hold potential
 }
 
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> NeuronVoxelXYZP<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxelXYZP<Potential, CoordQuant> {
 
     /// Number of bytes used to represent a single neuron voxel in memory (x, y, z, p elements).
     pub const NUMBER_OF_BYTES: usize = NeuronVoxelCoordinate::NUMBER_OF_BYTES + Potential::NUMBER_OF_BYTES;
@@ -31,7 +31,7 @@ impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> NeuronVoxelXY
 }
 
 #[cfg(feature = "alloc")]
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> std::fmt::Display for NeuronVoxelXYZP<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> std::fmt::Display for NeuronVoxelXYZP<Potential, CoordQuant> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s = format!(
             "NeuronVoxelXYZP({}, {}, {}, {})",

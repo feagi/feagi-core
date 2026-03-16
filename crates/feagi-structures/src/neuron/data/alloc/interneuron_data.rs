@@ -1,8 +1,8 @@
 use ahash::AHashMap;
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::cortical_area::descriptors::{CorticalAreaCount, CorticalAreaIndex};
+use crate::cortical_area::cortical_area_index::{CorticalAreaCount, CorticalAreaIndex};
 use crate::neuron::data::{InterNeuronData, NeuronFlag};
-use crate::neuron::descriptors::{ConsecutiveFireCountdown, ConsecutiveFireLimit, Excitability, LeakCoefficient, NeuralPotentialValue, RefractoryCountdown, RefractoryPeriod, SnoozePeriodCountdown, SnoozePeriodLimit};
+use crate::neuron::descriptors::{ConsecutiveFireCountdown, ConsecutiveFireLimit, Excitability, LeakCoefficient, NeuralMembranePotential, RefractoryCountdown, RefractoryPeriod, SnoozePeriodCountdown, SnoozePeriodLimit};
 use crate::neuron::FeagiNeuronError;
 
 // TODO Rayon? Could the trait perhaps implement some sort of iterator support for rayon?
@@ -17,7 +17,7 @@ pub struct InterNeuronDataDynamic<Neuron, Cortical, Coord, NPV, LC, RP, RC, EX, 
 where
     Neuron: QuantizableUInt,
     Cortical: QuantizableUInt,
-    NPV: NeuralPotentialValue,
+    NPV: NeuralMembranePotential,
     Coord: NeuronVoxelCoordinate,
     LC: LeakCoefficient,
     RP: RefractoryPeriod,

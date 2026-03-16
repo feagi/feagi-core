@@ -10,7 +10,7 @@ use ndarray::Array1;
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::neuron::descriptors::{NeuralPotentialValue, NeuronVoxelCoordinate};
+use crate::neuron::descriptors::{NeuralMembranePotential, NeuronVoxelCoordinate};
 
 /// Structure-of-arrays storage for neuron voxel data.
 ///
@@ -19,7 +19,7 @@ use crate::neuron::descriptors::{NeuralPotentialValue, NeuronVoxelCoordinate};
 #[derive(Clone, Debug, PartialEq)]
 pub struct NeuronVoxelXYZPArrays<Potential, CoordQuant>
 where
-    Potential: NeuralPotentialValue,
+    Potential: NeuralMembranePotential,
     CoordQuant: QuantizableUInt
 {
     /// X coordinates of neuron voxels (using Cartesian coordinate system)
@@ -32,7 +32,7 @@ where
     p: Vec<Potential>,
 }
 
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> NeuronVoxelXYZPArrays<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxelXYZPArrays<Potential, CoordQuant> {
     //region Unique Constructors
 
     /// Creates a new empty NeuronVoxelXYZPArrays instance.
@@ -58,13 +58,13 @@ impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> NeuronVoxelXY
     }
 }
 
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> Default for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> Default for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> NeuronVoxelXYZPArrays<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxelXYZPArrays<Potential, CoordQuant> {
     /// Creates a new NeuronVoxelXYZPArrays instance from four separate vectors of equal length.
     ///
     /// # Arguments
@@ -708,7 +708,7 @@ impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> NeuronVoxelXY
     }
 }
 
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> std::fmt::Display for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> std::fmt::Display for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s = format!(
             "'NeuronVoxelXYZPArrays(X: {:?}, Y: {:?}, Z: {:?}, P: {:?})'",
@@ -719,7 +719,7 @@ impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> std::fmt::Dis
 }
 
 // Implement IntoIterator for owned NeuronVoxelXYZPArrays
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> IntoIterator for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> IntoIterator for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
     type Item = NeuronVoxelXYZP<Potential, CoordQuant>;
     type IntoIter = NeuronVoxelXYZPArraysIntoIter<Potential, CoordQuant>;
 
@@ -734,14 +734,14 @@ impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> IntoIterator 
 }
 
 /// Iterator for consuming NeuronVoxelXYZPArrays and producing owned NeuronVoxelXYZP instances.
-pub struct NeuronVoxelXYZPArraysIntoIter<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> {
+pub struct NeuronVoxelXYZPArraysIntoIter<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> {
     x: std::vec::IntoIter<CoordQuant>,
     y: std::vec::IntoIter<CoordQuant>,
     z: std::vec::IntoIter<CoordQuant>,
     p: std::vec::IntoIter<Potential>,
 }
 
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> Iterator for NeuronVoxelXYZPArraysIntoIter<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> Iterator for NeuronVoxelXYZPArraysIntoIter<Potential, CoordQuant> {
     type Item = NeuronVoxelXYZP<Potential, CoordQuant>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -759,14 +759,14 @@ impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> Iterator for 
     }
 }
 
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> ExactSizeIterator for NeuronVoxelXYZPArraysIntoIter<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> ExactSizeIterator for NeuronVoxelXYZPArraysIntoIter<Potential, CoordQuant> {
     fn len(&self) -> usize {
         self.x.len()
     }
 }
 
 // Implement IntoParallelIterator for owned NeuronVoxelXYZPArrays
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> IntoParallelIterator for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> IntoParallelIterator for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
     type Iter = NeuronVoxelXYZPArraysParIter<Potential, CoordQuant>;
     type Item = NeuronVoxelXYZP<Potential, CoordQuant>;
 
@@ -781,14 +781,14 @@ impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> IntoParallelI
 }
 
 /// Parallel iterator for processing NeuronVoxelXYZPArrays using Rayon.
-pub struct NeuronVoxelXYZPArraysParIter<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> {
+pub struct NeuronVoxelXYZPArraysParIter<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> {
     x: Vec<CoordQuant>,
     y: Vec<CoordQuant>,
     z: Vec<CoordQuant>,
     p: Vec<Potential>,
 }
 
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> ParallelIterator for NeuronVoxelXYZPArraysParIter<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> ParallelIterator for NeuronVoxelXYZPArraysParIter<Potential, CoordQuant> {
     type Item = NeuronVoxelXYZP<Potential, CoordQuant>;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
@@ -809,7 +809,7 @@ impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> ParallelItera
     }
 }
 
-impl<Potential: NeuralPotentialValue, CoordQuant: QuantizableUInt> IndexedParallelIterator for NeuronVoxelXYZPArraysParIter<Potential, CoordQuant> {
+impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> IndexedParallelIterator for NeuronVoxelXYZPArraysParIter<Potential, CoordQuant> {
     fn len(&self) -> usize {
         self.x.len()
     }

@@ -98,7 +98,7 @@ Copy + Clone + Send + Sync + QuantizableValue + 'static
 }
 
 #[cfg(feature = "alloc")]
-pub trait NeuralPotentialValue:
+pub trait NeuralMembranePotential:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableValue + 'static
 {
     fn from_f32(value: f32) -> Self;
@@ -108,7 +108,7 @@ Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableValue + 'sta
 }
 
 
-impl NeuralPotentialValue for f32 {
+impl NeuralMembranePotential for f32 {
 
     #[inline(always)]
     fn from_f32(value: f32) -> Self {

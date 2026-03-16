@@ -6,6 +6,7 @@ pub mod no_alloc;
 pub mod alloc;
 mod synapse_data;
 mod synapse_flag;
+mod single_neuron_data;
 
 pub use interneuron_data::InterNeuronData;
 pub use neuron_flag::NeuronFlag;
