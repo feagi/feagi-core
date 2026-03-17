@@ -1,9 +1,9 @@
 
 /// Stores various neuron boolean flags under a single byte (u8)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NeuronFlag(u8);
+pub struct InterneuronFlag(u8);
 
-impl NeuronFlag {
+impl InterneuronFlag {
     pub fn new_valid() -> Self {
         Self(0x01) // The first flag is the valid flag
     }
@@ -91,10 +91,10 @@ impl NeuronFlag {
     }
     */
 
-    
+
     pub fn toggle_validity(&mut self) { self ^= 0x01; }
     pub fn toggle_mp_charge_accumulation_enabled(&mut self) { self ^= 0x02; }
-    
+
     //pub fn toggle_c(&mut self) { self ^= 0x04; }
     //pub fn toggle_d(&mut self) { self ^= 0x08; }
     //pub fn toggle_e(&mut self) { self ^= 0x10; }

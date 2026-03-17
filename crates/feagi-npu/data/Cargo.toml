@@ -1,0 +1,27 @@
+[package]
+name = "feagi-npu-data"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Abstractions for neural structures used by the FEAGI Burst Engine"
+
+[features]
+default = ["std"]
+
+std = ["alloc", "dep:ahash"] # allows use of the std library
+alloc = [] # allows use of alloc (through core, not strictly std)
+defmt = ["dep:defmt"]
+rayon = ["dep:rayon", "std"]
+
+[dependencies]
+defmt = {workspace = true, optional = true}
+ahash = { workspace = true, default-features = false, optional = true}
+serde = { workspace = true }
+rayon = { workspace = true, optional = true}
+half = {workspace = true, default-features = false, features = []} # STD enables autoarch detection, which we may not want
+
+[dev-dependencies]
+paste = "1.0.15"
