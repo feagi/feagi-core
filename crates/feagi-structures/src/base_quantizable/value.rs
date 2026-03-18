@@ -176,7 +176,7 @@ impl QuantizableValue for f64 {
 
     #[inline(always)]
     fn to_f32(self) -> f32 {
-        self as f32 // TODO what does this end up doing?
+        self as f32
     }
 
     #[inline(always)]

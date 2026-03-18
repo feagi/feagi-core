@@ -48,9 +48,9 @@ impl InterneuronID for u8 {
 
 pub type LeakCoefficientType<T: QuantizableValue> = T;
 #[cfg(feature = "support_64bit_indexing_quantization")]
-pub type LeakCoefficientU64 = LeakCoefficientType<f64>;
-pub type LeakCoefficientU32 = LeakCoefficientType<f32>;
-pub type LeakCoefficientU16 = LeakCoefficientType<f16>;
+pub type LeakCoefficientF64 = LeakCoefficientType<f64>;
+pub type LeakCoefficientF32 = LeakCoefficientType<f32>;
+pub type LeakCoefficientF16 = LeakCoefficientType<f16>;
 pub type LeakCoefficientU8 = LeakCoefficientType<u8>;
 
 
@@ -59,7 +59,7 @@ pub trait LeakCoefficient:
 Copy + Clone + Send + Sync + QuantizableValue + 'static
 {
     fn saturating_add(self, other: Self) -> Self;
-    fn mul_leak(self, leak_coefficient: f32) -> Self;
+    fn mul_leak(self, leak_coefficient: Self) -> Self;
 }
 
 #[cfg(feature = "alloc")]
@@ -67,24 +67,44 @@ pub trait LeakCoefficient:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableValue + 'static
 {
     fn saturating_add(self, other: Self) -> Self;
-    fn mul_leak(self, leak_coefficient: f32) -> Self;
+    fn mul_leak(self, leak_coefficient: Self) -> Self;
 }
 
 #[cfg(feature = "support_64bit_indexing_quantization")]
 impl LeakCoefficient for f64 {
-
+    fn saturating_add(self, other: Self) -> Self {
+        todo!()
+    }
+    fn mul_leak(self, leak_coefficient: Self) -> Self {
+        todo!()
+    }
 }
 
 impl LeakCoefficient for f32 {
-
+    fn saturating_add(self, other: Self) -> Self {
+        todo!()
+    }
+    fn mul_leak(self, leak_coefficient: Self) -> Self {
+        todo!()
+    }
 }
 
 impl LeakCoefficient for f16 {
-
+    fn saturating_add(self, other: Self) -> Self {
+        todo!()
+    }
+    fn mul_leak(self, leak_coefficient: Self) -> Self {
+        todo!()
+    }
 }
 
 impl LeakCoefficient for u8 {
-
+    fn saturating_add(self, other: Self) -> Self {
+        todo!()
+    }
+    fn mul_leak(self, leak_coefficient: Self) -> Self {
+        todo!()
+    }
 }
 
 //endregion
@@ -187,23 +207,55 @@ pub type ExcitabilityU8 = ExcitabilityType<u8>;
 pub trait Excitability:
 Copy + Clone + Send + Sync + QuantizableValue + 'static
 {
-    fn from_f32(value: f32) -> Self;
-    fn to_f32(self) -> f32;
     fn saturating_add(self, other: Self) -> Self;
-    fn mul_leak(self, leak_coefficient: f32) -> Self;
+    fn mul_leak(self, leak_coefficient: LeakCoefficientType<T: QuantizableValue>) -> Self;
 }
 
 #[cfg(feature = "alloc")]
 pub trait Excitability:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableValue + 'static
 {
-
+    fn saturating_add(self, other: Self) -> Self;
+    fn mul_leak(self, leak_coefficient: LeakCoefficientType<T: QuantizableValue>) -> Self;
 }
 
+#[cfg(feature = "support_64bit_indexing_quantization")]
+impl Excitability for f64 {
+    fn saturating_add(self, other: Self) -> Self {
+        todo!()
+    }
+    fn mul_leak(self, leak_coefficient: LeakCoefficientF64) -> Self {
+        todo!()
+    }
+}
 
 impl Excitability for f32 {
-
+    fn saturating_add(self, other: Self) -> Self {
+        todo!()
+    }
+    fn mul_leak(self, leak_coefficient: LeakCoefficientF32) -> Self {
+        todo!()
+    }
 }
+
+impl Excitability for f16 {
+    fn saturating_add(self, other: Self) -> Self {
+        todo!()
+    }
+    fn mul_leak(self, leak_coefficient: LeakCoefficientF16) -> Self {
+        todo!()
+    }
+}
+
+impl Excitability for u8 {
+    fn saturating_add(self, other: Self) -> Self {
+        todo!()
+    }
+    fn mul_leak(self, leak_coefficient: LeakCoefficientU8) -> Self {
+        todo!()
+    }
+}
+
 
 //endregion
 
