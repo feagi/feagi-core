@@ -12,14 +12,15 @@ description = "Abstractions for neural structures used by the FEAGI Burst Engine
 default = ["std"]
 
 std = ["alloc", "dep:ahash"] # allows use of the std library
-alloc = [] # allows use of alloc (through core, not strictly std)
+alloc = ["serde/alloc"] # allows use of alloc (through core, not strictly std)
 defmt = ["dep:defmt"]
 rayon = ["dep:rayon", "std"]
+support_64bit_indexing_quantization = []
 
 [dependencies]
 defmt = {workspace = true, optional = true}
 ahash = { workspace = true, default-features = false, optional = true}
-serde = { workspace = true }
+serde = { workspace = true, default-features = false, features = [] }
 rayon = { workspace = true, optional = true}
 half = {workspace = true, default-features = false, features = []} # STD enables autoarch detection, which we may not want
 

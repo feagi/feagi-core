@@ -16,6 +16,10 @@ impl SynapseFlag {
         self & 0x02 != 0
     }
 
+    // TODO is plastic? type -> stdp plastic enum / no plastic
+
+
+
     // Other 6 bits are reserved for now
     //pub fn get_c(&self) -> bool { self & 0x04 != 0 }
     //pub fn get_d(&self) -> bool { self & 0x08 != 0 }

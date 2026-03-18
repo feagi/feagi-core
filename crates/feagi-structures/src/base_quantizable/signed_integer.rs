@@ -1,5 +1,11 @@
 use core::fmt::{Debug, Display};
 
+#[cfg(feature = "support_64bit_indexing_quantization")]
+pub type QuantizableSIntI64 = i64;
+pub type QuantizableSIntI32 = i32;
+pub type QuantizableSIntI16 = i16;
+pub type QuantizableSIntI8 = i8;
+
 #[cfg(not(feature = "alloc"))]
 pub trait QuantizableInt:
     Copy
@@ -432,6 +438,7 @@ impl Into<isize> for i32 {
     fn into(self) -> isize { self as isize } // lol
 }
 
+#[cfg(feature = "support_64bit_indexing_quantization")]
 impl QuantizableInt for i64 {
     const NUMBER_OF_BYTES: usize = size_of::<i64>();
 
@@ -511,6 +518,7 @@ impl QuantizableInt for i64 {
     }
 }
 
+#[cfg(feature = "support_64bit_indexing_quantization")]
 impl Into<isize> for i64 {
     fn into(self) -> isize { self as isize } // lol
 }

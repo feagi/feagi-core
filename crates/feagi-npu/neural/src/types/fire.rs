@@ -23,8 +23,8 @@ use alloc::vec::Vec;
 #[derive(Debug, Clone)]
 pub struct FireCandidateList {
     candidates: ahash::AHashMap<u32, f32>,
-    cached: RefCell<Vec<(NeuronId, f32)>>,
-    cache_dirty: Cell<bool>,
+    cached: RefCell<Vec<(NeuronId, f32)>>, // TODO amir drop this, handle this external
+    cache_dirty: Cell<bool>, // todo drop
 }
 
 #[cfg(feature = "std")]
@@ -46,7 +46,7 @@ impl FireCandidateList {
 
     #[inline]
     pub fn add_candidate(&mut self, neuron_id: NeuronId, potential: f32) {
-        *self.candidates.entry(neuron_id.0).or_insert(0.0) += potential;
+        *self.candidates.entry(neuron_id.0).or_insert(0.0) += potential; // TODO AMIR bucket this!
         self.cache_dirty.set(true);
     }
 

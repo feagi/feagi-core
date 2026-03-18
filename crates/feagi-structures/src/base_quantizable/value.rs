@@ -1,6 +1,8 @@
 use core::fmt::{Debug, Display};
 use half::f16;
 
+#[cfg(feature = "support_64bit_indexing_quantization")]
+pub type QuantizableValueF64 = f64;
 pub type QuantizableValueF32 = f32;
 pub type QuantizableValueF16 = f16;
 pub type QuantizableValueU8 = u8;
@@ -76,6 +78,117 @@ pub trait QuantizableValue:
     fn checked_div(self, other: Self) -> Option<Self>;
     fn to_f32(self) -> f32;
     fn from_f32(value: f32) -> Self;
+}
+
+#[cfg(feature = "support_64bit_indexing_quantization")]
+impl QuantizableValue for f64 {
+    const NUMBER_OF_BYTES: usize = size_of::<f64>();
+
+    #[inline(always)]
+    fn ge(self, other: Self) -> bool {
+        self >= other
+    }
+
+    #[inline(always)]
+    fn lt(self, other: Self) -> bool {
+        self < other
+    }
+
+    #[inline(always)]
+    fn zero() -> Self {
+        0.0
+    }
+
+    #[inline(always)]
+    fn one() -> Self {
+        1.0
+    }
+
+    #[inline(always)]
+    fn max_value() -> Self {
+        f64::MAX
+    }
+
+    #[inline(always)]
+    fn min_value() -> Self {
+        f64::MIN
+    }
+
+    #[inline(always)]
+    fn saturating_add(self, other: Self) -> Self {
+        let value = self + other;
+        if value.is_infinite() {
+            if value.is_sign_negative() { f64::MIN } else { f64::MAX }
+        } else if value.is_nan() {
+            0.0
+        } else {
+            value
+        }
+    }
+
+    #[inline(always)]
+    fn checked_add(self, other: Self) -> Option<Self> {
+        let value = self + other;
+        if value.is_finite() { Some(value) } else { None }
+    }
+
+    #[inline(always)]
+    fn saturating_sub(self, other: Self) -> Self {
+        let value = self - other;
+        if value.is_infinite() {
+            if value.is_sign_negative() { f64::MIN } else { f64::MAX }
+        } else if value.is_nan() {
+            0.0
+        } else {
+            value
+        }
+    }
+
+    #[inline(always)]
+    fn checked_sub(self, other: Self) -> Option<Self> {
+        let value = self - other;
+        if value.is_finite() { Some(value) } else { None }
+    }
+
+    #[inline(always)]
+    fn saturating_mul(self, other: Self) -> Self {
+        let value = self * other;
+        if value.is_infinite() {
+            if value.is_sign_negative() { f64::MIN } else { f64::MAX }
+        } else if value.is_nan() {
+            0.0
+        } else {
+            value
+        }
+    }
+
+    #[inline(always)]
+    fn checked_mul(self, other: Self) -> Option<Self> {
+        let value = self * other;
+        if value.is_finite() { Some(value) } else { None }
+    }
+
+    #[inline(always)]
+    fn checked_div(self, other: Self) -> Option<Self> {
+        let value = self / other;
+        if value.is_finite() { Some(value) } else { None }
+    }
+
+    #[inline(always)]
+    fn to_f32(self) -> f32 {
+        self as f32 // TODO what does this end up doing?
+    }
+
+    #[inline(always)]
+    fn from_f32(value: f32) -> Self {
+        if value.is_infinite() {
+            if value.is_sign_negative() { f64::MIN } else { f64::MAX }
+        } else if value.is_nan() {
+            0.0
+        } else {
+            value as f64
+        }
+    }
 }
 
 impl QuantizableValue for f32 {

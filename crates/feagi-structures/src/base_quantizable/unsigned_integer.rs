@@ -2,6 +2,13 @@ use core::fmt::{Debug, Display};
 
 // TODO implement display on alloc builds
 
+#[cfg(feature = "support_64bit_indexing_quantization")]
+pub type QuantizableUIntU64 = u64;
+pub type QuantizableUIntU32 = u32;
+pub type QuantizableUIntU16 = u16;
+pub type QuantizableUIntU8 = u8;
+
+
 #[cfg(not(feature = "alloc"))]
 pub trait QuantizableUInt:
     Copy
@@ -422,6 +429,7 @@ impl Into<usize> for u32 {
     }
 }
 
+#[cfg(feature = "support_64bit_indexing_quantization")]
 impl QuantizableUInt for u64 {
     const NUMBER_OF_BYTES: usize = size_of::<u64>();
 
@@ -504,6 +512,7 @@ impl QuantizableUInt for u64 {
     }
 }
 
+#[cfg(feature = "support_64bit_indexing_quantization")]
 impl Into<usize> for u64 {
     fn into(self) -> usize {
         self as usize  // Just a cast - no computation

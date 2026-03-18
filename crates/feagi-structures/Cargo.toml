@@ -11,13 +11,14 @@ description = "The most core library, defines the basic data types used by FEAGI
 # TODO investigate possible split between neuron structures and certain genomic identifiers
 
 [features]
-default = ["std"]
+default = ["std", "ndarray", "rayon", "support_64bit_indexing_quantization"]
 
 std = ["alloc", "dep:ahash"] # allows use of the std library
 alloc = [] # allows use of alloc (through core, not strictly std)
 defmt = ["dep:defmt"]
 ndarray = ["dep:ndarray"]
 rayon = ["dep:rayon", "std"]
+support_64bit_indexing_quantization = []
 
 [dependencies]
 defmt = {workspace = true, optional = true}
@@ -28,6 +29,7 @@ ndarray = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 uuid = { workspace = true } # TODO check STD compabtility
 half = {workspace = true, default-features = false, features = []} # STD enables autoarch detection, which we may not want
+tracing = "0.1.44" # TODO we may need to move this with wherever we move the ulog
 
 
 base64 = "0.22.1" # TODO move to workspace

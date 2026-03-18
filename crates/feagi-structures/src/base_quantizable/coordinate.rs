@@ -26,6 +26,7 @@ pub struct UnsignedCoordinate2DType<T: QuantizableUInt> {
 }
 
 pub type UnsignedCoordinate2DUSize = UnsignedCoordinate2DType<usize>;
+#[cfg(feature = "support_64bit_indexing_quantization")]
 pub type UnsignedCoordinate2DU64 = UnsignedCoordinate2DType<u64>;
 pub type UnsignedCoordinate2DU32 = UnsignedCoordinate2DType<u32>;
 pub type UnsignedCoordinate2DU16 = UnsignedCoordinate2DType<u16>;
@@ -71,6 +72,7 @@ pub struct SignedCoordinate2DType<T: QuantizableInt> {
 }
 
 pub type SignedCoordinate2DISize = SignedCoordinate2DType<isize>;
+#[cfg(feature = "support_64bit_indexing_quantization")]
 pub type SignedCoordinate2DI64 = SignedCoordinate2DType<i64>;
 pub type SignedCoordinate2DI32 = SignedCoordinate2DType<i32>;
 pub type SignedCoordinate2DI16 = SignedCoordinate2DType<i16>;
@@ -117,6 +119,7 @@ pub struct Dimension2DType<T: QuantizableUInt> {
 }
 
 pub type Dimension2DUSize = Dimension2DType<usize>;
+#[cfg(feature = "support_64bit_indexing_quantization")]
 pub type Dimension2DU64 = Dimension2DType<u64>;
 pub type Dimension2DU32 = Dimension2DType<u32>;
 pub type Dimension2DU16 = Dimension2DType<u16>;
@@ -197,6 +200,7 @@ pub struct UnsignedCoordinate3DType<T: QuantizableUInt> {
 }
 
 pub type UnsignedCoordinate3DUSize = UnsignedCoordinate3DType<usize>;
+#[cfg(feature = "support_64bit_indexing_quantization")]
 pub type UnsignedCoordinate3DU64 = UnsignedCoordinate3DType<u64>;
 pub type UnsignedCoordinate3DU32 = UnsignedCoordinate3DType<u32>;
 pub type UnsignedCoordinate3DU16 = UnsignedCoordinate3DType<u16>;
@@ -255,6 +259,7 @@ pub struct SignedCoordinate3DType<T: QuantizableInt> {
 }
 
 pub type SignedCoordinate3DISize = SignedCoordinate3DType<isize>;
+#[cfg(feature = "support_64bit_indexing_quantization")]
 pub type SignedCoordinate3DI64 = SignedCoordinate3DType<i64>;
 pub type SignedCoordinate3DI32 = SignedCoordinate3DType<i32>;
 pub type SignedCoordinate3DI16 = SignedCoordinate3DType<i16>;
@@ -302,6 +307,7 @@ pub struct Dimension3DType<T: QuantizableUInt> {
 }
 
 pub type Dimension3DUSize = Dimension3DType<usize>;
+#[cfg(feature = "support_64bit_indexing_quantization")]
 pub type Dimension3DU64 = Dimension3DType<u64>;
 pub type Dimension3DU32 = Dimension3DType<u32>;
 pub type Dimension3DU16 = Dimension3DType<u16>;

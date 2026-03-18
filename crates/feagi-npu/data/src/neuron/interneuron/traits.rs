@@ -39,10 +39,6 @@ where
     //region Individual neuron Properties
 
     //region Membrane Potential
-    fn get_neuron_membrane_potential(&self, neuron_id: NeuronIndex) -> Result<NMP, FeagiNPUDataError>;
-
-    fn set_neuron_membrane_potential(&mut self, neuron_id: NeuronIndex, potential: NMP) -> Result<(), FeagiNPUDataError>;
-
     fn get_neuron_membrane_potentials_slice(&self) -> &[NMP];
 
     fn get_neuron_membrane_potentials_slice_mut(&mut self) -> &mut [NMP];
@@ -52,96 +48,58 @@ where
 
     // No setting functions since no neurons can move voxels in static environments
 
-    fn get_neuron_voxel_coordinate(&self, neuron_id: NeuronIndex) -> Result<NeuronVoxelCoordinate<CoordQuant>, FeagiNPUDataError>;
-
     fn get_neuron_voxel_coordinates_slice(&self) -> &[NeuronVoxelCoordinate<CoordQuant>];
     //endregion
 
     //region Threshold
-    fn get_neuron_threshold(&self, neuron_id: NeuronIndex) -> Result<NMP, FeagiNPUDataError>;
-
-    fn set_neuron_threshold(&mut self, neuron_id: NeuronIndex, threshold: NMP) -> Result<(), FeagiNPUDataError>;
-
     fn get_neuron_thresholds_slice(&self) -> &[NMP];
 
     fn get_neuron_thresholds_slice_mut(&mut self) -> &mut [NMP];
     //endregion
 
     //region Threshold Limit
-    fn get_neuron_threshold_limit(&self, neuron_id: NeuronIndex) -> Result<NMP, FeagiNPUDataError>; // 0 is no limit
-
-    fn set_neuron_threshold_limit(&mut self, neuron_id: NeuronIndex, threshold_limit: NMP) -> Result<(), FeagiNPUDataError>;
-
     fn get_neuron_threshold_limits_slice(&self) -> &[NMP];
 
     fn get_neuron_threshold_limits_slice_mut(&mut self) -> &mut [NMP];
     //endregion
 
     //region Leak Coefficient
-    fn get_neuron_leak_coefficient(&self, neuron_id: NeuronIndex) -> Result<LC, FeagiNPUDataError>;
-
-    fn set_neuron_leak_coefficient(&mut self, neuron_id: NeuronIndex, leak_coefficient: LC) -> Result<(), FeagiNPUDataError>;
-
     fn get_neuron_leak_coefficients_slice(&self) -> &[LC];
 
     fn get_neuron_leak_coefficients_slice_mut(&mut self) -> &mut [LC];
     //endregion
 
     //region Neuron Flags
-    fn get_neuron_flags(&self, neuron_id: NeuronIndex) -> Result<InterneuronFlag, FeagiNPUDataError>;
-
-    fn set_neuron_flags(&self, neuron_id: NeuronIndex, neuron_flag: InterneuronFlag) -> Result<() , FeagiNPUDataError>;
-
     fn get_neuron_flags_slice(&self) -> &[InterneuronFlag];
 
     fn get_neuron_flags_slice_mut(&mut self) -> &mut [InterneuronFlag];
     //endregion
 
     //region Refractory Countdown
-    fn get_neuron_refractory_countdown(&self, neuron_id: NeuronIndex) -> Result<RC, FeagiNPUDataError>;
-
-    fn set_neuron_refractory_countdown(&mut self, neuron_id: NeuronIndex, countdown: RC) -> Result<(), FeagiNPUDataError>;
-
     fn get_neuron_refractory_countdowns_slice(&self) -> &[RC];
 
     fn get_neuron_refractory_countdowns_slice_mut(&mut self) -> &mut [RC];
     //endregion
 
     //region Fire Count
-    fn get_consecutive_fire_count(&self, neuron_id: NeuronIndex) -> Result<CFC, FeagiNPUDataError>;
-
-    fn set_consecutive_fire_count(&mut self, neuron_id: NeuronIndex, countdown: CFC) -> Result<(), FeagiNPUDataError>;
-
     fn get_consecutive_fire_count_slice(&self) -> &[CFC];
 
     fn get_consecutive_fire_count_slice_mut(&mut self) -> &mut [CFC];
     //endregion
 
     //region Fire Limit
-    fn get_consecutive_fire_limit(&self, neuron_id: CFL) -> Result<u16, FeagiNPUDataError>;
-
-    fn set_consecutive_fire_limit(&mut self, neuron_id: CFL, countdown: u16) -> Result<(), FeagiNPUDataError>;
-
     fn get_consecutive_fire_limit_slice(&self) -> &[u16];
 
     fn get_consecutive_fire_limit_slice_mut(&mut self) -> &mut [u16];
     //endregion
 
     //region Snooze Period Countdown
-    fn get_snooze_period_countdown(&self, neuron_id: NeuronIndex) -> Result<SPC, FeagiNPUDataError>;
-
-    fn set_snooze_period_countdown(&mut self, neuron_id: NeuronIndex, countdown: SPC) -> Result<(), FeagiNPUDataError>;
-
     fn get_snooze_period_countdown_slice(&self) -> &[SPC];
 
     fn get_snooze_period_countdown_slice_mut(&mut self) -> &mut [SPC];
     //endregion
 
     //region Snooze Period Limit
-    fn get_snooze_period_limit(&self, neuron_id: NeuronIndex) -> Result<SPL, FeagiNPUDataError>;
-
-    fn set_snooze_period_limit(&mut self, neuron_id: NeuronIndex, countdown: SPL) -> Result<(), FeagiNPUDataError>;
-
     fn get_snooze_period_limit_slice(&self) -> &[SPL];
 
     fn get_snooze_period_limit_slice_mut(&mut self) -> &mut [SPL];

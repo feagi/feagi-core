@@ -39,7 +39,7 @@ pub struct SynapseArray {
     pub weights: Vec<u8>, // should be quantizable uint
 
     /// Postsynaptic potentials / Conductances (0-255)
-    pub postsynaptic_potentials: Vec<u8>, // should be quantizable uint
+    pub postsynaptic_potentials: Vec<u8>, // should be quantizable uint // rename to postynaptic_potential_multiplier
 
     /// Synapse types (0=excitatory, 1=inhibitory)
     pub types: Vec<u8>, // remove this for below
@@ -81,8 +81,14 @@ impl SynapseArray {
 
     /// Propagate activity from fired neurons in parallel
     ///
+    ///
+    //
     /// Returns target neuron index → accumulated contribution
-    pub fn propagate_parallel(&self, fired_neurons: &[u32]) -> AHashMap<u32, f32> {
+    pub fn propagate_parallel(&self, fired_neurons: &[u32]) -> AHashMap<u32, f32> { //in an array of neuron IDs (from a single ca), returns a hashmap of impacted neuron ids with their new potential (delta or done?)
+
+        // TODO delete
+
+
         // Collect all synapse indices for fired neurons
         let synapse_indices: Vec<usize> = fired_neurons
             .par_iter()
@@ -102,10 +108,10 @@ impl SynapseArray {
                     SynapseType::Inhibitory
                 };
 
-                let contribution = compute_synaptic_contribution(
-                    self.weights[syn_idx],
-                    self.postsynaptic_potentials[syn_idx],
-                    synapse_type,
+                let contribution = compute_synaptic_contribution( // actual calculating the delta
+                    self.weights[syn_idx],  // synapse weight
+                    self.postsynaptic_potentials[syn_idx], // takes in the postynaptic_potential_multiplier
+                    synapse_type, // enum as discussed in synapse flags
                 );
 
                 (target, contribution)
@@ -155,7 +161,7 @@ impl SynapseStorage for SynapseArray {
         &mut self.weights[..count]
     }
 
-    fn postsynaptic_potentials_mut(&mut self) -> &mut [u8] {
+    fn postsynaptic_potentials_mut(&mut self) -> &mut [u8] { // todo rename
         let count = self.count;
         &mut self.postsynaptic_potentials[..count]
     }
@@ -257,7 +263,7 @@ impl SynapseStorage for SynapseArray {
         Ok(removed)
     }
 
-    fn update_weight(&mut self, idx: usize, new_weight: u8) -> crate::traits::Result<()> {
+    fn update_weight(&mut self, idx: usize, new_weight: u8) -> crate::traits::Result<()> { // todo batch this (keep an eye for relocks) -> buckets for std, assume no parralization -> become a function that takes a same size array of neuron id in / out, and new potential
         if idx >= self.count {
             return Err(crate::traits::RuntimeError::InvalidParameters(format!(
                 "Synapse index {} out of bounds (count: {})",
@@ -276,7 +282,7 @@ impl SynapseStorage for SynapseArray {
 
     fn valid_count(&self) -> usize {
         self.valid_mask[..self.count].iter().filter(|&&v| v).count()
-    }
+    } // todo cache
 }
 
 #[cfg(test)]

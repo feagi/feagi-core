@@ -3,6 +3,7 @@ use crate::base_quantizable::unsigned_integer::QuantizableUInt;
 use crate::FeagiBaseError;
 
 pub type NonzeroCountUSize = NonzeroCountType<usize>;
+#[cfg(feature = "support_64bit_indexing_quantization")]
 pub type NonzeroCountU64 = NonzeroCountType<u64>;
 pub type NonzeroCountU32 = NonzeroCountType<u32>;
 pub type NonzeroCountU16 = NonzeroCountType<u16>;

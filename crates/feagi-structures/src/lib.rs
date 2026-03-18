@@ -6,7 +6,6 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 extern crate core;
-extern crate core;
 
 mod feagi_json;
 mod templates;
@@ -16,9 +15,12 @@ pub mod genomic;
 pub mod neuron;
 pub mod base_quantizable;
 pub mod cortical_area;
+pub mod ulog_temp;
+
 
 pub use feagi_base_error::FeagiBaseError;
 pub use feagi_json::FeagiJSON;
+
 
 // Re-export async macros for convenience
 // Note: Macros are exported at crate root via #[macro_export], so we don't need to re-export them here
