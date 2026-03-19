@@ -14,6 +14,7 @@ pub trait QuantizableValue:
     + Send
     + Sync
     + Into<f32>
+    + core::cmp::PartialOrd
     + core::ops::Add<Output = Self>
     + core::ops::Sub<Output = Self>
     + core::ops::Mul<Output = Self>
@@ -25,8 +26,6 @@ pub trait QuantizableValue:
     + 'static
 {
     const NUMBER_OF_BYTES: usize;
-    fn ge(self, other: Self) -> bool;
-    fn lt(self, other: Self) -> bool;
     fn zero() -> Self;
     fn one() -> Self;
     fn max_value() -> Self;
@@ -52,6 +51,7 @@ pub trait QuantizableValue:
     + Display
     + Default
     + Into<f32>
+    + core::cmp::PartialOrd
     + core::ops::Add<Output = Self>
     + core::ops::Sub<Output = Self>
     + core::ops::Mul<Output = Self>
@@ -63,8 +63,6 @@ pub trait QuantizableValue:
     + 'static
 {
     const NUMBER_OF_BYTES: usize;
-    fn ge(self, other: Self) -> bool;
-    fn lt(self, other: Self) -> bool;
     fn zero() -> Self;
     fn one() -> Self;
     fn max_value() -> Self;
@@ -83,16 +81,6 @@ pub trait QuantizableValue:
 #[cfg(feature = "support_64bit_indexing_quantization")]
 impl QuantizableValue for f64 {
     const NUMBER_OF_BYTES: usize = size_of::<f64>();
-
-    #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
 
     #[inline(always)]
     fn zero() -> Self {
@@ -195,16 +183,6 @@ impl QuantizableValue for f32 {
     const NUMBER_OF_BYTES: usize = size_of::<f32>();
 
     #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
-
-    #[inline(always)]
     fn zero() -> Self {
         0.0
     }
@@ -305,16 +283,6 @@ impl QuantizableValue for f16 {
     const NUMBER_OF_BYTES: usize = size_of::<f16>();
 
     #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
-
-    #[inline(always)]
     fn zero() -> Self {
         f16::from_f32(0.0)
     }
@@ -410,16 +378,6 @@ impl QuantizableValue for f16 {
 
 impl QuantizableValue for u8 {
     const NUMBER_OF_BYTES: usize = size_of::<u8>();
-
-    #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
 
     #[inline(always)]
     fn zero() -> Self {

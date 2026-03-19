@@ -76,7 +76,7 @@ pub fn update_neuron_lif<T: NeuralValue>(
     *membrane_potential = membrane_potential.saturating_add(candidate_potential);
 
     // Check threshold
-    if membrane_potential.ge(threshold) {
+    if *membrane_potential >= threshold {
         // Fire and reset
         *membrane_potential = T::zero();
         return true;
@@ -133,7 +133,7 @@ pub fn should_fire<T: NeuralValue>(
     excitability: f32,
     random_value: f32,
 ) -> bool {
-    if membrane_potential.lt(threshold) {
+    if membrane_potential < threshold {
         return false;
     }
 

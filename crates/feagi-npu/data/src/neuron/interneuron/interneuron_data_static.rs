@@ -4,56 +4,38 @@
 // those groupings being ordered by cortical are size biggest to smallest (in terms of neuron count)
 // such that the most common areas to hit (by chance) are at the start
 
-pub struct InterneuronDataStatic<
-    NeuronIndex,
-    CorticalIndex,
-    CoordQuant,
-    NMP,
-    LC,
-    RP,
-    RC,
-    EX,
-    CFC,
-    CFL,
-    SPC,
-    SPL,
-    const NEURON_COUNT: NeuronIndex,
-    const CORTICAL_AREA_COUNT: CorticalIndex,
+pub struct InterneuronDataStatic<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant,
+    const MAX_NEURON_INDEX: NeuronIndexQuant,
+    const MAX_CORTICAL_AREA_INDEX: NeuronIndexQuant,
 >
 where
-    NeuronIndex: QuantizableUInt,
-    CorticalIndex: QuantizableUInt,
-    NMP: NeuralMembranePotential,
-    CoordQuant: QuantizableUInt,
-    LC: LeakCoefficient,
-    RP: RefractoryPeriod,
-    RC: RefractoryCountdown,
-    EX: Excitability,
-    CFC: ConsecutiveFireCountdown,
-    CFL: ConsecutiveFireLimit,
-    SPC: SnoozePeriodCountdown,
-    SPL: SnoozePeriodLimit,
+    NeuronIndexQuant: InterneuronIndex,
+    CorticalIndexQuant: CorticalAreaIndex,
+    CoordQuant: NeuronVoxelCoordinate<QuantizableUInt>,
+    BurstQuant: BurstDeltaCount,
+    PotentialQuant: PotentialUnit,
+    PercentageQuant: PercentageScale,
 {
-    neuron_end_index_and_neurons_per_voxel_per_cortical_index: [(NeuronIndex, NumberNeuronsPerVoxel); CORTICAL_AREA_COUNT], // See note at top
+    neuron_end_index_and_neurons_per_voxel_per_cortical_index: [(NeuronIndexQuant, NumberNeuronsPerVoxel); MAX_CORTICAL_AREA_INDEX], // See note at top
 
     // Per Neuron
-    neuron_cortical_area_index: [CorticalIndex; NEURON_COUNT],
-    neuron_membrane_potential: [NMP; NEURON_COUNT],
-    neuron_voxel_coordinate: [NeuronVoxelCoordinate<CoordQuant>; NEURON_COUNT],
-    neuron_threshold: [NMP; NEURON_COUNT],
-    neuron_threshold_limit: [NMP; NEURON_COUNT],
-    neuron_leak_coefficient: [LC; NEURON_COUNT],
-    neuron_flags: [NeuronFlag; NEURON_COUNT],
-    neuron_refractory_countdown: [RC; NEURON_COUNT],
-    consecutive_fire_count: [CFC; NEURON_COUNT],
-    consecutive_fire_limit: [CFL; NEURON_COUNT],
-    snooze_period_countdown: [SPC; NEURON_COUNT],
-    snooze_period_limit: [SPL; NEURON_COUNT],
+    neuron_cortical_area_index: [CorticalIndexQuant; MAX_NEURON_INDEX],
+    neuron_membrane_potential: [PotentialQuant; MAX_NEURON_INDEX],
+    neuron_voxel_coordinate: [CoordQuant; MAX_NEURON_INDEX],
+    neuron_threshold: [PotentialQuant; MAX_NEURON_INDEX],
+    neuron_threshold_limit: [PotentialQuant; MAX_NEURON_INDEX],
+    neuron_leak_coefficient: [LC; MAX_NEURON_INDEX],
+    neuron_flags: [NeuronFlag; MAX_NEURON_INDEX],
+    neuron_refractory_countdown: [RC; MAX_NEURON_INDEX],
+    consecutive_fire_count: [CFC; MAX_NEURON_INDEX],
+    consecutive_fire_limit: [CFL; MAX_NEURON_INDEX],
+    snooze_period_countdown: [SPC; MAX_NEURON_INDEX],
+    snooze_period_limit: [SPL; MAX_NEURON_INDEX],
 
     // Per Cortical Area
-    cortical_refractory_period: [RP; CORTICAL_AREA_COUNT],
-    cortical_excitability: [EX; CORTICAL_AREA_COUNT],
-    neurons_per_voxel: [NeuronIndex; CORTICAL_AREA_COUNT],
+    cortical_refractory_period: [RP; MAX_CORTICAL_AREA_INDEX],
+    cortical_excitability: [EX; MAX_CORTICAL_AREA_INDEX],
+    neurons_per_voxel: [NeuronIndex; MAX_CORTICAL_AREA_INDEX],
 }
 
 impl<

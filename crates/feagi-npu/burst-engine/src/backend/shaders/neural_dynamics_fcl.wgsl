@@ -141,7 +141,7 @@ fn neural_dynamics_fcl_main(@builtin(global_invocation_id) global_id: vec3<u32>)
         return;
     }
     
-    // Step 3: Check firing threshold (>= to match CPU .ge() logic)
+    // Step 3: Check firing threshold (>= to match CPU logic)
     if (membrane < threshold) {
         // Below threshold - not firing
         membrane_potentials[neuron_id] = membrane;

@@ -33,7 +33,7 @@ impl<T: QuantizableUInt> NonzeroCountType<T> {
     }
 
     pub fn new(n: T) -> Result<Self, FeagiBaseError> {
-        if n.lt(T::one()) {
+        if n < T::one() {
             return Err(FeagiBaseError::ValueCannotBeZero);
         }
         Ok(Self(n))
@@ -81,7 +81,7 @@ impl<T: QuantizableUInt> NonzeroCountType<T> {
 
     #[inline(always)]
     fn new_checked_nonzero(value: T) -> Option<Self> {
-        if value.lt(T::one()) {
+        if value < T::one() {
             None
         } else {
             Some(Self::new_unchecked(value))

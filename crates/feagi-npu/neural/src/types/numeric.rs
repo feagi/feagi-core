@@ -57,13 +57,11 @@ impl Precision {
 }
 
 /// Trait for neural computation values
-pub trait NeuralValue: Copy + Clone + Send + Sync + fmt::Debug + 'static {
+pub trait NeuralValue: Copy + Clone + Send + Sync + fmt::Debug + PartialOrd + 'static {
     fn from_f32(value: f32) -> Self;
     fn to_f32(self) -> f32;
     fn saturating_add(self, other: Self) -> Self;
     fn mul_leak(self, leak_coefficient: f32) -> Self;
-    fn ge(self, other: Self) -> bool;
-    fn lt(self, other: Self) -> bool;
     fn zero() -> Self;
     fn one() -> Self;
     fn max_value() -> Self;
@@ -89,16 +87,6 @@ impl NeuralValue for f32 {
     #[inline(always)]
     fn mul_leak(self, leak_coefficient: f32) -> Self {
         self * (1.0 - leak_coefficient)
-    }
-
-    #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
     }
 
     #[inline(always)]
@@ -176,16 +164,6 @@ impl NeuralValue for INT8Value {
         let potential_f32 = self.to_f32();
         let retention = 1.0 - leak_coefficient;
         Self::from_f32(potential_f32 * retention)
-    }
-
-    #[inline]
-    fn ge(self, other: Self) -> bool {
-        self.0 >= other.0
-    }
-
-    #[inline]
-    fn lt(self, other: Self) -> bool {
-        self.0 < other.0
     }
 
     #[inline]

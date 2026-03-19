@@ -148,7 +148,7 @@ impl<T: QuantizableUInt> Dimension2DType<T> {
     }
 
     pub fn does_fit(&self, coordinate: &UnsignedCoordinate2DType<T>) -> bool {
-        coordinate.x.lt(self.x.get()) && coordinate.y.lt(self.y.get())
+        coordinate.x < self.x.get() && coordinate.y < self.y.get()
     }
 
     pub fn verify_fit(&self, coordinate: &UnsignedCoordinate2DType<T>) -> Result<(), FeagiBaseError> {
@@ -339,9 +339,9 @@ impl<T: QuantizableUInt> Dimension3DType<T> {
     }
 
     pub fn does_fit(&self, coordinate: &UnsignedCoordinate3DType<T>) -> bool {
-        coordinate.x.lt(self.x.get())
-            && coordinate.y.lt(self.y.get())
-            && coordinate.z.lt(self.z.get())
+        coordinate.x < self.x.get()
+            && coordinate.y < self.y.get()
+            && coordinate.z < self.z.get()
     }
 
     pub fn verify_fit(&self, coordinate: &UnsignedCoordinate3DType<T>) -> Result<(), FeagiBaseError> {

@@ -417,7 +417,7 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             let mp = batch_mp[i];
             // SIMD-friendly: uniform comparison (no branching for "no limit" case)
             // If threshold_limit == T::MAX, MP will always be < MAX (unless MP is also MAX, which is unlikely)
-            if mp.ge(threshold_limit) && mp.to_f32() != threshold_limit.to_f32() {
+            if mp >= threshold_limit && mp.to_f32() != threshold_limit.to_f32() {
                 fired_mask[i] = false; // Blocked by threshold_limit
                 continue;
             }
@@ -662,11 +662,11 @@ fn process_single_neuron<T: NeuralValue>(
 
     // Firing window: threshold <= MP <= threshold_limit
     // SIMD-friendly encoding: threshold_limit == T::MAX means no upper bound
-    // Note: using ge() and not lt() to implement <= (since le() doesn't exist in trait)
-    let above_min = current_potential.ge(threshold);
+    // Note: direct comparisons rely on NeuralValue + PartialOrd.
+    let above_min = current_potential >= threshold;
     // SIMD-friendly: uniform comparison (no branching for "no limit" case)
     // If threshold_limit == T::MAX, MP will always be < MAX (unless MP is also MAX, which is unlikely)
-    let below_max = !current_potential.ge(threshold_limit)
+    let below_max = current_potential < threshold_limit
         || current_potential.to_f32() == threshold_limit.to_f32();
 
     if above_min && below_max {

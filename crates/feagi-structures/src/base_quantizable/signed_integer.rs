@@ -20,11 +20,10 @@ pub trait QuantizableInt:
     + core::ops::SubAssign
     + core::ops::MulAssign
     + core::ops::DivAssign
+    + core::cmp::PartialOrd
     + 'static
 {
     const NUMBER_OF_BYTES: usize;
-    fn ge(self, other: Self) -> bool;
-    fn lt(self, other: Self) -> bool;
     fn zero() -> Self;
     fn one() -> Self;
     fn max_value() -> Self;
@@ -58,11 +57,10 @@ pub trait QuantizableInt:
     + core::ops::SubAssign
     + core::ops::MulAssign
     + core::ops::DivAssign
+    + core::cmp::PartialOrd
     + 'static
 {
     const NUMBER_OF_BYTES: usize;
-    fn ge(self, other: Self) -> bool;
-    fn lt(self, other: Self) -> bool;
     fn zero() -> Self;
     fn one() -> Self;
     fn max_value() -> Self;
@@ -80,16 +78,6 @@ pub trait QuantizableInt:
 
 impl QuantizableInt for isize {
     const NUMBER_OF_BYTES: usize = size_of::<isize>();
-
-    #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
 
     #[inline(always)]
     fn zero() -> Self {
@@ -164,16 +152,6 @@ impl Into<isize> for isize {
 
 impl QuantizableInt for i8 {
     const NUMBER_OF_BYTES: usize = size_of::<i8>();
-
-    #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
 
     #[inline(always)]
     fn zero() -> Self {
@@ -258,16 +236,6 @@ impl QuantizableInt for i16 {
     const NUMBER_OF_BYTES: usize = size_of::<i16>();
 
     #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
-
-    #[inline(always)]
     fn zero() -> Self {
         0
     }
@@ -348,16 +316,6 @@ impl Into<isize> for i16 {
 
 impl QuantizableInt for i32 {
     const NUMBER_OF_BYTES: usize = size_of::<i32>();
-
-    #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
 
     #[inline(always)]
     fn zero() -> Self {
@@ -441,16 +399,6 @@ impl Into<isize> for i32 {
 #[cfg(feature = "support_64bit_indexing_quantization")]
 impl QuantizableInt for i64 {
     const NUMBER_OF_BYTES: usize = size_of::<i64>();
-
-    #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
 
     #[inline(always)]
     fn zero() -> Self {

@@ -1,32 +1,29 @@
 
 
-pub trait SynapseData<SynapseIndexAndSize, NeuronIndex, Weight, Potential>
+pub trait SynapseData<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >
 where
-    SynapseIndexAndSize: QuantizableUInt,
-    NeuronIndex: QuantizableUInt,
-    Weight: QuantizableValue,
-    Potential: QuantizableUInt,
+    SynapseIndexQuant: SynapseIndex,
+    NeuronIndexQuant: QuantizableUInt, // TODO we need to address the multiple types of neuron indexes
+    PercentageQuant: PercentageScale,
+    PotentialQuant: PotentialUnit,
 {
-
     fn number_of_active_synapses(&self) -> SynapseIndexAndSize;
 
-    //fn current_synapse_capacity(&self) -> SynapseIndexAndSize;
-    //fn set_current_synapse_capacity(&mut self, capacity: SynapseIndexAndSize); // TODO does this make sense?
+    fn get_synapse_indexes(&self) -> &[SynapseIndexQuant];
+    fn get_synapse_indexes_mut(&mut self) -> &mut [SynapseIndexQuant];
 
+    fn get_source_neurons(&self) -> &[NeuronIndexQuant];
+    fn get_source_neurons_mut(&mut self) -> &mut [NeuronIndexQuant];
 
-    // TODO out mut!
-    fn get_source_neurons(&self, synapse_indexes: &[SynapseIndexAndSize]) -> Result<NeuronIndex, FeagiNPUDataError>;
-    fn set_source_neurons(&mut self, synapse_indexes: &[SynapseIndexAndSize], source_neuron: NeuronIndex) -> Result<(), FeagiNPUDataError>;
+    fn get_destination_neurons(&self) -> &[NeuronIndexQuant];
+    fn get_destination_neurons_mut(&mut self) -> &mut [NeuronIndexQuant];
 
-    fn get_destination_neurons(&self, synapse_indexes: &[SynapseIndexAndSize]) -> Result<NeuronIndex, FeagiNPUDataError>;
-    fn set_destination_neurons(&mut self, synapse_indexes: &[SynapseIndexAndSize], destination_neuron: NeuronIndex) -> Result<(), FeagiNPUDataError>;
-1
-    fn get_weights(&self, synapse_indexes: &[SynapseIndexAndSize]) -> Result<Weight, FeagiNPUDataError>;
-    fn set_weights(&mut self, synapse_indexes: &[SynapseIndexAndSize], weight: Weight) -> Result<(), FeagiNPUDataError>;
+    fn get_synapse_weights(&self) -> &[PotentialQuant];
+    fn set_synapse_weights(&mut self) -> &mut [PotentialQuant];
 
-    fn get_post_synaptic_potentials(&self, synapse_indexes: &[SynapseIndexAndSize])  -> Result<Potential, FeagiNPUDataError>;
-    fn set_post_synaptic_potentials(&mut self, synapse_indexes: &[SynapseIndexAndSize], post_synaptic_potential: Potential) -> Result<(), FeagiNPUDataError>;
+    fn get_post_synaptic_potentials(&self) -> &[PotentialQuant];
+    fn set_post_synaptic_potentials(&mut self) -> &mut [PotentialQuant];
 
-    fn get_synapse_flags(&self, synapse_indexes: &[SynapseIndexAndSize])  -> Result<SynapseFlag, FeagiNPUDataError>;
-    fn set_synapse_flags(&mut self, synapse_indexes: &[SynapseIndexAndSize], synapse_flag: SynapseFlag) -> Result<(), FeagiNPUDataError>;
+    fn get_synapse_flags(&self) -> &[SynapseFlag];
+    fn set_synapse_flags(&mut self) -> &mut [SynapseFlag];
 }

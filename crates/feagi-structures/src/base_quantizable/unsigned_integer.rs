@@ -16,6 +16,7 @@ pub trait QuantizableUInt:
     + Send
     + Sync
     + Into<usize>
+    + core::cmp::PartialOrd
     + core::ops::Add<Output = Self>
     + core::ops::Sub<Output = Self>
     + core::ops::Mul<Output = Self>
@@ -27,8 +28,6 @@ pub trait QuantizableUInt:
     + 'static
 {
     const NUMBER_OF_BYTES: usize;
-    fn ge(self, other: Self) -> bool;
-    fn lt(self, other: Self) -> bool;
     fn zero() -> Self;
     fn one() -> Self;
     fn max_value() -> Self;
@@ -54,6 +53,7 @@ pub trait QuantizableUInt:
     + Display
     + Default
     + Into<usize>
+    + core::cmp::PartialOrd
     + core::ops::Add<Output = Self>
     + core::ops::Sub<Output = Self>
     + core::ops::Mul<Output = Self>
@@ -65,8 +65,6 @@ pub trait QuantizableUInt:
     + 'static
 {
     const NUMBER_OF_BYTES: usize;
-    fn ge(self, other: Self) -> bool;
-    fn lt(self, other: Self) -> bool;
     fn zero() -> Self;
     fn one() -> Self;
     fn max_value() -> Self;
@@ -84,16 +82,6 @@ pub trait QuantizableUInt:
 
 impl QuantizableUInt for usize {
     const NUMBER_OF_BYTES: usize = size_of::<usize>();
-
-    #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
 
     #[inline(always)]
     fn zero() -> Self {
@@ -167,16 +155,6 @@ impl Into<usize> for usize {
 
 impl QuantizableUInt for u8 {
     const NUMBER_OF_BYTES: usize = size_of::<u8>();
-
-    #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
 
     #[inline(always)]
     fn zero() -> Self {
@@ -257,16 +235,6 @@ impl QuantizableUInt for u16 {
     const NUMBER_OF_BYTES: usize = size_of::<u16>();
 
     #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
-
-    #[inline(always)]
     fn zero() -> Self {
         0
     }
@@ -343,16 +311,6 @@ impl Into<usize> for u16 {
 
 impl QuantizableUInt for u32 {
     const NUMBER_OF_BYTES: usize = size_of::<u32>();
-
-    #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
 
     #[inline(always)]
     fn zero() -> Self {
@@ -432,16 +390,6 @@ impl Into<usize> for u32 {
 #[cfg(feature = "support_64bit_indexing_quantization")]
 impl QuantizableUInt for u64 {
     const NUMBER_OF_BYTES: usize = size_of::<u64>();
-
-    #[inline(always)]
-    fn ge(self, other: Self) -> bool {
-        self >= other
-    }
-
-    #[inline(always)]
-    fn lt(self, other: Self) -> bool {
-        self < other
-    }
 
     #[inline(always)]
     fn zero() -> Self {

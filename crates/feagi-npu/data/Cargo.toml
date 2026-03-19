@@ -23,6 +23,6 @@ ahash = { workspace = true, default-features = false, optional = true}
 serde = { workspace = true, default-features = false, features = [] }
 rayon = { workspace = true, optional = true}
 half = {workspace = true, default-features = false, features = []} # STD enables autoarch detection, which we may not want
+paste = { workspace = true }
 
 [dev-dependencies]
-paste = "1.0.15"
