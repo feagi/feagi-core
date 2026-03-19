@@ -191,6 +191,13 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
     let connectome_service = state.connectome_service.as_ref();
     let genome_service = state.genome_service.as_ref();
 
+    // Get root region ID so auto-created OPU/IPU areas appear in root (fixes power area disappearing in BV)
+    let root_region_id = connectome_service
+        .get_root_region_id()
+        .await
+        .ok()
+        .flatten();
+
     let output_units = device_registrations
         .get("output_units_and_decoder_properties")
         .and_then(|v| v.as_object());
@@ -471,6 +478,12 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             serde_json::Value::String(bundle_type),
                         );
                     }
+                    if let Some(ref rid) = root_region_id {
+                        properties.insert(
+                            "parent_region_id".to_string(),
+                            serde_json::Value::String(rid.clone()),
+                        );
+                    }
 
                     to_create.push(CreateCorticalAreaParams {
                         cortical_id: cortical_id_b64.clone(),
@@ -745,6 +758,12 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         properties.insert(
                             "registration_bundle_type".to_string(),
                             serde_json::Value::String(bundle_type),
+                        );
+                    }
+                    if let Some(ref rid) = root_region_id {
+                        properties.insert(
+                            "parent_region_id".to_string(),
+                            serde_json::Value::String(rid.clone()),
                         );
                     }
 

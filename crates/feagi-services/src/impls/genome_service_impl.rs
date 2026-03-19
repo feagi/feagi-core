@@ -377,10 +377,53 @@ impl GenomeService for GenomeServiceImpl {
                 // It will acquire its own locks internally
                 let manager_arc = feagi_brain_development::ConnectomeManager::instance();
                 let mut neuro = Neuroembryogenesis::new(manager_arc.clone());
-                neuro.develop_from_genome(&genome_clone).map_err(|e| {
-                    tracing::error!(target: "feagi-services", "Neuroembryogenesis failed: {}", e);
-                    ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e))
-                })?;
+
+                let develop_result = neuro.develop_from_genome(&genome_clone);
+                let develop_result = match develop_result {
+                    Ok(()) => Ok(()),
+                    Err(e) => {
+                        let err_str = e.to_string();
+                        let is_already_exists = err_str.contains("already exists");
+                        if is_already_exists {
+                            tracing::warn!(
+                                target: "feagi-services",
+                                "Neuroembryogenesis failed with 'already exists' - clearing connectome and retrying once: {}",
+                                err_str
+                            );
+                            // Re-prepare and retry: handle stale connectome state.
+                            let (retry_prepare, retry_resize) = {
+                                let mut manager = connectome_clone.write();
+                                let prep = manager.prepare_for_new_genome();
+                                let resize = prep.as_ref().ok().map(|_| manager.resize_for_genome(&genome_clone));
+                                (prep, resize)
+                            };
+                            retry_prepare.map_err(|e| {
+                                tracing::error!(target: "feagi-services", "Retry prepare_for_new_genome failed: {}", e);
+                                ServiceError::from(e)
+                            })?;
+                            if let Some(res) = retry_resize {
+                                res.map_err(|e| {
+                                    tracing::error!(target: "feagi-services", "Retry resize_for_genome failed: {}", e);
+                                    ServiceError::from(e)
+                                })?;
+                            }
+                            let mut neuro_retry = Neuroembryogenesis::new(manager_arc.clone());
+                            neuro_retry.develop_from_genome(&genome_clone).map_err(|e| {
+                                tracing::error!(target: "feagi-services", "Neuroembryogenesis retry failed: {}", e);
+                                ServiceError::Backend(format!(
+                                    "Neuroembryogenesis failed: {}. Retry after connectome reset also failed.",
+                                    err_str
+                                ))
+                            })?;
+                            neuro = neuro_retry;
+                            Ok(())
+                        } else {
+                            tracing::error!(target: "feagi-services", "Neuroembryogenesis failed: {}", e);
+                            Err(ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e)))
+                        }
+                    }
+                };
+                develop_result?;
 
                 // Ensure core cortical areas exist after neuroembryogenesis
                 // (they may have been added during corticogenesis, but we ensure they exist)
@@ -649,6 +692,9 @@ impl GenomeService for GenomeServiceImpl {
     ) -> ServiceResult<Vec<CorticalAreaInfo>> {
         info!(target: "feagi-services", "Creating {} new cortical areas via GenomeService", params.len());
 
+        // IO areas (IPU/OPU) must always be in root region; get root ID for default
+        let root_region_id = self.connectome.read().get_root_region_id();
+
         // Step 1: Build CorticalArea structures
         let mut areas_to_add = Vec::new();
         for param in &params {
@@ -765,6 +811,20 @@ impl GenomeService for GenomeServiceImpl {
                 area.properties = merged;
             } else if let Some(properties) = &param.properties {
                 area.properties = properties.clone();
+            }
+
+            // IO areas (IPU/OPU) must always be in root region; default if missing
+            if matches!(
+                area_type,
+                CorticalAreaType::BrainInput(_) | CorticalAreaType::BrainOutput(_)
+            ) && !area.properties.contains_key("parent_region_id")
+            {
+                if let Some(ref root_id) = root_region_id {
+                    area.add_property_mut(
+                        "parent_region_id".to_string(),
+                        serde_json::Value::String(root_id.clone()),
+                    );
+                }
             }
 
             areas_to_add.push(area);

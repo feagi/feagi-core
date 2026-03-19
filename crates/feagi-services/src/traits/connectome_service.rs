@@ -257,6 +257,13 @@ pub trait ConnectomeService: Send + Sync {
     ///
     async fn brain_region_exists(&self, region_id: &str) -> ServiceResult<bool>;
 
+    /// Get brain region ID of the root region (no parent).
+    ///
+    /// # Returns
+    /// * `Option<String>` - Root region ID if one exists
+    ///
+    async fn get_root_region_id(&self) -> ServiceResult<Option<String>>;
+
     // ========================================================================
     // MORPHOLOGY OPERATIONS
     // ========================================================================
