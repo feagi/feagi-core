@@ -17,6 +17,8 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use tracing::{info, warn};
 
+const MOTOR_AREA_X_GAP_VOXELS: i32 = 10;
+
 fn build_friendly_unit_name(unit_label: &str, group: u8, sub_unit_index: usize) -> String {
     format!("{unit_label}-{}-{}", group, sub_unit_index)
 }
@@ -288,6 +290,49 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     }
                 };
 
+                // Precompute dimensions and positions for all sub-areas in this
+                // motor unit/group. Keep a guaranteed X-gap between neighboring
+                // areas regardless of their computed width.
+                let mut expected_dimensions_by_sub: Vec<Option<(usize, usize, usize)>> =
+                    vec![None; cortical_ids.len()];
+                let mut expected_position_by_sub: Vec<Option<(i32, i32, i32)>> =
+                    vec![None; cortical_ids.len()];
+                let mut previous_position_x: Option<i32> = None;
+                let mut previous_width: Option<i32> = None;
+                for i in 0..cortical_ids.len() {
+                    let sub_index = CorticalSubUnitIndex::from(i as u8);
+                    let Some(unit_topology) = topology.get(&sub_index) else {
+                        continue;
+                    };
+                    let per_channel_width = unit_topology.channel_dimensions_default[0] as usize;
+                    let per_channel_height = unit_topology.channel_dimensions_default[1] as usize;
+                    let per_channel_depth = unit_topology.channel_dimensions_default[2] as usize;
+                    let expected_dimensions = (
+                        (per_channel_width * device_count).max(1),
+                        per_channel_height,
+                        per_channel_depth,
+                    );
+                    expected_dimensions_by_sub[i] = Some(expected_dimensions);
+
+                    let y = unit_topology.relative_position[1] + (group_u8 as i32 * 20);
+                    let z = unit_topology.relative_position[2];
+                    let width_i32 = expected_dimensions.0 as i32;
+                    let x = if let (Some(prev_x), Some(_prev_w)) =
+                        (previous_position_x, previous_width)
+                    {
+                        // Areas are anchored from their minimum X and extend to +X.
+                        // To keep a fixed empty gap when placing current area on the
+                        // left of previous area:
+                        // current_x + current_width + gap <= previous_x
+                        prev_x - width_i32 - MOTOR_AREA_X_GAP_VOXELS
+                    } else {
+                        unit_topology.relative_position[0]
+                    };
+                    expected_position_by_sub[i] = Some((x, y, z));
+                    previous_position_x = Some(x);
+                    previous_width = Some(width_i32);
+                }
+
                 for (i, cortical_id) in cortical_ids.iter().enumerate() {
                     let cortical_id_b64 = cortical_id.as_base_64();
                     let legacy_default_name =
@@ -325,11 +370,26 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             continue;
                         }
                     };
-                    let expected_position = (
-                        unit_topology.relative_position[0],
-                        unit_topology.relative_position[1] + (group_u8 as i32 * 20),
-                        unit_topology.relative_position[2],
-                    );
+                    let expected_position = match expected_position_by_sub.get(i).and_then(|v| *v) {
+                        Some(pos) => pos,
+                        None => {
+                            warn!(
+                                "⚠️ [API] Missing precomputed motor position for '{}' subunit {}; skipping",
+                                motor_unit_key, i
+                            );
+                            continue;
+                        }
+                    };
+                    let expected_dimensions = match expected_dimensions_by_sub.get(i).and_then(|v| *v) {
+                        Some(dims) => dims,
+                        None => {
+                            warn!(
+                                "⚠️ [API] Missing precomputed motor dimensions for '{}' subunit {}; skipping",
+                                motor_unit_key, i
+                            );
+                            continue;
+                        }
+                    };
 
                     if exists {
                         // Area exists: ensure dimensions and dev_count match device_registrations.
@@ -346,17 +406,6 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                                     continue;
                                 }
                             };
-
-                        let (per_channel_width, per_channel_height, per_channel_depth) = (
-                            unit_topology.channel_dimensions_default[0] as usize,
-                            unit_topology.channel_dimensions_default[1] as usize,
-                            unit_topology.channel_dimensions_default[2] as usize,
-                        );
-                        let expected_dimensions = (
-                            (per_channel_width * device_count).max(1),
-                            per_channel_height,
-                            per_channel_depth,
-                        );
 
                         let current_dev_count = current
                             .properties
@@ -438,11 +487,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         unit_topology.channel_dimensions_default[1] as usize,
                         unit_topology.channel_dimensions_default[2] as usize,
                     );
-                    let dimensions = (
-                        (per_channel_width * device_count).max(1),
-                        per_channel_height,
-                        per_channel_depth,
-                    );
+                    let dimensions = expected_dimensions;
                     let per_device_dims =
                         (per_channel_width, per_channel_height, per_channel_depth);
                     let position = expected_position;
