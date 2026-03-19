@@ -31,7 +31,7 @@ macro_rules! motor_cortical_units {
                     },
                     cortical_area_properties: {
                         0 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Absolute, percentage_neuron_positioning), relative_position: [-20, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]),
-                        1 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Incremental, percentage_neuron_positioning), relative_position: [-40, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                        1 => (IOCorticalAreaConfigurationFlag::Percentage(FrameChangeHandling::Incremental, percentage_neuron_positioning), relative_position: [-40, 0, -10], channel_dimensions_default: [2, 1, 10], channel_dimensions_min: [2, 1, 1], channel_dimensions_max: [2, 1, 1024])
                     }
                 },
 
