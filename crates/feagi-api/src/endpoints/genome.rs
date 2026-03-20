@@ -129,6 +129,26 @@ async fn load_genome_with_priority(
     );
 
     let runtime_service = state.runtime_service.as_ref();
+    #[cfg(feature = "feagi-agent")]
+    if let Some(handler) = &state.agent_handler {
+        let deregistered_ids = {
+            let mut guard = handler.lock().unwrap();
+            guard.force_deregister_all_agents("forced by genome transition")
+        };
+        for agent_id in &deregistered_ids {
+            runtime_service.unregister_motor_subscriptions(agent_id);
+            runtime_service.unregister_visualization_subscriptions(agent_id);
+        }
+        tracing::info!(
+            target: "feagi-api",
+            "🔌 Forced deregistration for {} agents before genome transition",
+            deregistered_ids.len()
+        );
+    }
+    // Strict transition barrier: guarantee no stale subscriptions survive.
+    runtime_service.clear_all_motor_subscriptions();
+    runtime_service.clear_all_visualization_subscriptions();
+
     let runtime_status = runtime_service
         .get_status()
         .await
@@ -1052,13 +1072,9 @@ pub async fn post_clone(
         (status = 500, description = "Reset failed")
     )
 )]
-pub async fn post_reset(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_reset(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     let _lock = state.genome_transition_lock.try_lock().map_err(|_| {
-        ApiError::conflict(
-            "Another genome transition is in progress; wait for it to finish",
-        )
+        ApiError::conflict("Another genome transition is in progress; wait for it to finish")
     })?;
 
     let genome_service = state.genome_service.as_ref();

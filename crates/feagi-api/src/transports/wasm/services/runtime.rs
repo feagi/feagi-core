@@ -176,4 +176,12 @@ impl RuntimeService for WasmRuntimeService {
     fn unregister_visualization_subscriptions(&self, _agent_id: &str) {
         // No-op: WASM mode does not support agent subscriptions
     }
+
+    fn clear_all_motor_subscriptions(&self) {
+        // No-op: WASM mode does not support agent subscriptions
+    }
+
+    fn clear_all_visualization_subscriptions(&self) {
+        // No-op: WASM mode does not support agent subscriptions
+    }
 }

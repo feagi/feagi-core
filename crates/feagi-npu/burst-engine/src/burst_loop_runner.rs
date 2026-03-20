@@ -509,6 +509,22 @@ impl BurstLoopRunner {
         }
     }
 
+    /// Remove all motor subscriptions and associated rate/publish state.
+    pub fn clear_all_motor_subscriptions(&self) {
+        let removed = {
+            let mut subs = self.motor_subscriptions.write();
+            let count = subs.len();
+            subs.clear();
+            count
+        };
+        self.motor_output_rates_hz.write().clear();
+        self.motor_last_publish_time.write().clear();
+        info!(
+            "[BURST-RUNNER] Removed all motor subscriptions (count={})",
+            removed
+        );
+    }
+
     /// Register a visualization agent with a rate limit (Hz).
     ///
     /// # Errors
@@ -558,6 +574,22 @@ impl BurstLoopRunner {
                 agent_id
             );
         }
+    }
+
+    /// Remove all visualization subscriptions and associated rate/publish state.
+    pub fn clear_all_visualization_subscriptions(&self) {
+        let removed = {
+            let mut subs = self.visualization_subscriptions.write();
+            let count = subs.len();
+            subs.clear();
+            count
+        };
+        self.visualization_output_rates_hz.write().clear();
+        self.visualization_last_publish_time.write().clear();
+        info!(
+            "[BURST-RUNNER] Removed all visualization subscriptions (count={})",
+            removed
+        );
     }
 
     // REMOVED: set_viz_zmq_publisher - NO PYTHON CALLBACKS IN HOT PATH!

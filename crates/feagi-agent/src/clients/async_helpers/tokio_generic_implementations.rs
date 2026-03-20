@@ -192,9 +192,11 @@ impl TokioEmbodimentAgent {
     /// This call waits for a heartbeat acknowledgment to ensure FEAGI ingested the payload
     /// before the agent starts streaming sensory data.
     fn send_agent_configuration_details(&mut self) -> Result<(), FeagiAgentError> {
-        let device_regs_json = self.embodiment.export_device_registrations_as_config_json()?;
-        let device_definition: JSONInputOutputDefinition =
-            serde_json::from_value(device_regs_json).map_err(|e| {
+        let device_regs_json = self
+            .embodiment
+            .export_device_registrations_as_config_json()?;
+        let device_definition: JSONInputOutputDefinition = serde_json::from_value(device_regs_json)
+            .map_err(|e| {
                 FeagiAgentError::UnableToSendData(format!(
                     "Failed to serialize connector cache device registrations: {}",
                     e

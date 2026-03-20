@@ -4979,11 +4979,12 @@ impl ConnectomeManager {
 
                 for (cortical_id, area) in &self.cortical_areas {
                     // Power area defaults to uniform PSP distribution when property is absent.
-                    let default_psp_uniform = if *cortical_id == CoreCorticalType::Power.to_cortical_id() {
-                        true
-                    } else {
-                        false
-                    };
+                    let default_psp_uniform =
+                        if *cortical_id == CoreCorticalType::Power.to_cortical_id() {
+                            true
+                        } else {
+                            false
+                        };
                     let psp_uniform = area
                         .get_property("psp_uniform_distribution")
                         .and_then(|v| v.as_bool())

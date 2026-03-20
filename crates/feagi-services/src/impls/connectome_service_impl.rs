@@ -19,12 +19,12 @@ use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag;
 use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions, CorticalAreaType,
 };
-use feagi_structures::genomic::cortical_area::CoreCorticalType;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 // Note: decode_cortical_id removed - use feagi_structures::CorticalID directly
 use parking_lot::RwLock;
@@ -854,18 +854,18 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         let cortical_bytes = cortical_id_typed.as_bytes();
         let is_io_area = cortical_bytes[0] == b'i' || cortical_bytes[0] == b'o';
-        let io_flag = if is_io_area {
-            cortical_id_typed.extract_io_data_flag().ok().or_else(|| {
-                match &area.cortical_type {
-                    CorticalAreaType::BrainInput(flag) | CorticalAreaType::BrainOutput(flag) => {
-                        Some(*flag)
+        let io_flag =
+            if is_io_area {
+                cortical_id_typed.extract_io_data_flag().ok().or_else(|| {
+                    match &area.cortical_type {
+                        CorticalAreaType::BrainInput(flag)
+                        | CorticalAreaType::BrainOutput(flag) => Some(*flag),
+                        _ => None,
                     }
-                    _ => None,
-                }
-            })
-        } else {
-            None
-        };
+                })
+            } else {
+                None
+            };
         let cortical_subtype = if is_io_area {
             String::from_utf8(cortical_bytes[0..4].to_vec()).ok()
         } else {

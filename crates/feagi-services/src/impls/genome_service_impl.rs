@@ -31,7 +31,7 @@ use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{debug, info, trace, warn};
+use tracing::{info, trace, warn};
 
 use crate::genome::{ChangeType, CorticalChangeClassifier};
 
@@ -540,41 +540,6 @@ impl GenomeService for GenomeServiceImpl {
         })?;
 
         info!(target: "feagi-services", "✅ RuntimeGenome loaded, exporting in flat format v3.0");
-
-        // Debug: Check all property values in RuntimeGenome before saving
-        for (cortical_id, area) in &genome.cortical_areas {
-            let area_id_str = cortical_id.as_base_64();
-            debug!(
-                target: "feagi-services",
-                "[GENOME-SAVE] Area {} has {} properties in RuntimeGenome",
-                area_id_str,
-                area.properties.len()
-            );
-
-            // Log key properties that should be saved
-            let key_props = [
-                "mp_driven_psp",
-                "snooze_length",
-                "consecutive_fire_cnt_max",
-                "firing_threshold_increment_x",
-                "firing_threshold_increment_y",
-                "firing_threshold_increment_z",
-                "firing_threshold",
-                "leak_coefficient",
-                "refractory_period",
-                "neuron_excitability",
-            ];
-
-            for prop_name in &key_props {
-                if let Some(prop_value) = area.properties.get(*prop_name) {
-                    debug!(
-                        target: "feagi-services",
-                        "[GENOME-SAVE] Area {} property {}={}",
-                        area_id_str, prop_name, prop_value
-                    );
-                }
-            }
-        }
 
         // Update metadata if provided
         if let Some(id) = params.genome_id {

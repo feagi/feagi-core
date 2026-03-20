@@ -258,4 +258,16 @@ pub trait RuntimeService: Send + Sync {
     ///
     /// Called when an agent is deregistered (e.g. descriptor replacement, timeout).
     fn unregister_visualization_subscriptions(&self, agent_id: &str);
+
+    /// Remove all motor subscriptions.
+    ///
+    /// Used by strict genome transitions to ensure no stale agent-session
+    /// subscriptions remain after genome replacement.
+    fn clear_all_motor_subscriptions(&self);
+
+    /// Remove all visualization subscriptions.
+    ///
+    /// Used by strict genome transitions to ensure no stale visualization
+    /// subscribers remain after genome replacement.
+    fn clear_all_visualization_subscriptions(&self);
 }

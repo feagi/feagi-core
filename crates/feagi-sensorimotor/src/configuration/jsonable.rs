@@ -362,6 +362,7 @@ pub enum JSONDecoderProperties {
         bool,
         PercentageChannelDimensionality,
     ),
+    PositionalServo(NeuronDepth, PercentageNeuronPositioning), // z depth for both absolute and incremental
     GazeProperties(NeuronDepth, NeuronDepth, PercentageNeuronPositioning), // eccentricity z depth, modularity z depth
     ImageFilteringSettings(
         NeuronDepth,
@@ -420,6 +421,20 @@ impl JSONDecoderProperties {
                     *percentage_neuron_positioning,
                     *is_signed,
                     *dimension_count,
+                )
+            }
+            JSONDecoderProperties::PositionalServo(neuron_depth, percentage_neuron_positioning) => {
+                if cortical_ids.len() != 2 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected two cortical ids for PositionalServo!".to_string(),
+                    ));
+                }
+                crate::neuron_voxel_coding::xyzp::decoders::PositionalServoNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.first().unwrap(), // Absolute
+                    *cortical_ids.get(1).unwrap(),  // Incremental
+                    *neuron_depth,
+                    number_channels,
+                    *percentage_neuron_positioning,
                 )
             }
             JSONDecoderProperties::GazeProperties(
@@ -526,6 +541,10 @@ impl JSONDecoderProperties {
             ) => Ok(WrappedIOData::GazeProperties(
                 GazeProperties::create_default_centered(),
             )),
+            JSONDecoderProperties::PositionalServo(
+                _neuron_depth,
+                _percentage_neuron_positioning,
+            ) => Ok(WrappedIOData::Percentage(Percentage::new_zero())),
             JSONDecoderProperties::ImageFilteringSettings(
                 _brightness,
                 _contrast,

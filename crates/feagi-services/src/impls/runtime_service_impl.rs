@@ -231,6 +231,16 @@ impl RuntimeService for RuntimeServiceImpl {
         runner.unregister_visualization_subscriptions(agent_id);
     }
 
+    fn clear_all_motor_subscriptions(&self) {
+        let runner = self.burst_runner.read();
+        runner.clear_all_motor_subscriptions();
+    }
+
+    fn clear_all_visualization_subscriptions(&self) {
+        let runner = self.burst_runner.read();
+        runner.clear_all_visualization_subscriptions();
+    }
+
     async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>> {
         let runner = self.burst_runner.read();
         let fcl_data = runner.get_fcl_snapshot();
@@ -420,10 +430,6 @@ impl RuntimeService for RuntimeServiceImpl {
             warn!(target: "feagi-services",
                 "No neurons found for injection: cortical_id={}, coordinates={}",
                 cortical_id, xyzp_data.len());
-        } else if injected_count > 0 {
-            info!(target: "feagi-services",
-                "Injected {} neurons into FCL for cortical area {}",
-                injected_count, cortical_id);
         }
 
         Ok(injected_count)

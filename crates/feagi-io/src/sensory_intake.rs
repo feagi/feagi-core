@@ -37,4 +37,14 @@ impl SensoryIntakeQueue {
     pub fn poll_next(&self) -> Option<Vec<u8>> {
         self.inner.lock().ok().and_then(|mut q| q.pop_front())
     }
+
+    /// Drop all queued sensory payloads.
+    ///
+    /// Used by strict genome transitions to guarantee no stale pre-transition
+    /// sensory data can be consumed after a new genome is loaded.
+    pub fn clear(&self) {
+        if let Ok(mut q) = self.inner.lock() {
+            q.clear();
+        }
+    }
 }

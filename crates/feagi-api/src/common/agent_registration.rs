@@ -84,8 +84,48 @@ fn build_io_config_map() -> Result<serde_json::Map<String, serde_json::Value>, S
     Ok(config)
 }
 
+fn build_io_config_map_from_unit_def(
+    unit_def: &Value,
+) -> Result<serde_json::Map<String, serde_json::Value>, String> {
+    let io_flags = unit_def
+        .get("io_configuration_flags")
+        .and_then(|v| v.as_object());
+
+    let frame_value = io_flags
+        .and_then(|flags| flags.get("frame_change_handling"))
+        .cloned()
+        .or_else(|| unit_def.get("frame_change_handling").cloned())
+        .ok_or_else(|| "unit_def missing frame_change_handling".to_string())?;
+    let positioning_value = io_flags
+        .and_then(|flags| flags.get("percentage_neuron_positioning"))
+        .cloned()
+        .or_else(|| unit_def.get("percentage_neuron_positioning").cloned())
+        .ok_or_else(|| "unit_def missing percentage_neuron_positioning".to_string())?;
+
+    let frame: FrameChangeHandling = serde_json::from_value(frame_value)
+        .map_err(|e| format!("Invalid frame_change_handling value: {}", e))?;
+    let positioning: PercentageNeuronPositioning = serde_json::from_value(positioning_value)
+        .map_err(|e| format!("Invalid percentage_neuron_positioning value: {}", e))?;
+
+    let mut config = serde_json::Map::new();
+    config.insert(
+        "frame_change_handling".to_string(),
+        serde_json::to_value(frame)
+            .map_err(|e| format!("Failed to serialize FrameChangeHandling: {}", e))?,
+    );
+    config.insert(
+        "percentage_neuron_positioning".to_string(),
+        serde_json::to_value(positioning)
+            .map_err(|e| format!("Failed to serialize PercentageNeuronPositioning: {}", e))?,
+    );
+    Ok(config)
+}
+
 fn as_nonzero_usize(value: Option<&Value>) -> Option<usize> {
-    value.and_then(|v| v.as_u64()).map(|v| v as usize).filter(|v| *v > 0)
+    value
+        .and_then(|v| v.as_u64())
+        .map(|v| v as usize)
+        .filter(|v| *v > 0)
 }
 
 fn color_channel_count_from_value(value: Option<&Value>) -> Option<usize> {
@@ -194,11 +234,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
     let genome_service = state.genome_service.as_ref();
 
     // Get root region ID so auto-created OPU/IPU areas appear in root (fixes power area disappearing in BV)
-    let root_region_id = connectome_service
-        .get_root_region_id()
-        .await
-        .ok()
-        .flatten();
+    let root_region_id = connectome_service.get_root_region_id().await.ok().flatten();
 
     let output_units = device_registrations
         .get("output_units_and_decoder_properties")
@@ -264,11 +300,11 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     continue;
                 }
 
-                let config_map = match build_io_config_map() {
+                let config_map = match build_io_config_map_from_unit_def(unit_def) {
                     Ok(map) => map,
                     Err(e) => {
                         warn!(
-                            "⚠️ [API] Failed to build motor IO config map for '{}' group {}: {}",
+                            "⚠️ [API] Failed to build motor IO config map from registration for '{}' group {}: {}",
                             motor_unit_key, group_u8, e
                         );
                         continue;
@@ -380,7 +416,10 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             continue;
                         }
                     };
-                    let expected_dimensions = match expected_dimensions_by_sub.get(i).and_then(|v| *v) {
+                    let expected_dimensions = match expected_dimensions_by_sub
+                        .get(i)
+                        .and_then(|v| *v)
+                    {
                         Some(dims) => dims,
                         None => {
                             warn!(
@@ -912,8 +951,12 @@ pub fn derive_motor_cortical_ids_from_device_registrations(
                 ));
             }
 
-            let config = build_io_config_map()
-                .map_err(|e| format!("Failed to build motor IO config map: {}", e))?;
+            let config = build_io_config_map_from_unit_def(unit_def).map_err(|e| {
+                format!(
+                    "Failed to build motor IO config map from registration for '{}' group {}: {}",
+                    motor_unit_key, group_u8, e
+                )
+            })?;
             let unit_cortical_ids = motor_unit
                 .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(group, config)
                 .map_err(|e| format!("Failed to derive cortical IDs: {}", e))?;

@@ -26,7 +26,7 @@ macro_rules! motor_cortical_units {
                     cortical_id_unit_reference: *b"pse",
                     number_cortical_areas: 2,
                     cortical_type_parameters: {
-                        _frame_change_handling: FrameChangeHandling,
+                        frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {

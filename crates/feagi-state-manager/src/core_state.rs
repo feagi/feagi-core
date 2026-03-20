@@ -295,10 +295,12 @@ impl MemoryMappedState {
         let mut current = self.agent_count.load(Ordering::Acquire);
         let new_count = loop {
             let next = current.saturating_sub(1);
-            match self
-                .agent_count
-                .compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire)
-            {
+            match self.agent_count.compare_exchange_weak(
+                current,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
                 Ok(_) => break next,
                 Err(actual) => current = actual,
             }
@@ -343,10 +345,12 @@ impl MemoryMappedState {
         let mut current = self.neuron_count.load(Ordering::Acquire);
         let new_count = loop {
             let next = current.saturating_sub(delta);
-            match self
-                .neuron_count
-                .compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire)
-            {
+            match self.neuron_count.compare_exchange_weak(
+                current,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
                 Ok(_) => break next,
                 Err(actual) => current = actual,
             }
@@ -379,10 +383,12 @@ impl MemoryMappedState {
         let mut current = self.synapse_count.load(Ordering::Acquire);
         let new_count = loop {
             let next = current.saturating_sub(delta);
-            match self
-                .synapse_count
-                .compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire)
-            {
+            match self.synapse_count.compare_exchange_weak(
+                current,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
                 Ok(_) => break next,
                 Err(actual) => current = actual,
             }
@@ -452,10 +458,12 @@ impl MemoryMappedState {
         let mut current = self.regular_neuron_count.load(Ordering::Acquire);
         let new_count = loop {
             let next = current.saturating_sub(delta);
-            match self
-                .regular_neuron_count
-                .compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire)
-            {
+            match self.regular_neuron_count.compare_exchange_weak(
+                current,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
                 Ok(_) => break next,
                 Err(actual) => current = actual,
             }
@@ -488,10 +496,12 @@ impl MemoryMappedState {
         let mut current = self.memory_neuron_count.load(Ordering::Acquire);
         let new_count = loop {
             let next = current.saturating_sub(delta);
-            match self
-                .memory_neuron_count
-                .compare_exchange_weak(current, next, Ordering::AcqRel, Ordering::Acquire)
-            {
+            match self.memory_neuron_count.compare_exchange_weak(
+                current,
+                next,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
                 Ok(_) => break next,
                 Err(actual) => current = actual,
             }
@@ -722,16 +732,32 @@ mod tests {
 
         // Subtract more than we have - must saturate at 0, not wrap
         state.subtract_neuron_count(5000);
-        assert_eq!(state.get_neuron_count(), 0, "neuron_count must not underflow");
+        assert_eq!(
+            state.get_neuron_count(),
+            0,
+            "neuron_count must not underflow"
+        );
 
         state.subtract_regular_neuron_count(5000);
-        assert_eq!(state.get_regular_neuron_count(), 0, "regular_neuron_count must not underflow");
+        assert_eq!(
+            state.get_regular_neuron_count(),
+            0,
+            "regular_neuron_count must not underflow"
+        );
 
         state.subtract_synapse_count(1000);
-        assert_eq!(state.get_synapse_count(), 0, "synapse_count must not underflow");
+        assert_eq!(
+            state.get_synapse_count(),
+            0,
+            "synapse_count must not underflow"
+        );
 
         state.subtract_memory_neuron_count(500);
-        assert_eq!(state.get_memory_neuron_count(), 0, "memory_neuron_count must not underflow");
+        assert_eq!(
+            state.get_memory_neuron_count(),
+            0,
+            "memory_neuron_count must not underflow"
+        );
 
         // Decrement agent from 0 - must stay 0
         state.decrement_agent_count();
