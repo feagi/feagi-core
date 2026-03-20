@@ -26,4 +26,6 @@ where
 
     fn get_synapse_flags(&self) -> &[SynapseFlag];
     fn set_synapse_flags(&mut self) -> &mut [SynapseFlag];
+
+    // TODO
 }

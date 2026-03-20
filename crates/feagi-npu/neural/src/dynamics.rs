@@ -78,7 +78,7 @@ pub fn update_neuron_lif<T: NeuralValue>(
     // Check threshold
     if *membrane_potential >= threshold {
         // Fire and reset
-        *membrane_potential = T::zero();
+        *membrane_potential = T::ZERO;
         return true;
     }
 
@@ -183,7 +183,7 @@ pub fn update_neurons_lif_batch<T: NeuralValue>(
             &mut membrane_potentials[i],
             thresholds[i],
             leak_coefficients[i], // f32
-            T::zero(),            // resting_potential
+            T::ZERO,            // resting_potential
             candidate_potentials[i],
         );
     }
@@ -275,7 +275,7 @@ mod tests {
         let leak = 0.1f32;
         let input = INT8Value::from_f32(35.0);
 
-        let fired = update_neuron_lif(&mut potential, threshold, leak, INT8Value::zero(), input);
+        let fired = update_neuron_lif(&mut potential, threshold, leak, INT8Value::ZERO, input);
 
         assert!(fired, "Neuron should fire (-20 + 35 = 15 > 10)");
 
@@ -298,7 +298,7 @@ mod tests {
         let leak = 0.05f32;
         let input = INT8Value::from_f32(20.0);
 
-        let fired = update_neuron_lif(&mut potential, threshold, leak, INT8Value::zero(), input);
+        let fired = update_neuron_lif(&mut potential, threshold, leak, INT8Value::ZERO, input);
 
         assert!(!fired, "Neuron should not fire (-30 + 20 = -10 < 10)");
 

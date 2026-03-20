@@ -33,7 +33,7 @@ impl<T: QuantizableUInt> NonzeroCountType<T> {
     }
 
     pub fn new(n: T) -> Result<Self, FeagiBaseError> {
-        if n < T::one() {
+        if n < T::ONE {
             return Err(FeagiBaseError::ValueCannotBeZero);
         }
         Ok(Self(n))
@@ -56,7 +56,7 @@ impl<T: QuantizableUInt> NonzeroCountType<T> {
     #[inline(always)]
     pub fn saturating_sub(self, other: Self) -> Self {
         let value = self.0.saturating_sub(other.0);
-        Self::new_checked_nonzero(value).unwrap_or_else(|| Self::new_unchecked(T::one()))
+        Self::new_checked_nonzero(value).unwrap_or_else(|| Self::new_unchecked(T::ONE))
     }
 
     #[inline(always)]
@@ -81,7 +81,7 @@ impl<T: QuantizableUInt> NonzeroCountType<T> {
 
     #[inline(always)]
     fn new_checked_nonzero(value: T) -> Option<Self> {
-        if value < T::one() {
+        if value < T::ONE {
             None
         } else {
             Some(Self::new_unchecked(value))
@@ -137,7 +137,7 @@ impl<T: QuantizableUInt> core::ops::Div for NonzeroCountType<T> {
     #[inline(always)]
     fn div(self, rhs: Self) -> Self::Output {
         // Divisor is guaranteed nonzero by type invariant.
-        self.checked_div(rhs).unwrap_or_else(|| Self::new_unchecked(T::one()))
+        self.checked_div(rhs).unwrap_or_else(|| Self::new_unchecked(T::ONE))
     }
 }
 
@@ -165,6 +165,6 @@ impl<T: QuantizableUInt> core::ops::MulAssign for NonzeroCountType<T> {
 impl<T: QuantizableUInt> core::ops::DivAssign for NonzeroCountType<T> {
     #[inline(always)]
     fn div_assign(&mut self, rhs: Self) {
-        *self = self.checked_div(rhs).unwrap_or_else(|| Self::new_unchecked(T::one()));
+        *self = self.checked_div(rhs).unwrap_or_else(|| Self::new_unchecked(T::ONE));
     }
 }

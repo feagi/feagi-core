@@ -1,0 +1,108 @@
+
+// I am deliberately adding "trait" to their names to make things less confusing. I don't care about
+// the convention not to in this case.
+// Only keep the parts that all neurons share in this base trait
+// NOTE: I recommend parallel arrays for data storage instead an array of structs due to
+// how data may be retrieved
+
+pub trait BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+where
+    NeuronIndexQuant: InterneuronIndex,
+    CorticalIndexQuant: CorticalAreaIndex,
+    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
+    BurstQuant: BurstDeltaCount,
+    PotentialQuant: PotentialUnit,
+    PercentageQuant: PercentageScale,
+{
+    // NOTE: Due to varying internal implementations, memory fragmentation may occur in various
+    // ways, ergo be cautious of calculating internal state. Instead, use the below helper functions.
+
+    const NUMBER_BYTES_PER_NEURON: usize;
+
+    /// Gets the maximum possible neuron index achievable by current quantization (or in the case
+    /// of static implementations, the size of the neuron array).
+    fn get_max_possible_neuron_index(&self) -> NeuronIndexQuant;
+
+    /// Returns the count of valid neurons in the structure. NOT THE SAME AS TOTAL NUMBER OF
+    /// NEURONS STORED!
+    fn get_total_number_of_valid_neurons(&self) -> &NeuronIndexQuant;
+
+    /// Returns the count of invalid neurons in the structure. NOT THE SAME AS TOTAL FREE CAPACITY!
+    fn get_total_number_of_invalid_neurons(&self) -> &NeuronIndexQuant;
+
+    /// Gets the maximum possible cortical area index achievable by current quantization (or in the
+    /// case of static implementations, the size of the neuron array).
+    fn get_max_possible_cortical_areas(&self) -> CorticalIndexQuant;
+
+
+
+    /// Brings all invalid neurons to the back of the internal arrays and returns the number of
+    /// them. Note that depending on the implementation, neuron order may not be preserved
+    //fn sort_invalid_neurons_to_the_back(&self) -> NeuronIndexQuant; // TODO we need to be more careful here, bind this with synapses
+
+}
+
+#[cfg(feature = "alloc")]
+pub trait BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>: InterneuronDataTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+where
+    NeuronIndexQuant: InterneuronIndex,
+    CorticalIndexQuant: CorticalAreaIndex,
+    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
+    BurstQuant: BurstDeltaCount,
+    PotentialQuant: PotentialUnit,
+    PercentageQuant: PercentageScale,
+// % synaptic attractivity
+{
+    /// Frees unused vector capacity and invalid neurons (assuming they were sorted to the back first!)
+    /// albeit allowing a buffer of free space. Returns the number of neurons that were freed.
+    /// Returns 0 if no neurons were freed (nothing to free or spare capacity is at or less than
+    /// what was requested). Note that invalid neurons not sorted to the back will not be freed.
+    fn free_unused_capacity(&mut self, spare_capacity_to_maintain: NeuronIndexQuant) -> NeuronIndexQuant;
+
+
+    fn next_available_cortical_area_index(&self) -> Result<&CorticalIndexQuant, FeagiNPUDataError>; // TODO Extreme edge case error, when we hit quat limit of cortical area count
+
+    /// Deletes a cortical area by invalidating all of its neurons. Returns the neuron indexes
+    /// of the disabled neurons
+    fn delete_cortical_area(&mut self, cortical_index: CorticalIndexQuant)
+                            ->Result<Range<NeuronIndexQuant>, FeagiNPUDataError>;
+
+
+    // TODO add blank neurons for a cortical area (take cortical idx, dimensions, number neurons per voxel) (return range of neuron idx that contains the new neurons) (default settings should be read from implementation constants)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+pub fn relative_index_to_coordinate<Quant>(relative_index: &Quant, dimensions: &NeuronVoxelDimensions<Quant>, neurons_per_voxel: Quant) -> NeuronVoxelCoordinates<Quant> where
+    Quant: QuantizableUInt,
+{
+    // TODO debug bounds checking
+    let div_index = relative_index / neurons_per_voxel;
+    let x = div_index % dimensions.x;
+    let y = (div_index / dimensions.x) % dimensions.y;
+    let z = div_index / (dimensions.x * dimensions.y);
+    NeuronVoxelCoordinates::new(x, y, z)
+}
+
+pub fn relative_index_to_coordinate_no_alloc<Quant>(relative_index: &Quant, dimensions: &NeuronVoxelDimensions<Quant>, neurons_per_voxel: Quant, out: &mut NeuronVoxelCoordinates<Quant>) where
+    Quant: QuantizableUInt,
+{
+    // TODO debug bounds checking
+    let div_index = relative_index / neurons_per_voxel;
+    out.x = div_index % dimensions.x;
+    out.y = (div_index / dimensions.x) % dimensions.y;
+    out.z = div_index / (dimensions.x * dimensions.y);
+}

@@ -866,7 +866,7 @@ impl<
                             thresholds.push(T::from_f32(threshold_at_pos));
                             // SIMD-friendly encoding: 0.0 means no limit, convert to MAX
                             let threshold_limit = if default_threshold_limit == 0.0 {
-                                T::max_value()
+                                T::MAX_VALUE
                             } else {
                                 T::from_f32(default_threshold_limit)
                             };
@@ -880,7 +880,7 @@ impl<
             thresholds.resize(total_neurons, T::from_f32(default_threshold));
             // SIMD-friendly encoding: 0.0 means no limit, convert to MAX
             let threshold_limit = if default_threshold_limit == 0.0 {
-                T::max_value()
+                T::MAX_VALUE
             } else {
                 T::from_f32(default_threshold_limit)
             };
@@ -1946,7 +1946,7 @@ impl<
                 let _neuron_id = self
                     .add_neuron(
                         T::from_f32(1.0), // threshold
-                        T::max_value(), // threshold_limit (MAX = no limit, SIMD-friendly encoding)
+                        T::MAX_VALUE, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
                         0.1,            // leak_coefficient
                         T::from_f32(0.0), // resting_potential
                         0,              // neuron_type
@@ -2863,9 +2863,9 @@ impl<
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
 
         // SIMD-friendly encoding: 0.0 means "no upper bound".
-        // Internally, "no upper bound" is represented as T::max_value().
+        // Internally, "no upper bound" is represented as T::MAX_VALUE.
         let encoded_limit = if limit == 0.0 {
-            T::max_value()
+            T::MAX_VALUE
         } else {
             T::from_f32(limit)
         };
@@ -4131,7 +4131,7 @@ fn phase1_injection_with_synapses<
         // Reset membrane potential for non-accumulating neurons
         for idx in 0..neuron_count {
             if neuron_storage.valid_mask()[idx] && !neuron_storage.mp_charge_accumulation()[idx] {
-                neuron_storage.membrane_potentials_mut()[idx] = T::zero();
+                neuron_storage.membrane_potentials_mut()[idx] = T::ZERO;
             }
         }
     } else {
@@ -4144,7 +4144,7 @@ fn phase1_injection_with_synapses<
                     && neuron_storage.valid_mask()[idx]
                     && !neuron_storage.mp_charge_accumulation()[idx]
                 {
-                    neuron_storage.membrane_potentials_mut()[idx] = T::zero();
+                    neuron_storage.membrane_potentials_mut()[idx] = T::ZERO;
                 }
             }
         }

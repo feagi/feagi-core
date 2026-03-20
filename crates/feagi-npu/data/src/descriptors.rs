@@ -102,26 +102,10 @@ macro_rules! impl_quantizable_uint_wrapper {
 
         impl<T: QuantizableUInt> QuantizableUInt for $wrapper<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
-
-            #[inline(always)]
-            fn zero() -> Self {
-                Self(T::zero())
-            }
-
-            #[inline(always)]
-            fn one() -> Self {
-                Self(T::one())
-            }
-
-            #[inline(always)]
-            fn max_value() -> Self {
-                Self(T::max_value())
-            }
-
-            #[inline(always)]
-            fn min_value() -> Self {
-                Self(T::min_value())
-            }
+            const ZERO: Self = Self(T::ZERO);
+            const ONE: Self = Self(T::ONE);
+            const MAX_VALUE: Self = Self(T::MAX_VALUE);
+            const MIN_VALUE: Self = Self(T::MIN_VALUE);
 
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {
@@ -285,26 +269,10 @@ macro_rules! impl_quantizable_value_wrapper {
 
         impl<T: QuantizableValue> QuantizableValue for $wrapper<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
-
-            #[inline(always)]
-            fn zero() -> Self {
-                Self(T::zero())
-            }
-
-            #[inline(always)]
-            fn one() -> Self {
-                Self(T::one())
-            }
-
-            #[inline(always)]
-            fn max_value() -> Self {
-                Self(T::max_value())
-            }
-
-            #[inline(always)]
-            fn min_value() -> Self {
-                Self(T::min_value())
-            }
+            const ZERO: Self = Self(T::ZERO);
+            const ONE: Self = Self(T::ONE);
+            const MAX_VALUE: Self = Self(T::MAX_VALUE);
+            const MIN_VALUE: Self = Self(T::MIN_VALUE);
 
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {
@@ -600,7 +568,18 @@ pub type NeuronVoxelCoordinateU8 = NeuronVoxelCoordinate<u8>;
 
 //endregion
 
+/// Represents the dimensions (in voxels) of a cortical area
+/// Note in some cases 1 voxel may contain multiple neurons
+//region Neuron Voxel Dimensions
 
+pub type NeuronVoxelDimensions<T: QuantizableUInt> = UnsignedCoordinate3DType<T>;
+#[cfg(feature = "support_64bit_indexing_quantization")]
+pub type NeuronVoxelDimensionsU64 = NeuronVoxelDimensions<u64>;
+pub type NeuronVoxelDimensionsU32 = NeuronVoxelDimensions<u32>;
+pub type NeuronVoxelDimensionsU16 = NeuronVoxelDimensions<u16>;
+pub type NeuronVoxelDimensionsU8 = NeuronVoxelDimensions<u8>;
+
+//endregion
 
 
 

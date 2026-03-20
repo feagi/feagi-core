@@ -42,6 +42,7 @@ type SensoryXyzpDecoded = Vec<(
 use tracing::{debug, error, info, trace, warn};
 
 use std::thread;
+use feagi_structures::neuron::voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
 /// Trait for visualization publishing (abstraction to avoid circular dependency with feagi-io)
 /// Any component that can publish visualization data implements this trait.

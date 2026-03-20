@@ -108,15 +108,15 @@ impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
     /// Create a new fixed-size neuron array
     ///
     /// All arrays are zero-initialized on the stack.
-    /// Note: Not const due to T::zero() trait method
+    /// Note: Fully const-initializable via associated constants.
     pub fn new() -> Self {
         Self {
             count: 0,
-            membrane_potentials: [T::zero(); N],
+            membrane_potentials: [T::ZERO; N],
             thresholds: [T::from_f32(1.0); N],
-            threshold_limits: [T::max_value(); N], // MAX = no limit (SIMD-friendly encoding)
+            threshold_limits: [T::MAX_VALUE; N], // MAX = no limit (SIMD-friendly encoding)
             leak_coefficients: [0.1; N],
-            resting_potentials: [T::zero(); N],
+            resting_potentials: [T::ZERO; N],
             neuron_types: [0; N],
             refractory_periods: [0; N],
             refractory_countdowns: [0; N],
@@ -152,9 +152,9 @@ impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
         NeuronStorage::add_neuron(
             self,
             threshold,
-            T::zero(), // threshold_limit (0 = no limit)
+            T::ZERO, // threshold_limit (0 = no limit)
             leak,
-            T::zero(), // resting potential
+            T::ZERO, // resting potential
             0,         // neuron type (excitatory)
             refractory_period,
             excitability,
@@ -210,7 +210,7 @@ impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
                 &mut self.membrane_potentials[idx],
                 self.thresholds[idx],
                 self.leak_coefficients[idx],
-                T::zero(), // resting_potential
+                T::ZERO, // resting_potential
                 input,
             );
 

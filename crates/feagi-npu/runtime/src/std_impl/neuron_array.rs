@@ -119,11 +119,11 @@ impl<T: NeuralValue> NeuronArray<T> {
             cortical_area_neuron_index: Mutex::new(AHashMap::new()),
         };
         // Resize to capacity with default values
-        result.membrane_potentials.resize(capacity, T::zero());
+        result.membrane_potentials.resize(capacity, T::ZERO);
         result.thresholds.resize(capacity, T::from_f32(1.0));
-        result.threshold_limits.resize(capacity, T::max_value()); // MAX = no limit (SIMD-friendly encoding)
+        result.threshold_limits.resize(capacity, T::MAX_VALUE); // MAX = no limit (SIMD-friendly encoding)
         result.leak_coefficients.resize(capacity, 0.1);
-        result.resting_potentials.resize(capacity, T::zero());
+        result.resting_potentials.resize(capacity, T::ZERO);
         result.neuron_types.resize(capacity, 0);
         result.refractory_periods.resize(capacity, 0);
         result.refractory_countdowns.resize(capacity, 0);
@@ -150,9 +150,9 @@ impl<T: NeuralValue> NeuronArray<T> {
         NeuronStorage::add_neuron(
             self,
             threshold,
-            T::max_value(), // threshold_limit (MAX = no limit, SIMD-friendly encoding)
+            T::MAX_VALUE, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
             leak,
-            T::zero(), // resting potential
+            T::ZERO, // resting potential
             0,         // neuron type (excitatory)
             refractory_period,
             excitability,
@@ -184,22 +184,22 @@ impl<T: NeuralValue> NeuronArray<T> {
             .into_par_iter()
             .map(|idx| {
                 if !self.valid_mask[idx] {
-                    return (idx, false, T::zero());
+                    return (idx, false, T::ZERO);
                 }
 
                 let in_refractory = self.refractory_countdowns[idx] > 0;
                 if in_refractory {
-                    return (idx, false, T::zero());
+                    return (idx, false, T::ZERO);
                 }
 
                 // Simulate neuron update (read-only)
                 let mut potential = self.membrane_potentials[idx];
-                let input = candidate_potentials.get(idx).copied().unwrap_or(T::zero());
+                let input = candidate_potentials.get(idx).copied().unwrap_or(T::ZERO);
                 let fired = update_neuron_lif(
                     &mut potential,
                     self.thresholds[idx],
                     self.leak_coefficients[idx],
-                    T::zero(),
+                    T::ZERO,
                     input,
                 );
 
@@ -245,12 +245,12 @@ impl<T: NeuralValue> NeuronArray<T> {
                 continue;
             }
 
-            let input = candidate_potentials.get(idx).copied().unwrap_or(T::zero());
+            let input = candidate_potentials.get(idx).copied().unwrap_or(T::ZERO);
             let fired = update_neuron_lif(
                 &mut self.membrane_potentials[idx],
                 self.thresholds[idx],
                 self.leak_coefficients[idx],
-                T::zero(),
+                T::ZERO,
                 input,
             );
 
@@ -464,7 +464,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
 
         // Grow if needed
         if idx >= self.membrane_potentials.len() {
-            self.membrane_potentials.push(T::zero());
+            self.membrane_potentials.push(T::ZERO);
             self.thresholds.push(threshold);
             self.threshold_limits.push(threshold_limit);
             self.leak_coefficients.push(leak);

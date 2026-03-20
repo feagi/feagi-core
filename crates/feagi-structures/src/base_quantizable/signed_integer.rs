@@ -24,10 +24,10 @@ pub trait QuantizableInt:
     + 'static
 {
     const NUMBER_OF_BYTES: usize;
-    fn zero() -> Self;
-    fn one() -> Self;
-    fn max_value() -> Self;
-    fn min_value() -> Self;
+    const ZERO: Self;
+    const ONE: Self;
+    const MAX_VALUE: Self;
+    const MIN_VALUE: Self;
     fn saturating_add(self, other: Self) -> Self;
     fn checked_add(self, other: Self) -> Option<Self>;
     fn saturating_sub(self, other: Self) -> Self;
@@ -61,10 +61,10 @@ pub trait QuantizableInt:
     + 'static
 {
     const NUMBER_OF_BYTES: usize;
-    fn zero() -> Self;
-    fn one() -> Self;
-    fn max_value() -> Self;
-    fn min_value() -> Self;
+    const ZERO: Self;
+    const ONE: Self;
+    const MAX_VALUE: Self;
+    const MIN_VALUE: Self;
     fn saturating_add(self, other: Self) -> Self;
     fn checked_add(self, other: Self) -> Option<Self>;
     fn saturating_sub(self, other: Self) -> Self;
@@ -78,26 +78,10 @@ pub trait QuantizableInt:
 
 impl QuantizableInt for isize {
     const NUMBER_OF_BYTES: usize = size_of::<isize>();
-
-    #[inline(always)]
-    fn zero() -> Self {
-        0
-    }
-
-    #[inline(always)]
-    fn one() -> Self {
-        1
-    }
-
-    #[inline(always)]
-    fn max_value() -> Self {
-        isize::MAX
-    }
-
-    #[inline(always)]
-    fn min_value() -> Self {
-        isize::MIN
-    }
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+    const MAX_VALUE: Self = isize::MAX;
+    const MIN_VALUE: Self = isize::MIN;
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -152,26 +136,10 @@ impl Into<isize> for isize {
 
 impl QuantizableInt for i8 {
     const NUMBER_OF_BYTES: usize = size_of::<i8>();
-
-    #[inline(always)]
-    fn zero() -> Self {
-        0
-    }
-
-    #[inline(always)]
-    fn one() -> Self {
-        1
-    }
-
-    #[inline(always)]
-    fn max_value() -> Self {
-        i8::MAX
-    }
-
-    #[inline(always)]
-    fn min_value() -> Self {
-        i8::MIN
-    }
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+    const MAX_VALUE: Self = i8::MAX;
+    const MIN_VALUE: Self = i8::MIN;
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -234,26 +202,10 @@ impl Into<isize> for i8 {
 
 impl QuantizableInt for i16 {
     const NUMBER_OF_BYTES: usize = size_of::<i16>();
-
-    #[inline(always)]
-    fn zero() -> Self {
-        0
-    }
-
-    #[inline(always)]
-    fn one() -> Self {
-        1
-    }
-
-    #[inline(always)]
-    fn max_value() -> Self {
-        i16::MAX
-    }
-
-    #[inline(always)]
-    fn min_value() -> Self {
-        i16::MIN
-    }
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+    const MAX_VALUE: Self = i16::MAX;
+    const MIN_VALUE: Self = i16::MIN;
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -316,26 +268,10 @@ impl Into<isize> for i16 {
 
 impl QuantizableInt for i32 {
     const NUMBER_OF_BYTES: usize = size_of::<i32>();
-
-    #[inline(always)]
-    fn zero() -> Self {
-        0
-    }
-
-    #[inline(always)]
-    fn one() -> Self {
-        1
-    }
-
-    #[inline(always)]
-    fn max_value() -> Self {
-        i32::MAX
-    }
-
-    #[inline(always)]
-    fn min_value() -> Self {
-        i32::MIN
-    }
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+    const MAX_VALUE: Self = i32::MAX;
+    const MIN_VALUE: Self = i32::MIN;
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -399,26 +335,10 @@ impl Into<isize> for i32 {
 #[cfg(feature = "support_64bit_indexing_quantization")]
 impl QuantizableInt for i64 {
     const NUMBER_OF_BYTES: usize = size_of::<i64>();
-
-    #[inline(always)]
-    fn zero() -> Self {
-        0
-    }
-
-    #[inline(always)]
-    fn one() -> Self {
-        1
-    }
-
-    #[inline(always)]
-    fn max_value() -> Self {
-        i64::MAX
-    }
-
-    #[inline(always)]
-    fn min_value() -> Self {
-        i64::MIN
-    }
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+    const MAX_VALUE: Self = i64::MAX;
+    const MIN_VALUE: Self = i64::MIN;
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {

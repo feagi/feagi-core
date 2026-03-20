@@ -26,10 +26,10 @@ pub trait QuantizableValue:
     + 'static
 {
     const NUMBER_OF_BYTES: usize;
-    fn zero() -> Self;
-    fn one() -> Self;
-    fn max_value() -> Self;
-    fn min_value() -> Self;
+    const ZERO: Self;
+    const ONE: Self;
+    const MAX_VALUE: Self;
+    const MIN_VALUE: Self;
     fn saturating_add(self, other: Self) -> Self;
     fn checked_add(self, other: Self) -> Option<Self>;
     fn saturating_sub(self, other: Self) -> Self;
@@ -63,10 +63,10 @@ pub trait QuantizableValue:
     + 'static
 {
     const NUMBER_OF_BYTES: usize;
-    fn zero() -> Self;
-    fn one() -> Self;
-    fn max_value() -> Self;
-    fn min_value() -> Self;
+    const ZERO: Self;
+    const ONE: Self;
+    const MAX_VALUE: Self;
+    const MIN_VALUE: Self;
     fn saturating_add(self, other: Self) -> Self;
     fn checked_add(self, other: Self) -> Option<Self>;
     fn saturating_sub(self, other: Self) -> Self;
@@ -81,26 +81,10 @@ pub trait QuantizableValue:
 #[cfg(feature = "support_64bit_indexing_quantization")]
 impl QuantizableValue for f64 {
     const NUMBER_OF_BYTES: usize = size_of::<f64>();
-
-    #[inline(always)]
-    fn zero() -> Self {
-        0.0
-    }
-
-    #[inline(always)]
-    fn one() -> Self {
-        1.0
-    }
-
-    #[inline(always)]
-    fn max_value() -> Self {
-        f64::MAX
-    }
-
-    #[inline(always)]
-    fn min_value() -> Self {
-        f64::MIN
-    }
+    const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    const MAX_VALUE: Self = f64::MAX;
+    const MIN_VALUE: Self = f64::MIN;
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -181,26 +165,10 @@ impl QuantizableValue for f64 {
 
 impl QuantizableValue for f32 {
     const NUMBER_OF_BYTES: usize = size_of::<f32>();
-
-    #[inline(always)]
-    fn zero() -> Self {
-        0.0
-    }
-
-    #[inline(always)]
-    fn one() -> Self {
-        1.0
-    }
-
-    #[inline(always)]
-    fn max_value() -> Self {
-        f32::MAX
-    }
-
-    #[inline(always)]
-    fn min_value() -> Self {
-        f32::MIN
-    }
+    const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    const MAX_VALUE: Self = f32::MAX;
+    const MIN_VALUE: Self = f32::MIN;
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -281,26 +249,10 @@ impl QuantizableValue for f32 {
 
 impl QuantizableValue for f16 {
     const NUMBER_OF_BYTES: usize = size_of::<f16>();
-
-    #[inline(always)]
-    fn zero() -> Self {
-        f16::from_f32(0.0)
-    }
-
-    #[inline(always)]
-    fn one() -> Self {
-        f16::from_f32(1.0)
-    }
-
-    #[inline(always)]
-    fn max_value() -> Self {
-        f16::MAX
-    }
-
-    #[inline(always)]
-    fn min_value() -> Self {
-        f16::MIN
-    }
+    const ZERO: Self = f16::ZERO;
+    const ONE: Self = f16::ONE;
+    const MAX_VALUE: Self = f16::MAX;
+    const MIN_VALUE: Self = f16::MIN;
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -378,26 +330,10 @@ impl QuantizableValue for f16 {
 
 impl QuantizableValue for u8 {
     const NUMBER_OF_BYTES: usize = size_of::<u8>();
-
-    #[inline(always)]
-    fn zero() -> Self {
-        0
-    }
-
-    #[inline(always)]
-    fn one() -> Self {
-        1
-    }
-
-    #[inline(always)]
-    fn max_value() -> Self {
-        u8::MAX
-    }
-
-    #[inline(always)]
-    fn min_value() -> Self {
-        u8::MIN
-    }
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
+    const MAX_VALUE: Self = u8::MAX;
+    const MIN_VALUE: Self = u8::MIN;
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
