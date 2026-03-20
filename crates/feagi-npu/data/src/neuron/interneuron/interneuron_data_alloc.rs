@@ -26,14 +26,13 @@ where
     neuron_snooze_period_countdown: Vec<BurstQuant>,
     neuron_snooze_period_limit: Vec<BurstQuant>,
 
-    // Per Cortical Area
+    // Per Cortical Area // NOTE: due to implementation, its possible for these vectors to also have blank unused spots within them!
     cortical_refractory_period: Vec<BurstQuant>,
     cortical_excitability: Vec<PercentageQuant>,
     cortical_threshold_limit: Vec<PotentialQuant>,
-    cortical_neurons_per_voxel: Vec<NumberNeuronsPerVoxel>,
 
     // Cached Data
-    cache_cortical_neuron_mappings: AHashMap<CorticalIndexQuant, InterneuronCorticalData>,
+    cache_cortical_metadata: AHashMap<CorticalIndexQuant, InterneuronCorticalData>,
     cache_number_valid_neurons: NeuronIndexQuant,
     cache_number_invalid_neurons: NeuronIndexQuant,
     cache_index_to_write_new_neurons: NeuronIndexQuant, // Index starting where new neurons will be written to
@@ -79,7 +78,7 @@ where
     fn invalidate_cortical_area(&mut self, cortical_area_index: CorticalIndexQuant) -> Result<Range<NeuronIndexQuant>, FeagiNPUDataError> {
         // These basic checks are fast and we arent iterating over cortical areas THAT fast, right? // TODO shove checks in a debug?
 
-        let cortical_data: InterneuronCorticalData<NeuronIndexQuant> = self.cache_cortical_neuron_mappings.get_mut(&cortical_area_index)
+        let cortical_data: InterneuronCorticalData<NeuronIndexQuant> = self.cache_cortical_metadata.get_mut(&cortical_area_index)
             .copied().ok_or_else(|| FeagiNPUDataError::InvalidCorticalIndex{given_cortical_index: cortical_area_index as u32})?;
 
         if !cortical_data.flags.is_valid() {
@@ -112,17 +111,17 @@ where
 
         // Mark this cortical index as free
         self.cache_skipped_cortical_indexes.push(cortical_area_index);
-        self.cache_cortical_neuron_mappings.remove(&cortical_area_index);
+        self.cache_cortical_metadata.remove(&cortical_area_index);
     }
 
 
     //region Internal Helper Functions
 
-    fn next_available_cortical_area_index(&self)  -> Result<&CorticalIndexQuant, FeagiNPUDataError> { // TODO Extreme edge case error, when we hit quat limit
+    fn next_available_cortical_area_index(&self)  -> Result<CorticalIndexQuant, FeagiNPUDataError> { // TODO Extreme edge case error, when we hit quat limit
         if &self.cache_skipped_cortical_indexes.is_empty() {
-            return Ok(&NeuronIndexQuant::from_u32(self.cache_cortical_neuron_mappings.len()));
+            return Ok(NeuronIndexQuant::from_u32(self.cache_cortical_metadata.len()));
         }
-        Ok(&self.cache_skipped_cortical_indexes.last().unwrap()) // TODO is last() performant??
+        Ok(self.cache_skipped_cortical_indexes.last().unwrap()) // TODO is last() performant??
     }
 
     /// Returns an empty result if a cortical area exists AND is valid. Otherwise errors.
@@ -136,13 +135,13 @@ where
 
     /// Get the cortical area properties by index. WARNING: AREA MAY EXIST BUT NOT BE VALID!
     fn get_cortical_data_ref(&self, cortical_area_index: CorticalIndexQuant) -> Result<&InterneuronCorticalData<NeuronIndexQuant>, FeagiNPUDataError> {
-        self.cache_cortical_neuron_mappings.get(&cortical_area_index)
+        self.cache_cortical_metadata.get(&cortical_area_index)
             .ok_or_else(|| FeagiNPUDataError::InvalidCorticalIndex{given_cortical_index: cortical_area_index as u32})?
     }
 
     /// Get the mutable cortical area properties by index. WARNING: AREA MAY EXIST BUT NOT BE VALID!
     fn get_cortical_data_ref_mut(&mut self, cortical_area_index: CorticalIndexQuant) -> Result<&mut InterneuronCorticalData<NeuronIndexQuant>, FeagiNPUDataError> {
-        self.cache_cortical_neuron_mappings.get_mut(&cortical_area_index)
+        self.cache_cortical_metadata.get_mut(&cortical_area_index)
             .ok_or_else(|| FeagiNPUDataError::InvalidCorticalIndex{given_cortical_index: cortical_area_index as u32})?
     }
 
@@ -178,12 +177,12 @@ where
                                                 cortical_refractory_period: BurstQuant,
                                                 cortical_excitability: PercentageQuant,
                                                 cortical_threshold_limit: PotentialQuant,
+                                                cortical_is_mp_charge_accumulation_enabled: bool,
+                                                cortical_is_mp_driven_psp_enabled: bool,
                                                 cortical_neurons_per_voxel: NumberNeuronsPerVoxel)
                                                 -> Result<(NeuronIndexQuant, Range<NeuronIndexQuant>), FeagiNPUDataError> {
 
         let number_of_neurons: usize = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
-
-
 
         let neuron_index_range: Range<NeuronIndexQuant> = {
             // TODO instead of allocating right to the end, what if we have a way to quickly check through cache_invalid_neuron_indexes (assuming we also group neighboring ranges) and put ourselves there if we fit?
@@ -194,7 +193,28 @@ where
             let start = self.cache_index_to_write_new_neurons.clone();
             self.cache_index_to_write_new_neurons += number_of_neurons;
             return start..(start + number_of_neurons);
-        }
+        };
+
+        let mut cortical_flags: InterneuronCorticalFlag = InterneuronCorticalFlag::new_valid();
+        cortical_flags.set_mp_charge_accumulation_enabled(cortical_is_mp_charge_accumulation_enabled);
+        cortical_flags.cortical_is_mp_driven_psp_enabled(cortical_is_mp_driven_psp_enabled);
+
+        let cortical_index = self.next_available_cortical_area_index();
+        _ = self.cache_cortical_metadata.insert(
+            cortical_area_index,
+            InterneuronCorticalData<NeuronIndexQuant, CoordQuant> {
+                flags: cortical_flags,
+                neuron_range: neuron_index_range.clone(),
+                number_neurons_invalid_from_degeneration: 0,
+                dimensions: cortical_area_dimensions
+            }
+        );
+
+        // TODO insert into frag logic with above
+
+
+        // TODO continue here!
+
 
 
 
@@ -365,6 +385,7 @@ struct InterneuronCorticalData<NeuronIndexQuant, CoordQuant> where
 {
     pub flags: InterneuronCorticalFlag,
     pub neuron_range: Range<NeuronIndexQuant>,
-    pub neurons_invalid_from_degeneration: NeuronIndexQuant,
+    pub number_neurons_invalid_from_degeneration: NeuronIndexQuant,
     pub dimensions: NeuronVoxelDimensions<CoordQuant>,
+    pub number_neurons_per_voxel: NumberNeuronsPerVoxel
 }

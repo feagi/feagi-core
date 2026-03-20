@@ -44,11 +44,88 @@ where
     snooze_period_countdown: [BurstQuant; MAX_NEURON_INDEX],
     snooze_period_limit: [BurstQuant; MAX_NEURON_INDEX],
 
+    cache_number_valid_neurons: NeuronIndexQuant,
+    cache_number_invalid_neurons: NeuronIndexQuant,
+
+
     // Per Cortical Area
     cortical_excitability: [PercentageQuant; MAX_CORTICAL_AREA_INDEX],
     neurons_per_voxel: [NumberNeuronsPerVoxel; MAX_CORTICAL_AREA_INDEX],
 }
 
+
+impl InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+where
+    NeuronIndexQuant: InterneuronIndex,
+    CorticalIndexQuant: CorticalAreaIndex,
+    CoordQuant: NeuronVoxelCoordinate<QuantizableUInt>,
+    BurstQuant: BurstDeltaCount,
+    PotentialQuant: PotentialUnit,
+    PercentageQuant: PercentageScale
+{
+
+
+
+}
+
+
+
+
+impl DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+where
+    NeuronIndexQuant: InterneuronIndex,
+    CorticalIndexQuant: CorticalAreaIndex,
+    CoordQuant: NeuronVoxelCoordinate<QuantizableUInt>,
+    BurstQuant: BurstDeltaCount,
+    PotentialQuant: PotentialUnit,
+    PercentageQuant: PercentageScale
+{
+
+}
+
+
+
+impl BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+where
+    NeuronIndexQuant: InterneuronIndex,
+    CorticalIndexQuant: CorticalAreaIndex,
+    CoordQuant: NeuronVoxelCoordinate<QuantizableUInt>,
+    BurstQuant: BurstDeltaCount,
+    PotentialQuant: PotentialUnit,
+    PercentageQuant: PercentageScale
+{
+    const NUMBER_BYTES_PER_NEURON = 0; // TODO
+
+    /// Gets the maximum possible neuron index achievable by current quantization (or in the case
+    /// of static implementations, the size of the neuron array).
+    fn get_max_possible_neuron_index(&self) -> NeuronIndexQuant {
+        NeuronIndexQuant::MAX
+    }
+
+    /// Returns the count of valid neurons in the structure. NOT THE SAME AS TOTAL NUMBER OF
+    /// NEURONS STORED!
+    fn get_total_number_of_valid_neurons(&self) -> NeuronIndexQuant {
+        &self.cache_number_valid_neurons
+    }
+
+
+    /// Returns the count of invalid neurons in the structure. NOT THE SAME AS TOTAL FREE CAPACITY!
+    fn get_total_number_of_invalid_neurons(&self) -> NeuronIndexQuant {
+        &self.cache_number_invalid_neurons
+    }
+
+    /// Gets the maximum possible cortical area index achievable by current quantization (or in the
+    /// case of static implementations, the size of the neuron array).
+    fn get_max_possible_cortical_areas(&self) -> CorticalIndexQuant {
+        CorticalIndexQuant::MAX
+    }
+
+}
+
+
+
+
+/*
 impl<
     NeuronIndexQuant,
     CorticalIndexQuant,
@@ -114,3 +191,5 @@ where
 
     fn get_total_number_of_neurons(&self) -> NeuronIndexQuant;
 }
+
+ */

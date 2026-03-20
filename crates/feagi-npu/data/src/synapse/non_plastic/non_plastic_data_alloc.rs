@@ -1,7 +1,7 @@
 
 
 
-pub struct SynapseDataAlloc<SynapseIndexAndSize, NeuronIndex, Weight, Potential> {
+pub struct NonplasticSynapseAllocRAMStorage<SynapseIndexAndSize, NeuronIndex, Weight, Potential> {
     number_active_synapses: SynapseIndexAndSize, // Not the same as length! Some synapses may be dead! // TODO apply this for neurons too
     source_neurons: Vec<NeuronIndex>,
     destination_neurons: Vec<NeuronIndex>,
@@ -11,6 +11,31 @@ pub struct SynapseDataAlloc<SynapseIndexAndSize, NeuronIndex, Weight, Potential>
     source_2_destinations: AHashMap<NeuronIndex, Vec<Potential>>,
 }
 
+impl NonplasticSynapseAllocRAMStorage<SynapseIndexAndSize, NeuronIndex, Weight, Potential> {
+
+}
+
+impl NonplasticSynapseStaticStorageTrait<SynapseIndexAndSize, NeuronIndex, Weight, Potential> for NonplasticSynapseAllocRAMStorage<SynapseIndexAndSize, NeuronIndex, Weight, Potential> {
+
+}
+
+impl BaseSynapseStaticStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant> for NonplasticSynapseAllocRAMStorage<SynapseIndexAndSize, NeuronIndex, Weight, Potential> {
+    /// Gets the maximum possible synapse index achievable by current quantization (or in the case
+    /// of static implementations, the size of the synapse array).
+    fn get_max_possible_synapse_index(&self) -> SynapseIndexQuant {
+        SynapseIndexAndSize::MAX
+    }
+
+    /// Returns the count of valid synapses in the structure. NOT THE SAME AS TOTAL NUMBER OF
+    /// SYNAPSES STORED!
+    fn get_total_number_of_valid_synapses(&self) -> &SynapseIndexQuant;
+
+    /// Returns the count of invalid synapses in the structure. NOT THE SAME AS TOTAL FREE CAPACITY!
+    fn get_total_number_of_invalid_synapses(&self) -> &SynapseIndexQuant;
+}
+
+
+/*
 impl<SynapseIndexAndSize, NeuronIndex, Weight, Potential> SynapseData<SynapseIndexAndSize, NeuronIndex, Weight, Potential> for SynapseDataAlloc<SynapseIndexAndSize, NeuronIndex, Weight, Potential> {
 
     fn number_of_active_synapses(&self) -> SynapseIndexAndSize {
@@ -85,3 +110,5 @@ impl<SynapseIndexAndSize, NeuronIndex, Weight, Potential> SynapseData<SynapseInd
         Err(FeagiNPUDataError::SynapseIndexNotFound)
     }
 }
+
+ */
