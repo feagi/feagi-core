@@ -20,11 +20,11 @@ where
     neuron_threshold: Vec<PotentialQuant>,
     neuron_leak_coefficient: Vec<PercentageQuant>,
     neuron_flags: Vec<InterneuronFlag>,
-    neuron_refractory_countdown: Vec<BurstQuant>,
-    consecutive_fire_count: Vec<BurstQuant>,
-    consecutive_fire_limit: Vec<BurstQuant>,
-    snooze_period_countdown: Vec<BurstQuant>,
-    snooze_period_limit: Vec<BurstQuant>,
+    neuron_neuron_refractory_countdown: Vec<BurstQuant>,
+    neuron_consecutive_fire_count: Vec<BurstQuant>,
+    neuron_consecutive_fire_limit: Vec<BurstQuant>,
+    neuron_snooze_period_countdown: Vec<BurstQuant>,
+    neuron_snooze_period_limit: Vec<BurstQuant>,
 
     // Per Cortical Area
     cortical_refractory_period: Vec<BurstQuant>,
@@ -51,8 +51,7 @@ where
     PotentialQuant: PotentialUnit,
     PercentageQuant: PercentageScale
 {
-
-    pub fn create_new_interneuron_storage(number_neurons_to_preallocate_space_for: NeuronIndexQuant, number_cortical_areas_to_preallocate_space_for: CorticalIndexQuant) -> Result<Self, FeagiNeuronError> {
+    pub fn create_new_interneuron_ram_storage(number_neurons_to_preallocate_space_for: NeuronIndexQuant, number_cortical_areas_to_preallocate_space_for: CorticalIndexQuant) -> Result<Self, FeagiNeuronError> {
         Ok(
             Self {
                 neuron_cortical_area_index: Vec::new_with_capacity(number_neurons_to_preallocate_space_for as usize),
@@ -73,9 +72,6 @@ where
             }
         )
     }
-
-
-
 
 
     /// Marks the neurons of a cortical area as invalid, as well as other cache work in this regard.
@@ -117,8 +113,40 @@ where
         // Mark this cortical index as free
         self.cache_skipped_cortical_indexes.push(cortical_area_index);
         self.cache_cortical_neuron_mappings.remove(&cortical_area_index);
-
     }
+
+
+    //region Internal Helper Functions
+
+    fn next_available_cortical_area_index(&self)  -> Result<&CorticalIndexQuant, FeagiNPUDataError> { // TODO Extreme edge case error, when we hit quat limit
+        if &self.cache_skipped_cortical_indexes.is_empty() {
+            return Ok(&NeuronIndexQuant::from_u32(self.cache_cortical_neuron_mappings.len()));
+        }
+        Ok(&self.cache_skipped_cortical_indexes.last().unwrap()) // TODO is last() performant??
+    }
+
+    /// Returns an empty result if a cortical area exists AND is valid. Otherwise errors.
+    fn verify_cortical_area_index_exist_and_valid(&self, cortical_area_index: CorticalIndexQuant) -> Result<(), FeagiNPUDataError> {
+        let reference = self.get_cortical_data_ref(cortical_area_index)?;
+        if reference.flags.is_valid() {
+            return Ok(())
+        }
+        FeagiNPUDataError::InvalidCorticalIndex{given_cortical_index: cortical_area_index as u32}
+    }
+
+    /// Get the cortical area properties by index. WARNING: AREA MAY EXIST BUT NOT BE VALID!
+    fn get_cortical_data_ref(&self, cortical_area_index: CorticalIndexQuant) -> Result<&InterneuronCorticalData<NeuronIndexQuant>, FeagiNPUDataError> {
+        self.cache_cortical_neuron_mappings.get(&cortical_area_index)
+            .ok_or_else(|| FeagiNPUDataError::InvalidCorticalIndex{given_cortical_index: cortical_area_index as u32})?
+    }
+
+    /// Get the mutable cortical area properties by index. WARNING: AREA MAY EXIST BUT NOT BE VALID!
+    fn get_cortical_data_ref_mut(&mut self, cortical_area_index: CorticalIndexQuant) -> Result<&mut InterneuronCorticalData<NeuronIndexQuant>, FeagiNPUDataError> {
+        self.cache_cortical_neuron_mappings.get_mut(&cortical_area_index)
+            .ok_or_else(|| FeagiNPUDataError::InvalidCorticalIndex{given_cortical_index: cortical_area_index as u32})?
+    }
+
+    //endregion
 
 }
 
@@ -133,7 +161,53 @@ where
     PercentageQuant: PercentageScale
 {
 
+    /// Creates a cortical area of given dimensions but using a set of neuron values copied across
+    /// all neurons.
+    /// Returns the cortical area index and the range of neuron indexes it covers
+    fn create_cortical_area_with_spanned_neuron(&mut self,
+                                                cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                neurons_per_voxel: NumberNeuronsPerVoxel,
+                                                neuron_membrane_potential: PotentialQuant,
+                                                neuron_leak_coefficient: PercentageQuant,
+                                                neuron_flag: InterneuronFlag,
+                                                neuron_refractory_countdown: BurstQuant,
+                                                neuron_consecutive_fire_count: BurstQuant,
+                                                neuron_consecutive_fire_limit: BurstQuant,
+                                                neuron_snooze_period_countdown: BurstQuant,
+                                                neuron_snooze_period_limit: BurstQuant,
+                                                cortical_refractory_period: BurstQuant,
+                                                cortical_excitability: PercentageQuant,
+                                                cortical_threshold_limit: PotentialQuant,
+                                                cortical_neurons_per_voxel: NumberNeuronsPerVoxel)
+                                                -> Result<(NeuronIndexQuant, Range<NeuronIndexQuant>), FeagiNPUDataError> {
 
+        let number_of_neurons: usize = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
+
+
+
+        let neuron_index_range: Range<NeuronIndexQuant> = {
+            // TODO instead of allocating right to the end, what if we have a way to quickly check through cache_invalid_neuron_indexes (assuming we also group neighboring ranges) and put ourselves there if we fit?
+            //if self.cache_number_invalid_neurons as usize > number_of_neurons {
+            //
+            //}
+            // TODO size checks (not debug only, we need to be careful)
+            let start = self.cache_index_to_write_new_neurons.clone();
+            self.cache_index_to_write_new_neurons += number_of_neurons;
+            return start..(start + number_of_neurons);
+        }
+        
+
+
+    }
+
+
+    /// Creates a cortical area of given dimensions but using prefilled neuron data values.
+    /// Returns the cortical area index and the range of neuron indexes it covers
+    fn create_cortical_area_with_configured_neurons(&mut self,
+                                                    cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                    neurons_per_voxel: NumberNeuronsPerVoxel,
+                                                    neuron_data: InterneuronDataFromCorticalArea)
+                                                    -> Result<(NeuronIndexQuant, Range<NeuronIndexQuant>), FeagiNPUDataError>;
 
 }
 
@@ -152,6 +226,68 @@ where
 
 }
 
+
+impl DimensionalAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+where
+    NeuronIndexQuant: InterneuronIndex,
+    CorticalIndexQuant: CorticalAreaIndex,
+    CoordQuant: NeuronVoxelCoordinate<QuantizableUInt>,
+    BurstQuant: BurstDeltaCount,
+    PotentialQuant: PotentialUnit,
+    PercentageQuant: PercentageScale
+{
+    /// Creates a cortical area of given dimensions and neuron density,
+    /// and returns its cortical area index and range of neuron indexes it covers
+    fn create_cortical_area_with_default_neurons(&mut self,
+                                                 cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                 neurons_per_voxel: NumberNeuronsPerVoxel)
+                                                 -> Result<(NeuronIndexQuant, Range<NeuronIndexQuant>), FeagiNPUDataError> {
+
+        let expected_number_neurons: usize = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
+        self.create_cortical_area_with_spanned_neuron(
+            cortical_area_dimensions,
+            neurons_per_voxel,
+            InterneuronStaticStorageTrait::DEFAULT_NEURON_MEMBRANE_POTENTIAL,
+            InterneuronStaticStorageTrait::DEFAULT_NEURON_THRESHOLD,
+            InterneuronStaticStorageTrait::DEFAULT_NEURON_LEAK_COEFFICIENT,
+            InterneuronStaticStorageTrait::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
+            InterneuronStaticStorageTrait::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
+            InterneuronStaticStorageTrait::DEFAULT_NEURON_CONSECUTIVE_FIRE_LIMIT,
+            InterneuronStaticStorageTrait::DEFAULT_NEURON_SNOOZE_PERIOD_COUNTDOWN,
+            InterneuronStaticStorageTrait::DEFAULT_NEURON_SNOOZE_PERIOD_LIMIT,
+            InterneuronStaticStorageTrait::DEFAULT_CORTICAL_REFRACTORY_PERIOD,
+            InterneuronStaticStorageTrait::DEFAULT_CORTICAL_EXCITABILITY,
+            InterneuronStaticStorageTrait::DEFAULT_CORTICAL_THRESHOLD_LIMIT,
+            InterneuronStaticStorageTrait::DEFAULT_CORTICAL_NEURONS_PER_VOXEL,
+        )
+    }
+
+
+    /// Effectively deletes a cortical area (by invalidating their neurons), then rebuilds it to the
+    /// new given dimensions and density. While cortical properties are preserved, neuron data is
+    /// reset to default. Returns a tuple of the old invalid neuron index range, and the new
+    /// created neuron index range.
+    fn resize_cortical_area_with_default_neurons(&mut self,
+                                                 cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                 neurons_per_voxel: NumberNeuronsPerVoxel,
+                                                 cortical_index: CorticalIndexQuant)
+                                                 -> Result<(Range<NeuronIndexQuant>, Range<NeuronIndexQuant>), FeagiNPUDataError>;
+}
+
+
+impl DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+where
+    NeuronIndexQuant: InterneuronIndex,
+    CorticalIndexQuant: CorticalAreaIndex,
+    CoordQuant: NeuronVoxelCoordinate<QuantizableUInt>,
+    BurstQuant: BurstDeltaCount,
+    PotentialQuant: PotentialUnit,
+    PercentageQuant: PercentageScale
+{
+
+}
+
+
 impl BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: InterneuronIndex,
@@ -162,18 +298,21 @@ where
     PercentageQuant: PercentageScale
 {
 
-
+    /// Frees unused vector capacity and invalid neurons (assuming they were sorted to the back first!)
+    /// albeit allowing a buffer of free space. Returns the number of neurons that were freed.
+    /// Returns 0 if no neurons were freed (nothing to free or spare capacity is at or less than
+    /// what was requested). Note that invalid neurons not sorted to the back will not be freed.
     fn free_unused_capacity(&mut self, spare_capacity_to_maintain: NeuronIndexQuant) -> NeuronIndexQuant {
         todo!()
     }
 
-    fn next_available_cortical_area_index(&self)  -> Result<&CorticalIndexQuant, FeagiNPUDataError> { // TODO Extreme edge case error, when we hit quat limit
-
-        if &self.cache_skipped_cortical_indexes.is_empty() {
-            return Ok(&NeuronIndexQuant::from_u32(self.cache_cortical_neuron_mappings.len()));
-        }
-        Ok(&self.cache_skipped_cortical_indexes.last().unwrap()) // TODO is last() performant??
+    /// Deletes a cortical area by invalidating all of its neurons. Returns the neuron indexes
+    /// of the disabled neurons
+    fn delete_cortical_area(&mut self, cortical_index: CorticalIndexQuant)
+                            ->Result<Range<NeuronIndexQuant>, FeagiNPUDataError> {
+        self.invalidate_cortical_area(cortical_index)
     }
+
 
 
 
@@ -216,6 +355,8 @@ where
     }
 
 }
+
+
 
 #[derive(Debug, Clone)]
 struct InterneuronCorticalData<NeuronIndexQuant, CoordQuant> where

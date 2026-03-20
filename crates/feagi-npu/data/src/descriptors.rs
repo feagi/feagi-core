@@ -579,6 +579,12 @@ pub type NeuronVoxelDimensionsU32 = NeuronVoxelDimensions<u32>;
 pub type NeuronVoxelDimensionsU16 = NeuronVoxelDimensions<u16>;
 pub type NeuronVoxelDimensionsU8 = NeuronVoxelDimensions<u8>;
 
+impl NeuronVoxelDimensions<T: QuantizableUInt> {
+    pub fn get_number_neurons(&self, density: NumberNeuronsPerVoxel) -> usize {
+        return self.x as usize * self.y as usize * self.z as usize * density as usize;
+    }
+}
+
 //endregion
 
 
