@@ -31,8 +31,8 @@ uuid = { workspace = true } # TODO check STD compabtility
 half = {workspace = true, default-features = false, features = []} # STD enables autoarch detection, which we may not want
 tracing = "0.1.44" # TODO we may need to move this with wherever we move the ulog
 
+paste = { workspace = true }
 
 base64 = "0.22.1" # TODO move to workspace
 
 [dev-dependencies]
-paste = "1.0.15"

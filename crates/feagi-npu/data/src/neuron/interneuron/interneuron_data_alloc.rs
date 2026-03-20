@@ -195,7 +195,7 @@ where
             self.cache_index_to_write_new_neurons += number_of_neurons;
             return start..(start + number_of_neurons);
         }
-        
+
 
 
     }
