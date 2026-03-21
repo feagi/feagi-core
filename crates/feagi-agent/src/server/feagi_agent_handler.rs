@@ -55,6 +55,7 @@ pub struct FeagiAgentHandler {
     sensors: HashMap<AgentID, SensorTranslator>,
     motors: HashMap<AgentID, MotorTranslator>,
     visualizations: HashMap<AgentID, VisualizationTranslator>,
+    sensor_poll_cursor: usize,
     liveness_config: AgentLivenessConfig,
     last_stale_check_at: Instant,
 
@@ -127,6 +128,7 @@ impl FeagiAgentHandler {
             sensors: Default::default(),
             motors: Default::default(),
             visualizations: Default::default(),
+            sensor_poll_cursor: 0,
             liveness_config,
             last_stale_check_at: Instant::now(),
 
@@ -415,13 +417,33 @@ impl FeagiAgentHandler {
 
     //region Agents
 
-    pub fn poll_agent_sensors(&mut self) -> Result<Option<&FeagiByteContainer>, FeagiAgentError> {
-        for (_id, translator) in self.sensors.iter_mut() {
-            let possible_sensor_data = translator.poll_sensor_server()?;
-            if possible_sensor_data.is_some() {
-                return Ok(possible_sensor_data);
+    pub fn poll_agent_sensors(&mut self) -> Result<Option<FeagiByteContainer>, FeagiAgentError> {
+        let mut sensor_ids: Vec<AgentID> = self.sensors.keys().copied().collect();
+        if sensor_ids.is_empty() {
+            return Ok(None);
+        }
+
+        sensor_ids.sort_by_key(|agent_id| agent_id.to_base64());
+        let count = sensor_ids.len();
+        let start = self.sensor_poll_cursor % count;
+
+        for offset in 0..count {
+            let idx = (start + offset) % count;
+            let agent_id = sensor_ids[idx];
+            let polled_data = if let Some(translator) = self.sensors.get_mut(&agent_id) {
+                translator.poll_sensor_server()?.cloned()
+            } else {
+                None
+            };
+
+            if let Some(data) = polled_data {
+                self.sensor_poll_cursor = (idx + 1) % count;
+                self.refresh_agent_activity(agent_id);
+                return Ok(Some(data));
             }
         }
+
+        self.sensor_poll_cursor = (start + 1) % count;
         Ok(None)
     }
 

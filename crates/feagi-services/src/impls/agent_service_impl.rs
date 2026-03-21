@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::traits::agent_service::*;
 use crate::traits::registration_handler::RegistrationHandlerTrait;
@@ -64,8 +64,17 @@ impl AgentServiceImpl {
 
     /// Set the runtime service for sensory injection (thread-safe, can be called after Arc wrapping)
     pub fn set_runtime_service(&self, runtime_service: Arc<dyn RuntimeServiceTrait + Send + Sync>) {
-        *self.runtime_service.write() = Some(runtime_service);
-        info!("🦀 [AGENT-SERVICE] Runtime service connected");
+        let mut guard = self.runtime_service.write();
+        if let Some(existing) = guard.as_ref() {
+            if Arc::ptr_eq(existing, &runtime_service) {
+                debug!("🦀 [AGENT-SERVICE] Runtime service already connected; ignoring duplicate bind");
+                return;
+            }
+            warn!("🦀 [AGENT-SERVICE] Runtime service replaced with a new instance");
+        } else {
+            info!("🦀 [AGENT-SERVICE] Runtime service connected");
+        }
+        *guard = Some(runtime_service);
     }
 }
 
