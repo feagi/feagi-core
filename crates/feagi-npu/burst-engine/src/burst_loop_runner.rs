@@ -1237,10 +1237,11 @@ fn select_fresh_payloads_for_burst(
     burst_start: Instant,
     max_age: Duration,
     payloads: Vec<SensoryIngressPayload>,
-) -> (Vec<SensoryIngressPayload>, usize) {
+) -> (Vec<SensoryIngressPayload>, usize, usize) {
     let mut dropped_stale_payloads: usize = 0;
+    let mut dropped_collapsed_payloads: usize = 0;
     let mut latest_by_source: ahash::AHashMap<String, SensoryIngressPayload> = ahash::AHashMap::new();
-    let mut source_less_payloads: Vec<SensoryIngressPayload> = Vec::new();
+    let mut latest_source_less_payload: Option<SensoryIngressPayload> = None;
 
     for payload in payloads {
         let age = burst_start.saturating_duration_since(payload.received_at);
@@ -1252,13 +1253,21 @@ fn select_fresh_payloads_for_burst(
         if let Some(source_id) = payload.source_id.clone() {
             latest_by_source.insert(source_id, payload);
         } else {
-            source_less_payloads.push(payload);
+            if latest_source_less_payload.replace(payload).is_some() {
+                dropped_collapsed_payloads = dropped_collapsed_payloads.saturating_add(1);
+            }
         }
     }
 
     let mut selected_payloads: Vec<SensoryIngressPayload> = latest_by_source.into_values().collect();
-    selected_payloads.extend(source_less_payloads);
-    (selected_payloads, dropped_stale_payloads)
+    if let Some(payload) = latest_source_less_payload {
+        selected_payloads.push(payload);
+    }
+    (
+        selected_payloads,
+        dropped_stale_payloads,
+        dropped_collapsed_payloads,
+    )
 }
 
 #[cfg(test)]
@@ -1287,9 +1296,10 @@ mod sensory_ingest_tests {
             },
         ];
 
-        let (selected, dropped) =
+        let (selected, dropped, collapsed) =
             select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
         assert_eq!(dropped, 0);
+        assert_eq!(collapsed, 0);
         assert_eq!(selected.len(), 2);
 
         let mut by_source = std::collections::HashMap::new();
@@ -1316,9 +1326,10 @@ mod sensory_ingest_tests {
             },
         ];
 
-        let (selected, dropped) =
+        let (selected, dropped, collapsed) =
             select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
         assert_eq!(dropped, 1);
+        assert_eq!(collapsed, 0);
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].source_id.as_deref(), Some("agent-b"));
         assert_eq!(selected[0].bytes, vec![2]);
@@ -1355,9 +1366,10 @@ mod sensory_ingest_tests {
             },
         ];
 
-        let (selected, dropped) =
+        let (selected, dropped, collapsed) =
             select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
         assert_eq!(dropped, 0);
+        assert_eq!(collapsed, 0);
         assert_eq!(selected.len(), 2);
 
         let mut by_source = std::collections::HashMap::new();
@@ -1366,6 +1378,36 @@ mod sensory_ingest_tests {
         }
         assert_eq!(by_source.get("agent-a"), Some(&12));
         assert_eq!(by_source.get("agent-b"), Some(&21));
+    }
+
+    #[test]
+    fn source_less_payloads_are_coalesced_to_latest_only() {
+        let now = Instant::now();
+        let payloads = vec![
+            SensoryIngressPayload {
+                bytes: vec![1],
+                source_id: None,
+                received_at: now - Duration::from_millis(3),
+            },
+            SensoryIngressPayload {
+                bytes: vec![2],
+                source_id: None,
+                received_at: now - Duration::from_millis(2),
+            },
+            SensoryIngressPayload {
+                bytes: vec![3],
+                source_id: None,
+                received_at: now - Duration::from_millis(1),
+            },
+        ];
+
+        let (selected, dropped, collapsed) =
+            select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
+        assert_eq!(dropped, 0);
+        assert_eq!(collapsed, 2);
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].source_id, None);
+        assert_eq!(selected[0].bytes, vec![3]);
     }
 }
 
@@ -1480,6 +1522,7 @@ fn burst_loop(
         // and drop stale packets that missed the realtime burst deadline.
         let mut sensory_xyzp_batches: Vec<SensoryXyzpDecoded> = Vec::new();
         let mut dropped_stale_payloads: usize = 0;
+        let mut collapsed_payloads: usize = 0;
         let burst_max_sensory_age = if current_frequency_hz > 0.0 {
             Duration::from_secs_f64(1.0 / current_frequency_hz)
         } else {
@@ -1492,12 +1535,14 @@ fn burst_loop(
                     drained_payloads.push(payload);
                 }
 
-                let (selected_payloads, dropped_count) = select_fresh_payloads_for_burst(
+                let (selected_payloads, dropped_count, collapsed_count) =
+                    select_fresh_payloads_for_burst(
                     burst_start,
                     burst_max_sensory_age,
                     drained_payloads,
                 );
                 dropped_stale_payloads = dropped_stale_payloads.saturating_add(dropped_count);
+                collapsed_payloads = collapsed_payloads.saturating_add(collapsed_count);
 
                 for payload in selected_payloads {
                     match decode_sensory_bytes(&payload.bytes) {
@@ -1521,6 +1566,12 @@ fn burst_loop(
                 "[SENSORY-INGEST] Dropped {} stale payloads (max_age={:.3}ms)",
                 dropped_stale_payloads,
                 burst_max_sensory_age.as_secs_f64() * 1000.0
+            );
+        }
+        if collapsed_payloads > 0 && burst_num % 120 == 0 {
+            warn!(
+                "[SENSORY-INGEST] Coalesced {} payloads to latest frame(s) in burst window",
+                collapsed_payloads
             );
         }
 
