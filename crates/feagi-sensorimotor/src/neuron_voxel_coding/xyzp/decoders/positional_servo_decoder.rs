@@ -174,13 +174,18 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
 
                 let neuron_x = neuron.neuron_voxel_coordinate.x;
                 let channel_index = (neuron_x / 2) as usize;
-                
+
                 // DEBUG: Log first few neurons
                 if channel_index < 3 {
-                    eprintln!("[SERVO_DECODER] Incremental neuron: X={}, Z={}, channel={}, forward={}", 
-                        neuron_x, neuron.neuron_voxel_coordinate.z, channel_index, neuron_x % 2 == 0);
+                    eprintln!(
+                        "[SERVO_DECODER] Incremental neuron: X={}, Z={}, channel={}, forward={}",
+                        neuron_x,
+                        neuron.neuron_voxel_coordinate.z,
+                        channel_index,
+                        neuron_x % 2 == 0
+                    );
                 }
-                
+
                 if channel_index >= number_of_channels {
                     continue;
                 }
@@ -229,8 +234,12 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
                 // Use absolute value directly
                 self.decode_percentage(absolute_scratch, percentage);
             } else if has_incremental {
-                eprintln!("[SERVO_DECODER] Channel {}: Using INCREMENTAL (fwd={}, bwd={})", 
-                    channel_index, !forward_scratch.is_empty(), !backward_scratch.is_empty());
+                eprintln!(
+                    "[SERVO_DECODER] Channel {}: Using INCREMENTAL (fwd={}, bwd={})",
+                    channel_index,
+                    !forward_scratch.is_empty(),
+                    !backward_scratch.is_empty()
+                );
                 let mut forward_value = Percentage::new_zero();
                 let mut backward_value = Percentage::new_zero();
 
@@ -246,11 +255,13 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
                 let forward_f = forward_value.get_as_0_1();
                 let backward_f = backward_value.get_as_0_1();
                 let net_direction = forward_f - backward_f; // Range: -1.0 to +1.0
-                
+
                 // Convert to 0-1 range where 0.5 is neutral
                 let output_value = ((net_direction + 1.0) / 2.0).clamp(0.0, 1.0);
-                eprintln!("[SERVO_DECODER] Channel {}: fwd={:.3}, bwd={:.3}, net={:.3}, output={:.3}",
-                    channel_index, forward_f, backward_f, net_direction, output_value);
+                eprintln!(
+                    "[SERVO_DECODER] Channel {}: fwd={:.3}, bwd={:.3}, net={:.3}, output={:.3}",
+                    channel_index, forward_f, backward_f, net_direction, output_value
+                );
                 *percentage = Percentage::new_from_0_1(output_value)
                     .unwrap_or_else(|_| Percentage::new_from_0_1_unchecked(output_value));
             }

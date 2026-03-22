@@ -1240,7 +1240,8 @@ fn select_fresh_payloads_for_burst(
 ) -> (Vec<SensoryIngressPayload>, usize, usize) {
     let mut dropped_stale_payloads: usize = 0;
     let mut dropped_collapsed_payloads: usize = 0;
-    let mut latest_by_source: ahash::AHashMap<String, SensoryIngressPayload> = ahash::AHashMap::new();
+    let mut latest_by_source: ahash::AHashMap<String, SensoryIngressPayload> =
+        ahash::AHashMap::new();
     let mut latest_source_less_payload: Option<SensoryIngressPayload> = None;
 
     for payload in payloads {
@@ -1259,7 +1260,8 @@ fn select_fresh_payloads_for_burst(
         }
     }
 
-    let mut selected_payloads: Vec<SensoryIngressPayload> = latest_by_source.into_values().collect();
+    let mut selected_payloads: Vec<SensoryIngressPayload> =
+        latest_by_source.into_values().collect();
     if let Some(payload) = latest_source_less_payload {
         selected_payloads.push(payload);
     }
@@ -1537,10 +1539,10 @@ fn burst_loop(
 
                 let (selected_payloads, dropped_count, collapsed_count) =
                     select_fresh_payloads_for_burst(
-                    burst_start,
-                    burst_max_sensory_age,
-                    drained_payloads,
-                );
+                        burst_start,
+                        burst_max_sensory_age,
+                        drained_payloads,
+                    );
                 dropped_stale_payloads = dropped_stale_payloads.saturating_add(dropped_count);
                 collapsed_payloads = collapsed_payloads.saturating_add(collapsed_count);
 

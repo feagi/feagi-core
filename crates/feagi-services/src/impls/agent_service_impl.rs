@@ -67,7 +67,9 @@ impl AgentServiceImpl {
         let mut guard = self.runtime_service.write();
         if let Some(existing) = guard.as_ref() {
             if Arc::ptr_eq(existing, &runtime_service) {
-                debug!("🦀 [AGENT-SERVICE] Runtime service already connected; ignoring duplicate bind");
+                debug!(
+                    "🦀 [AGENT-SERVICE] Runtime service already connected; ignoring duplicate bind"
+                );
                 return;
             }
             warn!("🦀 [AGENT-SERVICE] Runtime service replaced with a new instance");
