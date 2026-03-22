@@ -854,18 +854,19 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         let cortical_bytes = cortical_id_typed.as_bytes();
         let is_io_area = cortical_bytes[0] == b'i' || cortical_bytes[0] == b'o';
-        let io_flag =
-            if is_io_area {
-                cortical_id_typed.extract_io_data_flag().ok().or(
-                    match &area.cortical_type {
-                        CorticalAreaType::BrainInput(flag)
-                        | CorticalAreaType::BrainOutput(flag) => Some(*flag),
-                        _ => None,
-                    },
-                )
-            } else {
-                None
-            };
+        let io_flag = if is_io_area {
+            cortical_id_typed
+                .extract_io_data_flag()
+                .ok()
+                .or(match &area.cortical_type {
+                    CorticalAreaType::BrainInput(flag) | CorticalAreaType::BrainOutput(flag) => {
+                        Some(*flag)
+                    }
+                    _ => None,
+                })
+        } else {
+            None
+        };
         let cortical_subtype = if is_io_area {
             String::from_utf8(cortical_bytes[0..4].to_vec()).ok()
         } else {
