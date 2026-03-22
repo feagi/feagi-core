@@ -31,7 +31,7 @@ fn non_empty_string(value: Option<&Value>) -> Option<String> {
         .map(ToString::to_string)
 }
 
-fn extract_grouping_array<'a>(unit_def: &'a Value) -> &'a [Value] {
+fn extract_grouping_array(unit_def: &Value) -> &[Value] {
     unit_def
         .get("device_grouping")
         .and_then(|v| v.as_array())

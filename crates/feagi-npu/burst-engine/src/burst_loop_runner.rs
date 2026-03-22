@@ -1253,10 +1253,8 @@ fn select_fresh_payloads_for_burst(
 
         if let Some(source_id) = payload.source_id.clone() {
             latest_by_source.insert(source_id, payload);
-        } else {
-            if latest_source_less_payload.replace(payload).is_some() {
-                dropped_collapsed_payloads = dropped_collapsed_payloads.saturating_add(1);
-            }
+        } else if latest_source_less_payload.replace(payload).is_some() {
+            dropped_collapsed_payloads = dropped_collapsed_payloads.saturating_add(1);
         }
     }
 

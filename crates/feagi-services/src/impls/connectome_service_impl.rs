@@ -856,13 +856,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let is_io_area = cortical_bytes[0] == b'i' || cortical_bytes[0] == b'o';
         let io_flag =
             if is_io_area {
-                cortical_id_typed.extract_io_data_flag().ok().or_else(|| {
+                cortical_id_typed.extract_io_data_flag().ok().or(
                     match &area.cortical_type {
                         CorticalAreaType::BrainInput(flag)
                         | CorticalAreaType::BrainOutput(flag) => Some(*flag),
                         _ => None,
-                    }
-                })
+                    },
+                )
             } else {
                 None
             };
