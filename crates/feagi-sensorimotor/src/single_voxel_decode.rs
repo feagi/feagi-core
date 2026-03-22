@@ -88,6 +88,7 @@ impl ChannelDimensions {
 /// * `encoding_type` - "linear" or "exponential" (fractional)
 /// * `encoding_format` - "1d", "2d", "3d", or "4d"
 /// * `is_signed` - true for SignedPercentage variants
+#[allow(clippy::too_many_arguments)]
 pub fn decode_single_voxel_from_encoding(
     encoding_type: &str,
     encoding_format: &str,

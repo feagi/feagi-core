@@ -59,6 +59,8 @@ macro_rules! define_motor_cortical_units_enum {
                     #[doc = "Get cortical area types array for " $friendly_name "."]
                     pub const fn [<get_cortical_area_types_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type),*) -> [CorticalAreaType; $number_cortical_areas] {
+                        // Keep parameterized API stable even for unit templates that don't consume every parameter.
+                        $(let _ = &$param_name;)*
                         [
                             $(CorticalAreaType::BrainOutput($io_cortical_area_configuration_flag_expr)),*
                         ]
@@ -67,6 +69,8 @@ macro_rules! define_motor_cortical_units_enum {
                     #[doc = "Get cortical IDs array for " $friendly_name "."]
                     pub const fn [<get_cortical_ids_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type,)* cortical_unit_index: CorticalUnitIndex) -> [CorticalID; $number_cortical_areas] {
+                        // Keep parameterized API stable even for unit templates that don't consume every parameter.
+                        $(let _ = &$param_name;)*
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
                             $(

@@ -23,7 +23,6 @@ use std::time::Instant;
 #[derive(Debug)]
 pub struct PositionalServoNeuronVoxelXYZPDecoder {
     channel_absolute_dimensions: CorticalChannelDimensions,
-    channel_incremental_dimensions: CorticalChannelDimensions,
     cortical_absolute_read_target: CorticalID,
     cortical_incremental_read_target: CorticalID,
     interpolation: PercentageNeuronPositioning,
@@ -45,19 +44,11 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
     ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
         const ABSOLUTE_WIDTH_PER_CHANNEL: u32 = 1;
-        const INCREMENTAL_WIDTH_PER_CHANNEL: u32 = 2; // forward + backward
-
         let absolute_total_width = *number_channels * ABSOLUTE_WIDTH_PER_CHANNEL;
-        let incremental_total_width = *number_channels * INCREMENTAL_WIDTH_PER_CHANNEL;
 
         let decoder = PositionalServoNeuronVoxelXYZPDecoder {
             channel_absolute_dimensions: CorticalChannelDimensions::new(
                 absolute_total_width,
-                CHANNEL_Y_HEIGHT,
-                *z_depth,
-            )?,
-            channel_incremental_dimensions: CorticalChannelDimensions::new(
-                incremental_total_width,
                 CHANNEL_Y_HEIGHT,
                 *z_depth,
             )?,
@@ -83,7 +74,7 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
         }
     }
 
-    fn decode_percentage(&self, z_vector: &Vec<u32>, target: &mut Percentage) {
+    fn decode_percentage(&self, z_vector: &[u32], target: &mut Percentage) {
         match self.interpolation {
             PercentageNeuronPositioning::Linear => {
                 decode_unsigned_percentage_from_linear_neurons(
