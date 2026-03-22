@@ -12,9 +12,12 @@
 
 use std::time::{Duration, Instant};
 
+use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
+use crate::command_and_control::FeagiMessage;
 use feagi_io::traits_and_enums::client::FeagiClientRequesterProperties;
 use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
+use feagi_sensorimotor::configuration::jsonable::JSONInputOutputDefinition;
 use feagi_sensorimotor::ConnectorCache;
 
 use crate::clients::{
@@ -114,6 +117,7 @@ impl TokioEmbodimentAgent {
 
             match self.sm.phase() {
                 SessionPhase::Active => {
+                    self.send_agent_configuration_details()?;
                     self.apply_sensory_rate_negotiation_blocking()?;
                     return Ok(());
                 }
@@ -154,6 +158,7 @@ impl TokioEmbodimentAgent {
 
             match agent.sm.phase() {
                 SessionPhase::Active => {
+                    agent.send_agent_configuration_details()?;
                     agent.apply_sensory_rate_negotiation_async().await?;
                     return Ok(agent);
                 }
@@ -179,6 +184,49 @@ impl TokioEmbodimentAgent {
 
     pub fn get_embodiment_mut(&mut self) -> &mut ConnectorCache {
         &mut self.embodiment
+    }
+
+    /// Send current device registrations over command/control after successful registration.
+    ///
+    /// FEAGI server uses this configuration payload to auto-create missing cortical areas.
+    /// This call waits for a heartbeat acknowledgment to ensure FEAGI ingested the payload
+    /// before the agent starts streaming sensory data.
+    fn send_agent_configuration_details(&mut self) -> Result<(), FeagiAgentError> {
+        let device_regs_json = self
+            .embodiment
+            .export_device_registrations_as_config_json()?;
+        let device_definition: JSONInputOutputDefinition = serde_json::from_value(device_regs_json)
+            .map_err(|e| {
+                FeagiAgentError::UnableToSendData(format!(
+                    "Failed to serialize connector cache device registrations: {}",
+                    e
+                ))
+            })?;
+        let message = FeagiMessage::AgentConfiguration(
+            AgentEmbodimentConfigurationMessage::AgentConfigurationDetails(device_definition),
+        );
+        self.control.send_message(message, 0)?;
+
+        let start_ms = self.now_ms();
+        loop {
+            let (_state, maybe_message) = self.control.poll_for_messages()?;
+            if let Some(FeagiMessage::HeartBeat) = maybe_message {
+                return Ok(());
+            }
+
+            if let Some(deadline_ms) = self.driver.timing.registration_deadline_ms {
+                if self.now_ms().saturating_sub(start_ms) >= deadline_ms {
+                    return Err(FeagiAgentError::ConnectionFailed(
+                        "Timed out waiting for FEAGI acknowledgment of AgentConfigurationDetails"
+                            .to_string(),
+                    ));
+                }
+                std::thread::yield_now();
+                continue;
+            }
+
+            return Ok(());
+        }
     }
 
     /// Drive one tick of session maintenance (poll + step + execute actions).

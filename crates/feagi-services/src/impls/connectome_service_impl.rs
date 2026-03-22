@@ -19,6 +19,7 @@ use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag;
 use feagi_structures::genomic::cortical_area::{
@@ -853,11 +854,18 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         let cortical_bytes = cortical_id_typed.as_bytes();
         let is_io_area = cortical_bytes[0] == b'i' || cortical_bytes[0] == b'o';
-        let io_flag = if is_io_area {
-            cortical_id_typed.extract_io_data_flag().ok()
-        } else {
-            None
-        };
+        let io_flag =
+            if is_io_area {
+                cortical_id_typed.extract_io_data_flag().ok().or_else(|| {
+                    match &area.cortical_type {
+                        CorticalAreaType::BrainInput(flag)
+                        | CorticalAreaType::BrainOutput(flag) => Some(*flag),
+                        _ => None,
+                    }
+                })
+            } else {
+                None
+            };
         let cortical_subtype = if is_io_area {
             String::from_utf8(cortical_bytes[0..4].to_vec()).ok()
         } else {
@@ -1515,16 +1523,34 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .collect();
         child_regions.retain(|child_id| child_id != region_id);
 
+        let mut cortical_areas: Vec<String> = region
+            .cortical_areas
+            .iter()
+            .map(|id| id.as_base_64())
+            .collect();
+
+        // Ensure root region always includes power/death if they exist (fixes BV disappearing)
+        if parent_id.is_none() {
+            let power_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
+            let death_id = CoreCorticalType::Death.to_cortical_id().as_base_64();
+            if manager.cortical_area_exists(&CoreCorticalType::Power.to_cortical_id())
+                && !cortical_areas.contains(&power_id)
+            {
+                cortical_areas.push(power_id);
+            }
+            if manager.cortical_area_exists(&CoreCorticalType::Death.to_cortical_id())
+                && !cortical_areas.contains(&death_id)
+            {
+                cortical_areas.push(death_id);
+            }
+        }
+
         Ok(BrainRegionInfo {
             region_id: region_id.to_string(),
             name: region.name.clone(),
             region_type: Self::region_type_to_string(&region.region_type),
             parent_id,
-            cortical_areas: region
-                .cortical_areas
-                .iter()
-                .map(|id| id.as_base_64())
-                .collect(), // Use base64 to match cortical area API
+            cortical_areas,
             child_regions,
             properties: region.properties.clone(),
         })
@@ -1578,6 +1604,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn brain_region_exists(&self, region_id: &str) -> ServiceResult<bool> {
         debug!(target: "feagi-services","Checking if brain region exists: {}", region_id);
         Ok(self.connectome.read().get_brain_region(region_id).is_some())
+    }
+
+    async fn get_root_region_id(&self) -> ServiceResult<Option<String>> {
+        Ok(self.connectome.read().get_root_region_id())
     }
 
     async fn get_morphologies(&self) -> ServiceResult<HashMap<String, MorphologyInfo>> {

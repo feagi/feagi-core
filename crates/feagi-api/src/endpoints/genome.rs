@@ -129,6 +129,26 @@ async fn load_genome_with_priority(
     );
 
     let runtime_service = state.runtime_service.as_ref();
+    #[cfg(feature = "feagi-agent")]
+    if let Some(handler) = &state.agent_handler {
+        let deregistered_ids = {
+            let mut guard = handler.lock().unwrap();
+            guard.force_deregister_all_agents("forced by genome transition")
+        };
+        for agent_id in &deregistered_ids {
+            runtime_service.unregister_motor_subscriptions(agent_id);
+            runtime_service.unregister_visualization_subscriptions(agent_id);
+        }
+        tracing::info!(
+            target: "feagi-api",
+            "🔌 Forced deregistration for {} agents before genome transition",
+            deregistered_ids.len()
+        );
+    }
+    // Strict transition barrier: guarantee no stale subscriptions survive.
+    runtime_service.clear_all_motor_subscriptions();
+    runtime_service.clear_all_visualization_subscriptions();
+
     let runtime_status = runtime_service
         .get_status()
         .await
@@ -187,6 +207,28 @@ async fn load_genome_with_priority(
         "✅ Prioritized genome transition completed from {}",
         source
     );
+
+    // Deterministic: create missing IO areas for any registered agents immediately after genome load.
+    // Fixes nondeterministic behavior where areas were missing on first run but appeared on restart.
+    #[cfg(feature = "feagi-agent")]
+    if let Some(handler) = &state.agent_handler {
+        let device_regs_list: Vec<serde_json::Value> = {
+            let guard = handler.lock().unwrap();
+            guard
+                .get_all_registered_agents()
+                .iter()
+                .filter_map(|(sid, _)| guard.get_device_registrations_by_agent(*sid).cloned())
+                .collect()
+        };
+        for device_regs in device_regs_list {
+            crate::common::agent_registration::auto_create_cortical_areas_from_device_registrations(
+                state,
+                &device_regs,
+            )
+            .await;
+        }
+    }
+
     Ok(genome_info)
 }
 
@@ -1018,22 +1060,33 @@ pub async fn post_clone(
     )])))
 }
 
-/// Reset genome to its default state, clearing all customizations.
+/// Reset genome to its default state, clearing all cortical areas and brain regions.
+/// Use before loading a new genome when "cortical area already exists" errors occur.
 #[utoipa::path(
     post,
     path = "/v1/genome/reset",
     tag = "genome",
     responses(
-        (status = 200, description = "Genome reset", body = HashMap<String, String>)
+        (status = 200, description = "Genome reset", body = HashMap<String, String>),
+        (status = 409, description = "Genome transition in progress"),
+        (status = 500, description = "Reset failed")
     )
 )]
-pub async fn post_reset(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Implement genome reset
+pub async fn post_reset(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    let _lock = state.genome_transition_lock.try_lock().map_err(|_| {
+        ApiError::conflict("Another genome transition is in progress; wait for it to finish")
+    })?;
+
+    let genome_service = state.genome_service.as_ref();
+    genome_service.reset_connectome().await.map_err(|e| {
+        tracing::error!(target: "feagi-api", "Genome reset failed: {}", e);
+        ApiError::internal(format!("Genome reset failed: {}", e))
+    })?;
+
+    info!(target: "feagi-api", "Genome reset complete - connectome cleared");
     Ok(Json(HashMap::from([(
         "message".to_string(),
-        "Genome reset not yet implemented".to_string(),
+        "Genome reset complete. Connectome cleared. Load a new genome to continue.".to_string(),
     )])))
 }
 

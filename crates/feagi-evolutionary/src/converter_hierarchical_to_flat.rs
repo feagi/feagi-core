@@ -345,13 +345,13 @@ fn convert_properties_to_flat(
         ];
         if debug_props.contains(prop_key) {
             if let Some(prop_value) = properties.get(*prop_key) {
-                tracing::info!(
+                tracing::debug!(
                     "[GENOME-CONVERT] Found {}={} in properties for area {}, writing to flat format",
                     prop_key, prop_value, prefix
                 );
             } else {
                 let default_val = required_defaults.get(*prop_key).unwrap_or(&json!(null));
-                tracing::info!(
+                tracing::debug!(
                     "[GENOME-CONVERT] {} not in properties for area {}, using default={}",
                     prop_key,
                     prefix,

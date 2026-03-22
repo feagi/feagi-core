@@ -404,6 +404,10 @@ impl ConnectomeService for WasmConnectomeService {
         Ok(self.genome.brain_regions.contains_key(region_id))
     }
 
+    async fn get_root_region_id(&self) -> ServiceResult<Option<String>> {
+        Ok(self.genome.brain_regions_root.clone())
+    }
+
     async fn get_morphologies(
         &self,
     ) -> ServiceResult<std::collections::HashMap<String, MorphologyInfo>> {

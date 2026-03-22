@@ -240,15 +240,37 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageNeuronVoxelXYZPDecoder::new_box(
-                    cortical_id,
-                    z_neuron_resolution,
-                    number_channels,
-                    percentage_neuron_positioning,
-                    false,
-                    PercentageChannelDimensionality::D1
-                )?;
+                let cortical_ids = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit);
+
+                // Handle both single-area and dual-area percentage types
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = match (cortical_ids.get(0), cortical_ids.get(1)) {
+                    (Some(&id0), Some(&id1)) => {
+                        // Dual-area type (e.g., PositionalServo with absolute + incremental)
+                        PositionalServoNeuronVoxelXYZPDecoder::new_box(
+                            id0,
+                            id1,
+                            z_neuron_resolution,
+                            number_channels,
+                            percentage_neuron_positioning,
+                        )?
+                    }
+                    (Some(&id0), None) => {
+                        // Single-area percentage type (e.g., CountOutput)
+                        PercentageNeuronVoxelXYZPDecoder::new_box(
+                            id0,
+                            z_neuron_resolution,
+                            number_channels,
+                            percentage_neuron_positioning,
+                            false,
+                            PercentageChannelDimensionality::D1
+                        )?
+                    }
+                    _ => {
+                        return Err(FeagiDataError::InternalError(
+                            "Expected at least one cortical ID for Percentage motor unit".to_string()
+                        ));
+                    }
+                };
 
                 let io_props: serde_json::Map<String, serde_json::Value> = json!({
                     "frame_change_handling": frame_change_handling,

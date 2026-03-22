@@ -451,13 +451,13 @@ pub async fn post_multi_cortical_area_properties(
 
     for cortical_id in cortical_ids {
         if let Ok(area_info) = connectome_service.get_cortical_area(&cortical_id).await {
-            tracing::debug!(target: "feagi-api",
+            tracing::trace!(target: "feagi-api",
                 "[MULTI] Area {}: cortical_type={}, cortical_group={}, is_mem_type={:?}",
                 cortical_id, area_info.cortical_type, area_info.cortical_group,
                 area_info.properties.get("is_mem_type")
             );
             let json_value = serde_json::to_value(&area_info).unwrap_or_default();
-            tracing::debug!(target: "feagi-api",
+            tracing::trace!(target: "feagi-api",
                 "[MULTI] Serialized has cortical_type: {}",
                 json_value.get("cortical_type").is_some()
             );
