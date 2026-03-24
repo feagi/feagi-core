@@ -1,8 +1,6 @@
 
-// TODO extended traits with plastic support?
 
-// TODO &ConnectivityFunction we cant have one universal type right? Different types on connectivity functions for different types of synapses
-// TODO ConnectivityFunction should be a trait
+
 
 // we may need to make this an enum wrapping a type, with runtime checks to prevent invalid calls
 
@@ -10,29 +8,40 @@ pub trait ConnectomeBaseTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, 
 where
     NeuronIndexQuant: InterneuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
+    CoordQuant: QuantizableUInt,
     BurstQuant: BurstDeltaCount,
     PotentialQuant: PotentialUnit,
     PercentageQuant: PercentageScale,
 {
 
-    fn defragment_connectome(&mut self);
-
     fn process_burst(&mut self, fire_queue: &mut FireQueue, fire_candidate_list: &mut FireCandidateList); // TODO pass through types of FCL, FQ as mutable references
 
-    // TODO Memory Specific interactions
+    //region Utility and housekeeping
 
-    // TODO get connectome properties
-
-    // TODO Limits / statistics
-
+    // NOTE: neuron and synapse defragging is paired as they are are interwoven
+    /// Sort stored data across neurons and synapses for more optimal data reads and to allow freeing
+    /// of unused memory.
+    fn defragment_connectome(&mut self);
 
     fn compute_minimum_possible_quantization_of_all_types(&self); // TODO what do we return here, a struct of enums???
 
+    // TODO Limits / statistics
 
-    fn set_interneuron_fire_threshold_with_increment(&mut self, cortical_area_index: CorticalIndexQuant,
-                                                     increment_function: &FireThresholdIncrementFunction)
+    //endregion
+
+    //region Set Neuron Properties
+
+    fn set_interneuron_fire_thresholds(&mut self, cortical_area_index: CorticalIndexQuant,
+                                       executor: &Impl<NeuronFireThresholdExecutor>)
                                                      -> Result<(), FeagiNPUDataError>;
+
+    fn set_interneuron_leak_coefficients(&mut self, cortical_area_index: CorticalIndexQuant,
+                                         executor: &Impl<NeuronLeakCoefficientExecutor>)
+                                       -> Result<(), FeagiNPUDataError>;
+
+    //endregion
+
+
 
 }
 
@@ -67,13 +76,16 @@ pub trait ConnectomeAllocTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant,
     fn free_unused_cortical_area_capacity(&mut self); // TODO may not be needed?
 
     //region Synapses
+    // NOTE: These connection functions exist under alloc since in static contexts we will not be
+    // dynamically creating / destroying them
 
-    // TODO above note about &ConnectivityFunction
-    fn connect_nonplastic_synapse(&mut self, source_cortical_type: NPUNeuronType,
-                                  source_cortical_index: CorticalIndexQuant,
-                                  destination_cortical_type: NPUNeuronType,
-                                  destination_cortical_index: CorticalIndexQuant,
-                                  connectivity_function: &ConnectivityFunction);
+    fn connect_dimensional_area_to_dimensional_area_nonplastic(&mut self,
+                                                               source_index: CorticalIndexQuant,
+                                                               destination_index: CorticalIndexQuant, TODO);
+
+    fn connect_dimensional_area_to_dimensional_area_plastic(&mut self,
+                                                               source_index: CorticalIndexQuant,
+                                                               destination_index: CorticalIndexQuant, TODO);
 
     //endregion
 
@@ -115,7 +127,7 @@ pub trait ConnectomeAllocTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant,
                                                              cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                              neurons_per_voxel: NumberNeuronsPerVoxel,
                                                              cortical_index: CorticalIndexQuant,
-                                                             connectivity_function: &ConnectivityFunction)
+                                                             TODO)
         -> Result<(), FeagiNPUDataError>;
 
     // TODO resize with spanned?

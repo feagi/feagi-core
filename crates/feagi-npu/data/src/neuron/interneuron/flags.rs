@@ -131,7 +131,7 @@ impl InterneuronCorticalFlag {
         self & 0x04 != 0
     }
 
-    // Other 6 bits are reserved for now
+    // Other 5 bits are reserved for now
     //pub fn get_d(&self) -> bool { self & 0x08 != 0 }
     //pub fn get_e(&self) -> bool { self & 0x10 != 0 }
     //pub fn get_f(&self) -> bool { self & 0x20 != 0 }

@@ -1,3 +1,6 @@
+
+// Rename crate to "structures"
+
 mod feagi_npu_data_error;
 
 pub mod descriptors;

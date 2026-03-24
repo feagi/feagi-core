@@ -48,7 +48,7 @@ where
     PotentialQuant: PotentialUnit,
     PercentageQuant: PercentageScale,
 {
-    pub fn create_new_interneuron_ram_storage(number_neurons_to_preallocate_space_for: NeuronIndexQuant, number_cortical_areas_to_preallocate_space_for: CorticalIndexQuant) -> Result<Self, FeagiNeuronError> {
+    pub fn create_new_interneuron_ram_storage(number_neurons_to_preallocate_space_for: NeuronIndexQuant, number_cortical_areas_to_preallocate_space_for: CorticalIndexQuant) -> Result<Self, FeagiNPUDataError> {
         Ok(
             Self {
                 neuron_cortical_area_index: Vec::new_with_capacity(number_neurons_to_preallocate_space_for as usize),
