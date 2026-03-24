@@ -788,9 +788,9 @@ impl ConnectomeManager {
             synapse_cache.insert(cortical_id, AtomicUsize::new(0));
         }
         // @cursor:critical-path - BV pulls per-area stats from StateManager without NPU lock.
-        if let Some(state_manager) = StateManager::instance().try_read() {
-            state_manager.init_cortical_area_stats(&cortical_id.as_base_64());
-        }
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        state_manager.init_cortical_area_stats(&cortical_id.as_base_64());
 
         // CRITICAL: Register cortical area in NPU during corticogenesis
         // This must happen BEFORE neurogenesis so neurons can look up their cortical IDs
@@ -2015,18 +2015,18 @@ impl ConnectomeManager {
                         pruned_synapse_count
                     ))
                 })?;
-                if let Some(state_manager) = StateManager::instance().try_read() {
-                    let core_state = state_manager.get_core_state();
-                    core_state.subtract_synapse_count(pruned_u32);
-                    state_manager.subtract_cortical_area_outgoing_synapses(
-                        &src_area_id.as_base_64(),
-                        pruned_synapse_count,
-                    );
-                    state_manager.subtract_cortical_area_incoming_synapses(
-                        &dst_area_id.as_base_64(),
-                        pruned_synapse_count,
-                    );
-                }
+                let state_manager = StateManager::instance();
+                let state_manager = state_manager.read();
+                let core_state = state_manager.get_core_state();
+                core_state.subtract_synapse_count(pruned_u32);
+                state_manager.subtract_cortical_area_outgoing_synapses(
+                    &src_area_id.as_base_64(),
+                    pruned_synapse_count,
+                );
+                state_manager.subtract_cortical_area_incoming_synapses(
+                    &dst_area_id.as_base_64(),
+                    pruned_synapse_count,
+                );
 
                 // Best-effort: adjust per-area outgoing synapse count cache for the source area.
                 // (Cache is used for lock-free health-check reads; correctness is eventually
@@ -2088,14 +2088,14 @@ impl ConnectomeManager {
             }
 
             // Update StateManager synapse count (health_check endpoint)
-            if let Some(state_manager) = StateManager::instance().try_read() {
-                let core_state = state_manager.get_core_state();
-                core_state.add_synapse_count(created_u32);
-                state_manager
-                    .add_cortical_area_outgoing_synapses(&src_area_id.as_base_64(), synapse_count);
-                state_manager
-                    .add_cortical_area_incoming_synapses(&dst_area_id.as_base_64(), synapse_count);
-            }
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            let core_state = state_manager.get_core_state();
+            core_state.add_synapse_count(created_u32);
+            state_manager
+                .add_cortical_area_outgoing_synapses(&src_area_id.as_base_64(), synapse_count);
+            state_manager
+                .add_cortical_area_incoming_synapses(&dst_area_id.as_base_64(), synapse_count);
         }
 
         // Update upstream area tracking based on MAPPING existence, not synapse count
@@ -2534,26 +2534,42 @@ impl ConnectomeManager {
         // Apply each morphology rule
         let mut total_synapses = 0;
         for rule in &rules {
-            let rule_obj = match rule.as_object() {
-                Some(obj) => obj,
-                None => continue,
+            let morphology_id = if let Some(rule_obj) = rule.as_object() {
+                rule_obj
+                    .get("morphology_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string()
+            } else if let Some(rule_arr) = rule.as_array() {
+                rule_arr
+                    .first()
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string()
+            } else {
+                "unknown".to_string()
             };
-            let morphology_id = rule_obj
-                .get("morphology_id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
 
-            let rule_keys: Vec<String> = rule_obj.keys().cloned().collect();
+            let rule_keys: Vec<String> = rule
+                .as_object()
+                .map(|obj| obj.keys().cloned().collect())
+                .unwrap_or_default();
 
             // Handle STDP/plasticity configuration if needed
-            let mut plasticity_flag = rule_obj
-                .get("plasticity_flag")
+            let mut plasticity_flag = rule
+                .as_object()
+                .and_then(|obj| obj.get("plasticity_flag"))
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
             if morphology_id == "associative_memory" {
                 plasticity_flag = true;
             }
             if plasticity_flag {
+                let Some(rule_obj) = rule.as_object() else {
+                    return Err(crate::types::BduError::InvalidMorphology(
+                        "Plasticity mapping rule must be an object format".to_string(),
+                    ));
+                };
                 let (_weight, psp, synapse_type) =
                     self.resolve_synapse_params_for_rule(src_area_id, rule)?;
                 let bidirectional_stdp = morphology_id == "associative_memory";
@@ -3366,17 +3382,17 @@ impl ConnectomeManager {
         #[cfg(not(feature = "wasm"))]
         {
             use feagi_state_manager::StateManager;
-            if let Some(state_manager) = StateManager::instance().try_read() {
-                let core_state = state_manager.get_core_state();
-                // Capacity comes from config (set at initialization, never changes)
-                core_state.set_neuron_capacity(self.config.max_neurons as u32);
-                core_state.set_synapse_capacity(self.config.max_synapses as u32);
-                info!(
-                    target: "feagi-bdu",
-                    "📊 Updated State Manager with capacity: {} neurons, {} synapses",
-                    self.config.max_neurons, self.config.max_synapses
-                );
-            }
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            let core_state = state_manager.get_core_state();
+            // Capacity comes from config (set at initialization, never changes)
+            core_state.set_neuron_capacity(self.config.max_neurons as u32);
+            core_state.set_synapse_capacity(self.config.max_synapses as u32);
+            info!(
+                target: "feagi-bdu",
+                "📊 Updated State Manager with capacity: {} neurons, {} synapses",
+                self.config.max_neurons, self.config.max_synapses
+            );
         }
 
         // CRITICAL: Backfill cortical area registrations into NPU.
@@ -3753,21 +3769,21 @@ impl ConnectomeManager {
         }
 
         // @cursor:critical-path - Keep BV-facing stats in StateManager.
-        if let Some(state_manager) = StateManager::instance().try_read() {
-            state_manager
-                .set_cortical_area_neuron_count(&cortical_id.as_base_64(), neuron_count as usize);
-        }
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        state_manager
+            .set_cortical_area_neuron_count(&cortical_id.as_base_64(), neuron_count as usize);
 
         // Update total neuron count cache
         self.cached_neuron_count
             .fetch_add(neuron_count as usize, Ordering::Relaxed);
 
         // CRITICAL: Update StateManager neuron count (for health_check endpoint)
-        if let Some(state_manager) = StateManager::instance().try_read() {
-            let core_state = state_manager.get_core_state();
-            core_state.add_neuron_count(neuron_count);
-            core_state.add_regular_neuron_count(neuron_count);
-        }
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        let core_state = state_manager.get_core_state();
+        core_state.add_neuron_count(neuron_count);
+        core_state.add_regular_neuron_count(neuron_count);
 
         // Trigger fatigue index recalculation after neuron creation
         // NOTE: Disabled during genome loading to prevent blocking
@@ -3874,12 +3890,12 @@ impl ConnectomeManager {
         );
 
         // CRITICAL: Update StateManager neuron count (for health_check endpoint)
-        if let Some(state_manager) = StateManager::instance().try_read() {
-            let core_state = state_manager.get_core_state();
-            core_state.add_neuron_count(1);
-            core_state.add_regular_neuron_count(1);
-            state_manager.add_cortical_area_neuron_count(&cortical_id.as_base_64(), 1);
-        }
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        let core_state = state_manager.get_core_state();
+        core_state.add_neuron_count(1);
+        core_state.add_regular_neuron_count(1);
+        state_manager.add_cortical_area_neuron_count(&cortical_id.as_base_64(), 1);
 
         Ok(neuron_id.0 as u64)
     }
@@ -3914,13 +3930,13 @@ impl ConnectomeManager {
             trace!(target: "feagi-bdu", "Deleted neuron {}", neuron_id);
 
             // CRITICAL: Update StateManager neuron count (for health_check endpoint)
-            if let Some(state_manager) = StateManager::instance().try_read() {
-                let core_state = state_manager.get_core_state();
-                core_state.subtract_neuron_count(1);
-                core_state.subtract_regular_neuron_count(1);
-                if let Some(cortical_id) = cortical_id {
-                    state_manager.subtract_cortical_area_neuron_count(&cortical_id.as_base_64(), 1);
-                }
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            let core_state = state_manager.get_core_state();
+            core_state.subtract_neuron_count(1);
+            core_state.subtract_regular_neuron_count(1);
+            if let Some(cortical_id) = cortical_id {
+                state_manager.subtract_cortical_area_neuron_count(&cortical_id.as_base_64(), 1);
             }
 
             // Trigger fatigue index recalculation after neuron deletion
@@ -4023,10 +4039,10 @@ impl ConnectomeManager {
 
         // CRITICAL: Update StateManager synapse count (for health_check endpoint)
         if total_synapses > 0 {
-            if let Some(state_manager) = StateManager::instance().try_read() {
-                let core_state = state_manager.get_core_state();
-                core_state.add_synapse_count(total_synapses);
-            }
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            let core_state = state_manager.get_core_state();
+            core_state.add_synapse_count(total_synapses);
         }
 
         Ok(total_synapses)
@@ -4120,9 +4136,9 @@ impl ConnectomeManager {
             .store(count, Ordering::Relaxed);
 
         // @cursor:critical-path - Keep BV-facing stats in StateManager.
-        if let Some(state_manager) = StateManager::instance().try_read() {
-            state_manager.set_cortical_area_neuron_count(&cortical_id.as_base_64(), count);
-        }
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        state_manager.set_cortical_area_neuron_count(&cortical_id.as_base_64(), count);
 
         self.update_cached_neuron_count();
 
@@ -4950,15 +4966,15 @@ impl ConnectomeManager {
         let source_cortical_id = self.cortical_idx_to_id.get(&source_cortical_idx).cloned();
         let target_cortical_id = self.cortical_idx_to_id.get(&target_cortical_idx).cloned();
 
-        if let Some(state_manager) = StateManager::instance().try_read() {
-            let core_state = state_manager.get_core_state();
-            core_state.add_synapse_count(1);
-            if let Some(cortical_id) = source_cortical_id {
-                state_manager.add_cortical_area_outgoing_synapses(&cortical_id.as_base_64(), 1);
-            }
-            if let Some(cortical_id) = target_cortical_id {
-                state_manager.add_cortical_area_incoming_synapses(&cortical_id.as_base_64(), 1);
-            }
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        let core_state = state_manager.get_core_state();
+        core_state.add_synapse_count(1);
+        if let Some(cortical_id) = source_cortical_id {
+            state_manager.add_cortical_area_outgoing_synapses(&cortical_id.as_base_64(), 1);
+        }
+        if let Some(cortical_id) = target_cortical_id {
+            state_manager.add_cortical_area_incoming_synapses(&cortical_id.as_base_64(), 1);
         }
 
         // Trigger fatigue index recalculation after synapse creation
@@ -5131,17 +5147,17 @@ impl ConnectomeManager {
             debug!(target: "feagi-bdu","Removed synapse: {} -> {}", source_neuron_id, target_neuron_id);
 
             // CRITICAL: Update StateManager synapse count (for health_check endpoint)
-            if let Some(state_manager) = StateManager::instance().try_read() {
-                let core_state = state_manager.get_core_state();
-                core_state.subtract_synapse_count(1);
-                if let Some(cortical_id) = source_cortical_id {
-                    state_manager
-                        .subtract_cortical_area_outgoing_synapses(&cortical_id.as_base_64(), 1);
-                }
-                if let Some(cortical_id) = target_cortical_id {
-                    state_manager
-                        .subtract_cortical_area_incoming_synapses(&cortical_id.as_base_64(), 1);
-                }
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            let core_state = state_manager.get_core_state();
+            core_state.subtract_synapse_count(1);
+            if let Some(cortical_id) = source_cortical_id {
+                state_manager
+                    .subtract_cortical_area_outgoing_synapses(&cortical_id.as_base_64(), 1);
+            }
+            if let Some(cortical_id) = target_cortical_id {
+                state_manager
+                    .subtract_cortical_area_incoming_synapses(&cortical_id.as_base_64(), 1);
             }
         }
 
@@ -5272,12 +5288,12 @@ impl ConnectomeManager {
         info!(target: "feagi-bdu","Batch created {} neurons in cortical area {}", count, cortical_id);
 
         // CRITICAL: Update StateManager neuron count (for health_check endpoint)
-        if let Some(state_manager) = StateManager::instance().try_read() {
-            let core_state = state_manager.get_core_state();
-            core_state.add_neuron_count(neurons_created);
-            core_state.add_regular_neuron_count(neurons_created);
-            state_manager.add_cortical_area_neuron_count(&cortical_id.as_base_64(), count);
-        }
+        let state_manager = StateManager::instance();
+        let state_manager = state_manager.read();
+        let core_state = state_manager.get_core_state();
+        core_state.add_neuron_count(neurons_created);
+        core_state.add_regular_neuron_count(neurons_created);
+        state_manager.add_cortical_area_neuron_count(&cortical_id.as_base_64(), count);
 
         // Best-effort: keep per-area cache in sync for lock-free reads.
         {
@@ -5335,13 +5351,13 @@ impl ConnectomeManager {
 
         // CRITICAL: Update StateManager neuron count (for health_check endpoint)
         if deleted_count > 0 {
-            if let Some(state_manager) = StateManager::instance().try_read() {
-                let core_state = state_manager.get_core_state();
-                core_state.subtract_neuron_count(deleted_count as u32);
-                core_state.subtract_regular_neuron_count(deleted_count as u32);
-                for (cortical_id, count) in per_area_deleted {
-                    state_manager.subtract_cortical_area_neuron_count(&cortical_id, count);
-                }
+            let state_manager = StateManager::instance();
+            let state_manager = state_manager.read();
+            let core_state = state_manager.get_core_state();
+            core_state.subtract_neuron_count(deleted_count as u32);
+            core_state.subtract_regular_neuron_count(deleted_count as u32);
+            for (cortical_id, count) in per_area_deleted {
+                state_manager.subtract_cortical_area_neuron_count(&cortical_id, count);
             }
         }
 
