@@ -1,29 +1,35 @@
 
 
 
-pub trait InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>: BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+pub trait InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>: BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: InterneuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstQuant: BurstDeltaCount,
+    BurstDeltaQuant: BurstCount,
+    BurstIndexQuant: BurstCount,
     PotentialQuant: PotentialUnit,
     PercentageQuant: PercentageScale,
 {
     // TODO are these defaults fine?
+    // consecutive fire count should be one
+
+    // Neuron Defaults
+    const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: PotentialQuant = BurstIndexQuant::ZERO;
     const DEFAULT_NEURON_MEMBRANE_POTENTIAL: PotentialQuant = PotentialQuant::ZERO;
-    const DEFAULT_NEURON_THRESHOLD: PotentialQuant = PotentialQuant::ZERO;
+    const DEFAULT_NEURON_FIRE_THRESHOLD: PotentialQuant = PotentialQuant::ZERO;
     const DEFAULT_NEURON_LEAK_COEFFICIENT: PercentageQuant = PercentageQuant::ZERO;
     const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstQuant = BurstQuant::ZERO;
-    const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstQuant = BurstQuant::ZERO;
-    const DEFAULT_NEURON_CONSECUTIVE_FIRE_LIMIT: BurstQuant = BurstQuant::ZERO;
-    const DEFAULT_NEURON_SNOOZE_PERIOD_COUNTDOWN: BurstQuant = BurstQuant::ZERO;
-    const DEFAULT_NEURON_SNOOZE_PERIOD_LIMIT: BurstQuant = BurstQuant::ZERO;
+    const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstQuant = BurstQuant::ONE;
 
-    const DEFAULT_CORTICAL_REFRACTORY_PERIOD: BurstQuant = BurstQuant::ZERO;
-    const DEFAULT_CORTICAL_EXCITABILITY: PercentageQuant = PercentageQuant::ZERO;
-    const DEFAULT_CORTICAL_THRESHOLD_LIMIT: PotentialQuant = PotentialQuant::ZERO;
+    // Cortical Area Defaults
     const DEFAULT_CORTICAL_NEURONS_PER_VOXEL: NumberNeuronsPerVoxel = 1;
+    const DEFAULT_CORTICAL_EXCITABILITY: PercentageQuant = PercentageQuant::ZERO;
+    const DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT: BurstQuant = BurstQuant::ZERO;
+    const DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT: PotentialQuant = PotentialQuant::ZERO;
+    const DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT: BurstQuant = BurstQuant::ZERO;
+    const DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED: bool = false;
+    const DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED: bool = false;
 
     /// Returns a struct of references to the slices of all neuron data (include sparse invalids)
     fn get_all_neuron_values_to_process(&mut self) -> InterneuronDataRefSliceMultiCorticalArea<'_>;
@@ -43,16 +49,17 @@ where
 
 
 #[cfg(feature = "alloc")]
-pub trait InterneuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>:
-DimensionalAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant> +
-DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant> +
-BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant> +
-InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+pub trait InterneuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>:
+DimensionalAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> +
+DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> +
+BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> +
+InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: InterneuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstQuant: BurstDeltaCount,
+    BurstDeltaQuant: BurstCount,
+    BurstIndexQuant: BurstCount,
     PotentialQuant: PotentialUnit,
     PercentageQuant: PercentageScale,
 {
@@ -62,18 +69,18 @@ where
     fn create_cortical_area_with_spanned_neuron(&mut self,
                                                 cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                 neurons_per_voxel: NumberNeuronsPerVoxel,
+                                                neuron_global_burst_index_of_last_firing: BurstIndexQuant,
                                                 neuron_membrane_potential: PotentialQuant,
+                                                neuron_fire_threshold: PotentialQuant,
                                                 neuron_leak_coefficient: PercentageQuant,
-                                                neuron_flag: InterneuronFlag,
-                                                neuron_refractory_countdown: BurstQuant,
-                                                neuron_consecutive_fire_count: BurstQuant,
-                                                neuron_consecutive_fire_limit: BurstQuant,
-                                                neuron_snooze_period_countdown: BurstQuant,
-                                                neuron_snooze_period_limit: BurstQuant,
-                                                cortical_refractory_period: BurstQuant,
+                                                neuron_refractory_countdown: BurstDeltaQuant,
+                                                neuron_consecutive_fire_count: BurstDeltaQuant,
                                                 cortical_excitability: PercentageQuant,
-                                                cortical_threshold_limit: PotentialQuant,
-                                                cortical_neurons_per_voxel: NumberNeuronsPerVoxel)
+                                                cortical_refractory_period_limit: BurstDeltaQuant,
+                                                cortical_fire_threshold_limit: PotentialQuant,
+                                                cortical_consecutive_fire_limit: PotentialQuant,
+                                                cortical_is_mp_charge_accumulation_enabled: bool,
+                                                cortical_is_mp_driven_psp_enabled: bool)
         -> Result<(NeuronIndexQuant, Range<NeuronIndexQuant>), FeagiNPUDataError>;
 
 

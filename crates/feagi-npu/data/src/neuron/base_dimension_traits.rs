@@ -1,12 +1,13 @@
 
 
 
-pub trait DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>: BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+pub trait DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>: BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: InterneuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstQuant: BurstDeltaCount,
+    BurstDeltaQuant: BurstCount,
+    BurstIndexQuant: BurstCount,
     PotentialQuant: PotentialUnit,
     PercentageQuant: PercentageScale,
 {
@@ -17,14 +18,15 @@ where
 
 
 #[cfg(feature = "alloc")]
-pub trait DimensionalAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>:
-BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant> +
-DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+pub trait DimensionalAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>:
+BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> +
+DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: InterneuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstQuant: BurstDeltaCount,
+    BurstDeltaQuant: BurstCount,
+    BurstIndexQuant: BurstCount,
     PotentialQuant: PotentialUnit,
     PercentageQuant: PercentageScale,
 // % synaptic attractivity

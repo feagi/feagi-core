@@ -5,12 +5,13 @@
 // how data may be retrieved
 
 
-pub trait BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+pub trait BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: InterneuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstQuant: BurstDeltaCount,
+    BurstDeltaQuant: BurstCount,
+    BurstIndexQuant: BurstCount,
     PotentialQuant: PotentialUnit,
     PercentageQuant: PercentageScale,
 {
@@ -45,24 +46,26 @@ where
 
 
 #[cfg(feature = "alloc")]
-pub trait BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>: InterneuronDataTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
+pub trait BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>: InterneuronDataTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: InterneuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstQuant: BurstDeltaCount,
+    BurstDeltaQuant: BurstCount,
+    BurstIndexQuant: BurstCount,
     PotentialQuant: PotentialUnit,
     PercentageQuant: PercentageScale,
 {
-    /// Frees unused vector capacity and invalid neurons (assuming they were sorted to the back first!)
+    /// Frees unused neuron vector capacity and invalid neurons (assuming they were sorted to the back first!)
     /// albeit allowing a buffer of free space. Returns the number of neurons that were freed.
     /// Returns 0 if no neurons were freed (nothing to free or spare capacity is at or less than
     /// what was requested). Note that invalid neurons not sorted to the back will not be freed.
-    fn free_unused_capacity(&mut self, spare_capacity_to_maintain: NeuronIndexQuant) -> NeuronIndexQuant;
+    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronIndexQuant) -> NeuronIndexQuant;
 
 
     /// Deletes a cortical area by invalidating all of its neurons. Returns the neuron indexes
     /// of the disabled neurons
+    /// WARNING: BE SURE TO REMOVE ASSOCIATED SYNAPSE MAPPINGS!
     fn delete_cortical_area(&mut self, cortical_index: CorticalIndexQuant)
                             ->Result<Range<NeuronIndexQuant>, FeagiNPUDataError>;
 

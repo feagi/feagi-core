@@ -46,25 +46,25 @@ impl PSPMultiplier for PSPMultiplierU8 {}
 //endregion
 
 //region Burst Delta Count
-crate::define_quantizable_uint_type_family!(BurstDeltaCount);
+crate::define_quantizable_uint_type_family!(BurstCount);
 
 #[cfg(not(feature = "alloc"))]
-pub trait BurstDeltaCount:
+pub trait BurstCount:
 Copy + Clone + Send + Sync + QuantizableUInt + 'static
 {
 }
 
 #[cfg(feature = "alloc")]
-pub trait BurstDeltaCount:
+pub trait BurstCount:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'static
 {
 }
 
 #[cfg(feature = "support_64bit_indexing_quantization")]
-impl BurstDeltaCount for BurstDeltaCountU64 {}
-impl BurstDeltaCount for BurstDeltaCountU32 {}
-impl BurstDeltaCount for BurstDeltaCountU16 {}
-impl BurstDeltaCount for BurstDeltaCountU8 {}
+impl BurstCount for BurstCountU64 {}
+impl BurstCount for BurstCountU32 {}
+impl BurstCount for BurstCountU16 {}
+impl BurstCount for BurstCountU8 {}
 //endregion
 
 //region Interneuron Index

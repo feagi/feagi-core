@@ -1734,7 +1734,7 @@ impl ConnectomeManager {
     /// * `dst_area_id` - Destination cortical area ID
     /// * `mapping_data` - List of connection specifications
     ///
-    /// # Returns
+    /// # Returns`1
     /// * `BduResult<()>` - Ok if successful, Err otherwise
     pub fn update_cortical_mapping(
         &mut self,
