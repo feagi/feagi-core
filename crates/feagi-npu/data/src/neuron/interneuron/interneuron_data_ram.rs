@@ -352,6 +352,9 @@ where
 
     }
 
+    fn set_neuron_fire_threshold_with_increment(&mut self, cortical_area_index: CorticalIndexQuant, increment_function: &FireThresholdIncrementFunction)  // TODO FireThresholdIncrementFunction
+                                                -> Result<(), FeagiNPUDataError>;
+
 }
 
 

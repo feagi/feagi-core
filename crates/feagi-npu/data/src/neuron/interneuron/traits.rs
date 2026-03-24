@@ -38,6 +38,9 @@ where
     fn get_cortical_area_neuron_values_to_process(&mut self, cortical_area_index: CorticalIndexQuant)
         -> Result<InterneuronDataRefSliceSingleCorticalArea<'_>, FeagiNPUDataError>;
 
+    fn set_neuron_fire_threshold_with_increment(&mut self, cortical_area_index: CorticalIndexQuant, increment_function: &FireThresholdIncrementFunction)  // TODO FireThresholdIncrementFunction
+        -> Result<(), FeagiNPUDataError>;
+
 
 
     // TODO add more specific functions for getting specific fields for neuron processing

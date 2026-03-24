@@ -2,6 +2,8 @@
 // TODO extended traits with plastic support?
 
 // TODO &ConnectivityFunction we cant have one universal type right? Different types on connectivity functions for different types of synapses
+// TODO ConnectivityFunction should be a trait
+
 // we may need to make this an enum wrapping a type, with runtime checks to prevent invalid calls
 
 pub trait ConnectomeBaseTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstQuant, PotentialQuant, PercentageQuant>
@@ -26,6 +28,11 @@ where
 
 
     fn compute_minimum_possible_quantization_of_all_types(&self); // TODO what do we return here, a struct of enums???
+
+
+    fn set_interneuron_fire_threshold_with_increment(&mut self, cortical_area_index: CorticalIndexQuant,
+                                                     increment_function: &FireThresholdIncrementFunction)
+                                                     -> Result<(), FeagiNPUDataError>;
 
 }
 
@@ -72,12 +79,13 @@ pub trait ConnectomeAllocTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant,
 
     //region Interneuron Cortical Areas
 
+
     fn create_interneuron_cortical_area_with_default_neurons(&mut self,
                                                              cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                              neurons_per_voxel: NumberNeuronsPerVoxel)
         ->  Result<CorticalIndexQuant, FeagiNPUDataError>;
 
-    fn create_interneuron_cortical_area_with_spanned_neurons(&mut self,
+    fn create_interneuron_cortical_area_with_uniform_neurons(&mut self, // TODO change other instances of spanned to uniform
                                                              cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                              neurons_per_voxel: NumberNeuronsPerVoxel,
                                                              neuron_global_burst_index_of_last_firing: BurstIndexQuant,
