@@ -12,12 +12,28 @@ where
     const DEFAULT_SYNAPSE_WEIGHT: PercentageQuant = PercentageQuant:ONE;
     const DEFAULT_SYNAPSE_PSP: PotentialQuant = PotentialQuant:ONE;
 
+
+    // TODO how should we iterate this?
+
+}
+
+pub trait NonplasticSynapseAllocStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >: BaseSynapseStaticStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >
+where
+    SynapseIndexQuant: SynapseIndex,
+    NeuronIndexQuant: QuantizableUInt,
+    PercentageQuant: PercentageScale,
+    PotentialQuant: PotentialUnit,
+{
+
     fn create_spanned_synapse_connections(&mut self, source_neurons_indexes: &[NeuronIndexQuant],
                                           source_neuron_type: NPUNeuronType,
                                           destination_neuron_indexes: &[NeuronIndexQuant],
                                           destination_neuron_type: NPUNeuronType) -> Result<&[SynapseIndexQuant], FeagiNPUDataError> {}
 
 
+
+
+    // we may need to support some sort of function to write synapse data
 
     // TODO how should we iterate this?
 

@@ -370,7 +370,7 @@ where
     fn create_cortical_area_with_default_neurons(&mut self,
                                                  cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                  neurons_per_voxel: NumberNeuronsPerVoxel)
-                                                 -> Result<(NeuronIndexQuant, Range<NeuronIndexQuant>), FeagiNPUDataError> {
+                                                 -> Result<(CorticalIndexQuant, Range<NeuronIndexQuant>), FeagiNPUDataError> {
 
         let expected_number_neurons: usize = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
         self.create_cortical_area_with_spanned_neuron(
@@ -453,7 +453,7 @@ where
     /// of the disabled neurons
     /// WARNING: BE SURE TO REMOVE ASSOCIATED SYNAPSE MAPPINGS!
     fn delete_cortical_area(&mut self, cortical_index: CorticalIndexQuant)
-                            ->Result<Range<NeuronIndexQuant>, FeagiNPUDataError> {
+                            -> Result<Range<NeuronIndexQuant>, FeagiNPUDataError> {
         self.verify_cortical_area_index_exist_and_valid(&cortical_index)?;
         self.invalidate_cortical_area(cortical_index)
     }

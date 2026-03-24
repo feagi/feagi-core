@@ -23,3 +23,14 @@ where
     // TODO should I have a function that takes a source neuron and returns an iterator of destinations, or that takes a iterator of source neurons and returns a destination iterator iterator (cursed) ?
     // why not both?
 }
+
+pub trait BaseSynapseAllocStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >:
+BaseSynapseStaticStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant>
+where
+    SynapseIndexQuant: SynapseIndex,
+    NeuronIndexQuant: QuantizableUInt,
+    PercentageQuant: PercentageScale,
+    PotentialQuant: PotentialUnit,
+{
+    fn free_unused_synapse_capacity(&mut self, spare_capacity_to_maintain: SynapseIndexQuant) -> SynapseIndexQuant;
+}
