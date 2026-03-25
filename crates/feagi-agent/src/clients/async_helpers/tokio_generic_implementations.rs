@@ -405,7 +405,8 @@ impl TokioEmbodimentAgent {
         F: FnMut() -> Result<TokioEmbodimentAgent, E>,
         E: std::fmt::Display,
     {
-        let teardown_result = self.request_deregistration_and_disconnect(reason, teardown_deadline_ms);
+        let teardown_result =
+            self.request_deregistration_and_disconnect(reason, teardown_deadline_ms);
         if let Err(error) = &teardown_result {
             tracing::warn!(
                 "[feagi-agent] reconnect pre-teardown reported non-fatal error: {}",

@@ -182,6 +182,33 @@ type NeuronData = (
 );
 
 impl ConnectomeManager {
+    fn get_mapping_rules_for_destination<'a>(
+        mapping_dst: &'a serde_json::Map<String, serde_json::Value>,
+        dst_area_id: &CorticalID,
+    ) -> Option<&'a Vec<serde_json::Value>> {
+        if let Some(rules) = mapping_dst
+            .get(&dst_area_id.as_base_64())
+            .and_then(|value| value.as_array())
+        {
+            return Some(rules);
+        }
+
+        // Compatibility path: some legacy genomes may still store destination IDs
+        // as 6/8-char ASCII keys instead of base64. Resolve by semantic ID equality.
+        for (raw_dst_key, rules_value) in mapping_dst {
+            let parsed_dst = CorticalID::try_from_base_64(raw_dst_key)
+                .or_else(|_| CorticalID::try_from_legacy_ascii(raw_dst_key));
+            if parsed_dst.as_ref().ok() != Some(dst_area_id) {
+                continue;
+            }
+            if let Some(rules) = rules_value.as_array() {
+                return Some(rules);
+            }
+        }
+
+        None
+    }
+
     /// Create a new ConnectomeManager (private - use `instance()`)
     fn new() -> Self {
         Self {
@@ -1992,7 +2019,10 @@ impl ConnectomeManager {
                     src_area_id,
                     dst_area_id
                 );
-                npu.remove_synapses_from_sources_to_targets(sources, targets)
+                // Use direct source-target batch removal here rather than index-based removal.
+                // This avoids false "Pruned 0" outcomes when propagation synapse_index is stale
+                // during repeated rapid remap operations.
+                npu.remove_synapses_between(sources, targets)
             };
             let remove_time = remove_start.elapsed();
             let total_time = start.elapsed();
@@ -2495,9 +2525,7 @@ impl ConnectomeManager {
                 return Ok(0);
             };
 
-            let Some(rules) = mapping_dst
-                .get(&dst_area_id.as_base_64())
-                .and_then(|v| v.as_array())
+            let Some(rules) = Self::get_mapping_rules_for_destination(mapping_dst, dst_area_id)
             else {
                 return Ok(0);
             };
@@ -6570,6 +6598,25 @@ mod tests {
             .apply_cortical_mapping_for_pair(&src_id, &dst_id)
             .unwrap();
         assert_eq!(count2, 0);
+    }
+
+    #[test]
+    fn test_get_mapping_rules_for_destination_supports_legacy_key() {
+        let dst_id = CorticalID::try_from_bytes(b"csrc0002").unwrap();
+        let mapping_dst = serde_json::json!({
+            "csrc0002": [
+                {"morphology_id": "m1"}
+            ]
+        });
+        let mapping_obj = mapping_dst.as_object().expect("mapping must be an object");
+
+        let rules = ConnectomeManager::get_mapping_rules_for_destination(mapping_obj, &dst_id)
+            .expect("legacy destination key should resolve");
+        assert_eq!(rules.len(), 1);
+        assert_eq!(
+            rules[0].get("morphology_id").and_then(|v| v.as_str()),
+            Some("m1")
+        );
     }
 
     #[test]

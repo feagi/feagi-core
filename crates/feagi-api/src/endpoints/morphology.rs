@@ -191,6 +191,11 @@ pub async fn put_morphology(
     State(state): State<ApiState>,
     Json(req): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    tracing::info!(
+        target: "feagi-api",
+        "[MORPH-AUDIT][API] PUT /v1/morphology/morphology received payload keys={:?}",
+        req.keys().collect::<Vec<_>>()
+    );
     let morphology_name = req
         .get("morphology_name")
         .and_then(|v| v.as_str())
@@ -251,11 +256,23 @@ pub async fn put_morphology(
         class: DEFAULT_MORPHOLOGY_CLASS.to_string(),
     };
 
+    tracing::info!(
+        target: "feagi-api",
+        "[MORPH-AUDIT][API] Dispatching update_morphology name={} type={}",
+        morphology_name,
+        morphology_type
+    );
+
     state
         .connectome_service
         .update_morphology(morphology_name, morphology)
         .await
         .map_err(ApiError::from)?;
+
+    tracing::info!(
+        target: "feagi-api",
+        "[MORPH-AUDIT][API] update_morphology completed successfully"
+    );
 
     Ok(Json(HashMap::from([(
         "status".to_string(),

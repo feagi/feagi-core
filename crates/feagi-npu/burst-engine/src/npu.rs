@@ -1170,8 +1170,8 @@ impl<
     ///
     /// NOTE: This does NOT rebuild the synapse index. Call rebuild_synapse_index() after bulk removals.
     ///
-    /// Note: The trait method only supports single source-target pairs.
-    /// This method calls remove_synapses_between() for each source-target combination.
+    /// Performs a single pass over synapse storage and removes entries where
+    /// source ∈ sources AND target ∈ targets.
     ///
     /// Returns: number of synapses deleted
     pub fn remove_synapses_between(
@@ -1179,15 +1179,33 @@ impl<
         sources: Vec<NeuronId>,
         targets: Vec<NeuronId>,
     ) -> usize {
-        let mut total_removed = 0;
+        if sources.is_empty() || targets.is_empty() {
+            return 0;
+        }
+
+        let source_set: AHashSet<u32> = sources.into_iter().map(|n| n.0).collect();
+        let target_set: AHashSet<u32> = targets.into_iter().map(|n| n.0).collect();
+
         let mut synapse_storage = self.synapse_storage.write().unwrap();
-        for &source in &sources {
-            for &target in &targets {
-                if let Ok(removed) = synapse_storage.remove_synapses_between(source.0, target.0) {
-                    total_removed += removed;
-                }
+        let mut to_remove = Vec::new();
+        for idx in 0..synapse_storage.count() {
+            if !synapse_storage.valid_mask()[idx] {
+                continue;
+            }
+            if source_set.contains(&synapse_storage.source_neurons()[idx])
+                && target_set.contains(&synapse_storage.target_neurons()[idx])
+            {
+                to_remove.push(idx);
             }
         }
+
+        let mut total_removed = 0usize;
+        for idx in to_remove {
+            if synapse_storage.remove_synapse(idx).is_ok() {
+                total_removed += 1;
+            }
+        }
+
         total_removed
     }
 
@@ -5207,6 +5225,63 @@ mod tests {
             .unwrap();
 
         assert!(!npu.remove_synapse(n1, n2));
+    }
+
+    #[test]
+    fn test_remove_synapses_between_batch_sets() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
+        let src_a = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .unwrap();
+        let src_b = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .unwrap();
+        let src_keep = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .unwrap();
+
+        let dst_a = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .unwrap();
+        let dst_b = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .unwrap();
+        let dst_keep = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .unwrap();
+
+        // 4 candidate synapses should be removed (2x2 cross-product).
+        for (s, t) in [(src_a, dst_a), (src_a, dst_b), (src_b, dst_a), (src_b, dst_b)] {
+            npu.add_synapse(
+                s,
+                t,
+                SynapticWeight(128),
+                SynapticPsp(255),
+                SynapseType::Excitatory,
+            )
+            .unwrap();
+        }
+
+        // These should remain after batch removal.
+        for (s, t) in [(src_keep, dst_a), (src_a, dst_keep), (src_keep, dst_keep)] {
+            npu.add_synapse(
+                s,
+                t,
+                SynapticWeight(128),
+                SynapticPsp(255),
+                SynapseType::Excitatory,
+            )
+            .unwrap();
+        }
+
+        let removed = npu.remove_synapses_between(vec![src_a, src_b], vec![dst_a, dst_b]);
+        assert_eq!(removed, 4);
+        assert_eq!(npu.get_synapse_count(), 3);
     }
 
     // ═══════════════════════════════════════════════════════════

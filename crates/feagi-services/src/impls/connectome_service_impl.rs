@@ -339,6 +339,97 @@ fn get_cortical_mapping_dst_from_properties(
         .map(|rules| rules.to_vec())
 }
 
+fn mapping_rule_uses_morphology(rule: &serde_json::Value, morphology_id: &str) -> bool {
+    if let Some(arr) = rule.as_array() {
+        return arr.first().and_then(|v| v.as_str()) == Some(morphology_id);
+    }
+    if let Some(obj) = rule.as_object() {
+        return obj.get("morphology_id").and_then(|v| v.as_str()) == Some(morphology_id);
+    }
+    false
+}
+
+fn collect_morphology_usage_pairs(
+    genome: &feagi_evolutionary::RuntimeGenome,
+    morphology_id: &str,
+) -> Vec<(String, String)> {
+    let mut usage_pairs: HashSet<(String, String)> = HashSet::new();
+
+    for (src_id, area) in &genome.cortical_areas {
+        let Some(mapping_dst) = area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|value| value.as_object())
+        else {
+            continue;
+        };
+
+        for (dst_id, rules_value) in mapping_dst {
+            let Some(rule_array) = rules_value.as_array() else {
+                continue;
+            };
+
+            if rule_array
+                .iter()
+                .any(|rule| mapping_rule_uses_morphology(rule, morphology_id))
+            {
+                usage_pairs.insert((src_id.as_base_64(), dst_id.clone()));
+            }
+        }
+    }
+
+    let mut ordered_pairs: Vec<(String, String)> = usage_pairs.into_iter().collect();
+    ordered_pairs.sort();
+    ordered_pairs
+}
+
+fn collect_morphology_usage_pairs_from_area_infos(
+    area_infos: &[CorticalAreaInfo],
+    morphology_id: &str,
+) -> Vec<(String, String)> {
+    let mut usage_pairs: HashSet<(String, String)> = HashSet::new();
+
+    for area_info in area_infos {
+        let Some(mapping_dst) = area_info
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|value| value.as_object())
+        else {
+            continue;
+        };
+
+        for (dst_id, rules_value) in mapping_dst {
+            let Some(rule_array) = rules_value.as_array() else {
+                continue;
+            };
+
+            if rule_array
+                .iter()
+                .any(|rule| mapping_rule_uses_morphology(rule, morphology_id))
+            {
+                usage_pairs.insert((area_info.cortical_id.clone(), dst_id.clone()));
+            }
+        }
+    }
+
+    let mut ordered_pairs: Vec<(String, String)> = usage_pairs.into_iter().collect();
+    ordered_pairs.sort();
+    ordered_pairs
+}
+
+fn parse_cortical_id_flexible(raw_id: &str) -> Result<CorticalID, String> {
+    if let Ok(parsed) = CorticalID::try_from_base_64(raw_id) {
+        return Ok(parsed);
+    }
+    if let Ok(parsed) = CorticalID::try_from_legacy_ascii(raw_id) {
+        return Ok(parsed);
+    }
+    Err(format!(
+        "Unable to parse cortical ID '{}' as base64 or legacy ASCII format",
+        raw_id
+    ))
+}
+
 /// Recursively replace morphology_id in JSON values.
 ///
 /// Handles object format `{"morphology_id": "x", ...}` and array format
@@ -1681,27 +1772,139 @@ impl ConnectomeService for ConnectomeServiceImpl {
             ));
         }
 
-        let mut genome_guard = self.current_genome.write();
-        let Some(genome) = genome_guard.as_mut() else {
-            return Err(ServiceError::InvalidState(
-                "No RuntimeGenome loaded - cannot update morphology".to_string(),
-            ));
+        tracing::info!(
+            target: "feagi-services",
+            "[MORPH-AUDIT][SERVICE] update_morphology start name={} type={:?}",
+            morphology_id,
+            morphology.morphology_type
+        );
+
+        let mut usage_pairs = {
+            let mut genome_guard = self.current_genome.write();
+            let Some(genome) = genome_guard.as_mut() else {
+                return Err(ServiceError::InvalidState(
+                    "No RuntimeGenome loaded - cannot update morphology".to_string(),
+                ));
+            };
+
+            if !genome.morphologies.contains(&morphology_id) {
+                return Err(ServiceError::NotFound {
+                    resource: "morphology".to_string(),
+                    id: morphology_id,
+                });
+            }
+
+            let usage_pairs = collect_morphology_usage_pairs(genome, &morphology_id);
+            tracing::info!(
+                target: "feagi-services",
+                "[MORPH-AUDIT][SERVICE] RuntimeGenome usage pairs for {}: {}",
+                morphology_id,
+                usage_pairs.len()
+            );
+            if !usage_pairs.is_empty() && !self.connectome.read().has_npu() {
+                return Err(ServiceError::InvalidState(
+                    "Cannot rebuild synapses for morphology update because NPU is not connected"
+                        .to_string(),
+                ));
+            }
+
+            genome
+                .morphologies
+                .add_morphology(morphology_id.clone(), morphology.clone());
+
+            usage_pairs
         };
 
-        if !genome.morphologies.contains(&morphology_id) {
-            return Err(ServiceError::NotFound {
-                resource: "morphology".to_string(),
-                id: morphology_id,
-            });
+        if usage_pairs.is_empty() {
+            let area_infos = self.list_cortical_areas().await?;
+            let fallback_pairs =
+                collect_morphology_usage_pairs_from_area_infos(&area_infos, &morphology_id);
+            if !fallback_pairs.is_empty() {
+                warn!(
+                    target: "feagi-services",
+                    "RuntimeGenome had no usage pairs for morphology '{}'; recovered {} pairs from ConnectomeManager snapshot",
+                    morphology_id,
+                    fallback_pairs.len()
+                );
+                usage_pairs = fallback_pairs;
+            }
+            tracing::info!(
+                target: "feagi-services",
+                "[MORPH-AUDIT][SERVICE] Connectome fallback usage pairs for {}: {}",
+                morphology_id,
+                usage_pairs.len()
+            );
         }
 
-        genome
-            .morphologies
-            .add_morphology(morphology_id.clone(), morphology.clone());
+        if !usage_pairs.is_empty() && !self.connectome.read().has_npu() {
+            return Err(ServiceError::InvalidState(
+                "Cannot rebuild synapses for morphology update because NPU is not connected"
+                    .to_string(),
+            ));
+        }
 
-        self.connectome
-            .write()
-            .upsert_morphology(morphology_id, morphology);
+        let mut manager = self.connectome.write();
+        manager.upsert_morphology(morphology_id.clone(), morphology);
+
+        let mut regenerated_pairs = 0usize;
+        let mut total_synapses = 0usize;
+        let mut skipped_pairs = 0usize;
+
+        for (raw_src_id, raw_dst_id) in usage_pairs {
+            tracing::debug!(
+                target: "feagi-services",
+                "[MORPH-AUDIT][SERVICE] Rebuilding mapping {} -> {} for morphology {}",
+                raw_src_id,
+                raw_dst_id,
+                morphology_id
+            );
+            let src_id = match parse_cortical_id_flexible(&raw_src_id) {
+                Ok(id) => id,
+                Err(error) => {
+                    warn!(
+                        target: "feagi-services",
+                        "Skipping morphology regeneration for invalid source cortical ID {}: {}",
+                        raw_src_id,
+                        error
+                    );
+                    skipped_pairs += 1;
+                    continue;
+                }
+            };
+            let dst_id = match parse_cortical_id_flexible(&raw_dst_id) {
+                Ok(id) => id,
+                Err(error) => {
+                    warn!(
+                        target: "feagi-services",
+                        "Skipping morphology regeneration for invalid destination cortical ID {}: {}",
+                        raw_dst_id,
+                        error
+                    );
+                    skipped_pairs += 1;
+                    continue;
+                }
+            };
+
+            let synapses = manager
+                .regenerate_synapses_for_mapping(&src_id, &dst_id)
+                .map_err(|e| {
+                    ServiceError::Backend(format!(
+                        "Failed to regenerate synapses for morphology update ({} -> {}): {}",
+                        src_id, dst_id, e
+                    ))
+                })?;
+            regenerated_pairs += 1;
+            total_synapses += synapses;
+        }
+
+        info!(
+            target: "feagi-services",
+            "Updated morphology '{}' and regenerated {} mapping pairs (synapses_created={}, skipped_pairs={})",
+            morphology_id,
+            regenerated_pairs,
+            total_synapses,
+            skipped_pairs
+        );
 
         Ok(())
     }
@@ -2184,7 +2387,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
 #[cfg(test)]
 mod tests {
-    use super::{replace_morphology_id_in_value, update_cortical_mapping_dst_in_properties};
+    use super::{
+        collect_morphology_usage_pairs, parse_cortical_id_flexible, replace_morphology_id_in_value,
+        update_cortical_mapping_dst_in_properties,
+    };
     use crate::types::ServiceResult;
     use std::collections::HashMap;
 
@@ -2232,6 +2438,108 @@ mod tests {
             .expect("dstX should be an array");
         assert_eq!(arr.len(), 1);
         Ok(())
+    }
+
+    #[test]
+    fn collect_morphology_usage_pairs_scans_object_and_array_rules() {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+        };
+
+        let src_a = CorticalID::try_from_bytes(b"csrc0001").unwrap();
+        let src_b = CorticalID::try_from_bytes(b"csrc0002").unwrap();
+        let dst_a = CorticalID::try_from_bytes(b"csrc0003").unwrap();
+        let dst_b = CorticalID::try_from_bytes(b"csrc0004").unwrap();
+
+        let mut area_a = CorticalArea::new(
+            src_a,
+            0,
+            "Source A".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(
+                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+            ),
+        )
+        .unwrap();
+        area_a.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                dst_a.as_base_64(): [
+                    {"morphology_id": "m_shared"},
+                    {"morphology_id": "m_shared"}
+                ],
+                dst_b.as_base_64(): [
+                    ["m_shared", 1, 1.0, false]
+                ]
+            }),
+        );
+
+        let mut area_b = CorticalArea::new(
+            src_b,
+            1,
+            "Source B".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(
+                feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+            ),
+        )
+        .unwrap();
+        area_b.properties.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                dst_a.as_base_64(): [{"morphology_id": "m_other"}]
+            }),
+        );
+
+        let mut cortical_areas = HashMap::new();
+        cortical_areas.insert(area_a.cortical_id, area_a);
+        cortical_areas.insert(area_b.cortical_id, area_b);
+        let genome = feagi_evolutionary::RuntimeGenome {
+            metadata: feagi_evolutionary::GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "test".to_string(),
+                genome_description: "".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+                brain_regions_root: None,
+            },
+            cortical_areas,
+            brain_regions: HashMap::new(),
+            morphologies: feagi_evolutionary::MorphologyRegistry::new(),
+            physiology: feagi_evolutionary::PhysiologyConfig::default(),
+            signatures: feagi_evolutionary::GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: feagi_evolutionary::GenomeStats::default(),
+        };
+
+        let pairs = collect_morphology_usage_pairs(&genome, "m_shared");
+        assert_eq!(
+            pairs,
+            vec![
+                (src_a.as_base_64(), dst_a.as_base_64()),
+                (src_a.as_base_64(), dst_b.as_base_64()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_cortical_id_flexible_accepts_base64_and_legacy_formats() {
+        use feagi_structures::genomic::cortical_area::CorticalID;
+
+        let original = CorticalID::try_from_bytes(b"csrc0001").unwrap();
+        let as_base64 = original.as_base_64();
+        let from_base64 = parse_cortical_id_flexible(&as_base64).expect("base64 should parse");
+        assert_eq!(from_base64, original);
+
+        let legacy_id = "csrc0001";
+        let from_legacy = parse_cortical_id_flexible(legacy_id).expect("legacy should parse");
+        assert_eq!(from_legacy, original);
     }
 
     #[tokio::test]

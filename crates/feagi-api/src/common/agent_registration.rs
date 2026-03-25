@@ -431,7 +431,8 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     };
 
                     if exists {
-                        // Area exists: ensure dimensions and dev_count match device_registrations.
+                        // Area exists: reconcile structural properties from registrations.
+                        // Preserve user-defined layout by not mutating existing position.
                         // If a genome was loaded with wrong dimensions (e.g. 1 channel per limb),
                         // update to the correct channel count from device_grouping.
                         let current =
@@ -454,9 +455,8 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             .or(current.dev_count);
                         let dimensions_mismatch = current.dimensions != expected_dimensions;
                         let dev_count_mismatch = current_dev_count != Some(device_count);
-                        let position_mismatch = current.position != expected_position;
 
-                        if dimensions_mismatch || dev_count_mismatch || position_mismatch {
+                        if dimensions_mismatch || dev_count_mismatch {
                             let mut changes: HashMap<String, serde_json::Value> = HashMap::new();
                             // Pass total dimensions. Do NOT pass cortical_dimensions_per_device here:
                             // genome service would treat it as per-device and multiply depth by dev_count.
@@ -472,26 +472,18 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                                 "dev_count".to_string(),
                                 serde_json::Value::Number(serde_json::Number::from(device_count)),
                             );
-                            changes.insert(
-                                "position".to_string(),
-                                serde_json::json!([
-                                    expected_position.0,
-                                    expected_position.1,
-                                    expected_position.2
-                                ]),
-                            );
                             if let Err(e) = genome_service
                                 .update_cortical_area(&cortical_id_b64, changes)
                                 .await
                             {
                                 warn!(
-                                    "⚠️ [API] Failed to update cortical area '{}' dimensions/dev_count/position: {}",
+                                    "⚠️ [API] Failed to update cortical area '{}' dimensions/dev_count: {}",
                                     cortical_id_b64, e
                                 );
                             } else {
                                 info!(
-                                    "[API] Updated cortical area '{}' to {} channels (dimensions {:?}, position {:?})",
-                                    cortical_id_b64, device_count, expected_dimensions, expected_position
+                                    "[API] Updated cortical area '{}' to {} channels (dimensions {:?})",
+                                    cortical_id_b64, device_count, expected_dimensions
                                 );
                             }
                         }
@@ -728,7 +720,8 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     };
 
                     if exists {
-                        // Area exists: reconcile dimensions/dev_count/position with current registration.
+                        // Area exists: reconcile structural properties from registrations.
+                        // Preserve user-defined layout by not mutating existing position.
                         // This keeps pre-existing sensory areas aligned with declared capabilities.
                         let current = match connectome_service
                             .get_cortical_area(&cortical_id_b64)
@@ -751,8 +744,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             .or(current.dev_count);
                         let dimensions_mismatch = current.dimensions != expected_dimensions;
                         let dev_count_mismatch = current_dev_count != Some(device_count);
-                        let position_mismatch = current.position != expected_position;
-                        if dimensions_mismatch || dev_count_mismatch || position_mismatch {
+                        if dimensions_mismatch || dev_count_mismatch {
                             let mut changes: HashMap<String, serde_json::Value> = HashMap::new();
                             changes.insert(
                                 "dimensions".to_string(),
@@ -766,26 +758,18 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                                 "dev_count".to_string(),
                                 serde_json::Value::Number(serde_json::Number::from(device_count)),
                             );
-                            changes.insert(
-                                "position".to_string(),
-                                serde_json::json!([
-                                    expected_position.0,
-                                    expected_position.1,
-                                    expected_position.2
-                                ]),
-                            );
                             if let Err(e) = genome_service
                                 .update_cortical_area(&cortical_id_b64, changes)
                                 .await
                             {
                                 warn!(
-                                    "⚠️ [API] Failed to update sensory cortical area '{}' dimensions/dev_count/position: {}",
+                                    "⚠️ [API] Failed to update sensory cortical area '{}' dimensions/dev_count: {}",
                                     cortical_id_b64, e
                                 );
                             } else {
                                 info!(
-                                    "[API] Updated sensory cortical area '{}' to registration dimensions {:?} (dev_count {}, position {:?})",
-                                    cortical_id_b64, expected_dimensions, device_count, expected_position
+                                    "[API] Updated sensory cortical area '{}' to registration dimensions {:?} (dev_count {})",
+                                    cortical_id_b64, expected_dimensions, device_count
                                 );
                             }
                         }
