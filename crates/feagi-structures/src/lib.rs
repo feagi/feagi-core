@@ -12,7 +12,7 @@ pub mod genomic;
 
 pub mod neuron_voxels;
 pub mod base_quantizable;
-pub mod ulog_temp;
+pub mod feagi_log;
 
 
 pub use feagi_structures_error::FeagiStructuresError;

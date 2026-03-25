@@ -193,6 +193,9 @@ feagi-serialization = { version = "=0.0.2", path = "crates/feagi-serialization" 
 feagi-npu-neural = { version = "=0.0.2", path = "crates/feagi-npu/neural" }
 feagi-observability = { version = "=0.0.2", path = "crates/feagi-observability" }
 
+# Embedded stuff
+defmt = {version = "1.0.1", optional = true}
+
 [profile.release]
 lto = true           # Link-time optimization
 codegen-units = 1    # Better optimization, slower compile

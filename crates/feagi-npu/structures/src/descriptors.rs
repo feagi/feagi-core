@@ -42,12 +42,14 @@ crate::define_quantizable_uint_type_family!(BurstCount);
 pub trait BurstCount:
 Copy + Clone + Send + Sync + QuantizableUInt + 'static
 {
+    
 }
 
 #[cfg(feature = "alloc")]
 pub trait BurstCount:
 Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'static
 {
+    
 }
 
 //endregion
