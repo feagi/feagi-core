@@ -19,7 +19,7 @@ use feagi_io::AgentID;
 use feagi_serialization::FeagiByteContainer;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 type CommandServerIndex = usize;
 
@@ -577,7 +577,7 @@ impl FeagiAgentHandler {
             FeagiMessage::AgentRegistration(register_message) => {
                 match &register_message {
                     AgentRegistrationMessage::ClientRequestRegistration(registration_request) => {
-                        info!(
+                        debug!(
                             target: "feagi-agent",
                             "WS registration request received: session={} descriptor={:?} caps={:?} protocol={:?}",
                             agent_id.to_base64(),
@@ -644,7 +644,7 @@ impl FeagiAgentHandler {
                                 }
                             }
                             if !self.should_replace_existing_descriptor_session(existing_agent_id) {
-                                info!(
+                                debug!(
                                     target: "feagi-agent",
                                     "Ignoring duplicate registration for descriptor {:?}: existing session {} remains active",
                                     registration_request.agent_descriptor(),
@@ -710,7 +710,7 @@ impl FeagiAgentHandler {
                             response_message,
                             0,
                         )?;
-                        info!(
+                        debug!(
                             target: "feagi-agent",
                             "WS registration success response sent: session={} descriptor={:?} mapped_caps={:?}",
                             agent_id.to_base64(),
@@ -804,7 +804,7 @@ impl FeagiAgentHandler {
                         device_regs,
                     );
                 }
-                info!(
+                debug!(
                     target: "feagi-agent",
                     "Stored device registrations for agent {}",
                     agent_id.to_base64()

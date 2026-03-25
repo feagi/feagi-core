@@ -387,6 +387,48 @@ impl TokioEmbodimentAgent {
         Ok(())
     }
 
+    /// Replace this session with a freshly constructed/connected one.
+    ///
+    /// This helper standardizes reconnect orchestration:
+    /// 1) best-effort deregistration + transport teardown of current session
+    /// 2) construct replacement session via caller-provided factory
+    /// 3) atomically swap `self` with replacement
+    ///
+    /// The factory should return an already connected/registered session.
+    pub fn reconnect_with_replacement_session<F, E>(
+        &mut self,
+        reason: Option<String>,
+        teardown_deadline_ms: Option<u64>,
+        mut replacement_factory: F,
+    ) -> Result<(), FeagiAgentError>
+    where
+        F: FnMut() -> Result<TokioEmbodimentAgent, E>,
+        E: std::fmt::Display,
+    {
+        let teardown_result =
+            self.request_deregistration_and_disconnect(reason, teardown_deadline_ms);
+        if let Err(error) = &teardown_result {
+            tracing::warn!(
+                "[feagi-agent] reconnect pre-teardown reported non-fatal error: {}",
+                error
+            );
+        }
+
+        let replacement = replacement_factory().map_err(|error| {
+            let mut message = format!("failed to create replacement session: {}", error);
+            if let Err(teardown_error) = teardown_result {
+                message = format!(
+                    "{}; pre-reconnect teardown error: {}",
+                    message, teardown_error
+                );
+            }
+            FeagiAgentError::ConnectionFailed(message)
+        })?;
+
+        *self = replacement;
+        Ok(())
+    }
+
     fn now_ms(&self) -> NowMs {
         self.base.elapsed().as_millis() as u64
     }

@@ -27,6 +27,7 @@ use feagi_agent::{AgentDescriptor, AuthToken};
 #[cfg(feature = "feagi-agent")]
 use feagi_api::common::agent_registration::{
     auto_create_cortical_areas_from_device_registrations,
+    derive_motor_cortical_ids_from_device_registrations,
     derive_sensory_cortical_ids_from_device_registrations,
 };
 use feagi_api::common::{Json as ApiJson, State as ApiStateExtract};
@@ -723,6 +724,29 @@ fn sample_named_motor_device_registrations() -> Value {
 }
 
 #[cfg(feature = "feagi-agent")]
+fn sample_motor_device_registrations_with_io_flags() -> Value {
+    json!({
+        "output_units_and_decoder_properties": {
+            "RotaryMotor": [
+                [
+                    {
+                        "friendly_name": "arm_motor",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}, {"id": 1}],
+                        "io_configuration_flags": {
+                            "frame_change_handling": "Absolute",
+                            "percentage_neuron_positioning": "Linear"
+                        }
+                    },
+                    {}
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
 fn sample_named_sensory_only_device_registrations() -> Value {
     json!({
         "input_units_and_encoder_properties": {
@@ -1216,6 +1240,90 @@ async fn test_auto_create_updates_existing_sensory_area_dimensions_from_encoder_
         resized.dimensions,
         (128, 96, 4),
         "Expected sensory area dimensions to expand to encoder properties"
+    );
+    assert_eq!(
+        resized.position,
+        (-100, 30, 0),
+        "Existing sensory area position must remain unchanged during auto-create reconciliation"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_preserves_existing_motor_area_position_while_reconciling_structure() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_motor_device_registrations_with_io_flags();
+    let motor_ids = derive_motor_cortical_ids_from_device_registrations(&registrations)
+        .expect("Failed deriving motor cortical IDs");
+    let cortical_id = motor_ids
+        .into_iter()
+        .next()
+        .expect("Expected at least one motor cortical ID");
+    let preserved_position = (777, 888, 9);
+
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "legacy_motor".to_string(),
+            dimensions: (1, 1, 1),
+            position: preserved_position,
+            area_type: "motor".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("Failed to pre-create motor area");
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let reconciled = areas
+        .iter()
+        .find(|area| area.cortical_id == cortical_id)
+        .expect("Expected motor area to exist after auto-create");
+
+    assert_eq!(
+        reconciled.position, preserved_position,
+        "Existing motor area position must remain unchanged during auto-create reconciliation"
+    );
+    assert_ne!(
+        reconciled.dimensions,
+        (1, 1, 1),
+        "Expected motor dimensions to reconcile from registration while preserving position"
+    );
+    assert_eq!(
+        reconciled
+            .properties
+            .get("dev_count")
+            .and_then(|v| v.as_u64()),
+        Some(2),
+        "Expected motor dev_count to reconcile from registration while preserving position"
     );
 }
 

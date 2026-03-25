@@ -252,6 +252,9 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
     let required_morphologies = vec![
         "block_to_block",
         "projector",
+        "transpose_xy",
+        "transpose_yz",
+        "transpose_xz",
         "sweeper",
         "last_to_first",
         "bitmask_encoder_x",
@@ -309,6 +312,36 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
     // projector - Function-based morphology
     registry.add_morphology(
         "projector".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // transpose_xy - Projector with x/y axis transposition
+    registry.add_morphology(
+        "transpose_xy".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // transpose_yz - Projector with y/z axis transposition
+    registry.add_morphology(
+        "transpose_yz".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // transpose_xz - Projector with x/z axis transposition
+    registry.add_morphology(
+        "transpose_xz".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},
@@ -687,6 +720,9 @@ mod tests {
         assert!(genome.morphologies.count() > 0);
         assert!(genome.morphologies.contains("block_to_block"));
         assert!(genome.morphologies.contains("projector"));
+        assert!(genome.morphologies.contains("transpose_xy"));
+        assert!(genome.morphologies.contains("transpose_yz"));
+        assert!(genome.morphologies.contains("transpose_xz"));
         assert!(genome.morphologies.contains("lateral_+x"));
     }
 
@@ -699,6 +735,9 @@ mod tests {
         assert!(registry.count() >= 11);
         assert!(registry.contains("block_to_block"));
         assert!(registry.contains("projector"));
+        assert!(registry.contains("transpose_xy"));
+        assert!(registry.contains("transpose_yz"));
+        assert!(registry.contains("transpose_xz"));
         assert!(registry.contains("all_to_0-0-0"));
         assert!(registry.contains("lateral_+x"));
         assert!(registry.contains("lateral_-z"));
@@ -777,6 +816,9 @@ mod tests {
         assert!(morphs_added > 0);
         assert!(genome.morphologies.contains("block_to_block"));
         assert!(genome.morphologies.contains("projector"));
+        assert!(genome.morphologies.contains("transpose_xy"));
+        assert!(genome.morphologies.contains("transpose_yz"));
+        assert!(genome.morphologies.contains("transpose_xz"));
         assert!(genome.morphologies.contains("episodic_memory"));
         assert!(genome.morphologies.contains("lateral_+x"));
     }
