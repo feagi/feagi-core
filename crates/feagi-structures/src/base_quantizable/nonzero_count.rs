@@ -1,6 +1,6 @@
 use core::cmp::{Eq, Ord, PartialOrd};
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::FeagiBaseError;
+use crate::FeagiStructuresError;
 
 pub type NonzeroCountUSize = NonzeroCountType<usize>;
 #[cfg(feature = "support_64bit_indexing_quantization")]
@@ -32,9 +32,11 @@ impl<T: QuantizableUInt> NonzeroCountType<T> {
         Self(n)
     }
 
-    pub fn new(n: T) -> Result<Self, FeagiBaseError> {
+    pub fn new(n: T) -> Result<Self, FeagiStructuresError> {
         if n < T::ONE {
-            return Err(FeagiBaseError::ValueCannotBeZero);
+            return Err(FeagiStructuresError::ValueCannotBeZero {
+                context: "nonzero count must be >= 1",
+            });
         }
         Ok(Self(n))
     }

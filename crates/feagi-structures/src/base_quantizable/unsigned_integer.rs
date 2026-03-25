@@ -184,7 +184,6 @@ pub trait QuantizableUInt:
     + Clone
     + Send
     + Sync
-    + Into<usize>
     + core::cmp::PartialOrd
     + core::ops::Add<Output = Self>
     + core::ops::Sub<Output = Self>
@@ -221,7 +220,6 @@ pub trait QuantizableUInt:
     + Debug
     + Display
     + Default
-    + Into<usize>
     + core::cmp::PartialOrd
     + core::ops::Add<Output = Self>
     + core::ops::Sub<Output = Self>
@@ -302,10 +300,6 @@ impl QuantizableUInt for usize {
     }
 }
 
-impl Into<usize> for usize {
-    fn into(self) -> usize { self } // lol
-}
-
 impl QuantizableUInt for u8 {
     const NUMBER_OF_BYTES: usize = size_of::<u8>();
     const ZERO: Self = 0;
@@ -359,12 +353,6 @@ impl QuantizableUInt for u8 {
             Ok(v) => v,
             Err(_) => u8::MAX,
         }
-    }
-}
-
-impl Into<usize> for u8 {
-    fn into(self) -> usize {
-        self as usize  // Just a cast - no computation
     }
 }
 
@@ -424,12 +412,6 @@ impl QuantizableUInt for u16 {
     }
 }
 
-impl Into<usize> for u16 {
-    fn into(self) -> usize {
-        self as usize  // Just a cast - no computation
-    }
-}
-
 impl QuantizableUInt for u32 {
     const NUMBER_OF_BYTES: usize = size_of::<u32>();
     const ZERO: Self = 0;
@@ -483,12 +465,6 @@ impl QuantizableUInt for u32 {
             Ok(v) => v,
             Err(_) => u32::MAX,
         }
-    }
-}
-
-impl Into<usize> for u32 {
-    fn into(self) -> usize {
-        self as usize  // Just a cast - no computation
     }
 }
 
@@ -549,9 +525,3 @@ impl QuantizableUInt for u64 {
     }
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
-impl Into<usize> for u64 {
-    fn into(self) -> usize {
-        self as usize  // Just a cast - no computation
-    }
-}

@@ -1,5 +1,5 @@
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::neuron::descriptors::{NeuralMembranePotential, NeuronVoxelCoordinate};
+use crate::neuron::descriptors::{NeuronVoxelCoordinate};
 
 /// A single neuron voxel storing spatial coordinates and activation potential in XYZP format.
 ///

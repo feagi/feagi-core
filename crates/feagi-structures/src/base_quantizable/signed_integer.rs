@@ -48,7 +48,6 @@ pub trait QuantizableInt:
     + Debug
     + Display
     + Default
-    + Into<isize>
     + core::ops::Add<Output = Self>
     + core::ops::Sub<Output = Self>
     + core::ops::Mul<Output = Self>
@@ -129,11 +128,6 @@ impl QuantizableInt for isize {
     }
 }
 
-impl Into<isize> for isize {
-    fn into(self) -> isize { self } // lol
-}
-
-
 impl QuantizableInt for i8 {
     const NUMBER_OF_BYTES: usize = size_of::<i8>();
     const ZERO: Self = 0;
@@ -194,10 +188,6 @@ impl QuantizableInt for i8 {
             }
         }
     }
-}
-
-impl Into<isize> for i8 {
-    fn into(self) -> isize { self as isize} // lol
 }
 
 impl QuantizableInt for i16 {
@@ -262,10 +252,6 @@ impl QuantizableInt for i16 {
     }
 }
 
-impl Into<isize> for i16 {
-    fn into(self) -> isize { self as isize } // lol
-}
-
 impl QuantizableInt for i32 {
     const NUMBER_OF_BYTES: usize = size_of::<i32>();
     const ZERO: Self = 0;
@@ -328,10 +314,6 @@ impl QuantizableInt for i32 {
     }
 }
 
-impl Into<isize> for i32 {
-    fn into(self) -> isize { self as isize } // lol
-}
-
 #[cfg(feature = "support_64bit_indexing_quantization")]
 impl QuantizableInt for i64 {
     const NUMBER_OF_BYTES: usize = size_of::<i64>();
@@ -386,7 +368,3 @@ impl QuantizableInt for i64 {
     }
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
-impl Into<isize> for i64 {
-    fn into(self) -> isize { self as isize } // lol
-}

@@ -3,13 +3,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)] // Switch to no_std mode if the std feature is disabled
 
-#[cfg(feature = "alloc")]
-extern crate alloc;
-extern crate core;
-
 mod feagi_json;
 mod templates;
-mod feagi_base_error;
+mod feagi_structures_error;
 
 pub mod genomic;
 pub mod neuron;
@@ -18,7 +14,7 @@ pub mod cortical_area;
 pub mod ulog_temp;
 
 
-pub use feagi_base_error::FeagiBaseError;
+pub use feagi_structures_error::FeagiStructuresError;
 pub use feagi_json::FeagiJSON;
 
 

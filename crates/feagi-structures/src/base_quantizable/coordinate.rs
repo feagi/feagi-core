@@ -1,6 +1,6 @@
 use crate::base_quantizable::signed_integer::QuantizableInt;
 use crate::base_quantizable::nonzero_count::NonzeroCountType;
-use crate::FeagiBaseError;
+use crate::FeagiStructuresError;
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
 
 
@@ -44,14 +44,14 @@ impl<T: QuantizableUInt> UnsignedCoordinate2DType<T> {
         x: T,
         y: T,
         bounds: &Dimension2DType<T>,
-    ) -> Result<Self, FeagiBaseError> {
+    ) -> Result<Self, FeagiStructuresError> {
         let coords = Self::new(x, y);
         bounds.verify_fit(&coords)?;
         Ok(coords)
     }
 }
 
-impl<T: QuantizableUInt> core::fmt::Display for UnsignedCoordinate2DType<T> {
+impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for UnsignedCoordinate2DType<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "UnsignedCoordinate2D<{}, {}>", self.x, self.y)
     }
@@ -59,7 +59,7 @@ impl<T: QuantizableUInt> core::fmt::Display for UnsignedCoordinate2DType<T> {
 
 impl<T: QuantizableUInt> Into<UnsignedCoordinate2DUSize> for UnsignedCoordinate2DType<T> {
     fn into(self) -> UnsignedCoordinate2DUSize {
-        UnsignedCoordinate2DUSize::new(self.x as usize, self.y as usize)
+        UnsignedCoordinate2DUSize::new(self.x.to_usize(), self.y.to_usize())
     }
 }
 
@@ -78,7 +78,7 @@ pub type SignedCoordinate2DI32 = SignedCoordinate2DType<i32>;
 pub type SignedCoordinate2DI16 = SignedCoordinate2DType<i16>;
 pub type SignedCoordinate2DI8 = SignedCoordinate2DType<i8>;
 
-impl<T: QuantizableUInt> SignedCoordinate2DType<T> {
+impl<T: QuantizableInt> SignedCoordinate2DType<T> {
 
     pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
     pub fn new(x: T, y: T) -> Self {
@@ -86,15 +86,15 @@ impl<T: QuantizableUInt> SignedCoordinate2DType<T> {
     }
 }
 
-impl<T: QuantizableUInt> core::fmt::Display for SignedCoordinate2DType<T> {
+impl<T: QuantizableInt + core::fmt::Display> core::fmt::Display for SignedCoordinate2DType<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "SignedCoordinate2D<{}, {}>", self.x, self.y)
     }
 }
 
-impl<T: QuantizableUInt> Into<SignedCoordinate2DISize> for SignedCoordinate2DType<T> {
+impl<T: QuantizableInt> Into<SignedCoordinate2DISize> for SignedCoordinate2DType<T> {
     fn into(self) -> SignedCoordinate2DISize {
-        SignedCoordinate2DISize::new(self.x as isize, self.y as isize)
+        SignedCoordinate2DISize::new(self.x.to_isize(), self.y.to_isize())
     }
 }
 
@@ -135,13 +135,13 @@ impl<T: QuantizableUInt> Dimension2DType<T> {
         Self { x, y }
     }
 
-    pub fn new(x: T, y: T) -> Result<Self, FeagiBaseError> {
+    pub fn new(x: T, y: T) -> Result<Self, FeagiStructuresError> {
         let x = NonzeroCountType::new(x)?;
         let y = NonzeroCountType::new(y)?;
         Ok(Self { x, y })
     }
 
-    pub fn new_square(n: T) -> Result<Self, FeagiBaseError> {
+    pub fn new_square(n: T) -> Result<Self, FeagiStructuresError> {
         let x = NonzeroCountType::new(n)?;
         let y = x;
         Ok(Self { x, y })
@@ -151,13 +151,14 @@ impl<T: QuantizableUInt> Dimension2DType<T> {
         coordinate.x < self.x.get() && coordinate.y < self.y.get()
     }
 
-    pub fn verify_fit(&self, coordinate: &UnsignedCoordinate2DType<T>) -> Result<(), FeagiBaseError> {
+    pub fn verify_fit(&self, coordinate: &UnsignedCoordinate2DType<T>) -> Result<(), FeagiStructuresError> {
         if self.does_fit(coordinate) {
             return Ok(());
         }
-        Err(FeagiBaseError::Coordinate2DOutOfBounds {
-            coordinate.clone().into(),
-            dimensions: self.into(),
+        Err(FeagiStructuresError::Coordinate2DOutOfBounds {
+            context: "coordinate does not fit in 2D bounds",
+            coordinate: (*coordinate).into(),
+            dimensions: (*self).into(),
         })
     }
 }
@@ -170,7 +171,7 @@ impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for Dimension2D
 
 impl<T: QuantizableUInt> Into<Dimension2DUSize> for Dimension2DType<T> {
     fn into(self) -> Dimension2DUSize {
-        Dimension2DUSize::new_unchecked(self.x as usize, self.y as usize)
+        Dimension2DUSize::new_unchecked(self.x.get().to_usize(), self.y.get().to_usize())
     }
 }
 
@@ -219,7 +220,7 @@ impl<T: QuantizableUInt> UnsignedCoordinate3DType<T> {
         y: T,
         z: T,
         bounds: &Dimension3DType<T>,
-    ) -> Result<Self, FeagiBaseError> {
+    ) -> Result<Self, FeagiStructuresError> {
         let coords = Self::new(x, y, z);
         bounds.verify_fit(&coords)?;
         Ok(coords)
@@ -234,7 +235,7 @@ impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for UnsignedCoo
 
 impl<T: QuantizableUInt> Into<UnsignedCoordinate3DUSize> for UnsignedCoordinate3DType<T> {
     fn into(self) -> UnsignedCoordinate3DUSize {
-        UnsignedCoordinate3DUSize::new(self.x as usize, self as usize, self as usize)
+        UnsignedCoordinate3DUSize::new(self.x.to_usize(), self.y.to_usize(), self.z.to_usize())
     }
 }
 //endregion
@@ -265,7 +266,7 @@ pub type SignedCoordinate3DI32 = SignedCoordinate3DType<i32>;
 pub type SignedCoordinate3DI16 = SignedCoordinate3DType<i16>;
 pub type SignedCoordinate3DI8 = SignedCoordinate3DType<i8>;
 
-impl<T: QuantizableUInt> SignedCoordinate3DType<T> {
+impl<T: QuantizableInt> SignedCoordinate3DType<T> {
 
     pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
 
@@ -274,15 +275,15 @@ impl<T: QuantizableUInt> SignedCoordinate3DType<T> {
     }
 }
 
-impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for SignedCoordinate3DType<T> {
+impl<T: QuantizableInt + core::fmt::Display> core::fmt::Display for SignedCoordinate3DType<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "SignedCoordinate3D<{}, {}, {}>", self.x, self.y, self.z)
     }
 }
 
-impl<T: QuantizableUInt> Into<SignedCoordinate3DISize> for SignedCoordinate3DType<T> {
+impl<T: QuantizableInt> Into<SignedCoordinate3DISize> for SignedCoordinate3DType<T> {
     fn into(self) -> SignedCoordinate3DISize {
-        SignedCoordinate3DISize::new(self.x as isize, self as isize, self as isize)
+        SignedCoordinate3DISize::new(self.x.to_isize(), self.y.to_isize(), self.z.to_isize())
     }
 }
 //endregion
@@ -324,14 +325,14 @@ impl<T: QuantizableUInt> Dimension3DType<T> {
         Self { x, y, z }
     }
 
-    pub fn new(x: T, y: T, z: T) -> Result<Self, FeagiBaseError> {
+    pub fn new(x: T, y: T, z: T) -> Result<Self, FeagiStructuresError> {
         let x = NonzeroCountType::new(x)?;
         let y = NonzeroCountType::new(y)?;
         let z = NonzeroCountType::new(z)?;
         Ok(Self { x, y, z })
     }
 
-    pub fn new_cube(n: T) -> Result<Self, FeagiBaseError> {
+    pub fn new_cube(n: T) -> Result<Self, FeagiStructuresError> {
         let x = NonzeroCountType::new(n)?;
         let y = x;
         let z = x;
@@ -344,13 +345,14 @@ impl<T: QuantizableUInt> Dimension3DType<T> {
             && coordinate.z < self.z.get()
     }
 
-    pub fn verify_fit(&self, coordinate: &UnsignedCoordinate3DType<T>) -> Result<(), FeagiBaseError> {
+    pub fn verify_fit(&self, coordinate: &UnsignedCoordinate3DType<T>) -> Result<(), FeagiStructuresError> {
         if self.does_fit(coordinate) {
             return Ok(());
         }
-        Err(FeagiBaseError::Coordinate3DOutOfBounds {
-            coordinate,
-            dimensions: self,
+        Err(FeagiStructuresError::Coordinate3DOutOfBounds {
+            context: "coordinate does not fit in 3D bounds",
+            coordinate: (*coordinate).into(),
+            dimensions: (*self).into(),
         })
     }
 }
@@ -363,7 +365,11 @@ impl<T: QuantizableUInt + core::fmt::Display> core::fmt::Display for Dimension3D
 
 impl<T: QuantizableUInt> Into<Dimension3DUSize> for Dimension3DType<T> {
     fn into(self) -> Dimension3DUSize {
-        Dimension3DUSize::new_unchecked(self.x as usize, self.y as usize, self.z as usize)
+        Dimension3DUSize::new_unchecked(
+            self.x.get().to_usize(),
+            self.y.get().to_usize(),
+            self.z.get().to_usize(),
+        )
     }
 }
 
