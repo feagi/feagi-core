@@ -153,30 +153,15 @@ macro_rules! impl_quantizable_uint_wrapper {
 #[macro_export]
 macro_rules! define_quantizable_uint_type_family {
     ($base_name:ident) => {
-        $crate::base_quantizable::descriptor_macros::paste! {
             #[repr(transparent)]
             #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-            pub struct [<$base_name Type>]<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt>(pub T);
+            pub struct $base_name<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt>(pub T);
 
-            $crate::impl_quantizable_uint_wrapper!([<$base_name Type>]);
-
-            #[cfg(feature = "support_64bit_indexing_quantization")]
-            pub type [<$base_name U64>] = [<$base_name Type>]<u64>;
-            pub type [<$base_name U32>] = [<$base_name Type>]<u32>;
-            pub type [<$base_name U16>] = [<$base_name Type>]<u16>;
-            pub type [<$base_name U8>] = [<$base_name Type>]<u8>;
-        }
+            $crate::impl_quantizable_uint_wrapper!($base_name);
     };
 }
 
 // TODO implement display on alloc builds
-
-#[cfg(feature = "support_64bit_indexing_quantization")]
-pub type QuantizableUIntU64 = u64;
-pub type QuantizableUIntU32 = u32;
-pub type QuantizableUIntU16 = u16;
-pub type QuantizableUIntU8 = u8;
-
 
 #[cfg(not(feature = "alloc"))]
 pub trait QuantizableUInt:

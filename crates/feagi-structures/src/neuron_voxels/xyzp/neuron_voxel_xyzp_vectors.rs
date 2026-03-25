@@ -1,25 +1,27 @@
-// NOTE: Requires Alloc!
 
 use core::ops::RangeInclusive;
-use crate::neuron::FeagiNeuronError;
-use crate::neuron::voxels::xyzp::neuron_voxel_xyzp::{NeuronVoxelXYZP};
+
+use crate::neuron_voxels::FeagiNeuronVoxelError;
+use crate::neuron_voxels::xyzp::neuron_voxel_xyzp::{NeuronVoxelXYZP};
+use crate::base_quantizable::unsigned_integer::QuantizableUInt;
+use crate::base_quantizable::value::QuantizableValue;
+use crate::neuron_voxels::descriptors::{NeuronPotentialUnit, NeuronVoxelCoordinate};
 
 #[cfg(feature = "ndarray")]
 use ndarray::Array1;
 
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
-use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::neuron::descriptors::{NeuralMembranePotential, NeuronVoxelCoordinate};
+
 
 /// Structure-of-arrays storage for neuron voxel data.
 ///
 /// Stores neuron voxel coordinates and potentials in separate parallel arrays.
 /// WARNING: Does not check for duplicate neuron coordinates automatically!
 #[derive(Clone, Debug, PartialEq)]
-pub struct NeuronVoxelXYZPArrays<Potential, CoordQuant>
+pub struct NeuronVoxelXYZPVectors<Potential, CoordQuant>
 where
-    Potential: NeuralMembranePotential,
+    Potential: QuantizableValue,
     CoordQuant: QuantizableUInt
 {
     /// X coordinates of neuron voxels (using Cartesian coordinate system)
@@ -32,8 +34,7 @@ where
     p: Vec<Potential>,
 }
 
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxelXYZPArrays<Potential, CoordQuant> {
-    //region Unique Constructors
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> NeuronVoxelXYZPVectors<Potential, CoordQuant> {
 
     /// Creates a new empty NeuronVoxelXYZPArrays instance.
     ///
@@ -42,29 +43,31 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPVectors;
     ///
-    /// let arrays = NeuronVoxelXYZPArrays::new();
+    /// let arrays = NeuronVoxelXYZPVectors::new();
     /// assert_eq!(arrays.len(), 0);
     /// assert!(arrays.is_empty());
     /// ```
     pub fn new() -> Self {
-        NeuronVoxelXYZPArrays {
+        NeuronVoxelXYZPVectors {
             x: Vec::new(),
             y: Vec::new(),
             z: Vec::new(),
             p: Vec::new(),
         }
     }
+
+
 }
 
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> Default for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> Default for NeuronVoxelXYZPVectors<Potential, CoordQuant> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxelXYZPArrays<Potential, CoordQuant> {
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> NeuronVoxelXYZPVectors<Potential, CoordQuant> {
     /// Creates a new NeuronVoxelXYZPArrays instance from four separate vectors of equal length.
     ///
     /// # Arguments
@@ -74,18 +77,18 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     /// * `p` - Vector of potential/activation values
     ///
     /// # Returns
-    /// * `Result<Self, NeuronError>` - A new instance or an error if the vectors have different lengths
+    /// * `Result<Self, FeagiNeuronVoxelError;>` - A new instance or an error if the vectors have different lengths
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPVectors;
     ///
     /// let x = vec![1, 2, 3];
     /// let y = vec![4, 5, 6];
     /// let z = vec![7, 8, 9];
     /// let p = vec![0.1, 0.2, 0.3];
     ///
-    /// let arrays = NeuronVoxelXYZPArrays::new_from_vectors(x, y, z, p).unwrap();
+    /// let arrays = NeuronVoxelXYZPVectors::new_from_vectors(x, y, z, p).unwrap();
     /// assert_eq!(arrays.len(), 3);
     /// ```
     pub fn new_from_vectors(
@@ -93,12 +96,12 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
         y: Vec<CoordQuant>,
         z: Vec<CoordQuant>,
         p: Vec<Potential>,
-    ) -> Result<Self, FeagiNeuronError> {
+    ) -> Result<Self, FeagiNeuronVoxelError> {
         let len = x.len();
         if len != y.len() || len != z.len() || len != p.len() {
-            return Err(FeagiNeuronError::BadParameters());
+            return Err(FeagiNeuronVoxelError::BadParameters{context: "Cannot create NeuronVoxelXYZP vectors with unequal length input vectors!"});
         }
-        Ok(NeuronVoxelXYZPArrays { x, y, z, p })
+        Ok(NeuronVoxelXYZPVectors { x, y, z, p })
     }
 
     #[cfg(feature = "ndarray")]
@@ -116,14 +119,14 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     /// # Examples
     /// ```
     /// use ndarray::Array1;
-    /// use feagi_structures::neuron::voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPVectors;
     ///
     /// let x_nd = Array1::from_vec(vec![1, 2, 3]);
     /// let y_nd = Array1::from_vec(vec![4, 5, 6]);
     /// let z_nd = Array1::from_vec(vec![7, 8, 9]);
     /// let p_nd = Array1::from_vec(vec![0.1, 0.2, 0.3]);
     ///
-    /// let arrays = NeuronVoxelXYZPArrays::new_from_ndarrays(x_nd, y_nd, z_nd, p_nd).unwrap();
+    /// let arrays = NeuronVoxelXYZPVectors::new_from_ndarrays(x_nd, y_nd, z_nd, p_nd).unwrap();
     /// assert_eq!(arrays.len(), 3);
     /// ```
     pub fn new_from_ndarrays(
@@ -131,12 +134,12 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
         y_nd: Array1<CoordQuant>,
         z_nd: Array1<CoordQuant>,
         p_nd: Array1<Potential>,
-    ) -> Result<Self, FeagiNeuronError> {
+    ) -> Result<Self, FeagiNeuronVoxelError> {
         let len = x_nd.len();
         if len != y_nd.len() || len != z_nd.len() || len != p_nd.len() {
-            return Err(FeagiNeuronError::BadParameters());
+            return Err(FeagiNeuronVoxelError::BadParameters{context: "Cannot create NeuronVoxelXYZP vectors with unequal length input ndarrays!"});
         }
-        Ok(NeuronVoxelXYZPArrays {
+        Ok(NeuronVoxelXYZPVectors {
             x: x_nd.to_vec(),
             y: y_nd.to_vec(),
             z: z_nd.to_vec(),
@@ -156,7 +159,7 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     /// # Returns
     /// * `Self` - A new instance
     pub fn with_capacity(number_of_neurons_initial: usize) -> Self {
-        NeuronVoxelXYZPArrays {
+        NeuronVoxelXYZPVectors {
             x: Vec::with_capacity(number_of_neurons_initial),
             y: Vec::with_capacity(number_of_neurons_initial),
             z: Vec::with_capacity(number_of_neurons_initial),
@@ -171,9 +174,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPVectors;
     ///
-    /// let arrays = NeuronVoxelXYZPArrays::with_capacity(100);
+    /// let arrays = NeuronVoxelXYZPVectors::with_capacity(100);
     /// assert_eq!(arrays.capacity(), 100);
     /// ```
     pub fn capacity(&self) -> usize {
@@ -187,9 +190,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(10);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(10);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// assert_eq!(arrays.spare_capacity(), 9);
     /// ```
@@ -204,9 +207,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(1);
     /// assert_eq!(arrays.len(), 0);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// assert_eq!(arrays.len(), 1);
@@ -221,9 +224,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(100);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(100);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// arrays.shrink_to_fit();
     /// assert_eq!(arrays.capacity(), 1);
@@ -245,9 +248,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPVectors;
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(10);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(10);
     /// arrays.ensure_capacity(50);
     /// assert!(arrays.capacity() >= 50);
     /// ```
@@ -268,9 +271,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPVectors;
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::new();
+    /// let mut arrays = NeuronVoxelXYZPVectors::new();
     /// arrays.reserve(100);
     /// assert!(arrays.capacity() >= 100);
     /// ```
@@ -288,9 +291,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(1);
     /// let neuron = NeuronVoxelXYZP::new(1, 2, 3, 0.5);
     /// arrays.push(&neuron);
     /// assert_eq!(arrays.len(), 1);
@@ -312,9 +315,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPVectors;
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::new();
+    /// let mut arrays = NeuronVoxelXYZPVectors::new();
     /// arrays.push_raw(1, 2, 3, 0.5);
     /// assert_eq!(arrays.len(), 1);
     /// ```
@@ -331,20 +334,20 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     /// * `index` - The index of the neuron to retrieve
     ///
     /// # Returns
-    /// * `Result<NeuronVoxelXYZP, FeagiNeuronError>` - The neuron at the index or an error if out of bounds
+    /// * `Result<NeuronVoxelXYZP, FeagiNeuronVoxelError>` - The neuron at the index or an error if out of bounds
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(1);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// let neuron = arrays.get(0).unwrap();
     /// assert_eq!(neuron.neuron_voxel_coordinate.x, 1);
     /// ```
-    pub fn get(&self, index: usize) -> Result<NeuronVoxelXYZP<Potential, CoordQuant>, FeagiNeuronError> {
+    pub fn get(&self, index: usize) -> Result<NeuronVoxelXYZP<Potential, CoordQuant>, FeagiNeuronVoxelError> {
         if index >= self.len() {
-            return Err(FeagiNeuronError::BadParameters());
+            return Err(FeagiNeuronVoxelError::BadParameters());
         }
         let x = self.x[index];
         let y = self.y[index];
@@ -357,33 +360,33 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     }
 
     /// Gets the X component of the neuron at the specified index
-    pub fn get_x(&self, index: usize) -> Result<u32, FeagiNeuronError> {
+    pub fn get_x(&self, index: usize) -> Result<u32, FeagiNeuronVoxelError> {
         if index >= self.len() {
-            return Err(FeagiNeuronError::BadParameters());
+            return Err(FeagiNeuronVoxelError::BadParameters());
         }
         Ok(self.x[index])
     }
 
     /// Gets the Y component of the neuron at the specified index
-    pub fn get_y(&self, index: usize) -> Result<u32, FeagiNeuronError> {
+    pub fn get_y(&self, index: usize) -> Result<u32, FeagiNeuronVoxelError> {
         if index >= self.len() {
-            return Err(FeagiNeuronError::BadParameters());
+            return Err(FeagiNeuronVoxelError::BadParameters());
         }
         Ok(self.y[index])
     }
 
     /// Gets the Z component of the neuron at the specified index
-    pub fn get_z(&self, index: usize) -> Result<u32, FeagiNeuronError> {
+    pub fn get_z(&self, index: usize) -> Result<u32, FeagiNeuronVoxelError> {
         if index >= self.len() {
-            return Err(FeagiNeuronError::BadParameters());
+            return Err(FeagiNeuronVoxelError::BadParameters());
         }
         Ok(self.z[index])
     }
 
     /// Gets the P component of the neuron at the specified index
-    pub fn get_p(&self, index: usize) -> Result<Potential, FeagiNeuronError> {
+    pub fn get_p(&self, index: usize) -> Result<Potential, FeagiNeuronVoxelError> {
         if index >= self.len() {
-            return Err(FeagiNeuronError::BadParameters());
+            return Err(FeagiNeuronVoxelError::BadParameters());
         }
         Ok(self.p[index])
     }
@@ -395,9 +398,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(1);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// let neuron = arrays.pop().unwrap();
     /// assert_eq!(neuron.neuron_voxel_coordinate.x, 1);
@@ -430,9 +433,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(1);
     /// assert!(arrays.is_empty());
     ///
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
@@ -449,9 +452,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(2);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
     ///
@@ -483,9 +486,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(2);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
     ///
@@ -525,19 +528,20 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     pub fn update_vectors_from_external<F>(
         &mut self,
         vectors_changer: F,
-    ) -> Result<(), FeagiNeuronError>
+    ) -> Result<(), FeagiNeuronVoxelError>
     where
         F: FnOnce(
             &mut Vec<CoordQuant>,
             &mut Vec<CoordQuant>,
             &mut Vec<CoordQuant>,
             &mut Vec<Potential>,
-        ) -> Result<(), FeagiNeuronError>,
+        ) -> Result<(), FeagiNeuronVoxelError>,
     {
         vectors_changer(&mut self.x, &mut self.y, &mut self.z, &mut self.p)?;
         self.verify_equal_vector_lengths()
     }
 
+    // TODO there are faster ways to do this
     /// Creates a vector of NeuronVoxelXYZP instances from the current arrays.
     ///
     /// # Returns
@@ -545,9 +549,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(2);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
     ///
@@ -573,9 +577,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(2);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
     ///
@@ -606,9 +610,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(2);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
     /// assert_eq!(arrays.get_size_in_number_of_bytes(), 32); // 2 neuron voxels × 16 bytes
@@ -624,9 +628,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     ///
     /// # Examples
     /// ```
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(1);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     ///
     /// let (x, y, z, p) = arrays.borrow_xyzp_vectors();
@@ -652,9 +656,9 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
     /// # Examples
     /// ```
     /// use std::ops::RangeInclusive;
-    /// use feagi_structures::neuron::voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPVectors, NeuronVoxelXYZP};
     ///
-    /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(3);
+    /// let mut arrays = NeuronVoxelXYZPVectors::with_capacity(3);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
     /// arrays.push(&NeuronVoxelXYZP::new(7, 8, 9, 0.9));
@@ -672,7 +676,7 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
         x_range: RangeInclusive<CoordQuant>,
         y_range: RangeInclusive<CoordQuant>,
         z_range: RangeInclusive<CoordQuant>,
-    ) -> Result<NeuronVoxelXYZPArrays<Potential, CoordQuant>, FeagiNeuronError> {
+    ) -> Result<NeuronVoxelXYZPVectors<Potential, CoordQuant>, FeagiNeuronVoxelError> {
         let mut xv: Vec<CoordQuant> = Vec::new();
         let mut yv: Vec<CoordQuant> = Vec::new();
         let mut zv: Vec<CoordQuant> = Vec::new();
@@ -692,23 +696,23 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
             }
         }
 
-        NeuronVoxelXYZPArrays::new_from_vectors(xv, yv, zv, pv)
+        NeuronVoxelXYZPVectors::new_from_vectors(xv, yv, zv, pv)
     }
 
     /// Validates that all four internal vectors have the same length. This must never fail.
     ///
     /// # Returns
     /// * `Result<(), NeuronError>` - Success or an error if the vectors have different lengths
-    fn verify_equal_vector_lengths(&self) -> Result<(), FeagiNeuronError> {
+    fn verify_equal_vector_lengths(&self) -> Result<(), FeagiNeuronVoxelError> {
         let len = self.x.len();
         if !((self.y.len() == len) && (self.x.len() == len) && (self.z.len() == len)) {
-            return Err(FeagiNeuronError::InternalError());
+            return Err(FeagiNeuronVoxelError::InternalError{context: "Verification of equal lengths of NeuronVoxelXYZPVectors internal members failed! A crash is extremely likely!"});
         }
         Ok(())
     }
 }
 
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> std::fmt::Display for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> std::fmt::Display for NeuronVoxelXYZPVectors<Potential, CoordQuant> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s = format!(
             "'NeuronVoxelXYZPArrays(X: {:?}, Y: {:?}, Z: {:?}, P: {:?})'",
@@ -719,7 +723,7 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> std::fmt::
 }
 
 // Implement IntoIterator for owned NeuronVoxelXYZPArrays
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> IntoIterator for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> IntoIterator for NeuronVoxelXYZPVectors<Potential, CoordQuant> {
     type Item = NeuronVoxelXYZP<Potential, CoordQuant>;
     type IntoIter = NeuronVoxelXYZPArraysIntoIter<Potential, CoordQuant>;
 
@@ -734,14 +738,15 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> IntoIterat
 }
 
 /// Iterator for consuming NeuronVoxelXYZPArrays and producing owned NeuronVoxelXYZP instances.
-pub struct NeuronVoxelXYZPArraysIntoIter<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> {
+//region Iterator
+pub struct NeuronVoxelXYZPArraysIntoIter<Potential: QuantizableValue, CoordQuant: QuantizableUInt> {
     x: std::vec::IntoIter<CoordQuant>,
     y: std::vec::IntoIter<CoordQuant>,
     z: std::vec::IntoIter<CoordQuant>,
     p: std::vec::IntoIter<Potential>,
 }
 
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> Iterator for NeuronVoxelXYZPArraysIntoIter<Potential, CoordQuant> {
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> Iterator for NeuronVoxelXYZPArraysIntoIter<Potential, CoordQuant> {
     type Item = NeuronVoxelXYZP<Potential, CoordQuant>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -759,14 +764,14 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> Iterator f
     }
 }
 
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> ExactSizeIterator for NeuronVoxelXYZPArraysIntoIter<Potential, CoordQuant> {
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> ExactSizeIterator for NeuronVoxelXYZPArraysIntoIter<Potential, CoordQuant> {
     fn len(&self) -> usize {
         self.x.len()
     }
 }
 
 // Implement IntoParallelIterator for owned NeuronVoxelXYZPArrays
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> IntoParallelIterator for NeuronVoxelXYZPArrays<Potential, CoordQuant> {
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> IntoParallelIterator for NeuronVoxelXYZPVectors<Potential, CoordQuant> {
     type Iter = NeuronVoxelXYZPArraysParIter<Potential, CoordQuant>;
     type Item = NeuronVoxelXYZP<Potential, CoordQuant>;
 
@@ -779,16 +784,21 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> IntoParall
         }
     }
 }
+//endregion
+
 
 /// Parallel iterator for processing NeuronVoxelXYZPArrays using Rayon.
-pub struct NeuronVoxelXYZPArraysParIter<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> {
+//region Rayon Iterator
+#[cfg(feature = "rayon")]
+pub struct NeuronVoxelXYZPArraysParIter<Potential: QuantizableValue, CoordQuant: QuantizableUInt> {
     x: Vec<CoordQuant>,
     y: Vec<CoordQuant>,
     z: Vec<CoordQuant>,
     p: Vec<Potential>,
 }
 
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> ParallelIterator for NeuronVoxelXYZPArraysParIter<Potential, CoordQuant> {
+#[cfg(feature = "rayon")]
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> ParallelIterator for NeuronVoxelXYZPArraysParIter<Potential, CoordQuant> {
     type Item = NeuronVoxelXYZP<Potential, CoordQuant>;
 
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
@@ -809,7 +819,8 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> ParallelIt
     }
 }
 
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> IndexedParallelIterator for NeuronVoxelXYZPArraysParIter<Potential, CoordQuant> {
+#[cfg(feature = "rayon")]
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> IndexedParallelIterator for NeuronVoxelXYZPArraysParIter<Potential, CoordQuant> {
     fn len(&self) -> usize {
         self.x.len()
     }
@@ -846,3 +857,4 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> IndexedPar
             .with_producer(callback)
     }
 }
+//endregion

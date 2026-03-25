@@ -1,34 +1,10 @@
-use crate::{define_xy_coordinates, define_xyz_coordinates};
+// SPECIAL NOTE: ONLY EXPOSE THE I32 variants via the module as we do not care about other
+// quantizable types! These are representing configurations in the genome which do not have
+// quantizable sizes at all!
 
-define_xy_coordinates!(
-    GenomeCoordinate2D,
-    i32,
-    "GenomeCoordinate2D",
-    "2D coordinate local to the FEAGI Genome space.
+// Represents a 2D position within the Circuit Builder of brain visualizer
+crate::define_signed_coordinate_2d_type_family!(GenomeCoordinate2D);
 
-Represents a 2D position within the global genome coordinate system,
-using signed integers to allow for negative coordinates and relative
-positioning across the entire genome space.
+// Represents a 3D position within the Cortical Area Viewer of Brain Visualizer
+crate::define_signed_coordinate_3d_type_family!(GenomeCoordinate3D);
 
-# Usage
-Used for 2D visualization positioning of brain regions and cortical areas
-within the genome's 2D projection plane."
-);
-
-define_xyz_coordinates!(
-    GenomeCoordinate3D,
-    i32,
-    "GenomeCoordinate3D",
-    "3D coordinate local to the FEAGI Genome space.
-
-Represents a position within the global genome coordinate system,
-using signed integers to allow for negative coordinates and relative
-positioning across the entire genome space.
-
-# Usage
-Used for absolute positioning of cortical areas within the genome
-and for calculating spatial relationships between different brain regions."
-);
-
-// Alias for backward compatibility
-pub type GenomeCoordinate = GenomeCoordinate3D;

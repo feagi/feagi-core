@@ -1,7 +1,7 @@
 use super::descriptors::MiscDataDimensions;
 use super::ImageFrame;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
-use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPVectors;
 use feagi_structures::FeagiDataError;
 use ndarray::{Array3, Zip};
 
@@ -103,7 +103,7 @@ impl MiscData {
 
     pub fn overwrite_neuron_data(
         &self,
-        write_target: &mut NeuronVoxelXYZPArrays,
+        write_target: &mut NeuronVoxelXYZPVectors,
         x_channel_offset: CorticalChannelIndex,
     ) -> Result<(), FeagiDataError> {
         const EPSILON: f32 = 0.0001; // avoid writing near zero vals

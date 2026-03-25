@@ -11,7 +11,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
 };
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPVectors,
 };
 use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
@@ -22,7 +22,7 @@ use std::time::Instant;
 pub struct CartesianPlaneNeuronVoxelXYZPEncoder {
     image_properties: ImageFrameProperties,
     cortical_write_target: CorticalID,
-    scratch_space: Vec<NeuronVoxelXYZPArrays>,
+    scratch_space: Vec<NeuronVoxelXYZPVectors>,
 }
 
 impl NeuronVoxelXYZPEncoder for CartesianPlaneNeuronVoxelXYZPEncoder {
@@ -98,7 +98,7 @@ impl CartesianPlaneNeuronVoxelXYZPEncoder {
         let encoder = CartesianPlaneNeuronVoxelXYZPEncoder {
             image_properties: *image_properties,
             cortical_write_target,
-            scratch_space: vec![NeuronVoxelXYZPArrays::new(); *number_channels as usize],
+            scratch_space: vec![NeuronVoxelXYZPVectors::new(); *number_channels as usize],
         };
         Ok(Box::new(encoder))
     }

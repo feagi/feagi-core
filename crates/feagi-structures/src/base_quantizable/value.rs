@@ -155,29 +155,15 @@ macro_rules! impl_quantizable_value_wrapper {
 #[macro_export]
 macro_rules! define_quantizable_value_type_family {
     ($base_name:ident) => {
-        $crate::base_quantizable::descriptor_macros::paste! {
             #[repr(transparent)]
             #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-            pub struct [<$base_name Type>]<T: $crate::base_quantizable::value::QuantizableValue>(pub T);
 
-            $crate::impl_quantizable_value_wrapper!([<$base_name Type>]);
+            pub struct $base_name<T: $crate::base_quantizable::value::QuantizableValue>(pub T);
 
-            #[cfg(feature = "support_64bit_indexing_quantization")]
-            pub type [<$base_name F64>] = [<$base_name Type>]<f64>;
-            pub type [<$base_name F32>] = [<$base_name Type>]<f32>;
-            pub type [<$base_name F16>] = [<$base_name Type>]<$crate::base_quantizable::descriptor_macros::FeagiF16>;
-            pub type [<$base_name U8>] = [<$base_name Type>]<u8>;
-        }
+            $crate::impl_quantizable_value_wrapper!($base_name);
     };
 }
 
-
-
-#[cfg(feature = "support_64bit_indexing_quantization")]
-pub type QuantizableValueF64 = f64;
-pub type QuantizableValueF32 = f32;
-pub type QuantizableValueF16 = f16;
-pub type QuantizableValueU8 = u8;
 
 #[cfg(not(feature = "alloc"))]
 pub trait QuantizableValue:

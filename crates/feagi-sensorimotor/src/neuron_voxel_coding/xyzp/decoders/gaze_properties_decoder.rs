@@ -276,7 +276,7 @@ mod tests {
     use super::*;
     use feagi_structures::genomic::cortical_area::CoreCorticalType;
     use feagi_structures::neuron_voxels::xyzp::{
-        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPVectors,
     };
 
     /// Ensures partial gaze packets do not panic.
@@ -302,7 +302,7 @@ mod tests {
 
         // Motor packet contains ONLY eccentricity array, modularity missing.
         let mut voxels = CorticalMappedXYZPNeuronVoxels::new();
-        let _ = voxels.insert(eccentricity_id, NeuronVoxelXYZPArrays::new());
+        let _ = voxels.insert(eccentricity_id, NeuronVoxelXYZPVectors::new());
 
         let mut pipelines: Vec<MotorPipelineStageRunner> = Vec::new();
         let mut changed: Vec<bool> = Vec::new();

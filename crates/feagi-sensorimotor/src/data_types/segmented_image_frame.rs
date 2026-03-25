@@ -11,7 +11,7 @@ use super::descriptors::{
 };
 use super::ImageFrame;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
-use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPVectors;
 use feagi_structures::FeagiDataError;
 use ndarray::Array3;
 use rayon::prelude::*;
@@ -309,7 +309,7 @@ impl SegmentedImageFrame {
 
     pub(crate) fn overwrite_neuron_data(
         &self,
-        write_targets: &mut [NeuronVoxelXYZPArrays; 9],
+        write_targets: &mut [NeuronVoxelXYZPVectors; 9],
         channel_index: CorticalChannelIndex,
     ) -> Result<(), FeagiDataError> {
         let ordered_images = self.get_ordered_image_frame_references();

@@ -16,11 +16,6 @@ Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableValue + 'sta
 {
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
-impl PercentageScale for PercentageScaleF64 {}
-impl PercentageScale for PercentageScaleF32 {}
-impl PercentageScale for PercentageScaleF16 {}
-impl PercentageScale for PercentageScaleU8 {}
 //endregion
 
 //region PSP Multiplier
@@ -38,11 +33,6 @@ Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableValue + 'sta
 {
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
-impl PSPMultiplier for PSPMultiplierF64 {}
-impl PSPMultiplier for PSPMultiplierF32 {}
-impl PSPMultiplier for PSPMultiplierF16 {}
-impl PSPMultiplier for PSPMultiplierU8 {}
 //endregion
 
 //region Burst Delta Count
@@ -60,11 +50,6 @@ Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'stat
 {
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
-impl BurstCount for BurstCountU64 {}
-impl BurstCount for BurstCountU32 {}
-impl BurstCount for BurstCountU16 {}
-impl BurstCount for BurstCountU8 {}
 //endregion
 
 //region Interneuron Index
@@ -82,11 +67,6 @@ Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'stat
 {
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
-impl InterneuronIndex for InterneuronIndexU64 {}
-impl InterneuronIndex for InterneuronIndexU32 {}
-impl InterneuronIndex for InterneuronIndexU16 {}
-impl InterneuronIndex for InterneuronIndexU8 {}
 //endregion
 
 //region Cortical Area Index
@@ -104,11 +84,6 @@ Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'stat
 {
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
-impl CorticalAreaIndex for CorticalAreaIndexU64 {}
-impl CorticalAreaIndex for CorticalAreaIndexU32 {}
-impl CorticalAreaIndex for CorticalAreaIndexU16 {}
-impl CorticalAreaIndex for CorticalAreaIndexU8 {}
 //endregion
 
 //region Synapse Index
@@ -126,11 +101,6 @@ Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableUInt + 'stat
 {
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
-impl SynapseIndex for SynapseIndexU64 {}
-impl SynapseIndex for SynapseIndexU32 {}
-impl SynapseIndex for SynapseIndexU16 {}
-impl SynapseIndex for SynapseIndexU8 {}
 //endregion
 
 //region PSP Multiplier
@@ -148,9 +118,4 @@ Copy + Clone + Send + Sync + Debug + Display + Default + QuantizableValue + 'sta
 {
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
-impl PSPMultiplier for PSPMultiplierF64 {}
-impl PSPMultiplier for PSPMultiplierF32 {}
-impl PSPMultiplier for PSPMultiplierF16 {}
-impl PSPMultiplier for PSPMultiplierU8 {}
 //endregion

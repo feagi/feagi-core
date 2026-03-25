@@ -11,7 +11,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
 };
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPVectors,
 };
 use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
@@ -22,7 +22,7 @@ use std::time::Instant;
 pub struct SegmentedImageFrameNeuronVoxelXYZPEncoder {
     segmented_image_properties: SegmentedImageFrameProperties,
     cortical_write_targets: [CorticalID; 9],
-    neuron_scratch_spaces: Vec<[NeuronVoxelXYZPArrays; 9]>, // channel index {segment index }
+    neuron_scratch_spaces: Vec<[NeuronVoxelXYZPVectors; 9]>, // channel index {segment index }
 }
 
 impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
@@ -116,15 +116,15 @@ impl SegmentedImageFrameNeuronVoxelXYZPEncoder {
             cortical_write_targets: cortical_ids,
             neuron_scratch_spaces: vec![
                 [
-                    NeuronVoxelXYZPArrays::new(),
-                    NeuronVoxelXYZPArrays::new(),
-                    NeuronVoxelXYZPArrays::new(),
-                    NeuronVoxelXYZPArrays::new(),
-                    NeuronVoxelXYZPArrays::new(),
-                    NeuronVoxelXYZPArrays::new(),
-                    NeuronVoxelXYZPArrays::new(),
-                    NeuronVoxelXYZPArrays::new(),
-                    NeuronVoxelXYZPArrays::new()
+                    NeuronVoxelXYZPVectors::new(),
+                    NeuronVoxelXYZPVectors::new(),
+                    NeuronVoxelXYZPVectors::new(),
+                    NeuronVoxelXYZPVectors::new(),
+                    NeuronVoxelXYZPVectors::new(),
+                    NeuronVoxelXYZPVectors::new(),
+                    NeuronVoxelXYZPVectors::new(),
+                    NeuronVoxelXYZPVectors::new(),
+                    NeuronVoxelXYZPVectors::new()
                 ];
                 *number_channels as usize
             ],

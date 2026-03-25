@@ -1,5 +1,9 @@
+
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::neuron::descriptors::{NeuronVoxelCoordinate};
+use crate::base_quantizable::value::QuantizableValue;
+use crate::neuron_voxels::descriptors::NeuronPotentialUnit;
+use crate::neuron_voxels::descriptors::NeuronVoxelCoordinate;
+
 
 /// A single neuron voxel storing spatial coordinates and activation potential in XYZP format.
 ///
@@ -7,17 +11,16 @@ use crate::neuron::descriptors::{NeuronVoxelCoordinate};
 /// a cortical area, along with its current activation/voltage level.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NeuronVoxelXYZP<Potential, CoordQuant> where
-    Potential: NeuralMembranePotential,
+    Potential: QuantizableValue,
     CoordQuant: QuantizableUInt
 {
-
     /// coordinate within the cortical area.
     pub neuron_voxel_coordinate: NeuronVoxelCoordinate<CoordQuant>,
     /// potential (voltage) of the voxel
-    pub potential: Potential, // TODO: We may decided to have multiple ways to hold potential
+    pub potential: NeuronPotentialUnit<Potential>,
 }
 
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxelXYZP<Potential, CoordQuant> {
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> NeuronVoxelXYZP<Potential, CoordQuant> {
 
     /// Number of bytes used to represent a single neuron voxel in memory (x, y, z, p elements).
     pub const NUMBER_OF_BYTES: usize = NeuronVoxelCoordinate::NUMBER_OF_BYTES + Potential::NUMBER_OF_BYTES;
@@ -31,7 +34,7 @@ impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> NeuronVoxe
 }
 
 #[cfg(feature = "alloc")]
-impl<Potential: NeuralMembranePotential, CoordQuant: QuantizableUInt> std::fmt::Display for NeuronVoxelXYZP<Potential, CoordQuant> {
+impl<Potential: QuantizableValue, CoordQuant: QuantizableUInt> std::fmt::Display for NeuronVoxelXYZP<Potential, CoordQuant> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s = format!(
             "NeuronVoxelXYZP({}, {}, {}, {})",

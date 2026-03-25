@@ -11,8 +11,8 @@ Moved from feagi-core/crates/feagi-bdu/src/models/brain_region.rs
 mod region_id;
 pub use region_id::RegionID;
 
+
 use crate::genomic::cortical_area::CorticalID;
-use crate::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 

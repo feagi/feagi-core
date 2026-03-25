@@ -7,7 +7,7 @@
 use feagi_serialization::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
 use feagi_structures::neuron_voxels::xyzp::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
+    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPVectors,
 };
 use ndarray::prelude::*;
 
@@ -16,7 +16,7 @@ fn test_minimal_memory_corruption_debug() {
     // Create a simple test case
     let cortical_id = CoreCorticalType::Power.to_cortical_id();
     let neuron = NeuronVoxelXYZP::new(1, 2, 3, 0.5);
-    let mut neurons = NeuronVoxelXYZPArrays::with_capacity(1);
+    let mut neurons = NeuronVoxelXYZPVectors::with_capacity(1);
     neurons.push(&neuron);
 
     let mut cortical_mappings = CorticalMappedXYZPNeuronVoxels::new();
@@ -44,7 +44,7 @@ fn test_serialize_deserialize_neuron_mapped_areas() {
     let cortical_id_a = CoreCorticalType::Power.to_cortical_id();
     let neuron_a_1 = NeuronVoxelXYZP::new(1, 2, 3, 0.5);
     let neuron_a_2 = NeuronVoxelXYZP::new(4, 5, 7, 0.2);
-    let mut neurons_a = NeuronVoxelXYZPArrays::with_capacity(2); // lets preallocate
+    let mut neurons_a = NeuronVoxelXYZPVectors::with_capacity(2); // lets preallocate
     neurons_a.push(&neuron_a_1);
     neurons_a.push(&neuron_a_2);
 
@@ -52,7 +52,7 @@ fn test_serialize_deserialize_neuron_mapped_areas() {
     let cortical_id_b = CoreCorticalType::Death.to_cortical_id();
     let neuron_b_1 = NeuronVoxelXYZP::new(8, 9, 10, 0.5);
     let neuron_b_2 = NeuronVoxelXYZP::new(11, 12, 13, 0.2);
-    let mut neurons_b = NeuronVoxelXYZPArrays::with_capacity(1); // incorrect preallocation (system should grow)
+    let mut neurons_b = NeuronVoxelXYZPVectors::with_capacity(1); // incorrect preallocation (system should grow)
     neurons_b.push(&neuron_b_1);
     neurons_b.push(&neuron_b_2);
 
@@ -64,7 +64,7 @@ fn test_serialize_deserialize_neuron_mapped_areas() {
     let neurons_c_y = array![4, 5, 6];
     let neurons_c_z = array![7, 8, 9];
     let neurons_c_p: Array<f32, Ix1> = array![0.1, 0.2, 0.3];
-    let neurons_c = NeuronVoxelXYZPArrays::new_from_ndarrays(
+    let neurons_c = NeuronVoxelXYZPVectors::new_from_ndarrays(
         neurons_c_x,
         neurons_c_y,
         neurons_c_z,

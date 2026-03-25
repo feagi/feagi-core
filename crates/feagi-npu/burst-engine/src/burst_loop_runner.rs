@@ -42,7 +42,7 @@ type SensoryXyzpDecoded = Vec<(
 use tracing::{debug, error, info, trace, warn};
 
 use std::thread;
-use feagi_structures::neuron::voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
 /// Trait for visualization publishing (abstraction to avoid circular dependency with feagi-io)
 /// Any component that can publish visualization data implements this trait.
@@ -963,7 +963,7 @@ fn encode_fire_data_to_xyzp(
 ) -> Result<Vec<u8>, String> {
     use feagi_structures::genomic::cortical_area::CorticalID;
     use feagi_structures::neuron_voxels::xyzp::{
-        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPVectors,
     };
 
     let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
@@ -1039,7 +1039,7 @@ fn encode_fire_data_to_xyzp(
         }
 
         // Create neuron voxel arrays (MOVE vectors for zero-copy)
-        match NeuronVoxelXYZPArrays::new_from_vectors(
+        match NeuronVoxelXYZPVectors::new_from_vectors(
             x_vec, // ✅ MOVE (no clone)
             y_vec, // ✅ MOVE (no clone)
             z_vec, // ✅ MOVE (no clone)

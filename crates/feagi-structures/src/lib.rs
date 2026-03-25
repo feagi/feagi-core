@@ -7,10 +7,11 @@ mod feagi_json;
 mod templates;
 mod feagi_structures_error;
 
+
 pub mod genomic;
-pub mod neuron;
+
+pub mod neuron_voxels;
 pub mod base_quantizable;
-pub mod cortical_area;
 pub mod ulog_temp;
 
 

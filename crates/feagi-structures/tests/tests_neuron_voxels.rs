@@ -6,7 +6,7 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
 };
 use feagi_structures::genomic::SensoryCorticalUnit;
 use feagi_structures::neuron_voxels::xyzp::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
+    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPVectors,
 };
 use std::ops::RangeInclusive;
 
@@ -54,7 +54,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_creation_and_basic_ops() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         assert_eq!(arrays.len(), 0);
         assert!(arrays.is_empty());
@@ -68,7 +68,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_with_capacity() {
-        let arrays = NeuronVoxelXYZPArrays::with_capacity(100);
+        let arrays = NeuronVoxelXYZPVectors::with_capacity(100);
 
         assert_eq!(arrays.len(), 0);
         assert_eq!(arrays.capacity(), 100);
@@ -77,7 +77,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_push_and_get() {
-        let mut arrays = NeuronVoxelXYZPArrays::with_capacity(3);
+        let mut arrays = NeuronVoxelXYZPVectors::with_capacity(3);
 
         arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.1));
         arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.2));
@@ -94,7 +94,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_push_raw() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         arrays.push_raw(10, 20, 30, 0.7);
 
@@ -106,7 +106,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_get_components() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
         arrays.push_raw(5, 10, 15, 0.9);
 
         assert_eq!(arrays.get_x(0).unwrap(), 5);
@@ -117,7 +117,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_pop() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
         arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
@@ -135,7 +135,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_clear() {
-        let mut arrays = NeuronVoxelXYZPArrays::with_capacity(10);
+        let mut arrays = NeuronVoxelXYZPVectors::with_capacity(10);
 
         arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
         arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
@@ -151,7 +151,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_reserve() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         arrays.reserve(50);
         assert!(arrays.capacity() >= 50);
@@ -159,7 +159,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_ensure_capacity() {
-        let mut arrays = NeuronVoxelXYZPArrays::with_capacity(10);
+        let mut arrays = NeuronVoxelXYZPVectors::with_capacity(10);
 
         arrays.ensure_capacity(5); // Already have 10, should do nothing
         assert_eq!(arrays.capacity(), 10);
@@ -170,7 +170,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_shrink_to_fit() {
-        let mut arrays = NeuronVoxelXYZPArrays::with_capacity(100);
+        let mut arrays = NeuronVoxelXYZPVectors::with_capacity(100);
 
         arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
         arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
@@ -183,7 +183,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_iter() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.1));
         arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.2));
@@ -196,7 +196,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_enumerate() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         arrays.push(&NeuronVoxelXYZP::new(10, 20, 30, 0.5));
         arrays.push(&NeuronVoxelXYZP::new(40, 50, 60, 0.7));
@@ -212,7 +212,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_into_iter() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
         arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
@@ -231,7 +231,7 @@ mod xyzp_tests {
         let z = vec![7, 8, 9];
         let p = vec![0.1, 0.2, 0.3];
 
-        let arrays = NeuronVoxelXYZPArrays::new_from_vectors(x, y, z, p).unwrap();
+        let arrays = NeuronVoxelXYZPVectors::new_from_vectors(x, y, z, p).unwrap();
 
         assert_eq!(arrays.len(), 3);
         let voxel = arrays.get(1).unwrap();
@@ -246,7 +246,7 @@ mod xyzp_tests {
         let z = vec![7, 8];
         let p = vec![0.1, 0.2];
 
-        let result = NeuronVoxelXYZPArrays::new_from_vectors(x, y, z, p);
+        let result = NeuronVoxelXYZPVectors::new_from_vectors(x, y, z, p);
 
         assert!(result.is_err());
     }
@@ -260,14 +260,14 @@ mod xyzp_tests {
         let z_nd = Array1::from_vec(vec![7, 8, 9]);
         let p_nd = Array1::from_vec(vec![0.1, 0.2, 0.3]);
 
-        let arrays = NeuronVoxelXYZPArrays::new_from_ndarrays(x_nd, y_nd, z_nd, p_nd).unwrap();
+        let arrays = NeuronVoxelXYZPVectors::new_from_ndarrays(x_nd, y_nd, z_nd, p_nd).unwrap();
 
         assert_eq!(arrays.len(), 3);
     }
 
     #[test]
     fn test_arrays_copy_as_neuron_xyzp_vec() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
         arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
@@ -281,7 +281,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_copy_as_tuple_of_nd_arrays() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
         arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
@@ -296,7 +296,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_get_size_in_bytes() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
         arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
@@ -307,7 +307,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_borrow_xyzp_vectors() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         arrays.push_raw(1, 2, 3, 0.5);
         arrays.push_raw(4, 5, 6, 0.7);
@@ -323,7 +323,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_filter_by_location_bounds() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
 
         arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.1));
         arrays.push(&NeuronVoxelXYZP::new(5, 6, 7, 0.2));
@@ -349,7 +349,7 @@ mod xyzp_tests {
 
     #[test]
     fn test_arrays_update_vectors_from_external() {
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
         arrays.push_raw(1, 2, 3, 0.5);
 
         let result = arrays.update_vectors_from_external(|x, y, z, p| {
@@ -399,7 +399,7 @@ mod xyzp_tests {
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
         )[0];
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
         arrays.push_raw(1, 2, 3, 0.5);
 
         mapped.insert(cortical_id, arrays);
@@ -420,7 +420,7 @@ mod xyzp_tests {
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
         )[0];
-        let arrays = NeuronVoxelXYZPArrays::new();
+        let arrays = NeuronVoxelXYZPVectors::new();
 
         mapped.insert(cortical_id, arrays);
 
@@ -440,7 +440,7 @@ mod xyzp_tests {
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
         )[0];
-        mapped.insert(cortical_id, NeuronVoxelXYZPArrays::new());
+        mapped.insert(cortical_id, NeuronVoxelXYZPVectors::new());
 
         assert_eq!(mapped.len(), 1);
 
@@ -464,8 +464,8 @@ mod xyzp_tests {
             CorticalUnitIndex::from(0u8),
         )[0];
 
-        mapped.insert(id1, NeuronVoxelXYZPArrays::new());
-        mapped.insert(id2, NeuronVoxelXYZPArrays::new());
+        mapped.insert(id1, NeuronVoxelXYZPVectors::new());
+        mapped.insert(id2, NeuronVoxelXYZPVectors::new());
 
         assert_eq!(mapped.len(), 2);
 
@@ -484,7 +484,7 @@ mod xyzp_tests {
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
         )[0];
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
         arrays.push_raw(1, 2, 3, 0.5);
 
         mapped.insert(cortical_id, arrays);
@@ -511,10 +511,10 @@ mod xyzp_tests {
             CorticalUnitIndex::from(0u8),
         )[0];
 
-        let mut arrays1 = NeuronVoxelXYZPArrays::new();
+        let mut arrays1 = NeuronVoxelXYZPVectors::new();
         arrays1.push_raw(1, 2, 3, 0.5);
 
-        let mut arrays2 = NeuronVoxelXYZPArrays::new();
+        let mut arrays2 = NeuronVoxelXYZPVectors::new();
         arrays2.push_raw(4, 5, 6, 0.7);
 
         mapped.insert(id1, arrays1);
@@ -529,7 +529,7 @@ mod xyzp_tests {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
-        let mut arrays = NeuronVoxelXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPVectors::new();
         arrays.push_raw(1, 2, 3, 0.5);
 
         mapped.insert(cortical_id, arrays);
@@ -557,8 +557,8 @@ mod xyzp_tests {
             CorticalUnitIndex::from(0u8),
         )[0];
 
-        mapped.insert(id1, NeuronVoxelXYZPArrays::new());
-        mapped.insert(id2, NeuronVoxelXYZPArrays::new());
+        mapped.insert(id1, NeuronVoxelXYZPVectors::new());
+        mapped.insert(id2, NeuronVoxelXYZPVectors::new());
 
         let keys: Vec<_> = mapped.keys().collect();
         assert_eq!(keys.len(), 2);
@@ -579,8 +579,8 @@ mod xyzp_tests {
             CorticalUnitIndex::from(0u8),
         )[0];
 
-        mapped.insert(id1, NeuronVoxelXYZPArrays::new());
-        mapped.insert(id2, NeuronVoxelXYZPArrays::new());
+        mapped.insert(id1, NeuronVoxelXYZPVectors::new());
+        mapped.insert(id2, NeuronVoxelXYZPVectors::new());
 
         let collected: Vec<_> = mapped.into_iter().collect();
         assert_eq!(collected.len(), 2);
@@ -621,7 +621,7 @@ mod xyzp_tests {
             PercentageNeuronPositioning::Linear,
             CorticalUnitIndex::from(0u8),
         )[0];
-        mapped.insert(id1, NeuronVoxelXYZPArrays::new());
+        mapped.insert(id1, NeuronVoxelXYZPVectors::new());
 
         mapped.shrink_to_fit();
         assert!(mapped.capacity() >= 1);

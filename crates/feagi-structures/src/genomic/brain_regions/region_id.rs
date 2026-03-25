@@ -7,33 +7,18 @@ RegionID - UUID-based unique identifier for brain regions.
 Provides type safety and global uniqueness for brain region identifiers.
 */
 
-use crate::FeagiDataError;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use uuid::Uuid;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+
 
 /// Unique identifier for a brain region, based on UUID v7.
 ///
 /// This struct provides type safety and ensures global uniqueness for brain region IDs.
 /// UUID v7 is time-ordered, which provides better database indexing and sortability.
 /// It handles serialization to and deserialization from string representations of UUIDs.
-///
-/// # Examples
-///
-/// ```
-/// use feagi_structures::genomic::brain_regions::RegionID;
-///
-/// // Generate a new time-ordered RegionID
-/// let region_id = RegionID::new();
-///
-/// // Convert to string for storage/display
-/// let id_string = region_id.to_string();
-///
-/// // Parse from string
-/// let parsed_id = RegionID::from_string(&id_string).unwrap();
-/// assert_eq!(region_id, parsed_id);
-/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RegionID {
     uuid: Uuid,

@@ -2,12 +2,139 @@ use core::cmp::{Eq, Ord, PartialOrd};
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
 use crate::FeagiStructuresError;
 
-pub type NonzeroCountUSize = NonzeroCountType<usize>;
-#[cfg(feature = "support_64bit_indexing_quantization")]
-pub type NonzeroCountU64 = NonzeroCountType<u64>;
-pub type NonzeroCountU32 = NonzeroCountType<u32>;
-pub type NonzeroCountU16 = NonzeroCountType<u16>;
-pub type NonzeroCountU8 = NonzeroCountType<u8>;
+/// Defines forwarding implementations for wrappers over `NonzeroCountType<T>`.
+#[macro_export]
+macro_rules! impl_nonzero_count_wrapper {
+    ($wrapper:ident) => {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> $wrapper<T> {
+            #[inline(always)]
+            pub fn new(value: T) -> Result<Self, $crate::FeagiStructuresError> {
+                $crate::base_quantizable::nonzero_count::NonzeroCountType::new(value).map(Self)
+            }
+
+            #[inline(always)]
+            pub(crate) fn new_unchecked(value: T) -> Self {
+                Self($crate::base_quantizable::nonzero_count::NonzeroCountType::new_unchecked(value))
+            }
+
+            #[inline(always)]
+            pub fn get(self) -> T {
+                self.0.get()
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Deref for $wrapper<T> {
+            type Target = $crate::base_quantizable::nonzero_count::NonzeroCountType<T>;
+            #[inline(always)]
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::fmt::Display for $wrapper<T> {
+            #[inline(always)]
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "{}", self.0)
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> TryFrom<T> for $wrapper<T> {
+            type Error = $crate::FeagiStructuresError;
+            #[inline(always)]
+            fn try_from(value: T) -> Result<Self, Self::Error> {
+                Self::new(value)
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> From<$crate::base_quantizable::nonzero_count::NonzeroCountType<T>> for $wrapper<T> {
+            #[inline(always)]
+            fn from(value: $crate::base_quantizable::nonzero_count::NonzeroCountType<T>) -> Self {
+                Self(value)
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> From<$wrapper<T>> for $crate::base_quantizable::nonzero_count::NonzeroCountType<T> {
+            #[inline(always)]
+            fn from(value: $wrapper<T>) -> Self {
+                value.0
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Add for $wrapper<T> {
+            type Output = Self;
+            #[inline(always)]
+            fn add(self, rhs: Self) -> Self::Output {
+                Self(self.0 + rhs.0)
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Sub for $wrapper<T> {
+            type Output = Self;
+            #[inline(always)]
+            fn sub(self, rhs: Self) -> Self::Output {
+                Self(self.0 - rhs.0)
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Mul for $wrapper<T> {
+            type Output = Self;
+            #[inline(always)]
+            fn mul(self, rhs: Self) -> Self::Output {
+                Self(self.0 * rhs.0)
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Div for $wrapper<T> {
+            type Output = Self;
+            #[inline(always)]
+            fn div(self, rhs: Self) -> Self::Output {
+                Self(self.0 / rhs.0)
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::AddAssign for $wrapper<T> {
+            #[inline(always)]
+            fn add_assign(&mut self, rhs: Self) {
+                self.0 += rhs.0;
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::SubAssign for $wrapper<T> {
+            #[inline(always)]
+            fn sub_assign(&mut self, rhs: Self) {
+                self.0 -= rhs.0;
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::MulAssign for $wrapper<T> {
+            #[inline(always)]
+            fn mul_assign(&mut self, rhs: Self) {
+                self.0 *= rhs.0;
+            }
+        }
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::DivAssign for $wrapper<T> {
+            #[inline(always)]
+            fn div_assign(&mut self, rhs: Self) {
+                self.0 /= rhs.0;
+            }
+        }
+    };
+}
+
+/// Defines a transparent wrapper over `NonzeroCountType<T>` with quantized-width aliases.
+#[macro_export]
+macro_rules! define_nonzero_count_type_family {
+    ($base_name:ident) => {
+            #[repr(transparent)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+            pub struct $base_name<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt>(
+                pub $crate::base_quantizable::nonzero_count::NonzeroCountType<T>,
+            );
+
+            $crate::impl_nonzero_count_wrapper!($base_name);
+    };
+}
 
 #[repr(transparent)]
 #[derive(
