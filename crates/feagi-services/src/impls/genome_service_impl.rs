@@ -362,24 +362,75 @@ impl GenomeService for GenomeServiceImpl {
                     (prepare_result, resize_result)
                 }; // Lock released here
 
-                prepare_result.map_err(ServiceError::from)?;
+                prepare_result.map_err(|e| {
+                    tracing::error!(target: "feagi-services", "prepare_for_new_genome failed: {}", e);
+                    ServiceError::from(e)
+                })?;
                 if let Some(resize_result) = resize_result {
-                    resize_result.map_err(ServiceError::from)?;
+                    resize_result.map_err(|e| {
+                        tracing::error!(target: "feagi-services", "resize_for_genome failed: {}", e);
+                        ServiceError::from(e)
+                    })?;
                 }
 
                 // Now call develop_from_genome without holding the lock
                 // It will acquire its own locks internally
                 let manager_arc = feagi_brain_development::ConnectomeManager::instance();
                 let mut neuro = Neuroembryogenesis::new(manager_arc.clone());
-                neuro.develop_from_genome(&genome_clone).map_err(|e| {
-                    ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e))
-                })?;
+
+                let develop_result = neuro.develop_from_genome(&genome_clone);
+                let develop_result = match develop_result {
+                    Ok(()) => Ok(()),
+                    Err(e) => {
+                        let err_str = e.to_string();
+                        let is_already_exists = err_str.contains("already exists");
+                        if is_already_exists {
+                            tracing::warn!(
+                                target: "feagi-services",
+                                "Neuroembryogenesis failed with 'already exists' - clearing connectome and retrying once: {}",
+                                err_str
+                            );
+                            // Re-prepare and retry: handle stale connectome state.
+                            let (retry_prepare, retry_resize) = {
+                                let mut manager = connectome_clone.write();
+                                let prep = manager.prepare_for_new_genome();
+                                let resize = prep.as_ref().ok().map(|_| manager.resize_for_genome(&genome_clone));
+                                (prep, resize)
+                            };
+                            retry_prepare.map_err(|e| {
+                                tracing::error!(target: "feagi-services", "Retry prepare_for_new_genome failed: {}", e);
+                                ServiceError::from(e)
+                            })?;
+                            if let Some(res) = retry_resize {
+                                res.map_err(|e| {
+                                    tracing::error!(target: "feagi-services", "Retry resize_for_genome failed: {}", e);
+                                    ServiceError::from(e)
+                                })?;
+                            }
+                            let mut neuro_retry = Neuroembryogenesis::new(manager_arc.clone());
+                            neuro_retry.develop_from_genome(&genome_clone).map_err(|e| {
+                                tracing::error!(target: "feagi-services", "Neuroembryogenesis retry failed: {}", e);
+                                ServiceError::Backend(format!(
+                                    "Neuroembryogenesis failed: {}. Retry after connectome reset also failed.",
+                                    err_str
+                                ))
+                            })?;
+                            neuro = neuro_retry;
+                            Ok(())
+                        } else {
+                            tracing::error!(target: "feagi-services", "Neuroembryogenesis failed: {}", e);
+                            Err(ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e)))
+                        }
+                    }
+                };
+                develop_result?;
 
                 // Ensure core cortical areas exist after neuroembryogenesis
                 // (they may have been added during corticogenesis, but we ensure they exist)
                 {
                     let mut manager = manager_arc.write();
                     manager.ensure_core_cortical_areas().map_err(|e| {
+                        tracing::error!(target: "feagi-services", "ensure_core_cortical_areas failed: {}", e);
                         ServiceError::Backend(format!("Failed to ensure core cortical areas: {}", e))
                     })?;
                 }
@@ -489,41 +540,6 @@ impl GenomeService for GenomeServiceImpl {
         })?;
 
         info!(target: "feagi-services", "✅ RuntimeGenome loaded, exporting in flat format v3.0");
-
-        // Debug: Check all property values in RuntimeGenome before saving
-        for (cortical_id, area) in &genome.cortical_areas {
-            let area_id_str = cortical_id.as_base_64();
-            info!(
-                target: "feagi-services",
-                "[GENOME-SAVE] Area {} has {} properties in RuntimeGenome",
-                area_id_str,
-                area.properties.len()
-            );
-
-            // Log key properties that should be saved
-            let key_props = [
-                "mp_driven_psp",
-                "snooze_length",
-                "consecutive_fire_cnt_max",
-                "firing_threshold_increment_x",
-                "firing_threshold_increment_y",
-                "firing_threshold_increment_z",
-                "firing_threshold",
-                "leak_coefficient",
-                "refractory_period",
-                "neuron_excitability",
-            ];
-
-            for prop_name in &key_props {
-                if let Some(prop_value) = area.properties.get(*prop_name) {
-                    info!(
-                        target: "feagi-services",
-                        "[GENOME-SAVE] Area {} property {}={}",
-                        area_id_str, prop_name, prop_value
-                    );
-                }
-            }
-        }
 
         // Update metadata if provided
         if let Some(id) = params.genome_id {
@@ -640,6 +656,9 @@ impl GenomeService for GenomeServiceImpl {
         params: Vec<CreateCorticalAreaParams>,
     ) -> ServiceResult<Vec<CorticalAreaInfo>> {
         info!(target: "feagi-services", "Creating {} new cortical areas via GenomeService", params.len());
+
+        // IO areas (IPU/OPU) must always be in root region; get root ID for default
+        let root_region_id = self.connectome.read().get_root_region_id();
 
         // Step 1: Build CorticalArea structures
         let mut areas_to_add = Vec::new();
@@ -759,6 +778,20 @@ impl GenomeService for GenomeServiceImpl {
                 area.properties = properties.clone();
             }
 
+            // IO areas (IPU/OPU) must always be in root region; default if missing
+            if matches!(
+                area_type,
+                CorticalAreaType::BrainInput(_) | CorticalAreaType::BrainOutput(_)
+            ) && !area.properties.contains_key("parent_region_id")
+            {
+                if let Some(ref root_id) = root_region_id {
+                    area.add_property_mut(
+                        "parent_region_id".to_string(),
+                        serde_json::Value::String(root_id.clone()),
+                    );
+                }
+            }
+
             areas_to_add.push(area);
         }
 
@@ -846,20 +879,50 @@ impl GenomeService for GenomeServiceImpl {
         let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
 
-        // Verify cortical area exists
-        {
-            let manager = self.connectome.read();
-            if !manager.has_cortical_area(&cortical_id_typed) {
-                return Err(ServiceError::NotFound {
-                    resource: "CorticalArea".to_string(),
-                    id: cortical_id.to_string(),
-                });
-            }
-        }
-
         let mut changes = changes;
         let mut effective_cortical_id = cortical_id_typed;
         let mut effective_cortical_id_str = cortical_id.to_string();
+
+        // Verify cortical area exists.
+        // If not found, best-effort resolve IO cortical IDs that were recently remapped
+        // by coding changes (Absolute/Incremental, Linear/Fractional), where bytes 4-5
+        // change but the unit identifier + group/subunit stay the same.
+        {
+            let manager = self.connectome.read();
+            if !manager.has_cortical_area(&effective_cortical_id) {
+                let target_bytes = effective_cortical_id.as_bytes();
+                let mut candidates: Vec<_> = manager
+                    .get_cortical_area_ids()
+                    .iter()
+                    .map(|c| **c)
+                    .filter(|candidate| {
+                        let c = candidate.as_bytes();
+                        c[0] == target_bytes[0] // i/o namespace
+                            && c[1] == target_bytes[1]
+                            && c[2] == target_bytes[2]
+                            && c[3] == target_bytes[3] // cortical unit identifier
+                            && c[6] == target_bytes[6] // sub-unit index
+                            && c[7] == target_bytes[7] // unit(group) index
+                    })
+                    .collect();
+                if candidates.len() == 1 {
+                    let resolved = candidates.remove(0);
+                    info!(
+                        target: "feagi-services",
+                        "[GENOME-UPDATE] Resolved remapped cortical ID '{}' -> '{}'",
+                        cortical_id,
+                        resolved.as_base_64()
+                    );
+                    effective_cortical_id = resolved;
+                    effective_cortical_id_str = resolved.as_base_64();
+                } else {
+                    return Err(ServiceError::NotFound {
+                        resource: "CorticalArea".to_string(),
+                        id: cortical_id.to_string(),
+                    });
+                }
+            }
+        }
 
         if changes.contains_key("group_id") {
             let new_id = self.apply_unit_index_update(
@@ -2760,7 +2823,8 @@ impl GenomeServiceImpl {
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata update complete");
 
         // Return updated info
-        self.get_cortical_area_info(cortical_id).await
+        self.get_cortical_area_info(&effective_cortical_id_str)
+            .await
     }
 
     /// Structural rebuild: For dimension/density changes requiring synapse rebuild

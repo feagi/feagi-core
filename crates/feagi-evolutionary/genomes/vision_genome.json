@@ -1372,13 +1372,49 @@
       "class": "core",
       "dimension_sensitive": true
     },
-    "expander_x": {
+    "sweeper": {
       "parameters": {},
       "type": "functions",
       "class": "core",
       "dimension_sensitive": true
     },
-    "reducer_x": {
+    "last_to_first": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core",
+      "dimension_sensitive": true
+    },
+    "bitmask_encoder_x": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core",
+      "dimension_sensitive": true
+    },
+    "bitmask_encoder_y": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core",
+      "dimension_sensitive": true
+    },
+    "bitmask_encoder_z": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core",
+      "dimension_sensitive": true
+    },
+    "bitmask_decoder_x": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core",
+      "dimension_sensitive": true
+    },
+    "bitmask_decoder_y": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core",
+      "dimension_sensitive": true
+    },
+    "bitmask_decoder_z": {
       "parameters": {},
       "type": "functions",
       "class": "core",

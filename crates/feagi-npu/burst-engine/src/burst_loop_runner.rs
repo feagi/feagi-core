@@ -89,8 +89,14 @@ fn is_missing_agent_publish_error(error_message: &str) -> bool {
 /// Implemented by feagi-io; fed by any transport (ZMQ, WebSocket, SHM, etc.).
 pub trait SensoryIntake: Send {
     /// Poll for next sensory payload if available.
-    /// Returns serialized FeagiByteContainer bytes.
-    fn poll_sensory_data(&mut self) -> Result<Option<Vec<u8>>, String>;
+    fn poll_sensory_data(&mut self) -> Result<Option<SensoryIngressPayload>, String>;
+}
+
+#[derive(Clone, Debug)]
+pub struct SensoryIngressPayload {
+    pub bytes: Vec<u8>,
+    pub source_id: Option<String>,
+    pub received_at: Instant,
 }
 
 /// Burst loop runner - manages the main neural processing loop
@@ -510,6 +516,22 @@ impl BurstLoopRunner {
         }
     }
 
+    /// Remove all motor subscriptions and associated rate/publish state.
+    pub fn clear_all_motor_subscriptions(&self) {
+        let removed = {
+            let mut subs = self.motor_subscriptions.write();
+            let count = subs.len();
+            subs.clear();
+            count
+        };
+        self.motor_output_rates_hz.write().clear();
+        self.motor_last_publish_time.write().clear();
+        info!(
+            "[BURST-RUNNER] Removed all motor subscriptions (count={})",
+            removed
+        );
+    }
+
     /// Register a visualization agent with a rate limit (Hz).
     ///
     /// # Errors
@@ -540,7 +562,7 @@ impl BurstLoopRunner {
         self.visualization_last_publish_time
             .write()
             .remove(&agent_id);
-        info!(
+        debug!(
             "[BURST-RUNNER] Registered visualization subscription for agent '{}' at {:.2}Hz",
             agent_id, rate_hz
         );
@@ -554,11 +576,27 @@ impl BurstLoopRunner {
             self.visualization_last_publish_time
                 .write()
                 .remove(agent_id);
-            info!(
+            debug!(
                 "[BURST-RUNNER] Removed visualization subscription for agent '{}'",
                 agent_id
             );
         }
+    }
+
+    /// Remove all visualization subscriptions and associated rate/publish state.
+    pub fn clear_all_visualization_subscriptions(&self) {
+        let removed = {
+            let mut subs = self.visualization_subscriptions.write();
+            let count = subs.len();
+            subs.clear();
+            count
+        };
+        self.visualization_output_rates_hz.write().clear();
+        self.visualization_last_publish_time.write().clear();
+        debug!(
+            "[BURST-RUNNER] Removed all visualization subscriptions (count={})",
+            removed
+        );
     }
 
     // REMOVED: set_viz_zmq_publisher - NO PYTHON CALLBACKS IN HOT PATH!
@@ -643,14 +681,13 @@ impl BurstLoopRunner {
         Ok(())
     }
 
-    /// Stop the burst loop gracefully
+    /// Stop the burst loop strictly and verify thread termination.
     ///
     /// This method sets the shutdown flag and waits up to 2 seconds for the thread to finish.
-    /// If the thread doesn't finish within the timeout, it's considered non-responsive
-    /// and we proceed with shutdown anyway.
-    pub fn stop(&mut self) {
+    /// If the thread doesn't finish within the timeout, an error is returned.
+    pub fn stop_strict(&mut self) -> Result<(), String> {
         if !self.running.load(Ordering::Acquire) {
-            return; // Already stopped
+            return Ok(()); // Already stopped
         }
 
         info!("[BURST-RUNNER] Stopping burst loop...");
@@ -679,6 +716,7 @@ impl BurstLoopRunner {
                 }
                 Ok(Err(_)) => {
                     warn!("[BURST-RUNNER] ⚠️ Burst loop thread panicked during shutdown");
+                    return Err("Burst loop thread panicked during shutdown".to_string());
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     let elapsed = start.elapsed();
@@ -686,11 +724,24 @@ impl BurstLoopRunner {
                         "[BURST-RUNNER] ⚠️ Burst loop did not stop within {:?}, proceeding with shutdown",
                         elapsed
                     );
+                    return Err(format!("Burst loop did not stop within {:?}", stop_timeout));
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     warn!("[BURST-RUNNER] ⚠️ Join thread disconnected unexpectedly");
+                    return Err("Burst loop join thread disconnected unexpectedly".to_string());
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// Stop the burst loop gracefully (best effort).
+    pub fn stop(&mut self) {
+        if let Err(e) = self.stop_strict() {
+            warn!(
+                "[BURST-RUNNER] ⚠️ Non-strict stop encountered an error: {}",
+                e
+            );
         }
     }
 
@@ -1183,6 +1234,184 @@ fn decode_sensory_bytes(bytes: &[u8]) -> Result<SensoryXyzpDecoded, String> {
     Ok(out)
 }
 
+fn select_fresh_payloads_for_burst(
+    burst_start: Instant,
+    max_age: Duration,
+    payloads: Vec<SensoryIngressPayload>,
+) -> (Vec<SensoryIngressPayload>, usize, usize) {
+    let mut dropped_stale_payloads: usize = 0;
+    let mut dropped_collapsed_payloads: usize = 0;
+    let mut latest_by_source: ahash::AHashMap<String, SensoryIngressPayload> =
+        ahash::AHashMap::new();
+    let mut latest_source_less_payload: Option<SensoryIngressPayload> = None;
+
+    for payload in payloads {
+        let age = burst_start.saturating_duration_since(payload.received_at);
+        if age > max_age {
+            dropped_stale_payloads = dropped_stale_payloads.saturating_add(1);
+            continue;
+        }
+
+        if let Some(source_id) = payload.source_id.clone() {
+            latest_by_source.insert(source_id, payload);
+        } else if latest_source_less_payload.replace(payload).is_some() {
+            dropped_collapsed_payloads = dropped_collapsed_payloads.saturating_add(1);
+        }
+    }
+
+    let mut selected_payloads: Vec<SensoryIngressPayload> =
+        latest_by_source.into_values().collect();
+    if let Some(payload) = latest_source_less_payload {
+        selected_payloads.push(payload);
+    }
+    (
+        selected_payloads,
+        dropped_stale_payloads,
+        dropped_collapsed_payloads,
+    )
+}
+
+#[cfg(test)]
+mod sensory_ingest_tests {
+    use super::{select_fresh_payloads_for_burst, SensoryIngressPayload};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn keeps_only_latest_payload_per_source() {
+        let now = Instant::now();
+        let payloads = vec![
+            SensoryIngressPayload {
+                bytes: vec![1],
+                source_id: Some("agent-a".to_string()),
+                received_at: now - Duration::from_millis(2),
+            },
+            SensoryIngressPayload {
+                bytes: vec![2],
+                source_id: Some("agent-a".to_string()),
+                received_at: now - Duration::from_millis(1),
+            },
+            SensoryIngressPayload {
+                bytes: vec![3],
+                source_id: Some("agent-b".to_string()),
+                received_at: now - Duration::from_millis(1),
+            },
+        ];
+
+        let (selected, dropped, collapsed) =
+            select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
+        assert_eq!(dropped, 0);
+        assert_eq!(collapsed, 0);
+        assert_eq!(selected.len(), 2);
+
+        let mut by_source = std::collections::HashMap::new();
+        for payload in selected {
+            by_source.insert(payload.source_id.unwrap_or_default(), payload.bytes[0]);
+        }
+        assert_eq!(by_source.get("agent-a"), Some(&2));
+        assert_eq!(by_source.get("agent-b"), Some(&3));
+    }
+
+    #[test]
+    fn drops_stale_payloads_by_burst_deadline() {
+        let now = Instant::now();
+        let payloads = vec![
+            SensoryIngressPayload {
+                bytes: vec![1],
+                source_id: Some("agent-a".to_string()),
+                received_at: now - Duration::from_millis(50),
+            },
+            SensoryIngressPayload {
+                bytes: vec![2],
+                source_id: Some("agent-b".to_string()),
+                received_at: now - Duration::from_millis(2),
+            },
+        ];
+
+        let (selected, dropped, collapsed) =
+            select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
+        assert_eq!(dropped, 1);
+        assert_eq!(collapsed, 0);
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].source_id.as_deref(), Some("agent-b"));
+        assert_eq!(selected[0].bytes, vec![2]);
+    }
+
+    #[test]
+    fn interleaved_agents_remain_isolated_in_same_burst() {
+        let now = Instant::now();
+        let payloads = vec![
+            SensoryIngressPayload {
+                bytes: vec![10],
+                source_id: Some("agent-a".to_string()),
+                received_at: now - Duration::from_millis(6),
+            },
+            SensoryIngressPayload {
+                bytes: vec![20],
+                source_id: Some("agent-b".to_string()),
+                received_at: now - Duration::from_millis(5),
+            },
+            SensoryIngressPayload {
+                bytes: vec![11],
+                source_id: Some("agent-a".to_string()),
+                received_at: now - Duration::from_millis(3),
+            },
+            SensoryIngressPayload {
+                bytes: vec![21],
+                source_id: Some("agent-b".to_string()),
+                received_at: now - Duration::from_millis(2),
+            },
+            SensoryIngressPayload {
+                bytes: vec![12],
+                source_id: Some("agent-a".to_string()),
+                received_at: now - Duration::from_millis(1),
+            },
+        ];
+
+        let (selected, dropped, collapsed) =
+            select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
+        assert_eq!(dropped, 0);
+        assert_eq!(collapsed, 0);
+        assert_eq!(selected.len(), 2);
+
+        let mut by_source = std::collections::HashMap::new();
+        for payload in selected {
+            by_source.insert(payload.source_id.unwrap_or_default(), payload.bytes[0]);
+        }
+        assert_eq!(by_source.get("agent-a"), Some(&12));
+        assert_eq!(by_source.get("agent-b"), Some(&21));
+    }
+
+    #[test]
+    fn source_less_payloads_are_coalesced_to_latest_only() {
+        let now = Instant::now();
+        let payloads = vec![
+            SensoryIngressPayload {
+                bytes: vec![1],
+                source_id: None,
+                received_at: now - Duration::from_millis(3),
+            },
+            SensoryIngressPayload {
+                bytes: vec![2],
+                source_id: None,
+                received_at: now - Duration::from_millis(2),
+            },
+            SensoryIngressPayload {
+                bytes: vec![3],
+                source_id: None,
+                received_at: now - Duration::from_millis(1),
+            },
+        ];
+
+        let (selected, dropped, collapsed) =
+            select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
+        assert_eq!(dropped, 0);
+        assert_eq!(collapsed, 2);
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].source_id, None);
+        assert_eq!(selected[0].bytes, vec![3]);
+    }
+}
+
 /// Main burst processing loop (runs in dedicated thread)
 ///
 /// This is the HOT PATH - zero Python involvement!
@@ -1231,6 +1460,7 @@ fn burst_loop(
     let mut total_neurons_fired = 0usize;
     let mut burst_times = Vec::with_capacity(100);
     let mut last_burst_time = None;
+    let mut top_firing_areas_last_burst: Vec<(u32, usize)> = Vec::new();
     // Tracks agents that temporarily fail publish because transport mapping is not attached yet.
     // This avoids log spam during reconnect races while preserving automatic retry behavior.
     let mut missing_viz_agent_logged: ahash::AHashSet<String> = ahash::AHashSet::new();
@@ -1244,10 +1474,7 @@ fn burst_loop(
         let current_frequency_hz = *frequency_hz.lock().unwrap();
         update_sim_timestep_from_hz(current_frequency_hz);
 
-        // DIAGNOSTIC: Log that we're alive
-        if burst_num % 100 == 0 {
-            trace!("[BURST-LOOP] Burst {} starting (loop is alive)", burst_num);
-        }
+        // Per-burst heartbeat removed (was every 100 bursts)
 
         // Track time since last burst (to detect blocking)
         static LAST_ITERATION_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
@@ -1291,22 +1518,63 @@ fn burst_loop(
             break;
         }
 
-        // Poll transport-agnostic sensory intake (feagi-io) before acquiring NPU lock
-        let sensory_xyzp: Option<SensoryXyzpDecoded> = sensory_intake.as_ref().and_then(|intake| {
-            let mut guard = intake.lock().ok()?;
-            let bytes = guard.poll_sensory_data().ok().flatten()?;
-            match decode_sensory_bytes(&bytes) {
-                Ok(decoded) => Some(decoded),
-                Err(e) => {
-                    warn!(
-                        "[SENSORY-DECODE] Failed to decode {} bytes: {}",
-                        bytes.len(),
-                        e
+        // Poll transport-agnostic sensory intake (feagi-io) before acquiring NPU lock.
+        // Drain all currently available payloads, keep only the newest packet per source,
+        // and drop stale packets that missed the realtime burst deadline.
+        let mut sensory_xyzp_batches: Vec<SensoryXyzpDecoded> = Vec::new();
+        let mut dropped_stale_payloads: usize = 0;
+        let mut collapsed_payloads: usize = 0;
+        let burst_max_sensory_age = if current_frequency_hz > 0.0 {
+            Duration::from_secs_f64(1.0 / current_frequency_hz)
+        } else {
+            Duration::from_millis(100)
+        };
+        if let Some(intake) = sensory_intake.as_ref() {
+            if let Ok(mut guard) = intake.lock() {
+                let mut drained_payloads: Vec<SensoryIngressPayload> = Vec::new();
+                while let Ok(Some(payload)) = guard.poll_sensory_data() {
+                    drained_payloads.push(payload);
+                }
+
+                let (selected_payloads, dropped_count, collapsed_count) =
+                    select_fresh_payloads_for_burst(
+                        burst_start,
+                        burst_max_sensory_age,
+                        drained_payloads,
                     );
-                    None
+                dropped_stale_payloads = dropped_stale_payloads.saturating_add(dropped_count);
+                collapsed_payloads = collapsed_payloads.saturating_add(collapsed_count);
+
+                for payload in selected_payloads {
+                    match decode_sensory_bytes(&payload.bytes) {
+                        Ok(decoded) if !decoded.is_empty() => {
+                            sensory_xyzp_batches.push(decoded);
+                        }
+                        Ok(_) => {}
+                        Err(e) => {
+                            warn!(
+                                "[SENSORY-DECODE] Failed to decode {} bytes: {}",
+                                payload.bytes.len(),
+                                e
+                            );
+                        }
+                    }
                 }
             }
-        });
+        }
+        if dropped_stale_payloads > 0 && burst_num % 120 == 0 {
+            warn!(
+                "[SENSORY-INGEST] Dropped {} stale payloads (max_age={:.3}ms)",
+                dropped_stale_payloads,
+                burst_max_sensory_age.as_secs_f64() * 1000.0
+            );
+        }
+        if collapsed_payloads > 0 && burst_num % 120 == 0 {
+            warn!(
+                "[SENSORY-INGEST] Coalesced {} payloads to latest frame(s) in burst window",
+                collapsed_payloads
+            );
+        }
 
         // Track time since last lock release to detect if something held it
         static LAST_LOCK_RELEASE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
@@ -1331,7 +1599,7 @@ fn burst_loop(
             }
         }
 
-        if burst_num < 5 || burst_num % 100 == 0 {
+        if burst_num < 5 {
             trace!(
                 "[BURST-LOOP-DIAGNOSTIC] Burst {}: Attempting NPU lock...",
                 burst_num
@@ -1387,7 +1655,7 @@ fn burst_loop(
                     lock_wait_duration.as_millis()
                 );
             }
-            if burst_num < 5 || burst_num % 100 == 0 {
+            if burst_num < 5 {
                 trace!(
                     "[BURST-TIMING] Burst {}: NPU lock acquired in {:?}",
                     burst_num,
@@ -1633,11 +1901,14 @@ fn burst_loop(
                 }
 
                 // Inject sensory from intake (any transport) into NPU for this burst.
-                // Clear pending first so only the latest frame is applied (avoids accumulation).
-                if let Some(ref list) = sensory_xyzp {
-                    npu_lock.clear_pending_sensory_injections();
-                    for (cortical_id, xyzp) in list {
-                        npu_lock.inject_sensory_xyzp_by_id(cortical_id, xyzp);
+                // Do NOT clear pending injections here: manual stimulation and other
+                // service-originated injections are staged in the same pending queue and
+                // must survive concurrent high-rate transport ingress.
+                if !sensory_xyzp_batches.is_empty() {
+                    for list in &sensory_xyzp_batches {
+                        for (cortical_id, xyzp) in list {
+                            npu_lock.inject_sensory_xyzp_by_id(cortical_id, xyzp);
+                        }
                     }
                 }
 
@@ -1661,7 +1932,7 @@ fn burst_loop(
                             result.neurons_in_refractory,
                         ));
 
-                        if burst_num < 5 || burst_num % 100 == 0 {
+                        if burst_num < 5 {
                             trace!(
                                 "[BURST-TIMING] Burst {}: process_burst() completed in {:?}, {} neurons fired",
                                 burst_num,
@@ -1671,6 +1942,19 @@ fn burst_loop(
                         }
 
                         total_neurons_fired += result.neuron_count;
+                        top_firing_areas_last_burst.clear();
+                        if let Some(ref sample) = result.fire_queue_sample {
+                            top_firing_areas_last_burst.extend(sample.iter().map(
+                                |(cortical_idx, (xs, _ys, _zs, _neurons, _pots))| {
+                                    (*cortical_idx, xs.len())
+                                },
+                            ));
+                            top_firing_areas_last_burst
+                                .sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+                            if top_firing_areas_last_burst.len() > 5 {
+                                top_firing_areas_last_burst.truncate(5);
+                            }
+                        }
                         // Update cached burst count for lock-free reads
                         let current_burst = npu_lock.get_burst_count();
                         cached_burst_count
@@ -1743,47 +2027,177 @@ fn burst_loop(
             *last_release = Some(npu_lock_release_time);
         }
 
-        // Log lock release timing for diagnostics
+        // Log lock release timing for diagnostics (scaled to burst budget).
+        // This keeps diagnostics meaningful across different simulation timesteps.
+        let burst_budget_ms = (1.0 / current_frequency_hz) * 1000.0;
+        // A small lock wait is expected under load; only warn when wait consumes
+        // a substantial chunk of the burst budget.
+        let lock_wait_warn_threshold_ms = burst_budget_ms * 0.50;
+        let lock_hold_warn_threshold_ms = burst_budget_ms * 0.80;
+        let lock_hold_overrun_threshold_ms = burst_budget_ms;
         let lock_hold_duration = npu_lock_release_time.duration_since(lock_acquired);
-        if lock_wait_duration.as_millis() > 50 {
+        let lock_wait_ms = lock_wait_duration.as_secs_f64() * 1000.0;
+        let lock_hold_ms = lock_hold_duration.as_secs_f64() * 1000.0;
+        let should_log_lock_warn = burst_num < 10 || burst_num % 25 == 0;
+        if lock_wait_ms > lock_wait_warn_threshold_ms && should_log_lock_warn {
             warn!(
-                "[NPU-LOCK] Burst {} waited {:.2}ms to acquire lock",
+                "[NPU-LOCK] Burst {} waited {:.2}ms to acquire lock (threshold {:.2}ms, budget {:.2}ms)",
                 burst_num,
-                lock_wait_duration.as_secs_f64() * 1000.0
+                lock_wait_ms,
+                lock_wait_warn_threshold_ms,
+                burst_budget_ms
+            );
+        } else if lock_wait_ms > lock_wait_warn_threshold_ms {
+            debug!(
+                "[NPU-LOCK] Burst {} waited {:.2}ms to acquire lock (threshold {:.2}ms, budget {:.2}ms)",
+                burst_num,
+                lock_wait_ms,
+                lock_wait_warn_threshold_ms,
+                burst_budget_ms
             );
         }
-        if lock_hold_duration.as_millis() > 50 {
+        let hold_severity = if lock_hold_ms > lock_hold_overrun_threshold_ms {
+            Some("overrun")
+        } else if lock_hold_ms > lock_hold_warn_threshold_ms {
+            Some("high")
+        } else {
+            None
+        };
+        if let Some(severity) = hold_severity {
+            let should_warn_overrun = burst_num < 10 || burst_num % 25 == 0;
             if let Some((fired, power, synaptic, processed, refractory)) = last_burst_stats {
+                if severity == "overrun" {
+                    if should_warn_overrun {
+                        warn!(
+                            "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
+                            burst_num,
+                            lock_hold_ms,
+                            severity,
+                            lock_hold_warn_threshold_ms,
+                            burst_budget_ms,
+                            last_process_duration
+                                .map(|d| d.as_secs_f64() * 1000.0)
+                                .unwrap_or(0.0),
+                            fired,
+                            power,
+                            synaptic,
+                            processed,
+                            refractory
+                        );
+                    } else {
+                        debug!(
+                            "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
+                            burst_num,
+                            lock_hold_ms,
+                            severity,
+                            lock_hold_warn_threshold_ms,
+                            burst_budget_ms,
+                            last_process_duration
+                                .map(|d| d.as_secs_f64() * 1000.0)
+                                .unwrap_or(0.0),
+                            fired,
+                            power,
+                            synaptic,
+                            processed,
+                            refractory
+                        );
+                    }
+                } else {
+                    debug!(
+                        "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
+                        burst_num,
+                        lock_hold_ms,
+                        severity,
+                        lock_hold_warn_threshold_ms,
+                        burst_budget_ms,
+                        last_process_duration
+                            .map(|d| d.as_secs_f64() * 1000.0)
+                            .unwrap_or(0.0),
+                        fired,
+                        power,
+                        synaptic,
+                        processed,
+                        refractory
+                    );
+                }
+            } else {
+                if severity == "overrun" {
+                    if should_warn_overrun {
+                        warn!(
+                            "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
+                            burst_num,
+                            lock_hold_ms,
+                            severity,
+                            lock_hold_warn_threshold_ms,
+                            burst_budget_ms,
+                            last_process_duration
+                                .map(|d| d.as_secs_f64() * 1000.0)
+                                .unwrap_or(0.0)
+                        );
+                    } else {
+                        debug!(
+                            "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
+                            burst_num,
+                            lock_hold_ms,
+                            severity,
+                            lock_hold_warn_threshold_ms,
+                            burst_budget_ms,
+                            last_process_duration
+                                .map(|d| d.as_secs_f64() * 1000.0)
+                                .unwrap_or(0.0)
+                        );
+                    }
+                } else {
+                    debug!(
+                        "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
+                        burst_num,
+                        lock_hold_ms,
+                        severity,
+                        lock_hold_warn_threshold_ms,
+                        burst_budget_ms,
+                        last_process_duration
+                            .map(|d| d.as_secs_f64() * 1000.0)
+                            .unwrap_or(0.0)
+                    );
+                }
+            }
+
+            // Root-cause diagnostics for sustained overruns: identify hottest cortical areas.
+            // Throttled to every 25 bursts to avoid excessive log volume.
+            if severity == "overrun"
+                && burst_num % 25 == 0
+                && !top_firing_areas_last_burst.is_empty()
+            {
+                let cortical_id_map = cached_cortical_id_mappings.lock().unwrap();
+                let top_areas = top_firing_areas_last_burst
+                    .iter()
+                    .map(|(idx, count)| {
+                        let area_id = cortical_id_map
+                            .get(idx)
+                            .cloned()
+                            .unwrap_or_else(|| format!("idx_{}", idx));
+                        format!("{}:{}:{}", idx, area_id, count)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 warn!(
-                    "[NPU-LOCK] Burst {} held lock {:.2}ms | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
+                    "[BURST-ROOTCAUSE] Burst {} overrun snapshot | budget_ms={:.2} lock_hold_ms={:.2} process_burst_ms={:.2} top_firing_areas=[{}]",
                     burst_num,
-                    lock_hold_duration.as_secs_f64() * 1000.0,
+                    burst_budget_ms,
+                    lock_hold_ms,
                     last_process_duration
                         .map(|d| d.as_secs_f64() * 1000.0)
                         .unwrap_or(0.0),
-                    fired,
-                    power,
-                    synaptic,
-                    processed,
-                    refractory
-                );
-            } else {
-                warn!(
-                    "[NPU-LOCK] Burst {} held lock {:.2}ms | process_burst {:.2}ms",
-                    burst_num,
-                    lock_hold_duration.as_secs_f64() * 1000.0,
-                    last_process_duration
-                        .map(|d| d.as_secs_f64() * 1000.0)
-                        .unwrap_or(0.0)
+                    top_areas
                 );
             }
         }
-        if lock_hold_duration.as_millis() > 5 || burst_num < 5 || burst_num % 100 == 0 {
-            debug!(
+        if lock_hold_ms > lock_hold_warn_threshold_ms || burst_num < 5 {
+            trace!(
                 "[NPU-LOCK] Burst {} (thread={:?}): Lock RELEASED (held for {:.2}ms, total from acquisition: {:.2}ms)",
                 burst_num,
                 release_thread_id,
-                lock_hold_duration.as_secs_f64() * 1000.0,
+                lock_hold_ms,
                 npu_lock_release_time.duration_since(lock_start).as_secs_f64() * 1000.0
             );
         }
@@ -1870,16 +2284,6 @@ fn burst_loop(
         let needs_motor = has_motor_shm || (has_motor_publisher && has_motor_subscriptions);
         let needs_fire_data = has_shm_writer || should_publish_viz || needs_motor;
 
-        if burst_num % 100 == 0 {
-            trace!(
-                "[BURST-LOOP] Sampling conditions: needs_fire_data={} (shm={}, viz={}, motor={})",
-                needs_fire_data,
-                has_shm_writer,
-                should_publish_viz,
-                needs_motor
-            );
-        }
-
         // CRITICAL PERFORMANCE FIX: Use fire queue sample from process_burst() result
         // This avoids acquiring NPU lock again (was causing 2-5 second delays with 5.7M neurons!)
         // The sample is already built inside process_burst() while the lock is held
@@ -1902,19 +2306,6 @@ fn burst_loop(
                 "[BURST-TIMING] Fire queue sample retrieved from cache in {:?}",
                 sample_duration
             );
-
-            if burst_num % 100 == 0 {
-                trace!(
-                    "[BURST-LOOP] Fire queue sample result: has_data={}",
-                    fire_data_arc_opt.is_some()
-                );
-                if let Some(ref data) = fire_data_arc_opt {
-                    trace!(
-                        "[BURST-LOOP] Fire data contains {} cortical areas",
-                        data.len()
-                    );
-                }
-            }
 
             static FIRST_CHECK_LOGGED: std::sync::atomic::AtomicBool =
                 std::sync::atomic::AtomicBool::new(false);
@@ -1983,22 +2374,53 @@ fn burst_loop(
                                 1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
                                 2 => CoreCorticalType::Fatigue.to_cortical_id().as_base_64(),
                                 _ => {
-                                    // Skip areas not in cache (cache should be populated from ConnectomeManager)
-                                    // Log warning only once per area to avoid spam
-                                    static WARNED_AREAS: std::sync::LazyLock<
-                                        std::sync::Mutex<ahash::AHashSet<u32>>,
-                                    > = std::sync::LazyLock::new(|| {
-                                        std::sync::Mutex::new(ahash::AHashSet::new())
-                                    });
-                                    let mut warned = WARNED_AREAS.lock().unwrap();
-                                    if !warned.contains(area_id) {
-                                        warn!(
+                                    // Self-heal cache drift: resolve missing mapping directly from NPU area registry.
+                                    // This keeps behavior deterministic while avoiding a full cache rebuild in the hot path.
+                                    if let Ok(npu_lock) = npu.lock() {
+                                        if let Some(resolved_id) =
+                                            npu_lock.get_cortical_area_name(*area_id)
+                                        {
+                                            cached_cortical_id_mappings
+                                                .lock()
+                                                .unwrap()
+                                                .insert(*area_id, resolved_id.clone());
+                                            resolved_id
+                                        } else {
+                                            // Skip areas not in cache (cache should be populated from ConnectomeManager)
+                                            // Log warning only once per area to avoid spam
+                                            static WARNED_AREAS: std::sync::LazyLock<
+                                                std::sync::Mutex<ahash::AHashSet<u32>>,
+                                            > = std::sync::LazyLock::new(|| {
+                                                std::sync::Mutex::new(ahash::AHashSet::new())
+                                            });
+                                            let mut warned = WARNED_AREAS.lock().unwrap();
+                                            if !warned.contains(area_id) {
+                                                warn!(
+                                                    "[BURST-LOOP] ⚠️ Area {} not in cortical_id cache - skipping visualization. Cache should be refreshed from ConnectomeManager.",
+                                                    area_id
+                                                );
+                                                warned.insert(*area_id);
+                                            }
+                                            continue; // Skip this area - can't visualize without valid cortical_id
+                                        }
+                                    } else {
+                                        // Skip areas not in cache (cache should be populated from ConnectomeManager)
+                                        // Log warning only once per area to avoid spam
+                                        static WARNED_AREAS: std::sync::LazyLock<
+                                            std::sync::Mutex<ahash::AHashSet<u32>>,
+                                        > = std::sync::LazyLock::new(|| {
+                                            std::sync::Mutex::new(ahash::AHashSet::new())
+                                        });
+                                        let mut warned = WARNED_AREAS.lock().unwrap();
+                                        if !warned.contains(area_id) {
+                                            warn!(
                                             "[BURST-LOOP] ⚠️ Area {} not in cortical_id cache - skipping visualization. Cache should be refreshed from ConnectomeManager.",
                                             area_id
                                         );
-                                        warned.insert(*area_id);
+                                            warned.insert(*area_id);
+                                        }
+                                        continue; // Skip this area - can't visualize without valid cortical_id
                                     }
-                                    continue; // Skip this area - can't visualize without valid cortical_id
                                 }
                             }
                         }
@@ -2133,34 +2555,6 @@ fn burst_loop(
                         );
                     }
 
-                    // Minimal, high-signal debugging for BV "no power" issues:
-                    // Log whether the outgoing visualization snapshot contains the Power cortical area (core idx=1).
-                    // This pinpoints whether the failure is upstream (sampling/packaging) or downstream (BV decode/apply).
-                    if burst_num % 30 == 0 {
-                        use feagi_structures::genomic::cortical_area::CoreCorticalType;
-                        static POWER_ID_B64: std::sync::LazyLock<String> =
-                            std::sync::LazyLock::new(|| {
-                                CoreCorticalType::Power.to_cortical_id().as_base_64()
-                            });
-
-                        let power_neurons = raw_snapshot
-                            .values()
-                            .find(|d| d.cortical_id == *POWER_ID_B64)
-                            .map(|d| d.neuron_ids.len())
-                            .unwrap_or(0);
-
-                        info!(
-                                "[VIZ-DEBUG] burst={} transports: shm={} publisher={} should_publish_viz={} areas={} total_neurons={} power_neurons={}",
-                                burst_num,
-                                has_shm_writer,
-                                has_viz_publisher,
-                                should_publish_viz,
-                                raw_snapshot.len(),
-                                total_neurons,
-                                power_neurons
-                            );
-                    }
-
                     // IMPORTANT: Single visualization pipeline per burst.
                     // If SHM is attached, we write to SHM and skip publisher handoff to avoid doing
                     // two independent serialization paths (maintenance + performance nightmare).
@@ -2184,15 +2578,9 @@ fn burst_loop(
                             static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 =
                                 std::sync::atomic::AtomicU64::new(0);
 
-                            let count =
+                            let _count =
                                 PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            if count % 30 == 0 {
-                                trace!(
-                                    "[BURST-LOOP] Viz handoff #{}: {} neurons -> publisher (serialization off-thread)",
-                                    count,
-                                    total_neurons
-                                );
-                            }
+                            // Viz handoff logging removed (was every 30 handoffs)
 
                             let publish_start = Instant::now();
                             for agent_id in viz_due_agents.iter() {
@@ -2245,8 +2633,8 @@ fn burst_loop(
         // Motor output generation and publishing (per-agent, filtered by subscriptions)
         // NOTE: has_motor_publisher and has_motor_shm already computed above for shared_fire_data_opt
 
-        // CRITICAL: Log motor publisher state every 100 bursts (using INFO to guarantee visibility)
-        if burst_num % 100 == 0 {
+        // Motor publisher state: only trace for first 5 bursts
+        if burst_num < 5 {
             trace!(
                 "[BURST-LOOP] MOTOR PUBLISHER STATE: has_publisher={}, has_shm={}",
                 has_motor_publisher,
@@ -2298,22 +2686,53 @@ fn burst_loop(
                                 1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
                                 2 => CoreCorticalType::Fatigue.to_cortical_id().as_base_64(),
                                 _ => {
-                                    // Skip areas not in cache (cache should be populated from ConnectomeManager)
-                                    // Log warning only once per area to avoid spam
-                                    static WARNED_AREAS_MOTOR: std::sync::LazyLock<
-                                        std::sync::Mutex<ahash::AHashSet<u32>>,
-                                    > = std::sync::LazyLock::new(|| {
-                                        std::sync::Mutex::new(ahash::AHashSet::new())
-                                    });
-                                    let mut warned = WARNED_AREAS_MOTOR.lock().unwrap();
-                                    if !warned.contains(area_id) {
-                                        warn!(
+                                    // Self-heal cache drift: resolve missing mapping directly from NPU area registry.
+                                    // This keeps behavior deterministic while avoiding a full cache rebuild in the hot path.
+                                    if let Ok(npu_lock) = npu.lock() {
+                                        if let Some(resolved_id) =
+                                            npu_lock.get_cortical_area_name(*area_id)
+                                        {
+                                            cached_cortical_id_mappings
+                                                .lock()
+                                                .unwrap()
+                                                .insert(*area_id, resolved_id.clone());
+                                            resolved_id
+                                        } else {
+                                            // Skip areas not in cache (cache should be populated from ConnectomeManager)
+                                            // Log warning only once per area to avoid spam
+                                            static WARNED_AREAS_MOTOR: std::sync::LazyLock<
+                                                std::sync::Mutex<ahash::AHashSet<u32>>,
+                                            > = std::sync::LazyLock::new(|| {
+                                                std::sync::Mutex::new(ahash::AHashSet::new())
+                                            });
+                                            let mut warned = WARNED_AREAS_MOTOR.lock().unwrap();
+                                            if !warned.contains(area_id) {
+                                                warn!(
+                                                    "[BURST-LOOP] ⚠️ Area {} not in cortical_id cache - skipping motor. Cache should be refreshed from ConnectomeManager.",
+                                                    area_id
+                                                );
+                                                warned.insert(*area_id);
+                                            }
+                                            continue; // Skip this area - can't process without valid cortical_id
+                                        }
+                                    } else {
+                                        // Skip areas not in cache (cache should be populated from ConnectomeManager)
+                                        // Log warning only once per area to avoid spam
+                                        static WARNED_AREAS_MOTOR: std::sync::LazyLock<
+                                            std::sync::Mutex<ahash::AHashSet<u32>>,
+                                        > = std::sync::LazyLock::new(|| {
+                                            std::sync::Mutex::new(ahash::AHashSet::new())
+                                        });
+                                        let mut warned = WARNED_AREAS_MOTOR.lock().unwrap();
+                                        if !warned.contains(area_id) {
+                                            warn!(
                                             "[BURST-LOOP] ⚠️ Area {} not in cortical_id cache - skipping motor. Cache should be refreshed from ConnectomeManager.",
                                             area_id
                                         );
-                                        warned.insert(*area_id);
+                                            warned.insert(*area_id);
+                                        }
+                                        continue; // Skip this area - can't process without valid cortical_id
                                     }
-                                    continue; // Skip this area - can't process without valid cortical_id
                                 }
                             }
                         }
@@ -2342,21 +2761,11 @@ fn burst_loop(
                     );
                 }
 
-                debug!(
-                    "[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas",
-                    motor_snapshot.len()
-                );
-
-                // DEBUG: Log subscription state every 30 bursts
-                if burst_num % 30 == 0 {
-                    if subscriptions.is_empty() {
-                        trace!("[BURST-LOOP] No motor subscriptions");
-                    } else {
-                        trace!("[BURST-LOOP] {} motor subscriptions", subscriptions.len());
-                        for (agent_id, cortical_ids) in subscriptions.iter() {
-                            trace!("[BURST-LOOP] Agent '{}' -> {:?}", agent_id, cortical_ids);
-                        }
-                    }
+                if burst_num < 5 {
+                    trace!(
+                        "[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas",
+                        motor_snapshot.len()
+                    );
                 }
 
                 if subscriptions.is_empty() {

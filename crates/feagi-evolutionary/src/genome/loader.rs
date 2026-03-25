@@ -72,7 +72,10 @@ pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
     // Check if genome is in flat format and convert if needed
     let hierarchical_json = if is_flat_format(&json_value) {
         // Convert flat format to hierarchical format
-        crate::converter_flat_full::convert_flat_to_hierarchical_full(&json_value)?
+        crate::converter_flat_full::convert_flat_to_hierarchical_full(&json_value).map_err(|e| {
+            tracing::error!(target: "feagi-evo", "convert_flat_to_hierarchical_full failed: {}", e);
+            e
+        })?
     } else {
         json_value
     };
@@ -118,10 +121,16 @@ pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
     })?;
 
     // Parse JSON to ParsedGenome
-    let parsed = GenomeParser::parse(&hierarchical_json_str)?;
+    let parsed = GenomeParser::parse(&hierarchical_json_str).map_err(|e| {
+        tracing::error!(target: "feagi-evo", "GenomeParser::parse failed: {}", e);
+        e
+    })?;
 
     // Convert to RuntimeGenome
-    let mut runtime_genome = to_runtime_genome(parsed, &hierarchical_json_str)?;
+    let mut runtime_genome = to_runtime_genome(parsed, &hierarchical_json_str).map_err(|e| {
+        tracing::error!(target: "feagi-evo", "to_runtime_genome failed: {}", e);
+        e
+    })?;
 
     // CRITICAL: Auto-fix common issues before validation
     // This prevents genomes with 0 dimensions or 0 per_voxel_neuron_cnt from failing

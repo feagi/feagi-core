@@ -1,4 +1,4 @@
-mod coder_shared_functions;
+pub(crate) mod coder_shared_functions;
 /// Describes encoding / decoding to NeuronVoxelXYZP format
 mod coder_traits;
 

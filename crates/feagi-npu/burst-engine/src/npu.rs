@@ -422,6 +422,79 @@ impl<
         self.burst_count.load(std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// Reset all runtime state so a new genome can be loaded cleanly.
+    ///
+    /// This clears neuron/synapse storage and all derived runtime caches/indexes while
+    /// preserving allocated capacities to avoid repeated large allocations between reloads.
+    pub fn reset_for_new_genome(&mut self) -> Result<()> {
+        let neuron_capacity = self.neuron_storage.read().unwrap().capacity();
+        let synapse_capacity = self.synapse_storage.read().unwrap().capacity();
+
+        let new_neuron_storage = self
+            .runtime
+            .create_neuron_storage(neuron_capacity)
+            .map_err(|e| {
+                FeagiError::RuntimeError(format!("Failed to reset neuron storage: {:?}", e))
+            })?;
+        let new_synapse_storage = self
+            .runtime
+            .create_synapse_storage(synapse_capacity)
+            .map_err(|e| {
+                FeagiError::RuntimeError(format!("Failed to reset synapse storage: {:?}", e))
+            })?;
+
+        {
+            let mut neurons = self.neuron_storage.write().unwrap();
+            *neurons = new_neuron_storage;
+        }
+        {
+            let mut synapses = self.synapse_storage.write().unwrap();
+            *synapses = new_synapse_storage;
+        }
+
+        let fire_ledger_capacity_hint = {
+            let fire_structures = self.fire_structures.lock().unwrap();
+            fire_structures
+                .fire_ledger
+                .get_tracked_windows()
+                .iter()
+                .map(|(_, window)| *window)
+                .max()
+                .unwrap_or(16)
+        };
+
+        {
+            let mut fire_structures = self.fire_structures.lock().unwrap();
+            *fire_structures = FireStructures {
+                fire_candidate_list: FireCandidateList::new(),
+                current_fire_queue: FireQueue::new(),
+                previous_fire_queue: FireQueue::new(),
+                fire_ledger: FireLedger::new(fire_ledger_capacity_hint),
+                fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
+                pending_sensory_injections: Vec::with_capacity(10000),
+                pending_memory_injections: Vec::with_capacity(1024),
+                memory_candidate_cortical_idx: AHashMap::new(),
+                last_fcl_snapshot: Vec::new(),
+                pending_replay_injections: Vec::new(),
+            };
+        }
+
+        self.area_id_to_name.write().unwrap().clear();
+        *self.propagation_engine.write().unwrap() = SynapticPropagationEngine::new();
+        self.stdp_mappings.write().unwrap().clear();
+        self.stdp_mapping_index.write().unwrap().clear();
+        self.memory_replay_frames.write().unwrap().clear();
+        self.memory_replay_twin_map.write().unwrap().clear();
+        self.burst_count
+            .store(0, std::sync::atomic::Ordering::SeqCst);
+        self.fatigue_active
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.power_neuron_id
+            .store(POWER_NEURON_UNSET, std::sync::atomic::Ordering::SeqCst);
+
+        Ok(())
+    }
+
     /// Increment burst count (lock-free atomic operation)
     fn increment_burst_count(&self) -> u64 {
         self.burst_count
@@ -1097,8 +1170,8 @@ impl<
     ///
     /// NOTE: This does NOT rebuild the synapse index. Call rebuild_synapse_index() after bulk removals.
     ///
-    /// Note: The trait method only supports single source-target pairs.
-    /// This method calls remove_synapses_between() for each source-target combination.
+    /// Performs a single pass over synapse storage and removes entries where
+    /// source ∈ sources AND target ∈ targets.
     ///
     /// Returns: number of synapses deleted
     pub fn remove_synapses_between(
@@ -1106,15 +1179,33 @@ impl<
         sources: Vec<NeuronId>,
         targets: Vec<NeuronId>,
     ) -> usize {
-        let mut total_removed = 0;
+        if sources.is_empty() || targets.is_empty() {
+            return 0;
+        }
+
+        let source_set: AHashSet<u32> = sources.into_iter().map(|n| n.0).collect();
+        let target_set: AHashSet<u32> = targets.into_iter().map(|n| n.0).collect();
+
         let mut synapse_storage = self.synapse_storage.write().unwrap();
-        for &source in &sources {
-            for &target in &targets {
-                if let Ok(removed) = synapse_storage.remove_synapses_between(source.0, target.0) {
-                    total_removed += removed;
-                }
+        let mut to_remove = Vec::new();
+        for idx in 0..synapse_storage.count() {
+            if !synapse_storage.valid_mask()[idx] {
+                continue;
+            }
+            if source_set.contains(&synapse_storage.source_neurons()[idx])
+                && target_set.contains(&synapse_storage.target_neurons()[idx])
+            {
+                to_remove.push(idx);
             }
         }
+
+        let mut total_removed = 0usize;
+        for idx in to_remove {
+            if synapse_storage.remove_synapse(idx).is_ok() {
+                total_removed += 1;
+            }
+        }
+
         total_removed
     }
 
@@ -1456,6 +1547,61 @@ impl<
             cortical_idx,
             potential,
         ));
+    }
+
+    /// Stage regular cortical-area neurons for guaranteed fire in next burst.
+    ///
+    /// This uses the same generic forced-fire pipeline as memory candidates by
+    /// assigning temporary IDs in the reserved memory range and storing cortical
+    /// index metadata, without modifying normal neuron storage.
+    pub fn inject_force_fire_by_coordinates(
+        &mut self,
+        cortical_id: &CorticalID,
+        xyzp_data: &[(u32, u32, u32, f32)],
+    ) -> usize {
+        let cortical_id_str = cortical_id.to_string();
+        let cortical_id_base64 = cortical_id.as_base_64();
+        let cortical_area = match self.get_cortical_area_id(&cortical_id_str) {
+            Some(id) => id,
+            None => match self.get_cortical_area_id(&cortical_id_base64) {
+                Some(id) => id,
+                None => return 0,
+            },
+        };
+
+        let coords: Vec<(u32, u32, u32)> =
+            xyzp_data.iter().map(|(x, y, z, _)| (*x, *y, *z)).collect();
+        let neuron_ids = self
+            .neuron_storage
+            .read()
+            .unwrap()
+            .batch_coordinate_lookup(cortical_area, &coords);
+
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        let existing_len = fire_structures.pending_memory_injections.len() as u32;
+        let mut injected_count = 0usize;
+        const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+        const MANUAL_STIM_OFFSET: u32 = 10_000_000;
+        for (i, maybe_idx) in neuron_ids.iter().enumerate() {
+            if maybe_idx.is_none() {
+                continue;
+            }
+            let potential = xyzp_data.get(i).map_or(100.0, |(_, _, _, p)| *p);
+            if !potential.is_finite() || potential == 0.0 {
+                continue;
+            }
+            let forced_id = MEMORY_NEURON_ID_START
+                .saturating_add(MANUAL_STIM_OFFSET)
+                .saturating_add(existing_len)
+                .saturating_add(injected_count as u32);
+            fire_structures.pending_memory_injections.push((
+                NeuronId(forced_id),
+                cortical_area,
+                potential,
+            ));
+            injected_count += 1;
+        }
+        injected_count
     }
 
     /// Register a dynamic (non-storage-backed) neuron’s cortical mapping for synaptic propagation.
@@ -4068,13 +4214,13 @@ fn phase1_injection_with_synapses<
             // 🔍 DEBUG: Log first sensory injection
             static FIRST_SENSORY_LOG: std::sync::Once = std::sync::Once::new();
             FIRST_SENSORY_LOG.call_once(|| {
-                info!("╔══════════════════════════════════════════════════════════════");
-                info!("║ [SENSORY-INJECTION] 🎬 DRAINING STAGED SENSORY DATA");
-                info!(
+                debug!("╔══════════════════════════════════════════════════════════════");
+                debug!("║ [SENSORY-INJECTION] DRAINING STAGED SENSORY DATA");
+                debug!(
                     "║ Injecting {} neurons AFTER FCL clear (prevents race)",
                     pending.len()
                 );
-                info!("╚══════════════════════════════════════════════════════════════");
+                debug!("╚══════════════════════════════════════════════════════════════");
             });
 
             for (neuron_id, potential) in pending.drain(..) {
@@ -4636,6 +4782,76 @@ mod tests {
         assert_eq!(npu.get_neuron_count(), 0);
     }
 
+    #[test]
+    fn test_reset_for_new_genome_clears_runtime_state() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                128, 128, 20,
+            );
+
+        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(4, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
+        let src = npu
+            .add_neuron(
+                1.0,
+                f32::MAX,
+                0.1,
+                0.0,
+                0,
+                1,
+                1.0,
+                u16::MAX,
+                0,
+                true,
+                3,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+        let dst = npu
+            .add_neuron(
+                1.0,
+                f32::MAX,
+                0.1,
+                0.0,
+                0,
+                1,
+                1.0,
+                u16::MAX,
+                0,
+                true,
+                4,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        npu.add_synapse(
+            src,
+            dst,
+            SynapticWeight(1),
+            SynapticPsp(1),
+            SynapseType::Excitatory,
+        )
+        .unwrap();
+        npu.process_burst().unwrap();
+
+        assert!(npu.get_neuron_count() > 0);
+        assert!(npu.get_synapse_count() > 0);
+        assert!(npu.get_burst_count() > 0);
+
+        npu.reset_for_new_genome().unwrap();
+
+        assert_eq!(npu.get_neuron_count(), 0);
+        assert_eq!(npu.get_synapse_count(), 0);
+        assert_eq!(npu.get_burst_count(), 0);
+        assert!(npu.get_neurons_in_cortical_area(3).is_empty());
+        assert!(npu.get_neurons_in_cortical_area(4).is_empty());
+    }
+
     // ═══════════════════════════════════════════════════════════
     // Neuron Management
     // ═══════════════════════════════════════════════════════════
@@ -5009,6 +5225,68 @@ mod tests {
             .unwrap();
 
         assert!(!npu.remove_synapse(n1, n2));
+    }
+
+    #[test]
+    fn test_remove_synapses_between_batch_sets() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
+        let src_a = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .unwrap();
+        let src_b = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .unwrap();
+        let src_keep = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .unwrap();
+
+        let dst_a = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .unwrap();
+        let dst_b = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .unwrap();
+        let dst_keep = npu
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .unwrap();
+
+        // 4 candidate synapses should be removed (2x2 cross-product).
+        for (s, t) in [
+            (src_a, dst_a),
+            (src_a, dst_b),
+            (src_b, dst_a),
+            (src_b, dst_b),
+        ] {
+            npu.add_synapse(
+                s,
+                t,
+                SynapticWeight(128),
+                SynapticPsp(255),
+                SynapseType::Excitatory,
+            )
+            .unwrap();
+        }
+
+        // These should remain after batch removal.
+        for (s, t) in [(src_keep, dst_a), (src_a, dst_keep), (src_keep, dst_keep)] {
+            npu.add_synapse(
+                s,
+                t,
+                SynapticWeight(128),
+                SynapticPsp(255),
+                SynapseType::Excitatory,
+            )
+            .unwrap();
+        }
+
+        let removed = npu.remove_synapses_between(vec![src_a, src_b], vec![dst_a, dst_b]);
+        assert_eq!(removed, 4);
+        assert_eq!(npu.get_synapse_count(), 3);
     }
 
     // ═══════════════════════════════════════════════════════════

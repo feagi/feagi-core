@@ -171,6 +171,49 @@ fn test_projector_morphology_basic() {
     println!("✅ Test 1: Projector morphology basic - PASSED");
 }
 
+#[test]
+fn test_transpose_morphologies_basic() {
+    for morphology_id in ["transpose_xy", "transpose_yz", "transpose_xz"] {
+        let mut manager = create_test_manager();
+
+        // Keep dimensions small and asymmetric so axis swaps are exercised.
+        let (src_area, src_id) = create_test_area("srctrx", 4, 3, 2, 0);
+        manager
+            .add_cortical_area(src_area)
+            .expect("Failed to add source area");
+
+        let (dst_area, dst_id) = create_test_area("dsttrx", 4, 3, 2, 1);
+        manager
+            .add_cortical_area(dst_area)
+            .expect("Failed to add destination area");
+
+        create_grid_neurons(&mut manager, &src_id, 4, 3, 2);
+        create_grid_neurons(&mut manager, &dst_id, 4, 3, 2);
+
+        let rule = json!({
+            "morphology_id": morphology_id,
+            "postSynapticCurrent_multiplier": 1.0,
+            "synapse_attractivity": 100
+        });
+
+        manager
+            .update_cortical_mapping(&src_id, &dst_id, vec![rule])
+            .expect("Failed to update cortical mapping");
+
+        let synapse_count = manager
+            .regenerate_synapses_for_mapping(&src_id, &dst_id)
+            .expect("Failed to apply cortical mapping");
+
+        assert!(
+            synapse_count > 0,
+            "Morphology {} should create synapses",
+            morphology_id
+        );
+    }
+
+    println!("✅ Test 1a: Transpose morphologies basic - PASSED");
+}
+
 // ============================================================================
 // TEST 1b: Inhibitory mapping produces inhibitory synapses (type=1) with abs(weight)
 // ============================================================================
@@ -379,6 +422,70 @@ fn test_block_to_block_morphology_basic() {
     assert!(synapse_count > 0, "Should have created some synapses");
 
     println!("✅ Test 2: Block-to-block morphology basic - PASSED");
+}
+
+// ============================================================================
+// TEST 2b: Composite tile morphology - fold and replicate directions
+// ============================================================================
+#[test]
+fn test_tile_morphology_fold_and_replicate() {
+    let mut manager = create_test_manager();
+
+    // Fold case: source larger than destination
+    let (src_fold_area, src_fold_id) = create_test_area("src_tlf", 4, 1, 1, 10);
+    manager
+        .add_cortical_area(src_fold_area)
+        .expect("Failed to add fold source area");
+    let (dst_fold_area, dst_fold_id) = create_test_area("dst_tlf", 2, 1, 1, 11);
+    manager
+        .add_cortical_area(dst_fold_area)
+        .expect("Failed to add fold destination area");
+    create_grid_neurons(&mut manager, &src_fold_id, 4, 1, 1);
+    create_grid_neurons(&mut manager, &dst_fold_id, 2, 1, 1);
+
+    let rule_fold = json!({
+        "morphology_id": "tile",
+        "postSynapticCurrent_multiplier": 1.0,
+        "synapse_attractivity": 100
+    });
+    manager
+        .update_cortical_mapping(&src_fold_id, &dst_fold_id, vec![rule_fold])
+        .expect("Failed to update fold tile mapping");
+    let fold_count = manager
+        .regenerate_synapses_for_mapping(&src_fold_id, &dst_fold_id)
+        .expect("Failed to apply fold tile mapping");
+    assert_eq!(
+        fold_count, 4,
+        "Fold mode should map each of 4 source neurons into destination tile positions"
+    );
+
+    // Replicate case: source smaller than destination
+    let (src_rep_area, src_rep_id) = create_test_area("src_tlr", 2, 1, 1, 12);
+    manager
+        .add_cortical_area(src_rep_area)
+        .expect("Failed to add replicate source area");
+    let (dst_rep_area, dst_rep_id) = create_test_area("dst_tlr", 5, 1, 1, 13);
+    manager
+        .add_cortical_area(dst_rep_area)
+        .expect("Failed to add replicate destination area");
+    create_grid_neurons(&mut manager, &src_rep_id, 2, 1, 1);
+    create_grid_neurons(&mut manager, &dst_rep_id, 5, 1, 1);
+
+    let rule_rep = json!({
+        "morphology_id": "tile",
+        "postSynapticCurrent_multiplier": 1.0,
+        "synapse_attractivity": 100
+    });
+    manager
+        .update_cortical_mapping(&src_rep_id, &dst_rep_id, vec![rule_rep])
+        .expect("Failed to update replicate tile mapping");
+    let rep_count = manager
+        .regenerate_synapses_for_mapping(&src_rep_id, &dst_rep_id)
+        .expect("Failed to apply replicate tile mapping");
+    assert_eq!(
+        rep_count, 5,
+        "Replicate mode should tile source over destination (x=0,2,4 and x=1,3)"
+    );
 }
 
 // ============================================================================

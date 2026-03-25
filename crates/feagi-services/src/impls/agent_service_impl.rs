@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::traits::agent_service::*;
 use crate::traits::registration_handler::RegistrationHandlerTrait;
@@ -64,8 +64,19 @@ impl AgentServiceImpl {
 
     /// Set the runtime service for sensory injection (thread-safe, can be called after Arc wrapping)
     pub fn set_runtime_service(&self, runtime_service: Arc<dyn RuntimeServiceTrait + Send + Sync>) {
-        *self.runtime_service.write() = Some(runtime_service);
-        info!("🦀 [AGENT-SERVICE] Runtime service connected");
+        let mut guard = self.runtime_service.write();
+        if let Some(existing) = guard.as_ref() {
+            if Arc::ptr_eq(existing, &runtime_service) {
+                debug!(
+                    "🦀 [AGENT-SERVICE] Runtime service already connected; ignoring duplicate bind"
+                );
+                return;
+            }
+            warn!("🦀 [AGENT-SERVICE] Runtime service replaced with a new instance");
+        } else {
+            info!("🦀 [AGENT-SERVICE] Runtime service connected");
+        }
+        *guard = Some(runtime_service);
     }
 }
 
@@ -330,6 +341,7 @@ impl AgentService for AgentServiceImpl {
     async fn manual_stimulation(
         &self,
         stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
+        mode: ManualStimulationMode,
     ) -> AgentResult<HashMap<String, serde_json::Value>> {
         // Use RuntimeService for sensory injection (service layer, not direct NPU access)
         let runtime_service = self
@@ -344,7 +356,8 @@ impl AgentService for AgentServiceImpl {
             .clone();
 
         let mut result = HashMap::new();
-        let mut total_stimulated = 0;
+        let mut total_stimulated = 0usize;
+        let mut requested_coordinates = 0usize;
         let mut successful_areas = 0;
         let mut failed_areas = Vec::new();
         let mut coordinates_not_found = 0;
@@ -359,6 +372,7 @@ impl AgentService for AgentServiceImpl {
             let manager = self.connectome_manager.read();
 
             for (cortical_id, coordinates) in stimulation_payload.iter() {
+                requested_coordinates += coordinates.len();
                 let cortical_id_typed = match CorticalID::try_from_base_64(cortical_id) {
                     Ok(id) => id,
                     Err(e) => {
@@ -406,7 +420,18 @@ impl AgentService for AgentServiceImpl {
         // Second pass: perform injections (no locks held)
         for (cortical_id, xyzp_data) in injection_requests {
             match runtime_service
-                .inject_sensory_by_coordinates(&cortical_id, &xyzp_data)
+                .inject_sensory_by_coordinates(
+                    &cortical_id,
+                    &xyzp_data,
+                    match mode {
+                        ManualStimulationMode::Candidate => {
+                            crate::traits::runtime_service::ManualStimulationMode::Candidate
+                        }
+                        ManualStimulationMode::ForceFire => {
+                            crate::traits::runtime_service::ManualStimulationMode::ForceFire
+                        }
+                    },
+                )
                 .await
             {
                 Ok(injected_count) => {
@@ -432,6 +457,25 @@ impl AgentService for AgentServiceImpl {
         result.insert(
             "total_coordinates".to_string(),
             serde_json::json!(total_stimulated),
+        );
+        result.insert(
+            "requested_coordinates".to_string(),
+            serde_json::json!(requested_coordinates),
+        );
+        result.insert(
+            "matched_coordinates".to_string(),
+            serde_json::json!(total_stimulated),
+        );
+        result.insert(
+            "unique_neuron_ids".to_string(),
+            serde_json::json!(total_stimulated),
+        );
+        result.insert(
+            "mode".to_string(),
+            serde_json::json!(match mode {
+                ManualStimulationMode::Candidate => "candidate",
+                ManualStimulationMode::ForceFire => "force_fire",
+            }),
         );
         result.insert(
             "successful_areas".to_string(),

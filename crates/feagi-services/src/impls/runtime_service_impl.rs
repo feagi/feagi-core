@@ -19,6 +19,7 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
 use tracing::{debug, info, warn};
 
+use crate::traits::runtime_service::ManualStimulationMode;
 use crate::traits::RuntimeService;
 use crate::types::{RuntimeStatus, ServiceError, ServiceResult};
 
@@ -61,7 +62,9 @@ impl RuntimeService for RuntimeServiceImpl {
         info!(target: "feagi-services", "Stopping burst engine");
 
         let mut runner = self.burst_runner.write();
-        runner.stop();
+        runner
+            .stop_strict()
+            .map_err(|e| ServiceError::Backend(format!("Failed to stop burst engine: {}", e)))?;
 
         // Clear paused flag
         *self.paused.write() = false;
@@ -228,6 +231,16 @@ impl RuntimeService for RuntimeServiceImpl {
         runner.unregister_visualization_subscriptions(agent_id);
     }
 
+    fn clear_all_motor_subscriptions(&self) {
+        let runner = self.burst_runner.read();
+        runner.clear_all_motor_subscriptions();
+    }
+
+    fn clear_all_visualization_subscriptions(&self) {
+        let runner = self.burst_runner.read();
+        runner.clear_all_visualization_subscriptions();
+    }
+
     async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>> {
         let runner = self.burst_runner.read();
         let fcl_data = runner.get_fcl_snapshot();
@@ -371,6 +384,7 @@ impl RuntimeService for RuntimeServiceImpl {
         &self,
         cortical_id: &str,
         xyzp_data: &[(u32, u32, u32, f32)],
+        mode: ManualStimulationMode,
     ) -> ServiceResult<usize> {
         // Parse cortical ID from base64 string
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id).map_err(|e| {
@@ -396,7 +410,14 @@ impl RuntimeService for RuntimeServiceImpl {
                 "[NPU-LOCK] RUNTIME-SERVICE: Lock acquired for manual stimulation (waited {:.2}ms)",
                 lock_wait.as_secs_f64() * 1000.0
             );
-            let result = npu_lock.inject_sensory_xyzp_by_id(&cortical_id_typed, xyzp_data);
+            let result = match mode {
+                ManualStimulationMode::Candidate => {
+                    npu_lock.inject_sensory_xyzp_by_id(&cortical_id_typed, xyzp_data)
+                }
+                ManualStimulationMode::ForceFire => {
+                    npu_lock.inject_force_fire_by_coordinates(&cortical_id_typed, xyzp_data)
+                }
+            };
             let lock_hold_duration = lock_start.elapsed();
             debug!(
                 "[NPU-LOCK] RUNTIME-SERVICE: Releasing lock after manual stimulation (held for {:.2}ms)",
@@ -409,10 +430,6 @@ impl RuntimeService for RuntimeServiceImpl {
             warn!(target: "feagi-services",
                 "No neurons found for injection: cortical_id={}, coordinates={}",
                 cortical_id, xyzp_data.len());
-        } else if injected_count > 0 {
-            info!(target: "feagi-services",
-                "Injected {} neurons into FCL for cortical area {}",
-                injected_count, cortical_id);
         }
 
         Ok(injected_count)

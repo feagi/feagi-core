@@ -97,13 +97,42 @@ fn parse_morphologies(raw_morphologies: &HashMap<String, Value>) -> EvoResult<Mo
     Ok(registry)
 }
 
+/// Infer morphology type from parameters structure (backward compat for legacy genomes missing 'type').
+fn infer_morphology_type_from_params(params: &Value) -> Option<String> {
+    let params_obj = params.as_object();
+    match params_obj {
+        Some(obj) => {
+            if obj.contains_key("vectors") {
+                return Some("vectors".to_string());
+            }
+            if obj.contains_key("patterns") {
+                return Some("patterns".to_string());
+            }
+            if obj.contains_key("src_seed") {
+                return Some("composite".to_string());
+            }
+            if obj.is_empty() || obj.contains_key("function") {
+                return Some("functions".to_string());
+            }
+        }
+        None => return Some("functions".to_string()),
+    }
+    None
+}
+
 /// Parse a single morphology
 fn parse_single_morphology(value: &Value) -> EvoResult<Morphology> {
     let morphology_type_str = value["type"]
         .as_str()
-        .ok_or_else(|| EvoError::InvalidGenome("Morphology missing 'type' field".to_string()))?;
+        .map(|s| s.to_string())
+        .or_else(|| infer_morphology_type_from_params(&value["parameters"]))
+        .ok_or_else(|| {
+            EvoError::InvalidGenome(
+                "Morphology missing 'type' field and parameters do not allow inference".to_string(),
+            )
+        })?;
 
-    let morphology_type = match morphology_type_str {
+    let morphology_type = match morphology_type_str.as_str() {
         "vectors" => MorphologyType::Vectors,
         "patterns" => MorphologyType::Patterns,
         "functions" => MorphologyType::Functions,
@@ -370,6 +399,19 @@ fn extract_blueprint_map(genome_value: &Value) -> EvoResult<HashMap<String, Valu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_morphology_missing_type_inferred_from_vectors() {
+        let json = serde_json::json!({
+            "parameters": {
+                "vectors": [[1, 0, 0], [0, 1, 0]]
+            },
+            "class": "custom"
+        });
+
+        let morphology = parse_single_morphology(&json).unwrap();
+        assert_eq!(morphology.morphology_type, MorphologyType::Vectors);
+    }
 
     #[test]
     fn test_parse_vector_morphology() {

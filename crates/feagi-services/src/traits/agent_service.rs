@@ -11,6 +11,14 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ManualStimulationMode {
+    #[default]
+    Candidate,
+    ForceFire,
+}
+
 /// Result type for agent service operations
 pub type AgentResult<T> = Result<T, AgentError>;
 
@@ -128,6 +136,7 @@ pub trait AgentService: Send + Sync {
     async fn manual_stimulation(
         &self,
         stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
+        mode: ManualStimulationMode,
     ) -> AgentResult<HashMap<String, serde_json::Value>>;
 
     /// Set runtime service for sensory injection (optional, implementations can ignore if not needed)

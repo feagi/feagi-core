@@ -59,6 +59,8 @@ macro_rules! define_motor_cortical_units_enum {
                     #[doc = "Get cortical area types array for " $friendly_name "."]
                     pub const fn [<get_cortical_area_types_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type),*) -> [CorticalAreaType; $number_cortical_areas] {
+                        // Keep parameterized API stable even for unit templates that don't consume every parameter.
+                        $(let _ = &$param_name;)*
                         [
                             $(CorticalAreaType::BrainOutput($io_cortical_area_configuration_flag_expr)),*
                         ]
@@ -67,6 +69,8 @@ macro_rules! define_motor_cortical_units_enum {
                     #[doc = "Get cortical IDs array for " $friendly_name "."]
                     pub const fn [<get_cortical_ids_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type,)* cortical_unit_index: CorticalUnitIndex) -> [CorticalID; $number_cortical_areas] {
+                        // Keep parameterized API stable even for unit templates that don't consume every parameter.
+                        $(let _ = &$param_name;)*
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
                             $(
@@ -218,3 +222,78 @@ macro_rules! define_motor_cortical_units_enum {
 }
 // Generate the MotorCorticalUnit enum and all helper methods from the template
 motor_cortical_units!(define_motor_cortical_units_enum);
+
+impl MotorCorticalUnit {
+    /// Check if a legacy 3-char subtype matches a supported OPU type and return its default CorticalID.
+    /// Used by genome migrator to avoid converting unsupported legacy OPU areas to MiscData.
+    pub fn try_from_legacy_subtype(subtype: &str) -> Option<CorticalID> {
+        let subtype_bytes = subtype.as_bytes();
+        if subtype_bytes.len() != 3 {
+            return None;
+        }
+        let subtype_arr = [subtype_bytes[0], subtype_bytes[1], subtype_bytes[2]];
+        for unit in Self::list_all() {
+            if unit.get_cortical_id_unit_reference() == subtype_arr {
+                return Some(unit.get_default_cortical_id_for_group(CorticalUnitIndex::from(0u8)));
+            }
+        }
+        None
+    }
+
+    /// Get the default CorticalID for this unit with group index 0 (Absolute frame handling, Linear positioning).
+    pub fn get_default_cortical_id_for_group(&self, group_index: CorticalUnitIndex) -> CorticalID {
+        use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
+            FrameChangeHandling, PercentageNeuronPositioning,
+        };
+        let fh = FrameChangeHandling::Absolute;
+        let pos = PercentageNeuronPositioning::Linear;
+        match self {
+            MotorCorticalUnit::RotaryMotor => {
+                Self::get_cortical_ids_array_for_rotary_motor_with_parameters(fh, pos, group_index)
+                    [0]
+            }
+            MotorCorticalUnit::PositionalServo => {
+                Self::get_cortical_ids_array_for_positional_servo_with_parameters(
+                    FrameChangeHandling::Absolute,
+                    pos,
+                    group_index,
+                )[0]
+            }
+            MotorCorticalUnit::Gaze => {
+                Self::get_cortical_ids_array_for_gaze_with_parameters(fh, pos, group_index)[0]
+            }
+            MotorCorticalUnit::MiscData => {
+                Self::get_cortical_ids_array_for_misc_data_with_parameters(fh, group_index)[0]
+            }
+            MotorCorticalUnit::TextEnglishOutput => {
+                Self::get_cortical_ids_array_for_text_english_output_with_parameters(
+                    fh,
+                    group_index,
+                )[0]
+            }
+            MotorCorticalUnit::CountOutput => {
+                Self::get_cortical_ids_array_for_count_output_with_parameters(fh, pos, group_index)
+                    [0]
+            }
+            MotorCorticalUnit::ObjectSegmentation => {
+                Self::get_cortical_ids_array_for_object_segmentation_with_parameters(
+                    fh,
+                    group_index,
+                )[0]
+            }
+            MotorCorticalUnit::SimpleVisionOutput => {
+                Self::get_cortical_ids_array_for_simple_vision_output_with_parameters(
+                    fh,
+                    group_index,
+                )[0]
+            }
+            MotorCorticalUnit::DynamicImageProcessing => {
+                Self::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                    fh,
+                    pos,
+                    group_index,
+                )[0]
+            }
+        }
+    }
+}

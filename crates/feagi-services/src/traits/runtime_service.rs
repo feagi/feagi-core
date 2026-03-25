@@ -13,6 +13,16 @@ Licensed under the Apache License, Version 2.0
 use crate::types::*;
 use async_trait::async_trait;
 
+/// Manual stimulation injection behavior.
+///
+/// - `Candidate`: inject into FCL candidates (normal dynamics path)
+/// - `ForceFire`: stage neurons to be emitted in next burst fire queue
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ManualStimulationMode {
+    Candidate,
+    ForceFire,
+}
+
 /// Runtime control service (transport-agnostic)
 #[async_trait]
 pub trait RuntimeService: Send + Sync {
@@ -210,6 +220,7 @@ pub trait RuntimeService: Send + Sync {
         &self,
         cortical_id: &str,
         xyzp_data: &[(u32, u32, u32, f32)],
+        mode: ManualStimulationMode,
     ) -> ServiceResult<usize>;
 
     /// Register motor subscriptions with per-agent rate limits.
@@ -247,4 +258,16 @@ pub trait RuntimeService: Send + Sync {
     ///
     /// Called when an agent is deregistered (e.g. descriptor replacement, timeout).
     fn unregister_visualization_subscriptions(&self, agent_id: &str);
+
+    /// Remove all motor subscriptions.
+    ///
+    /// Used by strict genome transitions to ensure no stale agent-session
+    /// subscriptions remain after genome replacement.
+    fn clear_all_motor_subscriptions(&self);
+
+    /// Remove all visualization subscriptions.
+    ///
+    /// Used by strict genome transitions to ensure no stale visualization
+    /// subscribers remain after genome replacement.
+    fn clear_all_visualization_subscriptions(&self);
 }

@@ -404,6 +404,10 @@ impl ConnectomeService for WasmConnectomeService {
         Ok(self.genome.brain_regions.contains_key(region_id))
     }
 
+    async fn get_root_region_id(&self) -> ServiceResult<Option<String>> {
+        Ok(self.genome.brain_regions_root.clone())
+    }
+
     async fn get_morphologies(
         &self,
     ) -> ServiceResult<std::collections::HashMap<String, MorphologyInfo>> {
@@ -434,6 +438,12 @@ impl ConnectomeService for WasmConnectomeService {
     }
 
     async fn delete_morphology(&self, _morphology_id: &str) -> ServiceResult<()> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
+    }
+
+    async fn rename_morphology(&self, _old_id: &str, _new_id: &str) -> ServiceResult<()> {
         Err(ServiceError::NotImplemented(
             "WASM mode is read-only".to_string(),
         ))

@@ -1328,12 +1328,42 @@
       "type": "functions",
       "class": "core"
     },
-    "expander_x": {
+    "sweeper": {
       "parameters": {},
       "type": "functions",
       "class": "core"
     },
-    "reducer_x": {
+    "last_to_first": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_encoder_x": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_encoder_y": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_encoder_z": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_decoder_x": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_decoder_y": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
+    "bitmask_decoder_z": {
       "parameters": {},
       "type": "functions",
       "class": "core"
@@ -1563,7 +1593,7 @@
     "_____10c-_power-cx-_n_cnt-i": 1,
     "_____10c-_power-cx-synatt-f": 100,
     "_____10c-_power-cx-de_gen-f": 0,
-    "_____10c-_power-cx-pspuni-b": false,
+    "_____10c-_power-cx-pspuni-b": true,
     "_____10c-_power-nx-pstcrm-f": 35,
     "_____10c-_power-cx-dstmap-d": {},
     "_____10c-_power-cx-___bbx-i": 1,

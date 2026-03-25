@@ -402,6 +402,9 @@ impl FeagiZmqServerPuller {
     const MIN_FEAGI_FRAME_BYTES: usize =
         FeagiByteContainer::GLOBAL_BYTE_HEADER_BYTE_COUNT + FeagiByteContainer::AGENT_ID_BYTE_COUNT;
     const STRUCT_LOOKUP_BYTES_PER_ENTRY: usize = 4;
+    // Prevent one high-rate sensory source from monopolizing poll time.
+    // We still preserve latest-wins behavior, but yield after a bounded window.
+    const MAX_DRAIN_FRAMES_PER_POLL: usize = 64;
 
     /// Lightweight FEAGI frame sanity check used for latest-wins filtering.
     ///
@@ -444,9 +447,11 @@ impl FeagiZmqServerPuller {
             has_latest_non_empty_valid = true;
         }
 
-        loop {
+        let mut drained_frames: usize = 1;
+        while drained_frames < Self::MAX_DRAIN_FRAMES_PER_POLL {
             match self.socket.recv(&mut self.recv_msg, zmq::DONTWAIT) {
                 Ok(()) => {
+                    drained_frames = drained_frames.saturating_add(1);
                     if Self::is_plausible_feagi_frame(&self.recv_msg)
                         && Self::has_non_empty_payload(&self.recv_msg)
                     {
@@ -466,6 +471,13 @@ impl FeagiZmqServerPuller {
                 Err(e) => return Err(e),
             }
         }
+
+        // Bounded drain window reached: return latest frame captured in this poll cycle.
+        if has_latest_non_empty_valid {
+            std::mem::swap(&mut self.recv_msg, &mut self.latest_non_empty_valid_msg);
+            return Ok(true);
+        }
+        Ok(false)
     }
 }
 

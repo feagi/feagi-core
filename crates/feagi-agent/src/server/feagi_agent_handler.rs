@@ -1,3 +1,4 @@
+use crate::command_and_control::agent_embodiment_configuration_message::AgentEmbodimentConfigurationMessage;
 use crate::command_and_control::agent_registration_message::{
     AgentRegistrationMessage, DeregistrationResponse, RegistrationResponse,
 };
@@ -18,7 +19,7 @@ use feagi_io::AgentID;
 use feagi_serialization::FeagiByteContainer;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
-use tracing::info;
+use tracing::{debug, error, info, warn};
 
 type CommandServerIndex = usize;
 
@@ -54,6 +55,7 @@ pub struct FeagiAgentHandler {
     sensors: HashMap<AgentID, SensorTranslator>,
     motors: HashMap<AgentID, MotorTranslator>,
     visualizations: HashMap<AgentID, VisualizationTranslator>,
+    sensor_poll_cursor: usize,
     liveness_config: AgentLivenessConfig,
     last_stale_check_at: Instant,
 
@@ -126,6 +128,7 @@ impl FeagiAgentHandler {
             sensors: Default::default(),
             motors: Default::default(),
             visualizations: Default::default(),
+            sensor_poll_cursor: 0,
             liveness_config,
             last_stale_check_at: Instant::now(),
 
@@ -153,6 +156,35 @@ impl FeagiAgentHandler {
 
     pub fn get_all_registered_visualizations(&self) -> HashSet<AgentID> {
         self.visualizations.keys().cloned().collect()
+    }
+
+    /// Register a logical agent entry without transport allocation.
+    ///
+    /// This utility is intended for deterministic transition/integration tests
+    /// that need an active agent session record without starting network servers.
+    pub fn register_logical_agent(
+        &mut self,
+        agent_id: AgentID,
+        descriptor: AgentDescriptor,
+        capabilities: Vec<AgentCapabilities>,
+    ) {
+        self.all_registered_agents
+            .insert(agent_id, (descriptor, capabilities));
+        self.last_activity_by_agent.insert(agent_id, Instant::now());
+    }
+
+    /// Forcefully deregister all currently connected agents.
+    ///
+    /// Returns the removed session IDs (base64) so callers can clear any
+    /// runtime subscriptions keyed by session.
+    pub fn force_deregister_all_agents(&mut self, reason: &str) -> Vec<String> {
+        let ids: Vec<AgentID> = self.all_registered_agents.keys().copied().collect();
+        let mut removed_ids = Vec::with_capacity(ids.len());
+        for agent_id in ids {
+            removed_ids.push(agent_id.to_base64());
+            self.deregister_agent_internal(agent_id, reason);
+        }
+        removed_ids
     }
 
     pub fn get_command_control_server_info(&self) -> Vec<Box<dyn FeagiServerRouterProperties>> {
@@ -385,13 +417,33 @@ impl FeagiAgentHandler {
 
     //region Agents
 
-    pub fn poll_agent_sensors(&mut self) -> Result<Option<&FeagiByteContainer>, FeagiAgentError> {
-        for (_id, translator) in self.sensors.iter_mut() {
-            let possible_sensor_data = translator.poll_sensor_server()?;
-            if possible_sensor_data.is_some() {
-                return Ok(possible_sensor_data);
+    pub fn poll_agent_sensors(&mut self) -> Result<Option<FeagiByteContainer>, FeagiAgentError> {
+        let mut sensor_ids: Vec<AgentID> = self.sensors.keys().copied().collect();
+        if sensor_ids.is_empty() {
+            return Ok(None);
+        }
+
+        sensor_ids.sort_by_key(|agent_id| agent_id.to_base64());
+        let count = sensor_ids.len();
+        let start = self.sensor_poll_cursor % count;
+
+        for offset in 0..count {
+            let idx = (start + offset) % count;
+            let agent_id = sensor_ids[idx];
+            let polled_data = if let Some(translator) = self.sensors.get_mut(&agent_id) {
+                translator.poll_sensor_server()?.cloned()
+            } else {
+                None
+            };
+
+            if let Some(data) = polled_data {
+                self.sensor_poll_cursor = (idx + 1) % count;
+                self.refresh_agent_activity(agent_id);
+                return Ok(Some(data));
             }
         }
+
+        self.sensor_poll_cursor = (start + 1) % count;
         Ok(None)
     }
 
@@ -525,10 +577,24 @@ impl FeagiAgentHandler {
             FeagiMessage::AgentRegistration(register_message) => {
                 match &register_message {
                     AgentRegistrationMessage::ClientRequestRegistration(registration_request) => {
+                        debug!(
+                            target: "feagi-agent",
+                            "WS registration request received: session={} descriptor={:?} caps={:?} protocol={:?}",
+                            agent_id.to_base64(),
+                            registration_request.agent_descriptor(),
+                            registration_request.requested_capabilities(),
+                            registration_request.connection_protocol()
+                        );
                         let auth_result = self
                             .agent_auth_backend
                             .verify_agent_allowed_to_connect(registration_request);
                         if auth_result.is_err() {
+                            warn!(
+                                target: "feagi-agent",
+                                "WS registration rejected by auth backend: session={} descriptor={:?}",
+                                agent_id.to_base64(),
+                                registration_request.agent_descriptor()
+                            );
                             self.send_message_via_command_server(
                                 command_control_index,
                                 agent_id,
@@ -551,15 +617,19 @@ impl FeagiAgentHandler {
                         if let Some(existing_agent_id) = self
                             .find_agent_id_by_descriptor(registration_request.agent_descriptor())
                         {
-                            if let Some((_, _existing_capabilities)) =
+                            if let Some((_, existing_capabilities)) =
                                 self.all_registered_agents.get(&existing_agent_id)
                             {
-                                // TODO disable colliding agent check for now to temporarily bypass duplicate agent
-                                /*
                                 if !Self::capabilities_equivalent(
                                     existing_capabilities,
                                     registration_request.requested_capabilities(),
                                 ) {
+                                    info!(
+                                        target: "feagi-agent",
+                                        "Rejecting descriptor-collision registration for {:?}: existing session {} has different capabilities",
+                                        registration_request.agent_descriptor(),
+                                        existing_agent_id.to_base64()
+                                    );
                                     self.send_message_via_command_server(
                                         command_control_index,
                                         agent_id,
@@ -572,13 +642,9 @@ impl FeagiAgentHandler {
                                     )?;
                                     return Ok(None);
                                 }
-                                */
                             }
-                            // TODO prevent duplicate agent
-                            /*
-
                             if !self.should_replace_existing_descriptor_session(existing_agent_id) {
-                                info!(
+                                debug!(
                                     target: "feagi-agent",
                                     "Ignoring duplicate registration for descriptor {:?}: existing session {} remains active",
                                     registration_request.agent_descriptor(),
@@ -596,8 +662,6 @@ impl FeagiAgentHandler {
                                 )?;
                                 return Ok(None);
                             }
-
-                             */
                             let replacement_reason = format!(
                                 "descriptor replacement by new registration session={}",
                                 agent_id.to_base64()
@@ -615,6 +679,12 @@ impl FeagiAgentHandler {
                         ) {
                             Ok(mappings) => mappings,
                             Err(_) => {
+                                error!(
+                                    target: "feagi-agent",
+                                    "WS registration failed while creating transport mappings: session={} descriptor={:?}",
+                                    agent_id.to_base64(),
+                                    registration_request.agent_descriptor()
+                                );
                                 self.send_message_via_command_server(
                                     command_control_index,
                                     agent_id,
@@ -629,6 +699,7 @@ impl FeagiAgentHandler {
                             }
                         };
 
+                        let mapped_caps: Vec<_> = mappings.keys().cloned().collect();
                         let response = RegistrationResponse::Success(agent_id, mappings);
                         let response_message = FeagiMessage::AgentRegistration(
                             AgentRegistrationMessage::ServerRespondsRegistration(response),
@@ -639,6 +710,13 @@ impl FeagiAgentHandler {
                             response_message,
                             0,
                         )?;
+                        debug!(
+                            target: "feagi-agent",
+                            "WS registration success response sent: session={} descriptor={:?} mapped_caps={:?}",
+                            agent_id.to_base64(),
+                            registration_request.agent_descriptor(),
+                            mapped_caps
+                        );
                         Ok(None)
                     }
                     AgentRegistrationMessage::ClientRequestDeregistration(_) => {
@@ -705,6 +783,33 @@ impl FeagiAgentHandler {
             FeagiMessage::HeartBeat => {
                 // We can handle heartbeat here
                 // TODO or maybe we should let the higher levels handle it?
+                self.send_message_to_agent(agent_id, FeagiMessage::HeartBeat, 0)?;
+                Ok(None)
+            }
+            FeagiMessage::AgentConfiguration(
+                AgentEmbodimentConfigurationMessage::AgentConfigurationDetails(device_def),
+            ) => {
+                let device_regs = serde_json::to_value(device_def).unwrap_or_else(|_| {
+                    tracing::warn!(
+                        target: "feagi-agent",
+                        "Failed to serialize AgentConfigurationDetails to JSON"
+                    );
+                    serde_json::Value::Object(serde_json::Map::new())
+                });
+                self.set_device_registrations_by_agent(agent_id, device_regs.clone());
+                if let Some((descriptor, _)) = self.all_registered_agents.get(&agent_id) {
+                    self.set_device_registrations_by_descriptor(
+                        agent_id.to_base64(),
+                        descriptor.clone(),
+                        device_regs,
+                    );
+                }
+                debug!(
+                    target: "feagi-agent",
+                    "Stored device registrations for agent {}",
+                    agent_id.to_base64()
+                );
+                // Send acknowledgment so REQ/REP clients can complete the request
                 self.send_message_to_agent(agent_id, FeagiMessage::HeartBeat, 0)?;
                 Ok(None)
             }
@@ -923,7 +1028,9 @@ impl FeagiAgentHandler {
 
         if let Some(descriptor) = descriptor {
             self.agent_id_by_descriptor.remove(&descriptor);
-            self.device_registrations_by_descriptor.remove(&descriptor);
+            // Preserve descriptor-scoped device registrations across session teardown so
+            // reconnecting agents can recover motor/sensory mapping state before they
+            // resend AgentConfiguration. Session-scoped registrations are still removed.
         }
     }
 

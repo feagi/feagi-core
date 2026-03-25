@@ -225,6 +225,10 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
     if id_str == "___power" {
         return Ok(CoreCorticalType::Power.to_cortical_id());
     }
+    // 8-char padded form of ___pwr (from 6-char padding in legacy flat genomes)
+    if id_str == "___pwr__" {
+        return Ok(CoreCorticalType::Power.to_cortical_id());
+    }
     if id_str == "___death" {
         return Ok(CoreCorticalType::Death.to_cortical_id());
     }
@@ -238,21 +242,9 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
         return Ok(CoreCorticalType::Fatigue.to_cortical_id());
     }
 
-    // For non-core areas, handle 6-char and 8-char ASCII formats
-    if id_str.len() == 6 {
-        // Legacy 6-char non-core IDs: pad with underscores on the right
-        let mut bytes = [b'_'; 8];
-        bytes[..6].copy_from_slice(id_str.as_bytes());
-
-        CorticalID::try_from_bytes(&bytes).map_err(|e| {
-            EvoError::InvalidArea(format!("Failed to convert cortical_id '{}': {}", id_str, e))
-        })
-    } else if id_str.len() == 8 {
-        // Already 8 bytes - convert directly
-        let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(id_str.as_bytes());
-
-        CorticalID::try_from_bytes(&bytes).map_err(|e| {
+    // For non-core areas, use CorticalID's legacy ASCII parser (6-char and 8-char)
+    if id_str.len() == 6 || id_str.len() == 8 {
+        CorticalID::try_from_legacy_ascii(id_str).map_err(|e| {
             EvoError::InvalidArea(format!("Failed to convert cortical_id '{}': {}", id_str, e))
         })
     } else {
@@ -289,10 +281,10 @@ impl GenomeParser {
         let raw: RawGenome = serde_json::from_str(json_str)
             .map_err(|e| EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
 
-        // Validate version - support 2.x and 3.0 (3.0 is flat format with all IDs in base64)
-        if !raw.version.starts_with("2.") && raw.version != "3.0" {
+        // Validate version - support 2.x and 3.x (3.0 is flat format with base64 IDs)
+        if !raw.version.starts_with("2.") && !raw.version.starts_with("3.") && raw.version != "3" {
             return Err(EvoError::InvalidGenome(format!(
-                "Unsupported genome version: {}. Expected 2.x or 3.0",
+                "Unsupported genome version: {}. Expected 2.x or 3.x",
                 raw.version
             )));
         }
@@ -769,6 +761,17 @@ mod tests {
         // Migration must map this deterministically to the core Power cortical ID.
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let id = string_to_cortical_id("___pwr").unwrap();
+        assert_eq!(
+            id.as_base_64(),
+            CoreCorticalType::Power.to_cortical_id().as_base_64()
+        );
+    }
+
+    #[test]
+    fn test_string_to_cortical_id_legacy_power_padded() {
+        // 8-char padded form ___pwr__ (from 6-char padding in legacy flat genomes).
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        let id = string_to_cortical_id("___pwr__").unwrap();
         assert_eq!(
             id.as_base_64(),
             CoreCorticalType::Power.to_cortical_id().as_base_64()

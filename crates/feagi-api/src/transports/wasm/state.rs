@@ -22,6 +22,8 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
     let neuron_service = Arc::new(WasmNeuronService::new());
     let system_service = Arc::new(WasmSystemService::new());
 
+    let (genome_transition_lock, genome_transition_in_progress) =
+        ApiState::init_genome_transition_controls();
     ApiState {
         network_connection_info_provider: None,
         agent_service: None, // No agents in WASM standalone mode
@@ -44,6 +46,8 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
             .as_millis() as i64,
         memory_stats_cache: None,
         amalgamation_state: ApiState::init_amalgamation_state(),
+        genome_transition_lock,
+        genome_transition_in_progress,
         #[cfg(feature = "feagi-agent")]
         agent_handler: Some(ApiState::init_agent_registration_handler()),
     }

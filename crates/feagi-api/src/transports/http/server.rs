@@ -9,13 +9,14 @@
 use axum::{
     body::Body,
     extract::State,
-    http::{Request, StatusCode},
+    http::{Method, Request, StatusCode},
     middleware::{self, Next},
     response::{Html, IntoResponse, Json, Redirect, Response},
     routing::{get, put},
     Router,
 };
 use http_body_util::BodyExt;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tower_http::{
@@ -65,6 +66,10 @@ pub struct ApiState {
     pub memory_stats_cache: Option<feagi_npu_plasticity::MemoryStatsCache>,
     /// In-memory amalgamation state (pending request + history), surfaced via health_check.
     pub amalgamation_state: amalgamation::SharedAmalgamationState,
+    /// Exclusive lock for genome transition operations (load/upload/reload).
+    pub genome_transition_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Indicates whether a prioritized genome transition is currently in progress.
+    pub genome_transition_in_progress: Arc<AtomicBool>,
     /// Agent handler for device registrations and transport management
     #[cfg(feature = "feagi-agent")]
     pub agent_handler: Option<Arc<std::sync::Mutex<feagi_agent::server::FeagiAgentHandler>>>,
@@ -177,6 +182,14 @@ impl ApiState {
     pub fn init_amalgamation_state() -> amalgamation::SharedAmalgamationState {
         amalgamation::new_shared_state()
     }
+
+    /// Initialize synchronization primitives for strict genome transitions.
+    pub fn init_genome_transition_controls() -> (Arc<tokio::sync::Mutex<()>>, Arc<AtomicBool>) {
+        (
+            Arc::new(tokio::sync::Mutex::new(())),
+            Arc::new(AtomicBool::new(false)),
+        )
+    }
 }
 
 #[cfg(feature = "feagi-agent")]
@@ -199,6 +212,7 @@ fn format_ws_address(host: &str, port: u16) -> String {
 
 /// Create the main HTTP server application
 pub fn create_http_server(state: ApiState) -> Router {
+    let middleware_state = state.clone();
     Router::new()
         // Root redirect to custom Swagger UI
         .route("/", get(root_redirect))
@@ -224,6 +238,10 @@ pub fn create_http_server(state: ApiState) -> Router {
         .with_state(state)
 
         // Add middleware
+        .layer(middleware::from_fn_with_state(
+            middleware_state,
+            reject_during_genome_transition,
+        ))
         .layer(middleware::from_fn(log_request_response_bodies))
         .layer(create_cors_layer())
         .layer(
@@ -267,6 +285,40 @@ pub fn create_http_server(state: ApiState) -> Router {
         )
 }
 
+/// Reject non-genome requests while a prioritized genome transition is running.
+async fn reject_during_genome_transition(
+    State(state): State<ApiState>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let path = request.uri().path();
+    let method = request.method();
+    let transition_in_progress = state.genome_transition_in_progress.load(Ordering::SeqCst);
+
+    if transition_in_progress && !is_transition_allowed_route(path, method) {
+        let payload = crate::common::ApiError::conflict(
+            "Genome transition in progress: request rejected to preserve deterministic load semantics",
+        );
+        return (StatusCode::CONFLICT, Json(payload)).into_response();
+    }
+
+    next.run(request).await
+}
+
+fn is_transition_allowed_route(path: &str, method: &Method) -> bool {
+    if path.starts_with("/v1/genome/upload")
+        || path.starts_with("/v1/genome/load")
+        || path.starts_with("/v1/genome/amalgamation")
+    {
+        return true;
+    }
+
+    matches!(
+        (method, path),
+        (&Method::GET, "/v1/system/health_check") | (&Method::GET, "/v1/system/readiness_check")
+    )
+}
+
 /// Create V1 API router - Match Python structure EXACTLY
 /// Format: /v1/{module}/{snake_case_endpoint}
 fn create_v1_router() -> Router<ApiState> {
@@ -293,14 +345,43 @@ fn create_v1_router() -> Router<ApiState> {
 
     Router::new()
         // ===== AGENT MODULE =====
-        // Registration uses ZMQ/WebSocket only; no HTTP REST registration endpoints.
+        .route(
+            "/agent/register",
+            axum::routing::post(agent::register_agent),
+        )
+        .route("/agent/heartbeat", axum::routing::post(agent::heartbeat))
+        .route("/agent/list", get(agent::list_agents))
+        .route("/agent/properties", get(agent::get_agent_properties))
+        .route("/agent/shared_mem", get(agent::get_shared_memory))
+        .route(
+            "/agent/deregister",
+            axum::routing::delete(agent::deregister_agent),
+        )
         .route(
             "/agent/manual_stimulation",
             axum::routing::post(agent::manual_stimulation),
         )
         .route(
+            "/agent/fq_sampler_status",
+            get(agent::get_fq_sampler_status),
+        )
+        .route("/agent/capabilities", get(agent::get_capabilities))
+        .route(
+            "/agent/capabilities/all",
+            get(agent::get_all_agent_capabilities),
+        )
+        .route("/agent/info/{agent_id}", get(agent::get_agent_info))
+        .route(
+            "/agent/properties/{agent_id}",
+            get(agent::get_agent_properties_path),
+        )
+        .route(
+            "/agent/configure",
+            axum::routing::post(agent::post_configure),
+        )
+        .route(
             "/agent/{agent_id}/device_registrations",
-            axum::routing::post(agent::import_device_registrations),
+            get(agent::export_device_registrations).post(agent::import_device_registrations),
         )
         // ===== SYSTEM MODULE (21 endpoints) =====
         .route("/system/health_check", get(system::get_health_check))
@@ -526,6 +607,10 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(morphology::post_morphology)
                 .put(morphology::put_morphology)
                 .delete(morphology::delete_morphology_by_name),
+        )
+        .route(
+            "/morphology/rename",
+            axum::routing::put(morphology::put_rename_morphology),
         )
         .route(
             "/morphology/morphology_properties",

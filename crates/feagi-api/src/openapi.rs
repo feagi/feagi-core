@@ -178,6 +178,7 @@ use crate::{
         crate::endpoints::morphology::get_morphologies,
         crate::endpoints::morphology::post_morphology,
         crate::endpoints::morphology::put_morphology,
+        crate::endpoints::morphology::put_rename_morphology,
         crate::endpoints::morphology::delete_morphology_by_name,
         crate::endpoints::morphology::delete_morphology,  // This is delete_by_id
         crate::endpoints::morphology::post_morphology_properties,
@@ -533,6 +534,7 @@ use crate::{
 
             // Morphology
             crate::endpoints::morphology::MorphologyListResponse,
+            crate::endpoints::morphology::RenameMorphologyRequest,
 
             // Cortical Areas
             CorticalAreaSummary,

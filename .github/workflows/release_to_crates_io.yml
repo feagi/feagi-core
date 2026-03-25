@@ -284,8 +284,49 @@ jobs:
                       break
               return name, version
 
+          def _parse_semver(version: str):
+              m = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$", version)
+              if not m:
+                  return None
+              major, minor, patch, prerelease = m.groups()
+              pre_parts = ()
+              if prerelease:
+                  parsed = []
+                  for part in prerelease.split("."):
+                      if part.isdigit():
+                          parsed.append((0, int(part)))
+                      else:
+                          parsed.append((1, part))
+                  pre_parts = tuple(parsed)
+              return (int(major), int(minor), int(patch), pre_parts)
+
+          def _semver_gt(left: str, right: str) -> bool:
+              l = _parse_semver(left)
+              r = _parse_semver(right)
+              if l is None or r is None:
+                  # Deterministic fallback for non-semver strings
+                  return left > right
+              if l[:3] != r[:3]:
+                  return l[:3] > r[:3]
+              l_pre, r_pre = l[3], r[3]
+              # Stable release has higher precedence than any prerelease
+              if not l_pre and r_pre:
+                  return True
+              if l_pre and not r_pre:
+                  return False
+              if not l_pre and not r_pre:
+                  return False
+              # Both are prerelease: compare identifier by identifier
+              for li, ri in zip(l_pre, r_pre):
+                  if li == ri:
+                      continue
+                  # Numeric identifiers have lower precedence than non-numeric
+                  if li[0] != ri[0]:
+                      return li[0] < ri[0]
+                  return li[1] > ri[1]
+              return len(l_pre) > len(r_pre)
+
           def latest_on_crates_io(name: str):
-              import re as _re
               url = f"https://crates.io/api/v1/crates/{name}"
               with urlopen(url, timeout=20) as resp:
                   data = json.load(resp)
@@ -293,15 +334,16 @@ jobs:
                             if not v.get("yanked", False) and v.get("num")]
               if not candidates:
                   return ""
-              def _semver_key(s):
-                  return [int(p) if p.isdigit() else p for p in _re.split(r"[-.]", s)]
-              candidates.sort(key=_semver_key, reverse=True)
-              return candidates[0]
+              latest = candidates[0]
+              for candidate in candidates[1:]:
+                  if _semver_gt(candidate, latest):
+                      latest = candidate
+              return latest
 
           def version_gt(a: str, b: str) -> bool:
               if a == b:
                   return False
-              return sorted([a, b], key=lambda s: [int(x) if x.isdigit() else x for x in s.replace("-", ".").split(".")])[-1] == a
+              return _semver_gt(a, b)
 
           violations = []
           workspace_version = read_workspace_version(root)

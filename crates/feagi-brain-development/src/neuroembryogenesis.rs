@@ -630,7 +630,7 @@ impl Neuroembryogenesis {
                 // Create subregion
                 let mut subregion = BrainRegion::new(
                     RegionID::new(), // Generate new UUID instead of using string
-                    "Autogen Region".to_string(),
+                    "Autogen Circuit".to_string(),
                     RegionType::Undefined, // RegionType no longer has Custom variant
                 )
                 .expect("Failed to create subregion")
@@ -1337,7 +1337,9 @@ fn estimate_synapses_for_area(
             // Basic estimation by morphology type
             let count = match morphology_id {
                 "block_to_block" => src_neurons * dst_per_voxel * scalar,
-                "projector" => src_neurons * dst_neurons * scalar,
+                "projector" | "transpose_xy" | "transpose_yz" | "transpose_xz" => {
+                    src_neurons * dst_neurons * scalar
+                }
                 _ if morphology_id.contains("lateral") => src_neurons * scalar,
                 _ => (src_neurons * scalar).min(src_neurons * dst_neurons / 10),
             };

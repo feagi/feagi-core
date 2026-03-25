@@ -172,10 +172,10 @@ impl GenomeParser {
         let raw: RawGenome = serde_json::from_str(json_str)
             .map_err(|e| BduError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
 
-        // Validate version
-        if !raw.version.starts_with("2.") {
+        // Validate version - support 2.x and 3.x (3.0 is flat format with base64 IDs)
+        if !raw.version.starts_with("2.") && !raw.version.starts_with("3.") && raw.version != "3" {
             return Err(BduError::InvalidGenome(format!(
-                "Unsupported genome version: {}. Expected 2.x",
+                "Unsupported genome version: {}. Expected 2.x or 3.x",
                 raw.version
             )));
         }

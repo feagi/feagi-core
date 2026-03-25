@@ -10,17 +10,17 @@ description = "High-performance burst engine for FEAGI neural processing"
 
 [dependencies]
 # Platform-agnostic core (types + algorithms + models, includes synapse logic)
-feagi-npu-neural = { path = "../neural" }
+feagi-npu-neural = { version = "0.0.2", path = "../neural" }
 
 # Runtime trait abstraction (generic over any runtime implementation)
 # Standard runtime implementation available via "std" feature
-feagi-npu-runtime = {  path = "../runtime", optional = true }
+feagi-npu-runtime = { version = "0.0.2", path = "../runtime", optional = true }
 
-feagi-state-manager = {path = "../../feagi-state-manager" }  # For BurstEngineState enum
+feagi-state-manager = { version = "0.0.2", path = "../../feagi-state-manager" } # For BurstEngineState enum
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
 feagi-serialization = { workspace = true }  # For decoding sensory data
-feagi-structures = { workspace = true }  # For CorticalMappedXYZPNeuronVoxels and async runtime
+feagi-structures = { workspace = true, features = ["async"] }  # For CorticalMappedXYZPNeuronVoxels and async runtime
 thiserror.workspace = true
 rayon.workspace = true
 ndarray.workspace = true
@@ -48,11 +48,14 @@ cudarc = { version = "0.11", features = ["cuda-11080", "f16"], optional = true }
 half = { version = "2.4", optional = true }
 
 [features]
-default = ["connectome-io", "std"]
+default = ["connectome-io", "async-tokio", "std"]
 # Standard library support (includes StdRuntime for DynamicNPU type alias)
-std = [] #["feagi-npu-runtime/std"]
+std = ["feagi-npu-runtime/std"]
 # Enable connectome serialization/deserialization (requires native dependencies)
 connectome-io = []  # Types are in feagi-npu-neural (always available with std feature)
+# Async runtime features
+async-tokio = ["feagi-structures/async-tokio"]
+wasm = ["feagi-structures/async-wasm"]  # Explicitly enable wasm feature (no tokio)
 # Enable GPU acceleration via WGPU (cross-platform)
 gpu = ["wgpu", "pollster", "bytemuck"]
 # Enable CUDA acceleration (NVIDIA only, highest performance)

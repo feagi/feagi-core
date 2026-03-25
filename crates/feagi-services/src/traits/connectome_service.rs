@@ -257,6 +257,13 @@ pub trait ConnectomeService: Send + Sync {
     ///
     async fn brain_region_exists(&self, region_id: &str) -> ServiceResult<bool>;
 
+    /// Get brain region ID of the root region (no parent).
+    ///
+    /// # Returns
+    /// * `Option<String>` - Root region ID if one exists
+    ///
+    async fn get_root_region_id(&self) -> ServiceResult<Option<String>>;
+
     // ========================================================================
     // MORPHOLOGY OPERATIONS
     // ========================================================================
@@ -309,6 +316,18 @@ pub trait ConnectomeService: Send + Sync {
     /// * `ServiceError::InvalidState` - No genome loaded
     /// * `ServiceError::NotFound` - Morphology does not exist
     async fn delete_morphology(&self, morphology_id: &str) -> ServiceResult<()>;
+
+    /// Rename a morphology definition.
+    ///
+    /// Updates the morphology registry and all references in cortical mappings
+    /// (cortical_mapping_dst rules) across the loaded genome.
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidState` - No genome loaded
+    /// * `ServiceError::NotFound` - Old morphology does not exist
+    /// * `ServiceError::AlreadyExists` - New morphology ID already exists
+    /// * `ServiceError::InvalidInput` - Invalid old_id or new_id
+    async fn rename_morphology(&self, old_id: &str, new_id: &str) -> ServiceResult<()>;
 
     // ========================================================================
     // CORTICAL MAPPING OPERATIONS

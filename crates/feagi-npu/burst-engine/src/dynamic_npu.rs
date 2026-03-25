@@ -274,6 +274,17 @@ where
         dispatch_mut!(self, inject_sensory_xyzp_by_id(cortical_id, xyzp_data))
     }
 
+    pub fn inject_force_fire_by_coordinates(
+        &mut self,
+        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+        xyzp_data: &[(u32, u32, u32, f32)],
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            inject_force_fire_by_coordinates(cortical_id, xyzp_data)
+        )
+    }
+
     pub fn inject_sensory_xyzp_arrays_by_id(
         &mut self,
         cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
@@ -306,6 +317,11 @@ where
 
     pub fn get_burst_count(&self) -> u64 {
         dispatch!(self, get_burst_count())
+    }
+
+    /// Reset all NPU runtime state for loading a fresh genome.
+    pub fn reset_for_new_genome(&mut self) -> Result<()> {
+        dispatch_mut!(self, reset_for_new_genome())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -581,6 +597,14 @@ where
             self,
             remove_synapses_from_sources_to_targets(sources, targets)
         )
+    }
+
+    pub fn remove_synapses_between(
+        &mut self,
+        sources: Vec<NeuronId>,
+        targets: Vec<NeuronId>,
+    ) -> usize {
+        dispatch_mut!(self, remove_synapses_between(sources, targets))
     }
 
     pub fn update_synapse_weight(

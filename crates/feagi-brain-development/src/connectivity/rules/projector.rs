@@ -82,9 +82,11 @@ pub fn syn_projector(
         });
     }
 
-    // Apply transposition if specified
-    let (src_shape, dst_shape, location) = if let Some((tx, ty, tz)) = transpose {
-        apply_transpose(src_dims, dst_dims, neuron_location, (tx, ty, tz))
+    // Apply transposition if specified.
+    // Legacy Python compatibility: transpose modifies source frame only
+    // (source shape + source neuron location), NOT destination shape.
+    let (src_shape, location) = if let Some((tx, ty, tz)) = transpose {
+        apply_transpose(src_dims, neuron_location, (tx, ty, tz))
     } else {
         (
             [
@@ -93,17 +95,17 @@ pub fn syn_projector(
                 src_dims.depth as usize,
             ],
             [
-                dst_dims.width as usize,
-                dst_dims.height as usize,
-                dst_dims.depth as usize,
-            ],
-            [
                 neuron_location.0 as usize,
                 neuron_location.1 as usize,
                 neuron_location.2 as usize,
             ],
         )
     };
+    let dst_shape = [
+        dst_dims.width as usize,
+        dst_dims.height as usize,
+        dst_dims.depth as usize,
+    ];
 
     // Calculate destination voxel coordinates for each axis
     let mut dst_voxels: [Vec<u32>; 3] = [Vec::new(), Vec::new(), Vec::new()];
@@ -193,19 +195,13 @@ fn calculate_axis_projection(
 /// Apply axis transposition to dimensions and position.
 fn apply_transpose(
     src_dims: Dimensions,
-    dst_dims: Dimensions,
     location: Position,
     transpose: (usize, usize, usize),
-) -> ([usize; 3], [usize; 3], [usize; 3]) {
+) -> ([usize; 3], [usize; 3]) {
     let src_arr = [
         src_dims.width as usize,
         src_dims.height as usize,
         src_dims.depth as usize,
-    ];
-    let dst_arr = [
-        dst_dims.width as usize,
-        dst_dims.height as usize,
-        dst_dims.depth as usize,
     ];
     let loc_arr = [location.0, location.1, location.2];
 
@@ -214,18 +210,13 @@ fn apply_transpose(
         src_arr[transpose.1],
         src_arr[transpose.2],
     ];
-    let dst_transposed = [
-        dst_arr[transpose.0],
-        dst_arr[transpose.1],
-        dst_arr[transpose.2],
-    ];
     let loc_transposed = [
         loc_arr[transpose.0] as usize,
         loc_arr[transpose.1] as usize,
         loc_arr[transpose.2] as usize,
     ];
 
-    (src_transposed, dst_transposed, loc_transposed)
+    (src_transposed, loc_transposed)
 }
 
 /// Batch projection for multiple neurons (parallel processing).
@@ -376,5 +367,24 @@ mod tests {
             None,
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transpose_xz_maps_source_x_to_destination_z() {
+        // Legacy Python-compatible behavior for projector_xz:
+        // src (x,0,0) in 10x1x1 should map to dst (0,0,x) in 1x1x10.
+        let result = syn_projector(
+            "src",
+            "dst",
+            0,
+            (10, 1, 1),
+            (1, 1, 10),
+            (7, 0, 0),
+            Some((2, 1, 0)), // xz transpose
+            None,
+        )
+        .expect("transpose_xz projection should succeed");
+
+        assert_eq!(result, vec![(0, 0, 7)]);
     }
 }
