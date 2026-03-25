@@ -2689,7 +2689,7 @@ impl ConnectomeManager {
         synapse_type: feagi_npu_neural::SynapseType,
     ) -> BduResult<usize> {
         match morphology_id {
-            "projector" => {
+            "projector" | "transpose_xy" | "transpose_yz" | "transpose_xz" => {
                 // Get dimensions from cortical areas (no neuron scanning!)
                 let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
                     crate::types::BduError::InvalidArea(format!(
@@ -2715,6 +2715,15 @@ impl ConnectomeManager {
                     dst_area.dimensions.depth as usize,
                 );
 
+                // Legacy-compatible transpose mappings from Python FEAGI:
+                // projector_xy -> (y, x, z), projector_yz -> (x, z, y), projector_xz -> (z, y, x)
+                let transpose = match morphology_id {
+                    "transpose_xy" => Some((1, 0, 2)),
+                    "transpose_yz" => Some((0, 2, 1)),
+                    "transpose_xz" => Some((2, 1, 0)),
+                    _ => None,
+                };
+
                 use crate::connectivity::core_morphologies::apply_projector_morphology_with_dimensions;
                 let count = apply_projector_morphology_with_dimensions(
                     npu,
@@ -2722,7 +2731,7 @@ impl ConnectomeManager {
                     dst_idx,
                     src_dimensions,
                     dst_dimensions,
-                    None, // transpose
+                    transpose,
                     None, // project_last_layer_of
                     weight,
                     psp,

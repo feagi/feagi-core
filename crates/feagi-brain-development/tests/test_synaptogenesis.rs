@@ -171,6 +171,49 @@ fn test_projector_morphology_basic() {
     println!("✅ Test 1: Projector morphology basic - PASSED");
 }
 
+#[test]
+fn test_transpose_morphologies_basic() {
+    for morphology_id in ["transpose_xy", "transpose_yz", "transpose_xz"] {
+        let mut manager = create_test_manager();
+
+        // Keep dimensions small and asymmetric so axis swaps are exercised.
+        let (src_area, src_id) = create_test_area("srctrx", 4, 3, 2, 0);
+        manager
+            .add_cortical_area(src_area)
+            .expect("Failed to add source area");
+
+        let (dst_area, dst_id) = create_test_area("dsttrx", 4, 3, 2, 1);
+        manager
+            .add_cortical_area(dst_area)
+            .expect("Failed to add destination area");
+
+        create_grid_neurons(&mut manager, &src_id, 4, 3, 2);
+        create_grid_neurons(&mut manager, &dst_id, 4, 3, 2);
+
+        let rule = json!({
+            "morphology_id": morphology_id,
+            "postSynapticCurrent_multiplier": 1.0,
+            "synapse_attractivity": 100
+        });
+
+        manager
+            .update_cortical_mapping(&src_id, &dst_id, vec![rule])
+            .expect("Failed to update cortical mapping");
+
+        let synapse_count = manager
+            .regenerate_synapses_for_mapping(&src_id, &dst_id)
+            .expect("Failed to apply cortical mapping");
+
+        assert!(
+            synapse_count > 0,
+            "Morphology {} should create synapses",
+            morphology_id
+        );
+    }
+
+    println!("✅ Test 1a: Transpose morphologies basic - PASSED");
+}
+
 // ============================================================================
 // TEST 1b: Inhibitory mapping produces inhibitory synapses (type=1) with abs(weight)
 // ============================================================================

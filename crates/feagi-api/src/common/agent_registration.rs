@@ -100,7 +100,9 @@ fn build_io_config_map_from_unit_def(
         .and_then(|flags| flags.get("percentage_neuron_positioning"))
         .cloned()
         .or_else(|| unit_def.get("percentage_neuron_positioning").cloned())
-        .ok_or_else(|| "unit_def missing percentage_neuron_positioning".to_string())?;
+        // Some legacy registration payloads omit this field on motor units.
+        // Use the deterministic default used elsewhere in this module.
+        .unwrap_or_else(|| serde_json::json!(PercentageNeuronPositioning::Linear));
 
     let frame: FrameChangeHandling = serde_json::from_value(frame_value)
         .map_err(|e| format!("Invalid frame_change_handling value: {}", e))?;

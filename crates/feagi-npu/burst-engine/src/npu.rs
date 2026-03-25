@@ -4214,13 +4214,13 @@ fn phase1_injection_with_synapses<
             // 🔍 DEBUG: Log first sensory injection
             static FIRST_SENSORY_LOG: std::sync::Once = std::sync::Once::new();
             FIRST_SENSORY_LOG.call_once(|| {
-                info!("╔══════════════════════════════════════════════════════════════");
-                info!("║ [SENSORY-INJECTION] 🎬 DRAINING STAGED SENSORY DATA");
-                info!(
+                debug!("╔══════════════════════════════════════════════════════════════");
+                debug!("║ [SENSORY-INJECTION] DRAINING STAGED SENSORY DATA");
+                debug!(
                     "║ Injecting {} neurons AFTER FCL clear (prevents race)",
                     pending.len()
                 );
-                info!("╚══════════════════════════════════════════════════════════════");
+                debug!("╚══════════════════════════════════════════════════════════════");
             });
 
             for (neuron_id, potential) in pending.drain(..) {
@@ -5256,7 +5256,12 @@ mod tests {
             .unwrap();
 
         // 4 candidate synapses should be removed (2x2 cross-product).
-        for (s, t) in [(src_a, dst_a), (src_a, dst_b), (src_b, dst_a), (src_b, dst_b)] {
+        for (s, t) in [
+            (src_a, dst_a),
+            (src_a, dst_b),
+            (src_b, dst_a),
+            (src_b, dst_b),
+        ] {
             npu.add_synapse(
                 s,
                 t,

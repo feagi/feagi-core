@@ -561,7 +561,7 @@ impl BurstLoopRunner {
         self.visualization_last_publish_time
             .write()
             .remove(&agent_id);
-        info!(
+        debug!(
             "[BURST-RUNNER] Registered visualization subscription for agent '{}' at {:.2}Hz",
             agent_id, rate_hz
         );
@@ -575,7 +575,7 @@ impl BurstLoopRunner {
             self.visualization_last_publish_time
                 .write()
                 .remove(agent_id);
-            info!(
+            debug!(
                 "[BURST-RUNNER] Removed visualization subscription for agent '{}'",
                 agent_id
             );
@@ -592,7 +592,7 @@ impl BurstLoopRunner {
         };
         self.visualization_output_rates_hz.write().clear();
         self.visualization_last_publish_time.write().clear();
-        info!(
+        debug!(
             "[BURST-RUNNER] Removed all visualization subscriptions (count={})",
             removed
         );
@@ -2029,14 +2029,25 @@ fn burst_loop(
         // Log lock release timing for diagnostics (scaled to burst budget).
         // This keeps diagnostics meaningful across different simulation timesteps.
         let burst_budget_ms = (1.0 / current_frequency_hz) * 1000.0;
-        let lock_wait_warn_threshold_ms = burst_budget_ms * 0.25;
+        // A small lock wait is expected under load; only warn when wait consumes
+        // a substantial chunk of the burst budget.
+        let lock_wait_warn_threshold_ms = burst_budget_ms * 0.50;
         let lock_hold_warn_threshold_ms = burst_budget_ms * 0.80;
         let lock_hold_overrun_threshold_ms = burst_budget_ms;
         let lock_hold_duration = npu_lock_release_time.duration_since(lock_acquired);
         let lock_wait_ms = lock_wait_duration.as_secs_f64() * 1000.0;
         let lock_hold_ms = lock_hold_duration.as_secs_f64() * 1000.0;
-        if lock_wait_ms > lock_wait_warn_threshold_ms {
+        let should_log_lock_warn = burst_num < 10 || burst_num % 25 == 0;
+        if lock_wait_ms > lock_wait_warn_threshold_ms && should_log_lock_warn {
             warn!(
+                "[NPU-LOCK] Burst {} waited {:.2}ms to acquire lock (threshold {:.2}ms, budget {:.2}ms)",
+                burst_num,
+                lock_wait_ms,
+                lock_wait_warn_threshold_ms,
+                burst_budget_ms
+            );
+        } else if lock_wait_ms > lock_wait_warn_threshold_ms {
+            debug!(
                 "[NPU-LOCK] Burst {} waited {:.2}ms to acquire lock (threshold {:.2}ms, budget {:.2}ms)",
                 burst_num,
                 lock_wait_ms,
@@ -2052,35 +2063,102 @@ fn burst_loop(
             None
         };
         if let Some(severity) = hold_severity {
+            let should_warn_overrun = burst_num < 10 || burst_num % 25 == 0;
             if let Some((fired, power, synaptic, processed, refractory)) = last_burst_stats {
-                warn!(
-                    "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
-                    burst_num,
-                    lock_hold_ms,
-                    severity,
-                    lock_hold_warn_threshold_ms,
-                    burst_budget_ms,
-                    last_process_duration
-                        .map(|d| d.as_secs_f64() * 1000.0)
-                        .unwrap_or(0.0),
-                    fired,
-                    power,
-                    synaptic,
-                    processed,
-                    refractory
-                );
+                if severity == "overrun" {
+                    if should_warn_overrun {
+                        warn!(
+                            "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
+                            burst_num,
+                            lock_hold_ms,
+                            severity,
+                            lock_hold_warn_threshold_ms,
+                            burst_budget_ms,
+                            last_process_duration
+                                .map(|d| d.as_secs_f64() * 1000.0)
+                                .unwrap_or(0.0),
+                            fired,
+                            power,
+                            synaptic,
+                            processed,
+                            refractory
+                        );
+                    } else {
+                        debug!(
+                            "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
+                            burst_num,
+                            lock_hold_ms,
+                            severity,
+                            lock_hold_warn_threshold_ms,
+                            burst_budget_ms,
+                            last_process_duration
+                                .map(|d| d.as_secs_f64() * 1000.0)
+                                .unwrap_or(0.0),
+                            fired,
+                            power,
+                            synaptic,
+                            processed,
+                            refractory
+                        );
+                    }
+                } else {
+                    debug!(
+                        "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms | fired={} power_inj={} syn_inj={} processed={} refractory={}",
+                        burst_num,
+                        lock_hold_ms,
+                        severity,
+                        lock_hold_warn_threshold_ms,
+                        burst_budget_ms,
+                        last_process_duration
+                            .map(|d| d.as_secs_f64() * 1000.0)
+                            .unwrap_or(0.0),
+                        fired,
+                        power,
+                        synaptic,
+                        processed,
+                        refractory
+                    );
+                }
             } else {
-                warn!(
-                    "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
-                    burst_num,
-                    lock_hold_ms,
-                    severity,
-                    lock_hold_warn_threshold_ms,
-                    burst_budget_ms,
-                    last_process_duration
-                        .map(|d| d.as_secs_f64() * 1000.0)
-                        .unwrap_or(0.0)
-                );
+                if severity == "overrun" {
+                    if should_warn_overrun {
+                        warn!(
+                            "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
+                            burst_num,
+                            lock_hold_ms,
+                            severity,
+                            lock_hold_warn_threshold_ms,
+                            burst_budget_ms,
+                            last_process_duration
+                                .map(|d| d.as_secs_f64() * 1000.0)
+                                .unwrap_or(0.0)
+                        );
+                    } else {
+                        debug!(
+                            "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
+                            burst_num,
+                            lock_hold_ms,
+                            severity,
+                            lock_hold_warn_threshold_ms,
+                            burst_budget_ms,
+                            last_process_duration
+                                .map(|d| d.as_secs_f64() * 1000.0)
+                                .unwrap_or(0.0)
+                        );
+                    }
+                } else {
+                    debug!(
+                        "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
+                        burst_num,
+                        lock_hold_ms,
+                        severity,
+                        lock_hold_warn_threshold_ms,
+                        burst_budget_ms,
+                        last_process_duration
+                            .map(|d| d.as_secs_f64() * 1000.0)
+                            .unwrap_or(0.0)
+                    );
+                }
             }
 
             // Root-cause diagnostics for sustained overruns: identify hottest cortical areas.
