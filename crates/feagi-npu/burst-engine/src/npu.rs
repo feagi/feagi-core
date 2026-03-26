@@ -40,6 +40,8 @@ use ahash::AHashSet;
 use feagi_npu_neural::types::*;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use roaring::RoaringBitmap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error, info, trace, warn};
 
 // Import Runtime trait for generic runtime abstraction
@@ -54,6 +56,24 @@ type FireQueueSample = AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Ve
 
 /// Key for a cortical mapping A→B (cortical_idx indices).
 type CorticalMappingKey = (u32, u32);
+
+const WARN_THROTTLE_INTERVAL_MS: u64 = 10_000;
+static LAST_PHASE1_SENSORY_WARN_MS: AtomicU64 = AtomicU64::new(0);
+static LAST_PHASE1_POWER_WARN_MS: AtomicU64 = AtomicU64::new(0);
+
+fn should_emit_throttled_warning(last_emitted_ms: &AtomicU64, interval_ms: u64) -> bool {
+    let now_ms_u128 = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let now_ms = u64::try_from(now_ms_u128).unwrap_or(u64::MAX);
+    let previous_ms = last_emitted_ms.load(Ordering::Relaxed);
+    if now_ms.saturating_sub(previous_ms) < interval_ms {
+        return false;
+    }
+    last_emitted_ms.store(now_ms, Ordering::Relaxed);
+    true
+}
 
 /// STDP parameters for a plastic cortical mapping A→B.
 ///
@@ -939,7 +959,7 @@ impl<
                             thresholds.push(T::from_f32(threshold_at_pos));
                             // SIMD-friendly encoding: 0.0 means no limit, convert to MAX
                             let threshold_limit = if default_threshold_limit == 0.0 {
-                                T::MAX_VALUE
+                                T::max_value()
                             } else {
                                 T::from_f32(default_threshold_limit)
                             };
@@ -953,7 +973,7 @@ impl<
             thresholds.resize(total_neurons, T::from_f32(default_threshold));
             // SIMD-friendly encoding: 0.0 means no limit, convert to MAX
             let threshold_limit = if default_threshold_limit == 0.0 {
-                T::MAX_VALUE
+                T::max_value()
             } else {
                 T::from_f32(default_threshold_limit)
             };
@@ -1803,6 +1823,7 @@ impl<
         }
 
         let phase1_start = std::time::Instant::now();
+        let previous_fcl_snapshot = fire_structures.last_fcl_snapshot.clone();
         let injection_result = {
             let synapse_storage = self.synapse_storage.read().unwrap();
             let fatigue_active = self
@@ -1816,6 +1837,7 @@ impl<
                 &mut *neuron_storage,
                 &mut propagation_engine,
                 &previous_fq,
+                &previous_fcl_snapshot,
                 power_amount,
                 &*synapse_storage,
                 &pending_mutex,
@@ -2092,7 +2114,7 @@ impl<
                 let _neuron_id = self
                     .add_neuron(
                         T::from_f32(1.0), // threshold
-                        T::MAX_VALUE, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
+                        T::max_value(), // threshold_limit (MAX = no limit, SIMD-friendly encoding)
                         0.1,            // leak_coefficient
                         T::from_f32(0.0), // resting_potential
                         0,              // neuron_type
@@ -3009,9 +3031,9 @@ impl<
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
 
         // SIMD-friendly encoding: 0.0 means "no upper bound".
-        // Internally, "no upper bound" is represented as T::MAX_VALUE.
+        // Internally, "no upper bound" is represented as T::max_value().
         let encoded_limit = if limit == 0.0 {
-            T::MAX_VALUE
+            T::max_value()
         } else {
             T::from_f32(limit)
         };
@@ -4192,6 +4214,7 @@ fn phase1_injection_with_synapses<
     neuron_storage: &mut N,
     propagation_engine: &mut SynapticPropagationEngine,
     previous_fire_queue: &FireQueue,
+    last_fcl_snapshot: &[(NeuronId, f32)],
     power_amount: f32,
     synapse_storage: &S,
     pending_sensory: &std::sync::Mutex<Vec<(NeuronId, f32)>>,
@@ -4236,6 +4259,7 @@ fn phase1_injection_with_synapses<
     if sensory_count > 0
         && sim_timestep > std::time::Duration::from_nanos(0)
         && sensory_duration > sim_timestep
+        && should_emit_throttled_warning(&LAST_PHASE1_SENSORY_WARN_MS, WARN_THROTTLE_INTERVAL_MS)
     {
         warn!(
             "[PHASE1-SENSORY] Injection exceeded timestep: {:.2}ms > {:.2}ms ({} neurons)",
@@ -4245,7 +4269,7 @@ fn phase1_injection_with_synapses<
         );
     }
 
-    // 1. Power Injection + Membrane Potential Reset - OPTIMIZED FOR LARGE COUNTS
+    // 1. Power Injection + Membrane Potential Reset
     // O(1) access to cached power neuron ID (core area 1).
     static FIRST_LOG: std::sync::Once = std::sync::Once::new();
     FIRST_LOG.call_once(|| {
@@ -4255,55 +4279,31 @@ fn phase1_injection_with_synapses<
         info!("╚══════════════════════════════════════════════════════════════");
     });
 
-    // PERFORMANCE OPTIMIZATION: For large neuron counts, only reset neurons from fire queue
-    // This avoids scanning all 3M+ neurons when only a small fraction need resetting
     let neuron_count = neuron_storage.count();
-    let should_do_full_scan = neuron_count < 1_000_000;
 
     let power_start = std::time::Instant::now();
 
-    if should_do_full_scan {
-        if power_neuron_id != POWER_NEURON_UNSET {
-            let idx = power_neuron_id as usize;
-            if idx < neuron_count
-                && neuron_storage.valid_mask()[idx]
-                && neuron_storage.cortical_areas()[idx] == 1
-            {
-                fcl.add_candidate(NeuronId(power_neuron_id), power_amount);
-                power_count += 1;
-            }
+    if power_neuron_id != POWER_NEURON_UNSET {
+        let idx = power_neuron_id as usize;
+        if idx < neuron_count
+            && neuron_storage.valid_mask()[idx]
+            && neuron_storage.cortical_areas()[idx] == 1
+        {
+            fcl.add_candidate(NeuronId(power_neuron_id), power_amount);
+            power_count += 1;
         }
+    }
 
-        // Reset membrane potential for non-accumulating neurons
-        for idx in 0..neuron_count {
-            if neuron_storage.valid_mask()[idx] && !neuron_storage.mp_charge_accumulation()[idx] {
-                neuron_storage.membrane_potentials_mut()[idx] = T::ZERO;
-            }
-        }
-    } else {
-        // Large neuron count (3M+): Optimized approach
-        // 1. Reset only neurons that fired in previous burst (from fire queue)
-        for (_cortical_idx, neurons) in &previous_fire_queue.neurons_by_area {
-            for neuron in neurons {
-                let idx = neuron.neuron_id.0 as usize;
-                if idx < neuron_count
-                    && neuron_storage.valid_mask()[idx]
-                    && !neuron_storage.mp_charge_accumulation()[idx]
-                {
-                    neuron_storage.membrane_potentials_mut()[idx] = T::ZERO;
-                }
-            }
-        }
-
-        if power_neuron_id != POWER_NEURON_UNSET {
-            let idx = power_neuron_id as usize;
-            if idx < neuron_count
-                && neuron_storage.valid_mask()[idx]
-                && neuron_storage.cortical_areas()[idx] == 1
-            {
-                fcl.add_candidate(NeuronId(power_neuron_id), power_amount);
-                power_count += 1;
-            }
+    // Reset only neurons that were candidates in the previous burst and do not
+    // accumulate membrane potential. This preserves mp_charge_accumulation=false
+    // semantics without sweeping the full neuron array.
+    for &(neuron_id, _potential) in last_fcl_snapshot {
+        let idx = neuron_id.0 as usize;
+        if idx < neuron_count
+            && neuron_storage.valid_mask()[idx]
+            && !neuron_storage.mp_charge_accumulation()[idx]
+        {
+            neuron_storage.membrane_potentials_mut()[idx] = T::zero();
         }
     }
 
@@ -4313,6 +4313,7 @@ fn phase1_injection_with_synapses<
     if power_count > 0
         && sim_timestep > std::time::Duration::from_nanos(0)
         && power_duration > sim_timestep
+        && should_emit_throttled_warning(&LAST_PHASE1_POWER_WARN_MS, WARN_THROTTLE_INTERVAL_MS)
     {
         warn!(
             "[PHASE1-POWER] Injection exceeded timestep: {:.2}ms > {:.2}ms ({} neurons, total: {})",

@@ -26,9 +26,9 @@ use crate::update_sim_timestep_from_hz;
 use crate::{tracing_mutex::TracingMutex, DynamicNPU};
 use feagi_npu_neural::types::NeuronId;
 use parking_lot::RwLock as ParkingLotRwLock;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Type alias for fire queue sample data structure
 type FireQueueSample = ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
@@ -38,6 +38,24 @@ type SensoryXyzpDecoded = Vec<(
     feagi_structures::genomic::cortical_area::CorticalID,
     Vec<(u32, u32, u32, f32)>,
 )>;
+
+const WARN_THROTTLE_INTERVAL_MS: u64 = 10_000;
+static LAST_NPU_LOCK_OVERRUN_WARN_MS: AtomicU64 = AtomicU64::new(0);
+static LAST_BURST_ROOTCAUSE_WARN_MS: AtomicU64 = AtomicU64::new(0);
+
+fn should_emit_throttled_warning(last_emitted_ms: &AtomicU64, interval_ms: u64) -> bool {
+    let now_ms_u128 = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let now_ms = u64::try_from(now_ms_u128).unwrap_or(u64::MAX);
+    let previous_ms = last_emitted_ms.load(Ordering::Relaxed);
+    if now_ms.saturating_sub(previous_ms) < interval_ms {
+        return false;
+    }
+    last_emitted_ms.store(now_ms, Ordering::Relaxed);
+    true
+}
 
 use tracing::{debug, error, info, trace, warn};
 
@@ -2064,7 +2082,11 @@ fn burst_loop(
             None
         };
         if let Some(severity) = hold_severity {
-            let should_warn_overrun = burst_num < 10 || burst_num % 25 == 0;
+            let should_warn_overrun = (burst_num < 10 || burst_num % 25 == 0)
+                && should_emit_throttled_warning(
+                    &LAST_NPU_LOCK_OVERRUN_WARN_MS,
+                    WARN_THROTTLE_INTERVAL_MS,
+                );
             if let Some((fired, power, synaptic, processed, refractory)) = last_burst_stats {
                 if severity == "overrun" {
                     if should_warn_overrun {
@@ -2167,6 +2189,10 @@ fn burst_loop(
             if severity == "overrun"
                 && burst_num % 25 == 0
                 && !top_firing_areas_last_burst.is_empty()
+                && should_emit_throttled_warning(
+                    &LAST_BURST_ROOTCAUSE_WARN_MS,
+                    WARN_THROTTLE_INTERVAL_MS,
+                )
             {
                 let cortical_id_map = cached_cortical_id_mappings.lock().unwrap();
                 let top_areas = top_firing_areas_last_burst
