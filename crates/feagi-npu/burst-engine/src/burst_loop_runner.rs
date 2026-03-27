@@ -2141,33 +2141,19 @@ fn burst_loop(
                         refractory
                     );
                 }
-            } else {
-                if severity == "overrun" {
-                    if should_warn_overrun {
-                        warn!(
-                            "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
-                            burst_num,
-                            lock_hold_ms,
-                            severity,
-                            lock_hold_warn_threshold_ms,
-                            burst_budget_ms,
-                            last_process_duration
-                                .map(|d| d.as_secs_f64() * 1000.0)
-                                .unwrap_or(0.0)
-                        );
-                    } else {
-                        debug!(
-                            "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
-                            burst_num,
-                            lock_hold_ms,
-                            severity,
-                            lock_hold_warn_threshold_ms,
-                            burst_budget_ms,
-                            last_process_duration
-                                .map(|d| d.as_secs_f64() * 1000.0)
-                                .unwrap_or(0.0)
-                        );
-                    }
+            } else if severity == "overrun" {
+                if should_warn_overrun {
+                    warn!(
+                        "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
+                        burst_num,
+                        lock_hold_ms,
+                        severity,
+                        lock_hold_warn_threshold_ms,
+                        burst_budget_ms,
+                        last_process_duration
+                            .map(|d| d.as_secs_f64() * 1000.0)
+                            .unwrap_or(0.0)
+                    );
                 } else {
                     debug!(
                         "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
@@ -2181,6 +2167,18 @@ fn burst_loop(
                             .unwrap_or(0.0)
                     );
                 }
+            } else {
+                debug!(
+                    "[NPU-LOCK] Burst {} held lock {:.2}ms ({}, threshold {:.2}ms, budget {:.2}ms) | process_burst {:.2}ms",
+                    burst_num,
+                    lock_hold_ms,
+                    severity,
+                    lock_hold_warn_threshold_ms,
+                    burst_budget_ms,
+                    last_process_duration
+                        .map(|d| d.as_secs_f64() * 1000.0)
+                        .unwrap_or(0.0)
+                );
             }
 
             // Root-cause diagnostics for sustained overruns: identify hottest cortical areas.
