@@ -4,11 +4,12 @@ use std::path::PathBuf;
 // region Args
 /// Protocol for communication with FEAGI
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
+#[allow(clippy::upper_case_acronyms)]
 enum Protocol {
     /// ZeroMQ protocol
     #[value(name = "zmq")]
     #[default]
-    Zmq,
+    ZMQ,
 }
 
 /// Segmented video stream example for FEAGI connector
