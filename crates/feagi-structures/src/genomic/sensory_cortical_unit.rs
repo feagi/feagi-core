@@ -20,6 +20,24 @@ pub struct UnitTopology {
     pub channel_dimensions_max: [u32; 3],
 }
 
+macro_rules! default_firing_threshold_impl {
+    () => {
+        None
+    };
+    ($value:expr) => {
+        Some($value)
+    };
+}
+
+macro_rules! default_mp_charge_accumulation_impl {
+    () => {
+        None
+    };
+    ($value:expr) => {
+        Some($value)
+    };
+}
+
 macro_rules! define_sensory_cortical_units_enum {
     (
         SensoryCorticalUnit {
@@ -30,6 +48,8 @@ macro_rules! define_sensory_cortical_units_enum {
                     accepted_wrapped_io_data_type: $accepted_wrapped_io_data_type:expr,
                     cortical_id_unit_reference: $cortical_id_unit_reference:expr,
                     number_cortical_areas: $number_cortical_areas:expr,
+                    $(default_firing_threshold: $default_firing_threshold:expr,)?
+                    $(default_mp_charge_accumulation: $default_mp_charge_accumulation:expr,)?
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
                     },
@@ -131,6 +151,30 @@ macro_rules! define_sensory_cortical_units_enum {
                 match self {
                     $(
                         SensoryCorticalUnit::$variant_name => $number_cortical_areas,
+                    )*
+                }
+            }
+
+            /// Returns the template-defined default firing threshold for auto-created areas.
+            /// `None` means no template override is defined.
+            pub const fn get_default_firing_threshold(&self) -> Option<f64> {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => {
+                            default_firing_threshold_impl!($($default_firing_threshold)?)
+                        }
+                    )*
+                }
+            }
+
+            /// Returns the template-defined default mp_charge_accumulation for auto-created areas.
+            /// `None` means no template override is defined.
+            pub const fn get_default_mp_charge_accumulation(&self) -> Option<bool> {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => {
+                            default_mp_charge_accumulation_impl!($($default_mp_charge_accumulation)?)
+                        }
                     )*
                 }
             }
