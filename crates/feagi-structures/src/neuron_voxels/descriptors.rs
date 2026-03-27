@@ -1,6 +1,7 @@
 use core::fmt::{Debug, Display};
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
 use crate::base_quantizable::value::QuantizableValue;
+use crate::neurons::descriptors::NumberNeuronsPerVoxel;
 
 pub enum SingleCorticalNeuronVoxelCollectionType {
     DenseArray,
@@ -8,6 +9,7 @@ pub enum SingleCorticalNeuronVoxelCollectionType {
     IndexVector,
     CoordVector,
 }
+
 
 
 //region Neuron Voxel Coordinate
@@ -23,6 +25,10 @@ crate::define_dimension_3d_type_family!(NeuronVoxelDimensions, NeuronVoxelCoordi
 impl<CoordQuant: QuantizableUInt> NeuronVoxelDimensions<CoordQuant> {
     pub fn get_max_allowed_index_exclusive(&self) -> NeuronVoxelIndexQuant {
         self.x * self.y * self.z
+    }
+
+    pub fn get_number_neurons(&self, density: NumberNeuronsPerVoxel) -> usize {
+        self.get_max_allowed_index_exclusive() as usize * (density as usize)
     }
 }
 

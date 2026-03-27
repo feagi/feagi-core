@@ -1,4 +1,3 @@
-use core::cmp::{Eq, Ord, PartialOrd};
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
 use crate::FeagiStructuresError;
 

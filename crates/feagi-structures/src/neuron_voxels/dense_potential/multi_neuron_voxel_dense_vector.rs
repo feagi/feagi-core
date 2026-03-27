@@ -2,7 +2,6 @@ use ahash::AHashMap;
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
 use crate::base_quantizable::value::QuantizableValue;
 use crate::genomic::cortical_area::CorticalID;
-use crate::neuron_descriptors::CorticalAreaIndex;
 use crate::neuron_voxels::dense_potential::neuron_voxel_dense_vector::NeuronVoxelDenseVector;
 use crate::neuron_voxels::descriptors::SingleCorticalNeuronVoxelCollectionType;
 use crate::neuron_voxels::FeagiNeuronVoxelError;

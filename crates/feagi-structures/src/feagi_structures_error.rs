@@ -7,3 +7,41 @@ pub enum FeagiStructuresError {
     Coordinate3DOutOfBounds{context: &'static str, coordinate: UnsignedCoordinate3DType<u32>, dimensions: Dimension3DType<u32>},
     JSONError{context: &'static str},
 }
+
+#[cfg(feature = "alloc")]
+impl core::fmt::Display for FeagiStructuresError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::ValueCannotBeZero { context } => {
+                write!(f, "value cannot be zero: {context}")
+            }
+            Self::ValuesMustBeEqual { context } => {
+                write!(f, "values must be equal: {context}")
+            }
+            Self::Coordinate2DOutOfBounds {
+                context,
+                coordinate,
+                dimensions,
+            } => {
+                write!(
+                    f,
+                    "2D coordinate out of bounds ({context}): coordinate {coordinate}, dimensions {dimensions}"
+                )
+            }
+            Self::Coordinate3DOutOfBounds {
+                context,
+                coordinate,
+                dimensions,
+            } => {
+                write!(
+                    f,
+                    "3D coordinate out of bounds ({context}): coordinate {coordinate}, dimensions {dimensions}"
+                )
+            }
+            Self::JSONError { context } => write!(f, "JSON error: {context}"),
+        }
+    }
+}
+
+#[cfg(all(feature = "alloc", feature = "std"))]
+impl std::error::Error for FeagiStructuresError {}

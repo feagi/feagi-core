@@ -14,7 +14,11 @@ where
     PercentageQuant: PercentageScale,
 {
 
-    fn process_burst(&mut self, fire_queue: &mut FireQueue, fire_candidate_list: &mut FireCandidateList); // TODO pass through types of FCL, FQ as mutable references
+    fn process_burst(&mut self);
+
+    fn get_fire_candidate_list_ref(&self) -> &impl FireCandidateList;
+
+    fn get_fire_candidate_list_ref_mut(&self) -> &mut impl FireCandidateList;
 
     //region Utility and housekeeping
 

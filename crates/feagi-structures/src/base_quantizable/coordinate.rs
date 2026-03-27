@@ -84,7 +84,7 @@ macro_rules! define_dimension_2d_type_family {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
-        pub struct $base_name Type<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> {
+        pub struct $base_name<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> {
             pub x: $crate::base_quantizable::nonzero_count::NonzeroCountType<T>,
             pub y: $crate::base_quantizable::nonzero_count::NonzeroCountType<T>,
         }
@@ -361,6 +361,18 @@ impl<T: QuantizableUInt> Into<UnsignedCoordinate2DType<usize>> for UnsignedCoord
 //endregion
 
 //region Signed Coordinate 2D
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct SignedCoordinate2DType<T: QuantizableInt> {
     pub x: T,
     pub y: T,

@@ -1,6 +1,6 @@
 use crate::base_quantizable::unsigned_integer::QuantizableUInt;
 use crate::base_quantizable::value::QuantizableValue;
-use crate::neuron_descriptors::NeuronPotentialUnit;
+use crate::descriptors::NeuronPotentialUnit;
 use crate::neuron_voxels::descriptors::NeuronVoxelPotential;
 use crate::neuron_voxels::traits::NeuronVoxel;
 

@@ -13,8 +13,8 @@ pub mod genomic;
 pub mod neuron_voxels;
 pub mod base_quantizable;
 pub mod feagi_log;
-pub mod neuron_descriptors;
-mod neurons;
+pub mod descriptors;
+pub mod neurons;
 
 pub use feagi_structures_error::FeagiStructuresError;
 pub use feagi_json::FeagiJSON;

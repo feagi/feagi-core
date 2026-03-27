@@ -153,6 +153,7 @@ SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronV
 
 //endregion
 
+//region MultiCACollection
 pub trait MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
     VoxelPotentialQuant: QuantizableValue,
     CoordQuant: QuantizableUInt,
@@ -203,6 +204,6 @@ MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVo
 
 }
 
-
+//endregion
 // NOTE: The mixed type is also alone so it doesn't need a trait either
 

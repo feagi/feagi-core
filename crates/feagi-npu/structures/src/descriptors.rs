@@ -29,9 +29,9 @@ define_quantizable_uint_type_family!(BurstCount);
 
 //endregion
 
-//region Interneuron Index
-define_quantizable_uint_type_family!(InterneuronIndex);
+//region Neuron Index
 
+crate::define_quantizable_uint_type_family!(NeuronNPUIndex);
 
 //endregion
 
