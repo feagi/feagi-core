@@ -1818,11 +1818,26 @@ fn burst_loop(
                             }
                             "neuron_mp_charge_accumulation" | "mp_charge_accumulation" => {
                                 if let Some(accumulation) = update.value.as_bool() {
-                                    npu_lock.update_cortical_area_mp_charge_accumulation(
+                                    let n = npu_lock.update_cortical_area_mp_charge_accumulation(
                                         update.cortical_idx,
                                         accumulation,
-                                    )
+                                    );
+                                    if n == 0 {
+                                        tracing::warn!(
+                                            target: "feagi-burst-engine",
+                                            "mp_charge_accumulation update applied to 0 neurons (cortical_idx={}, cortical_id={}); check area index",
+                                            update.cortical_idx,
+                                            update.cortical_id
+                                        );
+                                    }
+                                    n
                                 } else {
+                                    tracing::warn!(
+                                        target: "feagi-burst-engine",
+                                        "mp_charge_accumulation ignored: JSON value must be boolean, got {:?} (cortical_id={})",
+                                        update.value,
+                                        update.cortical_id
+                                    );
                                     0
                                 }
                             }

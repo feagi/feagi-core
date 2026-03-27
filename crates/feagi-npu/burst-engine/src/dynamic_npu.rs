@@ -509,7 +509,7 @@ where
         dispatch!(self, get_neuron_id_at_coordinate(cortical_area, x, y, z))
     }
 
-    pub fn get_neuron_cortical_area(&self, neuron_id: u32) -> u32 {
+    pub fn get_neuron_cortical_area(&self, neuron_id: u32) -> Option<u32> {
         dispatch!(self, get_neuron_cortical_area(neuron_id))
     }
 
@@ -694,6 +694,11 @@ where
         dispatch!(self, get_cortical_area_name(area_id))
     }
 
+    /// Resolve registered cortical name (typically `CorticalID::as_base_64()`) to runtime `cortical_idx`.
+    pub fn get_cortical_area_id(&self, cortical_name: &str) -> Option<u32> {
+        dispatch!(self, get_cortical_area_id(cortical_name))
+    }
+
     pub fn update_cortical_area_threshold(&mut self, cortical_area: u32, threshold: f32) -> usize {
         dispatch_mut!(
             self,
@@ -769,6 +774,14 @@ where
         dispatch_mut!(
             self,
             update_cortical_area_mp_charge_accumulation(cortical_area, accumulation)
+        )
+    }
+
+    /// Reset membrane potentials to zero for all neurons in one cortical area (sparse vs whole brain).
+    pub fn reset_membrane_potentials_for_cortical_area(&mut self, cortical_area: u32) -> usize {
+        dispatch_mut!(
+            self,
+            reset_membrane_potentials_for_cortical_area(cortical_area)
         )
     }
 

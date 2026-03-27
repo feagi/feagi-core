@@ -15,6 +15,10 @@
 //! ## Performance Critical Path
 //! This is the hottest code path in FEAGI. Every optimization matters.
 //!
+//! ## @npu-debug-instrumentation (cleanup)
+//! Temporary runtime wiring (`set_runtime_trace_cortical_idx`, extra trace targets): remove or
+//! narrow after membrane/FCL root-cause is finished.
+//!
 //! ## Optimization Strategy
 //! 1. **SIMD**: Process 8+ neurons at once using AVX2/AVX-512
 //! 2. **Rayon**: Parallelize across cores for large neuron counts
@@ -23,8 +27,9 @@
 use crate::fire_structures::{FireQueue, FiringNeuron};
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::NeuronStorage;
-use std::sync::OnceLock;
-use tracing::trace;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Once, OnceLock};
+use tracing::debug;
 
 // Use platform-agnostic core algorithms (Phase 1 - NO DUPLICATION)
 use feagi_npu_neural::{apply_leak, excitability_random, update_neurons_lif_batch};
@@ -39,12 +44,47 @@ use feagi_npu_neural::{apply_leak, excitability_random, update_neurons_lif_batch
 
 /// Runtime-gated tracing config for neural dynamics.
 /// Enable with:
-/// - FEAGI_NPU_TRACE_DYNAMICS=1
-///   Optional filters:
-/// - FEAGI_NPU_TRACE_NEURON=<u32 neuron_id> (single neuron)
+/// - `FEAGI_NPU_TRACE_DYNAMICS=1`
+///
+/// **Anti-spam:** at least one of the following must be set or no per-neuron traces are emitted:
+/// - `FEAGI_NPU_TRACE_NEURON=<u32>` — single neuron id
+/// - `FEAGI_NPU_TRACE_CORTICAL_IDX=<u32>` — numeric `cortical_idx` (same as neuron array / BDU assignment)
+///
+/// Power area (`cortical_idx == 1`) is suppressed unless `FEAGI_NPU_TRACE_CORTICAL_IDX=1`.
 struct DynamicsTraceCfg {
     enabled: bool,
     neuron_filter: Option<u32>,
+    cortical_idx_filter: Option<u32>,
+}
+
+/// Sentinel: no runtime override for cortical_idx tracing (see `set_runtime_trace_cortical_idx`).
+const RUNTIME_TRACE_CORTICAL_IDX_UNSET: u32 = u32::MAX;
+
+static RUNTIME_TRACE_CORTICAL_IDX: AtomicU32 = AtomicU32::new(RUNTIME_TRACE_CORTICAL_IDX_UNSET);
+
+/// Set after brain load so dynamics/FCL use the same cortical_idx as `FEAGI_NPU_TRACE_CORTICAL_ID`.
+/// Env `FEAGI_NPU_TRACE_CORTICAL_IDX` **wins** when set (explicit).
+pub fn set_runtime_trace_cortical_idx(idx: Option<u32>) {
+    match idx {
+        Some(i) => RUNTIME_TRACE_CORTICAL_IDX.store(i, Ordering::Release),
+        None => {
+            RUNTIME_TRACE_CORTICAL_IDX.store(RUNTIME_TRACE_CORTICAL_IDX_UNSET, Ordering::Release)
+        }
+    }
+}
+
+fn runtime_trace_cortical_idx() -> Option<u32> {
+    let v = RUNTIME_TRACE_CORTICAL_IDX.load(Ordering::Acquire);
+    if v == RUNTIME_TRACE_CORTICAL_IDX_UNSET {
+        None
+    } else {
+        Some(v)
+    }
+}
+
+fn effective_cortical_idx_filter() -> Option<u32> {
+    let c = dynamics_trace_cfg();
+    c.cortical_idx_filter.or_else(runtime_trace_cortical_idx)
 }
 
 fn dynamics_trace_cfg() -> &'static DynamicsTraceCfg {
@@ -60,11 +100,68 @@ fn dynamics_trace_cfg() -> &'static DynamicsTraceCfg {
             .ok()
             .and_then(|v| v.parse().ok());
 
-        DynamicsTraceCfg {
+        let cortical_idx_filter = std::env::var("FEAGI_NPU_TRACE_CORTICAL_IDX")
+            .ok()
+            .and_then(|v| v.parse().ok());
+
+        let cfg = DynamicsTraceCfg {
             enabled,
             neuron_filter,
+            cortical_idx_filter,
+        };
+
+        let cortical_id_for_late_idx = std::env::var("FEAGI_NPU_TRACE_CORTICAL_ID")
+            .ok()
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false);
+
+        static WARN_NO_FOCUS: Once = Once::new();
+        if cfg.enabled
+            && cfg.neuron_filter.is_none()
+            && cfg.cortical_idx_filter.is_none()
+            && !cortical_id_for_late_idx
+        {
+            WARN_NO_FOCUS.call_once(|| {
+                tracing::warn!(
+                    target: "feagi-npu-trace",
+                    "FEAGI_NPU_TRACE_DYNAMICS is set but neither FEAGI_NPU_TRACE_NEURON nor FEAGI_NPU_TRACE_CORTICAL_IDX is set — per-neuron dynamics traces are disabled (anti-spam). Set one of those to scope logging."
+                );
+            });
         }
+
+        cfg
     })
+}
+
+/// Returns true when per-neuron dynamics tracing should emit for this neuron.
+/// Power neurons are skipped unless `FEAGI_NPU_TRACE_CORTICAL_IDX=1`.
+#[inline]
+fn dynamics_trace_emit(neuron_id: u32, cortical_idx: u32) -> bool {
+    let cfg = dynamics_trace_cfg();
+    if !cfg.enabled {
+        return false;
+    }
+    let idx = effective_cortical_idx_filter();
+    let has_focus = cfg.neuron_filter.is_some() || idx.is_some();
+    if !has_focus {
+        return false;
+    }
+    if cortical_idx == 1 && idx != Some(1) {
+        return false;
+    }
+    let neuron_ok = cfg.neuron_filter.map(|n| n == neuron_id).unwrap_or(true);
+    let cortical_ok = idx.map(|c| c == cortical_idx).unwrap_or(true);
+    neuron_ok && cortical_ok
+}
+
+/// When set, [`process_burst`](crate::RustNPU::process_burst) logs one FCL aggregate line for this
+/// cortical index (phase 1, pre-dynamics) when dynamics tracing is enabled.
+pub fn trace_fcl_cortical_idx_for_logging() -> Option<u32> {
+    let cfg = dynamics_trace_cfg();
+    if !cfg.enabled {
+        return None;
+    }
+    effective_cortical_idx_filter()
 }
 
 /// Result of neural dynamics processing
@@ -567,17 +664,8 @@ fn process_single_neuron<T: NeuralValue>(
         return None; // Neuron doesn't exist
     }
 
-    // Trace config (exclude power to avoid noise)
-    let trace_cfg = dynamics_trace_cfg();
-    let is_power = neuron_array.cortical_areas()[idx] == 1;
-    let allow_trace = trace_cfg.enabled
-        && !is_power
-        && trace_cfg
-            .neuron_filter
-            .map(|id| id == neuron_id.0)
-            .unwrap_or(true);
-
     let cortical_idx = neuron_array.cortical_areas()[idx];
+    let allow_trace = dynamics_trace_emit(neuron_id.0, cortical_idx);
     let mp_acc = neuron_array.mp_charge_accumulation()[idx];
 
     // CRITICAL DEBUG: Log entry for neuron 16438 (disabled to reduce spam)
@@ -603,7 +691,7 @@ fn process_single_neuron<T: NeuralValue>(
             let mp = neuron_array.membrane_potentials()[idx].to_f32();
             let thr = neuron_array.thresholds()[idx].to_f32();
             let leak = neuron_array.leak_coefficients()[idx];
-            trace!(
+            debug!(
                 target: "feagi-npu-trace",
                 "[DYN] burst={} neuron={} area={} mp_acc={} REFRACTORY countdown={} candidate={:.6} mp={:.6} thr={:.6} leak={:.6}",
                 burst_count,
@@ -671,7 +759,7 @@ fn process_single_neuron<T: NeuralValue>(
 
     if above_min && below_max {
         if allow_trace {
-            trace!(
+            debug!(
                 target: "feagi-npu-trace",
                 "[DYN] burst={} neuron={} area={} mp_acc={} CROSS mp_old={:.6} cand={:.6} mp_new={:.6} thr={:.6} thr_limit={:.6} leak={:.6} excit={:.6}",
                 burst_count,
@@ -734,7 +822,7 @@ fn process_single_neuron<T: NeuralValue>(
 
         if should_fire {
             if allow_trace {
-                trace!(
+                debug!(
                     target: "feagi-npu-trace",
                     "[DYN] burst={} neuron={} area={} mp_acc={} FIRED mp_new={:.6} thr={:.6} refrac_period={} cfc={}/{} snooze={}",
                     burst_count,
@@ -831,7 +919,7 @@ fn process_single_neuron<T: NeuralValue>(
     );
 
     if allow_trace {
-        trace!(
+        debug!(
             target: "feagi-npu-trace",
             "[DYN] burst={} neuron={} area={} mp_acc={} NOFIRE mp_old={:.6} cand={:.6} mp_preleak={:.6} mp_postleak={:.6} thr={:.6} leak={:.6}",
             burst_count,

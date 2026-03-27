@@ -331,7 +331,7 @@ pub fn apply_block_connection_morphology(
                 if let Some(coords) = npu.get_neuron_coordinates(nid) {
                     sample_coords.push(coords);
                 }
-                sample_area_ids.push(npu.get_neuron_cortical_area(nid));
+                sample_area_ids.push(npu.get_neuron_cortical_area(nid).unwrap_or(0));
             }
             warn!(
                 target: "feagi-bdu",

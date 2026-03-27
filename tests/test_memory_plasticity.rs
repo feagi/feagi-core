@@ -511,7 +511,7 @@ fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
         if result
             .fired_neurons
             .iter()
-            .any(|id| npu_lock.get_neuron_cortical_area(id.0) == l2_twin_idx)
+            .any(|id| npu_lock.get_neuron_cortical_area(id.0) == Some(l2_twin_idx))
         {
             l2_twin_fired = true;
         }
@@ -1233,7 +1233,7 @@ fn test_memory_replay_injects_twin_area() {
         if result
             .fired_neurons
             .iter()
-            .any(|id| npu_lock.get_neuron_cortical_area(id.0) == twin_idx)
+            .any(|id| npu_lock.get_neuron_cortical_area(id.0) == Some(twin_idx))
         {
             twin_fired = true;
         }

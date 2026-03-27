@@ -87,6 +87,7 @@ pub mod backend;
 #[cfg(feature = "std")]
 pub mod burst_loop_runner;
 pub use burst_loop_runner::SensoryIntake;
+pub mod chain_latency_trace;
 pub mod fire_ledger;
 pub mod fire_structures;
 pub mod fq_sampler;

@@ -189,12 +189,28 @@ impl CorticalParameterUpdater {
                             cortical_idx,
                             accumulation,
                         );
-                        info!(
-                            "✓ Synced mp_charge_accumulation={} to {} neurons in area {}",
-                            accumulation, count, cortical_id
-                        );
+                        if count == 0 {
+                            warn!(
+                                "mp_charge_accumulation={} synced to 0 neurons (cortical_idx={}, area={}); check cortical_idx",
+                                accumulation, cortical_idx, cortical_id
+                            );
+                        } else if !accumulation {
+                            info!(
+                                "✓ Synced mp_charge_accumulation=false to {} neurons in area {}; membrane potentials cleared for this cortical area",
+                                count, cortical_id
+                            );
+                        } else {
+                            info!(
+                                "✓ Synced mp_charge_accumulation=true to {} neurons in area {}",
+                                count, cortical_id
+                            );
+                        }
                         count
                     } else {
+                        warn!(
+                            "mp_charge_accumulation ignored: value must be JSON boolean, got {:?} (area {})",
+                            value, cortical_id
+                        );
                         0
                     }
                 }

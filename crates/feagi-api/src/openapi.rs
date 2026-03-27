@@ -160,6 +160,7 @@ use crate::{
         crate::endpoints::cortical_area::post_clone,
         crate::endpoints::cortical_area::post_resize,
         crate::endpoints::cortical_area::post_reposition,
+        crate::endpoints::cortical_area::get_voxel_neurons,
         crate::endpoints::cortical_area::post_voxel_neurons,
         crate::endpoints::cortical_area::get_cortical_area_index_list,
         crate::endpoints::cortical_area::get_cortical_idx_mapping,
@@ -531,6 +532,9 @@ use crate::{
             crate::endpoints::cortical_area::CorticalAreaIdListResponse,
             crate::endpoints::cortical_area::CorticalAreaNameListResponse,
             crate::endpoints::cortical_area::CorticalTypeMetadata,
+            crate::endpoints::cortical_area::VoxelNeuronsQuery,
+            crate::endpoints::cortical_area::VoxelNeuronsBody,
+            crate::endpoints::cortical_area::VoxelNeuronsResponse,
 
             // Morphology
             crate::endpoints::morphology::MorphologyListResponse,
@@ -668,6 +672,9 @@ mod tests {
         let components = openapi.components.unwrap();
         assert!(components.schemas.contains_key("HealthCheckResponseV1"));
         assert!(components.schemas.contains_key("ApiError"));
+        assert!(components.schemas.contains_key("VoxelNeuronsBody"));
+        assert!(components.schemas.contains_key("VoxelNeuronsResponse"));
+        assert!(components.schemas.contains_key("VoxelNeuronsQuery"));
     }
 
     #[test]

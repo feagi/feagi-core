@@ -556,7 +556,7 @@ fn create_v1_router() -> Router<ApiState> {
         )
         .route(
             "/cortical_area/voxel_neurons",
-            axum::routing::post(cortical_area::post_voxel_neurons),
+            get(cortical_area::get_voxel_neurons).post(cortical_area::post_voxel_neurons),
         )
         .route(
             "/cortical_area/cortical_area_index_list",

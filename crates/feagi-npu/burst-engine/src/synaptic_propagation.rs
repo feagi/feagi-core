@@ -43,22 +43,38 @@ use feagi_npu_neural::types::*;
 use feagi_npu_runtime::SynapseStorage;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use rayon::prelude::*;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Once, OnceLock};
 
 // Use platform-agnostic synaptic algorithms (now in feagi-neural)
 use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType as FeagiSynapseType};
-use tracing::trace;
+use tracing::debug;
 
 /// Runtime-gated tracing config for synaptic propagation.
 /// Enable with:
-/// - FEAGI_NPU_TRACE_SYNAPSE=1
-///   Optional filters:
-/// - FEAGI_NPU_TRACE_SRC=<u32 neuron_id>
-/// - FEAGI_NPU_TRACE_DST=<u32 neuron_id>
+/// - `FEAGI_NPU_TRACE_SYNAPSE=1`
+///
+/// **Anti-spam:** at least one of:
+/// - `FEAGI_NPU_TRACE_SRC=<u32>` — source neuron id
+/// - `FEAGI_NPU_TRACE_DST=<u32>` — target neuron id
+/// - `FEAGI_NPU_TRACE_CORTICAL_ID=<base64>` — target neuron's cortical area id (e.g. genome key)
+///
+/// Per-synapse lines require `FEAGI_NPU_TRACE_SYNAPSE_VERBOSE=1`. Otherwise one summary line per
+/// propagation call counts matching edges (avoids log flooding).
+///
+/// When `FEAGI_NPU_TRACE_CORTICAL_ID` is set, synapses **from** `_power` are included if they
+/// target that area (so power → area feedforward is visible).
+///
+/// ## @npu-debug-instrumentation (cleanup)
+/// Verbose gating and summary line: remove or simplify after root-cause.
 struct SynapseTraceCfg {
     enabled: bool,
     src_filter: Option<u32>,
     dst_filter: Option<u32>,
+    /// Filter by postsynaptic cortical id (matches `neuron_to_area` for target neuron).
+    dst_cortical_id_filter: Option<CorticalID>,
+    /// When false, emit a single `[SYNAPSE]` summary count instead of per-edge lines.
+    synapse_verbose: bool,
 }
 
 fn synapse_trace_cfg() -> &'static SynapseTraceCfg {
@@ -77,11 +93,51 @@ fn synapse_trace_cfg() -> &'static SynapseTraceCfg {
             .ok()
             .and_then(|v| v.parse().ok());
 
-        SynapseTraceCfg {
+        let dst_cortical_id_filter = std::env::var("FEAGI_NPU_TRACE_CORTICAL_ID")
+            .ok()
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+            .and_then(|s| match CorticalID::try_from_base_64(&s) {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    tracing::warn!(
+                        target: "feagi-npu-trace",
+                        "FEAGI_NPU_TRACE_CORTICAL_ID is invalid ({}); cortical id filter disabled",
+                        e
+                    );
+                    None
+                }
+            });
+
+        let synapse_verbose = std::env::var("FEAGI_NPU_TRACE_SYNAPSE_VERBOSE")
+            .ok()
+            .as_deref()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        let cfg = SynapseTraceCfg {
             enabled,
             src_filter,
             dst_filter,
+            dst_cortical_id_filter,
+            synapse_verbose,
+        };
+
+        static WARN_NO_FOCUS: Once = Once::new();
+        if cfg.enabled
+            && cfg.src_filter.is_none()
+            && cfg.dst_filter.is_none()
+            && cfg.dst_cortical_id_filter.is_none()
+        {
+            WARN_NO_FOCUS.call_once(|| {
+                tracing::warn!(
+                    target: "feagi-npu-trace",
+                    "FEAGI_NPU_TRACE_SYNAPSE is set but neither FEAGI_NPU_TRACE_SRC, FEAGI_NPU_TRACE_DST, nor FEAGI_NPU_TRACE_CORTICAL_ID — synapse traces disabled (anti-spam)."
+                );
+            });
         }
+
+        cfg
     })
 }
 
@@ -229,6 +285,10 @@ impl SynapticPropagationEngine {
     ) -> Result<PropagationResult> {
         let profile_enabled = tracing::enabled!(tracing::Level::DEBUG);
         let trace_cfg = synapse_trace_cfg();
+        let synapse_verbose = trace_cfg.synapse_verbose;
+        let has_focus = trace_cfg.src_filter.is_some()
+            || trace_cfg.dst_filter.is_some()
+            || trace_cfg.dst_cortical_id_filter.is_some();
         let total_start = profile_enabled.then(std::time::Instant::now);
         self.total_propagations += 1;
 
@@ -416,6 +476,7 @@ impl SynapticPropagationEngine {
         // This is where Python spent 165ms doing inefficient numpy ops
         // ZERO-COPY: Access StdSynapseArray fields directly (Structure-of-Arrays)
         let compute_start = profile_enabled.then(std::time::Instant::now);
+        let synapse_match_count = AtomicUsize::new(0);
         let contributions: Vec<(NeuronId, CorticalID, SynapticContribution)> = synapse_indices
             .par_iter()
             .filter_map(|&syn_idx| {
@@ -436,9 +497,22 @@ impl SynapticPropagationEngine {
                 // Get pre-computed source neuron metadata (eliminates 4 HashMap lookups per synapse!)
                 let source_meta = source_metadata.get(&source_neuron)?;
 
-                // Logging: exclude power sources to avoid noise (cortical_idx=1 maps to _power).
+                // Logging: exclude power sources unless tracing a destination cortical area (then
+                // power→area drive is often relevant).
+                let has_focus = trace_cfg.src_filter.is_some()
+                    || trace_cfg.dst_filter.is_some()
+                    || trace_cfg.dst_cortical_id_filter.is_some();
+                let dst_cortical_ok = trace_cfg
+                    .dst_cortical_id_filter
+                    .as_ref()
+                    .map(|id| *id == cortical_area)
+                    .unwrap_or(true);
+                let power_src = source_meta.area == *power_cortical_id();
+                let allow_power_src = trace_cfg.dst_cortical_id_filter.is_some() && dst_cortical_ok;
                 let allow_trace = trace_cfg.enabled
-                    && source_meta.area != *power_cortical_id()
+                    && has_focus
+                    && dst_cortical_ok
+                    && (!power_src || allow_power_src)
                     && trace_cfg
                         .src_filter
                         .map(|id| id == source_neuron.0)
@@ -488,28 +562,42 @@ impl SynapticPropagationEngine {
                 };
 
                 if allow_trace {
-                    trace!(
-                        target: "feagi-npu-trace",
-                        "[SYNAPSE] syn_idx={} src={} dst={} src_area={:?} dst_area={:?} type={:?} weight={} psp_used={} mp_driven={} uniform={} outgoing={} base_contrib={:.3} final_contrib={:.3}",
-                        syn_idx,
-                        source_neuron.0,
-                        target_neuron.0,
-                        source_meta.area,
-                        cortical_area,
-                        synapse_type,
-                        weight,
-                        base_psp,
-                        source_meta.mp_driven,
-                        source_meta.uniform,
-                        source_meta.synapse_count,
-                        base_contribution,
-                        final_contribution
-                    );
+                    if synapse_verbose {
+                        debug!(
+                            target: "feagi-npu-trace",
+                            "[SYNAPSE] syn_idx={} src={} dst={} src_area={:?} dst_area={:?} type={:?} weight={} psp_used={} mp_driven={} uniform={} outgoing={} base_contrib={:.3} final_contrib={:.3}",
+                            syn_idx,
+                            source_neuron.0,
+                            target_neuron.0,
+                            source_meta.area,
+                            cortical_area,
+                            synapse_type,
+                            weight,
+                            base_psp,
+                            source_meta.mp_driven,
+                            source_meta.uniform,
+                            source_meta.synapse_count,
+                            base_contribution,
+                            final_contribution
+                        );
+                    } else {
+                        synapse_match_count.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
 
                 Some((target_neuron, cortical_area, SynapticContribution(final_contribution)))
             })
             .collect();
+        if trace_cfg.enabled && has_focus && !synapse_verbose {
+            let n = synapse_match_count.load(Ordering::Relaxed);
+            if n > 0 {
+                debug!(
+                    target: "feagi-npu-trace",
+                    "[SYNAPSE] synapses_matching_focus count={}",
+                    n
+                );
+            }
+        }
         let compute_ms = compute_start
             .map(|start| start.elapsed().as_secs_f64() * 1000.0)
             .unwrap_or(0.0);

@@ -343,6 +343,11 @@ impl AgentService for AgentServiceImpl {
         stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
         mode: ManualStimulationMode,
     ) -> AgentResult<HashMap<String, serde_json::Value>> {
+        // Manual stimulation is authoritative: always use force-fire injection so every resolved
+        // voxel neuron is merged into the fire queue after dynamics, regardless of MP/refractory/
+        // excitability. The `mode` argument is kept for API compatibility only.
+        let _ = mode;
+
         // Use RuntimeService for sensory injection (service layer, not direct NPU access)
         let runtime_service = self
             .runtime_service
@@ -423,14 +428,7 @@ impl AgentService for AgentServiceImpl {
                 .inject_sensory_by_coordinates(
                     &cortical_id,
                     &xyzp_data,
-                    match mode {
-                        ManualStimulationMode::Candidate => {
-                            crate::traits::runtime_service::ManualStimulationMode::Candidate
-                        }
-                        ManualStimulationMode::ForceFire => {
-                            crate::traits::runtime_service::ManualStimulationMode::ForceFire
-                        }
-                    },
+                    crate::traits::runtime_service::ManualStimulationMode::ForceFire,
                 )
                 .await
             {
@@ -470,13 +468,7 @@ impl AgentService for AgentServiceImpl {
             "unique_neuron_ids".to_string(),
             serde_json::json!(total_stimulated),
         );
-        result.insert(
-            "mode".to_string(),
-            serde_json::json!(match mode {
-                ManualStimulationMode::Candidate => "candidate",
-                ManualStimulationMode::ForceFire => "force_fire",
-            }),
-        );
+        result.insert("mode".to_string(), serde_json::json!("force_fire"));
         result.insert(
             "successful_areas".to_string(),
             serde_json::json!(successful_areas),

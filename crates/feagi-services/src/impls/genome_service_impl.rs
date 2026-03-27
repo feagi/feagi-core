@@ -1317,6 +1317,13 @@ impl GenomeServiceImpl {
                                     "mp_charge_accumulation".to_string(),
                                     serde_json::json!(v),
                                 );
+                            } else {
+                                warn!(
+                                    target: "feagi-services",
+                                    "[FAST-UPDATE] mp_charge_accumulation not stored: value must be JSON boolean, got {:?} (area {})",
+                                    value,
+                                    cortical_id
+                                );
                             }
                         }
                         "mp_driven_psp" | "neuron_mp_driven_psp" => {
@@ -1526,6 +1533,13 @@ impl GenomeServiceImpl {
                                 area.properties.insert(
                                     "mp_charge_accumulation".to_string(),
                                     serde_json::json!(v),
+                                );
+                            } else {
+                                warn!(
+                                    target: "feagi-services",
+                                    "[GENOME-UPDATE] mp_charge_accumulation not stored: value must be JSON boolean, got {:?} (area {})",
+                                    value,
+                                    cortical_id
                                 );
                             }
                         }
@@ -1806,6 +1820,13 @@ impl GenomeServiceImpl {
                             area.add_property_mut(
                                 "mp_charge_accumulation".to_string(),
                                 serde_json::json!(v),
+                            );
+                        } else {
+                            warn!(
+                                target: "feagi-services",
+                                "[CONNECTOME-UPDATE] mp_charge_accumulation not applied: value must be JSON boolean, got {:?} (area {})",
+                                value,
+                                cortical_id
                             );
                         }
                     }

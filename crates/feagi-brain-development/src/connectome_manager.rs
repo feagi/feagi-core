@@ -3959,7 +3959,7 @@ impl ConnectomeManager {
             .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
 
         let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
-        let cortical_id = self.cortical_idx_to_id.get(&cortical_idx).cloned();
+        let cortical_id = cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
 
         let deleted = npu_lock.delete_neuron(neuron_id as u32);
 
@@ -4267,14 +4267,19 @@ impl ConnectomeManager {
     /// Cortical area index, or 0 if neuron doesn't exist or NPU not connected
     ///
     pub fn get_neuron_cortical_idx(&self, neuron_id: u64) -> u32 {
+        self.get_neuron_cortical_idx_opt(neuron_id).unwrap_or(0)
+    }
+
+    /// Cortical area index for a neuron, or `None` if the neuron slot is invalid / NPU unavailable.
+    pub fn get_neuron_cortical_idx_opt(&self, neuron_id: u64) -> Option<u32> {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock.get_neuron_cortical_area(neuron_id as u32)
             } else {
-                0
+                None
             }
         } else {
-            0
+            None
         }
     }
 
@@ -4589,7 +4594,7 @@ impl ConnectomeManager {
     /// The cortical area ID, or None if neuron doesn't exist
     ///
     pub fn get_neuron_cortical_id(&self, neuron_id: u64) -> Option<CorticalID> {
-        let cortical_idx = self.get_neuron_cortical_idx(neuron_id);
+        let cortical_idx = self.get_neuron_cortical_idx_opt(neuron_id)?;
         self.cortical_idx_to_id.get(&cortical_idx).copied()
     }
 
@@ -5000,8 +5005,10 @@ impl ConnectomeManager {
 
         let source_cortical_idx = npu_lock.get_neuron_cortical_area(source_neuron_id as u32);
         let target_cortical_idx = npu_lock.get_neuron_cortical_area(target_neuron_id as u32);
-        let source_cortical_id = self.cortical_idx_to_id.get(&source_cortical_idx).cloned();
-        let target_cortical_id = self.cortical_idx_to_id.get(&target_cortical_idx).cloned();
+        let source_cortical_id =
+            source_cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
+        let target_cortical_id =
+            target_cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
 
         let state_manager = StateManager::instance();
         let state_manager = state_manager.read();
@@ -5171,8 +5178,10 @@ impl ConnectomeManager {
 
         let source_cortical_idx = npu_lock.get_neuron_cortical_area(source_neuron_id as u32);
         let target_cortical_idx = npu_lock.get_neuron_cortical_area(target_neuron_id as u32);
-        let source_cortical_id = self.cortical_idx_to_id.get(&source_cortical_idx).cloned();
-        let target_cortical_id = self.cortical_idx_to_id.get(&target_cortical_idx).cloned();
+        let source_cortical_id =
+            source_cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
+        let target_cortical_id =
+            target_cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
 
         // Remove synapse via NPU
         let removed = npu_lock.remove_synapse(
@@ -5373,7 +5382,8 @@ impl ConnectomeManager {
         // Note: Could be optimized with a batch delete method in NPU if needed
         for neuron_id in neuron_ids {
             let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
-            let cortical_id = self.cortical_idx_to_id.get(&cortical_idx).cloned();
+            let cortical_id =
+                cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
 
             if npu_lock.delete_neuron(neuron_id as u32) {
                 deleted_count += 1;
@@ -5845,7 +5855,7 @@ impl ConnectomeManager {
             return None;
         }
 
-        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
+        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32)?;
 
         // Look up cortical_id from index
         self.cortical_areas
@@ -5892,7 +5902,7 @@ impl ConnectomeManager {
         properties.insert("z".to_string(), serde_json::json!(z));
 
         // Get cortical area
-        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id_u32);
+        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id_u32)?;
         properties.insert("cortical_area".to_string(), serde_json::json!(cortical_idx));
 
         // Get neuron state (returns: consecutive_fire_count, consecutive_fire_limit, snooze_period, membrane_potential, threshold, refractory_countdown)
