@@ -4,6 +4,7 @@
 //! Shared registration helpers used across transports.
 
 use crate::common::ApiState;
+use base64::{engine::general_purpose, Engine as _};
 use feagi_config::load_config;
 use feagi_services::types::CreateCorticalAreaParams;
 use feagi_structures::genomic::cortical_area::descriptors::{
@@ -18,6 +19,7 @@ use std::collections::{HashMap, HashSet};
 use tracing::{info, warn};
 
 const MOTOR_AREA_X_GAP_VOXELS: i32 = 10;
+const SEGMENTED_VISION_GROUP_X_GAP_VOXELS: i32 = 10;
 
 fn build_friendly_unit_name(unit_label: &str, group: u8, sub_unit_index: usize) -> String {
     format!("{unit_label}-{}-{}", group, sub_unit_index)
@@ -237,6 +239,48 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
 
     // Get root region ID so auto-created OPU/IPU areas appear in root (fixes power area disappearing in BV)
     let root_region_id = connectome_service.get_root_region_id().await.ok().flatten();
+    let existing_segmented_vision_yz_by_subunit = connectome_service
+        .list_cortical_areas()
+        .await
+        .ok()
+        .and_then(|areas| {
+            let mut grouped_yz_by_group: HashMap<u8, HashMap<u8, (i32, i32)>> = HashMap::new();
+
+            for area in areas {
+                let Ok(bytes) = general_purpose::STANDARD.decode(&area.cortical_id) else {
+                    continue;
+                };
+                if bytes.len() != 8 || bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+                    continue;
+                }
+                let subunit_index = bytes[6];
+                let group_index = bytes[7];
+                grouped_yz_by_group
+                    .entry(group_index)
+                    .or_default()
+                    .insert(subunit_index, (area.position.1, area.position.2));
+            }
+
+            // Deterministically pick one existing segmented-vision group as alignment anchor:
+            // prefer the group with most subunits; ties resolved by lower group index.
+            let selected_group = grouped_yz_by_group
+                .iter()
+                .max_by(|(group_a, map_a), (group_b, map_b)| {
+                    map_a
+                        .len()
+                        .cmp(&map_b.len())
+                        .then_with(|| group_b.cmp(group_a))
+                })
+                .map(|(group_index, _)| *group_index)?;
+            let selected_map = grouped_yz_by_group.remove(&selected_group)?;
+            if selected_map.len()
+                == SensoryCorticalUnit::SegmentedVision.get_number_cortical_areas()
+            {
+                Some(selected_map)
+            } else {
+                None
+            }
+        });
 
     let output_units = device_registrations
         .get("output_units_and_decoder_properties")
@@ -669,6 +713,79 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     }
                 };
                 let topology = sensory_unit.get_unit_default_topology();
+                let segmented_group_x_offsets =
+                    if sensory_unit == SensoryCorticalUnit::SegmentedVision {
+                        // For each segmented-vision group, compute the assembly min/max X bounds based on
+                        // template relative positions and effective per-subunit dimensions.
+                        let mut bounds_by_group: Vec<(u8, i32, i32)> = Vec::new();
+                        for grouped_entry in unit_defs_arr {
+                            let Some(grouped_pair) = grouped_entry.as_array() else {
+                                continue;
+                            };
+                            let Some(grouped_def) = grouped_pair.first() else {
+                                continue;
+                            };
+                            let Some(grouped_u64) = grouped_def
+                                .get("cortical_unit_index")
+                                .and_then(|v| v.as_u64())
+                            else {
+                                continue;
+                            };
+                            let Ok(grouped_u8) = u8::try_from(grouped_u64) else {
+                                continue;
+                            };
+                            let grouped_encoder_properties = grouped_pair.get(1);
+
+                            let mut assembly_min_x: Option<i32> = None;
+                            let mut assembly_max_x: Option<i32> = None;
+                            for (sub_index, unit_topology) in &topology {
+                                let sub_idx_usize = sub_index.get() as usize;
+                                let dimensions = resolve_sensory_dimensions_from_encoder_properties(
+                                    grouped_encoder_properties,
+                                    sub_idx_usize,
+                                    (
+                                        unit_topology.channel_dimensions_default[0] as usize,
+                                        unit_topology.channel_dimensions_default[1] as usize,
+                                        unit_topology.channel_dimensions_default[2] as usize,
+                                    ),
+                                );
+                                let rel_x = unit_topology.relative_position[0];
+                                let right_edge_x = rel_x.saturating_add(dimensions.0 as i32);
+
+                                assembly_min_x = Some(match assembly_min_x {
+                                    Some(current) => current.min(rel_x),
+                                    None => rel_x,
+                                });
+                                assembly_max_x = Some(match assembly_max_x {
+                                    Some(current) => current.max(right_edge_x),
+                                    None => right_edge_x,
+                                });
+                            }
+
+                            if let (Some(min_x), Some(max_x)) = (assembly_min_x, assembly_max_x) {
+                                bounds_by_group.push((grouped_u8, min_x, max_x));
+                            }
+                        }
+
+                        // Sort by cortical unit index so lower-index segmented assemblies stay left and
+                        // higher-index assemblies are shifted to the right with a fixed gap.
+                        bounds_by_group.sort_by_key(|(grouped_u8, _, _)| *grouped_u8);
+
+                        let mut offsets: HashMap<u8, i32> = HashMap::new();
+                        let mut previous_shifted_max_x: Option<i32> = None;
+                        for (grouped_u8, min_x, max_x) in bounds_by_group {
+                            let offset_x = if let Some(prev_max_x) = previous_shifted_max_x {
+                                prev_max_x + SEGMENTED_VISION_GROUP_X_GAP_VOXELS - min_x
+                            } else {
+                                0
+                            };
+                            previous_shifted_max_x = Some(max_x.saturating_add(offset_x));
+                            offsets.insert(grouped_u8, offset_x);
+                        }
+                        offsets
+                    } else {
+                        HashMap::new()
+                    };
 
                 for (i, cortical_id) in cortical_ids.iter().enumerate() {
                     let cortical_id_b64 = cortical_id.as_base_64();
@@ -692,10 +809,23 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             unit_topology.channel_dimensions_default[2] as usize,
                         ),
                     );
+                    let group_x_offset = *segmented_group_x_offsets.get(&group_u8).unwrap_or(&0);
+                    let existing_segmented_yz =
+                        if sensory_unit == SensoryCorticalUnit::SegmentedVision {
+                            existing_segmented_vision_yz_by_subunit
+                                .as_ref()
+                                .and_then(|yz_by_subunit| yz_by_subunit.get(&(i as u8)).copied())
+                        } else {
+                            None
+                        };
                     let expected_position = (
-                        unit_topology.relative_position[0],
-                        unit_topology.relative_position[1],
-                        unit_topology.relative_position[2],
+                        unit_topology.relative_position[0] + group_x_offset,
+                        existing_segmented_yz
+                            .map(|(y, _)| y)
+                            .unwrap_or(unit_topology.relative_position[1]),
+                        existing_segmented_yz
+                            .map(|(_, z)| z)
+                            .unwrap_or(unit_topology.relative_position[2]),
                     );
                     let legacy_default_name =
                         build_friendly_unit_name(sensory_unit.get_friendly_name(), group_u8, i);
@@ -834,6 +964,22 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         properties.insert(
                             "parent_region_id".to_string(),
                             serde_json::Value::String(rid.clone()),
+                        );
+                    }
+                    if let Some(default_firing_threshold) =
+                        sensory_unit.get_default_firing_threshold()
+                    {
+                        properties.insert(
+                            "firing_threshold".to_string(),
+                            serde_json::json!(default_firing_threshold),
+                        );
+                    }
+                    if let Some(default_mp_charge_accumulation) =
+                        sensory_unit.get_default_mp_charge_accumulation()
+                    {
+                        properties.insert(
+                            "mp_charge_accumulation".to_string(),
+                            serde_json::json!(default_mp_charge_accumulation),
                         );
                     }
 

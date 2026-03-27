@@ -158,6 +158,8 @@ macro_rules! sensor_cortical_units {
                     accepted_wrapped_io_data_type: ImageFrame,
                     cortical_id_unit_reference: *b"img",
                     number_cortical_areas: 1,
+                    default_firing_threshold: 150.0,
+                    default_mp_charge_accumulation: false,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },
@@ -174,6 +176,8 @@ macro_rules! sensor_cortical_units {
                     accepted_wrapped_io_data_type: SegmentedImageFrame,
                     cortical_id_unit_reference: *b"svi",
                     number_cortical_areas: 9,
+                    default_firing_threshold: 150.0,
+                    default_mp_charge_accumulation: false,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },
