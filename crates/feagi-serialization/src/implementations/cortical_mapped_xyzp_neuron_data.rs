@@ -3,8 +3,8 @@
 use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 use byteorder::{ByteOrder, LittleEndian};
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::xyzp::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPVectors,
+use feagi_structures::neuron_voxels::coord_potential::{
+    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPSparseVectors,
 };
 use feagi_structures::FeagiDataError;
 use std::any::Any;
@@ -189,7 +189,7 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
 /// for memory efficiency and cache locality during deserialization.
 #[inline]
 fn write_neuron_array_to_bytes(
-    neuron_array: &NeuronVoxelXYZPVectors,
+    neuron_array: &NeuronVoxelXYZPSparseVectors,
     bytes_to_write_to: &mut [u8],
 ) -> Result<(), FeagiDataError> {
     const U32_F32_LENGTH: usize = 4;

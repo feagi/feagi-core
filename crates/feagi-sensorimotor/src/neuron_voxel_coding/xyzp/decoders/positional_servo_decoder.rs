@@ -11,7 +11,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
 };
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
@@ -135,20 +135,20 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
         // Collect neurons from absolute area (1 neuron width per channel)
         if let Some(neurons) = absolute_neuron_array {
             for neuron in neurons.iter() {
-                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                     continue;
                 }
-                if neuron.neuron_voxel_coordinate.z >= z_depth {
+                if neuron.coordinate.z >= z_depth {
                     continue;
                 }
 
-                let channel_index = neuron.neuron_voxel_coordinate.x as usize;
+                let channel_index = neuron.coordinate.x as usize;
                 if channel_index >= number_of_channels {
                     continue;
                 }
 
                 if let Some(scratch) = self.z_depth_absolute_scratch_space.get_mut(channel_index) {
-                    scratch.push(neuron.neuron_voxel_coordinate.z);
+                    scratch.push(neuron.coordinate.z);
                 }
             }
         }
@@ -156,14 +156,14 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
         // Collect neurons from incremental area (2 neuron widths per channel: even=forward, odd=backward)
         if let Some(neurons) = incremental_neuron_array {
             for neuron in neurons.iter() {
-                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                     continue;
                 }
-                if neuron.neuron_voxel_coordinate.z >= z_depth {
+                if neuron.coordinate.z >= z_depth {
                     continue;
                 }
 
-                let neuron_x = neuron.neuron_voxel_coordinate.x;
+                let neuron_x = neuron.coordinate.x;
                 let channel_index = (neuron_x / 2) as usize;
 
                 // DEBUG: Log first few neurons
@@ -171,7 +171,7 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
                     eprintln!(
                         "[SERVO_DECODER] Incremental neuron: X={}, Z={}, channel={}, forward={}",
                         neuron_x,
-                        neuron.neuron_voxel_coordinate.z,
+                        neuron.coordinate.z,
                         channel_index,
                         neuron_x % 2 == 0
                     );
@@ -191,7 +191,7 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
                 };
 
                 if let Some(s) = scratch {
-                    s.push(neuron.neuron_voxel_coordinate.z);
+                    s.push(neuron.coordinate.z);
                 }
             }
         }

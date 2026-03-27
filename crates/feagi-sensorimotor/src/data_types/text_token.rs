@@ -1,6 +1,6 @@
 use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
-use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPVectors;
+use feagi_structures::neuron_voxels::coord_potential::NeuronVoxelXYZPSparseVectors;
 use feagi_structures::FeagiDataError;
 
 /// A single token ID transported through FEAGI as a Z-bitplane value at (x=0,y=0).
@@ -35,7 +35,7 @@ impl TextToken {
     /// - `Ok(None)` for a gap (no token emitted).
     /// - `Ok(Some(TextToken))` for a decoded token id.
     pub fn try_from_xyzp_bitplanes(
-        voxels: &NeuronVoxelXYZPVectors,
+        voxels: &NeuronVoxelXYZPSparseVectors,
         depth: u32,
     ) -> Result<Option<Self>, FeagiDataError> {
         let Some(token_id) = decode_token_id_from_xyzp_bitplanes(voxels, depth)? else {
@@ -45,14 +45,14 @@ impl TextToken {
     }
 
     /// Encode this token into XYZP bitplanes at (x=0,y=0) with z=0 as MSB.
-    pub fn to_xyzp_bitplanes(&self, depth: u32) -> Result<NeuronVoxelXYZPVectors, FeagiDataError> {
+    pub fn to_xyzp_bitplanes(&self, depth: u32) -> Result<NeuronVoxelXYZPSparseVectors, FeagiDataError> {
         encode_token_id_to_xyzp_bitplanes(self.token_id, depth)
     }
 }
 
 /// Decode a token id from XYZP bitplanes (see [`TextToken`] for encoding contract).
 pub fn decode_token_id_from_xyzp_bitplanes(
-    voxels: &NeuronVoxelXYZPVectors,
+    voxels: &NeuronVoxelXYZPSparseVectors,
     depth: u32,
 ) -> Result<Option<u32>, FeagiDataError> {
     if depth == 0 {
@@ -95,7 +95,7 @@ pub fn decode_token_id_from_xyzp_bitplanes(
 pub fn encode_token_id_to_xyzp_bitplanes(
     token_id: u32,
     depth: u32,
-) -> Result<NeuronVoxelXYZPVectors, FeagiDataError> {
+) -> Result<NeuronVoxelXYZPSparseVectors, FeagiDataError> {
     if depth == 0 {
         return Err(FeagiDataError::BadParameters(
             "TextToken depth must be > 0".into(),
@@ -139,7 +139,7 @@ pub fn encode_token_id_to_xyzp_bitplanes(
         }
     }
 
-    NeuronVoxelXYZPVectors::new_from_vectors(x_vec, y_vec, z_vec, p_vec)
+    NeuronVoxelXYZPSparseVectors::new_from_vectors(x_vec, y_vec, z_vec, p_vec)
 }
 
 /// Decode a token id from a 1x1xZ `MiscData` bitplane buffer (see [`TextToken`] contract).
@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn test_gap_decodes_to_none() {
-        let voxels = NeuronVoxelXYZPVectors::new();
+        let voxels = NeuronVoxelXYZPSparseVectors::new();
         let decoded = decode_token_id_from_xyzp_bitplanes(&voxels, 16).unwrap();
         assert_eq!(decoded, None);
     }

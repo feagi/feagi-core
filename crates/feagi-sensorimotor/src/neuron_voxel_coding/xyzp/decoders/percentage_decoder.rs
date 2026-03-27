@@ -20,7 +20,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
 };
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
@@ -391,49 +391,49 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
         match self.is_signed {
             false => {
                 for neuron in neuron_array.iter() {
-                    if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0
+                    if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0
                     {
                         continue;
                     }
-                    if neuron.neuron_voxel_coordinate.x >= max_possible_x_index
-                        || neuron.neuron_voxel_coordinate.z >= z_depth
+                    if neuron.coordinate.x >= max_possible_x_index
+                        || neuron.coordinate.z >= z_depth
                     {
                         continue;
                     }
 
                     if let Some(z_row_vector) = self
                         .z_depth_scratch_space
-                        .get_mut(neuron.neuron_voxel_coordinate.x as usize)
+                        .get_mut(neuron.coordinate.x as usize)
                     {
-                        z_row_vector.push(neuron.neuron_voxel_coordinate.z);
+                        z_row_vector.push(neuron.coordinate.z);
                     }
                 }
             }
             true => {
                 for neuron in neuron_array.iter() {
-                    if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0
+                    if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0
                     {
                         continue;
                     }
-                    if neuron.neuron_voxel_coordinate.z >= z_depth {
+                    if neuron.coordinate.z >= z_depth {
                         continue;
                     }
 
                     // For signed: even X = positive, odd X = negative
                     // Map X coordinate to channel index
-                    let channel_index = (neuron.neuron_voxel_coordinate.x / 2) as usize;
+                    let channel_index = (neuron.coordinate.x / 2) as usize;
                     if channel_index >= number_of_channels as usize {
                         continue;
                     }
 
-                    let z_row_vector = if neuron.neuron_voxel_coordinate.x % 2 == 0 {
+                    let z_row_vector = if neuron.coordinate.x % 2 == 0 {
                         self.z_depth_scratch_space.get_mut(channel_index)
                     } else {
                         self.z_depth_scratch_space_negative.get_mut(channel_index)
                     };
 
                     if let Some(v) = z_row_vector {
-                        v.push(neuron.neuron_voxel_coordinate.z);
+                        v.push(neuron.coordinate.z);
                     }
                 }
             }

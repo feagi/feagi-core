@@ -1,0 +1,111 @@
+use crate::base_quantizable::unsigned_integer::QuantizableUInt;
+use crate::base_quantizable::value::QuantizableValue;
+use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential};
+use crate::neuron_voxels::traits::{SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionDense, SingleCorticalNeuronVoxelCollectionSparse};
+
+pub struct NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
+    VoxelPotentialQuant: QuantizableValue,
+    CoordQuant: QuantizableUInt,
+    NeuronVoxelIndexQuant: QuantizableUInt
+{
+    cortical_dimensions: NeuronVoxelDimensions<CoordQuant>,
+    potentials: Vec<NeuronVoxelPotential<VoxelPotentialQuant>>,
+}
+
+impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
+where
+    VoxelPotentialQuant: QuantizableValue,
+    CoordQuant: QuantizableUInt,
+    NeuronVoxelIndexQuant: QuantizableUInt{
+
+    pub fn new(cortical_dimensions: NeuronVoxelDimensions<CoordQuant>) -> Self {
+        let number_neurons = cortical_dimensions.get_max_allowed_index_exclusive();
+        Self {
+            cortical_dimensions,
+            potentials: vec!(VoxelPotentialQuant::ZERO; number_neurons as usize),
+        }
+    }
+}
+
+
+impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
+SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
+for NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
+where
+    VoxelPotentialQuant: QuantizableValue,
+    CoordQuant: QuantizableUInt,
+    NeuronVoxelIndexQuant: QuantizableUInt
+{
+    fn get_representing_cortical_area_dimensions(&self) -> &NeuronVoxelDimensions<CoordQuant> {
+        &self.cortical_dimensions
+    }
+
+    fn neuron_index_max_limit(&self) -> NeuronVoxelIndexQuant {
+        self.potentials.len()
+    }
+}
+
+impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
+SingleCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
+for NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
+where
+    VoxelPotentialQuant: QuantizableValue,
+    CoordQuant: QuantizableUInt,
+    NeuronVoxelIndexQuant: QuantizableUInt
+{
+    fn get_number_neuron_voxel_contained_count(&self) -> NeuronVoxelIndexQuant {
+        self.potentials.len() as NeuronVoxelIndexQuant
+    }
+
+    fn get_neuron_voxel_count_allocated_capacity(&self) -> usize {
+        self.potentials.capacity()
+    }
+
+    fn reserve(&mut self, number_of_neuron_voxels_to_reserve_for: NeuronVoxelIndexQuant) {
+        self.potentials.reserve(number_of_neuron_voxels_to_reserve_for as usize);
+    }
+
+    fn empty_and_change_cortical_area_dimensions(&mut self, new_dimensions: NeuronVoxelDimensions<CoordQuant>) {
+        let number_neurons = new_dimensions.get_max_allowed_index_exclusive();
+        self.potentials.clear();
+        self.cortical_dimensions = new_dimensions;
+    }
+
+    fn shrink_to_fit(&mut self) {
+        // Does nothing, we can never shrink to fit as this is always dense
+        return;
+    }
+}
+
+impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
+SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
+for NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
+where
+    VoxelPotentialQuant: QuantizableValue,
+    CoordQuant: QuantizableUInt,
+    NeuronVoxelIndexQuant: QuantizableUInt
+{
+    fn get_all_neuron_voxel_potentials(&self) -> &[NeuronVoxelPotential<VoxelPotentialQuant>] {
+        self.potentials.as_slice()
+    }
+
+    fn get_all_neuron_voxel_potentials_mut(&mut self) -> &mut [NeuronVoxelPotential<VoxelPotentialQuant>] {
+        self.potentials.as_mut_slice()
+    }
+
+    fn iter_nonzero_index(&self) -> impl Iterator<Item=(&NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)> {
+        todo!()
+    }
+
+    fn iter_nonzero_coordinate(&self) -> impl Iterator<Item=(&NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)> {
+        todo!()
+    }
+
+    fn zero_all_neuron_voxel_potentials(&mut self) {
+        todo!()
+    }
+
+    fn inplace_overwrite_data_from_sparse(&mut self, sparse_neurons: &impl SingleCorticalNeuronVoxelCollectionSparse<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>) {
+        todo!()
+    }
+}

@@ -43,8 +43,6 @@ where
 
 }
 
-
-
 #[cfg(feature = "alloc")]
 pub trait BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>: InterneuronDataTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
@@ -69,6 +67,4 @@ where
     fn delete_cortical_area(&mut self, cortical_index: CorticalIndexQuant)
                             ->Result<Range<NeuronIndexQuant>, FeagiNPUDataError>;
 
-
-    // TODO add blank neurons for a cortical area (take cortical idx, dimensions, number neurons per voxel) (return range of neuron idx that contains the new neurons) (default settings should be read from implementation constants)
 }

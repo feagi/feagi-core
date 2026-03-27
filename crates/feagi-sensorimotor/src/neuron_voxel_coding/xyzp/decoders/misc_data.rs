@@ -6,7 +6,7 @@ use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, NeuronDepth};
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
@@ -49,16 +49,16 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
         let max_possible_z_index = self.misc_dimensions.depth;
 
         for neuron in neuron_array.iter() {
-            if neuron.neuron_voxel_coordinate.x >= max_possible_x_index
-                || neuron.neuron_voxel_coordinate.y >= max_possible_y_index
-                || neuron.neuron_voxel_coordinate.z >= max_possible_z_index
+            if neuron.coordinate.x >= max_possible_x_index
+                || neuron.coordinate.y >= max_possible_y_index
+                || neuron.coordinate.z >= max_possible_z_index
             {
                 continue;
             }
 
-            let channel_index: u32 = neuron.neuron_voxel_coordinate.x / self.misc_dimensions.width;
+            let channel_index: u32 = neuron.coordinate.x / self.misc_dimensions.width;
             let in_channel_x_index: u32 =
-                neuron.neuron_voxel_coordinate.x % self.misc_dimensions.width;
+                neuron.coordinate.x % self.misc_dimensions.width;
             let misc_data: &mut MiscData = pipelines_with_data_to_update
                 .get_mut(channel_index as usize)
                 .unwrap()
@@ -71,8 +71,8 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
             let internal_data = misc_data.get_internal_data_mut(); // TODO should we possibly allocate these references outside this loop?
             internal_data[(
                 in_channel_x_index as usize,
-                neuron.neuron_voxel_coordinate.y as usize,
-                neuron.neuron_voxel_coordinate.z as usize,
+                neuron.coordinate.y as usize,
+                neuron.coordinate.z as usize,
             )] = neuron.potential.clamp(-1.0, 1.0);
         }
 

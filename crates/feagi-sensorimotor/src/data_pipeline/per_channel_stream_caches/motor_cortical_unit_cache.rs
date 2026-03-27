@@ -10,7 +10,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
 };
 use feagi_structures::genomic::MotorCorticalUnit;
-use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use rayon::prelude::*;
 use std::time::Instant;

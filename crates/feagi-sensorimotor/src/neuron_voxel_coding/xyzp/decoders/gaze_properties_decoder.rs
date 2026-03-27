@@ -14,7 +14,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
 };
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
@@ -130,52 +130,52 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
         // Collect eccentricity neuron data
         if let Some(eccentricity_neuron_array) = eccentricity_neuron_array {
             for neuron in eccentricity_neuron_array.iter() {
-                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                     continue;
                 }
 
-                if neuron.neuron_voxel_coordinate.x
+                if neuron.coordinate.x
                     >= (number_of_channels * ECCENTRICITY_CHANNEL_WIDTH)
-                    || neuron.neuron_voxel_coordinate.z >= eccentricity_z_depth
+                    || neuron.coordinate.z >= eccentricity_z_depth
                 {
                     continue;
                 }
 
                 let z_row_vector = self
                     .z_depth_eccentricity_scratch_space
-                    .get_mut(neuron.neuron_voxel_coordinate.x as usize)
+                    .get_mut(neuron.coordinate.x as usize)
                     .ok_or_else(|| {
                         FeagiDataError::InternalError(
                             "Eccentricity scratch space indexing error".into(),
                         )
                     })?;
-                z_row_vector.push(neuron.neuron_voxel_coordinate.z);
+                z_row_vector.push(neuron.coordinate.z);
             }
         }
 
         // Collect modularity neuron data
         if let Some(modularity_neuron_array) = modularity_neuron_array {
             for neuron in modularity_neuron_array.iter() {
-                if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                     continue;
                 }
 
-                if neuron.neuron_voxel_coordinate.x
+                if neuron.coordinate.x
                     >= (number_of_channels * MODULARITY_CHANNEL_WIDTH)
-                    || neuron.neuron_voxel_coordinate.z >= modularity_z_depth
+                    || neuron.coordinate.z >= modularity_z_depth
                 {
                     continue;
                 }
 
                 let z_row_vector = self
                     .z_depth_modularity_scratch_space
-                    .get_mut(neuron.neuron_voxel_coordinate.x as usize)
+                    .get_mut(neuron.coordinate.x as usize)
                     .ok_or_else(|| {
                         FeagiDataError::InternalError(
                             "Modularity scratch space indexing error".into(),
                         )
                     })?;
-                z_row_vector.push(neuron.neuron_voxel_coordinate.z);
+                z_row_vector.push(neuron.coordinate.z);
             }
         }
 
@@ -275,8 +275,8 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
 mod tests {
     use super::*;
     use feagi_structures::genomic::cortical_area::CoreCorticalType;
-    use feagi_structures::neuron_voxels::xyzp::{
-        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPVectors,
+    use feagi_structures::neuron_voxels::coord_potential::{
+        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
     };
 
     /// Ensures partial gaze packets do not panic.
@@ -302,7 +302,7 @@ mod tests {
 
         // Motor packet contains ONLY eccentricity array, modularity missing.
         let mut voxels = CorticalMappedXYZPNeuronVoxels::new();
-        let _ = voxels.insert(eccentricity_id, NeuronVoxelXYZPVectors::new());
+        let _ = voxels.insert(eccentricity_id, NeuronVoxelXYZPSparseVectors::new());
 
         let mut pipelines: Vec<MotorPipelineStageRunner> = Vec::new();
         let mut changed: Vec<bool> = Vec::new();

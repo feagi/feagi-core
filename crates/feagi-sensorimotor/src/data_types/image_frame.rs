@@ -3,7 +3,7 @@ use super::descriptors::{
     MemoryOrderLayout,
 };
 use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
-use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPVectors;
+use feagi_structures::neuron_voxels::coord_potential::NeuronVoxelXYZPSparseVectors;
 use feagi_structures::FeagiDataError;
 use image::{DynamicImage, GenericImageView};
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
@@ -561,7 +561,7 @@ impl ImageFrame {
 
     pub(crate) fn overwrite_neuron_data(
         &self,
-        write_target: &mut NeuronVoxelXYZPVectors,
+        write_target: &mut NeuronVoxelXYZPSparseVectors,
         channel_index: CorticalChannelIndex,
     ) -> Result<(), FeagiDataError> {
         const EPSILON: u8 = 1; // avoid writing near zero vals

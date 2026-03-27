@@ -1,8 +1,6 @@
 use std::iter;
 use ahash::AHashMap;
 
-// TODO Rayon? Could the trait perhaps implement some sort of iterator support for rayon?
-
 // In this implementation, we can do a lot by keeping neurons of a cortical area grouped together, albeit they may not be guaranteed to be in cortical index order
 
 
@@ -175,15 +173,15 @@ where
                                                 cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                 neurons_per_voxel: NumberNeuronsPerVoxel,
                                                 neuron_global_burst_index_of_last_firing: BurstIndexQuant,
-                                                neuron_membrane_potential: PotentialQuant,
-                                                neuron_fire_threshold: PotentialQuant,
+                                                neuron_membrane_potential: MembranePotential<PotentialQuant>,
+                                                neuron_fire_threshold: FireThreshold<PotentialQuant>,
                                                 neuron_leak_coefficient: PercentageQuant,
                                                 neuron_refractory_countdown: BurstDeltaQuant,
                                                 neuron_consecutive_fire_count: BurstDeltaQuant,
                                                 cortical_excitability: PercentageQuant,
                                                 cortical_refractory_period_limit: BurstDeltaQuant,
-                                                cortical_fire_threshold_limit: PotentialQuant,
-                                                cortical_consecutive_fire_limit: PotentialQuant,
+                                                cortical_fire_threshold_limit: FireThresholdLimit<PotentialQuant>,
+                                                cortical_consecutive_fire_limit: BurstDeltaQuant,
                                                 cortical_is_mp_charge_accumulation_enabled: bool,
                                                 cortical_is_mp_driven_psp_enabled: bool)
                                                 -> Result<(CorticalIndexQuant, Range<NeuronIndexQuant>), FeagiNPUDataError> {

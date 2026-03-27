@@ -12,8 +12,8 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
 };
 use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
 use feagi_structures::genomic::SensoryCorticalUnit;
-use feagi_structures::neuron_voxels::xyzp::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPVectors,
+use feagi_structures::neuron_voxels::coord_potential::{
+    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
 };
 
 fn sample_cortical_mapped_neurons(
@@ -21,7 +21,7 @@ fn sample_cortical_mapped_neurons(
     cortical_id: CorticalID,
 ) -> CorticalMappedXYZPNeuronVoxels {
     let mut neurons = CorticalMappedXYZPNeuronVoxels::new();
-    let mut neuron_array = NeuronVoxelXYZPVectors::with_capacity(100);
+    let mut neuron_array = NeuronVoxelXYZPSparseVectors::with_capacity(100);
     for i in 0..dimensions.number_elements() {
         neuron_array.push_raw(
             i % dimensions.width,
@@ -261,7 +261,7 @@ fn test_byte_container_with_segmented_vision() {
     let mut neurons = CorticalMappedXYZPNeuronVoxels::new();
 
     // Add neurons for the center segment (first ID)
-    let mut neuron_array = NeuronVoxelXYZPVectors::with_capacity(32);
+    let mut neuron_array = NeuronVoxelXYZPSparseVectors::with_capacity(32);
     for i in 0..dimensions.number_elements() {
         neuron_array.push_raw(
             i % dimensions.width,
@@ -310,14 +310,14 @@ fn test_byte_container_multiple_core_types() {
     let mut neurons = CorticalMappedXYZPNeuronVoxels::new();
 
     // Add neurons for power cortical area
-    let mut power_array = NeuronVoxelXYZPVectors::new();
+    let mut power_array = NeuronVoxelXYZPSparseVectors::new();
     for i in 0..4 {
         power_array.push_raw(i % 2, i / 2, 0, 0.5);
     }
     neurons.insert(power_id, power_array);
 
     // Add neurons for death cortical area
-    let mut death_array = NeuronVoxelXYZPVectors::new();
+    let mut death_array = NeuronVoxelXYZPSparseVectors::new();
     for i in 0..4 {
         death_array.push_raw(i % 2, i / 2, 1, 0.7);
     }

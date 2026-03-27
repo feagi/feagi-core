@@ -1,5 +1,5 @@
 
-// TODO different firing / refactory mode support eventually
+// TODO different firing / refractory mode support eventually
 
 pub trait InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>: BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
@@ -12,22 +12,20 @@ where
     PercentageQuant: PercentageScale,
 {
     // TODO are these defaults fine?
-    // consecutive fire count should be one
-
     // Neuron Defaults
     const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: PotentialQuant = BurstIndexQuant::ZERO;
-    const DEFAULT_NEURON_MEMBRANE_POTENTIAL: PotentialQuant = PotentialQuant::ZERO;
-    const DEFAULT_NEURON_FIRE_THRESHOLD: PotentialQuant = PotentialQuant::ZERO;
+    const DEFAULT_NEURON_MEMBRANE_POTENTIAL: MembranePotential<PotentialQuant> = PotentialQuant::ZERO;
+    const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<PotentialQuant> = PotentialQuant::ZERO;
     const DEFAULT_NEURON_LEAK_COEFFICIENT: PercentageQuant = PercentageQuant::ZERO;
-    const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstQuant = BurstQuant::ZERO;
-    const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstQuant = BurstQuant::ONE;
+    const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDeltaQuant = BurstDeltaQuant::ZERO;
+    const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDeltaQuant = BurstDeltaQuant::ONE;
 
     // Cortical Area Defaults
     const DEFAULT_CORTICAL_NEURONS_PER_VOXEL: NumberNeuronsPerVoxel = 1;
     const DEFAULT_CORTICAL_EXCITABILITY: PercentageQuant = PercentageQuant::ZERO;
-    const DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT: BurstQuant = BurstQuant::ZERO;
-    const DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT: PotentialQuant = PotentialQuant::ZERO;
-    const DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT: BurstQuant = BurstQuant::ZERO;
+    const DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT: BurstDeltaQuant = BurstDeltaQuant::ZERO;
+    const DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT: FireThresholdLimit<PotentialQuant> = PotentialQuant::ZERO;
+    const DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT: BurstDeltaQuant = BurstDeltaQuant::ZERO;
     const DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED: bool = false;
     const DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED: bool = false;
 
@@ -73,15 +71,15 @@ where
                                                 cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                 neurons_per_voxel: NumberNeuronsPerVoxel,
                                                 neuron_global_burst_index_of_last_firing: BurstIndexQuant,
-                                                neuron_membrane_potential: PotentialQuant,
-                                                neuron_fire_threshold: PotentialQuant,
+                                                neuron_membrane_potential: MembranePotential<PotentialQuant>,
+                                                neuron_fire_threshold: FireThreshold<PotentialQuant>,
                                                 neuron_leak_coefficient: PercentageQuant,
                                                 neuron_refractory_countdown: BurstDeltaQuant,
                                                 neuron_consecutive_fire_count: BurstDeltaQuant,
                                                 cortical_excitability: PercentageQuant,
                                                 cortical_refractory_period_limit: BurstDeltaQuant,
-                                                cortical_fire_threshold_limit: PotentialQuant,
-                                                cortical_consecutive_fire_limit: PotentialQuant,
+                                                cortical_fire_threshold_limit: FireThresholdLimit<PotentialQuant>,
+                                                cortical_consecutive_fire_limit: BurstDeltaQuant,
                                                 cortical_is_mp_charge_accumulation_enabled: bool,
                                                 cortical_is_mp_driven_psp_enabled: bool)
         -> Result<(NeuronIndexQuant, Range<NeuronIndexQuant>), FeagiNPUDataError>;

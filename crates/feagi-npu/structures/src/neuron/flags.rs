@@ -1,11 +1,13 @@
 
-/// Stores various interneuron boolean flags under a single byte (u8)
+// TODO turn this stuff into a macro, I dont want to type this 500 times
+
+/// Stores various neuron boolean flags under a single byte (u8)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InterneuronFlag(u8);
+pub struct NeuronFlag(u8);
 
-impl InterneuronFlag {
+impl NeuronFlag {
 
-    pub const INVALID_FLAG: InterneuronFlag = InterneuronFlag(0);
+    pub const INVALID_FLAG: NeuronFlag = NeuronFlag(0);
 
     pub fn new_valid() -> Self {
         Self(0x01) // The first flag is the valid flag

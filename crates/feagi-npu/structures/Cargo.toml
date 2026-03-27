@@ -1,5 +1,5 @@
 [package]
-name = "feagi-npu-data"
+name = "feagi-npu-structures"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

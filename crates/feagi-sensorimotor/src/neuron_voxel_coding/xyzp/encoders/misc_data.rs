@@ -10,8 +10,8 @@ use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex,
 };
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::xyzp::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPVectors,
+use feagi_structures::neuron_voxels::coord_potential::{
+    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
 };
 use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
@@ -22,7 +22,7 @@ use std::time::Instant;
 pub struct MiscDataNeuronVoxelXYZPEncoder {
     misc_data_dimensions: MiscDataDimensions,
     cortical_write_target: CorticalID,
-    scratch_space: Vec<NeuronVoxelXYZPVectors>,
+    scratch_space: Vec<NeuronVoxelXYZPSparseVectors>,
 }
 
 impl NeuronVoxelXYZPEncoder for MiscDataNeuronVoxelXYZPEncoder {
@@ -99,7 +99,7 @@ impl MiscDataNeuronVoxelXYZPEncoder {
         let encoder = MiscDataNeuronVoxelXYZPEncoder {
             misc_data_dimensions,
             cortical_write_target,
-            scratch_space: vec![NeuronVoxelXYZPVectors::new(); *number_channels as usize],
+            scratch_space: vec![NeuronVoxelXYZPSparseVectors::new(); *number_channels as usize],
         };
         Ok(Box::new(encoder))
     }
