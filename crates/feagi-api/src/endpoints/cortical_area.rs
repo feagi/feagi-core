@@ -11,7 +11,9 @@ use std::collections::HashMap;
 
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
+use feagi_evolutionary::extract_memory_properties;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use utoipa::{IntoParams, ToSchema};
 
@@ -87,8 +89,63 @@ pub struct VoxelNeuronsBody {
     pub synapse_page: u32,
 }
 
+/// Default page size for [`MemoryCorticalAreaQuery::page_size`].
+pub const MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_DEFAULT: u32 = 50;
+/// Maximum allowed page size for memory neuron id list pagination.
+pub const MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_MAX: u32 = 500;
+
+fn default_memory_cortical_page_size() -> u32 {
+    MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_DEFAULT
+}
+
+/// Query parameters for [`get_memory_cortical_area`].
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct MemoryCorticalAreaQuery {
+    /// Base64 cortical area id for a memory area.
+    pub cortical_id: String,
+    /// 0-based page index for `memory_neuron_ids`.
+    #[serde(default)]
+    pub page: u32,
+    /// Page size for `memory_neuron_ids` (clamped to [`MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_MAX`]).
+    #[serde(default = "default_memory_cortical_page_size")]
+    pub page_size: u32,
+}
+
+/// Genome memory parameters for the cortical area (from `extract_memory_properties`).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct MemoryCorticalAreaParamsResponse {
+    pub temporal_depth: u32,
+    pub longterm_mem_threshold: u32,
+    pub lifespan_growth_rate: f32,
+    pub init_lifespan: u32,
+}
+
+/// Response for [`get_memory_cortical_area`].
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct MemoryCorticalAreaResponse {
+    pub cortical_id: String,
+    pub cortical_idx: u32,
+    pub cortical_name: String,
+    pub short_term_neuron_count: usize,
+    pub long_term_neuron_count: usize,
+    pub memory_parameters: MemoryCorticalAreaParamsResponse,
+    /// Upstream cortical indices that feed pattern detection for this memory area.
+    pub upstream_cortical_area_indices: Vec<u32>,
+    pub upstream_cortical_area_count: usize,
+    /// Distinct temporal patterns cached in the pattern detector for this area.
+    pub upstream_pattern_cache_size: usize,
+    pub incoming_synapse_count: usize,
+    pub outgoing_synapse_count: usize,
+    pub total_memory_neuron_ids: usize,
+    pub page: u32,
+    pub page_size: u32,
+    pub memory_neuron_ids: Vec<u64>,
+    pub has_more: bool,
+}
+
 /// Per-peer cortical id (base64 string or null), genome cortical **name**, cortical index, and voxel `(x,y,z)` for the given neuron id.
-fn peer_cortical_voxel_fields(
+pub(crate) fn peer_cortical_voxel_fields(
     mgr: &feagi_brain_development::ConnectomeManager,
     peer_id: u64,
     prefix: &str,
@@ -121,7 +178,7 @@ fn peer_cortical_voxel_fields(
 
 /// Build JSON arrays for NPU synapse tuples, aligned with `/v1/connectome/{cortical_area_id}/synapses`,
 /// plus peer cortical id, `target_cortical_name` / `source_cortical_name` (genome name), and voxel for the **target** (outgoing) or **source** (incoming) neuron.
-fn synapse_details_for_neuron(
+pub(crate) fn synapse_details_for_neuron(
     mgr: &feagi_brain_development::ConnectomeManager,
     neuron_id: u32,
     outgoing: &[(u32, f32, f32, u8)],
@@ -1880,6 +1937,99 @@ pub async fn post_voxel_neurons(
     )
     .await
     .map(Json)
+}
+
+/// GET /v1/cortical_area/memory — plasticity runtime stats, genome memory parameters, upstream wiring, synapse counts, and paginated memory neuron ids.
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_area/memory",
+    tag = "cortical_area",
+    params(MemoryCorticalAreaQuery),
+    responses(
+        (status = 200, description = "Memory cortical area details", body = MemoryCorticalAreaResponse),
+        (status = 400, description = "Invalid cortical id or not a memory area"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_memory_cortical_area(
+    State(state): State<ApiState>,
+    Query(params): Query<MemoryCorticalAreaQuery>,
+) -> ApiResult<Json<MemoryCorticalAreaResponse>> {
+    let connectome_service = state.connectome_service.as_ref();
+    let area = connectome_service
+        .get_cortical_area(&params.cortical_id)
+        .await
+        .map_err(ApiError::from)?;
+
+    let mem_props = extract_memory_properties(&area.properties).ok_or_else(|| {
+        ApiError::invalid_input(
+            "cortical area is not a memory area (expected is_mem_type memory properties)",
+        )
+    })?;
+
+    let cortical_idx = area.cortical_idx;
+    let cortical_name = area.name.clone();
+
+    let cid = CorticalID::try_from_base_64(&params.cortical_id)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid cortical_id: {}", e)))?;
+
+    let page_size_u32 = params
+        .page_size
+        .clamp(1, MEMORY_CORTICAL_NEURON_IDS_PAGE_SIZE_MAX);
+    let page_size = page_size_u32 as usize;
+    let offset = (params.page as usize).saturating_mul(page_size);
+
+    let manager = feagi_brain_development::ConnectomeManager::instance();
+    let mgr = manager.read();
+
+    let upstream_cortical_area_indices = mgr.get_upstream_cortical_areas(&cid);
+    let upstream_cortical_area_count = upstream_cortical_area_indices.len();
+
+    let exec = mgr
+        .get_plasticity_executor()
+        .ok_or_else(|| ApiError::internal("Plasticity executor not available"))?;
+    let ex = exec
+        .lock()
+        .map_err(|_| ApiError::internal("Plasticity executor lock poisoned"))?;
+
+    let runtime = ex
+        .memory_cortical_area_runtime_info(cortical_idx)
+        .ok_or_else(|| ApiError::internal("Plasticity service not initialized"))?;
+
+    let (memory_neuron_ids_u32, total_memory_neuron_ids) = ex
+        .paginated_memory_neuron_ids_in_area(cortical_idx, offset, page_size)
+        .unwrap_or((Vec::new(), 0));
+
+    let has_more = offset.saturating_add(memory_neuron_ids_u32.len()) < total_memory_neuron_ids;
+
+    let memory_neuron_ids: Vec<u64> = memory_neuron_ids_u32
+        .into_iter()
+        .map(|id| id as u64)
+        .collect();
+
+    Ok(Json(MemoryCorticalAreaResponse {
+        cortical_id: params.cortical_id,
+        cortical_idx,
+        cortical_name,
+        short_term_neuron_count: runtime.short_term_neuron_count,
+        long_term_neuron_count: runtime.long_term_neuron_count,
+        memory_parameters: MemoryCorticalAreaParamsResponse {
+            temporal_depth: mem_props.temporal_depth,
+            longterm_mem_threshold: mem_props.longterm_threshold,
+            lifespan_growth_rate: mem_props.lifespan_growth_rate,
+            init_lifespan: mem_props.init_lifespan,
+        },
+        upstream_cortical_area_indices,
+        upstream_cortical_area_count,
+        upstream_pattern_cache_size: runtime.upstream_pattern_cache_size,
+        incoming_synapse_count: area.incoming_synapse_count,
+        outgoing_synapse_count: area.outgoing_synapse_count,
+        total_memory_neuron_ids,
+        page: params.page,
+        page_size: page_size_u32,
+        memory_neuron_ids,
+        has_more,
+    }))
 }
 
 /// Get metadata for all available IPU types (vision, infrared, etc.). Includes encodings, formats, units, and topology.

@@ -17,6 +17,7 @@
 //! - Efficient memory management with index reuse
 
 use crate::neuron_id_manager::{AllocationStats, NeuronIdManager};
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 /// Memory neuron lifecycle configuration
@@ -44,6 +45,22 @@ impl Default for MemoryNeuronLifecycleConfig {
             max_reactivations: 1000,
         }
     }
+}
+
+/// Snapshot of a single memory neuron for API / inspection (plasticity array only).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MemoryNeuronDetail {
+    pub neuron_id: u32,
+    pub cortical_area_idx: u32,
+    pub pattern_hash: Option<u64>,
+    pub is_longterm_memory: bool,
+    pub is_active: bool,
+    pub lifespan_current: u32,
+    pub lifespan_initial: u32,
+    pub lifespan_growth_rate: f32,
+    pub creation_burst: u64,
+    pub last_activation_burst: u64,
+    pub activation_count: u32,
 }
 
 /// Memory neuron array statistics
@@ -302,6 +319,84 @@ impl MemoryNeuronArray {
         } else {
             Vec::new()
         }
+    }
+
+    /// Active short-term neurons (not marked LTM) in the area.
+    pub fn count_short_term_in_area(&self, cortical_area_id: u32) -> usize {
+        self.area_neuron_indices
+            .get(&cortical_area_id)
+            .map(|indices| {
+                indices
+                    .iter()
+                    .filter(|&&idx| {
+                        self.is_valid_index(idx)
+                            && self.is_active[idx]
+                            && !self.is_longterm_memory[idx]
+                    })
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
+    /// Active long-term memory neurons in the area.
+    pub fn count_long_term_in_area(&self, cortical_area_id: u32) -> usize {
+        self.area_neuron_indices
+            .get(&cortical_area_id)
+            .map(|indices| {
+                indices
+                    .iter()
+                    .filter(|&&idx| {
+                        self.is_valid_index(idx)
+                            && self.is_active[idx]
+                            && self.is_longterm_memory[idx]
+                    })
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
+    /// Stable-sorted active neuron IDs for the area, with pagination `(page_ids, total_count)`.
+    pub fn paginated_neuron_ids_in_area(
+        &self,
+        cortical_area_id: u32,
+        offset: usize,
+        limit: usize,
+    ) -> (Vec<u32>, usize) {
+        let mut ids = self.get_active_neurons_by_area(cortical_area_id);
+        ids.sort_unstable();
+        let total = ids.len();
+        let page = ids.into_iter().skip(offset).take(limit).collect();
+        (page, total)
+    }
+
+    fn find_neuron_index_by_global_id(&self, neuron_id: u32) -> Option<usize> {
+        for i in 0..self.next_available_index {
+            if self.neuron_ids[i] == neuron_id {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    /// Full detail for an active memory neuron by global neuron id, if present.
+    pub fn get_memory_neuron_detail(&self, neuron_id: u32) -> Option<MemoryNeuronDetail> {
+        let idx = self.find_neuron_index_by_global_id(neuron_id)?;
+        if !self.is_valid_index(idx) || !self.is_active[idx] {
+            return None;
+        }
+        Some(MemoryNeuronDetail {
+            neuron_id: self.neuron_ids[idx],
+            cortical_area_idx: self.cortical_area_ids[idx],
+            pattern_hash: self.index_to_pattern_hash.get(&idx).copied(),
+            is_longterm_memory: self.is_longterm_memory[idx],
+            is_active: self.is_active[idx],
+            lifespan_current: self.lifespan_current[idx],
+            lifespan_initial: self.lifespan_initial[idx],
+            lifespan_growth_rate: self.lifespan_growth_rate[idx],
+            creation_burst: self.creation_burst[idx],
+            last_activation_burst: self.last_activation_burst[idx],
+            activation_count: self.activation_count[idx],
+        })
     }
 
     /// Find neuron index by pattern hash
@@ -877,5 +972,33 @@ mod tests {
 
         array.reactivate_memory_neuron(idx, 2);
         assert_eq!(array.lifespan_current[idx], 20);
+    }
+
+    #[test]
+    fn test_st_ltm_counts_and_pagination_and_detail() {
+        let mut array = MemoryNeuronArray::new(1000);
+        let config = MemoryNeuronLifecycleConfig::default();
+
+        for i in 0..5 {
+            array
+                .create_memory_neuron(i as u64, 7, 0, &config)
+                .expect("create");
+        }
+        assert_eq!(array.count_short_term_in_area(7), 5);
+        assert_eq!(array.count_long_term_in_area(7), 0);
+
+        array.is_longterm_memory[0] = true;
+        assert_eq!(array.count_short_term_in_area(7), 4);
+        assert_eq!(array.count_long_term_in_area(7), 1);
+
+        let (page0, total) = array.paginated_neuron_ids_in_area(7, 0, 2);
+        assert_eq!(total, 5);
+        assert_eq!(page0.len(), 2);
+
+        let nid = page0[0];
+        let detail = array.get_memory_neuron_detail(nid).expect("detail");
+        assert_eq!(detail.neuron_id, nid);
+        assert_eq!(detail.cortical_area_idx, 7);
+        assert!(detail.pattern_hash.is_some());
     }
 }

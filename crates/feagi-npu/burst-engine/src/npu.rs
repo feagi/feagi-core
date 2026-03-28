@@ -5596,8 +5596,8 @@ mod tests {
         npu.add_synapse(
             neuron_a,
             neuron_b,
-            SynapticWeight(1.0),       // weight = 1
-            SynapticPsp(1.0),          // PSP = 1 → PSP = 1×1 = 1.0
+            SynapticWeight(1.0),     // weight = 1
+            SynapticPsp(1.0),        // PSP = 1 → PSP = 1×1 = 1.0
             SynapseType::Excitatory, // synapse_type (excitatory)
         )
         .unwrap();

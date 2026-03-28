@@ -19,10 +19,13 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
-use crate::memory_neuron_array::{MemoryNeuronArray, MemoryNeuronLifecycleConfig};
+use crate::memory_neuron_array::{
+    MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig,
+};
 use crate::memory_stats_cache::{self, MemoryStatsCache};
 use crate::pattern_detector::{BatchPatternDetector, PatternConfig};
 use crate::stdp::STDPConfig;
+use serde::{Deserialize, Serialize};
 
 // State manager access for fatigue reporting
 // TODO: Add feagi_state_manager dependency when wiring up state manager access
@@ -124,6 +127,14 @@ pub struct ReplayFrame {
 pub struct MemoryAreaConfig {
     pub temporal_depth: u32,
     pub upstream_areas: Vec<u32>,
+}
+
+/// Runtime counts for a memory cortical area (plasticity layer).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryCorticalAreaRuntimeInfo {
+    pub short_term_neuron_count: usize,
+    pub long_term_neuron_count: usize,
+    pub upstream_pattern_cache_size: usize,
 }
 
 /// Plasticity service statistics
@@ -940,6 +951,28 @@ impl PlasticityService {
     /// Get memory neuron array reference
     pub fn get_memory_neuron_array(&self) -> Arc<Mutex<MemoryNeuronArray>> {
         Arc::clone(&self.memory_neuron_array)
+    }
+
+    /// ST/LTM counts and pattern-detector cache size for a memory cortical area index.
+    pub fn memory_cortical_area_runtime_info(
+        &self,
+        cortical_idx: u32,
+    ) -> MemoryCorticalAreaRuntimeInfo {
+        let array = self.memory_neuron_array.lock().unwrap();
+        let upstream_pattern_cache_size = self
+            .pattern_detector
+            .cached_pattern_count_for_area(cortical_idx);
+        MemoryCorticalAreaRuntimeInfo {
+            short_term_neuron_count: array.count_short_term_in_area(cortical_idx),
+            long_term_neuron_count: array.count_long_term_in_area(cortical_idx),
+            upstream_pattern_cache_size,
+        }
+    }
+
+    /// Lookup plasticity-layer detail for a memory neuron id.
+    pub fn memory_neuron_detail(&self, neuron_id: u32) -> Option<MemoryNeuronDetail> {
+        let array = self.memory_neuron_array.lock().unwrap();
+        array.get_memory_neuron_detail(neuron_id)
     }
 
     /// Update memory neuron utilization in state manager

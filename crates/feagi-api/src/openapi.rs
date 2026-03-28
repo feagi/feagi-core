@@ -162,6 +162,7 @@ use crate::{
         crate::endpoints::cortical_area::post_reposition,
         crate::endpoints::cortical_area::get_voxel_neurons,
         crate::endpoints::cortical_area::post_voxel_neurons,
+        crate::endpoints::cortical_area::get_memory_cortical_area,
         crate::endpoints::cortical_area::get_cortical_area_index_list,
         crate::endpoints::cortical_area::get_cortical_idx_mapping,
         crate::endpoints::cortical_area::get_mapping_restrictions_query,
@@ -284,6 +285,7 @@ use crate::{
         crate::endpoints::connectome::get_neuron_properties_by_id,
         crate::endpoints::connectome::get_neuron_properties_query,
         crate::endpoints::connectome::get_neuron_properties_at_query,
+        crate::endpoints::connectome::get_memory_neuron,
         crate::endpoints::connectome::get_area_neurons_query,
         crate::endpoints::connectome::get_fire_queue_area,
         crate::endpoints::connectome::get_plasticity_info,
@@ -535,6 +537,11 @@ use crate::{
             crate::endpoints::cortical_area::VoxelNeuronsQuery,
             crate::endpoints::cortical_area::VoxelNeuronsBody,
             crate::endpoints::cortical_area::VoxelNeuronsResponse,
+            crate::endpoints::cortical_area::MemoryCorticalAreaQuery,
+            crate::endpoints::cortical_area::MemoryCorticalAreaParamsResponse,
+            crate::endpoints::cortical_area::MemoryCorticalAreaResponse,
+            crate::endpoints::connectome::MemoryNeuronQuery,
+            crate::endpoints::connectome::MemoryNeuronDetailResponse,
 
             // Morphology
             crate::endpoints::morphology::MorphologyListResponse,
@@ -675,6 +682,12 @@ mod tests {
         assert!(components.schemas.contains_key("VoxelNeuronsBody"));
         assert!(components.schemas.contains_key("VoxelNeuronsResponse"));
         assert!(components.schemas.contains_key("VoxelNeuronsQuery"));
+        assert!(components
+            .schemas
+            .contains_key("MemoryCorticalAreaResponse"));
+        assert!(components
+            .schemas
+            .contains_key("MemoryNeuronDetailResponse"));
     }
 
     #[test]

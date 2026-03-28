@@ -559,6 +559,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(cortical_area::get_voxel_neurons).post(cortical_area::post_voxel_neurons),
         )
         .route(
+            "/cortical_area/memory",
+            get(cortical_area::get_memory_cortical_area),
+        )
+        .route(
             "/cortical_area/cortical_area_index_list",
             get(cortical_area::get_cortical_area_index_list),
         )
@@ -798,6 +802,10 @@ fn create_v1_router() -> Router<ApiState> {
         .route(
             "/connectome/neuron_properties_at",
             get(connectome::get_neuron_properties_at_query),
+        )
+        .route(
+            "/connectome/memory_neuron",
+            get(connectome::get_memory_neuron),
         )
         .route(
             "/connectome/area_neurons",

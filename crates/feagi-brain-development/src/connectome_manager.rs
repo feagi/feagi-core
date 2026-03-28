@@ -6519,8 +6519,8 @@ mod tests {
         manager
             .create_synapse(
                 neuron1_id, neuron2_id, 128.0, // weight
-                64.0, // psp
-                0,   // excitatory
+                64.0,  // psp
+                0,     // excitatory
             )
             .unwrap();
 
