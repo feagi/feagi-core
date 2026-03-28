@@ -34,8 +34,8 @@ pub fn apply_projector_morphology(
     dst_area_id: u32,
     transpose: Option<(usize, usize, usize)>,
     project_last_layer_of: Option<usize>,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -83,8 +83,8 @@ pub fn apply_projector_morphology_with_dimensions(
     dst_dimensions: (usize, usize, usize),
     transpose: Option<(usize, usize, usize)>,
     project_last_layer_of: Option<usize>,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {

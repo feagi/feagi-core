@@ -121,7 +121,7 @@ fn should_emit_throttled_warning(last_emitted_ms: &AtomicU64, interval_ms: u64) 
 
 /// STDP parameters for a plastic cortical mapping A→B.
 ///
-/// Note: Synaptic weights are `u8` (0..255). Updates are additive and clamped.
+/// Note: New synapse weight from LTP uses `delta_plus_u8()` cast to `f32`; PSP is float-valued.
 #[derive(Debug, Clone, Copy)]
 pub struct StdpMappingParams {
     pub plasticity_window: usize,
@@ -129,7 +129,7 @@ pub struct StdpMappingParams {
     pub ltp_multiplier: i64,
     pub ltd_multiplier: i64,
     pub bidirectional_stdp: bool,
-    pub synapse_psp: u8,
+    pub synapse_psp: f32,
     pub synapse_type: SynapseType,
 }
 
@@ -1156,11 +1156,11 @@ impl<
         postsynaptic_potentials: Vec<SynapticPsp>,
         synapse_types: Vec<SynapseType>,
     ) -> Result<()> {
-        // Convert NeuronId/Weight types to raw u32/u8 for SynapseArray
+        // Convert NeuronId/Weight types to raw u32/f32 for SynapseArray
         let source_ids: Vec<u32> = sources.iter().map(|n| n.0).collect();
         let target_ids: Vec<u32> = targets.iter().map(|n| n.0).collect();
-        let weight_vals: Vec<u8> = weights.iter().map(|w| w.0).collect();
-        let psp_vals: Vec<u8> = postsynaptic_potentials.iter().map(|c| c.0).collect();
+        let weight_vals: Vec<f32> = weights.iter().map(|w| w.0).collect();
+        let psp_vals: Vec<f32> = postsynaptic_potentials.iter().map(|c| c.0).collect();
         let type_vals: Vec<u8> = synapse_types
             .iter()
             .map(|t| match t {
@@ -3620,7 +3620,7 @@ impl<
     pub fn update_cortical_area_postsynaptic_current(
         &mut self,
         cortical_area: u32,
-        postsynaptic_potential: u8,
+        postsynaptic_potential: f32,
     ) -> usize {
         // Phase 1: Gather source neuron IDs for this cortical area.
         // NeuronId == array index by design in this NPU (see process_single_neuron).
@@ -3678,7 +3678,7 @@ impl<
     pub fn update_stdp_mapping_psp_for_source(
         &mut self,
         src_cortical_idx: u32,
-        new_psp: u8,
+        new_psp: f32,
     ) -> usize {
         let mut updated = 0usize;
         let mut mappings = self.stdp_mappings.write().unwrap();
@@ -3817,8 +3817,8 @@ impl<
     }
 
     /// Get all outgoing synapses from a source neuron
-    /// Returns Vec of (target_neuron_id, weight)
-    pub fn get_outgoing_synapses(&self, source_neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
+    /// Returns Vec of (target_neuron_id, weight, psp, synapse_type)
+    pub fn get_outgoing_synapses(&self, source_neuron_id: u32) -> Vec<(u32, f32, f32, u8)> {
         let source = NeuronId(source_neuron_id);
 
         // Look up synapse indices for this source neuron
@@ -3851,7 +3851,7 @@ impl<
 
     /// Get incoming synapses for a neuron (neuron is the target)
     /// Returns Vec<(source_neuron_id, weight, psp, synapse_type)>
-    pub fn get_incoming_synapses(&self, target_neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
+    pub fn get_incoming_synapses(&self, target_neuron_id: u32) -> Vec<(u32, f32, f32, u8)> {
         let mut synapses = Vec::new();
 
         // Iterate through all synapses to find ones targeting this neuron
@@ -4157,11 +4157,11 @@ impl<
 
                     if src_all_present && dst_all_present {
                         let old = synapse_storage.weights()[syn_idx];
-                        let new_w = old.saturating_add(delta_plus);
+                        let new_w = old + delta_plus as f32;
                         synapse_storage.weights_mut()[syn_idx] = new_w;
                     } else if delta_minus > 0 {
                         let old = synapse_storage.weights()[syn_idx];
-                        let new_w = old.saturating_sub(delta_minus);
+                        let new_w = (old - delta_minus as f32).max(0.0);
                         synapse_storage.weights_mut()[syn_idx] = new_w;
                     }
                 }
@@ -4243,7 +4243,7 @@ impl<
                         }
                         new_sources.push(NeuronId(src_neuron));
                         new_targets.push(NeuronId(dst_neuron));
-                        new_weights.push(SynapticWeight(delta_plus));
+                        new_weights.push(SynapticWeight(delta_plus as f32));
                         new_psps.push(SynapticPsp(params.synapse_psp));
                         new_types.push(params.synapse_type);
                     }
@@ -4253,8 +4253,8 @@ impl<
             if !new_sources.is_empty() {
                 let source_ids: Vec<u32> = new_sources.iter().map(|n| n.0).collect();
                 let target_ids: Vec<u32> = new_targets.iter().map(|n| n.0).collect();
-                let weight_vals: Vec<u8> = new_weights.iter().map(|w| w.0).collect();
-                let psp_vals: Vec<u8> = new_psps.iter().map(|c| c.0).collect();
+                let weight_vals: Vec<f32> = new_weights.iter().map(|w| w.0).collect();
+                let psp_vals: Vec<f32> = new_psps.iter().map(|c| c.0).collect();
                 let type_vals: Vec<u8> = new_types.iter().map(|t| *t as u8).collect();
 
                 self.synapse_storage
@@ -4545,25 +4545,18 @@ fn phase1_injection_with_synapses<
         //   contain 0 by the time we propagate (which breaks mp_driven_psp).
         // - FireQueue stores the membrane potential captured at the moment of firing.
         //
-        // Conversion contract:
-        // - Synaptic propagation expects a u8 PSP (0..=255).
-        //
-        // IMPORTANT:
-        // This conversion must be monotonic. A previous heuristic attempted to "downscale"
-        // values above 255 by dividing by 255, which introduced a discontinuity:
-        //   MP=255   -> 255
-        //   MP=256   -> ~1
-        // This can make downstream neurons appear to "stop responding" as upstream PSP increases.
-        //
-        // We therefore clamp deterministically into the representable u8 range.
+        // Firing-time membrane potentials for mp_driven_psp (full `f32`; clamp to non-negative finite).
         let mp_build_start = std::time::Instant::now();
-        let mut neuron_mps: ahash::AHashMap<NeuronId, u8> = ahash::AHashMap::new();
-        let u8_max_f32 = u8::MAX as f32;
+        let mut neuron_mps: ahash::AHashMap<NeuronId, f32> = ahash::AHashMap::new();
         for neurons in previous_fire_queue.neurons_by_area.values() {
             for neuron in neurons {
                 let mp_f32 = neuron.membrane_potential;
-                let mp_u8 = mp_f32.clamp(0.0, u8_max_f32).round() as u8;
-                neuron_mps.insert(neuron.neuron_id, mp_u8);
+                let mp = if mp_f32.is_finite() {
+                    mp_f32.max(0.0)
+                } else {
+                    0.0
+                };
+                neuron_mps.insert(neuron.neuron_id, mp);
             }
         }
         let mp_build_duration = mp_build_start.elapsed();
@@ -4971,8 +4964,8 @@ mod tests {
         npu.add_synapse(
             src,
             dst,
-            SynapticWeight(1),
-            SynapticPsp(1),
+            SynapticWeight(1.0),
+            SynapticPsp(1.0),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -5237,8 +5230,8 @@ mod tests {
         npu.add_synapse(
             n1,
             n2,
-            SynapticWeight(128),
-            SynapticPsp(255),
+            SynapticWeight(128.0),
+            SynapticPsp(255.0),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -5267,24 +5260,24 @@ mod tests {
         npu.add_synapse(
             n1,
             n2,
-            SynapticWeight(128),
-            SynapticPsp(255),
+            SynapticWeight(128.0),
+            SynapticPsp(255.0),
             SynapseType::Excitatory,
         )
         .unwrap();
         npu.add_synapse(
             n1,
             n3,
-            SynapticWeight(64),
-            SynapticPsp(128),
+            SynapticWeight(64.0),
+            SynapticPsp(128.0),
             SynapseType::Excitatory,
         )
         .unwrap();
         npu.add_synapse(
             n2,
             n3,
-            SynapticWeight(32),
-            SynapticPsp(64),
+            SynapticWeight(32.0),
+            SynapticPsp(64.0),
             SynapseType::Inhibitory,
         )
         .unwrap();
@@ -5310,8 +5303,8 @@ mod tests {
         npu.add_synapse(
             n1,
             n2,
-            SynapticWeight(128),
-            SynapticPsp(255),
+            SynapticWeight(128.0),
+            SynapticPsp(255.0),
             SynapseType::Inhibitory,
         )
         .unwrap();
@@ -5337,8 +5330,8 @@ mod tests {
         npu.add_synapse(
             n1,
             n2,
-            SynapticWeight(128),
-            SynapticPsp(255),
+            SynapticWeight(128.0),
+            SynapticPsp(255.0),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -5404,8 +5397,8 @@ mod tests {
             npu.add_synapse(
                 s,
                 t,
-                SynapticWeight(128),
-                SynapticPsp(255),
+                SynapticWeight(128.0),
+                SynapticPsp(255.0),
                 SynapseType::Excitatory,
             )
             .unwrap();
@@ -5416,8 +5409,8 @@ mod tests {
             npu.add_synapse(
                 s,
                 t,
-                SynapticWeight(128),
-                SynapticPsp(255),
+                SynapticWeight(128.0),
+                SynapticPsp(255.0),
                 SynapseType::Excitatory,
             )
             .unwrap();
@@ -5603,8 +5596,8 @@ mod tests {
         npu.add_synapse(
             neuron_a,
             neuron_b,
-            SynapticWeight(1),       // weight = 1
-            SynapticPsp(1),          // PSP = 1 → PSP = 1×1 = 1.0
+            SynapticWeight(1.0),       // weight = 1
+            SynapticPsp(1.0),          // PSP = 1 → PSP = 1×1 = 1.0
             SynapseType::Excitatory, // synapse_type (excitatory)
         )
         .unwrap();
@@ -5806,8 +5799,8 @@ mod tests {
         npu.add_synapse(
             neuron_src,
             neuron_dst,
-            SynapticWeight(1),
-            SynapticPsp(1),
+            SynapticWeight(1.0),
+            SynapticPsp(1.0),
             SynapseType::Excitatory,
         )
         .unwrap();
@@ -6184,8 +6177,8 @@ mod tests {
         let result = npu.add_synapse(
             n1,
             nonexistent,
-            SynapticWeight(128),
-            SynapticPsp(255),
+            SynapticWeight(128.0),
+            SynapticPsp(255.0),
             SynapseType::Excitatory,
         );
 

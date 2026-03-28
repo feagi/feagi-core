@@ -28,8 +28,8 @@ pub fn apply_tile_morphology_with_dimensions(
     dst_area_id: u32,
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {

@@ -309,11 +309,11 @@ pub trait SynapseStorage: Send + Sync {
     /// Target neuron IDs slice
     fn target_neurons(&self) -> &[u32];
 
-    /// Synaptic weights slice (0-255, stored as u8)
-    fn weights(&self) -> &[u8];
+    /// Synaptic weights slice (`f32`, no fixed quantization)
+    fn weights(&self) -> &[f32];
 
-    /// Postsynaptic potentials slice (0-255)
-    fn postsynaptic_potentials(&self) -> &[u8];
+    /// Postsynaptic potentials slice (`f32`)
+    fn postsynaptic_potentials(&self) -> &[f32];
 
     /// Synapse types slice (0=excitatory, 1=inhibitory)
     fn types(&self) -> &[u8];
@@ -324,10 +324,10 @@ pub trait SynapseStorage: Send + Sync {
     // === Synapse Properties (Mutable) ===
 
     /// Mutable weights slice
-    fn weights_mut(&mut self) -> &mut [u8];
+    fn weights_mut(&mut self) -> &mut [f32];
 
     /// Mutable postsynaptic potentials slice
-    fn postsynaptic_potentials_mut(&mut self) -> &mut [u8];
+    fn postsynaptic_potentials_mut(&mut self) -> &mut [f32];
 
     /// Mutable valid mask
     fn valid_mask_mut(&mut self) -> &mut [bool];
@@ -347,8 +347,8 @@ pub trait SynapseStorage: Send + Sync {
         &mut self,
         source: u32,
         target: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: u8,
     ) -> Result<usize>;
 
@@ -360,8 +360,8 @@ pub trait SynapseStorage: Send + Sync {
         &mut self,
         sources: &[u32],
         targets: &[u32],
-        weights: &[u8],
-        psps: &[u8],
+        weights: &[f32],
+        psps: &[f32],
         types: &[u8],
     ) -> Result<()>;
 
@@ -379,7 +379,7 @@ pub trait SynapseStorage: Send + Sync {
     // === Synapse Updates ===
 
     /// Update weight of a synapse
-    fn update_weight(&mut self, idx: usize, new_weight: u8) -> Result<()>;
+    fn update_weight(&mut self, idx: usize, new_weight: f32) -> Result<()>;
 
     // === Query Methods ===
 

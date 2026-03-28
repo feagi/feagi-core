@@ -360,8 +360,8 @@ impl CUDABackend {
         for i in 0..synapse_count {
             let source = synapse_array.source_neurons[i];
             let target = synapse_array.target_neurons[i];
-            let weight = synapse_array.weights[i] as u32;
-            let psp = synapse_array.postsynaptic_potentials[i] as u32;
+            let weight = synapse_array.weights[i].clamp(0.0, 255.0) as u8 as u32;
+            let psp = synapse_array.postsynaptic_potentials[i].clamp(0.0, 255.0) as u8 as u32;
             let syn_type = synapse_array.types[i] as u32;
             let packed_params = (syn_type << 16) | (psp << 8) | weight;
 

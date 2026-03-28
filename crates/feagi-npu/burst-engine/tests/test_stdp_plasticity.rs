@@ -55,7 +55,7 @@ fn stdp_params(
     ltp_multiplier: i64,
     ltd_multiplier: i64,
     bidirectional_stdp: bool,
-    synapse_psp: u8,
+    synapse_psp: f32,
     synapse_type: SynapseType,
 ) -> StdpMappingParams {
     StdpMappingParams {
@@ -87,7 +87,7 @@ fn test_bidirectional_stdp_requires_consistent_neurons_across_window() {
     npu.configure_fire_ledger_window(10, 3).unwrap();
     npu.configure_fire_ledger_window(11, 3).unwrap();
 
-    let params = stdp_params(3, 1, 5, 0, true, 10, SynapseType::Excitatory);
+    let params = stdp_params(3, 1, 5, 0, true, 10.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     // Burst 1: fire src0/dst0
@@ -143,7 +143,7 @@ fn test_bidirectional_stdp_creates_synapse_after_full_window() {
     npu.configure_fire_ledger_window(10, 2).unwrap();
     npu.configure_fire_ledger_window(11, 2).unwrap();
 
-    let params = stdp_params(2, 1, 5, 2, true, 200, SynapseType::Excitatory);
+    let params = stdp_params(2, 1, 5, 2, true, 200.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     let src = src_neurons[0];
@@ -169,8 +169,8 @@ fn test_bidirectional_stdp_creates_synapse_after_full_window() {
     );
     let (target, weight, psp, synapse_type) = outgoing[0];
     assert_eq!(target, dst.0);
-    assert_eq!(weight, 5);
-    assert_eq!(psp, 200);
+    assert_eq!(weight, 5.0);
+    assert_eq!(psp, 200.0);
     assert_eq!(synapse_type, SynapseType::Excitatory as u8);
 }
 
@@ -182,7 +182,7 @@ fn test_bidirectional_stdp_with_memory_neuron_ids() {
     npu.configure_fire_ledger_window(10, 2).unwrap();
     npu.configure_fire_ledger_window(11, 2).unwrap();
 
-    let params = stdp_params(2, 1, 5, 0, true, 200, SynapseType::Excitatory);
+    let params = stdp_params(2, 1, 5, 0, true, 200.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     let src = NeuronId(MEMORY_NEURON_ID_START);
@@ -220,7 +220,7 @@ fn test_bidirectional_stdp_ltp_accumulates_on_sync() {
     npu.configure_fire_ledger_window(10, 1).unwrap();
     npu.configure_fire_ledger_window(11, 1).unwrap();
 
-    let params = stdp_params(1, 2, 3, 1, true, 128, SynapseType::Excitatory);
+    let params = stdp_params(1, 2, 3, 1, true, 128.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     let src = src_neurons[0];
@@ -233,14 +233,14 @@ fn test_bidirectional_stdp_ltp_accumulates_on_sync() {
     let outgoing = npu.get_outgoing_synapses(src.0);
     assert_eq!(outgoing.len(), 1);
     assert_eq!(outgoing[0].0, dst.0);
-    assert_eq!(outgoing[0].1, 6);
+    assert_eq!(outgoing[0].1, 6.0);
 
     let burst = process_burst_with_injection(&mut npu, &[(src, 128.0), (dst, 128.0)]);
     assert_neuron_fired(&npu, 10, burst, src);
     assert_neuron_fired(&npu, 11, burst, dst);
 
     let outgoing = npu.get_outgoing_synapses(src.0);
-    assert_eq!(outgoing[0].1, 12);
+    assert_eq!(outgoing[0].1, 12.0);
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn test_classic_plasticity_updates_existing_synapses_only() {
     npu.configure_fire_ledger_window(10, 1).unwrap();
     npu.configure_fire_ledger_window(11, 1).unwrap();
 
-    let params = stdp_params(1, 3, 2, 1, false, 100, SynapseType::Excitatory);
+    let params = stdp_params(1, 3, 2, 1, false, 100.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     let src = src_neurons[0];
@@ -261,8 +261,8 @@ fn test_classic_plasticity_updates_existing_synapses_only() {
     npu.add_synapse(
         src,
         dst,
-        SynapticWeight(9),
-        SynapticPsp(100),
+        SynapticWeight(9.0),
+        SynapticPsp(100.0),
         SynapseType::Excitatory,
     )
     .unwrap();
@@ -279,7 +279,7 @@ fn test_classic_plasticity_updates_existing_synapses_only() {
     let outgoing = npu.get_outgoing_synapses(src.0);
     assert_eq!(outgoing.len(), 1);
     assert_eq!(outgoing[0].0, dst.0);
-    assert_eq!(outgoing[0].1, 6);
+    assert_eq!(outgoing[0].1, 6.0);
 
     let no_pair_outgoing = npu.get_outgoing_synapses(no_pair_src.0);
     assert!(
@@ -295,7 +295,7 @@ fn test_ltd_reduces_to_zero_and_marks_prunable() {
     npu.configure_fire_ledger_window(10, 1).unwrap();
     npu.configure_fire_ledger_window(11, 1).unwrap();
 
-    let params = stdp_params(1, 2, 1, 2, false, 100, SynapseType::Excitatory);
+    let params = stdp_params(1, 2, 1, 2, false, 100.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     let src = src_neurons[0];
@@ -304,8 +304,8 @@ fn test_ltd_reduces_to_zero_and_marks_prunable() {
     npu.add_synapse(
         src,
         dst,
-        SynapticWeight(1),
-        SynapticPsp(100),
+        SynapticWeight(1.0),
+        SynapticPsp(100.0),
         SynapseType::Excitatory,
     )
     .unwrap();
@@ -317,5 +317,5 @@ fn test_ltd_reduces_to_zero_and_marks_prunable() {
     let outgoing = npu.get_outgoing_synapses(src.0);
     assert_eq!(outgoing.len(), 1);
     assert_eq!(outgoing[0].0, dst.0);
-    assert_eq!(outgoing[0].1, 0, "Weight=0 marks synapse as prunable");
+    assert_eq!(outgoing[0].1, 0.0, "Weight=0 marks synapse as prunable");
 }

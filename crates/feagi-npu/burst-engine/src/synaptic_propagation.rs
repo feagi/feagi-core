@@ -269,7 +269,7 @@ impl SynapticPropagationEngine {
     /// # Parameters
     /// - `fired_neurons`: List of neurons that fired this burst
     /// - `synapse_storage`: Synapse array (weights, PSPs, types)
-    /// - `neuron_membrane_potentials`: Source neuron → membrane potential (0-255)
+    /// - `neuron_membrane_potentials`: Source neuron → firing-time membrane potential (`f32`)
     ///   Used when `mp_driven_psp` is enabled for the source cortical area
     ///
     /// # Performance Notes
@@ -281,7 +281,7 @@ impl SynapticPropagationEngine {
         &mut self,
         fired_neurons: &[NeuronId],
         synapse_storage: &impl SynapseStorage,
-        neuron_membrane_potentials: &AHashMap<NeuronId, u8>,
+        neuron_membrane_potentials: &AHashMap<NeuronId, f32>,
     ) -> Result<PropagationResult> {
         let profile_enabled = tracing::enabled!(tracing::Level::DEBUG);
         let trace_cfg = synapse_trace_cfg();
@@ -674,8 +674,8 @@ mod tests {
             count: 3,
             source_neurons: vec![1, 1, 2],    // Raw u32 values
             target_neurons: vec![10, 11, 10], // Raw u32 values
-            weights: vec![255, 128, 200],     // Raw u8 values
-            postsynaptic_potentials: vec![255, 255, 200], // Raw u8 PSP values
+            weights: vec![255.0, 128.0, 200.0],
+            postsynaptic_potentials: vec![255.0, 255.0, 200.0],
             types: vec![0, 1, 0],             // 0=excitatory, 1=inhibitory
             valid_mask: vec![true, true, true],
             source_index: ahash::AHashMap::new(),

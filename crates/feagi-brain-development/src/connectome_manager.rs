@@ -2325,7 +2325,7 @@ impl ConnectomeManager {
         dst_cortical_idx: u32,
         rule_obj: &serde_json::Map<String, serde_json::Value>,
         bidirectional_stdp: bool,
-        synapse_psp: u8,
+        synapse_psp: f32,
         synapse_type: feagi_npu_neural::SynapseType,
     ) -> BduResult<()> {
         let plasticity_window = rule_obj
@@ -2419,83 +2419,52 @@ impl ConnectomeManager {
         &self,
         src_area_id: &CorticalID,
         rule: &serde_json::Value,
-    ) -> BduResult<(u8, u8, feagi_npu_neural::SynapseType)> {
+    ) -> BduResult<(f32, f32, feagi_npu_neural::SynapseType)> {
         // Get source area to access PSP property
         let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
             crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
         })?;
 
-        // Extract weight from rule (postSynapticCurrent_multiplier)
-        //
-        // IMPORTANT:
-        // - This value represents the synapse "weight" stored in the NPU (u8: 0..255).
-        // - Do NOT scale by 255 here. A multiplier of 1.0 should remain weight=1 (not 255).
+        // Extract weight from rule (`postSynapticCurrent_multiplier`) as full-precision float.
         let (weight, synapse_type) = {
-            // Accept either integer or whole-number float inputs for compatibility with older clients/tests.
-            let parse_i64 = |v: &serde_json::Value| -> Option<i64> {
+            let parse_f64 = |v: &serde_json::Value| -> Option<f64> {
                 if let Some(i) = v.as_i64() {
-                    return Some(i);
+                    return Some(i as f64);
                 }
-                let f = v.as_f64()?;
-                if f.fract() == 0.0 {
-                    Some(f as i64)
-                } else {
-                    None
-                }
+                v.as_f64()
             };
 
-            let multiplier_i64: i64 = if let Some(obj) = rule.as_object() {
+            let mult: f64 = if let Some(obj) = rule.as_object() {
                 obj.get("postSynapticCurrent_multiplier")
-                    .and_then(parse_i64)
-                    .unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
+                    .and_then(parse_f64)
+                    .unwrap_or(1.0)
             } else if let Some(arr) = rule.as_array() {
-                // Array format: [morphology_id, scalar, multiplier, ...]
-                arr.get(2).and_then(parse_i64).unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
+                arr.get(2).and_then(parse_f64).unwrap_or(1.0)
             } else {
-                128 // @architecture:acceptable - emergency fallback for malformed rule
+                128.0
             };
 
-            if multiplier_i64 < 0 {
-                let abs = if multiplier_i64 == i64::MIN {
-                    i64::MAX
-                } else {
-                    multiplier_i64.abs()
-                };
-                (
-                    abs.clamp(0, 255) as u8,
-                    feagi_npu_neural::SynapseType::Inhibitory,
-                )
+            if mult < 0.0 {
+                (mult.abs() as f32, feagi_npu_neural::SynapseType::Inhibitory)
             } else {
-                (
-                    multiplier_i64.clamp(0, 255) as u8,
-                    feagi_npu_neural::SynapseType::Excitatory,
-                )
+                (mult as f32, feagi_npu_neural::SynapseType::Excitatory)
             }
         };
 
-        // Get PSP from source cortical area.
-        //
-        // IMPORTANT:
-        // - This value represents the synapse PSP stored in the NPU (u8: 0..255).
-        // - Treat `postsynaptic_current` as an absolute value in 0..255 units.
-        // - Do NOT scale by 255 here. A PSP of 1.0 should remain PSP=1 (not 255).
-        let (psp_f32, psp) = {
-            use crate::models::cortical_area::CorticalAreaExt;
-            let psp_f32 = src_area.postsynaptic_current();
-            (psp_f32, psp_f32.clamp(0.0, 255.0) as u8)
-        };
+        // PSP from source cortical area (float; stored as f32 on synapses)
+        use crate::models::cortical_area::CorticalAreaExt;
+        let psp_f32 = src_area.postsynaptic_current();
 
         tracing::debug!(
             target: "feagi-bdu",
-            "Resolved synapse params src={} weight={} psp={} psp_f32={} type={:?}",
+            "Resolved synapse params src={} weight={} psp={} type={:?}",
             src_area_id.as_base_64(),
             weight,
-            psp,
             psp_f32,
             synapse_type
         );
 
-        Ok((weight, psp, synapse_type))
+        Ok((weight, psp_f32, synapse_type))
     }
 
     /// Apply cortical mapping for a specific area pair
@@ -2683,8 +2652,8 @@ impl ConnectomeManager {
         dst_area_id: &CorticalID,
         src_idx: u32,
         dst_idx: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_attractivity: u8,
         synapse_type: feagi_npu_neural::SynapseType,
     ) -> BduResult<usize> {
@@ -4326,7 +4295,7 @@ impl ConnectomeManager {
     ///
     /// Vec of (target_neuron_id, weight, psp, synapse_type), or empty if NPU not connected
     ///
-    pub fn get_outgoing_synapses(&self, source_neuron_id: u64) -> Vec<(u32, u8, u8, u8)> {
+    pub fn get_outgoing_synapses(&self, source_neuron_id: u64) -> Vec<(u32, f32, f32, u8)> {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock.get_outgoing_synapses(source_neuron_id as u32)
@@ -4348,7 +4317,7 @@ impl ConnectomeManager {
     ///
     /// Vec of (source_neuron_id, weight, psp, synapse_type), or empty if NPU not connected
     ///
-    pub fn get_incoming_synapses(&self, target_neuron_id: u64) -> Vec<(u32, u8, u8, u8)> {
+    pub fn get_incoming_synapses(&self, target_neuron_id: u64) -> Vec<(u32, f32, f32, u8)> {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock.get_incoming_synapses(target_neuron_id as u32)
@@ -4541,13 +4510,13 @@ impl ConnectomeManager {
     ///
     /// # Returns
     ///
-    /// Synapse weight (0-255), or None if no connection exists
+    /// Synapse weight (`f32`), or None if no connection exists
     ///
     pub fn get_connection_weight(
         &self,
         source_neuron_id: u64,
         target_neuron_id: u64,
-    ) -> Option<u8> {
+    ) -> Option<f32> {
         let synapses = self.get_outgoing_synapses(source_neuron_id);
         synapses
             .iter()
@@ -4940,8 +4909,8 @@ impl ConnectomeManager {
     ///
     /// * `source_neuron_id` - Source neuron ID
     /// * `target_neuron_id` - Target neuron ID
-    /// * `weight` - Synapse weight (0-255)
-    /// * `psp` - Synapse PSP (0-255)
+    /// * `weight` - Synapse weight (`f32`)
+    /// * `psp` - Synapse PSP (`f32`)
     /// * `synapse_type` - Synapse type (0=excitatory, 1=inhibitory)
     ///
     /// # Returns
@@ -4952,8 +4921,8 @@ impl ConnectomeManager {
         &mut self,
         source_neuron_id: u64,
         target_neuron_id: u64,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: u8,
     ) -> BduResult<()> {
         // Get NPU
@@ -5085,7 +5054,7 @@ impl ConnectomeManager {
         &self,
         source_neuron_id: u64,
         target_neuron_id: u64,
-    ) -> Option<(u8, u8, u8)> {
+    ) -> Option<(f32, f32, u8)> {
         // Get NPU
         let npu = self.npu.as_ref()?;
         let npu_lock = npu.lock().ok()?;
@@ -5120,7 +5089,7 @@ impl ConnectomeManager {
         &mut self,
         source_neuron_id: u64,
         target_neuron_id: u64,
-        new_weight: u8,
+        new_weight: f32,
     ) -> BduResult<()> {
         // Get NPU
         let npu = self
@@ -6549,8 +6518,8 @@ mod tests {
         // Test create_synapse (creation should succeed)
         manager
             .create_synapse(
-                neuron1_id, neuron2_id, 128, // weight
-                64,  // psp
+                neuron1_id, neuron2_id, 128.0, // weight
+                64.0, // psp
                 0,   // excitatory
             )
             .unwrap();
@@ -6701,8 +6670,8 @@ mod tests {
             .unwrap();
 
         // Create synapses that represent an established mapping between the two areas
-        manager.create_synapse(s0, t0, 128, 200, 0).unwrap();
-        manager.create_synapse(s1, t1, 128, 200, 0).unwrap();
+        manager.create_synapse(s0, t0, 128.0, 200.0, 0).unwrap();
+        manager.create_synapse(s1, t1, 128.0, 200.0, 0).unwrap();
 
         // Build index once before pruning
         {
@@ -6797,8 +6766,8 @@ mod tests {
             .unwrap();
 
         // Create synapses that represent an established mapping between the two areas
-        manager.create_synapse(s0, t0, 128, 200, 0).unwrap();
-        manager.create_synapse(s1, t1, 128, 200, 0).unwrap();
+        manager.create_synapse(s0, t0, 128.0, 200.0, 0).unwrap();
+        manager.create_synapse(s1, t1, 128.0, 200.0, 0).unwrap();
 
         // Build index once before pruning
         {

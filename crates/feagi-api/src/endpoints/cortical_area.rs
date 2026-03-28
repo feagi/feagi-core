@@ -124,8 +124,8 @@ fn peer_cortical_voxel_fields(
 fn synapse_details_for_neuron(
     mgr: &feagi_brain_development::ConnectomeManager,
     neuron_id: u32,
-    outgoing: &[(u32, u8, u8, u8)],
-    incoming: &[(u32, u8, u8, u8)],
+    outgoing: &[(u32, f32, f32, u8)],
+    incoming: &[(u32, f32, f32, u8)],
 ) -> (serde_json::Value, serde_json::Value) {
     let outgoing_json: Vec<serde_json::Value> = outgoing
         .iter()
@@ -2216,14 +2216,14 @@ mod voxel_neurons_dto_tests {
     #[test]
     fn synapse_details_matches_connectome_shape() {
         let mgr = feagi_brain_development::ConnectomeManager::new_for_testing();
-        let out_full = vec![(10, 2, 5, 1)];
-        let inc_full = vec![(3, 4, 6, 0)];
+        let out_full = vec![(10, 2.0, 5.0, 1)];
+        let inc_full = vec![(3, 4.0, 6.0, 0)];
         let (out, inc) = synapse_details_for_neuron(&mgr, 7, &out_full, &inc_full);
         let out_a = out.as_array().expect("outgoing array");
         assert_eq!(out_a[0]["source_neuron_id"], serde_json::json!(7));
         assert_eq!(out_a[0]["target_neuron_id"], serde_json::json!(10));
-        assert_eq!(out_a[0]["weight"], serde_json::json!(2));
-        assert_eq!(out_a[0]["postsynaptic_potential"], serde_json::json!(5));
+        assert_eq!(out_a[0]["weight"], serde_json::json!(2.0));
+        assert_eq!(out_a[0]["postsynaptic_potential"], serde_json::json!(5.0));
         assert_eq!(out_a[0]["synapse_type"], serde_json::json!(1));
         assert!(out_a[0].get("target_cortical_id").is_some());
         assert!(out_a[0].get("target_cortical_name").is_some());

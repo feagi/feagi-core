@@ -3,35 +3,35 @@
 
 //! Synapse type definitions
 
-/// Synaptic weight (0-255, stored as u8 for memory efficiency)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SynapticWeight(pub u8);
+/// Synaptic weight (stored as `f32`; historically u8 0–255, now full float precision for f32 runtime)
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SynapticWeight(pub f32);
 
 impl SynapticWeight {
     #[inline(always)]
     pub fn to_float(self) -> f32 {
-        self.0 as f32
+        self.0
     }
 
     #[inline(always)]
     pub fn from_float(value: f32) -> Self {
-        Self(value as u8)
+        Self(value)
     }
 }
 
-/// Synaptic PSP (0-255, stored as u8)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SynapticPsp(pub u8);
+/// Synaptic PSP (stored as `f32`)
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SynapticPsp(pub f32);
 
 impl SynapticPsp {
     #[inline(always)]
     pub fn to_float(self) -> f32 {
-        self.0 as f32
+        self.0
     }
 
     #[inline(always)]
     pub fn from_float(value: f32) -> Self {
-        Self(value as u8)
+        Self(value)
     }
 }
 

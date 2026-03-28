@@ -18,8 +18,8 @@ pub fn apply_expander_morphology(
     npu: &mut feagi_npu_burst_engine::DynamicNPU,
     src_area_id: u32,
     dst_area_id: u32,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {

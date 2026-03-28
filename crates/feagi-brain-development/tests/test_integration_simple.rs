@@ -202,9 +202,9 @@ fn test_create_and_query_synapses() {
     // Create synapse
     manager
         .create_synapse(
-            neuron1, neuron2, 128, // weight
-            200, // psp
-            0,   // excitatory
+            neuron1, neuron2, 128.0, // weight
+            200.0, // psp
+            0,     // excitatory
         )
         .expect("Failed to create synapse");
 
@@ -214,20 +214,20 @@ fn test_create_and_query_synapses() {
         .expect("Synapse should exist");
 
     let (weight, psp, syn_type) = synapse;
-    assert_eq!(weight, 128);
-    assert_eq!(psp, 200);
+    assert_eq!(weight, 128.0);
+    assert_eq!(psp, 200.0);
     assert_eq!(syn_type, 0);
 
     // Update synapse weight
     manager
-        .update_synapse_weight(neuron1, neuron2, 255)
+        .update_synapse_weight(neuron1, neuron2, 255.0)
         .expect("Failed to update weight");
 
     // Verify update
     let updated = manager
         .get_synapse(neuron1, neuron2)
         .expect("Synapse should still exist");
-    assert_eq!(updated.0, 255);
+    assert_eq!(updated.0, 255.0);
 
     // Get synapse count
     let count = manager.get_synapse_count();
@@ -549,7 +549,7 @@ fn test_delete_operations() {
 
     // Create synapse
     manager
-        .create_synapse(neuron1, neuron2, 128, 200, 0)
+        .create_synapse(neuron1, neuron2, 128.0, 200.0, 0)
         .expect("Failed to create synapse");
 
     // Verify synapse exists

@@ -84,10 +84,8 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
             }
 
             let target_id = synapse_storage.target_neurons()[syn_idx];
-            // Canonical synaptic units: u8 (0..255) stored in synapse arrays.
-            // We use direct cast to f32 (NO /255 normalization) to match the rest of FEAGI.
-            let weight = synapse_storage.weights()[syn_idx] as f32;
-            let psp = synapse_storage.postsynaptic_potentials()[syn_idx] as f32;
+            let weight = synapse_storage.weights()[syn_idx];
+            let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
             let synapse_type = if synapse_storage.types()[syn_idx] == 0 {
                 SynapseType::Excitatory
             } else {
@@ -160,7 +158,7 @@ mod tests {
         // Create minimal test data
         let fired_neurons = vec![1];
         let mut synapse_storage = StdSynapseArray::new(4);
-        synapse_storage.add_synapse_simple(1, 2, 2, 3, SynapseType::Excitatory); // 2×3 = 6
+        synapse_storage.add_synapse_simple(1, 2, 2.0, 3.0, SynapseType::Excitatory); // 2×3 = 6
         let mut fcl = FireCandidateList::new();
 
         // Should not panic
@@ -174,8 +172,8 @@ mod tests {
         assert_eq!(
             fcl.get(NeuronId(2)),
             Some(compute_synaptic_contribution(
-                2,
-                3,
+                2.0,
+                3.0,
                 NeuralSynapseType::Excitatory
             ))
         );

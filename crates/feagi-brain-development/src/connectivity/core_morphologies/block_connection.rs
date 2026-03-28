@@ -26,8 +26,8 @@ pub fn apply_block_connection_morphology_batched(
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),
     scaling_factor: u32,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -183,8 +183,8 @@ pub fn apply_block_connection_morphology(
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),
     scaling_factor: u32,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {

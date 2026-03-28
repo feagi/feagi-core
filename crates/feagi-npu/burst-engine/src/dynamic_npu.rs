@@ -682,11 +682,11 @@ where
         dispatch!(self, get_neuron_property_u16_by_index(idx, property))
     }
 
-    pub fn get_incoming_synapses(&self, _neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
+    pub fn get_incoming_synapses(&self, _neuron_id: u32) -> Vec<(u32, f32, f32, u8)> {
         dispatch!(self, get_incoming_synapses(_neuron_id))
     }
 
-    pub fn get_outgoing_synapses(&self, _neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
+    pub fn get_outgoing_synapses(&self, _neuron_id: u32) -> Vec<(u32, f32, f32, u8)> {
         dispatch!(self, get_outgoing_synapses(_neuron_id))
     }
 
@@ -792,7 +792,7 @@ where
     pub fn update_cortical_area_postsynaptic_current(
         &mut self,
         cortical_area: u32,
-        postsynaptic_potential: u8,
+        postsynaptic_potential: f32,
     ) -> usize {
         dispatch_mut!(
             self,
@@ -803,7 +803,7 @@ where
     pub fn update_stdp_mapping_psp_for_source(
         &mut self,
         src_cortical_idx: u32,
-        new_psp: u8,
+        new_psp: f32,
     ) -> usize {
         dispatch_mut!(
             self,

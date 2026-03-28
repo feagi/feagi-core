@@ -21,8 +21,8 @@ pub fn apply_sweeper_morphology_with_dimensions(
     src_area_id: u32,
     dst_area_id: u32,
     dst_dimensions: (usize, usize, usize),
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {

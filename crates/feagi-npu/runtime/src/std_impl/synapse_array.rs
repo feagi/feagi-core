@@ -30,11 +30,11 @@ pub struct SynapseArray {
     /// Target neuron IDs
     pub target_neurons: Vec<u32>,
 
-    /// Synaptic weights (0-255)
-    pub weights: Vec<u8>,
+    /// Synaptic weights (`f32`)
+    pub weights: Vec<f32>,
 
-    /// Postsynaptic potentials / Conductances (0-255)
-    pub postsynaptic_potentials: Vec<u8>,
+    /// Postsynaptic potentials (`f32`)
+    pub postsynaptic_potentials: Vec<f32>,
 
     /// Synapse types (0=excitatory, 1=inhibitory)
     pub types: Vec<u8>,
@@ -66,8 +66,8 @@ impl SynapseArray {
         &mut self,
         source: u32,
         target: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: SynapseType,
     ) {
         SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8)
@@ -128,11 +128,11 @@ impl SynapseStorage for SynapseArray {
         &self.target_neurons[..self.count]
     }
 
-    fn weights(&self) -> &[u8] {
+    fn weights(&self) -> &[f32] {
         &self.weights[..self.count]
     }
 
-    fn postsynaptic_potentials(&self) -> &[u8] {
+    fn postsynaptic_potentials(&self) -> &[f32] {
         &self.postsynaptic_potentials[..self.count]
     }
 
@@ -145,12 +145,12 @@ impl SynapseStorage for SynapseArray {
     }
 
     // Mutable property accessors
-    fn weights_mut(&mut self) -> &mut [u8] {
+    fn weights_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.weights[..count]
     }
 
-    fn postsynaptic_potentials_mut(&mut self) -> &mut [u8] {
+    fn postsynaptic_potentials_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.postsynaptic_potentials[..count]
     }
@@ -174,8 +174,8 @@ impl SynapseStorage for SynapseArray {
         &mut self,
         source: u32,
         target: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: u8,
     ) -> Result<usize> {
         let idx = self.count;
@@ -198,8 +198,8 @@ impl SynapseStorage for SynapseArray {
         &mut self,
         sources: &[u32],
         targets: &[u32],
-        weights: &[u8],
-        psps: &[u8],
+        weights: &[f32],
+        psps: &[f32],
         types: &[u8],
     ) -> crate::traits::Result<()> {
         let batch_size = sources.len();
@@ -252,7 +252,7 @@ impl SynapseStorage for SynapseArray {
         Ok(removed)
     }
 
-    fn update_weight(&mut self, idx: usize, new_weight: u8) -> crate::traits::Result<()> {
+    fn update_weight(&mut self, idx: usize, new_weight: f32) -> crate::traits::Result<()> {
         if idx >= self.count {
             return Err(crate::traits::RuntimeError::InvalidParameters(format!(
                 "Synapse index {} out of bounds (count: {})",
@@ -281,15 +281,15 @@ mod tests {
     #[test]
     fn test_add_synapse() {
         let mut array = SynapseArray::new(10);
-        array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory);
+        array.add_synapse_simple(0, 1, 255.0, 255.0, SynapseType::Excitatory);
         assert_eq!(array.count, 1);
     }
 
     #[test]
     fn test_propagate_parallel() {
         let mut array = SynapseArray::new(10);
-        array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory);
-        array.add_synapse_simple(0, 2, 128, 255, SynapseType::Excitatory);
+        array.add_synapse_simple(0, 1, 255.0, 255.0, SynapseType::Excitatory);
+        array.add_synapse_simple(0, 2, 128.0, 255.0, SynapseType::Excitatory);
 
         let fired = std::vec![0];
         let contributions = array.propagate_parallel(&fired);

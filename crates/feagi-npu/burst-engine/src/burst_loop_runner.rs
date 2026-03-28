@@ -1843,24 +1843,22 @@ fn burst_loop(
                             }
                             "postsynaptic_current" | "neuron_post_synaptic_potential" => {
                                 if let Some(psp) = update.value.as_f64() {
-                                    // PSP is stored in the NPU as u8 (0..=255).
-                                    // Clamp deterministically (matches synaptogenesis behavior).
-                                    let psp_u8 = psp.clamp(0.0, 255.0) as u8;
+                                    let psp_f32 = psp as f32;
                                     let synapses_updated = npu_lock
                                         .update_cortical_area_postsynaptic_current(
                                             update.cortical_idx,
-                                            psp_u8,
+                                            psp_f32,
                                         );
                                     let mappings_updated = npu_lock
                                         .update_stdp_mapping_psp_for_source(
                                             update.cortical_idx,
-                                            psp_u8,
+                                            psp_f32,
                                         );
                                     info!(
                                         target: "feagi-burst-engine",
                                         "Applied PSP update area={} psp={} synapses_updated={} stdp_mappings_updated={}",
                                         update.cortical_id,
-                                        psp_u8,
+                                        psp_f32,
                                         synapses_updated,
                                         mappings_updated
                                     );

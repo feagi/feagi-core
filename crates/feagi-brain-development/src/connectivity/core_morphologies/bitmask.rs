@@ -35,8 +35,8 @@ pub fn apply_bitmask_morphology_with_dimensions(
     dst_dimensions: (usize, usize, usize),
     axis: BitmaskAxis,
     mode: BitmaskMode,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
