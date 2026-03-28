@@ -470,7 +470,12 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             batch_thresholds.push(neuron_array.thresholds()[idx]);
             batch_threshold_limits.push(neuron_array.threshold_limits()[idx]);
             batch_leaks.push(neuron_array.leak_coefficients()[idx]);
-            batch_candidates.push(T::from_f32(candidate_potential));
+            let mut cand_t = T::from_f32(candidate_potential);
+            cand_t = fcl_candidate_respecting_mp_charge_accumulation(
+                neuron_array.mp_charge_accumulation()[idx],
+                cand_t,
+            );
+            batch_candidates.push(cand_t);
             batch_consecutive_fire_counts.push(neuron_array.consecutive_fire_counts()[idx]);
             batch_consecutive_fire_limits.push(neuron_array.consecutive_fire_limits()[idx]);
             batch_excitabilities.push(neuron_array.excitabilities()[idx]);
@@ -646,6 +651,21 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
     (results, refractory)
 }
 
+/// When MP charge accumulation is enabled, only non-negative (excitatory) FCL input
+/// contributes to the membrane update. Inhibitory (negative) candidates are not applied,
+/// so accumulated MP is not driven negative across bursts by inhibition.
+#[inline(always)]
+fn fcl_candidate_respecting_mp_charge_accumulation<T: NeuralValue>(
+    mp_charge_accumulation: bool,
+    candidate: T,
+) -> T {
+    if mp_charge_accumulation && candidate.to_f32() < 0.0 {
+        T::zero()
+    } else {
+        candidate
+    }
+}
+
 /// Process a single neuron's dynamics
 ///
 /// Returns Some(FiringNeuron) if the neuron fires, None otherwise
@@ -667,6 +687,8 @@ fn process_single_neuron<T: NeuralValue>(
     let cortical_idx = neuron_array.cortical_areas()[idx];
     let allow_trace = dynamics_trace_emit(neuron_id.0, cortical_idx);
     let mp_acc = neuron_array.mp_charge_accumulation()[idx];
+    let candidate_potential =
+        fcl_candidate_respecting_mp_charge_accumulation(mp_acc, candidate_potential);
 
     // CRITICAL DEBUG: Log entry for neuron 16438 (disabled to reduce spam)
     // if neuron_id.0 == 16438 {
@@ -1050,6 +1072,70 @@ mod tests {
         assert_eq!(result.neurons_fired, 0);
         assert_eq!(result.fire_queue.total_neurons(), 0);
         assert!(neurons.membrane_potentials[0].to_f32() > 0.0); // Potential accumulated
+    }
+
+    #[test]
+    fn test_mp_charge_accumulation_skips_negative_fcl_candidates() {
+        let mut neurons = StdNeuronArray::new(10);
+        let id = neurons
+            .add_neuron(
+                100.0,    // threshold — no fire
+                f32::MAX, // threshold_limit
+                0.0,      // leak_coefficient
+                0.0,
+                0,
+                5,
+                1.0,
+                u16::MAX,
+                0,
+                true, // mp_charge_accumulation
+                1,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        neurons.membrane_potentials[id as usize] = 3.0f32;
+
+        let mut fcl = FireCandidateList::new();
+        fcl.add_candidate(NeuronId(id as u32), -10.0);
+
+        let result = process_neural_dynamics(&fcl, None, &mut neurons, 0).unwrap();
+        assert_eq!(result.neurons_fired, 0);
+        assert_eq!(neurons.membrane_potentials[id as usize], 3.0);
+    }
+
+    #[test]
+    fn test_mp_charge_accumulation_false_still_applies_negative_fcl_candidates() {
+        let mut neurons = StdNeuronArray::new(10);
+        let id = neurons
+            .add_neuron(
+                100.0,
+                f32::MAX,
+                0.0,
+                0.0,
+                0,
+                5,
+                1.0,
+                u16::MAX,
+                0,
+                false, // mp_charge_accumulation
+                1,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        neurons.membrane_potentials[id as usize] = 3.0f32;
+
+        let mut fcl = FireCandidateList::new();
+        fcl.add_candidate(NeuronId(id as u32), -10.0);
+
+        let result = process_neural_dynamics(&fcl, None, &mut neurons, 0).unwrap();
+        assert_eq!(result.neurons_fired, 0);
+        assert_eq!(neurons.membrane_potentials[id as usize], -7.0);
     }
 
     #[test]
