@@ -5726,7 +5726,8 @@ impl ConnectomeManager {
 
         for (key, value) in properties {
             match key.as_str() {
-                "title" | "name" => {
+                // BV (FEAGIRequests.edit_region_object) sends `region_title`; other clients use `title` / `name`.
+                "title" | "name" | "region_title" => {
                     if let Some(name) = value.as_str() {
                         region.name = name.to_string();
                         debug!(target: "feagi-bdu", "Updated brain region {} name = {}", region_id, name);

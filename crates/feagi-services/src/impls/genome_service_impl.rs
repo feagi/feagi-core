@@ -557,6 +557,26 @@ impl GenomeService for GenomeServiceImpl {
         Ok(json_str)
     }
 
+    async fn export_region_genome(&self, region_id: String) -> ServiceResult<String> {
+        let genome = self.current_genome.read().clone().ok_or_else(|| {
+            ServiceError::Internal(
+                "No RuntimeGenome stored. Genome must be loaded before exporting a region."
+                    .to_string(),
+            )
+        })?;
+        let subset =
+            feagi_evolutionary::subset_runtime_genome_for_region_branch(&genome, &region_id)
+                .map_err(|e| match e {
+                    feagi_evolutionary::EvoError::InvalidRegion(msg) => {
+                        ServiceError::InvalidInput(msg)
+                    }
+                    other => ServiceError::Internal(other.to_string()),
+                })?;
+        feagi_evolutionary::save_genome_to_json(&subset).map_err(|e| {
+            ServiceError::Internal(format!("Failed to serialize region genome: {}", e))
+        })
+    }
+
     async fn get_genome_info(&self) -> ServiceResult<GenomeInfo> {
         trace!(target: "feagi-services", "Getting genome info");
 
