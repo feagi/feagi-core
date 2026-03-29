@@ -308,7 +308,7 @@ impl TrackedAreaHistory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fire_structures::{FireQueue, FiringNeuron};
+    use crate::fire_structures::{FireQueue, FiringNeuron, FIRE_KIND_STDP_ELIGIBLE};
     use feagi_npu_neural::types::NeuronId;
 
     #[test]
@@ -325,6 +325,7 @@ mod tests {
             x: 0,
             y: 0,
             z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
         });
         fq1.add_neuron(FiringNeuron {
             neuron_id: NeuronId(200),
@@ -333,6 +334,7 @@ mod tests {
             x: 1,
             y: 0,
             z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
         });
         ledger.archive_burst(1, &fq1).unwrap();
 
@@ -349,6 +351,7 @@ mod tests {
             x: 0,
             y: 0,
             z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
         });
         ledger.archive_burst(3, &fq3).unwrap();
 
@@ -375,6 +378,7 @@ mod tests {
             x: 0,
             y: 0,
             z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
         });
         ledger.archive_burst(1, &fq1).unwrap();
 

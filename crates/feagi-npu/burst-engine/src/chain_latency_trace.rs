@@ -186,7 +186,7 @@ pub(crate) fn emit_chain_latency_trace(burst_count: u64, fire_queue: &FireQueue)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fire_structures::{FireQueue, FiringNeuron};
+    use crate::fire_structures::{FireQueue, FiringNeuron, FIRE_KIND_STDP_ELIGIBLE};
     use feagi_npu_neural::types::NeuronId;
 
     #[test]
@@ -206,6 +206,7 @@ mod tests {
             x: 0,
             y: 0,
             z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
         });
         emit_chain_latency_trace(1, &fq);
         emit_area_cortical_fire_detail(1, &fq);

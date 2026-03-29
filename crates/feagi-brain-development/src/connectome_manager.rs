@@ -42,6 +42,7 @@ type BrainRegionIoRegistry = HashMap<String, (Vec<String>, Vec<String>)>;
 
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use crate::types::{BduError, BduResult};
+use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
 use feagi_npu_neural::types::NeuronId;
 use feagi_structures::genomic::cortical_area::{
     CoreCorticalType, CorticalAreaType, CorticalID, CustomCorticalType,
@@ -2706,6 +2707,7 @@ impl ConnectomeManager {
                     psp,
                     synapse_attractivity,
                     synapse_type,
+                    0,
                 )?;
                 // Ensure the propagation engine sees the newly created synapses immediately
                 npu.rebuild_synapse_index();
@@ -2775,6 +2777,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
                     )?;
                     npu.rebuild_synapse_index();
                     Ok(count as usize)
@@ -7326,6 +7329,13 @@ mod tests {
         assert!(
             created > 0,
             "Expected associative memory mapping between memory areas to create synapses"
+        );
+        let npu_guard = dyn_npu.lock().unwrap();
+        let assoc_tagged =
+            npu_guard.count_synapses_with_edge_flag_bits(SYNAPSE_EDGE_ASSOCIATIVE_MEMORY);
+        assert!(
+            assoc_tagged >= 1,
+            "associative_memory connectome path should stamp SYNAPSE_EDGE_ASSOCIATIVE_MEMORY on created synapses"
         );
     }
 

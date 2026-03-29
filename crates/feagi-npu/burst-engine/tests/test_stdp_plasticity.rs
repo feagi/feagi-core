@@ -5,6 +5,7 @@
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::npu::StdpMappingParams;
 use feagi_npu_burst_engine::RustNPU;
+use feagi_npu_burst_engine::FIRE_KIND_STDP_ELIGIBLE;
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 use feagi_npu_runtime::StdRuntime;
@@ -192,8 +193,8 @@ fn test_bidirectional_stdp_with_memory_neuron_ids() {
     let src = NeuronId(MEMORY_NEURON_ID_START);
     let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
 
-    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
-    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
     let burst = npu.process_burst().unwrap().burst;
     assert_neuron_fired(&npu, 10, burst, src);
     assert_neuron_fired(&npu, 11, burst, dst);
@@ -202,8 +203,8 @@ fn test_bidirectional_stdp_with_memory_neuron_ids() {
         "No synapse should form until the full window is observed"
     );
 
-    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
-    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
     let burst = npu.process_burst().unwrap().burst;
     assert_neuron_fired(&npu, 10, burst, src);
     assert_neuron_fired(&npu, 11, burst, dst);
@@ -234,12 +235,12 @@ fn test_bidirectional_memory_neuron_both_mappings_no_duplicate_mirror() {
     let src = NeuronId(MEMORY_NEURON_ID_START);
     let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
 
-    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
-    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
     let _ = npu.process_burst().unwrap();
 
-    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
-    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
     let _ = npu.process_burst().unwrap();
 
     let fwd = npu.get_outgoing_synapses(src.0);
@@ -271,12 +272,12 @@ fn test_memory_only_single_mapping_gets_mirrored_reverse_edge() {
     let src = NeuronId(MEMORY_NEURON_ID_START);
     let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
 
-    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
-    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
     let _ = npu.process_burst().unwrap();
 
-    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
-    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
     let _ = npu.process_burst().unwrap();
 
     let fwd = npu.get_outgoing_synapses(src.0);
@@ -303,11 +304,11 @@ fn test_memory_memory_associative_stdp_skipped_when_not_assoc_eligible() {
     let src = NeuronId(MEMORY_NEURON_ID_START);
     let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
 
-    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
-    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
     let _ = npu.process_burst().unwrap();
-    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
-    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
     let _ = npu.process_burst().unwrap();
 
     assert!(npu.get_outgoing_synapses(src.0).is_empty());
@@ -331,11 +332,11 @@ fn test_single_mapping_mirror_skipped_when_not_ltm() {
     let src = NeuronId(MEMORY_NEURON_ID_START);
     let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
 
-    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
-    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
     let _ = npu.process_burst().unwrap();
-    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
-    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
     let _ = npu.process_burst().unwrap();
 
     let fwd = npu.get_outgoing_synapses(src.0);

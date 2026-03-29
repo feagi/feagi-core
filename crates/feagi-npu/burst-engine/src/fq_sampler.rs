@@ -270,7 +270,7 @@ impl FQSampler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fire_structures::FiringNeuron;
+    use crate::fire_structures::{FiringNeuron, FIRE_KIND_STDP_ELIGIBLE};
     use feagi_npu_neural::types::NeuronId;
     // Note: CorticalID removed - use feagi_structures::CorticalID
 
@@ -289,6 +289,7 @@ mod tests {
             x: 0,
             y: 0,
             z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
         };
         fire_queue.add_neuron(neuron);
 
@@ -319,6 +320,7 @@ mod tests {
             x: 0,
             y: 0,
             z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
         };
         fire_queue.add_neuron(neuron);
 

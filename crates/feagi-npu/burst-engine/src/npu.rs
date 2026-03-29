@@ -32,7 +32,9 @@
 
 use crate::chain_latency_trace::{emit_area_cortical_fire_detail, emit_chain_latency_trace};
 use crate::fire_ledger::FireLedger;
-use crate::fire_structures::{FireQueue, FiringNeuron};
+use crate::fire_structures::{
+    FireQueue, FiringNeuron, FIRE_KIND_EPISODIC_MEMORY, FIRE_KIND_STDP_ELIGIBLE,
+};
 use crate::fq_sampler::{FQSampler, SamplingMode};
 use crate::neural_dynamics::*;
 use crate::synaptic_propagation::SynapticPropagationEngine;
@@ -102,6 +104,7 @@ fn merge_authoritative_fires_into_fire_queue<N, T>(
             x,
             y,
             z,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
         });
         already.insert(nid.0);
     }
@@ -276,6 +279,8 @@ pub(crate) struct FireStructures {
     pub(crate) current_fire_queue: FireQueue,
     pub(crate) previous_fire_queue: FireQueue,
     pub(crate) fire_ledger: FireLedger,
+    /// Episodic-only memory neuron fires (pattern injection path); independent of STDP ledger.
+    pub(crate) episodic_memory_fire_ledger: FireLedger,
     pub(crate) fq_sampler: FQSampler,
     pub(crate) pending_sensory_injections: Vec<(NeuronId, f32)>,
     /// Staged memory neuron injections to be applied at the start of the next burst.
@@ -283,10 +288,13 @@ pub(crate) struct FireStructures {
     /// Memory neurons live in a reserved ID range (50_000_000+) and are not present in the
     /// regular `NeuronStorage` array. They are executed via a dedicated forced-fire path
     /// in `neural_dynamics`.
-    pub(crate) pending_memory_injections: Vec<(NeuronId, u32, f32)>, // (id, cortical_idx, potential)
+    pub(crate) pending_memory_injections: Vec<(NeuronId, u32, f32, u8)>, // (id, cortical_idx, potential, fire_kind)
     /// Per-burst metadata for memory neuron candidates (id -> cortical_idx).
     /// Populated during Phase 1 from `pending_memory_injections` and cleared each burst.
     pub(crate) memory_candidate_cortical_idx: AHashMap<u32, u32>,
+    /// Per-burst fire_kind for staged memory injections (id -> kind). Propagation-sourced memory
+    /// candidates omit entries here and default to STDP-eligible in dynamics.
+    pub(crate) memory_candidate_fire_kind: AHashMap<u32, u8>,
     pub(crate) last_fcl_snapshot: Vec<(NeuronId, f32)>,
     /// Scheduled replay injections (burst target -> twin area coords).
     pub(crate) pending_replay_injections: Vec<ReplayInjection>,
@@ -364,10 +372,12 @@ impl<
                 current_fire_queue: FireQueue::new(),
                 previous_fire_queue: FireQueue::new(),
                 fire_ledger: FireLedger::new(fire_ledger_window),
+                episodic_memory_fire_ledger: FireLedger::new(fire_ledger_window),
                 fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
                 pending_sensory_injections: Vec::with_capacity(10000),
                 pending_memory_injections: Vec::with_capacity(1024),
                 memory_candidate_cortical_idx: AHashMap::new(),
+                memory_candidate_fire_kind: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
                 pending_replay_injections: Vec::new(),
                 pending_authoritative_fq: Vec::with_capacity(256),
@@ -547,6 +557,15 @@ impl<
                 .map(|(_, window)| *window)
                 .max()
                 .unwrap_or(16)
+                .max(
+                    fire_structures
+                        .episodic_memory_fire_ledger
+                        .get_tracked_windows()
+                        .iter()
+                        .map(|(_, window)| *window)
+                        .max()
+                        .unwrap_or(0),
+                )
         };
 
         {
@@ -556,10 +575,12 @@ impl<
                 current_fire_queue: FireQueue::new(),
                 previous_fire_queue: FireQueue::new(),
                 fire_ledger: FireLedger::new(fire_ledger_capacity_hint),
+                episodic_memory_fire_ledger: FireLedger::new(fire_ledger_capacity_hint),
                 fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
                 pending_sensory_injections: Vec::with_capacity(10000),
                 pending_memory_injections: Vec::with_capacity(1024),
                 memory_candidate_cortical_idx: AHashMap::new(),
+                memory_candidate_fire_kind: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
                 pending_replay_injections: Vec::new(),
                 pending_authoritative_fq: Vec::with_capacity(256),
@@ -1652,17 +1673,36 @@ impl<
         cortical_idx: u32,
         potential: f32,
     ) {
-        let mut fire_structures = self.fire_structures.lock().unwrap();
-        tracing::debug!(
-            "[NPU] Staging memory injection: neuron_id={} area_idx={} potential={}",
+        self.inject_memory_neuron_to_fcl_with_kind(
             neuron_id,
             cortical_idx,
-            potential
+            potential,
+            FIRE_KIND_EPISODIC_MEMORY,
+        );
+    }
+
+    /// Same staging as [`Self::inject_memory_neuron_to_fcl`] but supplies an explicit
+    /// [`FiringNeuron::fire_kind`] (e.g. [`FIRE_KIND_STDP_ELIGIBLE`] for associative STDP tests).
+    pub fn inject_memory_neuron_to_fcl_with_kind(
+        &mut self,
+        neuron_id: u32,
+        cortical_idx: u32,
+        potential: f32,
+        fire_kind: u8,
+    ) {
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        tracing::debug!(
+            "[NPU] Staging memory injection: neuron_id={} area_idx={} potential={} fire_kind={}",
+            neuron_id,
+            cortical_idx,
+            potential,
+            fire_kind
         );
         fire_structures.pending_memory_injections.push((
             NeuronId(neuron_id),
             cortical_idx,
             potential,
+            fire_kind,
         ));
     }
 
@@ -1938,11 +1978,15 @@ impl<
         // Apply memory neuron injections after Phase 1 (so they’re not affected by Phase 1 staging logic).
         // These become candidates for Phase 2 and will be force-fired by the dynamics layer.
         fire_structures.memory_candidate_cortical_idx.clear();
+        fire_structures.memory_candidate_fire_kind.clear();
         let mut memory_candidate_count = 0usize;
-        for (neuron_id, cortical_idx, potential) in pending_memory.drain(..) {
+        for (neuron_id, cortical_idx, potential, fire_kind) in pending_memory.drain(..) {
             fire_structures
                 .memory_candidate_cortical_idx
                 .insert(neuron_id.0, cortical_idx);
+            fire_structures
+                .memory_candidate_fire_kind
+                .insert(neuron_id.0, fire_kind);
             fire_structures
                 .fire_candidate_list
                 .add_candidate(neuron_id, potential);
@@ -2041,6 +2085,7 @@ impl<
         let mut dynamics_result = process_neural_dynamics(
             &fire_structures.fire_candidate_list,
             Some(&fire_structures.memory_candidate_cortical_idx),
+            Some(&fire_structures.memory_candidate_fire_kind),
             &mut *neuron_storage,
             burst_count,
         )?;
@@ -2086,10 +2131,23 @@ impl<
 
         // Phase 3: Archival (ZERO-COPY archive to Fire Ledger)
         let phase3_start = std::time::Instant::now();
+        let stdp_fire_queue = dynamics_result
+            .fire_queue
+            .clone_for_stdp_fire_ledger(MEMORY_NEURON_ID_START);
         fire_structures
             .fire_ledger
-            .archive_burst(burst_count, &dynamics_result.fire_queue)
+            .archive_burst(burst_count, &stdp_fire_queue)
             .map_err(|e| FeagiError::RuntimeError(format!("FireLedger archive failed: {e}")))?;
+
+        let episodic_fire_queue = dynamics_result
+            .fire_queue
+            .clone_for_episodic_memory_fire_ledger(MEMORY_NEURON_ID_START);
+        fire_structures
+            .episodic_memory_fire_ledger
+            .archive_burst(burst_count, &episodic_fire_queue)
+            .map_err(|e| {
+                FeagiError::RuntimeError(format!("Episodic memory FireLedger archive failed: {e}"))
+            })?;
 
         // Phase 3.5: Synaptic Plasticity (STDP-like) updates
         // Uses FireLedger window ending at this burst and applies weight updates to affect burst t+1.
@@ -3649,11 +3707,15 @@ impl<
             fs.pending_sensory_injections
                 .retain(|(nid, _)| !neuron_ids_in_area.contains(&nid.0));
             fs.pending_memory_injections
-                .retain(|(_, area_idx, _)| *area_idx != cortical_area);
+                .retain(|(_, area_idx, _, _)| *area_idx != cortical_area);
             fs.pending_authoritative_fq
                 .retain(|(nid, _)| !neuron_ids_in_area.contains(&nid.0));
             fs.memory_candidate_cortical_idx
                 .retain(|_, idx| *idx != cortical_area);
+            let memory_candidate_ids: AHashSet<u32> =
+                fs.memory_candidate_cortical_idx.keys().copied().collect();
+            fs.memory_candidate_fire_kind
+                .retain(|k, _| memory_candidate_ids.contains(k));
 
             // CRITICAL: Remove from fire queues to prevent stale firings from propagating
             let current_removed = fs.current_fire_queue.remove_cortical_area(cortical_area);
@@ -3924,6 +3986,18 @@ impl<
     /// Get synapse count (valid only)
     pub fn get_synapse_count(&self) -> usize {
         self.synapse_storage.read().unwrap().valid_count()
+    }
+
+    /// Count valid synapses whose packed [`SynapseStorage::edge_flags`] intersect `mask` (any shared bit).
+    pub fn count_synapses_with_edge_flag_bits(&self, mask: u8) -> usize {
+        let s = self.synapse_storage.read().unwrap();
+        let mut n = 0usize;
+        for i in 0..s.count() {
+            if s.valid_mask()[i] && (s.edge_flags()[i] & mask) != 0 {
+                n += 1;
+            }
+        }
+        n
     }
 
     /// Get all outgoing synapses from a source neuron
@@ -4905,6 +4979,59 @@ impl<
             .lock()
             .unwrap()
             .fire_ledger
+            .get_tracked_windows()
+    }
+
+    /// Track a cortical area on the episodic memory FireLedger (pattern-injection fires only).
+    pub fn configure_episodic_memory_fire_ledger_window(
+        &mut self,
+        cortical_idx: u32,
+        window_size: usize,
+    ) -> Result<()> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .episodic_memory_fire_ledger
+            .track_area(cortical_idx, window_size)
+            .map_err(|e| {
+                FeagiError::RuntimeError(format!("Episodic memory FireLedger track failed: {e}"))
+            })?;
+        Ok(())
+    }
+
+    pub fn get_episodic_memory_fire_ledger_window_size(&self, cortical_idx: u32) -> Result<usize> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .episodic_memory_fire_ledger
+            .get_tracked_window(cortical_idx)
+            .map_err(|e| {
+                FeagiError::RuntimeError(format!("Episodic memory FireLedger query failed: {e}"))
+            })
+    }
+
+    pub fn get_episodic_memory_fire_ledger_dense_window_bitmaps(
+        &self,
+        cortical_idx: u32,
+        end_timestep: u64,
+        depth: usize,
+    ) -> Result<Vec<(u64, RoaringBitmap)>> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .episodic_memory_fire_ledger
+            .get_dense_window_bitmaps(cortical_idx, end_timestep, depth)
+            .map_err(|e| {
+                FeagiError::RuntimeError(format!("Episodic memory FireLedger query failed: {e}"))
+            })
+    }
+
+    /// Tracked areas for the episodic memory FireLedger only.
+    pub fn get_all_episodic_memory_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .episodic_memory_fire_ledger
             .get_tracked_windows()
     }
 }

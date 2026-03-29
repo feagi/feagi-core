@@ -275,22 +275,29 @@ fn test_register_memory_area_configures_fire_ledger() {
     let service = PlasticityService::new(config, cache, npu.clone());
 
     let upstream_idx = 42u32;
+    let memory_area_idx = 100u32;
     let temporal_depth = 3u32;
     service.register_memory_area(
-        100,
+        memory_area_idx,
         "mem_00".to_string(),
         temporal_depth,
         vec![upstream_idx],
         None,
     );
 
-    let configs = npu.lock().unwrap().get_all_fire_ledger_configs();
+    let npu_guard = npu.lock().unwrap();
+    let configs = npu_guard.get_all_fire_ledger_configs();
     let window = configs
         .iter()
         .find(|(idx, _)| *idx == upstream_idx)
         .map(|(_, w)| *w)
         .expect("FireLedger window should be configured for upstream area");
     assert_eq!(window, temporal_depth as usize);
+
+    let episodic = npu_guard
+        .get_episodic_memory_fire_ledger_window_size(memory_area_idx)
+        .expect("episodic memory FireLedger should track the memory cortical area");
+    assert_eq!(episodic, temporal_depth as usize);
 }
 
 #[test]

@@ -96,7 +96,7 @@ If **both** episodic activation and associative (LIF) integration would affect t
 
 ## 9. Synapse tagging (runtime, efficient)
 
-- **Associative** edges that exist as **physical synapses** carry a per-row **`edge_flags`** byte in `SynapseStorage` (std: `Vec<u8>` parallel to synapses; embedded: fixed array). Bit **`SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`** (`feagi_npu_neural::synapse`) marks edges created by **associative STDP** batch adds in the NPU. Connectome/morphology paths currently pass **`0`**; stamping **associative memory mapping** edges from genome is a follow-up.
+- **Associative** edges that exist as **physical synapses** carry a per-row **`edge_flags`** byte in `SynapseStorage` (std: `Vec<u8>` parallel to synapses; embedded: fixed array). Bit **`SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`** (`feagi_npu_neural::synapse`) marks edges from **associative STDP** batch adds in the NPU and from **`associative_memory`** projector application when both areas are memory (see `apply_projector_morphology_with_dimensions` / `apply_function_morphology`). Other morphologies pass **`0`** unless extended later.
 - **Episodic** binding does **not** require a synapse tag for the pattern link (no synapse for that binding).
 - Genome: **morphology** distinguishes **associative memory mapping** (and related options) so edges can be stamped at creation once wired through.
 
@@ -117,7 +117,9 @@ If **both** episodic activation and associative (LIF) integration would affect t
 
 ## 11. Relationship to existing code
 
-- Synapse rows encode **associative STDP** edges via **`edge_flags`** (see §9). **Independent STDP vs episodic fire-ledger windows** for memory areas are **not** implemented yet (single `FireLedger` today).
+- Synapse rows encode **associative STDP** edges via **`edge_flags`** (see §9).
+- **Dual FireLedger:** `RustNPU` holds **`fire_ledger`** (STDP / associative-eligible dense + memory fires with `fire_kind != FIRE_KIND_EPISODIC_MEMORY`) and **`episodic_memory_fire_ledger`** (only `FIRE_KIND_EPISODIC_MEMORY` memory-neuron fires from the pattern-injection path). Phase 3 archives `clone_for_stdp_fire_ledger` / `clone_for_episodic_memory_fire_ledger` (see `feagi_npu_burst_engine::fire_structures`). `Memory` `FiringNeuron::fire_kind` comes from staged injections or defaults to STDP-eligible for propagation-sourced memory candidates (`process_neural_dynamics`).
+- **`register_memory_area`** configures upstream STDP windows on the main ledger **and** the memory cortical area on the episodic ledger (`configure_episodic_memory_fire_ledger_window` on `DynamicNPU`).
 - `docs/INTEGRATION.md` in this crate covers **service wiring** and task history; this document covers **memory semantics** only.
 
 ---
@@ -127,4 +129,5 @@ If **both** episodic activation and associative (LIF) integration would affect t
 | Date | Notes |
 |------|--------|
 | 2026-03-29 | Initial consolidation from architecture discussion (episodic vs associative, topology, windows, synapse rules). |
-| 2026-03-28 | `SynapseStorage::edge_flags` + associative bit on STDP-created synapses; connectome stamping deferred. |
+| 2026-03-28 | `SynapseStorage::edge_flags`; STDP batch + connectome `associative_memory` (memory↔memory) stamp `SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`; `count_synapses_with_edge_flag_bits` on NPU. |
+| 2026-03-28 | Dual `FireLedger` + `FiringNeuron::fire_kind`; episodic vs STDP archive paths; plasticity registers episodic memory area window. |

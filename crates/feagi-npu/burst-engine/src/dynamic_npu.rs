@@ -259,6 +259,10 @@ where
         dispatch!(self, get_synapse_count())
     }
 
+    pub fn count_synapses_with_edge_flag_bits(&self, mask: u8) -> usize {
+        dispatch!(self, count_synapses_with_edge_flag_bits(mask))
+    }
+
     pub fn get_cortical_area_neuron_count(&self, cortical_area: u32) -> usize {
         dispatch!(self, get_cortical_area_neuron_count(cortical_area))
     }
@@ -890,6 +894,29 @@ where
         }
     }
 
+    pub fn inject_memory_neuron_to_fcl_with_kind(
+        &mut self,
+        neuron_id: u32,
+        cortical_idx: u32,
+        potential: f32,
+        fire_kind: u8,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.inject_memory_neuron_to_fcl_with_kind(
+                neuron_id,
+                cortical_idx,
+                potential,
+                fire_kind,
+            ),
+            DynamicNPUGeneric::INT8(npu) => npu.inject_memory_neuron_to_fcl_with_kind(
+                neuron_id,
+                cortical_idx,
+                potential,
+                fire_kind,
+            ),
+        }
+    }
+
     /// Register a dynamic (non-storage-backed) neuron’s cortical mapping (needed for memory neurons).
     pub fn register_dynamic_neuron_mapping(
         &mut self,
@@ -961,6 +988,61 @@ where
         match self {
             DynamicNPUGeneric::F32(npu) => npu.get_all_fire_ledger_configs(),
             DynamicNPUGeneric::INT8(npu) => npu.get_all_fire_ledger_configs(),
+        }
+    }
+
+    pub fn configure_episodic_memory_fire_ledger_window(
+        &mut self,
+        cortical_idx: u32,
+        window_size: usize,
+    ) -> Result<()> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.configure_episodic_memory_fire_ledger_window(cortical_idx, window_size)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.configure_episodic_memory_fire_ledger_window(cortical_idx, window_size)
+            }
+        }
+    }
+
+    pub fn get_episodic_memory_fire_ledger_window_size(&self, cortical_idx: u32) -> Result<usize> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.get_episodic_memory_fire_ledger_window_size(cortical_idx)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.get_episodic_memory_fire_ledger_window_size(cortical_idx)
+            }
+        }
+    }
+
+    pub fn get_episodic_memory_fire_ledger_dense_window_bitmaps(
+        &self,
+        cortical_idx: u32,
+        end_timestep: u64,
+        depth: usize,
+    ) -> Result<Vec<(u64, roaring::RoaringBitmap)>> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu
+                .get_episodic_memory_fire_ledger_dense_window_bitmaps(
+                    cortical_idx,
+                    end_timestep,
+                    depth,
+                ),
+            DynamicNPUGeneric::INT8(npu) => npu
+                .get_episodic_memory_fire_ledger_dense_window_bitmaps(
+                    cortical_idx,
+                    end_timestep,
+                    depth,
+                ),
+        }
+    }
+
+    pub fn get_all_episodic_memory_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.get_all_episodic_memory_fire_ledger_configs(),
+            DynamicNPUGeneric::INT8(npu) => npu.get_all_episodic_memory_fire_ledger_configs(),
         }
     }
 

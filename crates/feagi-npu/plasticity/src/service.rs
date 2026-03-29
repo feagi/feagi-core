@@ -845,7 +845,8 @@ impl PlasticityService {
             configs.insert(area_idx, config);
         }
 
-        // Ensure FireLedger tracks upstream areas for the requested temporal depth.
+        // Ensure FireLedger tracks upstream areas for the requested temporal depth (STDP ledger).
+        // Also track the memory cortical area on the episodic memory FireLedger (pattern-injection fires).
         if let Ok(mut npu) = self.npu.lock() {
             let desired = temporal_depth as usize;
             let existing_configs = npu.get_all_fire_ledger_configs();
@@ -866,6 +867,27 @@ impl PlasticityService {
                             e
                         );
                     }
+                }
+            }
+
+            let existing_episodic = npu.get_all_episodic_memory_fire_ledger_configs();
+            let existing_mem = existing_episodic
+                .iter()
+                .find(|(idx, _)| *idx == area_idx)
+                .map(|(_, w)| *w)
+                .unwrap_or(0);
+            let resolved_mem = existing_mem.max(desired);
+            if resolved_mem != existing_mem {
+                if let Err(e) =
+                    npu.configure_episodic_memory_fire_ledger_window(area_idx, resolved_mem)
+                {
+                    tracing::warn!(
+                        target: "plasticity",
+                        "[PLASTICITY] Failed to configure episodic memory FireLedger for area {} (requested={}): {}",
+                        area_idx,
+                        resolved_mem,
+                        e
+                    );
                 }
             }
         } else {
