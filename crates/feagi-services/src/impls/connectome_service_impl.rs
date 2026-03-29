@@ -911,7 +911,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         // Accept base64 or legacy ASCII (clients may send either form).
         let cortical_id_typed =
-            parse_cortical_id_flexible(cortical_id).map_err(|e| ServiceError::InvalidInput(e))?;
+            parse_cortical_id_flexible(cortical_id).map_err(ServiceError::InvalidInput)?;
 
         let manager = self.connectome.read();
 

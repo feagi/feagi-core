@@ -582,6 +582,7 @@ fn apply_plasticity_commands(npu: &Arc<TracingMutex<DynamicNPU>>, commands: &[Pl
             }
             PlasticityCommand::UpdateWeightsDelta { .. } => {}
             PlasticityCommand::UpdateStateCounters { .. } => {}
+            PlasticityCommand::ResetMemoryNeuronsInArea { .. } => {}
         }
     }
 }
@@ -634,6 +635,7 @@ fn apply_plasticity_commands_with_manager(
             }
             PlasticityCommand::UpdateWeightsDelta { .. } => {}
             PlasticityCommand::UpdateStateCounters { .. } => {}
+            PlasticityCommand::ResetMemoryNeuronsInArea { .. } => {}
         }
     }
 }

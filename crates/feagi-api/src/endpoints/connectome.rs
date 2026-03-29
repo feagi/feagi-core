@@ -912,7 +912,7 @@ pub async fn get_memory_neuron(
     let oc = outgoing_full.len();
     let ic = incoming_full.len();
     let (out_json, in_json) =
-        synapse_details_for_neuron(&*mgr, q.neuron_id, &outgoing_full, &incoming_full);
+        synapse_details_for_neuron(&mgr, q.neuron_id, &outgoing_full, &incoming_full);
 
     Ok(Json(MemoryNeuronDetailResponse {
         neuron_id: q.neuron_id as u64,

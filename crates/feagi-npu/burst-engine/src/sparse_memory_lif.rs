@@ -101,7 +101,7 @@ pub fn step_sparse_memory_associative_lif(
     let current = state.membrane_potential + integrate;
 
     let above_min = current >= p.threshold;
-    let below_max = current < p.threshold_limit || current == p.threshold_limit;
+    let below_max = current <= p.threshold_limit;
 
     if !(above_min && below_max) {
         state.membrane_potential = current;

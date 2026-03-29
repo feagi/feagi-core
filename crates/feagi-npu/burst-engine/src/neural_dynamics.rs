@@ -190,6 +190,7 @@ pub struct DynamicsResult {
 /// 3. Check firing thresholds (with refractory period)
 /// 4. Apply probabilistic excitability
 /// 5. Create Fire Queue from firing neurons
+#[allow(clippy::too_many_arguments)] // Hot path: explicit params avoid alloc and match call sites
 pub fn process_neural_dynamics<T: NeuralValue>(
     fcl: &FireCandidateList,
     memory_candidate_cortical_idx: Option<&ahash::AHashMap<u32, u32>>,
@@ -375,6 +376,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
 /// 5. Scatters results back to sparse locations
 ///
 /// This maintains 100% correctness while achieving 3-6x speedup for large candidate counts.
+#[allow(clippy::too_many_arguments)] // Mirrors `process_neural_dynamics` for SIMD batch path
 fn process_candidates_with_simd_batching<T: NeuralValue>(
     candidates: &[(NeuronId, f32)],
     memory_candidate_cortical_idx: Option<&ahash::AHashMap<u32, u32>>,
@@ -1175,7 +1177,7 @@ mod tests {
             )
             .unwrap();
 
-        neurons.membrane_potentials[id as usize] = 3.0f32;
+        neurons.membrane_potentials[id] = 3.0f32;
 
         let mut fcl = FireCandidateList::new();
         fcl.add_candidate(NeuronId(id as u32), -10.0);
@@ -1192,7 +1194,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result.neurons_fired, 0);
-        assert_eq!(neurons.membrane_potentials[id as usize], 3.0);
+        assert_eq!(neurons.membrane_potentials[id], 3.0);
     }
 
     #[test]
@@ -1218,7 +1220,7 @@ mod tests {
             )
             .unwrap();
 
-        neurons.membrane_potentials[id as usize] = 3.0f32;
+        neurons.membrane_potentials[id] = 3.0f32;
 
         let mut fcl = FireCandidateList::new();
         fcl.add_candidate(NeuronId(id as u32), -10.0);
@@ -1235,7 +1237,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result.neurons_fired, 0);
-        assert_eq!(neurons.membrane_potentials[id as usize], -7.0);
+        assert_eq!(neurons.membrane_potentials[id], -7.0);
     }
 
     #[test]

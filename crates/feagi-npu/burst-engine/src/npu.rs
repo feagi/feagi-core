@@ -65,6 +65,9 @@ type FireQueueSample = AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Ve
 /// Key for a cortical mapping A→B (cortical_idx indices).
 type CorticalMappingKey = (u32, u32);
 
+/// Boxed predicate for memory-neuron plasticity filters (stored on the NPU).
+type MemoryNeuronPredicate = Arc<dyn Fn(u32) -> bool + Send + Sync>;
+
 const WARN_THROTTLE_INTERVAL_MS: u64 = 10_000;
 static LAST_PHASE1_SENSORY_WARN_MS: AtomicU64 = AtomicU64::new(0);
 static LAST_PHASE1_POWER_WARN_MS: AtomicU64 = AtomicU64::new(0);
@@ -262,12 +265,10 @@ pub struct RustNPU<
     /// Optional filter for forward memory↔memory associative STDP. When `Some`, both endpoints must
     /// pass (plasticity: typically `is_active`). When `None`, legacy behavior: any co-firing pair in
     /// the memory global id range qualifies without calling plasticity.
-    memory_neuron_assoc_predicate:
-        std::sync::RwLock<Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>>,
+    memory_neuron_assoc_predicate: std::sync::RwLock<Option<MemoryNeuronPredicate>>,
     /// Long-term memory predicate (wired by plasticity from memory neuron state). Reciprocal
     /// associative edges are not synthesized in STDP; register a second mapping for B→A if needed.
-    memory_neuron_longterm_predicate:
-        std::sync::RwLock<Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>>,
+    memory_neuron_longterm_predicate: std::sync::RwLock<Option<MemoryNeuronPredicate>>,
 }
 
 const POWER_NEURON_UNSET: u32 = u32::MAX;
@@ -620,18 +621,12 @@ impl<
     }
 
     /// Register optional forward filter; `None` restores legacy permissive memory↔memory STDP.
-    pub fn set_memory_neuron_assoc_predicate(
-        &self,
-        pred: Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>,
-    ) {
+    pub fn set_memory_neuron_assoc_predicate(&self, pred: Option<MemoryNeuronPredicate>) {
         *self.memory_neuron_assoc_predicate.write().unwrap() = pred;
     }
 
     /// Set LTM predicate for plasticity-backed state (see field docs).
-    pub fn set_memory_neuron_longterm_predicate(
-        &self,
-        pred: Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>,
-    ) {
+    pub fn set_memory_neuron_longterm_predicate(&self, pred: Option<MemoryNeuronPredicate>) {
         *self.memory_neuron_longterm_predicate.write().unwrap() = pred;
     }
 

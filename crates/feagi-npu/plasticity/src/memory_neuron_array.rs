@@ -370,12 +370,7 @@ impl MemoryNeuronArray {
     }
 
     fn find_neuron_index_by_global_id(&self, neuron_id: u32) -> Option<usize> {
-        for i in 0..self.next_available_index {
-            if self.neuron_ids[i] == neuron_id {
-                return Some(i);
-            }
-        }
-        None
+        (0..self.next_available_index).find(|&i| self.neuron_ids[i] == neuron_id)
     }
 
     /// Full detail for an active memory neuron by global neuron id, if present.
@@ -998,8 +993,8 @@ mod tests {
         assert_eq!(array.get_active_neurons_by_area(6).len(), 1);
 
         // Verify pattern hashes are cleared for area 5
-        assert!(array.pattern_hash_to_index.get(&pattern1).is_none());
-        assert!(array.pattern_hash_to_index.get(&pattern2).is_none());
+        assert!(!array.pattern_hash_to_index.contains_key(&pattern1));
+        assert!(!array.pattern_hash_to_index.contains_key(&pattern2));
 
         // Verify area 6 pattern still exists
         assert!(array.pattern_hash_to_index.contains_key(&pattern3));
