@@ -46,6 +46,7 @@ mod cuda_small_realistic_tests {
                 SynapticWeight(10.0),
                 SynapticPsp(5.0),
                 SynapseType::Excitatory,
+                0,
             )
             .unwrap();
         }
@@ -59,6 +60,7 @@ mod cuda_small_realistic_tests {
                     SynapticWeight(10.0),
                     SynapticPsp(1.0),
                     SynapseType::Excitatory,
+                    0,
                 )
                 .unwrap();
             }
@@ -72,6 +74,7 @@ mod cuda_small_realistic_tests {
                 SynapticWeight(1.0),
                 SynapticPsp(1.0),
                 SynapseType::Excitatory,
+                0,
             )
             .unwrap();
         }
@@ -108,6 +111,7 @@ mod cuda_small_realistic_tests {
                 SynapticWeight(10.0),
                 SynapticPsp(5.0),
                 SynapseType::Excitatory,
+                0,
             )
             .unwrap();
         }
@@ -120,6 +124,7 @@ mod cuda_small_realistic_tests {
                     SynapticWeight(10.0),
                     SynapticPsp(1.0),
                     SynapseType::Excitatory,
+                    0,
                 )
                 .unwrap();
             }
@@ -132,6 +137,7 @@ mod cuda_small_realistic_tests {
                 SynapticWeight(1.0),
                 SynapticPsp(1.0),
                 SynapseType::Excitatory,
+                0,
             )
             .unwrap();
         }

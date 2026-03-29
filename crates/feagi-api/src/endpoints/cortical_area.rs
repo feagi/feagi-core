@@ -1823,7 +1823,7 @@ pub async fn put_reset(
     Json(request): Json<CorticalAreaResetRequest>,
 ) -> ApiResult<Json<CorticalAreaResetResponse>> {
     use tracing::info;
-    
+
     if request.area_list.is_empty() {
         return Err(ApiError::invalid_input("area_list cannot be empty"));
     }

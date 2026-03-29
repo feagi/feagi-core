@@ -83,6 +83,7 @@ pub fn apply_bitmask_morphology_with_dimensions(
                             SynapticWeight(weight),
                             SynapticPsp(psp),
                             synapse_type,
+                            0,
                         )
                         .is_ok()
                 {

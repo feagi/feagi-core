@@ -70,6 +70,7 @@ pub fn apply_last_to_first_morphology_with_dimensions(
                     SynapticWeight(weight),
                     SynapticPsp(psp),
                     synapse_type,
+                    0,
                 )
                 .is_ok()
         {

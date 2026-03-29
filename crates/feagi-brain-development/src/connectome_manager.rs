@@ -4996,6 +4996,7 @@ impl ConnectomeManager {
                 feagi_npu_neural::types::SynapticWeight(weight),
                 feagi_npu_neural::types::SynapticPsp(psp),
                 syn_type,
+                0,
             )
             .map_err(|e| BduError::Internal(format!("Failed to create synapse: {}", e)))?;
 

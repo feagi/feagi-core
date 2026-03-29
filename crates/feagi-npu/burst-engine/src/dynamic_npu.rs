@@ -235,8 +235,12 @@ where
         weight: SynapticWeight,
         psp: SynapticPsp,
         synapse_type: SynapseType,
+        edge_flag: u8,
     ) -> Result<usize> {
-        dispatch_mut!(self, add_synapse(source, target, weight, psp, synapse_type))
+        dispatch_mut!(
+            self,
+            add_synapse(source, target, weight, psp, synapse_type, edge_flag)
+        )
     }
 
     pub fn get_neurons_in_cortical_area(&self, cortical_idx: u32) -> Vec<u32> {

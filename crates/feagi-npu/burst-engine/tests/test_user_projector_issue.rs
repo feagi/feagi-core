@@ -76,6 +76,7 @@ fn test_projector_psp_division_issue() {
             SynapticWeight(1.0), // weight = 1
             SynapticPsp(1.0),    // PSP = 1
             SynapseType::Excitatory,
+            0,
         )
         .unwrap();
         println!(

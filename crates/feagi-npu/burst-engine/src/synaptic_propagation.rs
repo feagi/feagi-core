@@ -677,6 +677,7 @@ mod tests {
             weights: vec![255.0, 128.0, 200.0],
             postsynaptic_potentials: vec![255.0, 255.0, 200.0],
             types: vec![0, 1, 0], // 0=excitatory, 1=inhibitory
+            edge_flags: vec![0, 0, 0],
             valid_mask: vec![true, true, true],
             source_index: ahash::AHashMap::new(),
         };

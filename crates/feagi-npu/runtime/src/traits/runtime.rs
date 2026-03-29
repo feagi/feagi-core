@@ -318,6 +318,10 @@ pub trait SynapseStorage: Send + Sync {
     /// Synapse types slice (0=excitatory, 1=inhibitory)
     fn types(&self) -> &[u8];
 
+    /// Per-synapse packed flags (same length as [`SynapseStorage::count`] active rows).
+    /// Semantics: `feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`, etc.
+    fn edge_flags(&self) -> &[u8];
+
     /// Valid synapse mask
     fn valid_mask(&self) -> &[bool];
 
@@ -342,7 +346,7 @@ pub trait SynapseStorage: Send + Sync {
 
     // === Synapse Creation ===
 
-    /// Add a single synapse
+    /// Add a single synapse (`edge_flag`: see `feagi_npu_neural::synapse::edge_flags`).
     fn add_synapse(
         &mut self,
         source: u32,
@@ -350,11 +354,13 @@ pub trait SynapseStorage: Send + Sync {
         weight: f32,
         psp: f32,
         synapse_type: u8,
+        edge_flag: u8,
     ) -> Result<usize>;
 
     // === Batch Operations ===
 
-    /// Batch add synapses
+    /// Batch add synapses. When `edge_flags` is `Some`, its length must match the batch size;
+    /// each row sets the packed flag for that synapse (`None` = all zeros).
     #[cfg(any(feature = "std", feature = "alloc"))]
     fn add_synapses_batch(
         &mut self,
@@ -363,6 +369,7 @@ pub trait SynapseStorage: Send + Sync {
         weights: &[f32],
         psps: &[f32],
         types: &[u8],
+        edge_flags: Option<&[u8]>,
     ) -> Result<()>;
 
     // === Synapse Removal ===

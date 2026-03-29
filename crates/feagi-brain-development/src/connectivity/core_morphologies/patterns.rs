@@ -72,6 +72,7 @@ pub fn apply_patterns_morphology(
                             SynapticWeight(weight),
                             SynapticPsp(psp),
                             synapse_type,
+                            0,
                         )
                         .is_ok()
                 {

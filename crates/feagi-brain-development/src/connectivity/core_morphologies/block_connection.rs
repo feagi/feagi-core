@@ -145,6 +145,7 @@ pub fn apply_block_connection_morphology_batched(
                     SynapticWeight(weight),
                     SynapticPsp(psp),
                     synapse_type,
+                    0,
                 )
                 .is_ok()
             {
@@ -425,6 +426,7 @@ pub fn apply_block_connection_morphology(
                         SynapticWeight(weight),
                         SynapticPsp(psp),
                         synapse_type,
+                        0,
                     )
                     .is_ok()
             {

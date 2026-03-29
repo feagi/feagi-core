@@ -62,6 +62,7 @@ pub fn apply_expander_morphology(
                         SynapticWeight(weight),
                         SynapticPsp(psp),
                         synapse_type,
+                        0,
                     )
                     .is_ok()
             {

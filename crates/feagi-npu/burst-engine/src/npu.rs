@@ -38,6 +38,7 @@ use crate::neural_dynamics::*;
 use crate::synaptic_propagation::SynapticPropagationEngine;
 use ahash::AHashMap;
 use ahash::AHashSet;
+use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
 use feagi_npu_neural::types::*;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use roaring::RoaringBitmap;
@@ -1149,7 +1150,8 @@ impl<
         Ok(success_count)
     }
 
-    /// Add a synapse to the NPU
+    /// Add a synapse to the NPU (`edge_flag`: `feagi_npu_neural::synapse` packed flags, e.g.
+    /// [`SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`]; use `0` for ordinary edges).
     pub fn add_synapse(
         &mut self,
         source: NeuronId,
@@ -1157,12 +1159,20 @@ impl<
         weight: SynapticWeight,
         psp: SynapticPsp,
         synapse_type: SynapseType,
+        edge_flag: u8,
     ) -> Result<usize> {
         let result = self
             .synapse_storage
             .write()
             .unwrap()
-            .add_synapse(source.0, target.0, weight.0, psp.0, synapse_type as u8)
+            .add_synapse(
+                source.0,
+                target.0,
+                weight.0,
+                psp.0,
+                synapse_type as u8,
+                edge_flag,
+            )
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapse: {:?}", e)))?;
 
         // NOTE: This does NOT rebuild the synapse index for performance reasons.
@@ -1182,7 +1192,6 @@ impl<
     /// - Contiguous SoA memory writes
     /// - Batch source_index updates
     ///
-    /// Returns: (successful_count, failed_indices)
     pub fn add_synapses_batch(
         &mut self,
         sources: Vec<NeuronId>,
@@ -1190,6 +1199,7 @@ impl<
         weights: Vec<SynapticWeight>,
         postsynaptic_potentials: Vec<SynapticPsp>,
         synapse_types: Vec<SynapseType>,
+        edge_flags: Option<Vec<u8>>,
     ) -> Result<()> {
         // Convert NeuronId/Weight types to raw u32/f32 for SynapseArray
         let source_ids: Vec<u32> = sources.iter().map(|n| n.0).collect();
@@ -1204,6 +1214,8 @@ impl<
             })
             .collect();
 
+        let flags_slice = edge_flags.as_deref();
+
         self.synapse_storage
             .write()
             .unwrap()
@@ -1213,6 +1225,7 @@ impl<
                 &weight_vals,
                 &psp_vals,
                 &type_vals,
+                flags_slice,
             )
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapses batch: {:?}", e)))
     }
@@ -3641,7 +3654,7 @@ impl<
                 .retain(|(nid, _)| !neuron_ids_in_area.contains(&nid.0));
             fs.memory_candidate_cortical_idx
                 .retain(|_, idx| *idx != cortical_area);
-            
+
             // CRITICAL: Remove from fire queues to prevent stale firings from propagating
             let current_removed = fs.current_fire_queue.remove_cortical_area(cortical_area);
             let previous_removed = fs.previous_fire_queue.remove_cortical_area(cortical_area);
@@ -4455,6 +4468,8 @@ impl<
                 let weight_vals: Vec<f32> = new_weights.iter().map(|w| w.0).collect();
                 let psp_vals: Vec<f32> = new_psps.iter().map(|c| c.0).collect();
                 let type_vals: Vec<u8> = new_types.iter().map(|t| *t as u8).collect();
+                let n_new = source_ids.len();
+                let stdp_edge_flags: Vec<u8> = vec![SYNAPSE_EDGE_ASSOCIATIVE_MEMORY; n_new];
 
                 self.synapse_storage
                     .write()
@@ -4465,6 +4480,7 @@ impl<
                         &weight_vals,
                         &psp_vals,
                         &type_vals,
+                        Some(stdp_edge_flags.as_slice()),
                     )
                     .map_err(|e| {
                         FeagiError::RuntimeError(format!("Failed to add synapses batch: {:?}", e))
@@ -5166,6 +5182,7 @@ mod tests {
             SynapticWeight(1.0),
             SynapticPsp(1.0),
             SynapseType::Excitatory,
+            0,
         )
         .unwrap();
         npu.process_burst().unwrap();
@@ -5432,6 +5449,7 @@ mod tests {
             SynapticWeight(128.0),
             SynapticPsp(255.0),
             SynapseType::Excitatory,
+            0,
         )
         .unwrap();
 
@@ -5462,6 +5480,7 @@ mod tests {
             SynapticWeight(128.0),
             SynapticPsp(255.0),
             SynapseType::Excitatory,
+            0,
         )
         .unwrap();
         npu.add_synapse(
@@ -5470,6 +5489,7 @@ mod tests {
             SynapticWeight(64.0),
             SynapticPsp(128.0),
             SynapseType::Excitatory,
+            0,
         )
         .unwrap();
         npu.add_synapse(
@@ -5478,6 +5498,7 @@ mod tests {
             SynapticWeight(32.0),
             SynapticPsp(64.0),
             SynapseType::Inhibitory,
+            0,
         )
         .unwrap();
 
@@ -5505,6 +5526,7 @@ mod tests {
             SynapticWeight(128.0),
             SynapticPsp(255.0),
             SynapseType::Inhibitory,
+            0,
         )
         .unwrap();
 
@@ -5532,6 +5554,7 @@ mod tests {
             SynapticWeight(128.0),
             SynapticPsp(255.0),
             SynapseType::Excitatory,
+            0,
         )
         .unwrap();
         assert_eq!(npu.get_synapse_count(), 1);
@@ -5599,6 +5622,7 @@ mod tests {
                 SynapticWeight(128.0),
                 SynapticPsp(255.0),
                 SynapseType::Excitatory,
+                0,
             )
             .unwrap();
         }
@@ -5611,6 +5635,7 @@ mod tests {
                 SynapticWeight(128.0),
                 SynapticPsp(255.0),
                 SynapseType::Excitatory,
+                0,
             )
             .unwrap();
         }
@@ -5798,6 +5823,7 @@ mod tests {
             SynapticWeight(1.0),     // weight = 1
             SynapticPsp(1.0),        // PSP = 1 → PSP = 1×1 = 1.0
             SynapseType::Excitatory, // synapse_type (excitatory)
+            0,
         )
         .unwrap();
         npu.rebuild_synapse_index();
@@ -6039,6 +6065,7 @@ mod tests {
             SynapticWeight(1.0),
             SynapticPsp(1.0),
             SynapseType::Excitatory,
+            0,
         )
         .unwrap();
         npu.rebuild_synapse_index();
@@ -6417,6 +6444,7 @@ mod tests {
             SynapticWeight(128.0),
             SynapticPsp(255.0),
             SynapseType::Excitatory,
+            0,
         );
 
         assert!(result.is_ok()); // No validation for performance

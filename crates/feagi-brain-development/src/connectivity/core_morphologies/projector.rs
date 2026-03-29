@@ -139,6 +139,7 @@ pub fn apply_projector_morphology_with_dimensions(
                             SynapticWeight(weight),
                             SynapticPsp(psp),
                             synapse_type,
+                            0,
                         )
                         .is_ok()
                     {

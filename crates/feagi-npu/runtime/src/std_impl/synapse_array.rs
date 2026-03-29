@@ -39,6 +39,9 @@ pub struct SynapseArray {
     /// Synapse types (0=excitatory, 1=inhibitory)
     pub types: Vec<u8>,
 
+    /// Per-synapse packed edge flags (associative STDP, etc.)
+    pub edge_flags: Vec<u8>,
+
     /// Valid synapse mask
     pub valid_mask: Vec<bool>,
 
@@ -56,6 +59,7 @@ impl SynapseArray {
             weights: Vec::with_capacity(capacity),
             postsynaptic_potentials: Vec::with_capacity(capacity),
             types: Vec::with_capacity(capacity),
+            edge_flags: Vec::with_capacity(capacity),
             valid_mask: Vec::with_capacity(capacity),
             source_index: AHashMap::new(),
         }
@@ -70,7 +74,7 @@ impl SynapseArray {
         psp: f32,
         synapse_type: SynapseType,
     ) {
-        SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8)
+        SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8, 0)
             .expect("Failed to add synapse");
     }
 
@@ -140,6 +144,10 @@ impl SynapseStorage for SynapseArray {
         &self.types[..self.count]
     }
 
+    fn edge_flags(&self) -> &[u8] {
+        &self.edge_flags[..self.count]
+    }
+
     fn valid_mask(&self) -> &[bool] {
         &self.valid_mask[..self.count]
     }
@@ -177,6 +185,7 @@ impl SynapseStorage for SynapseArray {
         weight: f32,
         psp: f32,
         synapse_type: u8,
+        edge_flag: u8,
     ) -> Result<usize> {
         let idx = self.count;
 
@@ -185,6 +194,7 @@ impl SynapseStorage for SynapseArray {
         self.weights.push(weight);
         self.postsynaptic_potentials.push(psp);
         self.types.push(synapse_type);
+        self.edge_flags.push(edge_flag);
         self.valid_mask.push(true);
 
         // Update index
@@ -201,10 +211,21 @@ impl SynapseStorage for SynapseArray {
         weights: &[f32],
         psps: &[f32],
         types: &[u8],
+        edge_flags: Option<&[u8]>,
     ) -> crate::traits::Result<()> {
         let batch_size = sources.len();
+        if let Some(flags) = edge_flags {
+            if flags.len() != batch_size {
+                return Err(crate::traits::RuntimeError::InvalidParameters(format!(
+                    "edge_flags length {} != batch size {}",
+                    flags.len(),
+                    batch_size
+                )));
+            }
+        }
         for i in 0..batch_size {
-            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i])?;
+            let ef = edge_flags.map(|f| f[i]).unwrap_or(0);
+            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i], ef)?;
         }
         Ok(())
     }
