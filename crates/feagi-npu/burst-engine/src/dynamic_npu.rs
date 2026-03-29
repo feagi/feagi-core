@@ -785,6 +785,11 @@ where
         )
     }
 
+    /// Clear FCL entries and reset membrane / refractory / consecutive-fire state for one cortical area.
+    pub fn reset_cortical_area_runtime_state(&mut self, cortical_area: u32) -> usize {
+        dispatch_mut!(self, reset_cortical_area_runtime_state(cortical_area))
+    }
+
     /// Update postsynaptic potential (PSP) for all existing outgoing synapses
     /// from neurons in a given cortical area.
     ///

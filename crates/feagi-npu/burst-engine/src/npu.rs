@@ -3574,6 +3574,56 @@ impl<
         reset_count
     }
 
+    /// Clear live neural state for one cortical area: strip FCL candidates, zero membrane
+    /// potentials, and reset refractory / consecutive-fire counters for neurons in that area.
+    ///
+    /// Also clears [`FireStructures::last_fcl_snapshot`] entries and staged injections for those
+    /// neurons so monitoring / FCL APIs do not keep showing stale potentials until the next burst.
+    ///
+    /// Returns the number of neurons updated in storage (same as membrane reset count).
+    pub fn reset_cortical_area_runtime_state(&mut self, cortical_area: u32) -> usize {
+        let neuron_ids_in_area: AHashSet<u32> = {
+            let ns = self.neuron_storage.read().unwrap();
+            (0..ns.count())
+                .filter(|&idx| ns.valid_mask()[idx] && ns.cortical_areas()[idx] == cortical_area)
+                .map(|idx| idx as u32)
+                .collect()
+        };
+
+        {
+            let mut fs = self.fire_structures.lock().unwrap();
+            let fcl = &mut fs.fire_candidate_list;
+            for &nid in &neuron_ids_in_area {
+                fcl.remove_candidate(NeuronId(nid));
+            }
+            // Stale snapshot rows otherwise keep old potentials visible to FCL / burst_engine APIs.
+            fs.last_fcl_snapshot
+                .retain(|(nid, _)| !neuron_ids_in_area.contains(&nid.0));
+            fs.pending_sensory_injections
+                .retain(|(nid, _)| !neuron_ids_in_area.contains(&nid.0));
+            fs.pending_memory_injections
+                .retain(|(_, area_idx, _)| *area_idx != cortical_area);
+            fs.pending_authoritative_fq
+                .retain(|(nid, _)| !neuron_ids_in_area.contains(&nid.0));
+            fs.memory_candidate_cortical_idx
+                .retain(|_, idx| *idx != cortical_area);
+        }
+
+        let mut neuron_storage_write = self.neuron_storage.write().unwrap();
+        let mut reset_count = 0usize;
+        for idx in 0..neuron_storage_write.count() {
+            if neuron_storage_write.valid_mask()[idx]
+                && neuron_storage_write.cortical_areas()[idx] == cortical_area
+            {
+                neuron_storage_write.membrane_potentials_mut()[idx] = T::zero();
+                neuron_storage_write.refractory_countdowns_mut()[idx] = 0;
+                neuron_storage_write.consecutive_fire_counts_mut()[idx] = 0;
+                reset_count += 1;
+            }
+        }
+        reset_count
+    }
+
     /// Update MP charge accumulation for all neurons in a cortical area.
     ///
     /// When `mp_charge_accumulation` is set to `false`, membrane potentials for that area are
@@ -5734,6 +5784,44 @@ mod tests {
             assert_eq!(ns.membrane_potentials()[n_area5.0 as usize].to_f32(), 0.0);
             assert!(!ns.mp_charge_accumulation()[n_area5.0 as usize]);
         }
+    }
+
+    #[test]
+    fn test_reset_cortical_area_runtime_state_clears_mp_and_fcl() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(5, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        let n_id = npu
+            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 5, 0, 0, 0)
+            .unwrap();
+        npu.inject_sensory_with_potentials(&[(n_id, 5.0)]);
+        npu.process_burst().unwrap();
+        {
+            let ns = npu.neuron_storage.read().unwrap();
+            assert!(ns.membrane_potentials()[n_id.0 as usize].to_f32() > 0.0);
+        }
+        npu.inject_sensory_batch(&[n_id], 1.0);
+        {
+            let mut fs = npu.fire_structures.lock().unwrap();
+            fs.last_fcl_snapshot.push((n_id, 99.0));
+        }
+        assert_eq!(npu.reset_cortical_area_runtime_state(5), 1);
+        assert!(
+            !npu.get_last_fcl_snapshot()
+                .iter()
+                .any(|(n, _)| n.0 == n_id.0),
+            "reset must strip last_fcl_snapshot rows so FCL APIs do not show stale MPs"
+        );
+        {
+            let ns = npu.neuron_storage.read().unwrap();
+            assert_eq!(ns.membrane_potentials()[n_id.0 as usize].to_f32(), 0.0);
+            assert_eq!(ns.refractory_countdowns()[n_id.0 as usize], 0);
+            assert_eq!(ns.consecutive_fire_counts()[n_id.0 as usize], 0);
+        }
+        let fs = npu.fire_structures.lock().unwrap();
+        assert!(fs.fire_candidate_list.get(n_id).is_none());
     }
 
     #[test]

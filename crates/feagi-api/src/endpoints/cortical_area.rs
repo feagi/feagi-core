@@ -31,6 +31,25 @@ pub struct CorticalAreaNameListResponse {
     pub cortical_area_name_list: Vec<String>,
 }
 
+/// Body for `PUT /v1/cortical_area/reset` (matches Brain Visualizer `area_list` payload).
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct CorticalAreaResetRequest {
+    pub area_list: Vec<String>,
+}
+
+/// Per-area outcome for cortical reset.
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct CorticalAreaResetItem {
+    pub cortical_idx: u32,
+    pub neurons_reset: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct CorticalAreaResetResponse {
+    pub message: String,
+    pub results: Vec<CorticalAreaResetItem>,
+}
+
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct UnitTopologyData {
     pub relative_position: [i32; 3],
@@ -1788,15 +1807,53 @@ pub async fn put_suppress_cortical_visibility(
     Err(ApiError::internal("Not yet implemented"))
 }
 
-/// Reset a cortical area to its default state (clear neuron states, etc.). (Not yet implemented)
-#[utoipa::path(put, path = "/v1/cortical_area/reset", tag = "cortical_area")]
-#[allow(unused_variables)] // In development
+/// Reset runtime neural state for one or more cortical areas (membrane potential, refractory
+/// counters, FCL candidates). Genome, connections, and parameters are unchanged.
+#[utoipa::path(
+    put,
+    path = "/v1/cortical_area/reset",
+    tag = "cortical_area",
+    request_body = CorticalAreaResetRequest,
+    responses(
+        (status = 200, description = "Reset applied", body = CorticalAreaResetResponse),
+    )
+)]
 pub async fn put_reset(
     State(state): State<ApiState>,
-    Json(request): Json<HashMap<String, String>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Reset cortical area
-    Err(ApiError::internal("Not yet implemented"))
+    Json(request): Json<CorticalAreaResetRequest>,
+) -> ApiResult<Json<CorticalAreaResetResponse>> {
+    if request.area_list.is_empty() {
+        return Err(ApiError::invalid_input("area_list cannot be empty"));
+    }
+
+    let connectome_service = state.connectome_service.as_ref();
+    let mut cortical_indices: Vec<u32> = Vec::with_capacity(request.area_list.len());
+    for id in &request.area_list {
+        let area = connectome_service
+            .get_cortical_area(id)
+            .await
+            .map_err(ApiError::from)?;
+        cortical_indices.push(area.cortical_idx);
+    }
+
+    let reset_pairs = state
+        .runtime_service
+        .reset_cortical_area_states(&cortical_indices)
+        .await
+        .map_err(ApiError::from)?;
+
+    let results: Vec<CorticalAreaResetItem> = reset_pairs
+        .into_iter()
+        .map(|(cortical_idx, neurons_reset)| CorticalAreaResetItem {
+            cortical_idx,
+            neurons_reset,
+        })
+        .collect();
+
+    Ok(Json(CorticalAreaResetResponse {
+        message: "ok".to_string(),
+        results,
+    }))
 }
 
 /// Check if visualization is enabled for the system.

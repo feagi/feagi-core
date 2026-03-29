@@ -533,6 +533,9 @@ use crate::{
             // Cortical Area
             crate::endpoints::cortical_area::CorticalAreaIdListResponse,
             crate::endpoints::cortical_area::CorticalAreaNameListResponse,
+            crate::endpoints::cortical_area::CorticalAreaResetRequest,
+            crate::endpoints::cortical_area::CorticalAreaResetResponse,
+            crate::endpoints::cortical_area::CorticalAreaResetItem,
             crate::endpoints::cortical_area::CorticalTypeMetadata,
             crate::endpoints::cortical_area::VoxelNeuronsQuery,
             crate::endpoints::cortical_area::VoxelNeuronsBody,

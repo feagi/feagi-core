@@ -275,6 +275,12 @@ fn build_test_state() -> ApiState {
         }
         fn unregister_motor_subscriptions(&self, _agent_id: &str) {}
         fn unregister_visualization_subscriptions(&self, _agent_id: &str) {}
+        async fn reset_cortical_area_states(
+            &self,
+            cortical_indices: &[u32],
+        ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
+            Ok(cortical_indices.iter().map(|&i| (i, 0)).collect())
+        }
         fn clear_all_motor_subscriptions(&self) {}
         fn clear_all_visualization_subscriptions(&self) {}
     }
@@ -462,6 +468,12 @@ impl feagi_services::RuntimeService for TrackingRuntimeService {
             .lock()
             .unwrap()
             .remove(agent_id);
+    }
+    async fn reset_cortical_area_states(
+        &self,
+        cortical_indices: &[u32],
+    ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
+        Ok(cortical_indices.iter().map(|&i| (i, 0)).collect())
     }
     fn clear_all_motor_subscriptions(&self) {
         self.tracker.motor_subscriptions.lock().unwrap().clear();

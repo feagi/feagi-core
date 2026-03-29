@@ -4240,7 +4240,17 @@ impl ConnectomeManager {
     }
 
     /// Cortical area index for a neuron, or `None` if the neuron slot is invalid / NPU unavailable.
+    ///
+    /// Memory neurons (global ids in `50_000_000..=99_999_999`) are not stored in the dense
+    /// [`NeuronArray`] index space; their cortical membership is resolved via the plasticity
+    /// [`MemoryNeuronArray`] when the plasticity feature is enabled.
     pub fn get_neuron_cortical_idx_opt(&self, neuron_id: u64) -> Option<u32> {
+        #[cfg(feature = "plasticity")]
+        {
+            if feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(neuron_id as u32) {
+                return self.memory_neuron_cortical_idx_opt(neuron_id as u32);
+            }
+        }
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock.get_neuron_cortical_area(neuron_id as u32)
@@ -4250,6 +4260,16 @@ impl ConnectomeManager {
         } else {
             None
         }
+    }
+
+    /// Resolve cortical index for a memory-neuron global id through the plasticity executor.
+    #[cfg(feature = "plasticity")]
+    fn memory_neuron_cortical_idx_opt(&self, neuron_id: u32) -> Option<u32> {
+        let exec = self.get_plasticity_executor()?;
+        let guard = exec.lock().ok()?;
+        guard
+            .memory_neuron_detail(neuron_id)
+            .map(|d| d.cortical_area_idx)
     }
 
     /// Get all neuron IDs in a specific cortical area

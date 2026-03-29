@@ -434,4 +434,33 @@ impl RuntimeService for RuntimeServiceImpl {
 
         Ok(injected_count)
     }
+
+    async fn reset_cortical_area_states(
+        &self,
+        cortical_indices: &[u32],
+    ) -> ServiceResult<Vec<(u32, usize)>> {
+        if cortical_indices.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let runner = self.burst_runner.read();
+        let npu = runner.get_npu();
+        let mut npu_lock = npu
+            .lock()
+            .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {e}")))?;
+
+        let mut results: Vec<(u32, usize)> = Vec::with_capacity(cortical_indices.len());
+        for &idx in cortical_indices {
+            let count = npu_lock.reset_cortical_area_runtime_state(idx);
+            results.push((idx, count));
+        }
+
+        info!(
+            target: "feagi-services",
+            "reset_cortical_area_states: {:?}",
+            results
+        );
+
+        Ok(results)
+    }
 }

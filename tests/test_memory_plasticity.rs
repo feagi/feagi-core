@@ -17,15 +17,16 @@ use feagi_npu_burst_engine::npu::MemoryReplayFrame;
 use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
 use feagi_npu_neural::types::NeuronId;
 use feagi_npu_plasticity::{
-    MemoryNeuronArray, MemoryNeuronLifecycleConfig, PatternConfig, PatternDetector,
-    PlasticityCommand, PlasticityConfig, PlasticityService, ReplayFrame,
+    AsyncPlasticityExecutor, MemoryNeuronArray, MemoryNeuronLifecycleConfig, PatternConfig,
+    PatternDetector, PlasticityCommand, PlasticityConfig, PlasticityExecutor, PlasticityService,
+    ReplayFrame,
 };
 use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 fn build_npu(tag: &'static str) -> Arc<TracingMutex<DynamicNPU>> {
     Arc::new(TracingMutex::new(
@@ -118,6 +119,22 @@ fn wait_for_commands(service: &PlasticityService) -> Vec<PlasticityCommand> {
     let mut commands = Vec::new();
     for _ in 0..10_000 {
         let drained = service.drain_commands();
+        if !drained.is_empty() {
+            commands.extend(drained);
+            break;
+        }
+        std::thread::yield_now();
+    }
+    commands
+}
+
+/// Drain plasticity commands from an [`AsyncPlasticityExecutor`] (same contract as [`wait_for_commands`]).
+fn wait_for_executor_commands(
+    exec: &Arc<Mutex<AsyncPlasticityExecutor>>,
+) -> Vec<PlasticityCommand> {
+    let mut commands = Vec::new();
+    for _ in 0..10_000 {
+        let drained = exec.lock().unwrap().drain_commands();
         if !drained.is_empty() {
             commands.extend(drained);
             break;
@@ -1240,4 +1257,63 @@ fn test_memory_replay_injects_twin_area() {
     }
 
     assert!(twin_fired, "Expected replay to activate the twin area");
+}
+
+/// Synapse inspector APIs resolve peer `source_cortical_idx` via [`ConnectomeManager::get_neuron_cortical_idx_opt`].
+/// Memory neuron global ids must use the plasticity [`MemoryNeuronArray`], not dense [`NeuronArray`] indices.
+#[test]
+fn test_connectome_resolves_memory_neuron_cortical_idx_for_inspector_peers() {
+    let npu = build_npu("connectome-memory-cortical-idx-inspector");
+    create_single_neuron_area(&npu, 7, "upstream");
+
+    let cache = feagi_npu_plasticity::create_memory_stats_cache();
+    let mut executor =
+        AsyncPlasticityExecutor::new(PlasticityConfig::default(), cache, npu.clone());
+    PlasticityExecutor::register_memory_area(
+        &executor,
+        100,
+        "mem_00".to_string(),
+        1,
+        vec![7],
+        None,
+    );
+    executor.start();
+
+    let exec_arc = Arc::new(Mutex::new(executor));
+    let mut manager = ConnectomeManager::new_for_testing_with_npu(npu.clone());
+    manager.set_plasticity_executor(Arc::clone(&exec_arc));
+
+    let upstream_neuron_id = {
+        let npu_lock = npu.lock().unwrap();
+        npu_lock.get_neurons_in_cortical_area(7)[0]
+    };
+    let burst = inject_and_burst(&npu, upstream_neuron_id, 10.0);
+    PlasticityExecutor::notify_burst(&*exec_arc.lock().unwrap(), burst);
+
+    let commands = wait_for_executor_commands(&exec_arc);
+    assert!(
+        commands
+            .iter()
+            .any(|c| matches!(c, PlasticityCommand::InjectMemoryNeuronToFCL { .. })),
+        "Expected InjectMemoryNeuronToFCL command"
+    );
+    apply_plasticity_commands(&npu, &commands);
+
+    let memory_nid = commands
+        .iter()
+        .find_map(|c| match c {
+            PlasticityCommand::InjectMemoryNeuronToFCL { neuron_id, .. } => Some(*neuron_id),
+            _ => None,
+        })
+        .expect("Expected memory neuron id in plasticity commands");
+
+    assert!(
+        feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(memory_nid),
+        "Sanity: plasticity should allocate a memory-range neuron id"
+    );
+    assert_eq!(
+        manager.get_neuron_cortical_idx_opt(memory_nid as u64),
+        Some(100u32),
+        "Inspector peer resolution must map memory neuron id to its memory cortical index"
+    );
 }
