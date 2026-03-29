@@ -9,6 +9,7 @@ use crate::backend::{CPUBackend, ComputeBackend};
 use crate::npu::RustNPU;
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::{NeuronStorage, Runtime, SynapseStorage};
+use std::sync::Arc;
 
 // Import StdRuntime for the default type alias
 #[cfg(feature = "std")]
@@ -309,6 +310,27 @@ where
 
     pub fn set_fatigue_active(&mut self, active: bool) {
         dispatch_mut!(self, set_fatigue_active(active))
+    }
+
+    pub fn set_memory_neuron_assoc_predicate(
+        &self,
+        pred: Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.set_memory_neuron_assoc_predicate(pred),
+            DynamicNPUGeneric::INT8(npu) => npu.set_memory_neuron_assoc_predicate(pred),
+        }
+    }
+
+    /// Forwards to `RustNPU::set_memory_neuron_longterm_predicate` on the active variant.
+    pub fn set_memory_neuron_longterm_predicate(
+        &self,
+        pred: Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.set_memory_neuron_longterm_predicate(pred),
+            DynamicNPUGeneric::INT8(npu) => npu.set_memory_neuron_longterm_predicate(pred),
+        }
     }
 
     pub fn is_fatigue_active(&self) -> bool {

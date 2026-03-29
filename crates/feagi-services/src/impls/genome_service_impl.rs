@@ -91,6 +91,9 @@ fn merge_memory_area_properties(
     defaults
         .entry("init_lifespan".to_string())
         .or_insert(Value::from(memory_defaults.init_lifespan));
+    defaults
+        .entry("psp_uniform_distribution".to_string())
+        .or_insert(Value::from(true));
 
     defaults.extend(base);
     if let Some(extra_props) = extra {

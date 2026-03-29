@@ -1822,9 +1822,18 @@ pub async fn put_reset(
     State(state): State<ApiState>,
     Json(request): Json<CorticalAreaResetRequest>,
 ) -> ApiResult<Json<CorticalAreaResetResponse>> {
+    use tracing::info;
+    
     if request.area_list.is_empty() {
         return Err(ApiError::invalid_input("area_list cannot be empty"));
     }
+
+    info!(
+        target: "feagi-api",
+        "[RESET] Received reset request for {} cortical areas: {:?}",
+        request.area_list.len(),
+        request.area_list
+    );
 
     let connectome_service = state.connectome_service.as_ref();
     let mut cortical_indices: Vec<u32> = Vec::with_capacity(request.area_list.len());
@@ -1834,7 +1843,19 @@ pub async fn put_reset(
             .await
             .map_err(ApiError::from)?;
         cortical_indices.push(area.cortical_idx);
+        info!(
+            target: "feagi-api",
+            "[RESET] Resolved cortical ID '{}' to index {}",
+            id,
+            area.cortical_idx
+        );
     }
+
+    info!(
+        target: "feagi-api",
+        "[RESET] Calling runtime service to reset indices: {:?}",
+        cortical_indices
+    );
 
     let reset_pairs = state
         .runtime_service
@@ -1844,11 +1865,25 @@ pub async fn put_reset(
 
     let results: Vec<CorticalAreaResetItem> = reset_pairs
         .into_iter()
-        .map(|(cortical_idx, neurons_reset)| CorticalAreaResetItem {
-            cortical_idx,
-            neurons_reset,
+        .map(|(cortical_idx, neurons_reset)| {
+            info!(
+                target: "feagi-api",
+                "[RESET] Cortical area {} reset: {} neurons cleared",
+                cortical_idx,
+                neurons_reset
+            );
+            CorticalAreaResetItem {
+                cortical_idx,
+                neurons_reset,
+            }
         })
         .collect();
+
+    info!(
+        target: "feagi-api",
+        "[RESET] Reset complete for {} areas",
+        results.len()
+    );
 
     Ok(Json(CorticalAreaResetResponse {
         message: "ok".to_string(),

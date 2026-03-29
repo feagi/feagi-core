@@ -536,6 +536,44 @@ impl MemoryNeuronArray {
     }
 
     /// Reset array state (for testing)
+    /// Deactivate all memory neurons in a specific cortical area
+    pub fn reset_cortical_area(&mut self, cortical_area_id: u32) -> usize {
+        let Some(neuron_indices) = self.area_neuron_indices.get(&cortical_area_id) else {
+            return 0;
+        };
+
+        let indices_to_reset: Vec<usize> = neuron_indices.iter().copied().collect();
+        let mut reset_count = 0;
+
+        for neuron_idx in indices_to_reset {
+            if !self.is_valid_index(neuron_idx) {
+                continue;
+            }
+
+            // Deactivate neuron
+            self.is_active[neuron_idx] = false;
+
+            // Remove pattern mapping
+            if let Some(pattern_hash) = self.index_to_pattern_hash.remove(&neuron_idx) {
+                self.pattern_hash_to_index.remove(&pattern_hash);
+            }
+
+            // Clear properties (optional but clean)
+            self.lifespan_current[neuron_idx] = 0;
+            self.activation_count[neuron_idx] = 0;
+
+            // Mark as reusable
+            self.reusable_indices.insert(neuron_idx);
+
+            reset_count += 1;
+        }
+
+        // Remove area tracking
+        self.area_neuron_indices.remove(&cortical_area_id);
+
+        reset_count
+    }
+
     pub fn reset(&mut self) {
         self.neuron_ids.fill(0);
         self.cortical_area_ids.fill(0);
@@ -928,6 +966,43 @@ mod tests {
         let pattern_hash = 0x6363636363636363u64;
         let idx = array.create_memory_neuron(pattern_hash, 100, 0, &config);
         assert!(idx.is_none());
+    }
+
+    #[test]
+    fn test_reset_cortical_area() {
+        let mut array = MemoryNeuronArray::new(1000);
+        let config = MemoryNeuronLifecycleConfig::default();
+
+        // Create neurons in area 5
+        let pattern1 = 0x0101010101010101u64;
+        let pattern2 = 0x0202020202020202u64;
+        array.create_memory_neuron(pattern1, 5, 0, &config);
+        array.create_memory_neuron(pattern2, 5, 0, &config);
+
+        // Create neurons in area 6
+        let pattern3 = 0x0303030303030303u64;
+        array.create_memory_neuron(pattern3, 6, 0, &config);
+
+        // Verify initial state
+        assert_eq!(array.get_active_neurons_by_area(5).len(), 2);
+        assert_eq!(array.get_active_neurons_by_area(6).len(), 1);
+
+        // Reset area 5
+        let reset_count = array.reset_cortical_area(5);
+        assert_eq!(reset_count, 2);
+
+        // Verify area 5 is empty
+        assert_eq!(array.get_active_neurons_by_area(5).len(), 0);
+
+        // Verify area 6 is unchanged
+        assert_eq!(array.get_active_neurons_by_area(6).len(), 1);
+
+        // Verify pattern hashes are cleared for area 5
+        assert!(array.pattern_hash_to_index.get(&pattern1).is_none());
+        assert!(array.pattern_hash_to_index.get(&pattern2).is_none());
+
+        // Verify area 6 pattern still exists
+        assert!(array.pattern_hash_to_index.contains_key(&pattern3));
     }
 
     #[test]

@@ -89,7 +89,8 @@ pub trait CorticalAreaExt {
     /// Get postsynaptic_current from properties
     fn postsynaptic_current(&self) -> f32;
 
-    /// Get psp_uniform_distribution from properties
+    /// Get psp_uniform_distribution from properties (defaults to true for memory cortical areas,
+    /// false for other types when the key is absent)
     fn psp_uniform_distribution(&self) -> bool;
 
     /// Get degeneration from properties
@@ -314,7 +315,11 @@ impl CorticalAreaExt for CorticalArea {
     }
 
     fn psp_uniform_distribution(&self) -> bool {
-        self.get_bool_property("psp_uniform_distribution", false)
+        let default = matches!(
+            self.cortical_type,
+            feagi_structures::genomic::cortical_area::CorticalAreaType::Memory(_)
+        );
+        self.get_bool_property("psp_uniform_distribution", default)
     }
 
     fn degeneration(&self) -> f32 {

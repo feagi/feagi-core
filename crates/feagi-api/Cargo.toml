@@ -98,7 +98,7 @@ feagi-npu-runtime = { version = "0.0.3", path = "../feagi-npu/runtime", features
 [features]
 default = ["http", "services"]
 http = ["axum", "tower", "tower-http", "hyper", "http-body-util", "tokio", "utoipa-swagger-ui", "services"]
-services = ["feagi-services/std", "feagi-io", "feagi-brain-development", "feagi-npu-burst-engine", "feagi-npu-plasticity", "feagi-state-manager/std", "feagi-agent"]
+services = ["feagi-services/std", "feagi-services/plasticity", "feagi-io", "feagi-brain-development", "feagi-npu-burst-engine", "feagi-npu-plasticity", "feagi-state-manager/std", "feagi-agent"]
 zmq = ["feagi-io", "dep:zeromq", "services"]  # feagi-io provides transport primitives
 security = ["chacha20poly1305", "x25519-dalek", "jsonwebtoken", "argon2"]
 tls = ["rustls", "tokio-rustls"]

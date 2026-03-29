@@ -117,6 +117,11 @@ impl AsyncPlasticityExecutor {
         self.memory_stats_cache.clone()
     }
 
+    /// Get a reference to the underlying PlasticityService (for RuntimeService wiring)
+    pub fn get_service(&self) -> Option<PlasticityService> {
+        self.service.lock().ok()?.as_ref().cloned()
+    }
+
     pub fn enqueue_commands_for_test(&self, commands: Vec<crate::PlasticityCommand>) {
         if let Some(service) = self.service.lock().unwrap().as_ref() {
             service.enqueue_commands_for_test(commands);
@@ -222,6 +227,13 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
                         }
                         PlasticityCommand::UpdateWeightsDelta { .. } => {}
                         PlasticityCommand::UpdateStateCounters { .. } => {}
+                        PlasticityCommand::ResetMemoryNeuronsInArea { cortical_idx } => {
+                            debug!(
+                                target: "plasticity",
+                                "[PLASTICITY-EXEC] ResetMemoryNeuronsInArea cortical_idx={}",
+                                cortical_idx
+                            );
+                        }
                     }
                 }
             }

@@ -94,6 +94,18 @@ impl FireQueue {
     pub fn is_empty(&self) -> bool {
         self.total_count == 0
     }
+
+    /// Remove all neurons from a specific cortical area
+    /// Returns the number of neurons removed
+    pub fn remove_cortical_area(&mut self, cortical_idx: u32) -> usize {
+        if let Some(neurons) = self.neurons_by_area.remove(&cortical_idx) {
+            let count = neurons.len();
+            self.total_count = self.total_count.saturating_sub(count);
+            count
+        } else {
+            0
+        }
+    }
 }
 
 impl Default for FireQueue {

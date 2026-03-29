@@ -42,6 +42,7 @@ use feagi_npu_neural::types::*;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use roaring::RoaringBitmap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error, info, trace, warn};
 
@@ -250,9 +251,23 @@ pub struct RustNPU<
     fatigue_active: std::sync::atomic::AtomicBool,
     /// Cached power neuron ID (core area 1). Updated during neurogenesis.
     power_neuron_id: std::sync::atomic::AtomicU32,
+
+    /// Optional filter for forward memory↔memory associative STDP. When `Some`, both endpoints must
+    /// pass (plasticity: typically `is_active`). When `None`, legacy behavior: any co-firing pair in
+    /// the memory global id range qualifies without calling plasticity.
+    memory_neuron_assoc_predicate:
+        std::sync::RwLock<Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>>,
+    /// Optional filter for the mirrored reciprocal edge (single mapping, no reverse STDP key).
+    /// When `Some`, both endpoints must pass (plasticity: typically LTM). When `None`, legacy
+    /// mirroring without an LTM gate.
+    memory_neuron_longterm_predicate:
+        std::sync::RwLock<Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>>,
 }
 
 const POWER_NEURON_UNSET: u32 = u32::MAX;
+
+/// Global id range for plasticity memory neurons (not dense [`NeuronStorage`] indices).
+const MEMORY_NEURON_ID_START: u32 = 50_000_000;
 
 /// Fire-related structures grouped together for single mutex
 pub(crate) struct FireStructures {
@@ -367,6 +382,8 @@ impl<
             power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
             fatigue_active: std::sync::atomic::AtomicBool::new(false),
             power_neuron_id: std::sync::atomic::AtomicU32::new(POWER_NEURON_UNSET),
+            memory_neuron_assoc_predicate: std::sync::RwLock::new(None),
+            memory_neuron_longterm_predicate: std::sync::RwLock::new(None),
         })
     }
 }
@@ -560,8 +577,26 @@ impl<
             .store(false, std::sync::atomic::Ordering::SeqCst);
         self.power_neuron_id
             .store(POWER_NEURON_UNSET, std::sync::atomic::Ordering::SeqCst);
+        *self.memory_neuron_assoc_predicate.write().unwrap() = None;
+        *self.memory_neuron_longterm_predicate.write().unwrap() = None;
 
         Ok(())
+    }
+
+    /// Register optional forward filter; `None` restores legacy permissive memory↔memory STDP.
+    pub fn set_memory_neuron_assoc_predicate(
+        &self,
+        pred: Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>,
+    ) {
+        *self.memory_neuron_assoc_predicate.write().unwrap() = pred;
+    }
+
+    /// Register optional mirror filter; `None` restores legacy mirroring without an LTM gate.
+    pub fn set_memory_neuron_longterm_predicate(
+        &self,
+        pred: Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>,
+    ) {
+        *self.memory_neuron_longterm_predicate.write().unwrap() = pred;
     }
 
     /// Increment burst count (lock-free atomic operation)
@@ -1909,7 +1944,6 @@ impl<
         }
         // Resolve memory neuron candidates sourced via synaptic propagation.
         // Memory neurons can be targets of associative synapses; ensure they have cortical metadata.
-        const MEMORY_NEURON_ID_START: u32 = 50_000_000;
         let mut unresolved_memory_candidates = 0usize;
         let mut resolved_memory_candidates = 0usize;
         let memory_candidates: Vec<NeuronId> = fire_structures
@@ -3607,6 +3641,19 @@ impl<
                 .retain(|(nid, _)| !neuron_ids_in_area.contains(&nid.0));
             fs.memory_candidate_cortical_idx
                 .retain(|_, idx| *idx != cortical_area);
+            
+            // CRITICAL: Remove from fire queues to prevent stale firings from propagating
+            let current_removed = fs.current_fire_queue.remove_cortical_area(cortical_area);
+            let previous_removed = fs.previous_fire_queue.remove_cortical_area(cortical_area);
+            if current_removed > 0 || previous_removed > 0 {
+                tracing::debug!(
+                    target: "feagi-npu",
+                    "Reset cortical area {}: removed {} from current_fire_queue, {} from previous_fire_queue",
+                    cortical_area,
+                    current_removed,
+                    previous_removed
+                );
+            }
         }
 
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
@@ -4009,12 +4056,38 @@ impl<
         *self.stdp_mapping_index.write().unwrap() = index;
     }
 
+    /// Whether `target` neuron id lies in cortical area `dst_area` (numeric index).
+    ///
+    /// Dense LIF neurons use [`NeuronStorage`]; memory neuron ids (`50_000_000+`) are not array
+    /// indices and must be resolved via [`SynapticPropagationEngine::neuron_to_area`] so
+    /// associative STDP can detect an existing synapse and avoid creating duplicates.
+    fn stdp_target_in_dst_cortical_area(
+        &self,
+        prop_engine: &SynapticPropagationEngine,
+        neuron_storage: &R::NeuronStorage<T>,
+        neuron_count: usize,
+        target: u32,
+        dst_area: u32,
+    ) -> bool {
+        let ti = target as usize;
+        if ti < neuron_count && neuron_storage.valid_mask()[ti] {
+            return neuron_storage.cortical_areas()[ti] == dst_area;
+        }
+        if target >= MEMORY_NEURON_ID_START {
+            return prop_engine
+                .neuron_to_area
+                .get(&NeuronId(target))
+                .and_then(|cid| self.get_cortical_area_id(cid.as_base_64().as_str()))
+                .is_some_and(|idx| idx == dst_area);
+        }
+        false
+    }
+
     fn apply_stdp_updates_for_burst(
         &self,
         burst_timestep: u64,
         fire_ledger: &crate::fire_ledger::FireLedger,
     ) -> Result<()> {
-        const MEMORY_NEURON_ID_START: u32 = 50_000_000;
         let mappings = self.stdp_mappings.read().unwrap().clone();
         if mappings.is_empty() {
             return Ok(());
@@ -4233,6 +4306,13 @@ impl<
                 continue;
             }
 
+            let assoc_pred = self.memory_neuron_assoc_predicate.read().unwrap().clone();
+            let longterm_pred = self
+                .memory_neuron_longterm_predicate
+                .read()
+                .unwrap()
+                .clone();
+
             let mut new_sources = Vec::new();
             let mut new_targets = Vec::new();
             let mut new_weights = Vec::new();
@@ -4256,13 +4336,13 @@ impl<
                                 continue;
                             }
                             let target = synapse_storage.target_neurons()[syn_idx];
-                            let target_idx = target as usize;
-                            if target_idx >= neuron_count
-                                || !neuron_storage.valid_mask()[target_idx]
-                            {
-                                continue;
-                            }
-                            if neuron_storage.cortical_areas()[target_idx] == *dst_area {
+                            if self.stdp_target_in_dst_cortical_area(
+                                &prop_engine,
+                                &*neuron_storage,
+                                neuron_count,
+                                target,
+                                *dst_area,
+                            ) {
                                 existing_targets.insert(target);
                             }
                         }
@@ -4271,6 +4351,17 @@ impl<
                     for dst_neuron in activity.dst_all.iter() {
                         if existing_targets.contains(&dst_neuron) {
                             continue;
+                        }
+                        if src_neuron >= MEMORY_NEURON_ID_START
+                            && dst_neuron >= MEMORY_NEURON_ID_START
+                        {
+                            let both_assoc = assoc_pred
+                                .as_ref()
+                                .map(|p| p(src_neuron) && p(dst_neuron))
+                                .unwrap_or(true);
+                            if !both_assoc {
+                                continue;
+                            }
                         }
                         let src_idx = src_neuron as usize;
                         let dst_idx = dst_neuron as usize;
@@ -4296,6 +4387,64 @@ impl<
                         new_weights.push(SynapticWeight(delta_plus as f32));
                         new_psps.push(SynapticPsp(params.synapse_psp));
                         new_types.push(params.synapse_type);
+
+                        // Memory-only cortical areas have no dense LIF neurons; associative projector
+                        // creates 0 synapses (empty `get_neurons_in_cortical_area`). Co-firing memory
+                        // neurons are linked only via this STDP path.
+                        //
+                        // When **only** one associative mapping is registered (e.g. genome mirror missing
+                        // for the reverse pair), create the reciprocal edge here using this mapping's
+                        // parameters. When **both** (A→B) and (B→A) STDP mappings exist, each direction is
+                        // created by its own loop iteration — mirroring would duplicate batch entries.
+                        if src_neuron >= MEMORY_NEURON_ID_START
+                            && dst_neuron >= MEMORY_NEURON_ID_START
+                        {
+                            let reverse_has_own_mapping = mappings.contains_key(&(key.1, key.0));
+                            if !reverse_has_own_mapping {
+                                let both_ltm = longterm_pred
+                                    .as_ref()
+                                    .map(|p| p(src_neuron) && p(dst_neuron))
+                                    .unwrap_or(true);
+                                if both_ltm {
+                                    let mut rev_existing = false;
+                                    if let Some(indices) =
+                                        prop_engine.synapse_index.get(&NeuronId(dst_neuron))
+                                    {
+                                        for &syn_idx in indices {
+                                            if syn_idx >= synapse_storage.count()
+                                                || !synapse_storage.valid_mask()[syn_idx]
+                                            {
+                                                continue;
+                                            }
+                                            if synapse_storage.target_neurons()[syn_idx]
+                                                == src_neuron
+                                            {
+                                                rev_existing = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if !rev_existing {
+                                        let rdp = delta_plus;
+                                        new_sources.push(NeuronId(dst_neuron));
+                                        new_targets.push(NeuronId(src_neuron));
+                                        new_weights.push(SynapticWeight(rdp as f32));
+                                        new_psps.push(SynapticPsp(params.synapse_psp));
+                                        new_types.push(params.synapse_type);
+                                        tracing::trace!(
+                                            target: "feagi-burst-engine",
+                                            "associative-stdp LTP mirror synapse burst={} mapping_rev=({}->{}) src_neuron={} dst_neuron={} weight={}",
+                                            burst_timestep,
+                                            key.1,
+                                            key.0,
+                                            dst_neuron,
+                                            src_neuron,
+                                            rdp,
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

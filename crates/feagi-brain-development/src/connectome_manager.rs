@@ -4212,6 +4212,16 @@ impl ConnectomeManager {
     /// Coordinates as (x, y, z), or (0, 0, 0) if neuron doesn't exist or NPU not connected
     ///
     pub fn get_neuron_coordinates(&self, neuron_id: u64) -> (u32, u32, u32) {
+        // Memory neurons live in the plasticity MemoryNeuronArray, not the NPU dense neuron array.
+        // Do not take the NPU mutex here: synapse inspector paths (`peer_cortical_voxel_fields`)
+        // resolve cortical idx via the plasticity lock first, then coordinates. The burst thread
+        // holds NPU while notifying plasticity — taking NPU after plasticity would deadlock.
+        #[cfg(feature = "plasticity")]
+        {
+            if feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(neuron_id as u32) {
+                return (0, 0, 0);
+            }
+        }
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock
@@ -5027,9 +5037,11 @@ impl ConnectomeManager {
                 let mut mp_driven_psp_flags = ahash::AHashMap::new();
 
                 for (cortical_id, area) in &self.cortical_areas {
-                    // Power area defaults to uniform PSP distribution when property is absent.
-                    let default_psp_uniform =
-                        *cortical_id == CoreCorticalType::Power.to_cortical_id();
+                    // When the property is absent: Power and Memory cortical areas default to uniform
+                    // PSP (full PSP per synapse); other areas default to divided PSP.
+                    let default_psp_uniform = *cortical_id
+                        == CoreCorticalType::Power.to_cortical_id()
+                        || matches!(area.cortical_type, CorticalAreaType::Memory(_));
                     let psp_uniform = area
                         .get_property("psp_uniform_distribution")
                         .and_then(|v| v.as_bool())

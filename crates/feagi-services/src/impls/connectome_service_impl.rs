@@ -115,6 +115,9 @@ fn merge_memory_area_properties(
     defaults
         .entry("init_lifespan".to_string())
         .or_insert(Value::from(memory_defaults.init_lifespan));
+    defaults
+        .entry("psp_uniform_distribution".to_string())
+        .or_insert(Value::from(true));
 
     defaults.extend(base);
     if let Some(extra_props) = extra {
@@ -906,9 +909,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
         trace!(target: "feagi-services", "Getting cortical area: {}", cortical_id);
 
-        // Convert String to CorticalID
-        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        // Accept base64 or legacy ASCII (clients may send either form).
+        let cortical_id_typed =
+            parse_cortical_id_flexible(cortical_id).map_err(|e| ServiceError::InvalidInput(e))?;
 
         let manager = self.connectome.read();
 
@@ -926,10 +929,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 id: cortical_id.to_string(),
             })?;
 
-        let neuron_count = manager.get_neuron_count_in_area(
-            &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
-        );
+        let neuron_count = manager.get_neuron_count_in_area(&cortical_id_typed);
         let outgoing_synapse_count = manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
         let incoming_synapse_count = manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
         let synapse_count = outgoing_synapse_count;

@@ -25,6 +25,7 @@ use crate::memory_neuron_array::{
 use crate::memory_stats_cache::{self, MemoryStatsCache};
 use crate::pattern_detector::{BatchPatternDetector, PatternConfig};
 use crate::stdp::STDPConfig;
+use feagi_npu_neural::types::NeuronId;
 use serde::{Deserialize, Serialize};
 
 // State manager access for fatigue reporting
@@ -112,6 +113,9 @@ pub enum PlasticityCommand {
         area_idx: u32,
         neuron_id: u32,
     },
+
+    /// Reset (delete) all memory neurons and their synapses in a cortical area
+    ResetMemoryNeuronsInArea { cortical_idx: u32 },
 }
 
 /// Replay frame describing a single temporal slice for an upstream area.
@@ -150,6 +154,7 @@ pub struct PlasticityStats {
 }
 
 /// Plasticity service - independent thread that computes plasticity every burst
+#[derive(Clone)]
 pub struct PlasticityService {
     config: PlasticityConfig,
 
@@ -190,13 +195,36 @@ impl PlasticityService {
         let pattern_detector = BatchPatternDetector::new(config.pattern_config.clone());
         let memory_array_capacity = config.memory_array_capacity;
 
+        let memory_neuron_array =
+            Arc::new(Mutex::new(MemoryNeuronArray::new(memory_array_capacity)));
+
+        {
+            let mem_assoc = Arc::clone(&memory_neuron_array);
+            let mem_ltm = Arc::clone(&memory_neuron_array);
+            let guard = npu.lock().unwrap();
+            guard.set_memory_neuron_assoc_predicate(Some(Arc::new(move |id: u32| {
+                mem_assoc
+                    .lock()
+                    .unwrap()
+                    .get_memory_neuron_detail(id)
+                    .map(|d| d.is_active)
+                    .unwrap_or(false)
+            })));
+            guard.set_memory_neuron_longterm_predicate(Some(Arc::new(move |id: u32| {
+                mem_ltm
+                    .lock()
+                    .unwrap()
+                    .get_memory_neuron_detail(id)
+                    .map(|d| d.is_longterm_memory)
+                    .unwrap_or(false)
+            })));
+        }
+
         Self {
             config,
             npu,
             pattern_detector,
-            memory_neuron_array: Arc::new(Mutex::new(MemoryNeuronArray::new(
-                memory_array_capacity,
-            ))),
+            memory_neuron_array,
             memory_areas: Arc::new(Mutex::new(HashMap::new())),
             memory_lifecycle_configs: Arc::new(Mutex::new(HashMap::new())),
             memory_area_names: Arc::new(Mutex::new(HashMap::new())),
@@ -937,6 +965,13 @@ impl PlasticityService {
                     }
                     PlasticityCommand::UpdateWeightsDelta { .. } => {}
                     PlasticityCommand::UpdateStateCounters { .. } => {}
+                    PlasticityCommand::ResetMemoryNeuronsInArea { cortical_idx } => {
+                        tracing::debug!(
+                            target: "plasticity",
+                            "[PLASTICITY-SVC] ResetMemoryNeuronsInArea cortical_idx={}",
+                            cortical_idx
+                        );
+                    }
                 }
             }
         }
@@ -951,6 +986,53 @@ impl PlasticityService {
     /// Get memory neuron array reference
     pub fn get_memory_neuron_array(&self) -> Arc<Mutex<MemoryNeuronArray>> {
         Arc::clone(&self.memory_neuron_array)
+    }
+
+    /// Reset (delete) all memory neurons and their synapses in a cortical area.
+    ///
+    /// Returns the number of memory neurons deleted.
+    pub fn reset_memory_neurons_in_area(&self, cortical_idx: u32) -> usize {
+        let mut array = self.memory_neuron_array.lock().unwrap();
+
+        // Get all memory neuron IDs in this area before deleting
+        let memory_neuron_ids = array.get_active_neurons_by_area(cortical_idx);
+
+        tracing::info!(
+            target: "plasticity",
+            "[PLASTICITY] Resetting {} memory neurons in cortical area {}",
+            memory_neuron_ids.len(),
+            cortical_idx
+        );
+
+        // Delete all synapses from/to these memory neurons
+        if !memory_neuron_ids.is_empty() {
+            let mut npu_lock = self.npu.lock().unwrap();
+            for &neuron_id in &memory_neuron_ids {
+                // Delete outgoing synapses
+                let outgoing = npu_lock.get_outgoing_synapses(neuron_id);
+                for (target_id, _, _, _) in outgoing {
+                    npu_lock.remove_synapse(NeuronId(neuron_id), NeuronId(target_id));
+                }
+
+                // Delete incoming synapses
+                let incoming = npu_lock.get_incoming_synapses(neuron_id);
+                for (source_id, _, _, _) in incoming {
+                    npu_lock.remove_synapse(NeuronId(source_id), NeuronId(neuron_id));
+                }
+            }
+        }
+
+        // Delete the memory neurons themselves
+        let reset_count = array.reset_cortical_area(cortical_idx);
+
+        tracing::info!(
+            target: "plasticity",
+            "[PLASTICITY] Reset complete: deleted {} memory neurons and their synapses from area {}",
+            reset_count,
+            cortical_idx
+        );
+
+        reset_count
     }
 
     /// ST/LTM counts and pattern-detector cache size for a memory cortical area index.
