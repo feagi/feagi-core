@@ -51,19 +51,20 @@ This document records agreed **architecture and behavior** for episodic (pattern
   - memory → memory, or  
   - memory → non-memory (interconnect, core, IPU, OPU).
 - **Two** opposing one-directional **memory→memory** associative mappings behave as **effective bidirectional** associative memory (same idea as two one-way interconnect STDP links).
+- The NPU **does not** create a reverse synapse when only one directional mapping exists; bidirectional behavior requires **two** registered mappings (A→B and B→A).
 
 ---
 
-## 6. Independent temporal windows (memory → memory)
+## 6. Independent temporal windows vs shared spike visibility (memory → memory)
 
 When **both** episodic and associative mechanisms apply between two memory areas:
 
 | Mechanism | Window / bookkeeping |
 |-----------|----------------------|
-| **Episodic (pattern)** | Uses its **own** dedicated temporal window (e.g. pattern detector / `temporal_depth` semantics). **Must not** be merged into the STDP window. |
-| **Associative (STDP)** | Uses the **STDP / plasticity** window (e.g. fire ledger + mapping keyed by STDP rules). |
+| **Episodic (pattern)** | Pattern / hash association uses its **own** temporal semantics (e.g. pattern detector / `temporal_depth`). That **bookkeeping** is not merged with STDP’s pairing logic. |
+| **Associative (STDP)** | Uses the **STDP / plasticity** window (fire ledger + mapping). **Episodic activations** (pattern-driven memory neuron spikes) are **the usual triggers** for associative STDP: those spikes are recorded on the **same** STDP fire ledger so source/destination co-activation can create a synapse if missing and then apply LTP/LTD. |
 
-They remain **strictly independent**.
+**Pattern machinery** and **STDP eligibility predicates** (e.g. assoc/LTM) remain separate concerns; **spike events** from the episodic path are visible to STDP for associative memory mappings.
 
 ---
 
@@ -102,23 +103,23 @@ If **both** episodic activation and associative (LIF) integration would affect t
 
 ---
 
-## 10. Planned: memory-neuron LIF parameters (associative path only)
+## 10. Memory-neuron LIF parameters (associative path only) — implemented
 
-**Scope (agreed direction, implementation may follow in a later change):**
+**Implementation (`feagi_npu_burst_engine::sparse_memory_lif`, `process_neural_dynamics`, `NPU::process_burst`):**
 
-- Parameters use the **same property names** as regular neurons, but apply only to **memory** cortical areas and the **memory neuron** subsystem — **no** mixing with dense `NeuronStorage`.
-- **Sparse state**: allocate LIF-related state **only** for memory neuron ids that have **ever received associative** input (efficiency).
-- **Off / omitted**: MP charge accumulation (always off); **no** firing threshold increment; **no** leak constant and **no** leak variability (dropped given no MP accumulation carryover design).
-- Remaining LIF-related knobs (subject to final property list): e.g. refractory, snooze, consecutive fire limit, firing threshold, firing threshold limit, neuron excitability — as aligned with implementation PRs.
+- Parameters use the **same property names** as regular neurons, but apply only to **memory** cortical areas and the **memory neuron** subsystem — **no** mixing with dense `NeuronStorage`. Defaults are keyed by `cortical_idx` via `MemoryAssociativeLifParamsByArea`; `RustNPU::set_memory_associative_lif_params` / `DynamicNPU` expose configuration.
+- **Sparse state**: `SparseMemoryAssociativeLifStates` allocates LIF-related state **only** for memory neuron ids that have **ever received non-zero associative PSP** (from synapses with `SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`).
+- **Off / omitted**: MP charge accumulation (always off); **no** firing threshold increment; **no** leak (integrate FCL drive only per burst).
+- **Remaining LIF knobs** in the associative path: refractory, snooze, consecutive fire limit, firing threshold, firing threshold limit, excitability (see `MemoryAssociativeLifParams`).
 
-**Routing:** Associative LIF only applies when incoming drive is from **associative-tagged** synapses; episodic injection follows pattern/FCL semantics and **wins** same burst (§7).
+**Routing:** Phase 1 accumulates associative contributions into `memory_associative_fcl_input` during synaptic propagation. Phase 2 resolves each memory candidate with `resolve_memory_neuron_output`: **episodic** staged `fire_kind` wins same burst (§7); else if both associative PSP map and LIF params are present, **sparse associative LIF**; else **legacy** instantaneous force-fire with STDP-eligible kind. GPU/CPU backends that do not wire associative maps pass empty maps / `None` and stay on the legacy path.
 
 ---
 
 ## 11. Relationship to existing code
 
 - Synapse rows encode **associative STDP** edges via **`edge_flags`** (see §9).
-- **Dual FireLedger:** `RustNPU` holds **`fire_ledger`** (STDP / associative-eligible dense + memory fires with `fire_kind != FIRE_KIND_EPISODIC_MEMORY`) and **`episodic_memory_fire_ledger`** (only `FIRE_KIND_EPISODIC_MEMORY` memory-neuron fires from the pattern-injection path). Phase 3 archives `clone_for_stdp_fire_ledger` / `clone_for_episodic_memory_fire_ledger` (see `feagi_npu_burst_engine::fire_structures`). `Memory` `FiringNeuron::fire_kind` comes from staged injections or defaults to STDP-eligible for propagation-sourced memory candidates (`process_neural_dynamics`).
+- **Dual FireLedger:** `RustNPU` holds **`fire_ledger`** (full STDP archive: dense + **all** memory-neuron fires, including `FIRE_KIND_EPISODIC_MEMORY` pattern injections, so associative STDP can match co-activation) and **`episodic_memory_fire_ledger`** (subset: only episodic-tagged memory-neuron fires for consumers that need pattern-path-only history). Phase 3 archives `clone_for_stdp_fire_ledger` (full queue) / `clone_for_episodic_memory_fire_ledger` (see `feagi_npu_burst_engine::fire_structures`). `FiringNeuron::fire_kind` comes from staged injections or defaults to STDP-eligible for propagation-sourced memory candidates (`process_neural_dynamics`).
 - **`register_memory_area`** configures upstream STDP windows on the main ledger **and** the memory cortical area on the episodic ledger (`configure_episodic_memory_fire_ledger_window` on `DynamicNPU`).
 - `docs/INTEGRATION.md` in this crate covers **service wiring** and task history; this document covers **memory semantics** only.
 
@@ -128,6 +129,8 @@ If **both** episodic activation and associative (LIF) integration would affect t
 
 | Date | Notes |
 |------|--------|
-| 2026-03-29 | Initial consolidation from architecture discussion (episodic vs associative, topology, windows, synapse rules). |
+| 2026-03-29 | Initial consolidation from architecture discussion (episodic vs associative, topology, windows, synapse rules). STDP fire ledger includes episodic-tagged memory spikes (associative STDP triggers); episodic ledger remains a subset view. |
+| 2026-03-29 | Associative memory STDP: single registered mapping creates edges only in that direction (no automatic reverse synapse); two mappings for true bidirectional. |
 | 2026-03-28 | `SynapseStorage::edge_flags`; STDP batch + connectome `associative_memory` (memory↔memory) stamp `SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`; `count_synapses_with_edge_flag_bits` on NPU. |
 | 2026-03-28 | Dual `FireLedger` + `FiringNeuron::fire_kind`; episodic vs STDP archive paths; plasticity registers episodic memory area window. |
+| 2026-03-28 | §10: sparse associative LIF for memory neurons (`sparse_memory_lif`, `memory_associative_fcl_input` from propagation, `process_neural_dynamics` wiring); §10 marked implemented. |

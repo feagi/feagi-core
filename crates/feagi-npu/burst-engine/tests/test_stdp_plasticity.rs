@@ -218,8 +218,49 @@ fn test_bidirectional_stdp_with_memory_neuron_ids() {
     assert_eq!(outgoing[0].0, dst.0);
 }
 
+/// Default `inject_memory_neuron_to_fcl` uses episodic fire kind; those spikes still drive
+/// associative STDP on the main fire ledger (synapse creation after full window).
+#[test]
+fn test_bidirectional_stdp_with_memory_neuron_ids_episodic_default_triggers_associative_stdp() {
+    const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+    let (mut npu, _src_neurons, _dst_neurons) = create_stdp_network();
+
+    npu.configure_fire_ledger_window(10, 2).unwrap();
+    npu.configure_fire_ledger_window(11, 2).unwrap();
+
+    let params = stdp_params(2, 1, 5, 0, true, 200.0, SynapseType::Excitatory);
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    let src = NeuronId(MEMORY_NEURON_ID_START);
+    let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
+
+    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
+    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    let burst = npu.process_burst().unwrap().burst;
+    assert_neuron_fired(&npu, 10, burst, src);
+    assert_neuron_fired(&npu, 11, burst, dst);
+    assert!(
+        npu.get_outgoing_synapses(src.0).is_empty(),
+        "No synapse should form until the full window is observed"
+    );
+
+    npu.inject_memory_neuron_to_fcl(src.0, 10, 2.0);
+    npu.inject_memory_neuron_to_fcl(dst.0, 11, 2.0);
+    let burst = npu.process_burst().unwrap().burst;
+    assert_neuron_fired(&npu, 10, burst, src);
+    assert_neuron_fired(&npu, 11, burst, dst);
+
+    let outgoing = npu.get_outgoing_synapses(src.0);
+    assert_eq!(
+        outgoing.len(),
+        1,
+        "Synapse should be created after full window"
+    );
+    assert_eq!(outgoing[0].0, dst.0);
+}
+
 /// When **both** (10→11) and (11→10) STDP mappings are registered, each direction is created by its
-/// own mapping iteration (no mirror — mirroring would duplicate the same batch entries).
+/// own mapping iteration only (no automatic reciprocal synapse from a single mapping).
 #[test]
 fn test_bidirectional_memory_neuron_both_mappings_no_duplicate_mirror() {
     const MEMORY_NEURON_ID_START: u32 = 50_000_000;
@@ -251,15 +292,14 @@ fn test_bidirectional_memory_neuron_both_mappings_no_duplicate_mirror() {
     assert_eq!(
         rev.len(),
         1,
-        "expected mirrored synapse dst→src when reverse STDP mapping is registered"
+        "expected dst→src edge only when reverse STDP mapping is registered"
     );
     assert_eq!(rev[0].0, src.0);
 }
 
-/// Single registered associative mapping (no reverse key in STDP table): mirror adds dst→src in the
-/// same burst so memory-only opposing areas still wire symmetrically.
+/// Single registered associative mapping does **not** create a reverse synapse; register B→A separately.
 #[test]
-fn test_memory_only_single_mapping_gets_mirrored_reverse_edge() {
+fn test_memory_only_single_mapping_has_no_automatic_reverse_edge() {
     const MEMORY_NEURON_ID_START: u32 = 50_000_000;
     let (mut npu, _src_neurons, _dst_neurons) = create_stdp_network();
 
@@ -284,9 +324,10 @@ fn test_memory_only_single_mapping_gets_mirrored_reverse_edge() {
     assert_eq!(fwd.len(), 1);
     assert_eq!(fwd[0].0, dst.0);
 
-    let rev = npu.get_outgoing_synapses(dst.0);
-    assert_eq!(rev.len(), 1);
-    assert_eq!(rev[0].0, src.0);
+    assert!(
+        npu.get_outgoing_synapses(dst.0).is_empty(),
+        "reverse edge must not be synthesized without a B→A STDP mapping"
+    );
 }
 
 #[test]
@@ -312,37 +353,6 @@ fn test_memory_memory_associative_stdp_skipped_when_not_assoc_eligible() {
     let _ = npu.process_burst().unwrap();
 
     assert!(npu.get_outgoing_synapses(src.0).is_empty());
-    assert!(npu.get_outgoing_synapses(dst.0).is_empty());
-}
-
-/// Forward associative edge uses assoc (active); mirrored reciprocal uses LTM only.
-#[test]
-fn test_single_mapping_mirror_skipped_when_not_ltm() {
-    const MEMORY_NEURON_ID_START: u32 = 50_000_000;
-    let (mut npu, _src, _dst) = create_stdp_network();
-    npu.set_memory_neuron_assoc_predicate(Some(Arc::new(|_| true)));
-    npu.set_memory_neuron_longterm_predicate(Some(Arc::new(|_| false)));
-
-    npu.configure_fire_ledger_window(10, 2).unwrap();
-    npu.configure_fire_ledger_window(11, 2).unwrap();
-
-    let params = stdp_params(2, 1, 5, 0, true, 200.0, SynapseType::Excitatory);
-    npu.register_stdp_mapping(10, 11, params).unwrap();
-
-    let src = NeuronId(MEMORY_NEURON_ID_START);
-    let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
-
-    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
-    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
-    let _ = npu.process_burst().unwrap();
-    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
-    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
-    let _ = npu.process_burst().unwrap();
-
-    let fwd = npu.get_outgoing_synapses(src.0);
-    assert_eq!(fwd.len(), 1);
-    assert_eq!(fwd[0].0, dst.0);
-
     assert!(npu.get_outgoing_synapses(dst.0).is_empty());
 }
 

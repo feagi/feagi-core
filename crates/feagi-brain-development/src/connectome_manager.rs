@@ -1252,8 +1252,7 @@ impl ConnectomeManager {
 
     /// Recompute and persist upstream_cortical_areas for a target area from mapping properties.
     ///
-    /// This is a recovery path for stale upstream tracking (e.g., bidirectional mappings
-    /// that were mirrored into properties but not fully regenerated).
+    /// This is a recovery path for stale upstream tracking after connectome or mapping edits.
     pub fn refresh_upstream_cortical_areas_from_mappings(
         &mut self,
         target_cortical_id: &CorticalID,
@@ -1755,9 +1754,9 @@ impl ConnectomeManager {
 
     /// Update cortical mapping properties between two cortical areas
     ///
-    /// Following Python's update_cortical_mapping_properties() logic:
-    /// 1. Updates the source area's cortical_mapping_dst property
-    /// 2. Triggers synapse regeneration for the affected connection
+    /// Updates only the source area's `cortical_mapping_dst` entry for this destination.
+    /// Associative memory mappings are **directed**: a reverse edge (if any) is stored only when
+    /// the client updates that pair explicitly (separate PUT).
     ///
     /// # Arguments
     /// * `src_area_id` - Source cortical area ID
@@ -1775,32 +1774,6 @@ impl ConnectomeManager {
         use tracing::info;
 
         info!(target: "feagi-bdu", "Updating cortical mapping: {} -> {}", src_area_id, dst_area_id);
-
-        // Helper: detect associative_memory (bi-directional STDP) in a mapping payload
-        let mapping_has_bidirectional_stdp = |rules: &[serde_json::Value]| -> bool {
-            for rule in rules {
-                if let Some(obj) = rule.as_object() {
-                    if let Some(morphology_id) = obj.get("morphology_id").and_then(|v| v.as_str()) {
-                        if morphology_id == "associative_memory" {
-                            return true;
-                        }
-                    }
-                }
-            }
-            false
-        };
-
-        let requested_bidirectional = mapping_has_bidirectional_stdp(&mapping_data);
-        let existing_bidirectional = self
-            .cortical_areas
-            .get(src_area_id)
-            .and_then(|area| area.properties.get("cortical_mapping_dst"))
-            .and_then(|v| v.as_object())
-            .and_then(|map| map.get(&dst_area_id.as_base_64()))
-            .and_then(|v| v.as_array())
-            .map(|arr| mapping_has_bidirectional_stdp(arr))
-            .unwrap_or(false);
-        let should_apply_bidirectional = requested_bidirectional || existing_bidirectional;
 
         {
             // Get source area (must exist)
@@ -1844,56 +1817,6 @@ impl ConnectomeManager {
                 );
                 info!(target: "feagi-bdu", "Updated mapping from {} to {} with {} connections",
                       src_area_id, dst_area_id, mapping_data.len());
-            }
-        }
-
-        // Bi-directional STDP: mirror the mapping on the reverse pair
-        if should_apply_bidirectional {
-            let dst_area = self.cortical_areas.get_mut(dst_area_id).ok_or_else(|| {
-                crate::types::BduError::InvalidArea(format!(
-                    "Destination area not found: {}",
-                    dst_area_id
-                ))
-            })?;
-            let dst_mapping_dst =
-                if let Some(existing) = dst_area.properties.get_mut("cortical_mapping_dst") {
-                    existing.as_object_mut().ok_or_else(|| {
-                        crate::types::BduError::InvalidMorphology(
-                            "cortical_mapping_dst is not an object".to_string(),
-                        )
-                    })?
-                } else {
-                    dst_area
-                        .properties
-                        .insert("cortical_mapping_dst".to_string(), serde_json::json!({}));
-                    dst_area
-                        .properties
-                        .get_mut("cortical_mapping_dst")
-                        .unwrap()
-                        .as_object_mut()
-                        .unwrap()
-                };
-
-            if mapping_data.is_empty() {
-                dst_mapping_dst.remove(&src_area_id.as_base_64());
-                info!(
-                    target: "feagi-bdu",
-                    "Removed bi-directional STDP mirror mapping from {} to {}",
-                    dst_area_id,
-                    src_area_id
-                );
-            } else {
-                dst_mapping_dst.insert(
-                    src_area_id.as_base_64(),
-                    serde_json::Value::Array(mapping_data.clone()),
-                );
-                info!(
-                    target: "feagi-bdu",
-                    "Updated bi-directional STDP mirror mapping from {} to {} with {} connections",
-                    dst_area_id,
-                    src_area_id,
-                    mapping_data.len()
-                );
             }
         }
 
@@ -2316,6 +2239,17 @@ impl ConnectomeManager {
         Ok(synapse_count)
     }
 
+    /// Whole numbers often arrive as JSON floats (e.g. `1.0`); `as_i64`/`as_u64` return None for those.
+    fn json_number_as_i64_for_stdp(v: &serde_json::Value) -> Option<i64> {
+        v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))
+    }
+
+    fn json_number_as_usize_for_stdp(v: &serde_json::Value) -> Option<usize> {
+        v.as_u64()
+            .map(|n| n as usize)
+            .or_else(|| v.as_f64().map(|f| f as usize))
+    }
+
     /// Register STDP mapping parameters for a plastic rule
     #[allow(clippy::too_many_arguments)]
     fn register_stdp_mapping_for_rule(
@@ -2331,16 +2265,16 @@ impl ConnectomeManager {
     ) -> BduResult<()> {
         let plasticity_window = rule_obj
             .get("plasticity_window")
-            .and_then(|v| v.as_u64())
+            .and_then(Self::json_number_as_usize_for_stdp)
             .ok_or_else(|| {
                 BduError::Internal(format!(
                     "Missing plasticity_window in plastic mapping rule {} -> {}",
                     src_area_id, dst_area_id
                 ))
-            })? as usize;
+            })?;
         let plasticity_constant = rule_obj
             .get("plasticity_constant")
-            .and_then(|v| v.as_i64())
+            .and_then(Self::json_number_as_i64_for_stdp)
             .ok_or_else(|| {
                 BduError::Internal(format!(
                     "Missing plasticity_constant in plastic mapping rule {} -> {}",
@@ -2349,7 +2283,7 @@ impl ConnectomeManager {
             })?;
         let ltp_multiplier = rule_obj
             .get("ltp_multiplier")
-            .and_then(|v| v.as_i64())
+            .and_then(Self::json_number_as_i64_for_stdp)
             .ok_or_else(|| {
                 BduError::Internal(format!(
                     "Missing ltp_multiplier in plastic mapping rule {} -> {}",
@@ -2358,7 +2292,7 @@ impl ConnectomeManager {
             })?;
         let ltd_multiplier = rule_obj
             .get("ltd_multiplier")
-            .and_then(|v| v.as_i64())
+            .and_then(Self::json_number_as_i64_for_stdp)
             .ok_or_else(|| {
                 BduError::Internal(format!(
                     "Missing ltd_multiplier in plastic mapping rule {} -> {}",
@@ -7074,23 +7008,30 @@ mod tests {
             "plasticity_window": 5,
         })];
         manager
-            .update_cortical_mapping(&m1_id, &m2_id, assoc_mapping)
+            .update_cortical_mapping(&m1_id, &m2_id, assoc_mapping.clone())
             .unwrap();
         manager
             .regenerate_synapses_for_mapping(&m1_id, &m2_id)
+            .unwrap();
+        // Second directed edge (bidirectional link is two explicit mappings, not auto-mirror).
+        manager
+            .update_cortical_mapping(&m2_id, &m1_id, assoc_mapping)
+            .unwrap();
+        manager
+            .regenerate_synapses_for_mapping(&m2_id, &m1_id)
             .unwrap();
 
         let upstream_m1 = manager.get_upstream_cortical_areas(&m1_id);
         let upstream_m2 = manager.get_upstream_cortical_areas(&m2_id);
         assert_eq!(
             upstream_m1.len(),
-            1,
-            "M1 should have only 1 upstream before refresh"
+            2,
+            "M1 should have A1 and M2 as upstreams once both directed associative edges exist"
         );
         assert_eq!(
             upstream_m2.len(),
             2,
-            "M2 should have 2 upstreams before refresh"
+            "M2 should have A2 and M1 as upstreams"
         );
 
         manager.refresh_upstream_cortical_areas_from_mappings(&m1_id);
@@ -7098,16 +7039,8 @@ mod tests {
 
         let upstream_m1 = manager.get_upstream_cortical_areas(&m1_id);
         let upstream_m2 = manager.get_upstream_cortical_areas(&m2_id);
-        assert_eq!(
-            upstream_m1.len(),
-            2,
-            "M1 should have 2 upstreams after refresh"
-        );
-        assert_eq!(
-            upstream_m2.len(),
-            2,
-            "M2 should have 2 upstreams after refresh"
-        );
+        assert_eq!(upstream_m1.len(), 2, "M1 upstreams unchanged after refresh");
+        assert_eq!(upstream_m2.len(), 2, "M2 upstreams unchanged after refresh");
         assert!(upstream_m1.contains(&a1_idx));
         assert!(upstream_m1.contains(&m2_idx));
         assert!(upstream_m2.contains(&a2_idx));

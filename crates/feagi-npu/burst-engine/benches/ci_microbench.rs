@@ -293,6 +293,7 @@ fn bench_synaptic_propagation_engine(c: &mut Criterion) {
                         black_box(&fired_ids),
                         black_box(&synapse_array),
                         black_box(&neuron_mps),
+                        None,
                     );
                     black_box(result)
                 });

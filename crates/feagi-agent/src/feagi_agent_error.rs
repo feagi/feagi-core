@@ -89,6 +89,24 @@ impl From<FeagiDataError> for FeagiAgentError {
     }
 }
 
+/// Returns true when `err` indicates a non-blocking transport send would block (e.g. ZMQ `EAGAIN`
+/// surfaced as `FeagiNetworkError::SendFailed` with `"Socket would block"`).
+///
+/// Used by callers and telemetry to avoid treating transient backpressure like a session failure.
+pub fn is_transient_zmq_send_would_block(err: &FeagiAgentError) -> bool {
+    match err {
+        FeagiAgentError::UnableToSendData(msg) | FeagiAgentError::SocketFailure(msg) => {
+            msg.contains("Socket would block")
+        }
+        _ => err.to_string().contains("Socket would block"),
+    }
+}
+
+/// String-based check for error messages already formatted (e.g. `anyhow` chains).
+pub fn is_transient_zmq_send_message(message: &str) -> bool {
+    message.contains("Socket would block")
+}
+
 impl From<FeagiNetworkError> for FeagiAgentError {
     fn from(err: FeagiNetworkError) -> Self {
         match err {
@@ -118,5 +136,31 @@ impl From<FeagiNetworkError> for FeagiAgentError {
                 FeagiAgentError::Other(format!("General failure: {}", msg))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod transient_send_tests {
+    use super::*;
+
+    #[test]
+    fn detects_would_block_in_unable_to_send() {
+        let e = FeagiAgentError::UnableToSendData("Socket would block".to_string());
+        assert!(is_transient_zmq_send_would_block(&e));
+    }
+
+    #[test]
+    fn ignores_other_unable_to_send() {
+        let e =
+            FeagiAgentError::UnableToSendData("Cannot send to inactive sensory socket".to_string());
+        assert!(!is_transient_zmq_send_would_block(&e));
+    }
+
+    #[test]
+    fn message_helper_matches() {
+        assert!(is_transient_zmq_send_message(
+            "FeagiAgentError: Unable to send data: Socket would block"
+        ));
+        assert!(!is_transient_zmq_send_message("connection reset"));
     }
 }

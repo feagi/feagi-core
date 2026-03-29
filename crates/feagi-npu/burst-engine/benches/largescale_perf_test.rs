@@ -148,6 +148,7 @@ fn bench_largescale_propagation(c: &mut Criterion) {
                         black_box(&fired_neurons),
                         black_box(&synapse_array),
                         black_box(&neuron_membrane_potentials),
+                        None,
                     );
                     let elapsed = start.elapsed();
 

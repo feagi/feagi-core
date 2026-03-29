@@ -1625,6 +1625,10 @@ fn burst_loop(
 
         let mut last_process_duration: Option<std::time::Duration> = None;
         let mut last_burst_stats: Option<(usize, usize, usize, usize, usize)> = None;
+        // Set when `process_burst` succeeds; notified after NPU lock release so
+        // `plasticity_notify` can lock `AsyncPlasticityExecutor` without inverting lock order
+        // with threads that hold the executor and then acquire the NPU (deadlock).
+        let mut plasticity_notify_timestep: Option<u64> = None;
 
         // Track lock acquisition time outside block scope for diagnostics
         let lock_acquired = {
@@ -1990,16 +1994,11 @@ fn burst_loop(
                         cached_burst_count
                             .store(current_burst, std::sync::atomic::Ordering::Relaxed);
 
-                        // Notify plasticity service of completed burst (while NPU lock still held)
-                        // This allows plasticity service to immediately query FireLedger data
-                        // Callback is pre-cloned Arc, so this is just a function call (no allocation)
-                        if let Some(ref notify_fn) = plasticity_notify {
-                            trace!(
-                                "[BURST-LOOP] 🧠 Notifying plasticity service of burst {}",
-                                current_burst
-                            );
-                            notify_fn(current_burst);
-                        }
+                        // Defer `plasticity_notify` until after NPU lock release: the callback locks
+                        // `AsyncPlasticityExecutor`, while other threads may hold that lock and wait
+                        // on the NPU (e.g. plasticity command processor). Notifying here inverted the
+                        // lock order and could deadlock the burst loop.
+                        plasticity_notify_timestep = Some(current_burst);
 
                         // CRITICAL PERFORMANCE FIX: Cache fire queue sample from process_burst() result
                         // This avoids needing to acquire NPU lock again (was causing 2-5 second delays!)
@@ -2051,6 +2050,16 @@ fn burst_loop(
         let lock_wait_duration = lock_acquired.duration_since(lock_start);
         let npu_lock_release_time = Instant::now();
         let release_thread_id = std::thread::current().id();
+
+        if let Some(timestep) = plasticity_notify_timestep {
+            if let Some(ref notify_fn) = plasticity_notify {
+                trace!(
+                    "[BURST-LOOP] Notifying plasticity service of burst {} (after NPU lock release)",
+                    timestep
+                );
+                notify_fn(timestep);
+            }
+        }
 
         // Update last lock release time
         if let Ok(mut last_release) = LAST_LOCK_RELEASE.lock() {

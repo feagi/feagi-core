@@ -1046,6 +1046,21 @@ where
         }
     }
 
+    pub fn set_memory_associative_lif_params(
+        &mut self,
+        cortical_idx: u32,
+        params: crate::MemoryAssociativeLifParams,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.set_memory_associative_lif_params(cortical_idx, params)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.set_memory_associative_lif_params(cortical_idx, params)
+            }
+        }
+    }
+
     /// Get a dense, burst-aligned window of firing history as RoaringBitmaps.
     pub fn get_fire_ledger_dense_window_bitmaps(
         &self,

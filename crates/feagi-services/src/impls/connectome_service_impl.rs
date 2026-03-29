@@ -2047,24 +2047,6 @@ impl ConnectomeService for ConnectomeServiceImpl {
             })
         };
 
-        let mapping_has_associative_memory = |rules: &[serde_json::Value]| -> bool {
-            for rule in rules {
-                if let Some(obj) = rule.as_object() {
-                    if let Some(morphology_id) = obj.get("morphology_id").and_then(|v| v.as_str()) {
-                        if morphology_id == "associative_memory" {
-                            return true;
-                        }
-                    }
-                }
-            }
-            false
-        };
-
-        let has_associative_memory = mapping_has_associative_memory(&mapping_data)
-            || existing_mapping
-                .as_ref()
-                .is_some_and(|rules| mapping_has_associative_memory(rules));
-
         let mut existing_plasticity_by_morphology: HashMap<
             String,
             serde_json::Map<String, serde_json::Value>,
@@ -2189,17 +2171,6 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .map_err(|e| {
                     ServiceError::Backend(format!("Failed to regenerate synapses: {}", e))
                 })?;
-
-            if has_associative_memory {
-                manager
-                    .regenerate_synapses_for_mapping(&dst_id, &src_id)
-                    .map_err(|e| {
-                        ServiceError::Backend(format!(
-                            "Failed to regenerate synapses for associative mirror: {}",
-                            e
-                        ))
-                    })?;
-            }
 
             // Recompute region IO registries after mapping change (critical for BV region boundary behavior)
             let region_io = manager.recompute_brain_region_io_registry().map_err(|e| {

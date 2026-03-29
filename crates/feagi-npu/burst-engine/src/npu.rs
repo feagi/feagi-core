@@ -37,6 +37,9 @@ use crate::fire_structures::{
 };
 use crate::fq_sampler::{FQSampler, SamplingMode};
 use crate::neural_dynamics::*;
+use crate::sparse_memory_lif::{
+    MemoryAssociativeLifParams, MemoryAssociativeLifParamsByArea, SparseMemoryAssociativeLifStates,
+};
 use crate::synaptic_propagation::SynapticPropagationEngine;
 use ahash::AHashMap;
 use ahash::AHashSet;
@@ -261,9 +264,8 @@ pub struct RustNPU<
     /// the memory global id range qualifies without calling plasticity.
     memory_neuron_assoc_predicate:
         std::sync::RwLock<Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>>,
-    /// Optional filter for the mirrored reciprocal edge (single mapping, no reverse STDP key).
-    /// When `Some`, both endpoints must pass (plasticity: typically LTM). When `None`, legacy
-    /// mirroring without an LTM gate.
+    /// Long-term memory predicate (wired by plasticity from memory neuron state). Reciprocal
+    /// associative edges are not synthesized in STDP; register a second mapping for B→A if needed.
     memory_neuron_longterm_predicate:
         std::sync::RwLock<Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>>,
 }
@@ -295,6 +297,12 @@ pub(crate) struct FireStructures {
     /// Per-burst fire_kind for staged memory injections (id -> kind). Propagation-sourced memory
     /// candidates omit entries here and default to STDP-eligible in dynamics.
     pub(crate) memory_candidate_fire_kind: AHashMap<u32, u8>,
+    /// Per-burst associative PSP sums for memory neuron ids (synapse `SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`).
+    pub(crate) memory_associative_fcl_input: AHashMap<u32, f32>,
+    /// Sparse associative LIF state (§10); allocated when a neuron first receives associative input.
+    pub(crate) sparse_memory_associative_lif: SparseMemoryAssociativeLifStates,
+    /// Default LIF parameters per memory `cortical_idx` for the associative path.
+    pub(crate) memory_associative_lif_params: MemoryAssociativeLifParamsByArea,
     pub(crate) last_fcl_snapshot: Vec<(NeuronId, f32)>,
     /// Scheduled replay injections (burst target -> twin area coords).
     pub(crate) pending_replay_injections: Vec<ReplayInjection>,
@@ -378,6 +386,9 @@ impl<
                 pending_memory_injections: Vec::with_capacity(1024),
                 memory_candidate_cortical_idx: AHashMap::new(),
                 memory_candidate_fire_kind: AHashMap::new(),
+                memory_associative_fcl_input: AHashMap::new(),
+                sparse_memory_associative_lif: AHashMap::new(),
+                memory_associative_lif_params: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
                 pending_replay_injections: Vec::new(),
                 pending_authoritative_fq: Vec::with_capacity(256),
@@ -581,6 +592,9 @@ impl<
                 pending_memory_injections: Vec::with_capacity(1024),
                 memory_candidate_cortical_idx: AHashMap::new(),
                 memory_candidate_fire_kind: AHashMap::new(),
+                memory_associative_fcl_input: AHashMap::new(),
+                sparse_memory_associative_lif: AHashMap::new(),
+                memory_associative_lif_params: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
                 pending_replay_injections: Vec::new(),
                 pending_authoritative_fq: Vec::with_capacity(256),
@@ -613,7 +627,7 @@ impl<
         *self.memory_neuron_assoc_predicate.write().unwrap() = pred;
     }
 
-    /// Register optional mirror filter; `None` restores legacy mirroring without an LTM gate.
+    /// Set LTM predicate for plasticity-backed state (see field docs).
     pub fn set_memory_neuron_longterm_predicate(
         &self,
         pred: Option<Arc<dyn Fn(u32) -> bool + Send + Sync>>,
@@ -1682,7 +1696,8 @@ impl<
     }
 
     /// Same staging as [`Self::inject_memory_neuron_to_fcl`] but supplies an explicit
-    /// [`FiringNeuron::fire_kind`] (e.g. [`FIRE_KIND_STDP_ELIGIBLE`] for associative STDP tests).
+    /// [`FiringNeuron::fire_kind`] (default injection uses [`FIRE_KIND_EPISODIC_MEMORY`], which
+    /// still feeds the STDP fire ledger for associative plasticity).
     pub fn inject_memory_neuron_to_fcl_with_kind(
         &mut self,
         neuron_id: u32,
@@ -1959,8 +1974,13 @@ impl<
             let power_neuron_id = self
                 .power_neuron_id
                 .load(std::sync::atomic::Ordering::Acquire);
+            let FireStructures {
+                fire_candidate_list,
+                memory_associative_fcl_input,
+                ..
+            } = &mut *fire_structures;
             phase1_injection_with_synapses(
-                &mut fire_structures.fire_candidate_list,
+                fire_candidate_list,
                 &mut *neuron_storage,
                 &mut propagation_engine,
                 &previous_fq,
@@ -1970,6 +1990,7 @@ impl<
                 &pending_mutex,
                 fatigue_active,
                 power_neuron_id,
+                memory_associative_fcl_input,
             )?
         };
         let phase1_duration = phase1_start.elapsed();
@@ -2082,13 +2103,27 @@ impl<
 
         // Phase 2: Neural Dynamics (membrane potential updates, threshold checks, firing)
         let phase2_start = std::time::Instant::now();
-        let mut dynamics_result = process_neural_dynamics(
-            &fire_structures.fire_candidate_list,
-            Some(&fire_structures.memory_candidate_cortical_idx),
-            Some(&fire_structures.memory_candidate_fire_kind),
-            &mut *neuron_storage,
-            burst_count,
-        )?;
+        let mut dynamics_result = {
+            let FireStructures {
+                fire_candidate_list,
+                memory_candidate_cortical_idx,
+                memory_candidate_fire_kind,
+                memory_associative_fcl_input,
+                sparse_memory_associative_lif,
+                memory_associative_lif_params,
+                ..
+            } = &mut *fire_structures;
+            process_neural_dynamics(
+                fire_candidate_list,
+                Some(memory_candidate_cortical_idx),
+                Some(memory_candidate_fire_kind),
+                Some(memory_associative_fcl_input),
+                sparse_memory_associative_lif,
+                Some(memory_associative_lif_params),
+                &mut *neuron_storage,
+                burst_count,
+            )?
+        };
         let pending_auth = std::mem::take(&mut fire_structures.pending_authoritative_fq);
         if !pending_auth.is_empty() {
             merge_authoritative_fires_into_fire_queue(
@@ -2131,9 +2166,7 @@ impl<
 
         // Phase 3: Archival (ZERO-COPY archive to Fire Ledger)
         let phase3_start = std::time::Instant::now();
-        let stdp_fire_queue = dynamics_result
-            .fire_queue
-            .clone_for_stdp_fire_ledger(MEMORY_NEURON_ID_START);
+        let stdp_fire_queue = dynamics_result.fire_queue.clone_for_stdp_fire_ledger();
         fire_structures
             .fire_ledger
             .archive_burst(burst_count, &stdp_fire_queue)
@@ -3710,12 +3743,21 @@ impl<
                 .retain(|(_, area_idx, _, _)| *area_idx != cortical_area);
             fs.pending_authoritative_fq
                 .retain(|(nid, _)| !neuron_ids_in_area.contains(&nid.0));
+            let memory_nids_in_area: Vec<u32> = fs
+                .memory_candidate_cortical_idx
+                .iter()
+                .filter_map(|(&nid, &c)| (c == cortical_area).then_some(nid))
+                .collect();
             fs.memory_candidate_cortical_idx
                 .retain(|_, idx| *idx != cortical_area);
+            for nid in memory_nids_in_area {
+                fs.sparse_memory_associative_lif.remove(&nid);
+            }
             let memory_candidate_ids: AHashSet<u32> =
                 fs.memory_candidate_cortical_idx.keys().copied().collect();
             fs.memory_candidate_fire_kind
                 .retain(|k, _| memory_candidate_ids.contains(k));
+            fs.memory_associative_lif_params.remove(&cortical_area);
 
             // CRITICAL: Remove from fire queues to prevent stale firings from propagating
             let current_removed = fs.current_fire_queue.remove_cortical_area(cortical_area);
@@ -4394,11 +4436,6 @@ impl<
             }
 
             let assoc_pred = self.memory_neuron_assoc_predicate.read().unwrap().clone();
-            let longterm_pred = self
-                .memory_neuron_longterm_predicate
-                .read()
-                .unwrap()
-                .clone();
 
             let mut new_sources = Vec::new();
             let mut new_targets = Vec::new();
@@ -4474,64 +4511,6 @@ impl<
                         new_weights.push(SynapticWeight(delta_plus as f32));
                         new_psps.push(SynapticPsp(params.synapse_psp));
                         new_types.push(params.synapse_type);
-
-                        // Memory-only cortical areas have no dense LIF neurons; associative projector
-                        // creates 0 synapses (empty `get_neurons_in_cortical_area`). Co-firing memory
-                        // neurons are linked only via this STDP path.
-                        //
-                        // When **only** one associative mapping is registered (e.g. genome mirror missing
-                        // for the reverse pair), create the reciprocal edge here using this mapping's
-                        // parameters. When **both** (A→B) and (B→A) STDP mappings exist, each direction is
-                        // created by its own loop iteration — mirroring would duplicate batch entries.
-                        if src_neuron >= MEMORY_NEURON_ID_START
-                            && dst_neuron >= MEMORY_NEURON_ID_START
-                        {
-                            let reverse_has_own_mapping = mappings.contains_key(&(key.1, key.0));
-                            if !reverse_has_own_mapping {
-                                let both_ltm = longterm_pred
-                                    .as_ref()
-                                    .map(|p| p(src_neuron) && p(dst_neuron))
-                                    .unwrap_or(true);
-                                if both_ltm {
-                                    let mut rev_existing = false;
-                                    if let Some(indices) =
-                                        prop_engine.synapse_index.get(&NeuronId(dst_neuron))
-                                    {
-                                        for &syn_idx in indices {
-                                            if syn_idx >= synapse_storage.count()
-                                                || !synapse_storage.valid_mask()[syn_idx]
-                                            {
-                                                continue;
-                                            }
-                                            if synapse_storage.target_neurons()[syn_idx]
-                                                == src_neuron
-                                            {
-                                                rev_existing = true;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    if !rev_existing {
-                                        let rdp = delta_plus;
-                                        new_sources.push(NeuronId(dst_neuron));
-                                        new_targets.push(NeuronId(src_neuron));
-                                        new_weights.push(SynapticWeight(rdp as f32));
-                                        new_psps.push(SynapticPsp(params.synapse_psp));
-                                        new_types.push(params.synapse_type);
-                                        tracing::trace!(
-                                            target: "feagi-burst-engine",
-                                            "associative-stdp LTP mirror synapse burst={} mapping_rev=({}->{}) src_neuron={} dst_neuron={} weight={}",
-                                            burst_timestep,
-                                            key.1,
-                                            key.0,
-                                            dst_neuron,
-                                            src_neuron,
-                                            rdp,
-                                        );
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -4639,6 +4618,7 @@ fn phase1_injection_with_synapses<
     pending_sensory: &std::sync::Mutex<Vec<(NeuronId, f32)>>,
     fatigue_active: bool,
     power_neuron_id: u32,
+    memory_associative_fcl_input: &mut AHashMap<u32, f32>,
 ) -> Result<InjectionResult> {
     // Clear FCL from previous burst
     fcl.clear();
@@ -4852,8 +4832,12 @@ fn phase1_injection_with_synapses<
 
         // Call synaptic propagation engine (ZERO-COPY: pass synapse_storage by reference)
         let propagate_start = std::time::Instant::now();
-        let propagation_result =
-            propagation_engine.propagate(&fired_ids, synapse_storage, &neuron_mps)?;
+        let propagation_result = propagation_engine.propagate(
+            &fired_ids,
+            synapse_storage,
+            &neuron_mps,
+            Some(memory_associative_fcl_input),
+        )?;
         let propagate_duration = propagate_start.elapsed();
 
         // Inject propagated potentials into FCL (OPTIMIZED: pre-allocate + direct insertion)
@@ -5033,6 +5017,21 @@ impl<
             .unwrap()
             .episodic_memory_fire_ledger
             .get_tracked_windows()
+    }
+
+    /// Set associative sparse LIF defaults for a memory cortical area (`cortical_idx`).
+    ///
+    /// See `plasticity/docs/memory-episodic-associative-design.md` §10.
+    pub fn set_memory_associative_lif_params(
+        &mut self,
+        cortical_idx: u32,
+        params: MemoryAssociativeLifParams,
+    ) {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .memory_associative_lif_params
+            .insert(cortical_idx, params);
     }
 }
 

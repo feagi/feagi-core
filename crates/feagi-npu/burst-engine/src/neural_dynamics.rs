@@ -25,6 +25,10 @@
 //! 3. **Cache-friendly**: Sequential access patterns, no pointer chasing
 
 use crate::fire_structures::{FireQueue, FiringNeuron, FIRE_KIND_STDP_ELIGIBLE};
+use crate::sparse_memory_lif::{
+    resolve_memory_neuron_output, MemoryAssociativeLifParamsByArea,
+    SparseMemoryAssociativeLifStates,
+};
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::NeuronStorage;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -80,18 +84,6 @@ fn runtime_trace_cortical_idx() -> Option<u32> {
     } else {
         Some(v)
     }
-}
-
-/// Resolve [`FiringNeuron::fire_kind`] for memory-neuron candidates: staged injections carry an
-/// explicit kind; propagation-sourced memory candidates omit the map entry and default to STDP-eligible.
-#[inline]
-fn memory_fire_kind_for(
-    memory_candidate_fire_kind: Option<&ahash::AHashMap<u32, u8>>,
-    neuron_id: u32,
-) -> u8 {
-    memory_candidate_fire_kind
-        .and_then(|m| m.get(&neuron_id).copied())
-        .unwrap_or(FIRE_KIND_STDP_ELIGIBLE)
 }
 
 fn effective_cortical_idx_filter() -> Option<u32> {
@@ -202,6 +194,9 @@ pub fn process_neural_dynamics<T: NeuralValue>(
     fcl: &FireCandidateList,
     memory_candidate_cortical_idx: Option<&ahash::AHashMap<u32, u32>>,
     memory_candidate_fire_kind: Option<&ahash::AHashMap<u32, u8>>,
+    memory_associative_psp: Option<&ahash::AHashMap<u32, f32>>,
+    sparse_memory_associative_lif: &mut SparseMemoryAssociativeLifStates,
+    memory_associative_lif_params: Option<&MemoryAssociativeLifParamsByArea>,
     neuron_array: &mut impl NeuronStorage<Value = T>,
     burst_count: u64,
 ) -> Result<DynamicsResult> {
@@ -240,6 +235,9 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                     candidates,
                     memory_candidate_cortical_idx,
                     memory_candidate_fire_kind,
+                    memory_associative_psp,
+                    sparse_memory_associative_lif,
+                    memory_associative_lif_params,
                     neuron_array,
                     burst_count,
                 )
@@ -264,19 +262,21 @@ pub fn process_neural_dynamics<T: NeuralValue>(
                             }
                         };
 
-                        results.push(FiringNeuron {
-                            neuron_id,
-                            membrane_potential: candidate_potential,
+                        let staged = memory_candidate_fire_kind
+                            .and_then(|m| m.get(&neuron_id.0).copied());
+                        if let Some(n) = resolve_memory_neuron_output(
+                            neuron_id.0,
                             cortical_idx,
-                            x: 0,
-                            y: 0,
-                            z: 0,
-                            fire_kind: memory_fire_kind_for(
-                                memory_candidate_fire_kind,
-                                neuron_id.0,
-                            ),
-                        });
-                        memory_fired += 1;
+                            candidate_potential,
+                            staged,
+                            burst_count,
+                            memory_associative_psp,
+                            sparse_memory_associative_lif,
+                            memory_associative_lif_params,
+                        ) {
+                            results.push(n);
+                            memory_fired += 1;
+                        }
                         continue;
                     }
 
@@ -379,6 +379,9 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
     candidates: &[(NeuronId, f32)],
     memory_candidate_cortical_idx: Option<&ahash::AHashMap<u32, u32>>,
     memory_candidate_fire_kind: Option<&ahash::AHashMap<u32, u8>>,
+    memory_associative_psp: Option<&ahash::AHashMap<u32, f32>>,
+    sparse_memory_associative_lif: &mut SparseMemoryAssociativeLifStates,
+    memory_associative_lif_params: Option<&MemoryAssociativeLifParamsByArea>,
     neuron_array: &mut impl NeuronStorage<Value = T>,
     burst_count: u64,
 ) -> (Vec<FiringNeuron>, usize) {
@@ -441,16 +444,20 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
                 }
             };
 
-        results.push(FiringNeuron {
-            neuron_id,
-            membrane_potential: candidate_potential,
+        let staged = memory_candidate_fire_kind.and_then(|m| m.get(&neuron_id.0).copied());
+        if let Some(n) = resolve_memory_neuron_output(
+            neuron_id.0,
             cortical_idx,
-            x: 0,
-            y: 0,
-            z: 0,
-            fire_kind: memory_fire_kind_for(memory_candidate_fire_kind, neuron_id.0),
-        });
-        memory_fired += 1;
+            candidate_potential,
+            staged,
+            burst_count,
+            memory_associative_psp,
+            sparse_memory_associative_lif,
+            memory_associative_lif_params,
+        ) {
+            results.push(n);
+            memory_fired += 1;
+        }
     }
     if memory_fired > 0 || memory_missing_meta > 0 {
         tracing::debug!(
@@ -988,11 +995,18 @@ fn process_single_neuron<T: NeuralValue>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fire_structures::{FIRE_KIND_EPISODIC_MEMORY, FIRE_KIND_STDP_ELIGIBLE};
+    use crate::sparse_memory_lif::MemoryAssociativeLifParams;
     use feagi_npu_runtime::StdNeuronArray; // OK: dev-dependency for tests
+
+    fn empty_assoc_sparse() -> crate::sparse_memory_lif::SparseMemoryAssociativeLifStates {
+        ahash::AHashMap::new()
+    }
 
     #[test]
     fn test_neuron_fires_when_above_threshold() {
         let mut neurons = StdNeuronArray::new(10);
+        let mut empty_sparse = empty_assoc_sparse();
 
         // Add a neuron with threshold 1.0
         let id = neurons
@@ -1019,7 +1033,17 @@ mod tests {
         fcl.add_candidate(NeuronId(id as u32), 1.5);
 
         // Process dynamics
-        let result = process_neural_dynamics(&fcl, None, None, &mut neurons, 0).unwrap();
+        let result = process_neural_dynamics(
+            &fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            0,
+        )
+        .unwrap();
 
         assert_eq!(result.neurons_fired, 1);
         assert_eq!(result.fire_queue.total_neurons(), 1);
@@ -1030,6 +1054,7 @@ mod tests {
     #[test]
     fn test_consecutive_fire_limit_zero_does_not_block_firing() {
         let mut neurons = StdNeuronArray::new(10);
+        let mut empty_sparse = empty_assoc_sparse();
 
         // consecutive_fire_limit=0 should DISABLE the limiter (unlimited).
         let id = neurons
@@ -1055,17 +1080,38 @@ mod tests {
         fcl.add_candidate(NeuronId(id as u32), 2.0);
 
         // Burst 0: should fire
-        let result0 = process_neural_dynamics(&fcl, None, None, &mut neurons, 0).unwrap();
+        let result0 = process_neural_dynamics(
+            &fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            0,
+        )
+        .unwrap();
         assert_eq!(result0.neurons_fired, 1);
 
         // Burst 1: should ALSO fire (still unlimited)
-        let result1 = process_neural_dynamics(&fcl, None, None, &mut neurons, 1).unwrap();
+        let result1 = process_neural_dynamics(
+            &fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            1,
+        )
+        .unwrap();
         assert_eq!(result1.neurons_fired, 1);
     }
 
     #[test]
     fn test_neuron_does_not_fire_below_threshold() {
         let mut neurons = StdNeuronArray::new(10);
+        let mut empty_sparse = empty_assoc_sparse();
 
         let id = neurons
             .add_neuron(
@@ -1089,7 +1135,17 @@ mod tests {
         let mut fcl = FireCandidateList::new();
         fcl.add_candidate(NeuronId(id as u32), 0.5); // Below threshold
 
-        let result = process_neural_dynamics(&fcl, None, None, &mut neurons, 0).unwrap();
+        let result = process_neural_dynamics(
+            &fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            0,
+        )
+        .unwrap();
 
         assert_eq!(result.neurons_fired, 0);
         assert_eq!(result.fire_queue.total_neurons(), 0);
@@ -1099,6 +1155,7 @@ mod tests {
     #[test]
     fn test_mp_charge_accumulation_skips_negative_fcl_candidates() {
         let mut neurons = StdNeuronArray::new(10);
+        let mut empty_sparse = empty_assoc_sparse();
         let id = neurons
             .add_neuron(
                 100.0,    // threshold — no fire
@@ -1123,7 +1180,17 @@ mod tests {
         let mut fcl = FireCandidateList::new();
         fcl.add_candidate(NeuronId(id as u32), -10.0);
 
-        let result = process_neural_dynamics(&fcl, None, None, &mut neurons, 0).unwrap();
+        let result = process_neural_dynamics(
+            &fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            0,
+        )
+        .unwrap();
         assert_eq!(result.neurons_fired, 0);
         assert_eq!(neurons.membrane_potentials[id as usize], 3.0);
     }
@@ -1131,6 +1198,7 @@ mod tests {
     #[test]
     fn test_mp_charge_accumulation_false_still_applies_negative_fcl_candidates() {
         let mut neurons = StdNeuronArray::new(10);
+        let mut empty_sparse = empty_assoc_sparse();
         let id = neurons
             .add_neuron(
                 100.0,
@@ -1155,7 +1223,17 @@ mod tests {
         let mut fcl = FireCandidateList::new();
         fcl.add_candidate(NeuronId(id as u32), -10.0);
 
-        let result = process_neural_dynamics(&fcl, None, None, &mut neurons, 0).unwrap();
+        let result = process_neural_dynamics(
+            &fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            0,
+        )
+        .unwrap();
         assert_eq!(result.neurons_fired, 0);
         assert_eq!(neurons.membrane_potentials[id as usize], -7.0);
     }
@@ -1163,6 +1241,7 @@ mod tests {
     #[test]
     fn test_refractory_period_blocks_firing() {
         let mut neurons = StdNeuronArray::new(10);
+        let mut empty_sparse = empty_assoc_sparse();
 
         let id = neurons
             .add_neuron(
@@ -1189,7 +1268,17 @@ mod tests {
         let mut fcl = FireCandidateList::new();
         fcl.add_candidate(NeuronId(id as u32), 2.0); // Well above threshold
 
-        let result = process_neural_dynamics(&fcl, None, None, &mut neurons, 0).unwrap();
+        let result = process_neural_dynamics(
+            &fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            0,
+        )
+        .unwrap();
 
         assert_eq!(result.neurons_fired, 0);
         assert_eq!(neurons.refractory_countdowns[0], 2); // Decremented
@@ -1198,6 +1287,7 @@ mod tests {
     #[test]
     fn test_leak_decay() {
         let mut neurons = StdNeuronArray::new(10);
+        let mut empty_sparse = empty_assoc_sparse();
 
         let id = neurons
             .add_neuron(
@@ -1223,7 +1313,17 @@ mod tests {
         let mut fcl = FireCandidateList::new();
         fcl.add_candidate(NeuronId(id as u32), 0.1);
 
-        process_neural_dynamics(&fcl, None, None, &mut neurons, 0).unwrap();
+        process_neural_dynamics(
+            &fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            0,
+        )
+        .unwrap();
 
         // Expected LIF: (1.0 + 0.1) + 0.5 * (0.0 - 1.1) = 1.1 - 0.55 = 0.55
         assert!((neurons.membrane_potentials[0].to_f32() - 0.55).abs() < 0.001);
@@ -1232,6 +1332,7 @@ mod tests {
     #[test]
     fn test_multiple_neurons_firing() {
         let mut neurons = StdNeuronArray::new(100);
+        let mut empty_sparse = empty_assoc_sparse();
 
         // Add 10 neurons
         let mut ids = Vec::new();
@@ -1263,7 +1364,17 @@ mod tests {
             fcl.add_candidate(NeuronId(*id as u32), 1.5);
         }
 
-        let result = process_neural_dynamics(&fcl, None, None, &mut neurons, 0).unwrap();
+        let result = process_neural_dynamics(
+            &fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            0,
+        )
+        .unwrap();
 
         assert_eq!(result.neurons_processed, 10);
         assert_eq!(result.neurons_fired, 10);
@@ -1272,6 +1383,7 @@ mod tests {
     #[test]
     fn test_memory_neuron_forced_fire_without_storage_backing() {
         let mut neurons = StdNeuronArray::<f32>::new(1);
+        let mut empty_sparse = empty_assoc_sparse();
 
         let memory_id = NeuronId(50_000_000);
         let cortical_idx = 42u32;
@@ -1283,7 +1395,17 @@ mod tests {
         let mut mem_map = ahash::AHashMap::new();
         mem_map.insert(memory_id.0, cortical_idx);
 
-        let result = process_neural_dynamics(&fcl, Some(&mem_map), None, &mut neurons, 7).unwrap();
+        let result = process_neural_dynamics(
+            &fcl,
+            Some(&mem_map),
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            7,
+        )
+        .unwrap();
 
         assert_eq!(result.neurons_fired, 1);
         assert_eq!(result.fire_queue.total_neurons(), 1);
@@ -1298,6 +1420,7 @@ mod tests {
     #[test]
     fn test_memory_neuron_forced_fire_allows_cortical_idx_zero() {
         let mut neurons = StdNeuronArray::<f32>::new(1);
+        let mut empty_sparse = empty_assoc_sparse();
 
         let memory_id = NeuronId(50_000_000);
         let cortical_idx = 0u32; // valid in some deployments (0-based cortical indices)
@@ -1308,8 +1431,146 @@ mod tests {
         let mut mem_map = ahash::AHashMap::new();
         mem_map.insert(memory_id.0, cortical_idx);
 
-        let result = process_neural_dynamics(&fcl, Some(&mem_map), None, &mut neurons, 1).unwrap();
+        let result = process_neural_dynamics(
+            &fcl,
+            Some(&mem_map),
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            1,
+        )
+        .unwrap();
         assert_eq!(result.fire_queue.total_neurons(), 1);
         assert!(result.fire_queue.get_area_neurons(cortical_idx).is_some());
+    }
+
+    #[test]
+    fn test_memory_neuron_associative_sparse_lif_fires_when_above_threshold() {
+        let mut neurons = StdNeuronArray::<f32>::new(1);
+        let mut empty_sparse = empty_assoc_sparse();
+
+        let memory_id = NeuronId(50_000_000);
+        let cortical_idx = 7u32;
+        let mut fcl = FireCandidateList::new();
+        fcl.add_candidate(memory_id, 2.0);
+
+        let mut mem_map = ahash::AHashMap::new();
+        mem_map.insert(memory_id.0, cortical_idx);
+
+        let mut assoc_psp = ahash::AHashMap::new();
+        assoc_psp.insert(memory_id.0, 2.0);
+
+        let mut lif_params = ahash::AHashMap::new();
+        lif_params.insert(
+            cortical_idx,
+            MemoryAssociativeLifParams {
+                threshold: 1.0,
+                ..Default::default()
+            },
+        );
+
+        let result = process_neural_dynamics(
+            &fcl,
+            Some(&mem_map),
+            None,
+            Some(&assoc_psp),
+            &mut empty_sparse,
+            Some(&lif_params),
+            &mut neurons,
+            0,
+        )
+        .unwrap();
+
+        assert_eq!(result.neurons_fired, 1);
+        let area = result.fire_queue.get_area_neurons(cortical_idx).unwrap();
+        assert_eq!(area[0].fire_kind, FIRE_KIND_STDP_ELIGIBLE);
+        assert!(!empty_sparse.is_empty());
+    }
+
+    #[test]
+    fn test_memory_neuron_associative_lif_no_fire_below_threshold() {
+        let mut neurons = StdNeuronArray::<f32>::new(1);
+        let mut empty_sparse = empty_assoc_sparse();
+
+        let memory_id = NeuronId(50_000_000);
+        let cortical_idx = 7u32;
+        let mut fcl = FireCandidateList::new();
+        fcl.add_candidate(memory_id, 0.3);
+
+        let mut mem_map = ahash::AHashMap::new();
+        mem_map.insert(memory_id.0, cortical_idx);
+
+        let mut assoc_psp = ahash::AHashMap::new();
+        assoc_psp.insert(memory_id.0, 0.3);
+
+        let mut lif_params = ahash::AHashMap::new();
+        lif_params.insert(
+            cortical_idx,
+            MemoryAssociativeLifParams {
+                threshold: 1.0,
+                ..Default::default()
+            },
+        );
+
+        let result = process_neural_dynamics(
+            &fcl,
+            Some(&mem_map),
+            None,
+            Some(&assoc_psp),
+            &mut empty_sparse,
+            Some(&lif_params),
+            &mut neurons,
+            0,
+        )
+        .unwrap();
+
+        assert_eq!(result.neurons_fired, 0);
+    }
+
+    #[test]
+    fn test_memory_neuron_episodic_preempts_associative_sparse_lif() {
+        let mut neurons = StdNeuronArray::<f32>::new(1);
+        let mut empty_sparse = empty_assoc_sparse();
+
+        let memory_id = NeuronId(50_000_000);
+        let cortical_idx = 7u32;
+        let mut fcl = FireCandidateList::new();
+        fcl.add_candidate(memory_id, 2.0);
+
+        let mut mem_map = ahash::AHashMap::new();
+        mem_map.insert(memory_id.0, cortical_idx);
+
+        let mut fire_kind = ahash::AHashMap::new();
+        fire_kind.insert(memory_id.0, FIRE_KIND_EPISODIC_MEMORY);
+
+        let mut assoc_psp = ahash::AHashMap::new();
+        assoc_psp.insert(memory_id.0, 2.0);
+
+        let mut lif_params = ahash::AHashMap::new();
+        lif_params.insert(
+            cortical_idx,
+            MemoryAssociativeLifParams {
+                threshold: 100.0,
+                ..Default::default()
+            },
+        );
+
+        let result = process_neural_dynamics(
+            &fcl,
+            Some(&mem_map),
+            Some(&fire_kind),
+            Some(&assoc_psp),
+            &mut empty_sparse,
+            Some(&lif_params),
+            &mut neurons,
+            0,
+        )
+        .unwrap();
+
+        assert_eq!(result.neurons_fired, 1);
+        let area = result.fire_queue.get_area_neurons(cortical_idx).unwrap();
+        assert_eq!(area[0].fire_kind, FIRE_KIND_EPISODIC_MEMORY);
     }
 }

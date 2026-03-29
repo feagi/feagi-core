@@ -16,10 +16,13 @@
 use ahash::AHashMap;
 use feagi_npu_neural::types::NeuronId;
 
-/// Default / dense LIF / associative-memory STDP-eligible fires (included in STDP FireLedger).
+/// Default / dense LIF / associative-memory fires tagged as driven by dense or associative LIF
+/// (not pattern-only injection).
 pub const FIRE_KIND_STDP_ELIGIBLE: u8 = 0;
-/// Memory neuron fired via episodic pattern path (`inject_memory_neuron_to_fcl`); excluded from STDP
-/// FireLedger, recorded on episodic memory FireLedger only.
+/// Memory neuron fired via episodic pattern path (`inject_memory_neuron_to_fcl` default).
+/// These spikes are **triggers for associative STDP**: they are archived to the main STDP
+/// fire ledger like other memory fires; the episodic-only ledger is a subset view for
+/// pattern machinery that needs episodic-tagged activity alone.
 pub const FIRE_KIND_EPISODIC_MEMORY: u8 = 1;
 
 /// A single neuron that fired in the current burst
@@ -129,18 +132,15 @@ impl FireQueue {
         }
     }
 
-    /// Clone of this queue for **STDP** FireLedger: drops episodic-only memory neuron fires
-    /// (see [`FIRE_KIND_EPISODIC_MEMORY`]) so plasticity windows stay independent of episodic path.
-    pub fn clone_for_stdp_fire_ledger(&self, memory_neuron_id_start: u32) -> Self {
+    /// Clone of this queue for **STDP** FireLedger: includes **all** fires, including
+    /// [`FIRE_KIND_EPISODIC_MEMORY`] pattern-injection spikes, so associative STDP can match
+    /// source/destination memory co-activation and create or update synapses.
+    pub fn clone_for_stdp_fire_ledger(&self) -> Self {
         let mut out = FireQueue::new();
         out.set_timestep(self.timestep);
         for neurons in self.neurons_by_area.values() {
             for n in neurons {
-                let skip = n.neuron_id.0 >= memory_neuron_id_start
-                    && n.fire_kind == FIRE_KIND_EPISODIC_MEMORY;
-                if !skip {
-                    out.add_neuron(n.clone());
-                }
+                out.add_neuron(n.clone());
             }
         }
         out
