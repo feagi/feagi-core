@@ -84,10 +84,8 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
             }
 
             let target_id = synapse_storage.target_neurons()[syn_idx];
-            // Canonical synaptic units: u8 (0..255) stored in synapse arrays.
-            // We use direct cast to f32 (NO /255 normalization) to match the rest of FEAGI.
-            let weight = synapse_storage.weights()[syn_idx] as f32;
-            let psp = synapse_storage.postsynaptic_potentials()[syn_idx] as f32;
+            let weight = synapse_storage.weights()[syn_idx];
+            let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
             let synapse_type = if synapse_storage.types()[syn_idx] == 0 {
                 SynapseType::Excitatory
             } else {
@@ -115,8 +113,17 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)> {
         // FCL-aware: Process only FCL neurons (existing neural_dynamics already supports this!)
-        let result =
-            neural_dynamics::process_neural_dynamics(fcl, None, neuron_storage, burst_count)?;
+        let mut empty_sparse = ahash::AHashMap::new();
+        let result = neural_dynamics::process_neural_dynamics(
+            fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            neuron_storage,
+            burst_count,
+        )?;
 
         // Extract neuron IDs from fire queue
         let fired_neurons: Vec<u32> = result
@@ -160,7 +167,7 @@ mod tests {
         // Create minimal test data
         let fired_neurons = vec![1];
         let mut synapse_storage = StdSynapseArray::new(4);
-        synapse_storage.add_synapse_simple(1, 2, 2, 3, SynapseType::Excitatory); // 2×3 = 6
+        synapse_storage.add_synapse_simple(1, 2, 2.0, 3.0, SynapseType::Excitatory); // 2×3 = 6
         let mut fcl = FireCandidateList::new();
 
         // Should not panic
@@ -174,8 +181,8 @@ mod tests {
         assert_eq!(
             fcl.get(NeuronId(2)),
             Some(compute_synaptic_contribution(
-                2,
-                3,
+                2.0,
+                3.0,
                 NeuralSynapseType::Excitatory
             ))
         );

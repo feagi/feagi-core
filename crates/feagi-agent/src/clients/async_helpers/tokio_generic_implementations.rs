@@ -5,7 +5,8 @@
 //! actions using poll-based `feagi-io` client implementations.
 //!
 //! Design constraints:
-//! - No hardcoded sleep intervals or timeouts: timing comes from `TokioDriverConfig`
+//! - Sleep/backoff for transient transport backpressure (e.g. ZMQ `EAGAIN`) uses [`TokioDriverConfig`]
+//!   (`poll_interval` and `SessionTimingConfig`).
 //! - ZMQ and WebSocket are first-class via `TransportProtocolEndpoint`
 //!
 //! @cursor:critical-path
@@ -17,6 +18,7 @@ use crate::command_and_control::FeagiMessage;
 use feagi_io::traits_and_enums::client::FeagiClientRequesterProperties;
 use feagi_io::traits_and_enums::client::{FeagiClientPusher, FeagiClientSubscriber};
 use feagi_io::traits_and_enums::shared::FeagiEndpointState;
+use feagi_io::FeagiNetworkError;
 use feagi_sensorimotor::configuration::jsonable::JSONInputOutputDefinition;
 use feagi_sensorimotor::ConnectorCache;
 
@@ -50,6 +52,64 @@ pub struct TokioDriverConfig {
     pub timing: SessionTimingConfig,
     /// Optional sensory-rate negotiation policy applied after registration.
     pub sensory_rate_negotiation: Option<SensoryRateNegotiationConfig>,
+}
+
+/// Result of one sensory encode + publish attempt ([`TokioEmbodimentAgent::send_stored_sensor_data_with_outcome`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SensoryPublishResult {
+    /// Payload was accepted by the transport (e.g. ZMQ `PUSH` succeeded).
+    Published,
+    /// Send was skipped because the negotiated minimum interval had not elapsed.
+    RateLimitedSkip,
+    /// Non-blocking transport stayed busy after bounded retries (e.g. ZMQ `EAGAIN`); nothing sent.
+    DroppedTransientBackpressure,
+}
+
+fn is_transient_zmq_publish_would_block(err: &FeagiNetworkError) -> bool {
+    matches!(
+        err,
+        FeagiNetworkError::SendFailed(msg) if msg.contains("Socket would block")
+    )
+}
+
+/// Bounded retry for ZMQ `DONTWAIT` / `EAGAIN` using [`TokioDriverConfig`] timing only.
+fn publish_sensor_payload_with_transient_retry(
+    pusher: &mut dyn FeagiClientPusher,
+    data: &[u8],
+    driver: &TokioDriverConfig,
+) -> Result<bool, FeagiAgentError> {
+    let poll_ms = driver.poll_interval.as_millis().max(1) as u64;
+    let budget_ms = driver
+        .timing
+        .registration_deadline_ms
+        .unwrap_or_else(|| driver.timing.heartbeat_interval_ms.saturating_mul(4));
+    let max_attempts = (budget_ms / poll_ms).clamp(16, 128) as usize;
+    let pause = (driver.poll_interval / 8).max(driver.poll_interval / 64);
+
+    let mut saw_would_block = false;
+    for attempt in 0..max_attempts {
+        match pusher.publish_data(data) {
+            Ok(()) => return Ok(true),
+            Err(e) if is_transient_zmq_publish_would_block(&e) => {
+                saw_would_block = true;
+                if attempt + 1 < max_attempts {
+                    std::thread::sleep(pause);
+                }
+            }
+            Err(e) => return Err(FeagiAgentError::from(e)),
+        }
+    }
+    if saw_would_block {
+        tracing::debug!(
+            target: "feagi_agent",
+            max_attempts,
+            "Sensory publish: transport busy after retries; frame dropped"
+        );
+        return Ok(false);
+    }
+    Err(FeagiAgentError::Other(
+        "Sensory publish retry exhausted unexpectedly".to_string(),
+    ))
 }
 
 /// Tokio adapter over the runtime-agnostic session state machine.
@@ -236,8 +296,13 @@ impl TokioEmbodimentAgent {
         Ok(())
     }
 
-    /// Encode all registered sensors and publish the payload.
-    pub fn send_stored_sensor_data(&mut self) -> Result<(), FeagiAgentError> {
+    /// Encode all registered sensors and publish the payload, reporting whether bytes left the client.
+    ///
+    /// On ZMQ/WebSocket non-blocking busy conditions, retries using [`TokioDriverConfig::poll_interval`]
+    /// and session timing bounds before returning [`SensoryPublishResult::DroppedTransientBackpressure`].
+    pub fn send_stored_sensor_data_with_outcome(
+        &mut self,
+    ) -> Result<SensoryPublishResult, FeagiAgentError> {
         // Progress session maintenance (heartbeat, channel state, etc.) deterministically.
         self.tick()?;
 
@@ -288,7 +353,7 @@ impl TokioEmbodimentAgent {
                         self.capped_sensory_frame_count
                     );
                 }
-                return Ok(());
+                return Ok(SensoryPublishResult::RateLimitedSkip);
             }
         }
 
@@ -297,14 +362,32 @@ impl TokioEmbodimentAgent {
         sensors.encode_neurons_to_bytes()?;
         let bytes = sensors.get_feagi_byte_container_mut();
         bytes.set_agent_identifier(session_id)?;
-        pusher.publish_data(bytes.get_byte_ref())?;
-        self.last_sensor_payload_sent_at = Some(now);
-        Ok(())
+        let payload = bytes.get_byte_ref();
+        let sent =
+            publish_sensor_payload_with_transient_retry(pusher.as_mut(), payload, &self.driver)?;
+        if sent {
+            self.last_sensor_payload_sent_at = Some(now);
+            Ok(SensoryPublishResult::Published)
+        } else {
+            Ok(SensoryPublishResult::DroppedTransientBackpressure)
+        }
+    }
+
+    /// Encode all registered sensors and publish the payload.
+    pub fn send_stored_sensor_data(&mut self) -> Result<(), FeagiAgentError> {
+        self.send_stored_sensor_data_with_outcome().map(|_| ())
     }
 
     /// Compatibility alias for downstream code that used the old blocking API.
     pub fn send_encoded_sensor_data(&mut self) -> Result<(), FeagiAgentError> {
         self.send_stored_sensor_data()
+    }
+
+    /// Same as [`Self::send_encoded_sensor_data`], with explicit publish outcome for telemetry/UI.
+    pub fn send_encoded_sensor_data_with_outcome(
+        &mut self,
+    ) -> Result<SensoryPublishResult, FeagiAgentError> {
+        self.send_stored_sensor_data_with_outcome()
     }
 
     /// Compatibility alias for downstream code that used the old blocking API.

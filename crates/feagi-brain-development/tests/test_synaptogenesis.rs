@@ -274,7 +274,7 @@ fn test_inhibitory_mapping_creates_inhibitory_synapses() {
 
             // Validate sign encoding: synapse_type=1 (inhibitory) and weight=5
             for (_target, weight, _psp, syn_type) in outgoing {
-                assert_eq!(weight, 5, "Expected abs(multiplier) to be used as weight");
+                assert_eq!(weight, 5.0, "Expected abs(multiplier) to be used as weight");
                 assert_eq!(
                     syn_type, 1,
                     "Expected inhibitory synapse_type=1 for negative multiplier"
@@ -288,7 +288,7 @@ fn test_inhibitory_mapping_creates_inhibitory_synapses() {
                 "Expected outgoing synapses from source neuron"
             );
             for (_target, weight, _psp, syn_type) in outgoing {
-                assert_eq!(weight, 5, "Expected abs(multiplier) to be used as weight");
+                assert_eq!(weight, 5.0, "Expected abs(multiplier) to be used as weight");
                 assert_eq!(
                     syn_type, 1,
                     "Expected inhibitory synapse_type=1 for negative multiplier"

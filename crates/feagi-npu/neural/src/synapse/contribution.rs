@@ -25,16 +25,15 @@ pub enum SynapseType {
 /// `contribution = weight × psp × sign`
 ///
 /// Where:
-/// - `weight`: Synaptic strength (0-255, direct cast to float, NO normalization)
-/// - `psp`: Post-synaptic potential (0-255, direct cast to float, NO normalization)
+/// - `weight`: Synaptic strength (`f32`, no normalization)
+/// - `psp`: Post-synaptic potential (`f32`, no normalization)
 /// - `sign`: +1.0 for excitatory, -1.0 for inhibitory
 ///
-/// CRITICAL: This matches FEAGI's Python behavior - direct cast with NO division by 255.
-/// Values range from 0.0 to 65,025.0 (255 × 255), NOT 0.0 to 1.0.
+/// CRITICAL: No division by 255; legacy u8 storage used direct cast to float (e.g. 255×255 max).
 ///
 /// # Arguments
-/// * `weight` - Synaptic weight (0-255)
-/// * `psp` - Postsynaptic potential (0-255)
+/// * `weight` - Synaptic weight
+/// * `psp` - Postsynaptic potential
 /// * `synapse_type` - Excitatory or inhibitory
 ///
 /// # Returns
@@ -44,22 +43,19 @@ pub enum SynapseType {
 /// ```
 /// use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType};
 ///
-/// let contribution = compute_synaptic_contribution(255, 255, SynapseType::Excitatory);
-/// assert_eq!(contribution, 65025.0); // Maximum excitatory (255 × 255)
+/// let contribution = compute_synaptic_contribution(255.0, 255.0, SynapseType::Excitatory);
+/// assert_eq!(contribution, 65025.0); // Legacy max (255 × 255)
 ///
-/// let contribution = compute_synaptic_contribution(255, 255, SynapseType::Inhibitory);
-/// assert_eq!(contribution, -65025.0); // Maximum inhibitory
+/// let contribution = compute_synaptic_contribution(255.0, 255.0, SynapseType::Inhibitory);
+/// assert_eq!(contribution, -65025.0);
 /// ```
 #[inline]
-pub fn compute_synaptic_contribution(weight: u8, psp: u8, synapse_type: SynapseType) -> f32 {
-    // CRITICAL: Direct cast, NO normalization (matches Python .astype(np.float32))
-    let w = weight as f32;
-    let c = psp as f32;
+pub fn compute_synaptic_contribution(weight: f32, psp: f32, synapse_type: SynapseType) -> f32 {
     let sign = match synapse_type {
         SynapseType::Excitatory => 1.0,
         SynapseType::Inhibitory => -1.0,
     };
-    w * c * sign
+    weight * psp * sign
 }
 
 /// Batch compute synaptic contributions (SIMD-friendly)
@@ -67,8 +63,8 @@ pub fn compute_synaptic_contribution(weight: u8, psp: u8, synapse_type: SynapseT
 /// Processes multiple synapses at once. Data layout is optimized for SIMD.
 ///
 /// # Arguments
-/// * `weights` - Slice of synaptic weights (0-255)
-/// * `psps` - Slice of PSP values (0-255)
+/// * `weights` - Slice of synaptic weights
+/// * `psps` - Slice of PSP values
 /// * `types` - Slice of synapse types (0=excitatory, 1=inhibitory)
 /// * `contributions` - Output slice (mutable)
 ///
@@ -92,8 +88,8 @@ pub fn compute_synaptic_contribution(weight: u8, psp: u8, synapse_type: SynapseT
 /// ```
 #[inline]
 pub fn compute_synaptic_contributions_batch(
-    weights: &[u8],
-    psps: &[u8],
+    weights: &[f32],
+    psps: &[f32],
     types: &[u8],
     contributions: &mut [f32],
 ) {
@@ -118,32 +114,32 @@ mod tests {
 
     #[test]
     fn test_excitatory_contribution() {
-        let contribution = compute_synaptic_contribution(255, 255, SynapseType::Excitatory);
+        let contribution = compute_synaptic_contribution(255.0, 255.0, SynapseType::Excitatory);
         assert_eq!(contribution, 65025.0); // 255 × 255 (NO normalization)
     }
 
     #[test]
     fn test_inhibitory_contribution() {
-        let contribution = compute_synaptic_contribution(255, 255, SynapseType::Inhibitory);
+        let contribution = compute_synaptic_contribution(255.0, 255.0, SynapseType::Inhibitory);
         assert_eq!(contribution, -65025.0); // -(255 × 255)
     }
 
     #[test]
     fn test_partial_weight() {
-        let contribution = compute_synaptic_contribution(128, 255, SynapseType::Excitatory);
+        let contribution = compute_synaptic_contribution(128.0, 255.0, SynapseType::Excitatory);
         assert_eq!(contribution, 128.0 * 255.0); // Direct multiplication
     }
 
     #[test]
     fn test_partial_psp() {
-        let contribution = compute_synaptic_contribution(255, 128, SynapseType::Excitatory);
+        let contribution = compute_synaptic_contribution(255.0, 128.0, SynapseType::Excitatory);
         assert_eq!(contribution, 255.0 * 128.0); // Direct multiplication
     }
 
     #[test]
     fn test_batch_computation() {
-        let weights = [255, 128, 200];
-        let psps = [255, 255, 200];
+        let weights = [255.0, 128.0, 200.0];
+        let psps = [255.0, 255.0, 200.0];
         let types = [0, 1, 0];
         let mut contributions = [0.0; 3];
 

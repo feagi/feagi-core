@@ -29,6 +29,7 @@ use crate::types::{RuntimeStatus, ServiceError, ServiceResult};
 pub struct RuntimeServiceImpl {
     burst_runner: Arc<RwLock<BurstLoopRunner>>,
     paused: Arc<RwLock<bool>>,
+    plasticity_service: Option<Arc<dyn std::any::Any + Send + Sync>>,
 }
 
 impl RuntimeServiceImpl {
@@ -37,6 +38,33 @@ impl RuntimeServiceImpl {
         Self {
             burst_runner,
             paused: Arc::new(RwLock::new(false)),
+            plasticity_service: None,
+        }
+    }
+
+    /// Create a new RuntimeServiceImpl with plasticity support
+    #[cfg(feature = "plasticity")]
+    pub fn new_with_plasticity(
+        burst_runner: Arc<RwLock<BurstLoopRunner>>,
+        plasticity_service: Arc<feagi_npu_plasticity::PlasticityService>,
+    ) -> Self {
+        Self {
+            burst_runner,
+            paused: Arc::new(RwLock::new(false)),
+            plasticity_service: Some(plasticity_service as Arc<dyn std::any::Any + Send + Sync>),
+        }
+    }
+
+    /// Create a new RuntimeServiceImpl with plasticity support (stub for no_plasticity builds)
+    #[cfg(not(feature = "plasticity"))]
+    pub fn new_with_plasticity(
+        burst_runner: Arc<RwLock<BurstLoopRunner>>,
+        _plasticity_service: Arc<dyn std::any::Any + Send + Sync>,
+    ) -> Self {
+        Self {
+            burst_runner,
+            paused: Arc::new(RwLock::new(false)),
+            plasticity_service: None,
         }
     }
 }
@@ -433,5 +461,52 @@ impl RuntimeService for RuntimeServiceImpl {
         }
 
         Ok(injected_count)
+    }
+
+    async fn reset_cortical_area_states(
+        &self,
+        cortical_indices: &[u32],
+    ) -> ServiceResult<Vec<(u32, usize)>> {
+        if cortical_indices.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let runner = self.burst_runner.read();
+        let npu = runner.get_npu();
+        let mut npu_lock = npu
+            .lock()
+            .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {e}")))?;
+
+        let mut results: Vec<(u32, usize)> = Vec::with_capacity(cortical_indices.len());
+        for &idx in cortical_indices {
+            let count = npu_lock.reset_cortical_area_runtime_state(idx);
+            results.push((idx, count));
+        }
+
+        // Release NPU lock before calling plasticity service
+        drop(npu_lock);
+        drop(runner);
+
+        // Reset memory neurons if plasticity service is available
+        #[cfg(feature = "plasticity")]
+        if let Some(plasticity_any) = &self.plasticity_service {
+            if let Some(plasticity_service) =
+                plasticity_any.downcast_ref::<feagi_npu_plasticity::PlasticityService>()
+            {
+                for &idx in cortical_indices {
+                    let memory_neuron_count = plasticity_service.reset_memory_neurons_in_area(idx);
+                    if memory_neuron_count > 0 {
+                        info!(
+                            target: "feagi-services",
+                            "Reset {} memory neurons in cortical area {}",
+                            memory_neuron_count,
+                            idx
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(results)
     }
 }

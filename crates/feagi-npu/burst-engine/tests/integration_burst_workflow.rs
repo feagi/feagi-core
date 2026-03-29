@@ -76,9 +76,10 @@ fn create_simple_network() -> RustNPU<StdRuntime, f32, CPUBackend> {
             npu.add_synapse(
                 NeuronId(input),
                 NeuronId(hidden),
-                SynapticWeight(200),
-                SynapticPsp(255),
+                SynapticWeight(200.0),
+                SynapticPsp(255.0),
                 SynapseType::Excitatory,
+                0,
             )
             .unwrap();
         }
@@ -90,9 +91,10 @@ fn create_simple_network() -> RustNPU<StdRuntime, f32, CPUBackend> {
             npu.add_synapse(
                 NeuronId(hidden),
                 NeuronId(output),
-                SynapticWeight(200),
-                SynapticPsp(255),
+                SynapticWeight(200.0),
+                SynapticPsp(255.0),
                 SynapseType::Excitatory,
+                0,
             )
             .unwrap();
         }
@@ -217,25 +219,28 @@ fn test_multi_burst_chain_propagation() {
     npu.add_synapse(
         n1,
         n2,
-        SynapticWeight(255),
-        SynapticPsp(255),
+        SynapticWeight(255.0),
+        SynapticPsp(255.0),
         SynapseType::Excitatory,
+        0,
     )
     .unwrap();
     npu.add_synapse(
         n2,
         n3,
-        SynapticWeight(255),
-        SynapticPsp(255),
+        SynapticWeight(255.0),
+        SynapticPsp(255.0),
         SynapseType::Excitatory,
+        0,
     )
     .unwrap();
     npu.add_synapse(
         n3,
         n4,
-        SynapticWeight(255),
-        SynapticPsp(255),
+        SynapticWeight(255.0),
+        SynapticPsp(255.0),
         SynapseType::Excitatory,
+        0,
     )
     .unwrap();
 
@@ -309,17 +314,19 @@ fn test_mixed_excitatory_inhibitory_network() {
     npu.add_synapse(
         excitatory,
         target,
-        SynapticWeight(128),
-        SynapticPsp(255),
+        SynapticWeight(128.0),
+        SynapticPsp(255.0),
         SynapseType::Excitatory,
+        0,
     )
     .unwrap();
     npu.add_synapse(
         inhibitory,
         target,
-        SynapticWeight(128),
-        SynapticPsp(255),
+        SynapticWeight(128.0),
+        SynapticPsp(255.0),
         SynapseType::Inhibitory,
+        0,
     )
     .unwrap();
 

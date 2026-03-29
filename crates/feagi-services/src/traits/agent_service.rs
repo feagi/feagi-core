@@ -132,7 +132,11 @@ pub trait AgentService: Send + Sync {
     /// Deregister an agent
     async fn deregister_agent(&self, agent_id: &str) -> AgentResult<()>;
 
-    /// Trigger manual stimulation for specific cortical areas
+    /// Trigger manual stimulation for specific cortical areas.
+    ///
+    /// Implementations should treat stimulation as authoritative: every resolved voxel neuron must
+    /// appear in the burst fire queue regardless of membrane dynamics. The `mode` parameter exists
+    /// for API compatibility; callers may ignore it.
     async fn manual_stimulation(
         &self,
         stimulation_payload: HashMap<String, Vec<Vec<i32>>>,

@@ -1545,10 +1545,22 @@ pub async fn get_defaults_files(State(_state): State<ApiState>) -> ApiResult<Jso
 /// Download a specific brain region from the genome.
 #[utoipa::path(get, path = "/v1/genome/download_region", tag = "genome")]
 pub async fn get_download_region(
-    State(_state): State<ApiState>,
-    Query(_params): Query<HashMap<String, String>>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    Ok(Json(HashMap::new()))
+    State(state): State<ApiState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let region_id = params
+        .get("region_id")
+        .cloned()
+        .ok_or_else(|| ApiError::invalid_input("region_id query parameter is required"))?;
+    let json_str = state
+        .genome_service
+        .export_region_genome(region_id)
+        .await
+        .map_err(ApiError::from)?;
+    let value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
+        ApiError::internal(format!("Exported region genome JSON is invalid: {}", e))
+    })?;
+    Ok(Json(value))
 }
 
 /// Get the current genome number or generation identifier.

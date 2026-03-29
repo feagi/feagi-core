@@ -19,8 +19,8 @@ pub fn apply_last_to_first_morphology_with_dimensions(
     dst_area_id: u32,
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -70,6 +70,7 @@ pub fn apply_last_to_first_morphology_with_dimensions(
                     SynapticWeight(weight),
                     SynapticPsp(psp),
                     synapse_type,
+                    0,
                 )
                 .is_ok()
         {

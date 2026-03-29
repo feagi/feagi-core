@@ -29,14 +29,17 @@ pub struct SynapseArray<const N: usize> {
     /// Target neuron IDs
     pub target_neurons: [u32; N],
 
-    /// Synaptic weights (0-255)
-    pub weights: [u8; N],
+    /// Synaptic weights (`f32`)
+    pub weights: [f32; N],
 
-    /// Postsynaptic potentials (0-255)
-    pub postsynaptic_potentials: [u8; N],
+    /// Postsynaptic potentials (`f32`)
+    pub postsynaptic_potentials: [f32; N],
 
     /// Synapse types (0=excitatory, 1=inhibitory)
     pub types: [u8; N],
+
+    /// Per-synapse packed edge flags
+    pub edge_flags: [u8; N],
 
     /// Valid synapse mask
     pub valid_mask: [bool; N],
@@ -49,9 +52,10 @@ impl<const N: usize> SynapseArray<N> {
             count: 0,
             source_neurons: [0; N],
             target_neurons: [0; N],
-            weights: [0; N],
-            postsynaptic_potentials: [0; N],
+            weights: [0.0; N],
+            postsynaptic_potentials: [0.0; N],
             types: [0; N],
+            edge_flags: [0; N],
             valid_mask: [false; N],
         }
     }
@@ -71,11 +75,12 @@ impl<const N: usize> SynapseArray<N> {
         &mut self,
         source: u32,
         target: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: SynapseType,
     ) -> bool {
-        SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8).is_ok()
+        SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8, 0)
+            .is_ok()
     }
 
     /// Propagate activity from fired neurons (single-threaded)
@@ -142,11 +147,11 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         &self.target_neurons[..self.count]
     }
 
-    fn weights(&self) -> &[u8] {
+    fn weights(&self) -> &[f32] {
         &self.weights[..self.count]
     }
 
-    fn postsynaptic_potentials(&self) -> &[u8] {
+    fn postsynaptic_potentials(&self) -> &[f32] {
         &self.postsynaptic_potentials[..self.count]
     }
 
@@ -154,16 +159,20 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         &self.types[..self.count]
     }
 
+    fn edge_flags(&self) -> &[u8] {
+        &self.edge_flags[..self.count]
+    }
+
     fn valid_mask(&self) -> &[bool] {
         &self.valid_mask[..self.count]
     }
 
-    fn weights_mut(&mut self) -> &mut [u8] {
+    fn weights_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.weights[..count]
     }
 
-    fn postsynaptic_potentials_mut(&mut self) -> &mut [u8] {
+    fn postsynaptic_potentials_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.postsynaptic_potentials[..count]
     }
@@ -185,9 +194,10 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         &mut self,
         source: u32,
         target: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: u8,
+        edge_flag: u8,
     ) -> Result<usize> {
         if self.count >= N {
             return Err(RuntimeError::CapacityExceeded {
@@ -202,6 +212,7 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         self.weights[idx] = weight;
         self.postsynaptic_potentials[idx] = psp;
         self.types[idx] = synapse_type;
+        self.edge_flags[idx] = edge_flag;
         self.valid_mask[idx] = true;
 
         self.count += 1;
@@ -213,9 +224,10 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         &mut self,
         sources: &[u32],
         targets: &[u32],
-        weights: &[u8],
-        psps: &[u8],
+        weights: &[f32],
+        psps: &[f32],
         types: &[u8],
+        edge_flags: Option<&[u8]>,
     ) -> Result<()> {
         let n = sources.len();
 
@@ -226,8 +238,19 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
             });
         }
 
+        if let Some(flags) = edge_flags {
+            if flags.len() != n {
+                return Err(RuntimeError::InvalidParameters(format!(
+                    "edge_flags length {} != batch size {}",
+                    flags.len(),
+                    n
+                )));
+            }
+        }
+
         for i in 0..n {
-            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i])?;
+            let ef = edge_flags.map(|f| f[i]).unwrap_or(0);
+            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i], ef)?;
         }
 
         Ok(())
@@ -271,7 +294,7 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         Ok(removed)
     }
 
-    fn update_weight(&mut self, idx: usize, new_weight: u8) -> Result<()> {
+    fn update_weight(&mut self, idx: usize, new_weight: f32) -> Result<()> {
         if idx >= self.count || !self.valid_mask[idx] {
             return Err(RuntimeError::CapacityExceeded {
                 requested: idx,
@@ -308,7 +331,7 @@ mod tests {
     fn test_add_synapse() {
         use feagi_npu_neural::SynapseType;
         let mut array = SynapseArray::<10>::new();
-        assert!(array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory));
+        assert!(array.add_synapse_simple(0, 1, 255.0, 255.0, SynapseType::Excitatory));
         assert_eq!(array.count, 1);
     }
 
@@ -316,20 +339,20 @@ mod tests {
     fn test_array_full() {
         use feagi_npu_neural::SynapseType;
         let mut array = SynapseArray::<2>::new();
-        assert!(array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory));
+        assert!(array.add_synapse_simple(0, 1, 255.0, 255.0, SynapseType::Excitatory));
         assert!(array
-            .add_synapse(1, 2, 255, 255, SynapseType::Excitatory as u8)
+            .add_synapse(1, 2, 255.0, 255.0, SynapseType::Excitatory as u8, 0)
             .is_ok());
         assert!(array
-            .add_synapse(2, 3, 255, 255, SynapseType::Excitatory as u8)
+            .add_synapse(2, 3, 255.0, 255.0, SynapseType::Excitatory as u8, 0)
             .is_err()); // Full
     }
 
     #[test]
     fn test_propagate() {
         let mut array = SynapseArray::<10>::new();
-        let _ = array.add_synapse(0, 1, 255, 255, 0);
-        let _ = array.add_synapse(0, 2, 128, 255, 0);
+        let _ = array.add_synapse(0, 1, 255.0, 255.0, 0, 0);
+        let _ = array.add_synapse(0, 2, 128.0, 255.0, 0, 0);
 
         let mut fired = [false; 10];
         fired[0] = true; // Neuron 0 fired
@@ -344,7 +367,7 @@ mod tests {
     #[test]
     fn test_memory_footprint() {
         let size = SynapseArray::<1000>::memory_footprint();
-        // ~1000 synapses × 8 bytes = ~8 KB
-        assert!(size < 15_000); // Should be under 15 KB
+        // ~1000 synapses × larger row (f32 weights/psps) — keep loose bound
+        assert!(size < 50_000);
     }
 }

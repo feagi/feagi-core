@@ -129,9 +129,9 @@ fn test_incoming_outgoing_synapse_counts_by_area() {
         .unwrap();
 
     // Create synapses: src -> dst (2) and dst -> src (1)
-    manager.create_synapse(s0, t0, 128, 200, 0).unwrap();
-    manager.create_synapse(s1, t1, 128, 200, 0).unwrap();
-    manager.create_synapse(t0, s1, 128, 200, 0).unwrap();
+    manager.create_synapse(s0, t0, 128.0, 200.0, 0).unwrap();
+    manager.create_synapse(s1, t1, 128.0, 200.0, 0).unwrap();
+    manager.create_synapse(t0, s1, 128.0, 200.0, 0).unwrap();
 
     assert_eq!(manager.get_outgoing_synapse_count_in_area(&src_id), 2);
     assert_eq!(manager.get_incoming_synapse_count_in_area(&src_id), 1);

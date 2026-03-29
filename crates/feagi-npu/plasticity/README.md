@@ -26,6 +26,11 @@ use feagi_plasticity::service::{PlasticityService, PlasticityConfig};
 // Apply learning rules during or after burst cycles
 ```
 
+## Documentation
+
+- [Memory: episodic vs associative design](docs/memory-episodic-associative-design.md) — topology rules, STDP vs pattern windows, synapse vs hash semantics.
+- [Plasticity integration notes](docs/INTEGRATION.md) — service wiring and integration tasks.
+
 ## Use Cases
 
 - Training systems

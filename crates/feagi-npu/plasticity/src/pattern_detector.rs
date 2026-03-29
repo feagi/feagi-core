@@ -258,6 +258,11 @@ impl PatternDetector {
         self.stats.lock().unwrap().clone()
     }
 
+    /// Number of distinct temporal patterns currently cached for this detector instance.
+    pub fn cached_pattern_count(&self) -> usize {
+        self.pattern_cache.lock().unwrap().len()
+    }
+
     /// Clear pattern cache
     pub fn clear_cache(&self) {
         let mut cache = self.pattern_cache.lock().unwrap();
@@ -309,6 +314,15 @@ impl BatchPatternDetector {
             .iter()
             .map(|(&area_idx, detector)| (area_idx, detector.get_stats()))
             .collect()
+    }
+
+    /// Cached temporal-pattern count for the given memory cortical area index (0 if none).
+    pub fn cached_pattern_count_for_area(&self, memory_area_idx: u32) -> usize {
+        let detectors = self.detectors.lock().unwrap();
+        detectors
+            .get(&memory_area_idx)
+            .map(|d| d.cached_pattern_count())
+            .unwrap_or(0)
     }
 }
 

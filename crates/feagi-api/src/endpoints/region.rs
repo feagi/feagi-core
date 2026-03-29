@@ -526,10 +526,17 @@ pub async fn get_region_detail(
         })
         .unwrap_or_else(|| serde_json::json!([0, 0]));
 
+    let description = region
+        .properties
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
     let mut response = HashMap::new();
     response.insert("region_id".to_string(), serde_json::json!(region.region_id));
     response.insert("title".to_string(), serde_json::json!(region.name));
-    response.insert("description".to_string(), serde_json::json!(""));
+    response.insert("description".to_string(), serde_json::json!(description));
     response.insert("coordinate_2d".to_string(), coordinate_2d);
     response.insert("coordinate_3d".to_string(), coordinate_3d);
     response.insert(

@@ -159,7 +159,8 @@ pub struct SuccessResponse {
 pub struct ManualStimulationRequest {
     /// Map of cortical area IDs to lists of coordinates [[x, y, z], ...]
     pub stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
-    /// Optional stimulation mode: "candidate" (default) or "force_fire"
+    /// Legacy optional field. Server applies authoritative force-fire semantics for manual
+    /// stimulation (resolved neurons are always placed in the fire queue); this field may be ignored.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
 }

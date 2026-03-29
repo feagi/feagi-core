@@ -24,6 +24,7 @@ use feagi_npu_neural::SynapseType;
 /// * `weight` - Synapse weight (0-255)
 /// * `psp` - Synapse PSP
 /// * `synapse_attractivity` - Probability (0-100) of creating synapse when match found
+/// * `edge_flag` - Packed per-synapse flag (e.g. `SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`); use `0` for ordinary edges
 ///
 /// # Returns
 /// Number of synapses created
@@ -34,10 +35,11 @@ pub fn apply_projector_morphology(
     dst_area_id: u32,
     transpose: Option<(usize, usize, usize)>,
     project_last_layer_of: Option<usize>,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
+    edge_flag: u8,
 ) -> BduResult<u32> {
     // Calculate dimensions by finding max coordinates in each area
     // NOTE: This is a fallback - callers should prefer passing dimensions directly
@@ -55,6 +57,7 @@ pub fn apply_projector_morphology(
         psp,
         synapse_attractivity,
         synapse_type,
+        edge_flag,
     )
 }
 
@@ -71,6 +74,7 @@ pub fn apply_projector_morphology(
 /// * `weight` - Synapse weight (0-255)
 /// * `psp` - Synapse PSP
 /// * `synapse_attractivity` - Probability (0-100) of creating synapse when match found
+/// * `edge_flag` - Packed per-synapse flag for each created synapse (`0` = none)
 ///
 /// # Returns
 /// Number of synapses created
@@ -83,10 +87,11 @@ pub fn apply_projector_morphology_with_dimensions(
     dst_dimensions: (usize, usize, usize),
     transpose: Option<(usize, usize, usize)>,
     project_last_layer_of: Option<usize>,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
+    edge_flag: u8,
 ) -> BduResult<u32> {
     use crate::rng::get_rng;
     use rand::Rng;
@@ -139,6 +144,7 @@ pub fn apply_projector_morphology_with_dimensions(
                             SynapticWeight(weight),
                             SynapticPsp(psp),
                             synapse_type,
+                            edge_flag,
                         )
                         .is_ok()
                     {

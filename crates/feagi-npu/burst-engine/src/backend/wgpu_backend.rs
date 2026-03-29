@@ -394,9 +394,9 @@ impl WGPUBackend {
             let source = synapse_array.source_neurons[i];
             let target = synapse_array.target_neurons[i];
 
-            // Pack u8 params into single u32: (type << 16) | (psp << 8) | weight
-            let weight = synapse_array.weights[i] as u32;
-            let psp = synapse_array.postsynaptic_potentials[i] as u32;
+            // Pack u8 params into single u32 (quantize f32 synapse params for legacy GPU pack)
+            let weight = synapse_array.weights[i].clamp(0.0, 255.0) as u8 as u32;
+            let psp = synapse_array.postsynaptic_potentials[i].clamp(0.0, 255.0) as u8 as u32;
             let synapse_type = synapse_array.types[i] as u32;
             let packed_params = (synapse_type << 16) | (psp << 8) | weight;
 

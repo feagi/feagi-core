@@ -115,6 +115,9 @@ fn merge_memory_area_properties(
     defaults
         .entry("init_lifespan".to_string())
         .or_insert(Value::from(memory_defaults.init_lifespan));
+    defaults
+        .entry("psp_uniform_distribution".to_string())
+        .or_insert(Value::from(true));
 
     defaults.extend(base);
     if let Some(extra_props) = extra {
@@ -906,9 +909,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
         trace!(target: "feagi-services", "Getting cortical area: {}", cortical_id);
 
-        // Convert String to CorticalID
-        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        // Accept base64 or legacy ASCII (clients may send either form).
+        let cortical_id_typed =
+            parse_cortical_id_flexible(cortical_id).map_err(ServiceError::InvalidInput)?;
 
         let manager = self.connectome.read();
 
@@ -926,10 +929,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 id: cortical_id.to_string(),
             })?;
 
-        let neuron_count = manager.get_neuron_count_in_area(
-            &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
-        );
+        let neuron_count = manager.get_neuron_count_in_area(&cortical_id_typed);
         let outgoing_synapse_count = manager.get_outgoing_synapse_count_in_area(&cortical_id_typed);
         let incoming_synapse_count = manager.get_incoming_synapse_count_in_area(&cortical_id_typed);
         let synapse_count = outgoing_synapse_count;
@@ -2047,24 +2047,6 @@ impl ConnectomeService for ConnectomeServiceImpl {
             })
         };
 
-        let mapping_has_associative_memory = |rules: &[serde_json::Value]| -> bool {
-            for rule in rules {
-                if let Some(obj) = rule.as_object() {
-                    if let Some(morphology_id) = obj.get("morphology_id").and_then(|v| v.as_str()) {
-                        if morphology_id == "associative_memory" {
-                            return true;
-                        }
-                    }
-                }
-            }
-            false
-        };
-
-        let has_associative_memory = mapping_has_associative_memory(&mapping_data)
-            || existing_mapping
-                .as_ref()
-                .is_some_and(|rules| mapping_has_associative_memory(rules));
-
         let mut existing_plasticity_by_morphology: HashMap<
             String,
             serde_json::Map<String, serde_json::Value>,
@@ -2189,17 +2171,6 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .map_err(|e| {
                     ServiceError::Backend(format!("Failed to regenerate synapses: {}", e))
                 })?;
-
-            if has_associative_memory {
-                manager
-                    .regenerate_synapses_for_mapping(&dst_id, &src_id)
-                    .map_err(|e| {
-                        ServiceError::Backend(format!(
-                            "Failed to regenerate synapses for associative mirror: {}",
-                            e
-                        ))
-                    })?;
-            }
 
             // Recompute region IO registries after mapping change (critical for BV region boundary behavior)
             let region_io = manager.recompute_brain_region_io_registry().map_err(|e| {

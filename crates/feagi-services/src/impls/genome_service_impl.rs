@@ -91,6 +91,9 @@ fn merge_memory_area_properties(
     defaults
         .entry("init_lifespan".to_string())
         .or_insert(Value::from(memory_defaults.init_lifespan));
+    defaults
+        .entry("psp_uniform_distribution".to_string())
+        .or_insert(Value::from(true));
 
     defaults.extend(base);
     if let Some(extra_props) = extra {
@@ -555,6 +558,26 @@ impl GenomeService for GenomeServiceImpl {
 
         info!(target: "feagi-services", "✅ Genome exported successfully (flat format v3.0)");
         Ok(json_str)
+    }
+
+    async fn export_region_genome(&self, region_id: String) -> ServiceResult<String> {
+        let genome = self.current_genome.read().clone().ok_or_else(|| {
+            ServiceError::Internal(
+                "No RuntimeGenome stored. Genome must be loaded before exporting a region."
+                    .to_string(),
+            )
+        })?;
+        let subset =
+            feagi_evolutionary::subset_runtime_genome_for_region_branch(&genome, &region_id)
+                .map_err(|e| match e {
+                    feagi_evolutionary::EvoError::InvalidRegion(msg) => {
+                        ServiceError::InvalidInput(msg)
+                    }
+                    other => ServiceError::Internal(other.to_string()),
+                })?;
+        feagi_evolutionary::save_genome_to_json(&subset).map_err(|e| {
+            ServiceError::Internal(format!("Failed to serialize region genome: {}", e))
+        })
     }
 
     async fn get_genome_info(&self) -> ServiceResult<GenomeInfo> {
@@ -1317,6 +1340,13 @@ impl GenomeServiceImpl {
                                     "mp_charge_accumulation".to_string(),
                                     serde_json::json!(v),
                                 );
+                            } else {
+                                warn!(
+                                    target: "feagi-services",
+                                    "[FAST-UPDATE] mp_charge_accumulation not stored: value must be JSON boolean, got {:?} (area {})",
+                                    value,
+                                    cortical_id
+                                );
                             }
                         }
                         "mp_driven_psp" | "neuron_mp_driven_psp" => {
@@ -1526,6 +1556,13 @@ impl GenomeServiceImpl {
                                 area.properties.insert(
                                     "mp_charge_accumulation".to_string(),
                                     serde_json::json!(v),
+                                );
+                            } else {
+                                warn!(
+                                    target: "feagi-services",
+                                    "[GENOME-UPDATE] mp_charge_accumulation not stored: value must be JSON boolean, got {:?} (area {})",
+                                    value,
+                                    cortical_id
                                 );
                             }
                         }
@@ -1806,6 +1843,13 @@ impl GenomeServiceImpl {
                             area.add_property_mut(
                                 "mp_charge_accumulation".to_string(),
                                 serde_json::json!(v),
+                            );
+                        } else {
+                            warn!(
+                                target: "feagi-services",
+                                "[CONNECTOME-UPDATE] mp_charge_accumulation not applied: value must be JSON boolean, got {:?} (area {})",
+                                value,
+                                cortical_id
                             );
                         }
                     }

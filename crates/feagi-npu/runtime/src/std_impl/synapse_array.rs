@@ -30,14 +30,17 @@ pub struct SynapseArray {
     /// Target neuron IDs
     pub target_neurons: Vec<u32>,
 
-    /// Synaptic weights (0-255)
-    pub weights: Vec<u8>,
+    /// Synaptic weights (`f32`)
+    pub weights: Vec<f32>,
 
-    /// Postsynaptic potentials / Conductances (0-255)
-    pub postsynaptic_potentials: Vec<u8>,
+    /// Postsynaptic potentials (`f32`)
+    pub postsynaptic_potentials: Vec<f32>,
 
     /// Synapse types (0=excitatory, 1=inhibitory)
     pub types: Vec<u8>,
+
+    /// Per-synapse packed edge flags (associative STDP, etc.)
+    pub edge_flags: Vec<u8>,
 
     /// Valid synapse mask
     pub valid_mask: Vec<bool>,
@@ -56,6 +59,7 @@ impl SynapseArray {
             weights: Vec::with_capacity(capacity),
             postsynaptic_potentials: Vec::with_capacity(capacity),
             types: Vec::with_capacity(capacity),
+            edge_flags: Vec::with_capacity(capacity),
             valid_mask: Vec::with_capacity(capacity),
             source_index: AHashMap::new(),
         }
@@ -66,11 +70,11 @@ impl SynapseArray {
         &mut self,
         source: u32,
         target: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: SynapseType,
     ) {
-        SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8)
+        SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8, 0)
             .expect("Failed to add synapse");
     }
 
@@ -128,11 +132,11 @@ impl SynapseStorage for SynapseArray {
         &self.target_neurons[..self.count]
     }
 
-    fn weights(&self) -> &[u8] {
+    fn weights(&self) -> &[f32] {
         &self.weights[..self.count]
     }
 
-    fn postsynaptic_potentials(&self) -> &[u8] {
+    fn postsynaptic_potentials(&self) -> &[f32] {
         &self.postsynaptic_potentials[..self.count]
     }
 
@@ -140,17 +144,21 @@ impl SynapseStorage for SynapseArray {
         &self.types[..self.count]
     }
 
+    fn edge_flags(&self) -> &[u8] {
+        &self.edge_flags[..self.count]
+    }
+
     fn valid_mask(&self) -> &[bool] {
         &self.valid_mask[..self.count]
     }
 
     // Mutable property accessors
-    fn weights_mut(&mut self) -> &mut [u8] {
+    fn weights_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.weights[..count]
     }
 
-    fn postsynaptic_potentials_mut(&mut self) -> &mut [u8] {
+    fn postsynaptic_potentials_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.postsynaptic_potentials[..count]
     }
@@ -174,9 +182,10 @@ impl SynapseStorage for SynapseArray {
         &mut self,
         source: u32,
         target: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: u8,
+        edge_flag: u8,
     ) -> Result<usize> {
         let idx = self.count;
 
@@ -185,6 +194,7 @@ impl SynapseStorage for SynapseArray {
         self.weights.push(weight);
         self.postsynaptic_potentials.push(psp);
         self.types.push(synapse_type);
+        self.edge_flags.push(edge_flag);
         self.valid_mask.push(true);
 
         // Update index
@@ -198,13 +208,24 @@ impl SynapseStorage for SynapseArray {
         &mut self,
         sources: &[u32],
         targets: &[u32],
-        weights: &[u8],
-        psps: &[u8],
+        weights: &[f32],
+        psps: &[f32],
         types: &[u8],
+        edge_flags: Option<&[u8]>,
     ) -> crate::traits::Result<()> {
         let batch_size = sources.len();
+        if let Some(flags) = edge_flags {
+            if flags.len() != batch_size {
+                return Err(crate::traits::RuntimeError::InvalidParameters(format!(
+                    "edge_flags length {} != batch size {}",
+                    flags.len(),
+                    batch_size
+                )));
+            }
+        }
         for i in 0..batch_size {
-            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i])?;
+            let ef = edge_flags.map(|f| f[i]).unwrap_or(0);
+            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i], ef)?;
         }
         Ok(())
     }
@@ -252,7 +273,7 @@ impl SynapseStorage for SynapseArray {
         Ok(removed)
     }
 
-    fn update_weight(&mut self, idx: usize, new_weight: u8) -> crate::traits::Result<()> {
+    fn update_weight(&mut self, idx: usize, new_weight: f32) -> crate::traits::Result<()> {
         if idx >= self.count {
             return Err(crate::traits::RuntimeError::InvalidParameters(format!(
                 "Synapse index {} out of bounds (count: {})",
@@ -281,15 +302,15 @@ mod tests {
     #[test]
     fn test_add_synapse() {
         let mut array = SynapseArray::new(10);
-        array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory);
+        array.add_synapse_simple(0, 1, 255.0, 255.0, SynapseType::Excitatory);
         assert_eq!(array.count, 1);
     }
 
     #[test]
     fn test_propagate_parallel() {
         let mut array = SynapseArray::new(10);
-        array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory);
-        array.add_synapse_simple(0, 2, 128, 255, SynapseType::Excitatory);
+        array.add_synapse_simple(0, 1, 255.0, 255.0, SynapseType::Excitatory);
+        array.add_synapse_simple(0, 2, 128.0, 255.0, SynapseType::Excitatory);
 
         let fired = std::vec![0];
         let contributions = array.propagate_parallel(&fired);

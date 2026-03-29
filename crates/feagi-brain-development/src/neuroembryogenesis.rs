@@ -27,6 +27,18 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::{debug, error, info, trace, warn};
 
+/// Label for the CUSTOM/MEMORY subregion when the genome JSON has no `brain_regions` and
+/// neuroembryogenesis must synthesize one. Prefer `metadata.genome_title` so Hub replace/upload
+/// shows the circuit title instead of the generic "Autogen Circuit".
+fn autogen_subregion_display_name(genome_title: &str) -> String {
+    let t = genome_title.trim();
+    if t.is_empty() || t.eq_ignore_ascii_case("untitled") {
+        "Autogen Circuit".to_string()
+    } else {
+        t.to_string()
+    }
+}
+
 /// Development stage tracking
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DevelopmentStage {
@@ -628,9 +640,10 @@ impl Neuroembryogenesis {
                     Self::calculate_autogen_region_position(&root_area_ids, genome);
 
                 // Create subregion
+                let subregion_name = autogen_subregion_display_name(&genome.metadata.genome_title);
                 let mut subregion = BrainRegion::new(
                     RegionID::new(), // Generate new UUID instead of using string
-                    "Autogen Circuit".to_string(),
+                    subregion_name,
                     RegionType::Undefined, // RegionType no longer has Custom variant
                 )
                 .expect("Failed to create subregion")
@@ -1494,6 +1507,32 @@ mod tests {
         let progress = neuro.get_progress();
         assert_eq!(progress.stage, DevelopmentStage::Initialization);
         assert_eq!(progress.progress, 0);
+    }
+
+    #[test]
+    fn autogen_subregion_display_name_uses_title_when_meaningful() {
+        assert_eq!(
+            autogen_subregion_display_name("My Shared Circuit"),
+            "My Shared Circuit"
+        );
+    }
+
+    #[test]
+    fn autogen_subregion_display_name_falls_back_for_untitled() {
+        assert_eq!(
+            autogen_subregion_display_name("Untitled"),
+            "Autogen Circuit"
+        );
+        assert_eq!(
+            autogen_subregion_display_name("untitled"),
+            "Autogen Circuit"
+        );
+    }
+
+    #[test]
+    fn autogen_subregion_display_name_falls_back_for_blank() {
+        assert_eq!(autogen_subregion_display_name(""), "Autogen Circuit");
+        assert_eq!(autogen_subregion_display_name("   "), "Autogen Circuit");
     }
 
     #[test]

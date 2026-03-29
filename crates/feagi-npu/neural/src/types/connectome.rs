@@ -107,11 +107,11 @@ pub struct SerializableSynapseArray {
     /// Target neuron IDs (u32)
     pub target_neurons: Vec<u32>,
 
-    /// Synaptic weights (u8, 0-255)
-    pub weights: Vec<u8>,
+    /// Synaptic weights (`f32`)
+    pub weights: Vec<f32>,
 
-    /// Synaptic PSP values (u8, 0-255)
-    pub postsynaptic_potentials: Vec<u8>,
+    /// Synaptic PSP values (`f32`)
+    pub postsynaptic_potentials: Vec<f32>,
 
     /// Synapse types (u8: 0=excitatory, 1=inhibitory)
     pub types: Vec<u8>,
@@ -150,8 +150,8 @@ impl SerializableSynapseArray {
             capacity,
             source_neurons: std::vec::from_elem(0, capacity),
             target_neurons: std::vec::from_elem(0, capacity),
-            weights: std::vec::from_elem(0, capacity),
-            postsynaptic_potentials: std::vec::from_elem(0, capacity),
+            weights: std::vec::from_elem(0.0f32, capacity),
+            postsynaptic_potentials: std::vec::from_elem(0.0f32, capacity),
             types: std::vec::from_elem(0, capacity),
             valid_mask: std::vec::from_elem(false, capacity),
             source_index: AHashMap::new(),

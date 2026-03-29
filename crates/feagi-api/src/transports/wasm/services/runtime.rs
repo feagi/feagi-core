@@ -184,4 +184,13 @@ impl RuntimeService for WasmRuntimeService {
     fn clear_all_visualization_subscriptions(&self) {
         // No-op: WASM mode does not support agent subscriptions
     }
+
+    async fn reset_cortical_area_states(
+        &self,
+        _cortical_indices: &[u32],
+    ) -> ServiceResult<Vec<(u32, usize)>> {
+        Err(ServiceError::NotImplemented(
+            "WASM mode cortical reset not yet implemented".to_string(),
+        ))
+    }
 }

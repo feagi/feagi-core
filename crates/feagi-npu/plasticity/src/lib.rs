@@ -41,12 +41,19 @@ pub mod stdp_core; // Platform-agnostic STDP (no_std compatible)
 // Re-export key types
 pub use executor::{AsyncPlasticityExecutor, PlasticityExecutor};
 // pub use lifecycle_manager::PlasticityLifecycleManager;  // DEPRECATED
-pub use memory_neuron_array::{MemoryNeuronArray, MemoryNeuronLifecycleConfig, MemoryNeuronStats};
+pub use memory_neuron_array::{
+    MemoryNeuronArray, MemoryNeuronDetail, MemoryNeuronLifecycleConfig, MemoryNeuronStats,
+};
 pub use memory_stats_cache::{
     create_memory_stats_cache, get_area_stats, get_stats_snapshot, init_memory_area,
     on_neuron_created, on_neuron_deleted, remove_memory_area, MemoryAreaStats, MemoryStatsCache,
 };
-pub use neuron_id_manager::{AllocationStats, NeuronIdManager, NeuronType};
+pub use neuron_id_manager::{
+    AllocationStats, NeuronIdManager, NeuronType, MEMORY_NEURON_ID_MAX, MEMORY_NEURON_ID_START,
+};
 pub use pattern_detector::{BatchPatternDetector, PatternConfig, PatternDetector, TemporalPattern};
-pub use service::{PlasticityCommand, PlasticityConfig, PlasticityService, ReplayFrame};
+pub use service::{
+    MemoryCorticalAreaRuntimeInfo, PlasticityCommand, PlasticityConfig, PlasticityService,
+    ReplayFrame,
+};
 pub use stdp::{compute_activity_factors, compute_timing_factors, STDPConfig};

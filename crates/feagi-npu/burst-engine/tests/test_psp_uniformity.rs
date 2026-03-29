@@ -74,9 +74,10 @@ fn test_psp_uniformity_false_divides_psp() {
         npu.add_synapse(
             source_neuron,
             target,
-            SynapticWeight(255),
-            SynapticPsp(10), // PSP = 10
+            SynapticWeight(255.0),
+            SynapticPsp(10.0), // PSP = 10
             SynapseType::Excitatory,
+            0,
         )
         .expect("Failed to add synapse");
     }
@@ -162,9 +163,10 @@ fn test_psp_uniformity_true_applies_full_psp() {
         npu.add_synapse(
             source_neuron,
             target,
-            SynapticWeight(255),
-            SynapticPsp(10), // PSP = 10
+            SynapticWeight(255.0),
+            SynapticPsp(10.0), // PSP = 10
             SynapseType::Excitatory,
+            0,
         )
         .expect("Failed to add synapse");
     }
@@ -258,18 +260,20 @@ fn test_psp_uniformity_default_is_false() {
     npu.add_synapse(
         source,
         target1,
-        SynapticWeight(255),
-        SynapticPsp(10),
+        SynapticWeight(255.0),
+        SynapticPsp(10.0),
         SynapseType::Excitatory,
+        0,
     )
     .expect("Failed to add synapse 1");
 
     npu.add_synapse(
         source,
         target2,
-        SynapticWeight(255),
-        SynapticPsp(10),
+        SynapticWeight(255.0),
+        SynapticPsp(10.0),
         SynapseType::Excitatory,
+        0,
     )
     .expect("Failed to add synapse 2");
 

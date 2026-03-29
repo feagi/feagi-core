@@ -116,7 +116,7 @@ macro_rules! sensor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [30, 10, -20], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [220, 0, -30], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1])
                     }
                 },
 
@@ -132,7 +132,7 @@ macro_rules! sensor_cortical_units {
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
                         // 1x1x16 default: one token per FEAGI tick, encoded into 16 bitplanes (supports GPT-2 vocab via token_id+1 offset).
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [55, 0, -10], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [70, 0, -30], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
                     }
                 },
 
@@ -148,7 +148,7 @@ macro_rules! sensor_cortical_units {
                     },
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [100, 0, -20], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [110, 0, -30], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
