@@ -5,10 +5,12 @@
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::npu::StdpMappingParams;
 use feagi_npu_burst_engine::RustNPU;
+use feagi_npu_burst_engine::FIRE_KIND_STDP_ELIGIBLE;
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
+use std::sync::Arc;
 
 /// Create a minimal STDP test network with two cortical areas.
 fn create_stdp_network() -> (
@@ -19,6 +21,9 @@ fn create_stdp_network() -> (
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 100, 1000, 10).unwrap();
+    // Plasticity supplies assoc (active) + LTM predicates; tests treat injected globals as both.
+    npu.set_memory_neuron_assoc_predicate(Some(Arc::new(|_| true)));
+    npu.set_memory_neuron_longterm_predicate(Some(Arc::new(|_| true)));
 
     // Register core areas for deterministic neuron IDs.
     npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
@@ -55,7 +60,7 @@ fn stdp_params(
     ltp_multiplier: i64,
     ltd_multiplier: i64,
     bidirectional_stdp: bool,
-    synapse_psp: u8,
+    synapse_psp: f32,
     synapse_type: SynapseType,
 ) -> StdpMappingParams {
     StdpMappingParams {
@@ -87,7 +92,7 @@ fn test_bidirectional_stdp_requires_consistent_neurons_across_window() {
     npu.configure_fire_ledger_window(10, 3).unwrap();
     npu.configure_fire_ledger_window(11, 3).unwrap();
 
-    let params = stdp_params(3, 1, 5, 0, true, 10, SynapseType::Excitatory);
+    let params = stdp_params(3, 1, 5, 0, true, 10.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     // Burst 1: fire src0/dst0
@@ -143,7 +148,7 @@ fn test_bidirectional_stdp_creates_synapse_after_full_window() {
     npu.configure_fire_ledger_window(10, 2).unwrap();
     npu.configure_fire_ledger_window(11, 2).unwrap();
 
-    let params = stdp_params(2, 1, 5, 2, true, 200, SynapseType::Excitatory);
+    let params = stdp_params(2, 1, 5, 2, true, 200.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     let src = src_neurons[0];
@@ -169,8 +174,8 @@ fn test_bidirectional_stdp_creates_synapse_after_full_window() {
     );
     let (target, weight, psp, synapse_type) = outgoing[0];
     assert_eq!(target, dst.0);
-    assert_eq!(weight, 5);
-    assert_eq!(psp, 200);
+    assert_eq!(weight, 5.0);
+    assert_eq!(psp, 200.0);
     assert_eq!(synapse_type, SynapseType::Excitatory as u8);
 }
 
@@ -182,7 +187,48 @@ fn test_bidirectional_stdp_with_memory_neuron_ids() {
     npu.configure_fire_ledger_window(10, 2).unwrap();
     npu.configure_fire_ledger_window(11, 2).unwrap();
 
-    let params = stdp_params(2, 1, 5, 0, true, 200, SynapseType::Excitatory);
+    let params = stdp_params(2, 1, 5, 0, true, 200.0, SynapseType::Excitatory);
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    let src = NeuronId(MEMORY_NEURON_ID_START);
+    let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
+
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    let burst = npu.process_burst().unwrap().burst;
+    assert_neuron_fired(&npu, 10, burst, src);
+    assert_neuron_fired(&npu, 11, burst, dst);
+    assert!(
+        npu.get_outgoing_synapses(src.0).is_empty(),
+        "No synapse should form until the full window is observed"
+    );
+
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    let burst = npu.process_burst().unwrap().burst;
+    assert_neuron_fired(&npu, 10, burst, src);
+    assert_neuron_fired(&npu, 11, burst, dst);
+
+    let outgoing = npu.get_outgoing_synapses(src.0);
+    assert_eq!(
+        outgoing.len(),
+        1,
+        "Synapse should be created after full window"
+    );
+    assert_eq!(outgoing[0].0, dst.0);
+}
+
+/// Default `inject_memory_neuron_to_fcl` uses episodic fire kind; those spikes still drive
+/// associative STDP on the main fire ledger (synapse creation after full window).
+#[test]
+fn test_bidirectional_stdp_with_memory_neuron_ids_episodic_default_triggers_associative_stdp() {
+    const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+    let (mut npu, _src_neurons, _dst_neurons) = create_stdp_network();
+
+    npu.configure_fire_ledger_window(10, 2).unwrap();
+    npu.configure_fire_ledger_window(11, 2).unwrap();
+
+    let params = stdp_params(2, 1, 5, 0, true, 200.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     let src = NeuronId(MEMORY_NEURON_ID_START);
@@ -213,6 +259,103 @@ fn test_bidirectional_stdp_with_memory_neuron_ids() {
     assert_eq!(outgoing[0].0, dst.0);
 }
 
+/// When **both** (10→11) and (11→10) STDP mappings are registered, each direction is created by its
+/// own mapping iteration only (no automatic reciprocal synapse from a single mapping).
+#[test]
+fn test_bidirectional_memory_neuron_both_mappings_no_duplicate_mirror() {
+    const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+    let (mut npu, _src_neurons, _dst_neurons) = create_stdp_network();
+
+    npu.configure_fire_ledger_window(10, 2).unwrap();
+    npu.configure_fire_ledger_window(11, 2).unwrap();
+
+    let params = stdp_params(2, 1, 5, 0, true, 200.0, SynapseType::Excitatory);
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+    npu.register_stdp_mapping(11, 10, params).unwrap();
+
+    let src = NeuronId(MEMORY_NEURON_ID_START);
+    let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
+
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    let _ = npu.process_burst().unwrap();
+
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    let _ = npu.process_burst().unwrap();
+
+    let fwd = npu.get_outgoing_synapses(src.0);
+    assert_eq!(fwd.len(), 1);
+    assert_eq!(fwd[0].0, dst.0);
+
+    let rev = npu.get_outgoing_synapses(dst.0);
+    assert_eq!(
+        rev.len(),
+        1,
+        "expected dst→src edge only when reverse STDP mapping is registered"
+    );
+    assert_eq!(rev[0].0, src.0);
+}
+
+/// Single registered associative mapping does **not** create a reverse synapse; register B→A separately.
+#[test]
+fn test_memory_only_single_mapping_has_no_automatic_reverse_edge() {
+    const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+    let (mut npu, _src_neurons, _dst_neurons) = create_stdp_network();
+
+    npu.configure_fire_ledger_window(10, 2).unwrap();
+    npu.configure_fire_ledger_window(11, 2).unwrap();
+
+    let params = stdp_params(2, 1, 5, 0, true, 200.0, SynapseType::Excitatory);
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    let src = NeuronId(MEMORY_NEURON_ID_START);
+    let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
+
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    let _ = npu.process_burst().unwrap();
+
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    let _ = npu.process_burst().unwrap();
+
+    let fwd = npu.get_outgoing_synapses(src.0);
+    assert_eq!(fwd.len(), 1);
+    assert_eq!(fwd[0].0, dst.0);
+
+    assert!(
+        npu.get_outgoing_synapses(dst.0).is_empty(),
+        "reverse edge must not be synthesized without a B→A STDP mapping"
+    );
+}
+
+#[test]
+fn test_memory_memory_associative_stdp_skipped_when_not_assoc_eligible() {
+    const MEMORY_NEURON_ID_START: u32 = 50_000_000;
+    let (mut npu, _src, _dst) = create_stdp_network();
+    npu.set_memory_neuron_assoc_predicate(Some(Arc::new(|_| false)));
+
+    npu.configure_fire_ledger_window(10, 2).unwrap();
+    npu.configure_fire_ledger_window(11, 2).unwrap();
+
+    let params = stdp_params(2, 1, 5, 0, true, 200.0, SynapseType::Excitatory);
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    let src = NeuronId(MEMORY_NEURON_ID_START);
+    let dst = NeuronId(MEMORY_NEURON_ID_START + 1);
+
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    let _ = npu.process_burst().unwrap();
+    npu.inject_memory_neuron_to_fcl_with_kind(src.0, 10, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    npu.inject_memory_neuron_to_fcl_with_kind(dst.0, 11, 2.0, FIRE_KIND_STDP_ELIGIBLE);
+    let _ = npu.process_burst().unwrap();
+
+    assert!(npu.get_outgoing_synapses(src.0).is_empty());
+    assert!(npu.get_outgoing_synapses(dst.0).is_empty());
+}
+
 #[test]
 fn test_bidirectional_stdp_ltp_accumulates_on_sync() {
     let (mut npu, src_neurons, dst_neurons) = create_stdp_network();
@@ -220,7 +363,7 @@ fn test_bidirectional_stdp_ltp_accumulates_on_sync() {
     npu.configure_fire_ledger_window(10, 1).unwrap();
     npu.configure_fire_ledger_window(11, 1).unwrap();
 
-    let params = stdp_params(1, 2, 3, 1, true, 128, SynapseType::Excitatory);
+    let params = stdp_params(1, 2, 3, 1, true, 128.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     let src = src_neurons[0];
@@ -233,14 +376,14 @@ fn test_bidirectional_stdp_ltp_accumulates_on_sync() {
     let outgoing = npu.get_outgoing_synapses(src.0);
     assert_eq!(outgoing.len(), 1);
     assert_eq!(outgoing[0].0, dst.0);
-    assert_eq!(outgoing[0].1, 6);
+    assert_eq!(outgoing[0].1, 6.0);
 
     let burst = process_burst_with_injection(&mut npu, &[(src, 128.0), (dst, 128.0)]);
     assert_neuron_fired(&npu, 10, burst, src);
     assert_neuron_fired(&npu, 11, burst, dst);
 
     let outgoing = npu.get_outgoing_synapses(src.0);
-    assert_eq!(outgoing[0].1, 12);
+    assert_eq!(outgoing[0].1, 12.0);
 }
 
 #[test]
@@ -250,7 +393,7 @@ fn test_classic_plasticity_updates_existing_synapses_only() {
     npu.configure_fire_ledger_window(10, 1).unwrap();
     npu.configure_fire_ledger_window(11, 1).unwrap();
 
-    let params = stdp_params(1, 3, 2, 1, false, 100, SynapseType::Excitatory);
+    let params = stdp_params(1, 3, 2, 1, false, 100.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     let src = src_neurons[0];
@@ -261,9 +404,10 @@ fn test_classic_plasticity_updates_existing_synapses_only() {
     npu.add_synapse(
         src,
         dst,
-        SynapticWeight(9),
-        SynapticPsp(100),
+        SynapticWeight(9.0),
+        SynapticPsp(100.0),
         SynapseType::Excitatory,
+        0,
     )
     .unwrap();
     npu.rebuild_synapse_index();
@@ -279,7 +423,7 @@ fn test_classic_plasticity_updates_existing_synapses_only() {
     let outgoing = npu.get_outgoing_synapses(src.0);
     assert_eq!(outgoing.len(), 1);
     assert_eq!(outgoing[0].0, dst.0);
-    assert_eq!(outgoing[0].1, 6);
+    assert_eq!(outgoing[0].1, 6.0);
 
     let no_pair_outgoing = npu.get_outgoing_synapses(no_pair_src.0);
     assert!(
@@ -295,7 +439,7 @@ fn test_ltd_reduces_to_zero_and_marks_prunable() {
     npu.configure_fire_ledger_window(10, 1).unwrap();
     npu.configure_fire_ledger_window(11, 1).unwrap();
 
-    let params = stdp_params(1, 2, 1, 2, false, 100, SynapseType::Excitatory);
+    let params = stdp_params(1, 2, 1, 2, false, 100.0, SynapseType::Excitatory);
     npu.register_stdp_mapping(10, 11, params).unwrap();
 
     let src = src_neurons[0];
@@ -304,9 +448,10 @@ fn test_ltd_reduces_to_zero_and_marks_prunable() {
     npu.add_synapse(
         src,
         dst,
-        SynapticWeight(1),
-        SynapticPsp(100),
+        SynapticWeight(1.0),
+        SynapticPsp(100.0),
         SynapseType::Excitatory,
+        0,
     )
     .unwrap();
     npu.rebuild_synapse_index();
@@ -317,5 +462,5 @@ fn test_ltd_reduces_to_zero_and_marks_prunable() {
     let outgoing = npu.get_outgoing_synapses(src.0);
     assert_eq!(outgoing.len(), 1);
     assert_eq!(outgoing[0].0, dst.0);
-    assert_eq!(outgoing[0].1, 0, "Weight=0 marks synapse as prunable");
+    assert_eq!(outgoing[0].1, 0.0, "Weight=0 marks synapse as prunable");
 }

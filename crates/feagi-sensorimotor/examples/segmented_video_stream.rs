@@ -1,21 +1,15 @@
 use clap::{Parser, ValueEnum};
-use feagi_sensorimotor as feagi_connector;
-use image::{DynamicImage, ImageBuffer, Rgb};
 use std::path::PathBuf;
 
 // region Args
 /// Protocol for communication with FEAGI
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+#[allow(clippy::upper_case_acronyms)]
 enum Protocol {
     /// ZeroMQ protocol
     #[value(name = "zmq")]
+    #[default]
     ZMQ,
-}
-
-impl Default for Protocol {
-    fn default() -> Self {
-        Protocol::ZMQ
-    }
 }
 
 /// Segmented video stream example for FEAGI connector

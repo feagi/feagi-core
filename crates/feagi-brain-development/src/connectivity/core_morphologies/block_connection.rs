@@ -26,8 +26,8 @@ pub fn apply_block_connection_morphology_batched(
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),
     scaling_factor: u32,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -145,6 +145,7 @@ pub fn apply_block_connection_morphology_batched(
                     SynapticWeight(weight),
                     SynapticPsp(psp),
                     synapse_type,
+                    0,
                 )
                 .is_ok()
             {
@@ -183,8 +184,8 @@ pub fn apply_block_connection_morphology(
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),
     scaling_factor: u32,
-    weight: u8,
-    psp: u8,
+    weight: f32,
+    psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
 ) -> BduResult<u32> {
@@ -331,7 +332,7 @@ pub fn apply_block_connection_morphology(
                 if let Some(coords) = npu.get_neuron_coordinates(nid) {
                     sample_coords.push(coords);
                 }
-                sample_area_ids.push(npu.get_neuron_cortical_area(nid));
+                sample_area_ids.push(npu.get_neuron_cortical_area(nid).unwrap_or(0));
             }
             warn!(
                 target: "feagi-bdu",
@@ -425,6 +426,7 @@ pub fn apply_block_connection_morphology(
                         SynapticWeight(weight),
                         SynapticPsp(psp),
                         synapse_type,
+                        0,
                     )
                     .is_ok()
             {

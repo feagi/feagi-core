@@ -47,6 +47,9 @@ pub trait GenomeService: Send + Sync {
     ///
     async fn save_genome(&self, params: SaveGenomeParams) -> ServiceResult<String>;
 
+    /// Export the subtree rooted at `region_id` as a standalone genome JSON (flat format 3.0).
+    async fn export_region_genome(&self, region_id: String) -> ServiceResult<String>;
+
     /// Get information about the currently loaded genome
     ///
     /// # Returns

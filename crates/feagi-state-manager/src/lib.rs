@@ -66,7 +66,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg(feature = "std")]
 extern crate std;
 
-#[cfg(feature = "no_std")]
+#[cfg(all(feature = "no_std", not(feature = "std")))]
 extern crate alloc;
 
 // Module structure

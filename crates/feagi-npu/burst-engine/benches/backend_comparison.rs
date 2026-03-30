@@ -14,7 +14,8 @@
 //! Tests multiple genome sizes to find the crossover point where GPU becomes beneficial.
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use feagi_npu_neural::types::{FireCandidateList, NeuronArray, NeuronId, SynapseArray};
+use feagi_npu_neural::types::{FireCandidateList, NeuronId};
+use feagi_npu_runtime::std_impl::{NeuronArray, SynapseArray};
 
 /// Create a test genome with specified size
 fn create_test_genome(
@@ -48,8 +49,8 @@ fn create_test_genome(
             if synapse_idx < synapse_count {
                 synapse_array.source_neurons[synapse_idx] = source as u32;
                 synapse_array.target_neurons[synapse_idx] = target as u32;
-                synapse_array.weights[synapse_idx] = 128;
-                synapse_array.postsynaptic_potentials[synapse_idx] = 200;
+                synapse_array.weights[synapse_idx] = 128.0;
+                synapse_array.postsynaptic_potentials[synapse_idx] = 200.0;
                 synapse_array.types[synapse_idx] = if i % 4 == 0 { 1 } else { 0 }; // 75% excitatory
                 synapse_array.valid_mask[synapse_idx] = true;
 
@@ -57,7 +58,7 @@ fn create_test_genome(
                 synapse_array
                     .source_index
                     .entry(source as u32)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(synapse_idx);
 
                 synapse_idx += 1;
@@ -110,13 +111,13 @@ fn bench_cpu_backend(c: &mut Criterion) {
                 let mut fcl = FireCandidateList::new();
                 b.iter(|| {
                     fcl.clear();
-                    let _ = <CPUBackend as ComputeBackend<f32>>::process_synaptic_propagation(
+                    let _ = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_synaptic_propagation(
                         &mut backend,
                         black_box(&fired_neurons),
                         black_box(&synapse_array),
                         black_box(&mut fcl),
                     );
-                    let _ = <CPUBackend as ComputeBackend<f32>>::process_neural_dynamics(
+                    let _ = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_neural_dynamics(
                         &mut backend,
                         black_box(&fcl),
                         black_box(&mut neuron_array),
@@ -135,7 +136,7 @@ fn bench_cpu_backend(c: &mut Criterion) {
                 let mut fcl = FireCandidateList::new();
                 b.iter(|| {
                     fcl.clear();
-                    let _ = <CPUBackend as ComputeBackend<f32>>::process_synaptic_propagation(
+                    let _ = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_synaptic_propagation(
                         &mut backend,
                         black_box(&fired_neurons),
                         black_box(&synapse_array),
@@ -157,7 +158,7 @@ fn bench_cpu_backend(c: &mut Criterion) {
                     fcl.add_candidate(NeuronId(i as u32), 2.0);
                 }
                 b.iter(|| {
-                    let _ = <CPUBackend as ComputeBackend<f32>>::process_neural_dynamics(
+                    let _ = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_neural_dynamics(
                         &mut backend,
                         black_box(&fcl),
                         black_box(&mut neuron_array),
@@ -324,14 +325,14 @@ fn bench_cpu_vs_gpu_comparison(c: &mut Criterion) {
             let mut fcl = FireCandidateList::new();
             b.iter(|| {
                 fcl.clear();
-                let _ = <CPUBackend as ComputeBackend<f32>>::process_synaptic_propagation(
+                let _ = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_synaptic_propagation(
                     &mut backend,
                     black_box(&fired_neurons),
                     black_box(&synapse_array),
                     black_box(&mut fcl),
                 );
                 let fcl_size = fcl.len();
-                let _ = <CPUBackend as ComputeBackend<f32>>::process_neural_dynamics(
+                let _ = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_neural_dynamics(
                     &mut backend,
                     black_box(&fcl),
                     black_box(&mut neuron_array_cpu),
@@ -432,14 +433,14 @@ fn bench_firing_rate_cpu(c: &mut Criterion) {
             let mut fcl = FireCandidateList::new();
             b.iter(|| {
                 fcl.clear();
-                let _ = <CPUBackend as ComputeBackend<f32>>::process_synaptic_propagation(
+                let _ = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_synaptic_propagation(
                     &mut backend,
                     black_box(&fired_neurons),
                     black_box(&synapse_array),
                     black_box(&mut fcl),
                 );
                 let fcl_size = fcl.len();
-                let _ = <CPUBackend as ComputeBackend<f32>>::process_neural_dynamics(
+                let _ = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_neural_dynamics(
                     &mut backend,
                     black_box(&fcl),
                     black_box(&mut neuron_array),

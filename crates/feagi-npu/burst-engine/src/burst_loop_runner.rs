@@ -1626,6 +1626,10 @@ fn burst_loop(
 
         let mut last_process_duration: Option<std::time::Duration> = None;
         let mut last_burst_stats: Option<(usize, usize, usize, usize, usize)> = None;
+        // Set when `process_burst` succeeds; notified after NPU lock release so
+        // `plasticity_notify` can lock `AsyncPlasticityExecutor` without inverting lock order
+        // with threads that hold the executor and then acquire the NPU (deadlock).
+        let mut plasticity_notify_timestep: Option<u64> = None;
 
         // Track lock acquisition time outside block scope for diagnostics
         let lock_acquired = {
@@ -1819,34 +1823,47 @@ fn burst_loop(
                             }
                             "neuron_mp_charge_accumulation" | "mp_charge_accumulation" => {
                                 if let Some(accumulation) = update.value.as_bool() {
-                                    npu_lock.update_cortical_area_mp_charge_accumulation(
+                                    let n = npu_lock.update_cortical_area_mp_charge_accumulation(
                                         update.cortical_idx,
                                         accumulation,
-                                    )
+                                    );
+                                    if n == 0 {
+                                        tracing::warn!(
+                                            target: "feagi-burst-engine",
+                                            "mp_charge_accumulation update applied to 0 neurons (cortical_idx={}, cortical_id={}); check area index",
+                                            update.cortical_idx,
+                                            update.cortical_id
+                                        );
+                                    }
+                                    n
                                 } else {
+                                    tracing::warn!(
+                                        target: "feagi-burst-engine",
+                                        "mp_charge_accumulation ignored: JSON value must be boolean, got {:?} (cortical_id={})",
+                                        update.value,
+                                        update.cortical_id
+                                    );
                                     0
                                 }
                             }
                             "postsynaptic_current" | "neuron_post_synaptic_potential" => {
                                 if let Some(psp) = update.value.as_f64() {
-                                    // PSP is stored in the NPU as u8 (0..=255).
-                                    // Clamp deterministically (matches synaptogenesis behavior).
-                                    let psp_u8 = psp.clamp(0.0, 255.0) as u8;
+                                    let psp_f32 = psp as f32;
                                     let synapses_updated = npu_lock
                                         .update_cortical_area_postsynaptic_current(
                                             update.cortical_idx,
-                                            psp_u8,
+                                            psp_f32,
                                         );
                                     let mappings_updated = npu_lock
                                         .update_stdp_mapping_psp_for_source(
                                             update.cortical_idx,
-                                            psp_u8,
+                                            psp_f32,
                                         );
                                     info!(
                                         target: "feagi-burst-engine",
                                         "Applied PSP update area={} psp={} synapses_updated={} stdp_mappings_updated={}",
                                         update.cortical_id,
-                                        psp_u8,
+                                        psp_f32,
                                         synapses_updated,
                                         mappings_updated
                                     );
@@ -1978,16 +1995,11 @@ fn burst_loop(
                         cached_burst_count
                             .store(current_burst, std::sync::atomic::Ordering::Relaxed);
 
-                        // Notify plasticity service of completed burst (while NPU lock still held)
-                        // This allows plasticity service to immediately query FireLedger data
-                        // Callback is pre-cloned Arc, so this is just a function call (no allocation)
-                        if let Some(ref notify_fn) = plasticity_notify {
-                            trace!(
-                                "[BURST-LOOP] 🧠 Notifying plasticity service of burst {}",
-                                current_burst
-                            );
-                            notify_fn(current_burst);
-                        }
+                        // Defer `plasticity_notify` until after NPU lock release: the callback locks
+                        // `AsyncPlasticityExecutor`, while other threads may hold that lock and wait
+                        // on the NPU (e.g. plasticity command processor). Notifying here inverted the
+                        // lock order and could deadlock the burst loop.
+                        plasticity_notify_timestep = Some(current_burst);
 
                         // CRITICAL PERFORMANCE FIX: Cache fire queue sample from process_burst() result
                         // This avoids needing to acquire NPU lock again (was causing 2-5 second delays!)
@@ -2040,6 +2052,16 @@ fn burst_loop(
         let npu_lock_release_time = Instant::now();
         let release_thread_id = std::thread::current().id();
 
+        if let Some(timestep) = plasticity_notify_timestep {
+            if let Some(ref notify_fn) = plasticity_notify {
+                trace!(
+                    "[BURST-LOOP] Notifying plasticity service of burst {} (after NPU lock release)",
+                    timestep
+                );
+                notify_fn(timestep);
+            }
+        }
+
         // Update last lock release time
         if let Ok(mut last_release) = LAST_LOCK_RELEASE.lock() {
             *last_release = Some(npu_lock_release_time);
@@ -2081,6 +2103,7 @@ fn burst_loop(
         } else {
             None
         };
+        #[allow(clippy::collapsible_else_if)]
         if let Some(severity) = hold_severity {
             let should_warn_overrun = (burst_num < 10 || burst_num % 25 == 0)
                 && should_emit_throttled_warning(

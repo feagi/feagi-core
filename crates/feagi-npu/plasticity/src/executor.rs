@@ -10,8 +10,11 @@
 //! This abstraction allows FEAGI to run plasticity optimally on different backends
 //! without code duplication or runtime overhead.
 
+use crate::memory_neuron_array::MemoryNeuronDetail;
 use crate::memory_stats_cache::MemoryStatsCache;
-use crate::service::{PlasticityCommand, PlasticityConfig, PlasticityService};
+use crate::service::{
+    MemoryCorticalAreaRuntimeInfo, PlasticityCommand, PlasticityConfig, PlasticityService,
+};
 use std::sync::{Arc, Mutex};
 use tracing::{debug, warn};
 
@@ -114,10 +117,50 @@ impl AsyncPlasticityExecutor {
         self.memory_stats_cache.clone()
     }
 
+    /// Get a reference to the underlying PlasticityService (for RuntimeService wiring)
+    pub fn get_service(&self) -> Option<PlasticityService> {
+        self.service.lock().ok()?.as_ref().cloned()
+    }
+
     pub fn enqueue_commands_for_test(&self, commands: Vec<crate::PlasticityCommand>) {
         if let Some(service) = self.service.lock().unwrap().as_ref() {
             service.enqueue_commands_for_test(commands);
         }
+    }
+
+    /// ST/LTM counts and upstream pattern cache size for a memory cortical index.
+    pub fn memory_cortical_area_runtime_info(
+        &self,
+        cortical_idx: u32,
+    ) -> Option<MemoryCorticalAreaRuntimeInfo> {
+        self.service
+            .lock()
+            .ok()?
+            .as_ref()
+            .map(|s| s.memory_cortical_area_runtime_info(cortical_idx))
+    }
+
+    /// Plasticity snapshot for a memory neuron by global id.
+    pub fn memory_neuron_detail(&self, neuron_id: u32) -> Option<MemoryNeuronDetail> {
+        self.service
+            .lock()
+            .ok()?
+            .as_ref()
+            .and_then(|s| s.memory_neuron_detail(neuron_id))
+    }
+
+    /// Active memory neuron ids for a cortical area (sorted), paginated: `(page, total)`.
+    pub fn paginated_memory_neuron_ids_in_area(
+        &self,
+        cortical_idx: u32,
+        offset: usize,
+        limit: usize,
+    ) -> Option<(Vec<u32>, usize)> {
+        let guard = self.service.lock().ok()?;
+        let service = guard.as_ref()?;
+        let array_arc = service.get_memory_neuron_array();
+        let array = array_arc.lock().ok()?;
+        Some(array.paginated_neuron_ids_in_area(cortical_idx, offset, limit))
     }
 }
 
@@ -184,6 +227,13 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
                         }
                         PlasticityCommand::UpdateWeightsDelta { .. } => {}
                         PlasticityCommand::UpdateStateCounters { .. } => {}
+                        PlasticityCommand::ResetMemoryNeuronsInArea { cortical_idx } => {
+                            debug!(
+                                target: "plasticity",
+                                "[PLASTICITY-EXEC] ResetMemoryNeuronsInArea cortical_idx={}",
+                                cortical_idx
+                            );
+                        }
                     }
                 }
             }

@@ -63,8 +63,8 @@ fn create_test_genome(
                 synapse_array.add_synapse_simple(
                     source as u32,
                     target as u32,
-                    128,
-                    200,
+                    128.0,
+                    200.0,
                     synapse_type,
                 );
 
@@ -293,6 +293,7 @@ fn bench_synaptic_propagation_engine(c: &mut Criterion) {
                         black_box(&fired_ids),
                         black_box(&synapse_array),
                         black_box(&neuron_mps),
+                        None,
                     );
                     black_box(result)
                 });

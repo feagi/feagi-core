@@ -6,10 +6,41 @@
 // Removed - using crate::common::State instead
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
-use serde::Deserialize;
+use crate::endpoints::cortical_area::synapse_details_for_neuron;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::warn;
 use utoipa::{IntoParams, ToSchema};
+
+/// Query for [`get_memory_neuron`].
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct MemoryNeuronQuery {
+    /// Global memory neuron id (reserved range, typically 50_000_000+).
+    pub neuron_id: u32,
+}
+
+/// Full memory neuron detail: plasticity lifecycle fields plus connectome synapses.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct MemoryNeuronDetailResponse {
+    pub neuron_id: u64,
+    pub cortical_idx: u32,
+    pub cortical_id: String,
+    pub cortical_name: String,
+    pub pattern_hash: Option<u64>,
+    pub is_longterm_memory: bool,
+    pub is_active: bool,
+    pub lifespan_current: u32,
+    pub lifespan_initial: u32,
+    pub lifespan_growth_rate: f32,
+    pub creation_burst: u64,
+    pub last_activation_burst: u64,
+    pub activation_count: u32,
+    pub outgoing_synapse_count: usize,
+    pub incoming_synapse_count: usize,
+    pub outgoing_synapses: serde_json::Value,
+    pub incoming_synapses: serde_json::Value,
+}
 
 /// GET /v1/connectome/cortical_areas/list/detailed
 #[utoipa::path(
@@ -823,4 +854,83 @@ pub async fn get_cortical_area_list_types(
     }
 
     Ok(Json(response))
+}
+
+/// GET /v1/connectome/memory_neuron — plasticity memory-neuron record and NPU synapse lists.
+#[utoipa::path(
+    get,
+    path = "/v1/connectome/memory_neuron",
+    tag = "connectome",
+    params(MemoryNeuronQuery),
+    responses(
+        (status = 200, description = "Memory neuron detail", body = MemoryNeuronDetailResponse),
+        (status = 400, description = "Invalid neuron id"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_memory_neuron(
+    State(_state): State<ApiState>,
+    Query(q): Query<MemoryNeuronQuery>,
+) -> ApiResult<Json<MemoryNeuronDetailResponse>> {
+    if !feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(q.neuron_id) {
+        return Err(ApiError::invalid_input(format!(
+            "neuron_id must be a memory neuron id in range {}..={}",
+            feagi_npu_plasticity::MEMORY_NEURON_ID_START,
+            feagi_npu_plasticity::MEMORY_NEURON_ID_MAX
+        )));
+    }
+
+    let manager = feagi_brain_development::ConnectomeManager::instance();
+    let mgr = manager.read();
+
+    // CRITICAL: Only hold the plasticity executor mutex while reading MemoryNeuronArray.
+    // Never hold it while acquiring the NPU lock (synapse queries), or the burst thread can
+    // deadlock (NPU held → plasticity vs plasticity held → NPU).
+    let detail = {
+        let exec = mgr
+            .get_plasticity_executor()
+            .ok_or_else(|| ApiError::internal("Plasticity executor not available"))?;
+        let ex = exec
+            .lock()
+            .map_err(|_| ApiError::internal("Plasticity executor lock poisoned"))?;
+        ex.memory_neuron_detail(q.neuron_id)
+            .ok_or_else(|| ApiError::not_found("Memory neuron", &q.neuron_id.to_string()))?
+    };
+
+    let cortical_idx = detail.cortical_area_idx;
+    let (cortical_id, cortical_name) = mgr
+        .get_cortical_id(cortical_idx)
+        .and_then(|cid| {
+            mgr.get_cortical_area(cid)
+                .map(|a| (cid.as_base_64(), a.name.clone()))
+        })
+        .unwrap_or_else(|| (String::new(), String::new()));
+
+    let outgoing_full = mgr.get_outgoing_synapses(q.neuron_id as u64);
+    let incoming_full = mgr.get_incoming_synapses(q.neuron_id as u64);
+    let oc = outgoing_full.len();
+    let ic = incoming_full.len();
+    let (out_json, in_json) =
+        synapse_details_for_neuron(&mgr, q.neuron_id, &outgoing_full, &incoming_full);
+
+    Ok(Json(MemoryNeuronDetailResponse {
+        neuron_id: q.neuron_id as u64,
+        cortical_idx,
+        cortical_id,
+        cortical_name,
+        pattern_hash: detail.pattern_hash,
+        is_longterm_memory: detail.is_longterm_memory,
+        is_active: detail.is_active,
+        lifespan_current: detail.lifespan_current,
+        lifespan_initial: detail.lifespan_initial,
+        lifespan_growth_rate: detail.lifespan_growth_rate,
+        creation_burst: detail.creation_burst,
+        last_activation_burst: detail.last_activation_burst,
+        activation_count: detail.activation_count,
+        outgoing_synapse_count: oc,
+        incoming_synapse_count: ic,
+        outgoing_synapses: out_json,
+        incoming_synapses: in_json,
+    }))
 }

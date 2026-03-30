@@ -16,6 +16,15 @@
 use ahash::AHashMap;
 use feagi_npu_neural::types::NeuronId;
 
+/// Default / dense LIF / associative-memory fires tagged as driven by dense or associative LIF
+/// (not pattern-only injection).
+pub const FIRE_KIND_STDP_ELIGIBLE: u8 = 0;
+/// Memory neuron fired via episodic pattern path (`inject_memory_neuron_to_fcl` default).
+/// These spikes are **triggers for associative STDP**: they are archived to the main STDP
+/// fire ledger like other memory fires; the episodic-only ledger is a subset view for
+/// pattern machinery that needs episodic-tagged activity alone.
+pub const FIRE_KIND_EPISODIC_MEMORY: u8 = 1;
+
 /// A single neuron that fired in the current burst
 #[derive(Debug, Clone)]
 pub struct FiringNeuron {
@@ -25,6 +34,22 @@ pub struct FiringNeuron {
     pub x: u32,
     pub y: u32,
     pub z: u32,
+    /// [`FIRE_KIND_STDP_ELIGIBLE`] vs [`FIRE_KIND_EPISODIC_MEMORY`] for memory-neuron semantics.
+    pub fire_kind: u8,
+}
+
+impl Default for FiringNeuron {
+    fn default() -> Self {
+        Self {
+            neuron_id: NeuronId(0),
+            membrane_potential: 0.0,
+            cortical_idx: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+        }
+    }
 }
 
 /// Fire Queue - neurons that fired in the current burst
@@ -93,6 +118,48 @@ impl FireQueue {
     /// Check if fire queue is empty
     pub fn is_empty(&self) -> bool {
         self.total_count == 0
+    }
+
+    /// Remove all neurons from a specific cortical area
+    /// Returns the number of neurons removed
+    pub fn remove_cortical_area(&mut self, cortical_idx: u32) -> usize {
+        if let Some(neurons) = self.neurons_by_area.remove(&cortical_idx) {
+            let count = neurons.len();
+            self.total_count = self.total_count.saturating_sub(count);
+            count
+        } else {
+            0
+        }
+    }
+
+    /// Clone of this queue for **STDP** FireLedger: includes **all** fires, including
+    /// [`FIRE_KIND_EPISODIC_MEMORY`] pattern-injection spikes, so associative STDP can match
+    /// source/destination memory co-activation and create or update synapses.
+    pub fn clone_for_stdp_fire_ledger(&self) -> Self {
+        let mut out = FireQueue::new();
+        out.set_timestep(self.timestep);
+        for neurons in self.neurons_by_area.values() {
+            for n in neurons {
+                out.add_neuron(n.clone());
+            }
+        }
+        out
+    }
+
+    /// Clone for **episodic memory** FireLedger: only episodic-tagged memory neuron fires.
+    pub fn clone_for_episodic_memory_fire_ledger(&self, memory_neuron_id_start: u32) -> Self {
+        let mut out = FireQueue::new();
+        out.set_timestep(self.timestep);
+        for neurons in self.neurons_by_area.values() {
+            for n in neurons {
+                let keep = n.neuron_id.0 >= memory_neuron_id_start
+                    && n.fire_kind == FIRE_KIND_EPISODIC_MEMORY;
+                if keep {
+                    out.add_neuron(n.clone());
+                }
+            }
+        }
+        out
     }
 }
 

@@ -62,7 +62,7 @@ macro_rules! motor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-30, 0, -10], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [300, 0, -30], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1024])
                     }
                 },
 
@@ -78,7 +78,7 @@ macro_rules! motor_cortical_units {
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
                         // 1x1x16 default: one token per FEAGI tick, encoded into 16 bitplanes (supports GPT-2 vocab via token_id+1 offset).
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [50, 0, -10], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [85, 0, -30], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
                     }
                 },
 
@@ -94,7 +94,7 @@ macro_rules! motor_cortical_units {
                     },
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [110, 0, -20], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [175, 0, -30], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -109,13 +109,13 @@ macro_rules! motor_cortical_units {
                     },
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-50, 30, 0], channel_dimensions_default: [32, 32, 8], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [-200, 0, 0], channel_dimensions_default: [32, 32, 8], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1024])
                     }
                 },
 
                 #[doc = "Visual thoughts output - RGB image generation from brain activity"]
                 SimpleVisionOutput => {
-                    friendly_name: "Simple Vision Output",
+                    friendly_name: "Simple Vision",
                     accepted_wrapped_io_data_type: ImageFrame,
                     cortical_id_unit_reference: *b"img",
                     number_cortical_areas: 1,
@@ -123,13 +123,13 @@ macro_rules! motor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::CartesianPlane(frame_change_handling), relative_position: [-50, 100, 0], channel_dimensions_default: [128, 128, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
+                        0 => (IOCorticalAreaConfigurationFlag::CartesianPlane(frame_change_handling), relative_position: [-240, 60, -20], channel_dimensions_default: [128, 128, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
                     }
                 },
 
                 #[doc = "Image Processing configuration - dynamically control brightness, contrast, and per pixel diff thresholding"]
                 DynamicImageProcessing => {
-                    friendly_name: "Dynamic Image Processing Settings",
+                    friendly_name: "Image Enhancements",
                     accepted_wrapped_io_data_type: ImageFilteringSettings,
                     cortical_id_unit_reference: *b"ifs",
                     number_cortical_areas: 4,

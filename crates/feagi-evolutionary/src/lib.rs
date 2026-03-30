@@ -65,8 +65,8 @@ pub use cortical_type_parser::{parse_cortical_type, validate_cortical_type};
 pub use genome::parser::string_to_cortical_id;
 pub use genome::{
     load_genome_from_file, load_genome_from_json, migrate_genome, peek_quantization_precision,
-    save_genome_to_file, save_genome_to_json, GenomeParser, GenomeSaver, MigrationResult,
-    ParsedGenome,
+    save_genome_to_file, save_genome_to_json, subset_runtime_genome_for_region_branch,
+    GenomeParser, GenomeSaver, MigrationResult, ParsedGenome,
 };
 pub use plasticity_detector::{
     extract_memory_properties, genome_has_plasticity, MemoryAreaProperties,

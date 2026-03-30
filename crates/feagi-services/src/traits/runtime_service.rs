@@ -259,6 +259,18 @@ pub trait RuntimeService: Send + Sync {
     /// Called when an agent is deregistered (e.g. descriptor replacement, timeout).
     fn unregister_visualization_subscriptions(&self, agent_id: &str);
 
+    /// Reset live neural state for cortical areas by **cortical index** (NPU internal index).
+    ///
+    /// Clears membrane potentials, refractory state, consecutive fire counters, and removes
+    /// matching neurons from the fire-candidate list for each area.
+    ///
+    /// # Returns
+    /// `(cortical_idx, neurons_reset)` per requested index.
+    async fn reset_cortical_area_states(
+        &self,
+        cortical_indices: &[u32],
+    ) -> ServiceResult<Vec<(u32, usize)>>;
+
     /// Remove all motor subscriptions.
     ///
     /// Used by strict genome transitions to ensure no stale agent-session

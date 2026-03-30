@@ -12,6 +12,7 @@
 //! instead of tower::util::ServiceExt (which requires the "util" feature).
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use base64::{engine::general_purpose, Engine as _};
 #[cfg(feature = "feagi-agent")]
 use feagi_agent::clients::{AgentRegistrationStatus, CommandControlAgent};
 #[cfg(feature = "feagi-agent")]
@@ -61,6 +62,14 @@ use feagi_services::impls::{
 use feagi_services::types::CreateCorticalAreaParams;
 #[cfg(feature = "feagi-agent")]
 use feagi_services::RuntimeService;
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    FrameChangeHandling, PercentageNeuronPositioning,
+};
+#[cfg(feature = "feagi-agent")]
+use feagi_structures::genomic::SensoryCorticalUnit;
 use parking_lot::RwLock;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -266,6 +275,12 @@ fn build_test_state() -> ApiState {
         }
         fn unregister_motor_subscriptions(&self, _agent_id: &str) {}
         fn unregister_visualization_subscriptions(&self, _agent_id: &str) {}
+        async fn reset_cortical_area_states(
+            &self,
+            cortical_indices: &[u32],
+        ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
+            Ok(cortical_indices.iter().map(|&i| (i, 0)).collect())
+        }
         fn clear_all_motor_subscriptions(&self) {}
         fn clear_all_visualization_subscriptions(&self) {}
     }
@@ -453,6 +468,12 @@ impl feagi_services::RuntimeService for TrackingRuntimeService {
             .lock()
             .unwrap()
             .remove(agent_id);
+    }
+    async fn reset_cortical_area_states(
+        &self,
+        cortical_indices: &[u32],
+    ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
+        Ok(cortical_indices.iter().map(|&i| (i, 0)).collect())
     }
     fn clear_all_motor_subscriptions(&self) {
         self.tracker.motor_subscriptions.lock().unwrap().clear();
@@ -739,6 +760,94 @@ fn sample_motor_device_registrations_with_io_flags() -> Value {
                         }
                     },
                     {}
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_multi_segmented_vision_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "SegmentedVision": [
+                [
+                    {
+                        "friendly_name": "front_camera_segmented",
+                        "cortical_unit_index": 0,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {
+                        "segment_xy_resolutions": {
+                            "lower_left": {"width": 32, "height": 32},
+                            "lower_middle": {"width": 32, "height": 32},
+                            "lower_right": {"width": 32, "height": 32},
+                            "middle_left": {"width": 32, "height": 32},
+                            "center": {"width": 128, "height": 128},
+                            "middle_right": {"width": 32, "height": 32},
+                            "upper_left": {"width": 32, "height": 32},
+                            "upper_middle": {"width": 32, "height": 32},
+                            "upper_right": {"width": 32, "height": 32}
+                        },
+                        "center_color_channel": "RGB",
+                        "peripheral_color_channels": "GrayScale"
+                    }
+                ],
+                [
+                    {
+                        "friendly_name": "rear_camera_segmented",
+                        "cortical_unit_index": 1,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {
+                        "segment_xy_resolutions": {
+                            "lower_left": {"width": 32, "height": 32},
+                            "lower_middle": {"width": 32, "height": 32},
+                            "lower_right": {"width": 32, "height": 32},
+                            "middle_left": {"width": 32, "height": 32},
+                            "center": {"width": 128, "height": 128},
+                            "middle_right": {"width": 32, "height": 32},
+                            "upper_left": {"width": 32, "height": 32},
+                            "upper_middle": {"width": 32, "height": 32},
+                            "upper_right": {"width": 32, "height": 32}
+                        },
+                        "center_color_channel": "RGB",
+                        "peripheral_color_channels": "GrayScale"
+                    }
+                ]
+            ]
+        },
+        "feedbacks": {}
+    })
+}
+
+#[cfg(feature = "feagi-agent")]
+fn sample_segmented_vision_group1_only_device_registrations() -> Value {
+    json!({
+        "input_units_and_encoder_properties": {
+            "SegmentedVision": [
+                [
+                    {
+                        "friendly_name": "rear_camera_segmented",
+                        "cortical_unit_index": 1,
+                        "device_grouping": [{"id": 0}]
+                    },
+                    {
+                        "segment_xy_resolutions": {
+                            "lower_left": {"width": 32, "height": 32},
+                            "lower_middle": {"width": 32, "height": 32},
+                            "lower_right": {"width": 32, "height": 32},
+                            "middle_left": {"width": 32, "height": 32},
+                            "center": {"width": 128, "height": 128},
+                            "middle_right": {"width": 32, "height": 32},
+                            "upper_left": {"width": 32, "height": 32},
+                            "upper_middle": {"width": 32, "height": 32},
+                            "upper_right": {"width": 32, "height": 32}
+                        },
+                        "center_color_channel": "RGB",
+                        "peripheral_color_channels": "GrayScale"
+                    }
                 ]
             ]
         },
@@ -1118,6 +1227,344 @@ async fn test_auto_create_creates_all_limb_cortical_areas() {
 
 #[cfg(feature = "feagi-agent")]
 #[tokio::test]
+async fn test_auto_create_places_segmented_vision_groups_horizontally_by_unit_index() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+    let registrations = sample_multi_segmented_vision_device_registrations();
+
+    auto_create_cortical_areas_from_device_registrations(&state, &registrations).await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+
+    let mut group0_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
+    let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
+
+    for area in &areas {
+        let Ok(bytes) = general_purpose::STANDARD.decode(&area.cortical_id) else {
+            continue;
+        };
+        if bytes.len() != 8 {
+            continue;
+        }
+        if bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+            continue;
+        }
+        let subunit_index = bytes[6];
+        let group_index = bytes[7];
+        if group_index == 0 {
+            group0_by_subunit.insert(subunit_index, area.position);
+        } else if group_index == 1 {
+            group1_by_subunit.insert(subunit_index, area.position);
+        }
+    }
+
+    assert_eq!(
+        group0_by_subunit.len(),
+        9,
+        "Expected 9 segmented-vision subunits for group 0"
+    );
+    assert_eq!(
+        group1_by_subunit.len(),
+        9,
+        "Expected 9 segmented-vision subunits for group 1"
+    );
+
+    for subunit in 0u8..9u8 {
+        let pos0 = group0_by_subunit
+            .get(&subunit)
+            .expect("Missing segmented-vision subunit in group 0");
+        let pos1 = group1_by_subunit
+            .get(&subunit)
+            .expect("Missing segmented-vision subunit in group 1");
+
+        assert_eq!(
+            pos0.1, pos1.1,
+            "Expected Y to match template for both segmented groups (subunit {})",
+            subunit
+        );
+        assert_eq!(
+            pos0.2, pos1.2,
+            "Expected Z to match template for both segmented groups (subunit {})",
+            subunit
+        );
+        assert!(
+            pos1.0 > pos0.0,
+            "Expected group 1 subunit {} to be to the right of group 0 (x1={}, x0={})",
+            subunit,
+            pos1.0,
+            pos0.0
+        );
+    }
+
+    let group0_max_x = group0_by_subunit
+        .values()
+        .map(|(x, _, _)| *x)
+        .max()
+        .expect("Group 0 should not be empty");
+    let group1_min_x = group1_by_subunit
+        .values()
+        .map(|(x, _, _)| *x)
+        .min()
+        .expect("Group 1 should not be empty");
+    assert!(
+        group1_min_x > group0_max_x,
+        "Expected segmented-vision group 1 assembly to be placed to the right of group 0 assembly"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    // Seed the scene with an existing segmented-vision group (group 0) at custom Y/Z positions.
+    let mut config = serde_json::Map::new();
+    config.insert(
+        "frame_change_handling".to_string(),
+        serde_json::to_value(FrameChangeHandling::Absolute).expect("Serialize frame handling"),
+    );
+    config.insert(
+        "percentage_neuron_positioning".to_string(),
+        serde_json::to_value(PercentageNeuronPositioning::Linear)
+            .expect("Serialize percentage neuron positioning"),
+    );
+
+    let existing_ids = SensoryCorticalUnit::SegmentedVision
+        .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+            CorticalUnitIndex::from(0u8),
+            config,
+        )
+        .expect("Generate segmented-vision cortical IDs for group 0");
+
+    let mut existing_params: Vec<CreateCorticalAreaParams> = Vec::new();
+    for (subunit, cortical_id) in existing_ids.iter().enumerate() {
+        let subunit_i32 = subunit as i32;
+        existing_params.push(CreateCorticalAreaParams {
+            cortical_id: cortical_id.as_base_64(),
+            name: format!("seeded-segmented-{}", subunit),
+            dimensions: if subunit == 4 {
+                (128, 128, 3)
+            } else {
+                (32, 32, 1)
+            },
+            position: (-100 + subunit_i32, 200 + subunit_i32, -300 - subunit_i32),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        });
+    }
+
+    state
+        .genome_service
+        .create_cortical_areas(existing_params)
+        .await
+        .expect("Seed existing segmented-vision group");
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_segmented_vision_group1_only_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+
+    let mut group0_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
+    let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
+    for area in &areas {
+        let Ok(bytes) = general_purpose::STANDARD.decode(&area.cortical_id) else {
+            continue;
+        };
+        if bytes.len() != 8 || bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+            continue;
+        }
+        let subunit_index = bytes[6];
+        let group_index = bytes[7];
+        if group_index == 0 {
+            group0_by_subunit.insert(subunit_index, area.position);
+        } else if group_index == 1 {
+            group1_by_subunit.insert(subunit_index, area.position);
+        }
+    }
+
+    assert_eq!(
+        group0_by_subunit.len(),
+        9,
+        "Expected seeded group 0 subunits"
+    );
+    assert_eq!(
+        group1_by_subunit.len(),
+        9,
+        "Expected newly created group 1 subunits"
+    );
+
+    for subunit in 0u8..9u8 {
+        let pos0 = group0_by_subunit
+            .get(&subunit)
+            .expect("Missing seeded group 0 subunit");
+        let pos1 = group1_by_subunit
+            .get(&subunit)
+            .expect("Missing created group 1 subunit");
+
+        assert_eq!(
+            pos1.1, pos0.1,
+            "Expected group 1 subunit {} Y to align with existing segmented group",
+            subunit
+        );
+        assert_eq!(
+            pos1.2, pos0.2,
+            "Expected group 1 subunit {} Z to align with existing segmented group",
+            subunit
+        );
+        assert!(
+            pos1.0 > pos0.0,
+            "Expected group 1 subunit {} X to be to the right after horizontal expansion",
+            subunit
+        );
+    }
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existing_anchor_incomplete(
+) {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    // Seed an INCOMPLETE existing segmented-vision group (group 0): only one subunit.
+    let mut config = serde_json::Map::new();
+    config.insert(
+        "frame_change_handling".to_string(),
+        serde_json::to_value(FrameChangeHandling::Absolute).expect("Serialize frame handling"),
+    );
+    config.insert(
+        "percentage_neuron_positioning".to_string(),
+        serde_json::to_value(PercentageNeuronPositioning::Linear)
+            .expect("Serialize percentage neuron positioning"),
+    );
+    let existing_ids = SensoryCorticalUnit::SegmentedVision
+        .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+            CorticalUnitIndex::from(0u8),
+            config,
+        )
+        .expect("Generate segmented-vision cortical IDs for group 0");
+
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: existing_ids[0].as_base_64(),
+            name: "seeded-incomplete-segmented-0".to_string(),
+            dimensions: (32, 32, 1),
+            position: (999, 777, 555),
+            area_type: "sensory".to_string(),
+            visible: None,
+            sub_group: None,
+            neurons_per_voxel: None,
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("Seed incomplete segmented-vision anchor");
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_segmented_vision_group1_only_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+
+    let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
+    for area in &areas {
+        let Ok(bytes) = general_purpose::STANDARD.decode(&area.cortical_id) else {
+            continue;
+        };
+        if bytes.len() != 8 || bytes[0] != b'i' || &bytes[1..4] != b"svi" {
+            continue;
+        }
+        if bytes[7] == 1 {
+            group1_by_subunit.insert(bytes[6], area.position);
+        }
+    }
+
+    assert_eq!(
+        group1_by_subunit.len(),
+        9,
+        "Expected complete group 1 segmented-vision creation"
+    );
+
+    // Subunit 0 template-relative Y/Z for segmented vision is (-70, 0) in sensory template.
+    // With an incomplete anchor, Y/Z must come from template (not the seeded 777/555).
+    let subunit0 = group1_by_subunit
+        .get(&0)
+        .expect("Missing group 1 subunit 0");
+    assert_eq!(
+        subunit0.1, -70,
+        "Expected template Y when existing segmented anchor is incomplete"
+    );
+    assert_eq!(
+        subunit0.2, 0,
+        "Expected template Z when existing segmented anchor is incomplete"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
 async fn test_auto_create_uses_registration_friendly_name_for_motor_areas() {
     let _guard = {
         let _lock = CONFIG_ENV_LOCK
@@ -1145,6 +1592,98 @@ async fn test_auto_create_uses_registration_friendly_name_for_motor_areas() {
             .any(|area| area.name.starts_with("front_left_leg")),
         "Expected created motor area names to use registration friendly name"
     );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_sets_firing_threshold_for_simple_vision() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(&state, &sample_device_registrations())
+        .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+    let vision_area = areas
+        .iter()
+        .find(|area| {
+            general_purpose::STANDARD
+                .decode(&area.cortical_id)
+                .ok()
+                .is_some_and(|bytes| bytes.len() == 8 && bytes[0] == b'i' && &bytes[1..4] == b"img")
+        })
+        .expect("Expected simple vision area to be auto-created");
+
+    assert_eq!(
+        vision_area.firing_threshold, 150.0,
+        "Expected simple vision auto-created area firing_threshold=150.0"
+    );
+    assert!(
+        !vision_area.mp_charge_accumulation,
+        "Expected simple vision auto-created area mp_charge_accumulation=false"
+    );
+}
+
+#[cfg(feature = "feagi-agent")]
+#[tokio::test]
+async fn test_auto_create_sets_firing_threshold_for_segmented_vision() {
+    let _guard = {
+        let _lock = CONFIG_ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("Failed to lock config env");
+        set_temp_config(true)
+    };
+    let state = build_test_state();
+
+    auto_create_cortical_areas_from_device_registrations(
+        &state,
+        &sample_multi_segmented_vision_device_registrations(),
+    )
+    .await;
+
+    let areas = state
+        .connectome_service
+        .list_cortical_areas()
+        .await
+        .expect("Failed to list cortical areas");
+
+    let segmented_vision_areas: Vec<_> = areas
+        .iter()
+        .filter(|area| {
+            general_purpose::STANDARD
+                .decode(&area.cortical_id)
+                .ok()
+                .is_some_and(|bytes| bytes.len() == 8 && bytes[0] == b'i' && &bytes[1..4] == b"svi")
+        })
+        .collect();
+
+    assert!(
+        !segmented_vision_areas.is_empty(),
+        "Expected segmented vision areas to be auto-created"
+    );
+    for area in segmented_vision_areas {
+        assert_eq!(
+            area.firing_threshold, 150.0,
+            "Expected segmented vision area {} firing_threshold=150.0",
+            area.cortical_id
+        );
+        assert!(
+            !area.mp_charge_accumulation,
+            "Expected segmented vision area {} mp_charge_accumulation=false",
+            area.cortical_id
+        );
+    }
 }
 
 #[cfg(feature = "feagi-agent")]

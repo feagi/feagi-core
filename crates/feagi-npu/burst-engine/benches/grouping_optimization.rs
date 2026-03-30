@@ -156,7 +156,7 @@ fn group_parallel(
     contributions
         .into_par_iter()
         .fold(
-            || AHashMap::<CorticalID, Vec<(NeuronId, SynapticContribution)>>::new(),
+            AHashMap::<CorticalID, Vec<(NeuronId, SynapticContribution)>>::new,
             |mut acc, (target_neuron, cortical_area, contribution)| {
                 acc.entry(cortical_area)
                     .or_default()
@@ -164,15 +164,12 @@ fn group_parallel(
                 acc
             },
         )
-        .reduce(
-            || AHashMap::new(),
-            |mut a, b| {
-                for (cortical_id, mut contribs) in b {
-                    a.entry(cortical_id).or_default().append(&mut contribs);
-                }
-                a
-            },
-        )
+        .reduce(AHashMap::new, |mut a, b| {
+            for (cortical_id, mut contribs) in b {
+                a.entry(cortical_id).or_default().append(&mut contribs);
+            }
+            a
+        })
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -87,6 +87,7 @@ pub mod backend;
 #[cfg(feature = "std")]
 pub mod burst_loop_runner;
 pub use burst_loop_runner::SensoryIntake;
+pub mod chain_latency_trace;
 pub mod fire_ledger;
 pub mod fire_structures;
 pub mod fq_sampler;
@@ -101,6 +102,7 @@ pub mod parameter_update_queue;
 pub mod sensory; // Rust sensory injection system
                  // Disabled - uses DynamicNPU
                  // pub mod sleep; // Sleep manager for energy efficiency and memory optimization
+pub mod sparse_memory_lif;
 pub mod synaptic_propagation;
 pub mod viz_shm_writer; // Rust visualization SHM writer // Rust motor SHM writer
 
@@ -124,6 +126,10 @@ pub use npu::*;
 pub use parameter_update_queue::{ParameterUpdate, ParameterUpdateQueue};
 pub use sensory::*;
 // pub use sleep::*;
+pub use sparse_memory_lif::{
+    MemoryAssociativeLifParams, MemoryAssociativeLifParamsByArea, MemoryAssociativeLifState,
+    SparseMemoryAssociativeLifStates,
+};
 pub use synaptic_propagation::*;
 pub use viz_shm_writer::*;
 

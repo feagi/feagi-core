@@ -42,6 +42,7 @@ type BrainRegionIoRegistry = HashMap<String, (Vec<String>, Vec<String>)>;
 
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use crate::types::{BduError, BduResult};
+use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
 use feagi_npu_neural::types::NeuronId;
 use feagi_structures::genomic::cortical_area::{
     CoreCorticalType, CorticalAreaType, CorticalID, CustomCorticalType,
@@ -1251,8 +1252,7 @@ impl ConnectomeManager {
 
     /// Recompute and persist upstream_cortical_areas for a target area from mapping properties.
     ///
-    /// This is a recovery path for stale upstream tracking (e.g., bidirectional mappings
-    /// that were mirrored into properties but not fully regenerated).
+    /// This is a recovery path for stale upstream tracking after connectome or mapping edits.
     pub fn refresh_upstream_cortical_areas_from_mappings(
         &mut self,
         target_cortical_id: &CorticalID,
@@ -1754,9 +1754,9 @@ impl ConnectomeManager {
 
     /// Update cortical mapping properties between two cortical areas
     ///
-    /// Following Python's update_cortical_mapping_properties() logic:
-    /// 1. Updates the source area's cortical_mapping_dst property
-    /// 2. Triggers synapse regeneration for the affected connection
+    /// Updates only the source area's `cortical_mapping_dst` entry for this destination.
+    /// Associative memory mappings are **directed**: a reverse edge (if any) is stored only when
+    /// the client updates that pair explicitly (separate PUT).
     ///
     /// # Arguments
     /// * `src_area_id` - Source cortical area ID
@@ -1774,32 +1774,6 @@ impl ConnectomeManager {
         use tracing::info;
 
         info!(target: "feagi-bdu", "Updating cortical mapping: {} -> {}", src_area_id, dst_area_id);
-
-        // Helper: detect associative_memory (bi-directional STDP) in a mapping payload
-        let mapping_has_bidirectional_stdp = |rules: &[serde_json::Value]| -> bool {
-            for rule in rules {
-                if let Some(obj) = rule.as_object() {
-                    if let Some(morphology_id) = obj.get("morphology_id").and_then(|v| v.as_str()) {
-                        if morphology_id == "associative_memory" {
-                            return true;
-                        }
-                    }
-                }
-            }
-            false
-        };
-
-        let requested_bidirectional = mapping_has_bidirectional_stdp(&mapping_data);
-        let existing_bidirectional = self
-            .cortical_areas
-            .get(src_area_id)
-            .and_then(|area| area.properties.get("cortical_mapping_dst"))
-            .and_then(|v| v.as_object())
-            .and_then(|map| map.get(&dst_area_id.as_base_64()))
-            .and_then(|v| v.as_array())
-            .map(|arr| mapping_has_bidirectional_stdp(arr))
-            .unwrap_or(false);
-        let should_apply_bidirectional = requested_bidirectional || existing_bidirectional;
 
         {
             // Get source area (must exist)
@@ -1843,56 +1817,6 @@ impl ConnectomeManager {
                 );
                 info!(target: "feagi-bdu", "Updated mapping from {} to {} with {} connections",
                       src_area_id, dst_area_id, mapping_data.len());
-            }
-        }
-
-        // Bi-directional STDP: mirror the mapping on the reverse pair
-        if should_apply_bidirectional {
-            let dst_area = self.cortical_areas.get_mut(dst_area_id).ok_or_else(|| {
-                crate::types::BduError::InvalidArea(format!(
-                    "Destination area not found: {}",
-                    dst_area_id
-                ))
-            })?;
-            let dst_mapping_dst =
-                if let Some(existing) = dst_area.properties.get_mut("cortical_mapping_dst") {
-                    existing.as_object_mut().ok_or_else(|| {
-                        crate::types::BduError::InvalidMorphology(
-                            "cortical_mapping_dst is not an object".to_string(),
-                        )
-                    })?
-                } else {
-                    dst_area
-                        .properties
-                        .insert("cortical_mapping_dst".to_string(), serde_json::json!({}));
-                    dst_area
-                        .properties
-                        .get_mut("cortical_mapping_dst")
-                        .unwrap()
-                        .as_object_mut()
-                        .unwrap()
-                };
-
-            if mapping_data.is_empty() {
-                dst_mapping_dst.remove(&src_area_id.as_base_64());
-                info!(
-                    target: "feagi-bdu",
-                    "Removed bi-directional STDP mirror mapping from {} to {}",
-                    dst_area_id,
-                    src_area_id
-                );
-            } else {
-                dst_mapping_dst.insert(
-                    src_area_id.as_base_64(),
-                    serde_json::Value::Array(mapping_data.clone()),
-                );
-                info!(
-                    target: "feagi-bdu",
-                    "Updated bi-directional STDP mirror mapping from {} to {} with {} connections",
-                    dst_area_id,
-                    src_area_id,
-                    mapping_data.len()
-                );
             }
         }
 
@@ -2315,6 +2239,17 @@ impl ConnectomeManager {
         Ok(synapse_count)
     }
 
+    /// Whole numbers often arrive as JSON floats (e.g. `1.0`); `as_i64`/`as_u64` return None for those.
+    fn json_number_as_i64_for_stdp(v: &serde_json::Value) -> Option<i64> {
+        v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))
+    }
+
+    fn json_number_as_usize_for_stdp(v: &serde_json::Value) -> Option<usize> {
+        v.as_u64()
+            .map(|n| n as usize)
+            .or_else(|| v.as_f64().map(|f| f as usize))
+    }
+
     /// Register STDP mapping parameters for a plastic rule
     #[allow(clippy::too_many_arguments)]
     fn register_stdp_mapping_for_rule(
@@ -2325,21 +2260,21 @@ impl ConnectomeManager {
         dst_cortical_idx: u32,
         rule_obj: &serde_json::Map<String, serde_json::Value>,
         bidirectional_stdp: bool,
-        synapse_psp: u8,
+        synapse_psp: f32,
         synapse_type: feagi_npu_neural::SynapseType,
     ) -> BduResult<()> {
         let plasticity_window = rule_obj
             .get("plasticity_window")
-            .and_then(|v| v.as_u64())
+            .and_then(Self::json_number_as_usize_for_stdp)
             .ok_or_else(|| {
                 BduError::Internal(format!(
                     "Missing plasticity_window in plastic mapping rule {} -> {}",
                     src_area_id, dst_area_id
                 ))
-            })? as usize;
+            })?;
         let plasticity_constant = rule_obj
             .get("plasticity_constant")
-            .and_then(|v| v.as_i64())
+            .and_then(Self::json_number_as_i64_for_stdp)
             .ok_or_else(|| {
                 BduError::Internal(format!(
                     "Missing plasticity_constant in plastic mapping rule {} -> {}",
@@ -2348,7 +2283,7 @@ impl ConnectomeManager {
             })?;
         let ltp_multiplier = rule_obj
             .get("ltp_multiplier")
-            .and_then(|v| v.as_i64())
+            .and_then(Self::json_number_as_i64_for_stdp)
             .ok_or_else(|| {
                 BduError::Internal(format!(
                     "Missing ltp_multiplier in plastic mapping rule {} -> {}",
@@ -2357,7 +2292,7 @@ impl ConnectomeManager {
             })?;
         let ltd_multiplier = rule_obj
             .get("ltd_multiplier")
-            .and_then(|v| v.as_i64())
+            .and_then(Self::json_number_as_i64_for_stdp)
             .ok_or_else(|| {
                 BduError::Internal(format!(
                     "Missing ltd_multiplier in plastic mapping rule {} -> {}",
@@ -2419,83 +2354,52 @@ impl ConnectomeManager {
         &self,
         src_area_id: &CorticalID,
         rule: &serde_json::Value,
-    ) -> BduResult<(u8, u8, feagi_npu_neural::SynapseType)> {
+    ) -> BduResult<(f32, f32, feagi_npu_neural::SynapseType)> {
         // Get source area to access PSP property
         let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
             crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
         })?;
 
-        // Extract weight from rule (postSynapticCurrent_multiplier)
-        //
-        // IMPORTANT:
-        // - This value represents the synapse "weight" stored in the NPU (u8: 0..255).
-        // - Do NOT scale by 255 here. A multiplier of 1.0 should remain weight=1 (not 255).
+        // Extract weight from rule (`postSynapticCurrent_multiplier`) as full-precision float.
         let (weight, synapse_type) = {
-            // Accept either integer or whole-number float inputs for compatibility with older clients/tests.
-            let parse_i64 = |v: &serde_json::Value| -> Option<i64> {
+            let parse_f64 = |v: &serde_json::Value| -> Option<f64> {
                 if let Some(i) = v.as_i64() {
-                    return Some(i);
+                    return Some(i as f64);
                 }
-                let f = v.as_f64()?;
-                if f.fract() == 0.0 {
-                    Some(f as i64)
-                } else {
-                    None
-                }
+                v.as_f64()
             };
 
-            let multiplier_i64: i64 = if let Some(obj) = rule.as_object() {
+            let mult: f64 = if let Some(obj) = rule.as_object() {
                 obj.get("postSynapticCurrent_multiplier")
-                    .and_then(parse_i64)
-                    .unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
+                    .and_then(parse_f64)
+                    .unwrap_or(1.0)
             } else if let Some(arr) = rule.as_array() {
-                // Array format: [morphology_id, scalar, multiplier, ...]
-                arr.get(2).and_then(parse_i64).unwrap_or(1) // @architecture:acceptable - rule-level default multiplier
+                arr.get(2).and_then(parse_f64).unwrap_or(1.0)
             } else {
-                128 // @architecture:acceptable - emergency fallback for malformed rule
+                128.0
             };
 
-            if multiplier_i64 < 0 {
-                let abs = if multiplier_i64 == i64::MIN {
-                    i64::MAX
-                } else {
-                    multiplier_i64.abs()
-                };
-                (
-                    abs.clamp(0, 255) as u8,
-                    feagi_npu_neural::SynapseType::Inhibitory,
-                )
+            if mult < 0.0 {
+                (mult.abs() as f32, feagi_npu_neural::SynapseType::Inhibitory)
             } else {
-                (
-                    multiplier_i64.clamp(0, 255) as u8,
-                    feagi_npu_neural::SynapseType::Excitatory,
-                )
+                (mult as f32, feagi_npu_neural::SynapseType::Excitatory)
             }
         };
 
-        // Get PSP from source cortical area.
-        //
-        // IMPORTANT:
-        // - This value represents the synapse PSP stored in the NPU (u8: 0..255).
-        // - Treat `postsynaptic_current` as an absolute value in 0..255 units.
-        // - Do NOT scale by 255 here. A PSP of 1.0 should remain PSP=1 (not 255).
-        let (psp_f32, psp) = {
-            use crate::models::cortical_area::CorticalAreaExt;
-            let psp_f32 = src_area.postsynaptic_current();
-            (psp_f32, psp_f32.clamp(0.0, 255.0) as u8)
-        };
+        // PSP from source cortical area (float; stored as f32 on synapses)
+        use crate::models::cortical_area::CorticalAreaExt;
+        let psp_f32 = src_area.postsynaptic_current();
 
         tracing::debug!(
             target: "feagi-bdu",
-            "Resolved synapse params src={} weight={} psp={} psp_f32={} type={:?}",
+            "Resolved synapse params src={} weight={} psp={} type={:?}",
             src_area_id.as_base_64(),
             weight,
-            psp,
             psp_f32,
             synapse_type
         );
 
-        Ok((weight, psp, synapse_type))
+        Ok((weight, psp_f32, synapse_type))
     }
 
     /// Apply cortical mapping for a specific area pair
@@ -2683,8 +2587,8 @@ impl ConnectomeManager {
         dst_area_id: &CorticalID,
         src_idx: u32,
         dst_idx: u32,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_attractivity: u8,
         synapse_type: feagi_npu_neural::SynapseType,
     ) -> BduResult<usize> {
@@ -2737,6 +2641,7 @@ impl ConnectomeManager {
                     psp,
                     synapse_attractivity,
                     synapse_type,
+                    0,
                 )?;
                 // Ensure the propagation engine sees the newly created synapses immediately
                 npu.rebuild_synapse_index();
@@ -2806,6 +2711,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
                     )?;
                     npu.rebuild_synapse_index();
                     Ok(count as usize)
@@ -3959,7 +3865,7 @@ impl ConnectomeManager {
             .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
 
         let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
-        let cortical_id = self.cortical_idx_to_id.get(&cortical_idx).cloned();
+        let cortical_id = cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
 
         let deleted = npu_lock.delete_neuron(neuron_id as u32);
 
@@ -4243,6 +4149,16 @@ impl ConnectomeManager {
     /// Coordinates as (x, y, z), or (0, 0, 0) if neuron doesn't exist or NPU not connected
     ///
     pub fn get_neuron_coordinates(&self, neuron_id: u64) -> (u32, u32, u32) {
+        // Memory neurons live in the plasticity MemoryNeuronArray, not the NPU dense neuron array.
+        // Do not take the NPU mutex here: synapse inspector paths (`peer_cortical_voxel_fields`)
+        // resolve cortical idx via the plasticity lock first, then coordinates. The burst thread
+        // holds NPU while notifying plasticity — taking NPU after plasticity would deadlock.
+        #[cfg(feature = "plasticity")]
+        {
+            if feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(neuron_id as u32) {
+                return (0, 0, 0);
+            }
+        }
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock
@@ -4267,15 +4183,40 @@ impl ConnectomeManager {
     /// Cortical area index, or 0 if neuron doesn't exist or NPU not connected
     ///
     pub fn get_neuron_cortical_idx(&self, neuron_id: u64) -> u32 {
+        self.get_neuron_cortical_idx_opt(neuron_id).unwrap_or(0)
+    }
+
+    /// Cortical area index for a neuron, or `None` if the neuron slot is invalid / NPU unavailable.
+    ///
+    /// Memory neurons (global ids in `50_000_000..=99_999_999`) are not stored in the dense
+    /// [`NeuronArray`] index space; their cortical membership is resolved via the plasticity
+    /// [`MemoryNeuronArray`] when the plasticity feature is enabled.
+    pub fn get_neuron_cortical_idx_opt(&self, neuron_id: u64) -> Option<u32> {
+        #[cfg(feature = "plasticity")]
+        {
+            if feagi_npu_plasticity::NeuronIdManager::is_memory_neuron_id(neuron_id as u32) {
+                return self.memory_neuron_cortical_idx_opt(neuron_id as u32);
+            }
+        }
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock.get_neuron_cortical_area(neuron_id as u32)
             } else {
-                0
+                None
             }
         } else {
-            0
+            None
         }
+    }
+
+    /// Resolve cortical index for a memory-neuron global id through the plasticity executor.
+    #[cfg(feature = "plasticity")]
+    fn memory_neuron_cortical_idx_opt(&self, neuron_id: u32) -> Option<u32> {
+        let exec = self.get_plasticity_executor()?;
+        let guard = exec.lock().ok()?;
+        guard
+            .memory_neuron_detail(neuron_id)
+            .map(|d| d.cortical_area_idx)
     }
 
     /// Get all neuron IDs in a specific cortical area
@@ -4321,7 +4262,7 @@ impl ConnectomeManager {
     ///
     /// Vec of (target_neuron_id, weight, psp, synapse_type), or empty if NPU not connected
     ///
-    pub fn get_outgoing_synapses(&self, source_neuron_id: u64) -> Vec<(u32, u8, u8, u8)> {
+    pub fn get_outgoing_synapses(&self, source_neuron_id: u64) -> Vec<(u32, f32, f32, u8)> {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock.get_outgoing_synapses(source_neuron_id as u32)
@@ -4343,7 +4284,7 @@ impl ConnectomeManager {
     ///
     /// Vec of (source_neuron_id, weight, psp, synapse_type), or empty if NPU not connected
     ///
-    pub fn get_incoming_synapses(&self, target_neuron_id: u64) -> Vec<(u32, u8, u8, u8)> {
+    pub fn get_incoming_synapses(&self, target_neuron_id: u64) -> Vec<(u32, f32, f32, u8)> {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock.get_incoming_synapses(target_neuron_id as u32)
@@ -4536,13 +4477,13 @@ impl ConnectomeManager {
     ///
     /// # Returns
     ///
-    /// Synapse weight (0-255), or None if no connection exists
+    /// Synapse weight (`f32`), or None if no connection exists
     ///
     pub fn get_connection_weight(
         &self,
         source_neuron_id: u64,
         target_neuron_id: u64,
-    ) -> Option<u8> {
+    ) -> Option<f32> {
         let synapses = self.get_outgoing_synapses(source_neuron_id);
         synapses
             .iter()
@@ -4589,7 +4530,7 @@ impl ConnectomeManager {
     /// The cortical area ID, or None if neuron doesn't exist
     ///
     pub fn get_neuron_cortical_id(&self, neuron_id: u64) -> Option<CorticalID> {
-        let cortical_idx = self.get_neuron_cortical_idx(neuron_id);
+        let cortical_idx = self.get_neuron_cortical_idx_opt(neuron_id)?;
         self.cortical_idx_to_id.get(&cortical_idx).copied()
     }
 
@@ -4935,8 +4876,8 @@ impl ConnectomeManager {
     ///
     /// * `source_neuron_id` - Source neuron ID
     /// * `target_neuron_id` - Target neuron ID
-    /// * `weight` - Synapse weight (0-255)
-    /// * `psp` - Synapse PSP (0-255)
+    /// * `weight` - Synapse weight (`f32`)
+    /// * `psp` - Synapse PSP (`f32`)
     /// * `synapse_type` - Synapse type (0=excitatory, 1=inhibitory)
     ///
     /// # Returns
@@ -4947,8 +4888,8 @@ impl ConnectomeManager {
         &mut self,
         source_neuron_id: u64,
         target_neuron_id: u64,
-        weight: u8,
-        psp: u8,
+        weight: f32,
+        psp: f32,
         synapse_type: u8,
     ) -> BduResult<()> {
         // Get NPU
@@ -4992,6 +4933,7 @@ impl ConnectomeManager {
                 feagi_npu_neural::types::SynapticWeight(weight),
                 feagi_npu_neural::types::SynapticPsp(psp),
                 syn_type,
+                0,
             )
             .map_err(|e| BduError::Internal(format!("Failed to create synapse: {}", e)))?;
 
@@ -5000,8 +4942,10 @@ impl ConnectomeManager {
 
         let source_cortical_idx = npu_lock.get_neuron_cortical_area(source_neuron_id as u32);
         let target_cortical_idx = npu_lock.get_neuron_cortical_area(target_neuron_id as u32);
-        let source_cortical_id = self.cortical_idx_to_id.get(&source_cortical_idx).cloned();
-        let target_cortical_id = self.cortical_idx_to_id.get(&target_cortical_idx).cloned();
+        let source_cortical_id =
+            source_cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
+        let target_cortical_id =
+            target_cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
 
         let state_manager = StateManager::instance();
         let state_manager = state_manager.read();
@@ -5031,9 +4975,11 @@ impl ConnectomeManager {
                 let mut mp_driven_psp_flags = ahash::AHashMap::new();
 
                 for (cortical_id, area) in &self.cortical_areas {
-                    // Power area defaults to uniform PSP distribution when property is absent.
-                    let default_psp_uniform =
-                        *cortical_id == CoreCorticalType::Power.to_cortical_id();
+                    // When the property is absent: Power and Memory cortical areas default to uniform
+                    // PSP (full PSP per synapse); other areas default to divided PSP.
+                    let default_psp_uniform = *cortical_id
+                        == CoreCorticalType::Power.to_cortical_id()
+                        || matches!(area.cortical_type, CorticalAreaType::Memory(_));
                     let psp_uniform = area
                         .get_property("psp_uniform_distribution")
                         .and_then(|v| v.as_bool())
@@ -5078,7 +5024,7 @@ impl ConnectomeManager {
         &self,
         source_neuron_id: u64,
         target_neuron_id: u64,
-    ) -> Option<(u8, u8, u8)> {
+    ) -> Option<(f32, f32, u8)> {
         // Get NPU
         let npu = self.npu.as_ref()?;
         let npu_lock = npu.lock().ok()?;
@@ -5113,7 +5059,7 @@ impl ConnectomeManager {
         &mut self,
         source_neuron_id: u64,
         target_neuron_id: u64,
-        new_weight: u8,
+        new_weight: f32,
     ) -> BduResult<()> {
         // Get NPU
         let npu = self
@@ -5171,8 +5117,10 @@ impl ConnectomeManager {
 
         let source_cortical_idx = npu_lock.get_neuron_cortical_area(source_neuron_id as u32);
         let target_cortical_idx = npu_lock.get_neuron_cortical_area(target_neuron_id as u32);
-        let source_cortical_id = self.cortical_idx_to_id.get(&source_cortical_idx).cloned();
-        let target_cortical_id = self.cortical_idx_to_id.get(&target_cortical_idx).cloned();
+        let source_cortical_id =
+            source_cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
+        let target_cortical_id =
+            target_cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
 
         // Remove synapse via NPU
         let removed = npu_lock.remove_synapse(
@@ -5373,7 +5321,8 @@ impl ConnectomeManager {
         // Note: Could be optimized with a batch delete method in NPU if needed
         for neuron_id in neuron_ids {
             let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
-            let cortical_id = self.cortical_idx_to_id.get(&cortical_idx).cloned();
+            let cortical_id =
+                cortical_idx.and_then(|idx| self.cortical_idx_to_id.get(&idx).cloned());
 
             if npu_lock.delete_neuron(neuron_id as u32) {
                 deleted_count += 1;
@@ -5716,7 +5665,8 @@ impl ConnectomeManager {
 
         for (key, value) in properties {
             match key.as_str() {
-                "title" | "name" => {
+                // BV (FEAGIRequests.edit_region_object) sends `region_title`; other clients use `title` / `name`.
+                "title" | "name" | "region_title" => {
                     if let Some(name) = value.as_str() {
                         region.name = name.to_string();
                         debug!(target: "feagi-bdu", "Updated brain region {} name = {}", region_id, name);
@@ -5845,7 +5795,7 @@ impl ConnectomeManager {
             return None;
         }
 
-        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
+        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32)?;
 
         // Look up cortical_id from index
         self.cortical_areas
@@ -5892,7 +5842,7 @@ impl ConnectomeManager {
         properties.insert("z".to_string(), serde_json::json!(z));
 
         // Get cortical area
-        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id_u32);
+        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id_u32)?;
         properties.insert("cortical_area".to_string(), serde_json::json!(cortical_idx));
 
         // Get neuron state (returns: consecutive_fire_count, consecutive_fire_limit, snooze_period, membrane_potential, threshold, refractory_countdown)
@@ -6538,9 +6488,9 @@ mod tests {
         // Test create_synapse (creation should succeed)
         manager
             .create_synapse(
-                neuron1_id, neuron2_id, 128, // weight
-                64,  // psp
-                0,   // excitatory
+                neuron1_id, neuron2_id, 128.0, // weight
+                64.0,  // psp
+                0,     // excitatory
             )
             .unwrap();
 
@@ -6690,8 +6640,8 @@ mod tests {
             .unwrap();
 
         // Create synapses that represent an established mapping between the two areas
-        manager.create_synapse(s0, t0, 128, 200, 0).unwrap();
-        manager.create_synapse(s1, t1, 128, 200, 0).unwrap();
+        manager.create_synapse(s0, t0, 128.0, 200.0, 0).unwrap();
+        manager.create_synapse(s1, t1, 128.0, 200.0, 0).unwrap();
 
         // Build index once before pruning
         {
@@ -6786,8 +6736,8 @@ mod tests {
             .unwrap();
 
         // Create synapses that represent an established mapping between the two areas
-        manager.create_synapse(s0, t0, 128, 200, 0).unwrap();
-        manager.create_synapse(s1, t1, 128, 200, 0).unwrap();
+        manager.create_synapse(s0, t0, 128.0, 200.0, 0).unwrap();
+        manager.create_synapse(s1, t1, 128.0, 200.0, 0).unwrap();
 
         // Build index once before pruning
         {
@@ -7058,23 +7008,30 @@ mod tests {
             "plasticity_window": 5,
         })];
         manager
-            .update_cortical_mapping(&m1_id, &m2_id, assoc_mapping)
+            .update_cortical_mapping(&m1_id, &m2_id, assoc_mapping.clone())
             .unwrap();
         manager
             .regenerate_synapses_for_mapping(&m1_id, &m2_id)
+            .unwrap();
+        // Second directed edge (bidirectional link is two explicit mappings, not auto-mirror).
+        manager
+            .update_cortical_mapping(&m2_id, &m1_id, assoc_mapping)
+            .unwrap();
+        manager
+            .regenerate_synapses_for_mapping(&m2_id, &m1_id)
             .unwrap();
 
         let upstream_m1 = manager.get_upstream_cortical_areas(&m1_id);
         let upstream_m2 = manager.get_upstream_cortical_areas(&m2_id);
         assert_eq!(
             upstream_m1.len(),
-            1,
-            "M1 should have only 1 upstream before refresh"
+            2,
+            "M1 should have A1 and M2 as upstreams once both directed associative edges exist"
         );
         assert_eq!(
             upstream_m2.len(),
             2,
-            "M2 should have 2 upstreams before refresh"
+            "M2 should have A2 and M1 as upstreams"
         );
 
         manager.refresh_upstream_cortical_areas_from_mappings(&m1_id);
@@ -7082,16 +7039,8 @@ mod tests {
 
         let upstream_m1 = manager.get_upstream_cortical_areas(&m1_id);
         let upstream_m2 = manager.get_upstream_cortical_areas(&m2_id);
-        assert_eq!(
-            upstream_m1.len(),
-            2,
-            "M1 should have 2 upstreams after refresh"
-        );
-        assert_eq!(
-            upstream_m2.len(),
-            2,
-            "M2 should have 2 upstreams after refresh"
-        );
+        assert_eq!(upstream_m1.len(), 2, "M1 upstreams unchanged after refresh");
+        assert_eq!(upstream_m2.len(), 2, "M2 upstreams unchanged after refresh");
         assert!(upstream_m1.contains(&a1_idx));
         assert!(upstream_m1.contains(&m2_idx));
         assert!(upstream_m2.contains(&a2_idx));
@@ -7313,6 +7262,13 @@ mod tests {
         assert!(
             created > 0,
             "Expected associative memory mapping between memory areas to create synapses"
+        );
+        let npu_guard = dyn_npu.lock().unwrap();
+        let assoc_tagged =
+            npu_guard.count_synapses_with_edge_flag_bits(SYNAPSE_EDGE_ASSOCIATIVE_MEMORY);
+        assert!(
+            assoc_tagged >= 1,
+            "associative_memory connectome path should stamp SYNAPSE_EDGE_ASSOCIATIVE_MEMORY on created synapses"
         );
     }
 
