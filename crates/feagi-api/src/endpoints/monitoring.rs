@@ -9,10 +9,11 @@
  */
 
 use crate::common::ApiState;
-use crate::common::{ApiError, ApiResult, Json, State};
-// Removed - using crate::common::State instead
+use crate::common::{ApiError, ApiResult, Json, Query, State};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use utoipa::IntoParams;
 
 // ============================================================================
 // MONITORING & METRICS
@@ -156,4 +157,158 @@ pub async fn get_performance(
     response.insert("memory_usage".to_string(), json!(0.0));
 
     Ok(Json(response))
+}
+
+// ============================================================================
+// CORTICAL ACTIVITY MONITORING
+// ============================================================================
+
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct CorticalActivityQuery {
+    /// Cortical area ID (Base64 encoded) to monitor
+    pub area: String,
+    /// Duration to monitor in seconds
+    #[serde(default = "default_duration")]
+    pub duration: f32,
+}
+
+fn default_duration() -> f32 {
+    1.0
+}
+
+/// Monitor real-time neuron firing activity for a specific cortical area over a time window.
+#[utoipa::path(
+    get,
+    path = "/v1/monitoring/cortical_activity",
+    tag = "monitoring",
+    params(CorticalActivityQuery),
+    responses(
+        (status = 200, description = "Cortical area firing activity", body = HashMap<String, serde_json::Value>),
+        (status = 404, description = "Cortical area not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_cortical_activity(
+    State(state): State<ApiState>,
+    Query(params): Query<CorticalActivityQuery>,
+) -> ApiResult<Json<HashMap<String, Value>>> {
+    use tracing::info;
+
+    let runtime_service = state.runtime_service.as_ref();
+    let connectome_service = state.connectome_service.as_ref();
+
+    info!(
+        target: "feagi-api",
+        "Monitoring cortical activity for area={}, duration={}s",
+        params.area,
+        params.duration
+    );
+
+    let area = connectome_service
+        .get_cortical_area(&params.area)
+        .await
+        .map_err(|_| ApiError::not_found("cortical area", &params.area))?;
+
+    let cortical_idx = area.cortical_idx;
+    let area_name = area.name.clone();
+
+    let start_burst = runtime_service
+        .get_burst_count()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
+
+    let sample_interval_ms = 50;
+    let num_samples = ((params.duration * 1000.0) / sample_interval_ms as f32).ceil() as usize;
+
+    let mut spike_history = Vec::new();
+    let mut neuron_fire_counts: HashMap<u32, u32> = HashMap::new();
+    let mut total_membrane_potential = 0.0;
+    let mut potential_samples = 0;
+
+    for _ in 0..num_samples {
+        tokio::time::sleep(tokio::time::Duration::from_millis(sample_interval_ms)).await;
+
+        let fq_sample = runtime_service
+            .get_fire_queue_sample()
+            .await
+            .map_err(|e| ApiError::internal(format!("Failed to get fire queue: {}", e)))?;
+
+        if let Some((neuron_ids, _x_coords, _y_coords, _z_coords, potentials)) =
+            fq_sample.get(&cortical_idx)
+        {
+            let current_burst = runtime_service
+                .get_burst_count()
+                .await
+                .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
+
+            for (i, &neuron_id) in neuron_ids.iter().enumerate() {
+                *neuron_fire_counts.entry(neuron_id).or_insert(0) += 1;
+
+                let potential = potentials.get(i).copied().unwrap_or(0.0);
+                total_membrane_potential += potential;
+                potential_samples += 1;
+
+                spike_history.push(json!({
+                    "burst": current_burst,
+                    "neuron_id": neuron_id,
+                    "potential": potential
+                }));
+            }
+        }
+    }
+
+    let end_burst = runtime_service
+        .get_burst_count()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
+
+    let total_spikes = spike_history.len();
+    let firing_rate_hz = if params.duration > 0.0 {
+        total_spikes as f32 / params.duration
+    } else {
+        0.0
+    };
+
+    let active_neurons: Vec<u32> = neuron_fire_counts.keys().copied().collect();
+    let peak_firing_neuron = neuron_fire_counts
+        .iter()
+        .max_by_key(|(_, &count)| count)
+        .map(|(&neuron_id, _)| neuron_id);
+
+    let avg_membrane_potential = if potential_samples > 0 {
+        total_membrane_potential / potential_samples as f32
+    } else {
+        0.0
+    };
+
+    info!(
+        target: "feagi-api",
+        "Activity monitoring complete: {} spikes, {} active neurons, {:.2} Hz",
+        total_spikes,
+        active_neurons.len(),
+        firing_rate_hz
+    );
+
+    Ok(Json(HashMap::from([
+        ("area_id".to_string(), json!(params.area)),
+        ("area_name".to_string(), json!(area_name)),
+        ("duration_ms".to_string(), json!(params.duration * 1000.0)),
+        (
+            "burst_count_sampled".to_string(),
+            json!(end_burst - start_burst),
+        ),
+        (
+            "firing_statistics".to_string(),
+            json!({
+                "total_spikes": total_spikes,
+                "firing_rate_hz": firing_rate_hz,
+                "active_neurons": active_neurons,
+                "active_neuron_count": active_neurons.len(),
+                "peak_firing_neuron": peak_firing_neuron,
+                "avg_membrane_potential": avg_membrane_potential,
+            }),
+        ),
+        ("spike_history".to_string(), json!(spike_history)),
+    ])))
 }

@@ -249,6 +249,7 @@ pub async fn put_mapping_properties(
         .await
         .map_err(|e| match e {
             feagi_services::types::ServiceError::InvalidInput(msg) => ApiError::invalid_input(msg),
+            feagi_services::types::ServiceError::Conflict(msg) => ApiError::conflict(msg),
             _ => ApiError::internal(format!("Failed to update cortical mapping: {}", e)),
         })?;
 

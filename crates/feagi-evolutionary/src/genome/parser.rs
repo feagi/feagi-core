@@ -147,16 +147,23 @@ pub struct RawCorticalArea {
 /// Raw brain region from genome
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RawBrainRegion {
+    #[serde(alias = "name")]
     pub title: Option<String>,
     pub description: Option<String>,
     pub parent_region_id: Option<String>,
     pub coordinate_2d: Option<Vec<i32>>,
     pub coordinate_3d: Option<Vec<i32>>,
+    #[serde(alias = "cortical_areas")]
     pub areas: Option<Vec<String>>,
     pub regions: Option<Vec<String>>,
     pub inputs: Option<Vec<String>>,
     pub outputs: Option<Vec<String>>,
+    /// Declared interface lists (persisted from RuntimeGenome / PUT region).
+    pub designated_inputs: Option<Vec<String>>,
+    pub designated_outputs: Option<Vec<String>>,
     pub signature: Option<String>,
+    /// v3 `serde_json::to_value(BrainRegion)` nests `inputs` / `designated_*` under `properties`.
+    pub properties: Option<HashMap<String, Value>>,
 }
 
 /// Convert cortical_mapping_dst keys from old format to base64
@@ -259,6 +266,37 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
 pub struct GenomeParser;
 
 impl GenomeParser {
+    /// Normalize cortical ID list properties (inputs, outputs, designated_*) to base64 strings.
+    fn normalize_brain_region_cortical_id_list_properties(region: &mut BrainRegion, keys: &[&str]) {
+        for key in keys {
+            let Some(val) = region.get_property(key) else {
+                continue;
+            };
+            let Some(arr) = val.as_array() else {
+                continue;
+            };
+            let mut out: Vec<String> = Vec::new();
+            for item in arr {
+                let Some(s) = item.as_str() else {
+                    continue;
+                };
+                match string_to_cortical_id(s) {
+                    Ok(cortical_id) => out.push(cortical_id.as_base_64()),
+                    Err(e) => {
+                        warn!(target: "feagi-evo",
+                            "Failed to convert brain region '{}' entry '{}': {}. Skipping.",
+                            key, s, e);
+                    }
+                }
+            }
+            if out.is_empty() {
+                region.properties.remove(*key);
+            } else {
+                region.add_property((*key).to_string(), serde_json::json!(out));
+            }
+        }
+    }
+
     /// Parse a genome JSON string into a ParsedGenome
     ///
     /// # Arguments
@@ -590,6 +628,13 @@ impl GenomeParser {
 
             let mut region = BrainRegion::new(region_id, title, region_type)?;
 
+            // v3 RuntimeGenome sections nest IO under `properties`; merge before list fields.
+            if let Some(props) = &raw_region.properties {
+                for (k, v) in props {
+                    region.add_property(k.clone(), v.clone());
+                }
+            }
+
             // Add cortical areas to region (using CorticalID directly)
             if let Some(areas) = &raw_region.areas {
                 for area_id in areas {
@@ -655,6 +700,51 @@ impl GenomeParser {
             if let Some(signature) = &raw_region.signature {
                 region.add_property("signature".to_string(), serde_json::json!(signature));
             }
+
+            if let Some(d) = &raw_region.designated_inputs {
+                let ids: Vec<String> = d
+                    .iter()
+                    .filter_map(|id| match string_to_cortical_id(id) {
+                        Ok(cortical_id) => Some(cortical_id.as_base_64()),
+                        Err(e) => {
+                            warn!(target: "feagi-evo",
+                                "Failed to convert designated_inputs entry '{}': {}. Skipping.",
+                                id, e);
+                            None
+                        }
+                    })
+                    .collect();
+                if !ids.is_empty() {
+                    region.add_property("designated_inputs".to_string(), serde_json::json!(ids));
+                }
+            }
+            if let Some(d) = &raw_region.designated_outputs {
+                let ids: Vec<String> = d
+                    .iter()
+                    .filter_map(|id| match string_to_cortical_id(id) {
+                        Ok(cortical_id) => Some(cortical_id.as_base_64()),
+                        Err(e) => {
+                            warn!(target: "feagi-evo",
+                                "Failed to convert designated_outputs entry '{}': {}. Skipping.",
+                                id, e);
+                            None
+                        }
+                    })
+                    .collect();
+                if !ids.is_empty() {
+                    region.add_property("designated_outputs".to_string(), serde_json::json!(ids));
+                }
+            }
+
+            Self::normalize_brain_region_cortical_id_list_properties(
+                &mut region,
+                &[
+                    "inputs",
+                    "outputs",
+                    "designated_inputs",
+                    "designated_outputs",
+                ],
+            );
 
             // Store parent_id for hierarchy construction
             let parent_id = raw_region.parent_region_id.clone();
@@ -821,6 +911,42 @@ mod tests {
                 "Should be classified as MEMORY type"
             );
         }
+    }
+
+    /// v3 save embeds IO lists under `properties`; loading must preserve designated_inputs for BV presets.
+    #[test]
+    fn test_parse_v3_brain_region_nested_properties_retains_designated_io() {
+        let json = r#"{
+            "version": "3.0",
+            "blueprint": {
+                "_power": {
+                    "cortical_name": "Core",
+                    "block_boundaries": [10, 10, 10],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "CORE"
+                }
+            },
+            "brain_regions": {
+                "550e8400-e29b-41d4-a716-446655440000": {
+                    "name": "Sub",
+                    "cortical_areas": ["_power"],
+                    "properties": {
+                        "designated_inputs": ["_power"],
+                        "designated_outputs": []
+                    }
+                }
+            }
+        }"#;
+
+        let parsed = GenomeParser::parse(json).unwrap();
+        assert_eq!(parsed.brain_regions.len(), 1);
+        let (region, _) = &parsed.brain_regions[0];
+        let di = region
+            .get_property("designated_inputs")
+            .and_then(|v| v.as_array())
+            .expect("designated_inputs");
+        assert_eq!(di.len(), 1);
+        assert_eq!(di[0].as_str().unwrap(), "X19fcG93ZXI=");
     }
 
     #[test]

@@ -38,6 +38,7 @@ pub mod connectivity;
 pub mod connectome_manager;
 pub mod cortical_type_utils;
 pub mod neuroembryogenesis;
+pub mod region_io_designation;
 mod rng;
 pub mod spatial;
 pub mod types;
@@ -53,6 +54,11 @@ pub use connectivity::{
 pub use spatial::{morton_decode_3d, morton_encode_3d, MortonSpatialHash, SpatialHashStats};
 
 // Re-export local BDU types
+pub use region_io_designation::{
+    merged_designated_lists, parse_designated_id_list, validate_cross_region_mapping_proposal,
+    validate_merged_designations_against_connectivity, DESIGNATED_INPUTS_KEY,
+    DESIGNATED_OUTPUTS_KEY,
+};
 pub use types::{AreaId, BduError, BduResult, Weight};
 
 // Re-export core types from feagi_data_structures (single source of truth)
@@ -70,7 +76,7 @@ pub use types::Position;
 pub use feagi_evolutionary::{GenomeParser, GenomeSaver, ParsedGenome};
 
 // Re-export connectome manager
-pub use connectome_manager::{ConnectomeConfig, ConnectomeManager};
+pub use connectome_manager::{BrainRegionIoRegistry, ConnectomeConfig, ConnectomeManager};
 
 // Re-export neuroembryogenesis
 pub use neuroembryogenesis::{DevelopmentProgress, DevelopmentStage, Neuroembryogenesis};

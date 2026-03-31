@@ -169,15 +169,38 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
         }
     }
 
-    // Collect cortical IDs from brain_regions (areas, inputs, outputs)
+    // Collect cortical IDs from brain_regions (areas, inputs, outputs, designated IO)
     if let Some(brain_regions) = genome_json.get("brain_regions").and_then(|v| v.as_object()) {
         for region in brain_regions.values() {
             if let Some(region_obj) = region.as_object() {
-                for arr_key in ["areas", "inputs", "outputs"] {
+                for arr_key in [
+                    "areas",
+                    "cortical_areas",
+                    "inputs",
+                    "outputs",
+                    "designated_inputs",
+                    "designated_outputs",
+                ] {
                     if let Some(Value::Array(arr)) = region_obj.get(arr_key) {
                         for item in arr {
                             if let Some(id) = item.as_str() {
                                 cortical_ids.insert(id.to_string());
+                            }
+                        }
+                    }
+                }
+                if let Some(Value::Object(props)) = region_obj.get("properties") {
+                    for arr_key in [
+                        "inputs",
+                        "outputs",
+                        "designated_inputs",
+                        "designated_outputs",
+                    ] {
+                        if let Some(Value::Array(arr)) = props.get(arr_key) {
+                            for item in arr {
+                                if let Some(id) = item.as_str() {
+                                    cortical_ids.insert(id.to_string());
+                                }
                             }
                         }
                     }
@@ -788,13 +811,15 @@ fn migrate_brain_regions(result: &mut MigrationResult) -> EvoResult<()> {
         if let Some(brain_regions) = brain_regions_value.as_object_mut() {
             for region in brain_regions.values_mut() {
                 if let Some(region_obj) = region.as_object_mut() {
-                    // Migrate "areas" array
-                    if let Some(areas_value) = region_obj.get_mut("areas") {
-                        if let Some(areas) = areas_value.as_array_mut() {
-                            for area_id in areas.iter_mut() {
-                                if let Some(old_id) = area_id.as_str() {
-                                    if let Some(new_id) = result.id_mapping.get(old_id) {
-                                        *area_id = Value::String(new_id.clone());
+                    // Migrate "areas" / "cortical_areas" arrays
+                    for areas_key in ["areas", "cortical_areas"] {
+                        if let Some(areas_value) = region_obj.get_mut(areas_key) {
+                            if let Some(areas) = areas_value.as_array_mut() {
+                                for area_id in areas.iter_mut() {
+                                    if let Some(old_id) = area_id.as_str() {
+                                        if let Some(new_id) = result.id_mapping.get(old_id) {
+                                            *area_id = Value::String(new_id.clone());
+                                        }
                                     }
                                 }
                             }
@@ -821,6 +846,43 @@ fn migrate_brain_regions(result: &mut MigrationResult) -> EvoResult<()> {
                                 if let Some(old_id) = output_id.as_str() {
                                     if let Some(new_id) = result.id_mapping.get(old_id) {
                                         *output_id = Value::String(new_id.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Migrate designated IO arrays (same shape as inputs/outputs)
+                    for key in ["designated_inputs", "designated_outputs"] {
+                        if let Some(val) = region_obj.get_mut(key) {
+                            if let Some(arr) = val.as_array_mut() {
+                                for entry in arr.iter_mut() {
+                                    if let Some(old_id) = entry.as_str() {
+                                        if let Some(new_id) = result.id_mapping.get(old_id) {
+                                            *entry = Value::String(new_id.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // v3 nested properties
+                    if let Some(Value::Object(props)) = region_obj.get_mut("properties") {
+                        for key in [
+                            "inputs",
+                            "outputs",
+                            "designated_inputs",
+                            "designated_outputs",
+                        ] {
+                            if let Some(val) = props.get_mut(key) {
+                                if let Some(arr) = val.as_array_mut() {
+                                    for entry in arr.iter_mut() {
+                                        if let Some(old_id) = entry.as_str() {
+                                            if let Some(new_id) = result.id_mapping.get(old_id) {
+                                                *entry = Value::String(new_id.clone());
+                                            }
+                                        }
                                     }
                                 }
                             }

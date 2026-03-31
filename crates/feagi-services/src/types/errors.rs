@@ -28,6 +28,10 @@ pub enum ServiceError {
     #[error("Already exists: {resource} with id '{id}'")]
     AlreadyExists { resource: String, id: String },
 
+    /// Policy or constraint conflict, e.g. region IO designation vs connectivity (409 in HTTP)
+    #[error("Conflict: {0}")]
+    Conflict(String),
+
     /// Operation not permitted (403 in HTTP, FORBIDDEN in ZMQ)
     #[error("Operation not permitted: {0}")]
     Forbidden(String),
@@ -95,6 +99,9 @@ impl From<feagi_brain_development::BduError> for ServiceError {
             }
             feagi_brain_development::BduError::InvalidMorphology(msg) => {
                 ServiceError::InvalidInput(msg)
+            }
+            feagi_brain_development::BduError::RegionIoPolicyViolation(msg) => {
+                ServiceError::Conflict(msg)
             }
             _ => ServiceError::Backend(err.to_string()),
         }
