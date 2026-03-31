@@ -54,6 +54,10 @@ pub enum BduError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    /// Region IO designation policy violation (cross-region mapping vs declared interface)
+    #[error("Region IO policy violation: {0}")]
+    RegionIoPolicyViolation(String),
 }
 
 // Convert from feagi_npu_neural::types::FeagiError

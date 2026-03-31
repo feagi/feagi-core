@@ -1173,11 +1173,15 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(visualization::post_heartbeat),
         )
         .route("/visualization/status", get(visualization::get_status))
-        // ===== MONITORING MODULE (4 endpoints) =====
+        // ===== MONITORING MODULE (5 endpoints) =====
         .route("/monitoring/status", get(monitoring::get_status))
         .route("/monitoring/metrics", get(monitoring::get_metrics))
         .route("/monitoring/data", get(monitoring::get_data))
         .route("/monitoring/performance", get(monitoring::get_performance))
+        .route(
+            "/monitoring/cortical_activity",
+            get(monitoring::get_cortical_activity),
+        )
         // ===== EVOLUTION MODULE (3 endpoints) =====
         .route("/evolution/status", get(evolution::get_status))
         .route(

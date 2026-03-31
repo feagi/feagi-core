@@ -297,20 +297,15 @@ pub async fn put_region(
     // Remove region_id from properties (it's not a property to update)
     request.remove("region_id");
 
-    // Update the brain region
-    match connectome_service
+    connectome_service
         .update_brain_region(&region_id, request)
         .await
-    {
-        Ok(_) => Ok(Json(HashMap::from([
-            ("message".to_string(), "Brain region updated".to_string()),
-            ("region_id".to_string(), region_id),
-        ]))),
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to update brain region: {}",
-            e
-        ))),
-    }
+        .map_err(ApiError::from)?;
+
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Brain region updated".to_string()),
+        ("region_id".to_string(), region_id),
+    ])))
 }
 
 /// DELETE /v1/region/region
@@ -398,9 +393,7 @@ pub async fn put_relocate_members(
         connectome_service
             .update_brain_region(&region_id, properties)
             .await
-            .map_err(|e| {
-                ApiError::internal(format!("Failed to update region {}: {}", region_id, e))
-            })?;
+            .map_err(ApiError::from)?;
 
         updated_regions.push(region_id);
     }
