@@ -1585,10 +1585,43 @@ impl ConnectomeService for ConnectomeServiceImpl {
     ) -> ServiceResult<BrainRegionInfo> {
         info!(target: "feagi-services", "Updating brain region: {}", region_id);
 
-        self.connectome
+        let io_registry = self
+            .connectome
             .write()
-            .update_brain_region_properties(region_id, properties)
+            .update_brain_region_properties(region_id, properties.clone())
             .map_err(ServiceError::from)?;
+
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            if let Some(region) = genome.brain_regions.get_mut(region_id) {
+                for (k, v) in &properties {
+                    region.properties.insert(k.clone(), v.clone());
+                }
+            }
+            if let Some(registry) = io_registry {
+                for (rid, (inputs, outputs)) in registry {
+                    if let Some(gr) = genome.brain_regions.get_mut(&rid) {
+                        if inputs.is_empty() {
+                            gr.properties.remove("inputs");
+                        } else {
+                            gr.properties
+                                .insert("inputs".to_string(), serde_json::json!(inputs));
+                        }
+                        if outputs.is_empty() {
+                            gr.properties.remove("outputs");
+                        } else {
+                            gr.properties
+                                .insert("outputs".to_string(), serde_json::json!(outputs));
+                        }
+                    } else {
+                        warn!(
+                            target: "feagi-services",
+                            "Region '{}' not found in RuntimeGenome while persisting IO registry after designated IO update",
+                            rid
+                        );
+                    }
+                }
+            }
+        }
 
         // Return updated info
         self.get_brain_region(region_id).await

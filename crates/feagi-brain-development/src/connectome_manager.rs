@@ -38,7 +38,8 @@ use std::sync::{Arc, Mutex};
 use tracing::{debug, error, info, trace, warn};
 use xxhash_rust::xxh64::Xxh64;
 
-type BrainRegionIoRegistry = HashMap<String, (Vec<String>, Vec<String>)>;
+/// Merged region `inputs` / `outputs` (base64 cortical IDs) after `recompute_brain_region_io_registry`.
+pub type BrainRegionIoRegistry = HashMap<String, (Vec<String>, Vec<String>)>;
 
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use crate::types::{BduError, BduResult};
@@ -996,6 +997,64 @@ impl ConnectomeManager {
         self.brain_regions.find_region_containing_area(cortical_id)
     }
 
+    /// True if `area` has at least one efferent mapping to a cortical area outside its brain region
+    /// (including destinations not assigned to any region).
+    pub fn has_cross_region_outgoing(&self, area: &CorticalID) -> bool {
+        let Some(my_region) = self.brain_regions.find_region_containing_area(area) else {
+            return false;
+        };
+        let Some(src_area) = self.cortical_areas.get(area) else {
+            return false;
+        };
+        let Some(dst_obj) = src_area
+            .properties
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+        else {
+            return false;
+        };
+        for dst_key in dst_obj.keys() {
+            let Ok(dst_id) = CorticalID::try_from_base_64(dst_key) else {
+                continue;
+            };
+            match self.brain_regions.find_region_containing_area(&dst_id) {
+                None => return true,
+                Some(rid) if rid != my_region => return true,
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// True if `area` has at least one afferent mapping from a cortical area outside its brain region.
+    pub fn has_cross_region_incoming(&self, area: &CorticalID) -> bool {
+        let Some(my_region) = self.brain_regions.find_region_containing_area(area) else {
+            return false;
+        };
+        let my_b64 = area.as_base_64();
+        for (src_id, src_area) in &self.cortical_areas {
+            if src_id == area {
+                continue;
+            }
+            let Some(dst_map) = src_area
+                .properties
+                .get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+            else {
+                continue;
+            };
+            if !dst_map.contains_key(&my_b64) {
+                continue;
+            }
+            match self.brain_regions.find_region_containing_area(src_id) {
+                None => return true,
+                Some(rid) if rid != my_region => return true,
+                _ => {}
+            }
+        }
+        false
+    }
+
     /// Recompute brain-region `inputs`/`outputs` registries from current cortical mappings.
     ///
     /// This drives `/v1/region/regions_members` (via `BrainRegion.properties["inputs"/"outputs"]`).
@@ -1075,6 +1134,35 @@ impl ConnectomeManager {
                     .entry(dst_region_id.clone())
                     .or_default()
                     .insert(dst_id.as_base_64());
+            }
+        }
+
+        // Union in declared interface lists so export/import and pre-wired regions show IO without edges.
+        for rid in &region_ids {
+            let Some(region) = self.brain_regions.get_region(rid) else {
+                continue;
+            };
+            let in_ids = crate::region_io_designation::parse_designated_id_list(
+                region
+                    .properties
+                    .get(crate::region_io_designation::DESIGNATED_INPUTS_KEY),
+            )?;
+            let out_ids = crate::region_io_designation::parse_designated_id_list(
+                region
+                    .properties
+                    .get(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY),
+            )?;
+            for id in in_ids {
+                inputs_by_region
+                    .entry(rid.clone())
+                    .or_default()
+                    .insert(id.as_base_64());
+            }
+            for id in out_ids {
+                outputs_by_region
+                    .entry(rid.clone())
+                    .or_default()
+                    .insert(id.as_base_64());
             }
         }
 
@@ -1772,6 +1860,13 @@ impl ConnectomeManager {
         mapping_data: Vec<serde_json::Value>,
     ) -> BduResult<()> {
         use tracing::info;
+
+        crate::region_io_designation::validate_cross_region_mapping_proposal(
+            self,
+            src_area_id,
+            dst_area_id,
+            &mapping_data,
+        )?;
 
         info!(target: "feagi-bdu", "Updating cortical mapping: {} -> {}", src_area_id, dst_area_id);
 
@@ -5653,8 +5748,35 @@ impl ConnectomeManager {
         &mut self,
         region_id: &str,
         properties: std::collections::HashMap<String, serde_json::Value>,
-    ) -> BduResult<()> {
+    ) -> BduResult<Option<BrainRegionIoRegistry>> {
         use tracing::{debug, info};
+
+        let should_recompute_io = properties.contains_key(
+            crate::region_io_designation::DESIGNATED_INPUTS_KEY,
+        ) || properties
+            .contains_key(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY);
+
+        if properties.contains_key(crate::region_io_designation::DESIGNATED_INPUTS_KEY)
+            || properties.contains_key(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY)
+        {
+            let region_snapshot = self
+                .brain_regions
+                .get_region(region_id)
+                .ok_or_else(|| {
+                    BduError::InvalidArea(format!("Brain region {} not found", region_id))
+                })?
+                .clone();
+            let (merged_in, merged_out) = crate::region_io_designation::merged_designated_lists(
+                &region_snapshot,
+                &properties,
+            )?;
+            crate::region_io_designation::validate_merged_designations_against_connectivity(
+                self,
+                &region_snapshot,
+                &merged_in,
+                &merged_out,
+            )?;
+        }
 
         let region = self
             .brain_regions
@@ -5708,7 +5830,19 @@ impl ConnectomeManager {
 
         info!(target: "feagi-bdu", "Updated brain region {} properties", region_id);
 
-        Ok(())
+        // Designated IO affects merged inputs/outputs used by regions_members and BV plates; recompute
+        // so connectivity-derived and declared lists stay merged in region.properties.
+        if should_recompute_io {
+            let registry = self.recompute_brain_region_io_registry()?;
+            return Ok(Some(registry));
+        }
+
+        // Keep StateManager health hashes in sync so clients (e.g. Brain Visualizer) detect changes via
+        // brain_regions_hash on the next health poll. Without this, PUT /v1/region/region updates
+        // (coordinates, title, etc.) do not bump the hash — same as update_brain_region for name/description.
+        self.refresh_brain_regions_hash();
+
+        Ok(None)
     }
 
     // ========================================================================

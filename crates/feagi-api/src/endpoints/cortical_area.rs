@@ -862,6 +862,24 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_u64())
         .unwrap_or(1) as u32;
 
+    // Optional: Override per-device dimensions (especially Z for angle resolution)
+    // Format: [x, y, z] where x=joints per device, y=1, z=angle_resolution
+    // Example: [1, 1, 32] for single-joint servo with 32-angle resolution
+    let per_device_dimensions_override: Option<(usize, usize, usize)> = request
+        .get("per_device_dimensions")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            if arr.len() == 3 {
+                Some((
+                    arr[0].as_u64()? as usize,
+                    arr[1].as_u64()? as usize,
+                    arr[2].as_u64()? as usize,
+                ))
+            } else {
+                None
+            }
+        });
+
     // BREAKING CHANGE (unreleased API):
     // `data_type_config` is now per-subunit, because some cortical units have heterogeneous
     // subunits (e.g. Gaze: Percentage2D + Percentage).
@@ -987,15 +1005,22 @@ pub async fn post_cortical_area(
 
         // Get per-device dimensions from topology, then scale X by device_count:
         // total_x = device_count * per_device_x
-        let (per_device_dimensions, dimensions) =
-            if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
-                let dims = topo.channel_dimensions_default;
-                let per_device = (dims[0] as usize, dims[1] as usize, dims[2] as usize);
-                let total_x = per_device.0.saturating_mul(device_count);
-                (per_device, (total_x, per_device.1, per_device.2))
-            } else {
-                ((1, 1, 1), (device_count.max(1), 1, 1)) // Fallback
-            };
+        // If per_device_dimensions_override is provided, use it instead of topology defaults
+        let (per_device_dimensions, dimensions) = if let Some(override_dims) =
+            per_device_dimensions_override
+        {
+            // Use custom per-device dimensions, scale X by device_count
+            let total_x = override_dims.0.saturating_mul(device_count);
+            (override_dims, (total_x, override_dims.1, override_dims.2))
+        } else if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
+            // Use topology defaults, scale X by device_count
+            let dims = topo.channel_dimensions_default;
+            let per_device = (dims[0] as usize, dims[1] as usize, dims[2] as usize);
+            let total_x = per_device.0.saturating_mul(device_count);
+            (per_device, (total_x, per_device.1, per_device.2))
+        } else {
+            ((1, 1, 1), (device_count.max(1), 1, 1)) // Fallback
+        };
 
         // Calculate position for this unit
         let position =
@@ -1285,10 +1310,19 @@ pub async fn post_custom_cortical_area(
         })
         .ok_or_else(|| ApiError::invalid_input("coordinates_3d must be [x, y, z]"))?;
 
+    // Custom and memory areas must belong to a brain region (circuit / sub-region), not be
+    // created without regional membership (root is reserved for core, IPU, and OPU).
     let brain_region_id = request
         .get("brain_region_id")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .ok_or_else(|| {
+            ApiError::invalid_input(
+                "brain_region_id is required for custom and memory cortical areas",
+            )
+        })?;
 
     let cortical_sub_group = request
         .get("cortical_sub_group")
@@ -1345,14 +1379,12 @@ pub async fn post_custom_cortical_area(
         cortical_id, cortical_id_bytes
     );
 
-    // Build properties with brain_region_id if provided
+    // parent_region_id is required (validated above) so the area is registered in the hierarchy.
     let mut properties = HashMap::new();
-    if let Some(region_id) = brain_region_id.clone() {
-        properties.insert(
-            "parent_region_id".to_string(),
-            serde_json::Value::String(region_id),
-        );
-    }
+    properties.insert(
+        "parent_region_id".to_string(),
+        serde_json::Value::String(brain_region_id.clone()),
+    );
 
     // Create cortical area parameters
     let params = CreateCorticalAreaParams {

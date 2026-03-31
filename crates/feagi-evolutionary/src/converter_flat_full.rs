@@ -190,7 +190,17 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
         }
     }
 
-    hierarchical.insert("brain_regions".to_string(), json!({}));
+    // Preserve brain_regions from flat v3 exports (RuntimeGenome save). Previously this was always
+    // `{}`, which dropped region IO designations and membership when loading flat blueprints.
+    if let Some(br) = flat_genome.get("brain_regions") {
+        hierarchical.insert("brain_regions".to_string(), br.clone());
+    } else {
+        hierarchical.insert("brain_regions".to_string(), json!({}));
+    }
+
+    if let Some(root) = flat_genome.get("brain_regions_root") {
+        hierarchical.insert("brain_regions_root".to_string(), root.clone());
+    }
 
     Ok(Value::Object(hierarchical))
 }

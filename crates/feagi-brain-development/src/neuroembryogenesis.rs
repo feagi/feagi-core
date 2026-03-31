@@ -719,12 +719,46 @@ impl Neuroembryogenesis {
             (regions_map, parent_map)
         } else {
             info!(target: "feagi-bdu","  📋 Genome already has {} brain regions - using existing structure", genome.brain_regions.len());
-            // For existing genomes, we don't have parent info readily available
-            // TODO: Extract parent relationships from genome structure
-            (
-                genome.brain_regions.clone(),
-                std::collections::HashMap::new(),
-            )
+            // Parent links may be stored on each region as `parent_region_id` (properties). Flat/v3
+            // exports often omit them; without parents, add_brain_region(..., None) only registers the
+            // first region as root and leaves other regions detached — BV then shows an empty tree.
+            let mut region_parent_map: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
+            for (region_id, region) in &genome.brain_regions {
+                if let Some(pid) = region
+                    .properties
+                    .get("parent_region_id")
+                    .and_then(|v| v.as_str())
+                {
+                    region_parent_map.insert(region_id.clone(), pid.to_string());
+                }
+            }
+            if region_parent_map.is_empty() {
+                if let Some((root_id, _)) = genome
+                    .brain_regions
+                    .iter()
+                    .find(|(_, r)| r.name == "Root Brain Region")
+                {
+                    for (region_id, region) in &genome.brain_regions {
+                        if region.name == "Root Brain Region" {
+                            continue;
+                        }
+                        region_parent_map.insert(region_id.clone(), root_id.clone());
+                    }
+                    if !region_parent_map.is_empty() {
+                        info!(target: "feagi-bdu",
+                            "  🔗 Inferred {} sub-region parent link(s) under root {}",
+                            region_parent_map.len(),
+                            root_id
+                        );
+                    }
+                } else {
+                    warn!(target: "feagi-bdu",
+                        "  ⚠️ brain_regions present but no 'Root Brain Region' and no parent_region_id — hierarchy may not load in BV"
+                    );
+                }
+            }
+            (genome.brain_regions.clone(), region_parent_map)
         };
 
         // Add brain regions with proper parent relationships - minimize lock scope
