@@ -1,9 +1,6 @@
 # ============================================================================
-# UMBRELLA CRATE: feagi
-#
-# This is the primary crate that users import. It re-exports all components
-# with feature flags for selective compilation.
-# All workspace members are also published individually for selective use.
+# This is the workspace from which allFEAGI crates have their dependency
+# configuration set
 # ============================================================================
 
 [package]
@@ -19,20 +16,7 @@ keywords = ["neuroscience", "ai", "neural-network", "brain", "agi"]
 categories = ["science", "simulation"]
 
 [features]
-
-# TODO change me
 default = ["common-config-feagi-server"]
-
-# TODO when we get other crates more solid, move from the platform-std features to the default-X ones!
-
-default-win-x86 = []
-default-win-arm = []
-default-mac-x86 = []
-default-mac-arm = []
-default-linux-x86 = []
-default-linux-arm = []
-default-wasm = []
-default-embedded-generic = [] # break this into more types later
 
 # Common Configurations (Common compile feature sets)
 common-config-feagi-server = [
@@ -86,13 +70,15 @@ agent-transport-websocket-wasm = ["feagi-agent/agent-transport-websocket-wasm"]
 #brain_development_unit = ["feagi-brain-development"]
 
 
-[dependencies]
 
+[dependencies]
 # Foundation (vendored into feagi-core when published)
 feagi-evolutionary = { version = "=0.0.4", path = "crates/feagi-evolutionary" }
 feagi-npu-neural = { version = "=0.0.4", path = "crates/feagi-npu/neural" }
+serde_json = "1.0"
 feagi-structures = { version = "=0.0.4", path = "crates/feagi-structures" }
 feagi-serialization = { version = "=0.0.4", path = "crates/feagi-serialization" }
+ndarray = { workspace = true }
 
 # Infrastructure (vendored)
 feagi-state-manager = { version = "=0.0.4", path = "crates/feagi-state-manager", optional = true }
@@ -108,25 +94,22 @@ feagi-io = { version = "=0.0.4", path = "crates/feagi-io", optional = true }
 feagi-agent = { version = "=0.0.4", path = "crates/feagi-agent", optional = true }
 feagi-services = { version = "=0.0.4", path = "crates/feagi-services", optional = true }
 
+# Async runtime is now a feature of feagi-data-structures
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+[dev-dependencies]
+# For integration tests that need GenomeService
+feagi-services = { version = "=0.0.4", path = "crates/feagi-services" }
+feagi-npu-runtime = { version = "=0.0.4", path = "crates/feagi-npu/runtime", features = ["std"] }
+ahash = { workspace = true }
+feagi-config = { version = "=0.0.4", path = "crates/feagi-config" }
+parking_lot = "0.12"
+tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros"] }
+# Optional crates needed by root integration tests
+feagi-sensorimotor = { version = "=0.0.4", path = "crates/feagi-sensorimotor" }
+feagi-brain-development = { version = "=0.0.4", path = "crates/feagi-brain-development" }
+feagi-npu-plasticity = { version = "=0.0.4", path = "crates/feagi-npu/plasticity" }
+feagi-io = { version = "=0.0.4", path = "crates/feagi-io" }
+feagi-agent = { version = "=0.0.4", path = "crates/feagi-agent" }
 
 # ============================================================================
 # WORKSPACE CONFIGURATION
@@ -136,7 +119,6 @@ feagi-services = { version = "=0.0.4", path = "crates/feagi-services", optional 
 resolver = "2"
 members = [
     # === Foundation Layer ===
-    "crates/feagi-structures",    # Core data structures
     "crates/feagi-config",             # Configuration loader (TOML + overrides)
     
     # === NPU Subsystem (Neural Processing Unit) ===
@@ -158,11 +140,16 @@ members = [
     "crates/feagi-brain-development",                # Neurogenesis (brain development)
     "crates/feagi-npu/plasticity",     # Synaptic learning (STDP, memory)
     
-    # === Agent Layer ===
+    # === I/O Layer ===
     "crates/feagi-io",                 # I/O System (ZMQ/UDP transport)
     "crates/feagi-agent",              # Agent library (Rust client library)
-    "crates/feagi-sensorimotor",  # Sensorimotor System - data processing & encoding (sensory & motor)
+    
+    # === Applications ===
+    
+    # === Data Processing ===
+    "crates/feagi-sensorimotor",                # Sensorimotor System - data processing & encoding (sensory & motor)
     "crates/feagi-serialization", # Data serialization formats
+    "crates/feagi-structures",    # Core data structures
 ]
 
 [workspace.package]
@@ -176,31 +163,53 @@ homepage = "https://feagi.org"
 documentation = "https://docs.rs/feagi"
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 [workspace.dependencies]
 # Core dependencies (shared across crates)
-serde = { version = "1.0.228" }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.149"
-thiserror = "1.0.50" # TODO we will be phasing this out entirely, so don't bother updating!
-rayon = "1.11.0"
-ndarray = { version = "0.17.2" }
-ahash = { version = "0.8.12"}  # Fast non-cryptographic hashing (no runtime-rng for WASM)
-tracing = "0.1.44"  # Structured logging and diagnostics
-bytemuck = { version = "1.14" } # TODO I feel there was a reason this is on 1.14?
-uuid = { version = "1.23"}
-half = {version = "2.7.1"}
-defmt = {version = "1.0.1"} # Only used in embedded contexts
-paste = "1.0.15" # only used in dev
-
-## Crates that are optional entirely
-# TODO most of these are only used by a single crate, should we move them just to that crate directly?
+thiserror = "1.0.50"
+rayon = "1.11"
+ndarray = { version = "0.17.1", features = ["rayon"] }
+ahash = { version = "0.8", default-features = false, features = ["std", "serde", "compile-time-rng"] }  # Fast non-cryptographic hashing (no runtime-rng for WASM)
+tracing = "0.1"  # Structured logging and diagnostics
 
 # Additional dependencies from feagi-data-processing
-image = "0.25.10"
+image = "0.25.9"
+uuid = { version = "1.11", features = ["v7", "serde", "js"] }  # js feature for WASM support
+paste = "1.0.15"
 
 # GPU acceleration (WGPU - cross-platform native GPU library)
-wgpu = "0.19" # TODO EXTREMELY OLD!
+wgpu = "0.19"
 pollster = "0.3"  # Async/await executor for GPU operations
+bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU buffers
 
+# FEAGI data crates (now internal to workspace)
+feagi-structures = { version = "=0.0.4", path = "crates/feagi-structures" }
+feagi-serialization = { version = "=0.0.4", path = "crates/feagi-serialization" }
+
+# Workspace-internal crates
+feagi-npu-neural = { version = "=0.0.4", path = "crates/feagi-npu/neural" }
+feagi-observability = { version = "=0.0.4", path = "crates/feagi-observability" }
+
+# Embedded stuff
+defmt = {version = "1.0.1", optional = true}
 
 [profile.release]
 lto = true           # Link-time optimization

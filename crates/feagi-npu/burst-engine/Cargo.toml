@@ -8,7 +8,29 @@ repository.workspace = true
 homepage.workspace = true
 description = "High-performance burst engine for FEAGI neural processing"
 
+[features]
+default = ["connectome-io", "async-tokio", "std"]
+# Standard library support (includes StdRuntime for DynamicNPU type alias)
+std = ["feagi-npu-runtime/std"]
+# Enable connectome serialization/deserialization (requires native dependencies)
+connectome-io = []  # Types are in feagi-npu-neural (always available with std feature)
+# Async runtime features
+async-tokio = ["feagi-structures/async-tokio"]
+wasm = ["feagi-structures/async-wasm"]  # Explicitly enable wasm feature (no tokio)
+# Enable GPU acceleration via WGPU (cross-platform)
+gpu = ["wgpu", "pollster", "bytemuck"]
+# Enable CUDA acceleration (NVIDIA only, highest performance)
+cuda = ["cudarc", "half"]
+# Enable all GPU backends
+all-gpu = ["gpu", "cuda"]
+# Enable NPU lock tracing (adds overhead - disable for production)
+# When disabled, uses regular Mutex instead of TracingMutex
+npu-lock-tracing = []
+
+
+
 [dependencies]
+
 # Platform-agnostic core (types + algorithms + models, includes synapse logic)
 feagi-npu-neural = { version = "0.0.4", path = "../neural" }
 
@@ -47,24 +69,7 @@ bytemuck = { workspace = true, optional = true }
 cudarc = { version = "0.11", features = ["cuda-11080", "f16"], optional = true }
 half = { version = "2.4", optional = true }
 
-[features]
-default = ["connectome-io", "async-tokio", "std"]
-# Standard library support (includes StdRuntime for DynamicNPU type alias)
-std = ["feagi-npu-runtime/std"]
-# Enable connectome serialization/deserialization (requires native dependencies)
-connectome-io = []  # Types are in feagi-npu-neural (always available with std feature)
-# Async runtime features
-async-tokio = ["feagi-structures/async-tokio"]
-wasm = ["feagi-structures/async-wasm"]  # Explicitly enable wasm feature (no tokio)
-# Enable GPU acceleration via WGPU (cross-platform)
-gpu = ["wgpu", "pollster", "bytemuck"]
-# Enable CUDA acceleration (NVIDIA only, highest performance)
-cuda = ["cudarc", "half"]
-# Enable all GPU backends
-all-gpu = ["gpu", "cuda"]
-# Enable NPU lock tracing (adds overhead - disable for production)
-# When disabled, uses regular Mutex instead of TracingMutex
-npu-lock-tracing = []
+
 
 [[bench]]
 name = "backend_comparison"

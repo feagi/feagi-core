@@ -11,28 +11,42 @@ description = "The most core library, defines the basic data types used by FEAGI
 # TODO investigate possible split between neuron structures and certain genomic identifiers
 
 [features]
-default = ["std", "ndarray", "rayon", "support_64bit_indexing_quantization"]
 
-std = ["alloc", "dep:ahash"] # allows use of the std library
+default = ["default-linux-x86"]
+
+default-win-x86 = ["_internal_common"]
+default-win-arm = ["_internal_common"]
+default-mac-x86 = ["_internal_common"]
+default-mac-arm = ["_internal_common"]
+default-linux-x86 = ["_internal_common"]
+default-linux-arm = ["_internal_common"]
+default-wasm = []
+default-embedded-generic = [] # break this into more types later
+
+# Used by most systems
+_internal_common = ["std", "ndarray", "rayon", "support_64bit_indexing_quantization"]
+
+
+std = ["alloc"] # allows use of the std library
 alloc = [] # allows use of alloc (through core, not strictly std)
 defmt = ["dep:defmt"]
 ndarray = ["dep:ndarray"]
 rayon = ["dep:rayon", "std"]
-support_64bit_indexing_quantization = []
+support_64bit_indexing_quantization = [] # Allow 64 bit quantization and indexing. This is pretty rare
 
 [dependencies]
-defmt = {workspace = true, optional = true}
-ahash = { workspace = true, optional = true}
 serde = { workspace = true }
-serde_json = { workspace = true}
+half = {workspace = true, default-features = false, features = []} # STD enables autoarch detection, which we may not want
+ahash = { workspace = true}
+uuid = { workspace = true } # TODO check STD compabtility
+serde_json = { workspace = true, optional = true}
 ndarray = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
-uuid = { workspace = true } # TODO check STD compabtility
-half = {workspace = true, default-features = false, features = []} # STD enables autoarch detection, which we may not want
+defmt = {workspace = true, optional = true}
 tracing = "0.1.44" # TODO we may need to move this with wherever we move the ulog
 
-paste = { workspace = true }
 
 base64 = "0.22.1" # TODO move to workspace
 
 [dev-dependencies]
+paste = { workspace = true }

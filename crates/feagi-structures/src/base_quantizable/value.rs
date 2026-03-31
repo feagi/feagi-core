@@ -2,11 +2,15 @@ use core::fmt::{Debug, Display};
 use half::f16;
 
 
-/// Defines all implementations of QuantizableValue and its dependent traits.
+/// Defines a transparent value wrapper type and all `QuantizableValue` / operator / conversion impls.
 #[macro_export]
-macro_rules! impl_quantizable_value_wrapper {
-    ($wrapper:ident) => {
-        impl<T: $crate::base_quantizable::value::QuantizableValue> From<T> for $wrapper<T> {
+macro_rules! define_quantizable_value_type_family {
+    ($base_name:ident) => {
+        #[repr(transparent)]
+        #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+        pub struct $base_name<T: $crate::base_quantizable::value::QuantizableValue>(pub T);
+
+        impl<T: $crate::base_quantizable::value::QuantizableValue> From<T> for $base_name<T> {
             #[inline(always)]
             fn from(value: T) -> Self {
                 Self(value)
@@ -14,21 +18,21 @@ macro_rules! impl_quantizable_value_wrapper {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::value::QuantizableValue> Default for $wrapper<T> {
+        impl<T: $crate::base_quantizable::value::QuantizableValue> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self(T::default())
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> From<$wrapper<T>> for f32 {
+        impl<T: $crate::base_quantizable::value::QuantizableValue> From<$base_name<T>> for f32 {
             #[inline(always)]
-            fn from(value: $wrapper<T>) -> Self {
+            fn from(value: $base_name<T>) -> Self {
                 value.0.to_f32()
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Add for $wrapper<T> {
+        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Add for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn add(self, rhs: Self) -> Self::Output {
@@ -36,7 +40,7 @@ macro_rules! impl_quantizable_value_wrapper {
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Sub for $wrapper<T> {
+        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Sub for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn sub(self, rhs: Self) -> Self::Output {
@@ -44,7 +48,7 @@ macro_rules! impl_quantizable_value_wrapper {
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Mul for $wrapper<T> {
+        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Mul for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn mul(self, rhs: Self) -> Self::Output {
@@ -52,7 +56,7 @@ macro_rules! impl_quantizable_value_wrapper {
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Div for $wrapper<T> {
+        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Div for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn div(self, rhs: Self) -> Self::Output {
@@ -60,28 +64,28 @@ macro_rules! impl_quantizable_value_wrapper {
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::AddAssign for $wrapper<T> {
+        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::SubAssign for $wrapper<T> {
+        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 -= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::MulAssign for $wrapper<T> {
+        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::DivAssign for $wrapper<T> {
+        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.0 /= rhs.0;
@@ -89,14 +93,16 @@ macro_rules! impl_quantizable_value_wrapper {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::value::QuantizableValue + core::fmt::Display> core::fmt::Display for $wrapper<T> {
+        impl<T: $crate::base_quantizable::value::QuantizableValue + core::fmt::Display> core::fmt::Display
+            for $base_name<T>
+        {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(f, "{}", self.0)
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> $crate::base_quantizable::value::QuantizableValue for $wrapper<T> {
+        impl<T: $crate::base_quantizable::value::QuantizableValue> $crate::base_quantizable::value::QuantizableValue for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
             const ZERO: Self = Self(T::ZERO);
             const ONE: Self = Self(T::ONE);
@@ -148,19 +154,6 @@ macro_rules! impl_quantizable_value_wrapper {
                 Self(T::from_f32(value))
             }
         }
-    };
-}
-
-/// Defines a transparent value wrapper type and all quantized-value aliases.
-#[macro_export]
-macro_rules! define_quantizable_value_type_family {
-    ($base_name:ident) => {
-            #[repr(transparent)]
-            #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-
-            pub struct $base_name<T: $crate::base_quantizable::value::QuantizableValue>(pub T);
-
-            $crate::impl_quantizable_value_wrapper!($base_name);
     };
 }
 

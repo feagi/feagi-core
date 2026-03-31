@@ -3,8 +3,8 @@ use crate::base_quantizable::coordinate::{Dimension2DType, Dimension3DType, Unsi
 pub enum FeagiStructuresError {
     ValueCannotBeZero{context: &'static str},
     ValuesMustBeEqual{context: &'static str},
-    Coordinate2DOutOfBounds{context: &'static str, coordinate: UnsignedCoordinate2DType<u32>, dimensions: Dimension2DType<u32>},
-    Coordinate3DOutOfBounds{context: &'static str, coordinate: UnsignedCoordinate3DType<u32>, dimensions: Dimension3DType<u32>},
+    Coordinate2DOutOfBounds{context: &'static str, coordinate: UnsignedCoordinate2DType<usize>, dimensions: Dimension2DType<usize>},
+    Coordinate3DOutOfBounds{context: &'static str, coordinate: UnsignedCoordinate3DType<usize>, dimensions: Dimension3DType<usize>},
     JSONError{context: &'static str},
 }
 

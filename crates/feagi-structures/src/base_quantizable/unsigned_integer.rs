@@ -1,10 +1,14 @@
 use core::fmt::{Debug, Display};
 
-/// Defines all implementations of QuantizableUInt and its dependent traits.
+/// Defines a transparent wrapper type and all `QuantizableUInt` / operator / conversion impls.
 #[macro_export]
-macro_rules! impl_quantizable_uint_wrapper {
-    ($wrapper:ident) => {
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> From<T> for $wrapper<T> {
+macro_rules! define_quantizable_uint_type_family {
+    ($base_name:ident) => {
+        #[repr(transparent)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        pub struct $base_name<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt>(pub T);
+
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> From<T> for $base_name<T> {
             #[inline(always)]
             fn from(value: T) -> Self {
                 Self(value)
@@ -12,21 +16,21 @@ macro_rules! impl_quantizable_uint_wrapper {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> Default for $wrapper<T> {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self(T::default())
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> From<$wrapper<T>> for usize {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> From<$base_name<T>> for usize {
             #[inline(always)]
-            fn from(value: $wrapper<T>) -> Self {
+            fn from(value: $base_name<T>) -> Self {
                 value.0.to_usize()
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Add for $wrapper<T> {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Add for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn add(self, rhs: Self) -> Self::Output {
@@ -34,7 +38,7 @@ macro_rules! impl_quantizable_uint_wrapper {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Sub for $wrapper<T> {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Sub for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn sub(self, rhs: Self) -> Self::Output {
@@ -42,7 +46,7 @@ macro_rules! impl_quantizable_uint_wrapper {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Mul for $wrapper<T> {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Mul for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn mul(self, rhs: Self) -> Self::Output {
@@ -50,7 +54,7 @@ macro_rules! impl_quantizable_uint_wrapper {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Div for $wrapper<T> {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Div for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn div(self, rhs: Self) -> Self::Output {
@@ -58,28 +62,28 @@ macro_rules! impl_quantizable_uint_wrapper {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::AddAssign for $wrapper<T> {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::SubAssign for $wrapper<T> {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 -= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::MulAssign for $wrapper<T> {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::DivAssign for $wrapper<T> {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.0 /= rhs.0;
@@ -87,14 +91,16 @@ macro_rules! impl_quantizable_uint_wrapper {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt + core::fmt::Display> core::fmt::Display for $wrapper<T> {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt + core::fmt::Display> core::fmt::Display
+            for $base_name<T>
+        {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(f, "{}", self.0)
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> $crate::base_quantizable::unsigned_integer::QuantizableUInt for $wrapper<T> {
+        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> $crate::base_quantizable::unsigned_integer::QuantizableUInt for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
             const ZERO: Self = Self(T::ZERO);
             const ONE: Self = Self(T::ONE);
@@ -146,18 +152,6 @@ macro_rules! impl_quantizable_uint_wrapper {
                 Self(T::from_usize(value))
             }
         }
-    };
-}
-
-/// Defines a transparent wrapper type and all quantized-width aliases.
-#[macro_export]
-macro_rules! define_quantizable_uint_type_family {
-    ($base_name:ident) => {
-            #[repr(transparent)]
-            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-            pub struct $base_name<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt>(pub T);
-
-            $crate::impl_quantizable_uint_wrapper!($base_name);
     };
 }
 
