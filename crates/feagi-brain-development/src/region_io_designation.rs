@@ -112,7 +112,7 @@ fn validate_membership(
             return Err(BduError::RegionIoPolicyViolation(format!(
                 "Designated area {} is not contained in brain region {}",
                 id.as_base_64(),
-                region.region_id.to_string()
+                region.region_id
             )));
         }
     }

@@ -5751,10 +5751,9 @@ impl ConnectomeManager {
     ) -> BduResult<Option<BrainRegionIoRegistry>> {
         use tracing::{debug, info};
 
-        let should_recompute_io = properties.contains_key(
-            crate::region_io_designation::DESIGNATED_INPUTS_KEY,
-        ) || properties
-            .contains_key(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY);
+        let should_recompute_io = properties
+            .contains_key(crate::region_io_designation::DESIGNATED_INPUTS_KEY)
+            || properties.contains_key(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY);
 
         if properties.contains_key(crate::region_io_designation::DESIGNATED_INPUTS_KEY)
             || properties.contains_key(crate::region_io_designation::DESIGNATED_OUTPUTS_KEY)
