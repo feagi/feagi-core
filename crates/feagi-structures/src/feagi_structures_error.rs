@@ -1,4 +1,4 @@
-use crate::base_quantizable::coordinate::{Dimension2DType, Dimension3DType, UnsignedCoordinate2DType, UnsignedCoordinate3DType};
+use crate::base_quantizable::spatial::{Dimension2DType, Dimension3DType, UnsignedCoordinate2DType, UnsignedCoordinate3DType};
 
 pub enum FeagiStructuresError {
     ValueCannotBeZero{context: &'static str},

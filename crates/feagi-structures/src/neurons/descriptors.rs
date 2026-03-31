@@ -1,5 +1,5 @@
-/// There is no reason for this to be quantized ever. Defines the number of neurons that a single
-/// voxel represents. In most contexts this will be 1, but sometimes may be more.
+/// The number of neurons that a single voxel represents. In most contexts this will be 1,
+/// but sometimes may be more, though never high, hence being locked to a u8
 pub type NumberNeuronsPerVoxel = u8;
 
 /// Neuron Potential of neurons (not voxels!)

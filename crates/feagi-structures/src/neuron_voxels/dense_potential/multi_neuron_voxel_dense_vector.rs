@@ -1,6 +1,6 @@
 use ahash::AHashMap;
-use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::base_quantizable::value::QuantizableValue;
+use crate::base_quantizable::unsigned_integer::QuantizableUIntType;
+use crate::base_quantizable::value::QuantizableValueType;
 use crate::genomic::cortical_area::CorticalID;
 use crate::neuron_voxels::dense_potential::neuron_voxel_dense_vector::NeuronVoxelDenseVector;
 use crate::neuron_voxels::descriptors::SingleCorticalNeuronVoxelCollectionType;
@@ -8,20 +8,20 @@ use crate::neuron_voxels::FeagiNeuronVoxelError;
 use crate::neuron_voxels::traits::{MultiCorticalNeuronVoxelCollectionAlloc, MultiCorticalNeuronVoxelCollectionBase, MultiCorticalNeuronVoxelCollectionDense, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionDense};
 
 pub struct MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
-    CorticalAreaIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
+    CorticalAreaIndexQuant: QuantizableUIntType
 {
     dense_vectors: AHashMap<CorticalID, NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>>,
     cache_included_types: AHashMap<CorticalID, SingleCorticalNeuronVoxelCollectionType>,
 }
 
 impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
-    CorticalAreaIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
+    CorticalAreaIndexQuant: QuantizableUIntType
 {
     pub fn new() -> Self {
         Self {
@@ -52,10 +52,10 @@ impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQu
 impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
 MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
 for MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
-    CorticalAreaIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
+    CorticalAreaIndexQuant: QuantizableUIntType
 {
     fn get_contained_cortical_collection_type(&self, cortical_id: &CorticalID) -> Result<&SingleCorticalNeuronVoxelCollectionType, FeagiNeuronVoxelError> {
         self.cache_included_types.get(cortical_id).ok_or_else(
@@ -85,10 +85,10 @@ for MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelInde
 impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
 MultiCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
 for MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
-    CorticalAreaIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
+    CorticalAreaIndexQuant: QuantizableUIntType
 {
     fn get_dense_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError> {
         let implementation = self.get_neuron_voxel_dense_vector(cortical_id)?;
@@ -104,10 +104,10 @@ for MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelInde
 impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
 MultiCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
 for MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
-    CorticalAreaIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
+    CorticalAreaIndexQuant: QuantizableUIntType
 {
     fn get_contained_cortical_collection_types(&self) -> &AHashMap<CorticalID, SingleCorticalNeuronVoxelCollectionType> {
         &self.cache_included_types

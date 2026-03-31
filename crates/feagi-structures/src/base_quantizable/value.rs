@@ -1,4 +1,3 @@
-use core::fmt::{Debug, Display};
 use half::f16;
 
 
@@ -8,9 +7,11 @@ macro_rules! define_quantizable_value_type_family {
     ($base_name:ident) => {
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-        pub struct $base_name<T: $crate::base_quantizable::value::QuantizableValue>(pub T);
+        #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
+        #[cfg_attr(feature = "alloc", serde(transparent))]
+        pub struct $base_name<T: $crate::base_quantizable::QuantizableValueType>(pub T);
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> From<T> for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableValueType> From<T> for $base_name<T> {
             #[inline(always)]
             fn from(value: T) -> Self {
                 Self(value)
@@ -18,21 +19,21 @@ macro_rules! define_quantizable_value_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::value::QuantizableValue> Default for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableValueType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self(T::default())
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> From<$base_name<T>> for f32 {
+        impl<T: $crate::base_quantizable::QuantizableValueType> From<$base_name<T>> for f32 {
             #[inline(always)]
             fn from(value: $base_name<T>) -> Self {
                 value.0.to_f32()
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Add for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::Add for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn add(self, rhs: Self) -> Self::Output {
@@ -40,7 +41,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::Sub for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn sub(self, rhs: Self) -> Self::Output {
@@ -48,7 +49,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::Mul for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn mul(self, rhs: Self) -> Self::Output {
@@ -56,7 +57,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::Div for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::Div for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn div(self, rhs: Self) -> Self::Output {
@@ -64,28 +65,28 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 -= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.0 /= rhs.0;
@@ -93,7 +94,7 @@ macro_rules! define_quantizable_value_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::value::QuantizableValue + core::fmt::Display> core::fmt::Display
+        impl<T: $crate::base_quantizable::QuantizableValueType + core::fmt::Display> core::fmt::Display
             for $base_name<T>
         {
             #[inline(always)]
@@ -102,7 +103,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::value::QuantizableValue> $crate::base_quantizable::value::QuantizableValue for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableValueType> $crate::base_quantizable::QuantizableValueType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
             const ZERO: Self = Self(T::ZERO);
             const ONE: Self = Self(T::ONE);
@@ -159,12 +160,12 @@ macro_rules! define_quantizable_value_type_family {
 
 
 #[cfg(not(feature = "alloc"))]
-pub trait QuantizableValue:
+pub trait QuantizableValueType:
     Copy
-    + Clone
+    + core::clone::Clone
     + Send
     + Sync
-    + Into<f32>
+    + core::convert::Into<f32>
     + core::cmp::PartialOrd
     + core::ops::Add<Output = Self>
     + core::ops::Sub<Output = Self>
@@ -193,15 +194,15 @@ pub trait QuantizableValue:
 }
 
 #[cfg(feature = "alloc")]
-pub trait QuantizableValue:
+pub trait QuantizableValueType:
     Copy
-    + Clone
+    + core::clone::Clone
     + Send
     + Sync
-    + Debug
-    + Display
-    + Default
-    + Into<f32>
+    + core::fmt::Debug
+    + core::fmt::Display
+    + core::default::Default
+    + core::convert::Into<f32>
     + core::cmp::PartialOrd
     + core::ops::Add<Output = Self>
     + core::ops::Sub<Output = Self>
@@ -229,92 +230,7 @@ pub trait QuantizableValue:
     fn from_f32(value: f32) -> Self;
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
-impl QuantizableValue for f64 {
-    const NUMBER_OF_BYTES: usize = size_of::<f64>();
-    const ZERO: Self = 0.0;
-    const ONE: Self = 1.0;
-    const MAX_VALUE: Self = f64::MAX;
-    const MIN_VALUE: Self = f64::MIN;
-
-    #[inline(always)]
-    fn saturating_add(self, other: Self) -> Self {
-        let value = self + other;
-        if value.is_infinite() {
-            if value.is_sign_negative() { f64::MIN } else { f64::MAX }
-        } else if value.is_nan() {
-            0.0
-        } else {
-            value
-        }
-    }
-
-    #[inline(always)]
-    fn checked_add(self, other: Self) -> Option<Self> {
-        let value = self + other;
-        if value.is_finite() { Some(value) } else { None }
-    }
-
-    #[inline(always)]
-    fn saturating_sub(self, other: Self) -> Self {
-        let value = self - other;
-        if value.is_infinite() {
-            if value.is_sign_negative() { f64::MIN } else { f64::MAX }
-        } else if value.is_nan() {
-            0.0
-        } else {
-            value
-        }
-    }
-
-    #[inline(always)]
-    fn checked_sub(self, other: Self) -> Option<Self> {
-        let value = self - other;
-        if value.is_finite() { Some(value) } else { None }
-    }
-
-    #[inline(always)]
-    fn saturating_mul(self, other: Self) -> Self {
-        let value = self * other;
-        if value.is_infinite() {
-            if value.is_sign_negative() { f64::MIN } else { f64::MAX }
-        } else if value.is_nan() {
-            0.0
-        } else {
-            value
-        }
-    }
-
-    #[inline(always)]
-    fn checked_mul(self, other: Self) -> Option<Self> {
-        let value = self * other;
-        if value.is_finite() { Some(value) } else { None }
-    }
-
-    #[inline(always)]
-    fn checked_div(self, other: Self) -> Option<Self> {
-        let value = self / other;
-        if value.is_finite() { Some(value) } else { None }
-    }
-
-    #[inline(always)]
-    fn to_f32(self) -> f32 {
-        self as f32
-    }
-
-    #[inline(always)]
-    fn from_f32(value: f32) -> Self {
-        if value.is_infinite() {
-            if value.is_sign_negative() { f64::MIN } else { f64::MAX }
-        } else if value.is_nan() {
-            0.0
-        } else {
-            value as f64
-        }
-    }
-}
-
-impl QuantizableValue for f32 {
+impl QuantizableValueType for f32 {
     const NUMBER_OF_BYTES: usize = size_of::<f32>();
     const ZERO: Self = 0.0;
     const ONE: Self = 1.0;
@@ -398,7 +314,7 @@ impl QuantizableValue for f32 {
     }
 }
 
-impl QuantizableValue for f16 {
+impl QuantizableValueType for f16 {
     const NUMBER_OF_BYTES: usize = size_of::<f16>();
     const ZERO: Self = f16::ZERO;
     const ONE: Self = f16::ONE;
@@ -479,7 +395,7 @@ impl QuantizableValue for f16 {
     }
 }
 
-impl QuantizableValue for u8 {
+impl QuantizableValueType for u8 {
     const NUMBER_OF_BYTES: usize = size_of::<u8>();
     const ZERO: Self = 0;
     const ONE: Self = 1;

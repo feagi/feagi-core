@@ -1,7 +1,4 @@
-
-use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::base_quantizable::value::QuantizableValue;
-use crate::descriptors::NeuronPotentialUnit;
+use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelPotential};
 use crate::neuron_voxels::traits::NeuronVoxel;
 
@@ -11,8 +8,8 @@ use crate::neuron_voxels::traits::NeuronVoxel;
 /// a cortical area, along with its current activation/voltage level.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NeuronVoxelXYZP<VoxelPotentialQuant, CoordQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType
 {
     /// coordinate within the cortical area.
     pub coordinate: NeuronVoxelCoordinate<CoordQuant>,
@@ -20,7 +17,7 @@ pub struct NeuronVoxelXYZP<VoxelPotentialQuant, CoordQuant> where
     pub potential: NeuronVoxelPotential<VoxelPotentialQuant>,
 }
 
-impl<VoxelPotentialQuant: QuantizableValue, CoordQuant: QuantizableUInt> NeuronVoxelXYZP<VoxelPotentialQuant, CoordQuant> {
+impl<VoxelPotentialQuant: QuantizableValueType, CoordQuant: QuantizableUIntType> NeuronVoxelXYZP<VoxelPotentialQuant, CoordQuant> {
 
     pub fn new(x: CoordQuant, y: CoordQuant, z: CoordQuant, potential: NeuronVoxelPotential<VoxelPotentialQuant>) -> Self {
         NeuronVoxelXYZP {
@@ -31,8 +28,9 @@ impl<VoxelPotentialQuant: QuantizableValue, CoordQuant: QuantizableUInt> NeuronV
 }
 
 impl<VoxelPotentialQuant, CoordQuant> NeuronVoxel<VoxelPotentialQuant> for NeuronVoxelXYZP<VoxelPotentialQuant, CoordQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt {
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType
+{
     const NUMBER_OF_BYTES: usize = NeuronVoxelCoordinate::NUMBER_OF_BYTES + VoxelPotentialQuant::NUMBER_OF_BYTES;
 
     fn get_voxel_potential(&self) -> NeuronVoxelPotential<VoxelPotentialQuant> {
@@ -53,7 +51,7 @@ impl<VoxelPotentialQuant, CoordQuant> NeuronVoxel<VoxelPotentialQuant> for Neuro
 }
 
 #[cfg(feature = "alloc")]
-impl<PotentialQuant: QuantizableValue, CoordQuant: QuantizableUInt> std::fmt::Display for NeuronVoxelXYZP<PotentialQuant, CoordQuant> {
+impl<PotentialQuant: QuantizableValueType, CoordQuant: QuantizableUIntType> std::fmt::Display for NeuronVoxelXYZP<PotentialQuant, CoordQuant> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s = format!(
             "NeuronVoxelXYZP({}, {}, {}, {})",

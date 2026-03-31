@@ -110,21 +110,9 @@ feagi-io = { version = "=0.0.5", path = "crates/feagi-io", optional = true }
 feagi-agent = { version = "=0.0.5", path = "crates/feagi-agent", optional = true }
 feagi-services = { version = "=0.0.5", path = "crates/feagi-services", optional = true }
 
-
-
-
-
-
-
-
-
-
-
-
 [dev-dependencies]
 # For integration tests that need GenomeService
 feagi-services = { version = "=0.0.5", path = "crates/feagi-services" }
-feagi-npu-runtime = { version = "=0.0.5", path = "crates/feagi-npu/runtime", features = ["std"] }
 ahash = { workspace = true }
 feagi-config = { version = "=0.0.5", path = "crates/feagi-config" }
 parking_lot = "0.12"
@@ -135,6 +123,15 @@ feagi-brain-development = { version = "=0.0.5", path = "crates/feagi-brain-devel
 feagi-npu-plasticity = { version = "=0.0.5", path = "crates/feagi-npu/plasticity" }
 feagi-io = { version = "=0.0.5", path = "crates/feagi-io" }
 feagi-agent = { version = "=0.0.5", path = "crates/feagi-agent" }
+
+
+
+
+
+
+
+
+
 
 # ============================================================================
 # WORKSPACE CONFIGURATION
@@ -198,7 +195,7 @@ bytemuck = { version = "1.14" } # TODO I feel there was a reason this is on 1.14
 uuid = { version = "1.23"}
 half = {version = "2.7.1"}
 defmt = {version = "1.0.1"} # Only used in embedded contexts
-paste = "1.0.15" # only used in dev
+paste = "1.0.15" # only used in development
 
 ## Crates that are optional entirely
 # TODO most of these are only used by a single crate, should we move them just to that crate directly?

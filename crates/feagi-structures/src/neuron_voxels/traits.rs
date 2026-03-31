@@ -1,15 +1,18 @@
-#[cfg(feature = "alloc")]
-use ahash::AHashMap;
-use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::base_quantizable::value::QuantizableValue;
+
+
 use crate::genomic::cortical_area::CorticalID;
 use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
+use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxels::FeagiNeuronVoxelError;
+
+#[cfg(feature = "alloc")]
+use ahash::AHashMap;
+
 
 //region NeuronVoxel
 /// Represents the potential of a single voxel (which may contain one or more neurons)
 pub trait NeuronVoxel<VoxelPotentialQuant> where
-    VoxelPotentialQuant: QuantizableValue
+    VoxelPotentialQuant: QuantizableValueType
 {
     const NUMBER_OF_BYTES: usize;
 
@@ -29,9 +32,9 @@ pub trait NeuronVoxel<VoxelPotentialQuant> where
 
 /// Defines any collection of neurons sparsely from a single cortical area
 pub trait SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
     // NOTE since neuron collections may be stored in different ways, I see no good way to
     // expose a common interface for getting out potential data efficiently
@@ -81,9 +84,9 @@ pub trait SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuan
 #[cfg(feature = "alloc")]
 pub trait SingleCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>:
 SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
 
     /// Returns the number of neuron voxels stored in the structure
@@ -105,9 +108,9 @@ SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronV
 pub trait SingleCorticalNeuronVoxelCollectionSparse<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>:
 SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> +
 SingleCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
     /// Clears all stored neurons (without deallocating)
     fn clear_all_neurons(&mut self);
@@ -128,9 +131,9 @@ SingleCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, Neuron
 
 pub trait SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>:
 SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
     fn get_all_neuron_voxel_potentials(&self) -> &[NeuronVoxelPotential<VoxelPotentialQuant>];
 
@@ -155,10 +158,10 @@ SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronV
 
 //region MultiCACollection
 pub trait MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
-    CorticalAreaIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
+    CorticalAreaIndexQuant: QuantizableUIntType
 {
     fn get_contained_cortical_collection_type(&self, cortical_id: &CorticalID) -> Result<&SingleCorticalNeuronVoxelCollectionType, FeagiNeuronVoxelError>;
 
@@ -176,10 +179,10 @@ pub trait MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant
 
 pub trait MultiCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>:
 MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
-    CorticalAreaIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
+    CorticalAreaIndexQuant: QuantizableUIntType
 {
     fn get_dense_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError>;
 
@@ -189,10 +192,10 @@ MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVo
 #[cfg(feature = "alloc")]
 pub trait MultiCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>:
 MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
-    CorticalAreaIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
+    CorticalAreaIndexQuant: QuantizableUIntType
 {
     // NOTE: Not practical to do any sort of data retrieval functions here, but we can do housekeeping
 

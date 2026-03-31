@@ -1,5 +1,5 @@
-use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::base_quantizable::value::QuantizableValue;
+use crate::base_quantizable::QuantizableUIntType;
+use crate::base_quantizable::QuantizableValueType;
 use crate::neuron_voxels::descriptors::{
     NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType,
 };
@@ -14,9 +14,9 @@ pub struct NeuronVoxelDenseArray<
     NeuronVoxelIndexQuant,
     const NUMBER_NEURON_VOXELS: usize,
 > where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
 {
     cortical_dimensions: NeuronVoxelDimensions<CoordQuant>,
     potentials: [NeuronVoxelPotential<VoxelPotentialQuant>; NUMBER_NEURON_VOXELS],
@@ -25,9 +25,9 @@ pub struct NeuronVoxelDenseArray<
 impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, const NUMBER_NEURON_VOXELS: usize>
     NeuronVoxelDenseArray<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, NUMBER_NEURON_VOXELS>
 where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
 {
     pub fn new(cortical_dimensions: NeuronVoxelDimensions<CoordQuant>) -> Self {
         Self {
@@ -41,9 +41,9 @@ impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, const NUMBER_NEURON
     SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
     for NeuronVoxelDenseArray<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, NUMBER_NEURON_VOXELS>
 where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
 {
     const COLLECTION_TYPE: SingleCorticalNeuronVoxelCollectionType =
         SingleCorticalNeuronVoxelCollectionType::DenseArray;
@@ -61,9 +61,9 @@ impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, const NUMBER_NEURON
     SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
     for NeuronVoxelDenseArray<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, NUMBER_NEURON_VOXELS>
 where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt,
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType,
 {
     fn get_all_neuron_voxel_potentials(&self) -> &[NeuronVoxelPotential<VoxelPotentialQuant>] {
         self.potentials.as_slice()

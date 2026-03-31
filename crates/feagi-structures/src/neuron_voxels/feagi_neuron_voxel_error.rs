@@ -1,4 +1,4 @@
-use crate::base_quantizable::coordinate::{Dimension3DType, UnsignedCoordinate3DType};
+use crate::base_quantizable::spatial::{Dimension3DType, UnsignedCoordinate3DType};
 use crate::genomic::cortical_area::CorticalID;
 
 pub enum FeagiNeuronVoxelError {

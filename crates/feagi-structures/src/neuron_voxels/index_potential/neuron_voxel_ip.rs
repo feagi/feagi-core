@@ -1,13 +1,11 @@
-use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::base_quantizable::value::QuantizableValue;
-use crate::descriptors::NeuronPotentialUnit;
+use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxels::descriptors::NeuronVoxelPotential;
 use crate::neuron_voxels::traits::NeuronVoxel;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NeuronVoxelIP<VoxelPotentialQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
     pub index: NeuronVoxelIndexQuant,
     /// potential (voltage) of the voxel
@@ -15,8 +13,8 @@ pub struct NeuronVoxelIP<VoxelPotentialQuant, NeuronVoxelIndexQuant> where
 }
 
 impl<VoxelPotentialQuant, NeuronVoxelIndexQuant>  NeuronVoxelIP<VoxelPotentialQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
     pub fn new(i: NeuronVoxelIndexQuant, potential: VoxelPotentialQuant) -> Self {
         Self {
@@ -27,8 +25,8 @@ impl<VoxelPotentialQuant, NeuronVoxelIndexQuant>  NeuronVoxelIP<VoxelPotentialQu
 }
 
 impl<VoxelPotentialQuant, NeuronVoxelIndexQuant> NeuronVoxel<VoxelPotentialQuant> for NeuronVoxelIP<VoxelPotentialQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
     const NUMBER_OF_BYTES: usize = NeuronVoxelIndexQuant::NUMBER_OF_BYTES + VoxelPotentialQuant::NUMBER_OF_BYTES;
 
@@ -51,8 +49,8 @@ impl<VoxelPotentialQuant, NeuronVoxelIndexQuant> NeuronVoxel<VoxelPotentialQuant
 
 #[cfg(feature = "alloc")]
 impl<VoxelPotentialQuant, NeuronVoxelIndexQuant> std::fmt::Display for NeuronVoxelIP<VoxelPotentialQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s = format!(

@@ -14,39 +14,66 @@ description = "The most core library, defines the basic data types used by FEAGI
 
 default = ["default-linux-x86"]
 
-default-win-x86 = ["_internal_common"]
-default-win-arm = ["_internal_common"]
-default-mac-x86 = ["_internal_common"]
-default-mac-arm = ["_internal_common"]
-default-linux-x86 = ["_internal_common"]
-default-linux-arm = ["_internal_common"]
+default-win-x86 = [
+    "std", 
+    "ndarray", 
+    "rayon"
+]
+default-win-arm = [
+    "std", 
+    "ndarray", 
+    "rayon"
+]
+default-mac-x86 = [
+    "std", 
+    "ndarray", 
+    "rayon"
+]
+default-mac-arm = [
+    "std", 
+    "ndarray", 
+    "rayon"
+]
+default-linux-x86 = [
+    "std", 
+    "ndarray", 
+    "rayon"
+]
+default-linux-arm = [
+    "std", 
+    "ndarray", 
+    "rayon"
+]
 default-wasm = []
-default-embedded-generic = [] # break this into more types later
+default-embedded-generic = ["defmt"] # break this into more types later
 
-# Used by most systems
-_internal_common = ["std", "ndarray", "rayon", "support_64bit_indexing_quantization"]
+# TODO It is possible to have serde functionality without std / alloc, but for now we will feature gate it
+# TODO think of a better way to toggle tracing off in embedded / wasm envs
 
-
-std = ["alloc"] # allows use of the std library
-alloc = [] # allows use of alloc (through core, not strictly std)
+std = ["alloc", "ahash/std" , "dep:tracing"] # allows use of the std library
+alloc = [ # allows use of alloc (through core, not strictly std) and structures here that need it
+    "dep:serde",
+    "dep:serde_json",
+    "half/serde",
+    "ahash/serde"
+]
 defmt = ["dep:defmt"]
 ndarray = ["dep:ndarray"]
 rayon = ["dep:rayon", "std"]
-support_64bit_indexing_quantization = [] # Allow 64 bit quantization and indexing. This is pretty rare
+support_64bit_indexing_quantization = [] # Allow 64 bit quantization and indexing. This is pretty rare. Not compatible with WASM or Embedded
 
 [dependencies]
-serde = { workspace = true }
-half = {workspace = true, default-features = false, features = []} # STD enables autoarch detection, which we may not want
-ahash = { workspace = true}
-uuid = { workspace = true } # TODO check STD compabtility
+serde = { workspace = true, optional = true, default-features = false, features = ["alloc", "derive"] }
 serde_json = { workspace = true, optional = true}
+half = { workspace = true, default-features = false, features = [] } # STD enables autoarch detection, which we may not want
+ahash = { workspace = true, default-features = false, features = []}
+uuid = { workspace = true } # TODO Special notes for embedded and WASM support, discuss later!
 ndarray = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 defmt = {workspace = true, optional = true}
-tracing = "0.1.44" # TODO we may need to move this with wherever we move the ulog
+tracing = {workspace = true, optional = true}
 
-
-base64 = "0.22.1" # TODO move to workspace
+base64 = { version = "0.22.1" } # TODO special notes about alloc, discuss later!
 
 [dev-dependencies]
 paste = { workspace = true }

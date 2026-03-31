@@ -1,12 +1,12 @@
-use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::base_quantizable::value::QuantizableValue;
-use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential};
+use crate::base_quantizable::QuantizableUIntType;
+use crate::base_quantizable::QuantizableValueType;
+use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
 use crate::neuron_voxels::traits::{SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionDense, SingleCorticalNeuronVoxelCollectionSparse};
 
 pub struct NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
     cortical_dimensions: NeuronVoxelDimensions<CoordQuant>,
     potentials: Vec<NeuronVoxelPotential<VoxelPotentialQuant>>,
@@ -14,9 +14,10 @@ pub struct NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIn
 
 impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
 where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt{
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
+{
 
     pub fn new(cortical_dimensions: NeuronVoxelDimensions<CoordQuant>) -> Self {
         let number_neurons = cortical_dimensions.get_max_allowed_index_exclusive();
@@ -32,10 +33,12 @@ impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
 SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
 for NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
 where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
+    const COLLECTION_TYPE: SingleCorticalNeuronVoxelCollectionType = SingleCorticalNeuronVoxelCollectionType::DenseVector;
+
     fn get_representing_cortical_area_dimensions(&self) -> &NeuronVoxelDimensions<CoordQuant> {
         &self.cortical_dimensions
     }
@@ -49,9 +52,9 @@ impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
 SingleCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
 for NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
 where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
     fn get_number_neuron_voxel_contained_count(&self) -> NeuronVoxelIndexQuant {
         self.potentials.len() as NeuronVoxelIndexQuant
@@ -81,9 +84,9 @@ impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
 SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
 for NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
 where
-    VoxelPotentialQuant: QuantizableValue,
-    CoordQuant: QuantizableUInt,
-    NeuronVoxelIndexQuant: QuantizableUInt
+    VoxelPotentialQuant: QuantizableValueType,
+    CoordQuant: QuantizableUIntType,
+    NeuronVoxelIndexQuant: QuantizableUIntType
 {
     fn get_all_neuron_voxel_potentials(&self) -> &[NeuronVoxelPotential<VoxelPotentialQuant>] {
         self.potentials.as_slice()

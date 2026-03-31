@@ -1,6 +1,5 @@
-use core::fmt::{Debug, Display};
-use crate::base_quantizable::unsigned_integer::QuantizableUInt;
-use crate::base_quantizable::value::QuantizableValue;
+use crate::base_quantizable::QuantizableUIntType;
+use crate::base_quantizable::QuantizableValueType;
 use crate::neurons::descriptors::NumberNeuronsPerVoxel;
 
 /// Denotes how neurons are being stored
@@ -23,8 +22,8 @@ crate::define_unsigned_coordinate_3d_type_family!(NeuronVoxelCoordinate);
 
 crate::define_dimension_3d_type_family!(NeuronVoxelDimensions, NeuronVoxelCoordinate);
 
-impl<CoordQuant: QuantizableUInt> NeuronVoxelDimensions<CoordQuant> {
-    pub fn get_max_allowed_index_exclusive(&self) -> NeuronVoxelIndexQuant {
+impl<CoordQuant: QuantizableUIntType> NeuronVoxelDimensions<CoordQuant> {
+    pub fn get_max_allowed_index_exclusive(&self) -> CoordQuant { // TODO we should be using an index quantization here!!!
         self.x * self.y * self.z
     }
 
@@ -39,7 +38,7 @@ impl<CoordQuant: QuantizableUInt> NeuronVoxelDimensions<CoordQuant> {
 
 crate::define_quantizable_value_type_family!(NeuronVoxelPotential);
 
-impl<Potential: QuantizableValue> NeuronVoxelPotential<Potential> {
+impl<Potential: QuantizableValueType> NeuronVoxelPotential<Potential> {
 
 }
 

@@ -6,9 +6,11 @@ macro_rules! define_quantizable_uint_type_family {
     ($base_name:ident) => {
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-        pub struct $base_name<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt>(pub T);
+        #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
+        #[cfg_attr(feature = "alloc", serde(transparent))]
+        pub struct $base_name<T: $crate::base_quantizable::QuantizableUIntType>(pub T);
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> From<T> for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> From<T> for $base_name<T> {
             #[inline(always)]
             fn from(value: T) -> Self {
                 Self(value)
@@ -16,21 +18,21 @@ macro_rules! define_quantizable_uint_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> Default for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self(T::default())
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> From<$base_name<T>> for usize {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> From<$base_name<T>> for usize {
             #[inline(always)]
             fn from(value: $base_name<T>) -> Self {
                 value.0.to_usize()
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Add for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn add(self, rhs: Self) -> Self::Output {
@@ -38,7 +40,7 @@ macro_rules! define_quantizable_uint_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn sub(self, rhs: Self) -> Self::Output {
@@ -46,7 +48,7 @@ macro_rules! define_quantizable_uint_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn mul(self, rhs: Self) -> Self::Output {
@@ -54,7 +56,7 @@ macro_rules! define_quantizable_uint_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::Div for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn div(self, rhs: Self) -> Self::Output {
@@ -62,28 +64,28 @@ macro_rules! define_quantizable_uint_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 -= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.0 /= rhs.0;
@@ -91,7 +93,7 @@ macro_rules! define_quantizable_uint_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt + core::fmt::Display> core::fmt::Display
+        impl<T: $crate::base_quantizable::QuantizableUIntType + core::fmt::Display> core::fmt::Display
             for $base_name<T>
         {
             #[inline(always)]
@@ -100,7 +102,7 @@ macro_rules! define_quantizable_uint_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> $crate::base_quantizable::unsigned_integer::QuantizableUInt for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> $crate::base_quantizable::QuantizableUIntType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
             const ZERO: Self = Self(T::ZERO);
             const ONE: Self = Self(T::ONE);
@@ -155,10 +157,9 @@ macro_rules! define_quantizable_uint_type_family {
     };
 }
 
-// TODO implement display on alloc builds
 
 #[cfg(not(feature = "alloc"))]
-pub trait QuantizableUInt:
+pub trait QuantizableUIntType:
     Copy
     + Clone
     + Send
@@ -191,7 +192,7 @@ pub trait QuantizableUInt:
 }
 
 #[cfg(feature = "alloc")]
-pub trait QuantizableUInt:
+pub trait QuantizableUIntType:
     Copy
     + Clone
     + Send
@@ -226,7 +227,7 @@ pub trait QuantizableUInt:
     fn from_usize(value: usize) -> Self;
 }
 
-impl QuantizableUInt for usize {
+impl QuantizableUIntType for usize {
     const NUMBER_OF_BYTES: usize = size_of::<usize>();
     const ZERO: Self = 0;
     const ONE: Self = 1;
@@ -279,7 +280,7 @@ impl QuantizableUInt for usize {
     }
 }
 
-impl QuantizableUInt for u8 {
+impl QuantizableUIntType for u8 {
     const NUMBER_OF_BYTES: usize = size_of::<u8>();
     const ZERO: Self = 0;
     const ONE: Self = 1;
@@ -335,7 +336,7 @@ impl QuantizableUInt for u8 {
     }
 }
 
-impl QuantizableUInt for u16 {
+impl QuantizableUIntType for u16 {
     const NUMBER_OF_BYTES: usize = size_of::<u16>();
     const ZERO: Self = 0;
     const ONE: Self = 1;
@@ -391,7 +392,7 @@ impl QuantizableUInt for u16 {
     }
 }
 
-impl QuantizableUInt for u32 {
+impl QuantizableUIntType for u32 {
     const NUMBER_OF_BYTES: usize = size_of::<u32>();
     const ZERO: Self = 0;
     const ONE: Self = 1;
@@ -448,7 +449,7 @@ impl QuantizableUInt for u32 {
 }
 
 #[cfg(feature = "support_64bit_indexing_quantization")]
-impl QuantizableUInt for u64 {
+impl QuantizableUIntType for u64 {
     const NUMBER_OF_BYTES: usize = size_of::<u64>();
     const ZERO: Self = 0;
     const ONE: Self = 1;

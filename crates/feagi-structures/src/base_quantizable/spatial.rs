@@ -12,12 +12,12 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
-        pub struct $base_name<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> {
+        pub struct $base_name<T: $crate::base_quantizable::QuantizableUIntType> {
             pub x: T,
             pub y: T,
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> $base_name<T> {
             pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
 
             #[inline(always)]
@@ -39,14 +39,14 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             )?
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(f, concat!(stringify!($display), "<{}, {}>"), self.x, self.y)
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> Into<$base_name<usize>> for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> Into<$base_name<usize>> for $base_name<T> {
             #[inline(always)]
             fn into(self) -> $base_name<usize> {
                 $base_name::new(self.x.to_usize(), self.y.to_usize())
@@ -69,12 +69,12 @@ macro_rules! define_signed_coordinate_2d_type_family {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
-        pub struct $base_name<T: $crate::base_quantizable::signed_integer::QuantizableInt> {
+        pub struct $base_name<T: $crate::base_quantizable::QuantizableIntType> {
             pub x: T,
             pub y: T,
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableIntType> $base_name<T> {
             pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
 
             #[inline(always)]
@@ -83,14 +83,14 @@ macro_rules! define_signed_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(f, concat!(stringify!($display), "<{}, {}>"), self.x, self.y)
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> Into<$base_name<isize>> for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableIntType> Into<$base_name<isize>> for $base_name<T> {
             #[inline(always)]
             fn into(self) -> $base_name<isize> {
                 $base_name::new(self.x.to_isize(), self.y.to_isize())
@@ -112,31 +112,31 @@ macro_rules! define_dimension_2d_type_family {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
-        pub struct $base_name<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> {
-            pub x: $crate::base_quantizable::nonzero_count::NonzeroCountType<T>,
-            pub y: $crate::base_quantizable::nonzero_count::NonzeroCountType<T>,
+        pub struct $base_name<T: $crate::base_quantizable::QuantizableUIntType> {
+            pub x: $crate::base_quantizable::NonzeroCount<T>,
+            pub y: $crate::base_quantizable::NonzeroCount<T>,
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> $base_name<T> {
             pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
 
             #[inline(always)]
             pub(crate) fn new_unchecked(x: T, y: T) -> Self {
-                let x = $crate::base_quantizable::nonzero_count::NonzeroCountType::new_unchecked(x);
-                let y = $crate::base_quantizable::nonzero_count::NonzeroCountType::new_unchecked(y);
+                let x = $crate::base_quantizable::NonzeroCount::new_unchecked(x);
+                let y = $crate::base_quantizable::NonzeroCount::new_unchecked(y);
                 Self { x, y }
             }
 
             #[inline(always)]
             pub fn new(x: T, y: T) -> Result<Self, $crate::FeagiStructuresError> {
-                let x = $crate::base_quantizable::nonzero_count::NonzeroCountType::new(x)?;
-                let y = $crate::base_quantizable::nonzero_count::NonzeroCountType::new(y)?;
+                let x = $crate::base_quantizable::NonzeroCount::new(x)?;
+                let y = $crate::base_quantizable::NonzeroCount::new(y)?;
                 Ok(Self { x, y })
             }
 
             #[inline(always)]
             pub fn new_square(n: T) -> Result<Self, $crate::FeagiStructuresError> {
-                let x = $crate::base_quantizable::nonzero_count::NonzeroCountType::new(n)?;
+                let x = $crate::base_quantizable::NonzeroCount::new(n)?;
                 let y = x;
                 Ok(Self { x, y })
             }
@@ -160,14 +160,14 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(f, concat!(stringify!($display), "<{}, {}>"), self.x, self.y)
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> Into<$base_name<usize>> for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> Into<$base_name<usize>> for $base_name<T> {
             #[inline(always)]
             fn into(self) -> $base_name<usize> {
                 $base_name::new_unchecked(self.x.get().to_usize(), self.y.get().to_usize())
@@ -189,13 +189,13 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
-        pub struct $base_name<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> {
+        pub struct $base_name<T: $crate::base_quantizable::QuantizableUIntType> {
             pub x: T,
             pub y: T,
             pub z: T,
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> $base_name<T> {
             pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
 
             #[inline(always)]
@@ -218,7 +218,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             )?
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(
@@ -231,7 +231,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> Into<$base_name<usize>> for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> Into<$base_name<usize>> for $base_name<T> {
             #[inline(always)]
             fn into(self) -> $base_name<usize> {
                 $base_name::new(self.x.to_usize(), self.y.to_usize(), self.z.to_usize())
@@ -253,13 +253,13 @@ macro_rules! define_signed_coordinate_3d_type_family {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
-        pub struct $base_name<T: $crate::base_quantizable::signed_integer::QuantizableInt> {
+        pub struct $base_name<T: $crate::base_quantizable::QuantizableIntType> {
             pub x: T,
             pub y: T,
             pub z: T,
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableIntType> $base_name<T> {
             pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
 
             #[inline(always)]
@@ -268,7 +268,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(
@@ -281,7 +281,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> Into<$base_name<isize>> for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableIntType> Into<$base_name<isize>> for $base_name<T> {
             #[inline(always)]
             fn into(self) -> $base_name<isize> {
                 $base_name::new(self.x.to_isize(), self.y.to_isize(), self.z.to_isize())
@@ -303,34 +303,34 @@ macro_rules! define_dimension_3d_type_family {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
-        pub struct $base_name<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> {
-            pub x: $crate::base_quantizable::nonzero_count::NonzeroCountType<T>,
-            pub y: $crate::base_quantizable::nonzero_count::NonzeroCountType<T>,
-            pub z: $crate::base_quantizable::nonzero_count::NonzeroCountType<T>,
+        pub struct $base_name<T: $crate::base_quantizable::QuantizableUIntType> {
+            pub x: $crate::base_quantizable::NonzeroCount<T>,
+            pub y: $crate::base_quantizable::NonzeroCount<T>,
+            pub z: $crate::base_quantizable::NonzeroCount<T>,
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> $base_name<T> {
             pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
 
             #[inline(always)]
             pub(crate) fn new_unchecked(x: T, y: T, z: T) -> Self {
-                let x = $crate::base_quantizable::nonzero_count::NonzeroCountType::new_unchecked(x);
-                let y = $crate::base_quantizable::nonzero_count::NonzeroCountType::new_unchecked(y);
-                let z = $crate::base_quantizable::nonzero_count::NonzeroCountType::new_unchecked(z);
+                let x = $crate::base_quantizable::NonzeroCount::new_unchecked(x);
+                let y = $crate::base_quantizable::NonzeroCount::new_unchecked(y);
+                let z = $crate::base_quantizable::NonzeroCount::new_unchecked(z);
                 Self { x, y, z }
             }
 
             #[inline(always)]
             pub fn new(x: T, y: T, z: T) -> Result<Self, $crate::FeagiStructuresError> {
-                let x = $crate::base_quantizable::nonzero_count::NonzeroCountType::new(x)?;
-                let y = $crate::base_quantizable::nonzero_count::NonzeroCountType::new(y)?;
-                let z = $crate::base_quantizable::nonzero_count::NonzeroCountType::new(z)?;
+                let x = $crate::base_quantizable::NonzeroCount::new(x)?;
+                let y = $crate::base_quantizable::NonzeroCount::new(y)?;
+                let z = $crate::base_quantizable::NonzeroCount::new(z)?;
                 Ok(Self { x, y, z })
             }
 
             #[inline(always)]
             pub fn new_cube(n: T) -> Result<Self, $crate::FeagiStructuresError> {
-                let x = $crate::base_quantizable::nonzero_count::NonzeroCountType::new(n)?;
+                let x = $crate::base_quantizable::NonzeroCount::new(n)?;
                 let y = x;
                 let z = x;
                 Ok(Self { x, y, z })
@@ -357,7 +357,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(
@@ -370,7 +370,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::unsigned_integer::QuantizableUInt> Into<$base_name<usize>> for $base_name<T> {
+        impl<T: $crate::base_quantizable::QuantizableUIntType> Into<$base_name<usize>> for $base_name<T> {
             #[inline(always)]
             fn into(self) -> $base_name<usize> {
                 $base_name::new_unchecked(
@@ -382,19 +382,3 @@ macro_rules! define_dimension_3d_type_family {
         }
     };
 }
-
-//region 2D — canonical layouts used by errors and fit checks (see macros above)
-
-crate::define_unsigned_coordinate_2d_type_family!(UnsignedCoordinate2DType, Dimension2DType, UnsignedCoordinate2D);
-crate::define_signed_coordinate_2d_type_family!(SignedCoordinate2DType, SignedCoordinate2D);
-crate::define_dimension_2d_type_family!(Dimension2DType, UnsignedCoordinate2DType, Dimensions2D);
-
-//endregion
-
-//region 3D
-
-crate::define_unsigned_coordinate_3d_type_family!(UnsignedCoordinate3DType, Dimension3DType, UnsignedCoordinate3D);
-crate::define_signed_coordinate_3d_type_family!(SignedCoordinate3DType, SignedCoordinate3D);
-crate::define_dimension_3d_type_family!(Dimension3DType, UnsignedCoordinate3DType, Dimensions3D);
-
-//endregion

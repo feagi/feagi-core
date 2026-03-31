@@ -6,9 +6,11 @@ macro_rules! define_quantizable_int_type_family {
     ($base_name:ident) => {
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-        pub struct $base_name<T: $crate::base_quantizable::signed_integer::QuantizableInt>(pub T);
+        #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
+        #[cfg_attr(feature = "alloc", serde(transparent))]
+        pub struct $base_name<T: $crate::base_quantizable::signed_integer:QuantizableIntType>(pub T);
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> From<T> for $base_name<T> {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> From<T> for $base_name<T> {
             #[inline(always)]
             fn from(value: T) -> Self {
                 Self(value)
@@ -16,21 +18,21 @@ macro_rules! define_quantizable_int_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> Default for $base_name<T> {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self(T::default())
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> From<$base_name<T>> for isize {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> From<$base_name<T>> for isize {
             #[inline(always)]
             fn from(value: $base_name<T>) -> Self {
                 value.0.to_isize()
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> core::ops::Add for $base_name<T> {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn add(self, rhs: Self) -> Self::Output {
@@ -38,7 +40,7 @@ macro_rules! define_quantizable_int_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn sub(self, rhs: Self) -> Self::Output {
@@ -46,7 +48,7 @@ macro_rules! define_quantizable_int_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn mul(self, rhs: Self) -> Self::Output {
@@ -54,7 +56,7 @@ macro_rules! define_quantizable_int_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> core::ops::Div for $base_name<T> {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn div(self, rhs: Self) -> Self::Output {
@@ -62,28 +64,28 @@ macro_rules! define_quantizable_int_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 -= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.0 /= rhs.0;
@@ -91,7 +93,7 @@ macro_rules! define_quantizable_int_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt + core::fmt::Display> core::fmt::Display
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType + core::fmt::Display> core::fmt::Display
             for $base_name<T>
         {
             #[inline(always)]
@@ -100,7 +102,7 @@ macro_rules! define_quantizable_int_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::signed_integer::QuantizableInt> $crate::base_quantizable::signed_integer::QuantizableInt for $base_name<T> {
+        impl<T: $crate::base_quantizable::signed_integer:QuantizableIntType> $crate::base_quantizable::signed_integer:QuantizableIntType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
             const ZERO: Self = Self(T::ZERO);
             const ONE: Self = Self(T::ONE);
@@ -155,14 +157,9 @@ macro_rules! define_quantizable_int_type_family {
     };
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
-pub type QuantizableSIntI64 = i64;
-pub type QuantizableSIntI32 = i32;
-pub type QuantizableSIntI16 = i16;
-pub type QuantizableSIntI8 = i8;
 
 #[cfg(not(feature = "alloc"))]
-pub trait QuantizableInt:
+pub trait QuantizableIntType:
     Copy
     + Clone
     + Send
@@ -195,7 +192,7 @@ pub trait QuantizableInt:
 }
 
 #[cfg(feature = "alloc")]
-pub trait QuantizableInt:
+pub trait QuantizableIntType:
     Copy
     + Clone
     + Send
@@ -230,7 +227,7 @@ pub trait QuantizableInt:
     fn from_isize(value: isize) -> Self;
 }
 
-impl QuantizableInt for isize {
+impl QuantizableIntType for isize {
     const NUMBER_OF_BYTES: usize = size_of::<isize>();
     const ZERO: Self = 0;
     const ONE: Self = 1;
@@ -283,7 +280,7 @@ impl QuantizableInt for isize {
     }
 }
 
-impl QuantizableInt for i8 {
+impl QuantizableIntType for i8 {
     const NUMBER_OF_BYTES: usize = size_of::<i8>();
     const ZERO: Self = 0;
     const ONE: Self = 1;
@@ -345,7 +342,7 @@ impl QuantizableInt for i8 {
     }
 }
 
-impl QuantizableInt for i16 {
+impl QuantizableIntType for i16 {
     const NUMBER_OF_BYTES: usize = size_of::<i16>();
     const ZERO: Self = 0;
     const ONE: Self = 1;
@@ -407,7 +404,7 @@ impl QuantizableInt for i16 {
     }
 }
 
-impl QuantizableInt for i32 {
+impl QuantizableIntType for i32 {
     const NUMBER_OF_BYTES: usize = size_of::<i32>();
     const ZERO: Self = 0;
     const ONE: Self = 1;
@@ -470,7 +467,7 @@ impl QuantizableInt for i32 {
 }
 
 #[cfg(feature = "support_64bit_indexing_quantization")]
-impl QuantizableInt for i64 {
+impl QuantizableIntType for i64 {
     const NUMBER_OF_BYTES: usize = size_of::<i64>();
     const ZERO: Self = 0;
     const ONE: Self = 1;
