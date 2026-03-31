@@ -8,8 +8,7 @@ mod templates;
 mod feagi_structures_error;
 
 
-// pub mod genomic; // TODO for now do not expose genomic properties
-
+pub mod genomic; // TODO for now do not expose genomic properties
 pub mod neuron_voxels;
 pub mod base_quantizable;
 pub mod feagi_log;

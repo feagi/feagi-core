@@ -1,3 +1,4 @@
+use core::marker::PhantomData;
 use crate::base_quantizable::QuantizableUIntType;
 use crate::base_quantizable::QuantizableValueType;
 use crate::neuron_voxels::descriptors::{
@@ -20,6 +21,7 @@ pub struct NeuronVoxelDenseArray<
 {
     cortical_dimensions: NeuronVoxelDimensions<CoordQuant>,
     potentials: [NeuronVoxelPotential<VoxelPotentialQuant>; NUMBER_NEURON_VOXELS],
+    _index_quant: PhantomData<NeuronVoxelIndexQuant>,
 }
 
 impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, const NUMBER_NEURON_VOXELS: usize>
@@ -33,6 +35,7 @@ where
         Self {
             cortical_dimensions,
             potentials: [NeuronVoxelPotential(VoxelPotentialQuant::ZERO); NUMBER_NEURON_VOXELS],
+            _index_quant: PhantomData,
         }
     }
 }

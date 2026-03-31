@@ -1,14 +1,6 @@
-/// Defines a full unsigned 2D coordinate type family. Pass `$dim_type` + `$display` to add
-/// `new_with_fit_check` and a shorter `Display` label (e.g. `UnsignedCoordinate2D` for `UnsignedCoordinate2DType`).
 #[macro_export]
 macro_rules! define_unsigned_coordinate_2d_type_family {
     ($base_name:ident) => {
-        $crate::define_unsigned_coordinate_2d_type_family!(@impl $base_name, $base_name);
-    };
-    ($base_name:ident, $dim_type:ident, $display:ident) => {
-        $crate::define_unsigned_coordinate_2d_type_family!(@impl $base_name, $display, $dim_type);
-    };
-    (@impl $base_name:ident, $display:ident $(, $dim_type:ident)?) => {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
@@ -25,6 +17,11 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
                 Self { x, y }
             }
 
+            #[inline(always)]
+            pub fn to_usize(self) -> $base_name<usize> {
+                $base_name::new(self.x.to_usize(), self.y.to_usize())
+            }
+
             $(
             #[inline(always)]
             pub fn new_with_fit_check(
@@ -39,33 +36,19 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             )?
         }
 
+        #[cfg(feature = "alloc")]
         impl<T: $crate::base_quantizable::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                write!(f, concat!(stringify!($display), "<{}, {}>"), self.x, self.y)
-            }
-        }
-
-        impl<T: $crate::base_quantizable::QuantizableUIntType> Into<$base_name<usize>> for $base_name<T> {
-            #[inline(always)]
-            fn into(self) -> $base_name<usize> {
-                $base_name::new(self.x.to_usize(), self.y.to_usize())
+                write!(f, concat!(stringify!($base_name), "<{}, {}>"), self.x, self.y)
             }
         }
     };
 }
 
-/// Defines a full signed 2D coordinate type family. Optional second ident is the `Display` prefix
-/// (e.g. `SignedCoordinate2D` for struct `SignedCoordinate2DType`).
 #[macro_export]
 macro_rules! define_signed_coordinate_2d_type_family {
-    ($base_name:ident) => {
-        $crate::define_signed_coordinate_2d_type_family!(@impl $base_name, $base_name);
-    };
-    ($base_name:ident, $display:ident) => {
-        $crate::define_signed_coordinate_2d_type_family!(@impl $base_name, $display);
-    };
-    (@impl $base_name:ident, $display:ident) => {
+    (@impl $base_name:ident) => {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
@@ -81,34 +64,28 @@ macro_rules! define_signed_coordinate_2d_type_family {
             pub fn new(x: T, y: T) -> Self {
                 Self { x, y }
             }
-        }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
+            /// Maps each component with [`QuantizableIntType::to_isize`]. Prefer this over [`Into`]
+            /// to avoid overlapping the standard `From<T> for T` / `Into` blanket when `T` is `isize`.
             #[inline(always)]
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                write!(f, concat!(stringify!($display), "<{}, {}>"), self.x, self.y)
+            pub fn to_isize(self) -> $base_name<isize> {
+                $base_name::new(self.x.to_isize(), self.y.to_isize())
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> Into<$base_name<isize>> for $base_name<T> {
+        #[cfg(feature = "alloc")]
+        impl<T: $crate::base_quantizable::QuantizableIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
-            fn into(self) -> $base_name<isize> {
-                $base_name::new(self.x.to_isize(), self.y.to_isize())
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, concat!(stringify!($base_name), "<{}, {}>"), self.x, self.y)
             }
         }
     };
 }
 
-/// Defines a full 2D dimension type family with fit checks. Optional third ident sets the `Display` prefix.
 #[macro_export]
 macro_rules! define_dimension_2d_type_family {
     ($base_name:ident, $coordinate_type:ident) => {
-        $crate::define_dimension_2d_type_family!(@impl $base_name, $coordinate_type, $base_name);
-    };
-    ($base_name:ident, $coordinate_type:ident, $display:ident) => {
-        $crate::define_dimension_2d_type_family!(@impl $base_name, $coordinate_type, $display);
-    };
-    (@impl $base_name:ident, $coordinate_type:ident, $display:ident) => {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
@@ -142,50 +119,29 @@ macro_rules! define_dimension_2d_type_family {
             }
 
             #[inline(always)]
+            pub fn to_usize(self) -> $base_name<usize> {
+                $base_name::new_unchecked(self.x.get().to_usize(), self.y.get().to_usize())
+            }
+
+            #[inline(always)]
             pub fn does_fit(&self, coordinate: &$coordinate_type<T>) -> bool {
                 coordinate.x < self.x.get() && coordinate.y < self.y.get()
             }
-
-            #[inline(always)]
-            pub fn verify_fit(&self, coordinate: &$coordinate_type<T>) -> Result<(), $crate::FeagiStructuresError> {
-                if self.does_fit(coordinate) {
-                    Ok(())
-                } else {
-                    Err($crate::FeagiStructuresError::Coordinate2DOutOfBounds {
-                        context: "coordinate does not fit in 2D bounds",
-                        coordinate: (*coordinate).into(),
-                        dimensions: (*self).into(),
-                    })
-                }
-            }
         }
 
+        #[cfg(feature = "alloc")]
         impl<T: $crate::base_quantizable::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                write!(f, concat!(stringify!($display), "<{}, {}>"), self.x, self.y)
-            }
-        }
-
-        impl<T: $crate::base_quantizable::QuantizableUIntType> Into<$base_name<usize>> for $base_name<T> {
-            #[inline(always)]
-            fn into(self) -> $base_name<usize> {
-                $base_name::new_unchecked(self.x.get().to_usize(), self.y.get().to_usize())
+                write!(f, concat!(stringify!($base_name), "<{}, {}>"), self.x, self.y)
             }
         }
     };
 }
 
-/// Defines a full unsigned 3D coordinate type family. See [`define_unsigned_coordinate_2d_type_family`].
 #[macro_export]
 macro_rules! define_unsigned_coordinate_3d_type_family {
     ($base_name:ident) => {
-        $crate::define_unsigned_coordinate_3d_type_family!(@impl $base_name, $base_name);
-    };
-    ($base_name:ident, $dim_type:ident, $display:ident) => {
-        $crate::define_unsigned_coordinate_3d_type_family!(@impl $base_name, $display, $dim_type);
-    };
-    (@impl $base_name:ident, $display:ident $(, $dim_type:ident)?) => {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
@@ -197,59 +153,36 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
 
         impl<T: $crate::base_quantizable::QuantizableUIntType> $base_name<T> {
             pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
-
             #[inline(always)]
             pub fn new(x: T, y: T, z: T) -> Self {
                 Self { x, y, z }
             }
 
-            $(
             #[inline(always)]
-            pub fn new_with_fit_check(
-                x: T,
-                y: T,
-                z: T,
-                bounds: &$dim_type<T>,
-            ) -> Result<Self, $crate::FeagiStructuresError> {
-                let coords = Self::new(x, y, z);
-                bounds.verify_fit(&coords)?;
-                Ok(coords)
+            pub fn to_usize(self) -> $base_name<usize> {
+                $base_name::new(self.x.to_usize(), self.y.to_usize(), self.z.to_usize())
             }
-            )?
         }
 
+        #[cfg(feature = "alloc")]
         impl<T: $crate::base_quantizable::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(
                     f,
-                    concat!(stringify!($display), "<{}, {}, {}>"),
+                    concat!(stringify!($base_name), "<{}, {}, {}>"),
                     self.x,
                     self.y,
                     self.z
                 )
             }
         }
-
-        impl<T: $crate::base_quantizable::QuantizableUIntType> Into<$base_name<usize>> for $base_name<T> {
-            #[inline(always)]
-            fn into(self) -> $base_name<usize> {
-                $base_name::new(self.x.to_usize(), self.y.to_usize(), self.z.to_usize())
-            }
-        }
     };
 }
 
-/// Defines a full signed 3D coordinate type family. Optional second ident is the `Display` prefix.
 #[macro_export]
 macro_rules! define_signed_coordinate_3d_type_family {
     ($base_name:ident) => {
-        $crate::define_signed_coordinate_3d_type_family!(@impl $base_name, $base_name);
-    };
-    ($base_name:ident, $display:ident) => {
-        $crate::define_signed_coordinate_3d_type_family!(@impl $base_name, $display);
-    };
-    (@impl $base_name:ident, $display:ident) => {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
@@ -266,40 +199,32 @@ macro_rules! define_signed_coordinate_3d_type_family {
             pub fn new(x: T, y: T, z: T) -> Self {
                 Self { x, y, z }
             }
+
+            #[inline(always)]
+            pub fn to_isize(self) -> $base_name<isize> {
+                $base_name::new(self.x.to_isize(), self.y.to_isize(), self.z.to_isize())
+            }
         }
 
+        #[cfg(feature = "alloc")]
         impl<T: $crate::base_quantizable::QuantizableIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(
                     f,
-                    concat!(stringify!($display), "<{}, {}, {}>"),
+                    concat!(stringify!($base_name), "<{}, {}, {}>"),
                     self.x,
                     self.y,
                     self.z
                 )
             }
         }
-
-        impl<T: $crate::base_quantizable::QuantizableIntType> Into<$base_name<isize>> for $base_name<T> {
-            #[inline(always)]
-            fn into(self) -> $base_name<isize> {
-                $base_name::new(self.x.to_isize(), self.y.to_isize(), self.z.to_isize())
-            }
-        }
     };
 }
 
-/// Defines a full 3D dimension type family with fit checks. Optional third ident sets the `Display` prefix.
 #[macro_export]
 macro_rules! define_dimension_3d_type_family {
-    ($base_name:ident, $coordinate_type:ident) => {
-        $crate::define_dimension_3d_type_family!(@impl $base_name, $coordinate_type, $base_name);
-    };
-    ($base_name:ident, $coordinate_type:ident, $display:ident) => {
-        $crate::define_dimension_3d_type_family!(@impl $base_name, $coordinate_type, $display);
-    };
-    (@impl $base_name:ident, $coordinate_type:ident, $display:ident) => {
+    ($base_name:ident, $coordinate_type:ident) =>  {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]
@@ -337,46 +262,32 @@ macro_rules! define_dimension_3d_type_family {
             }
 
             #[inline(always)]
+            pub fn to_usize(self) -> $base_name<usize> {
+                $base_name::new_unchecked(
+                    self.x.get().to_usize(),
+                    self.y.get().to_usize(),
+                    self.z.get().to_usize(),
+                )
+            }
+
+            #[inline(always)]
             pub fn does_fit(&self, coordinate: &$coordinate_type<T>) -> bool {
                 coordinate.x < self.x.get()
                     && coordinate.y < self.y.get()
                     && coordinate.z < self.z.get()
             }
-
-            #[inline(always)]
-            pub fn verify_fit(&self, coordinate: &$coordinate_type<T>) -> Result<(), $crate::FeagiStructuresError> {
-                if self.does_fit(coordinate) {
-                    Ok(())
-                } else {
-                    Err($crate::FeagiStructuresError::Coordinate3DOutOfBounds {
-                        context: "coordinate does not fit in 3D bounds",
-                        coordinate: (*coordinate).into(),
-                        dimensions: (*self).into(),
-                    })
-                }
-            }
         }
 
+        #[cfg(feature = "alloc")]
         impl<T: $crate::base_quantizable::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(
                     f,
-                    concat!(stringify!($display), "<{}, {}, {}>"),
+                    concat!(stringify!($base_name), "<{}, {}, {}>"),
                     self.x,
                     self.y,
                     self.z
-                )
-            }
-        }
-
-        impl<T: $crate::base_quantizable::QuantizableUIntType> Into<$base_name<usize>> for $base_name<T> {
-            #[inline(always)]
-            fn into(self) -> $base_name<usize> {
-                $base_name::new_unchecked(
-                    self.x.get().to_usize(),
-                    self.y.get().to_usize(),
-                    self.z.get().to_usize(),
                 )
             }
         }

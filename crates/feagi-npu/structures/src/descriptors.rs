@@ -1,4 +1,4 @@
-use feagi_structures::define_quantizable_value_type_family;
+use feagi_structures::{define_quantizable_uint_type_family, define_quantizable_value_type_family};
 
 //region Fire Threshold
 define_quantizable_value_type_family!(FireThreshold);
@@ -31,7 +31,7 @@ define_quantizable_uint_type_family!(BurstCount);
 
 //region Neuron Index
 
-crate::define_quantizable_uint_type_family!(NeuronNPUIndex);
+define_quantizable_uint_type_family!(NeuronNPUIndex);
 
 //endregion
 

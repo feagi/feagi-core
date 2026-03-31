@@ -2093,7 +2093,7 @@ name = "feagi-npu-structures"
 version = "0.0.5"
 dependencies = [
  "ahash",
- "defmt",
+ "feagi-structures",
  "half",
  "paste",
  "rayon",

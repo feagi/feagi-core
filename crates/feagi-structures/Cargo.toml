@@ -60,14 +60,15 @@ alloc = [ # allows use of alloc (through core, not strictly std) and structures 
 defmt = ["dep:defmt"]
 ndarray = ["dep:ndarray"]
 rayon = ["dep:rayon", "std"]
-support_64bit_indexing_quantization = [] # Allow 64 bit quantization and indexing. This is pretty rare. Not compatible with WASM or Embedded
+support_64bit_indexing = [] # Allow 64 bit indexing. This is pretty rare. Not compatible with WASM or Embedded
+support_64bit_values = [] # Allow 64 bit values (IE: Membrane potentials). Extremely rare! Not compatible with WASM or Embedded
 
 [dependencies]
 serde = { workspace = true, optional = true, default-features = false, features = ["alloc", "derive"] }
 serde_json = { workspace = true, optional = true}
 half = { workspace = true, default-features = false, features = [] } # STD enables autoarch detection, which we may not want
 ahash = { workspace = true, default-features = false, features = []}
-uuid = { workspace = true } # TODO Special notes for embedded and WASM support, discuss later!
+uuid = { workspace = true, features = ["v7"] } # TODO Special notes for embedded and WASM support, discuss later!
 ndarray = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 defmt = {workspace = true, optional = true}

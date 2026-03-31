@@ -5,7 +5,7 @@
 #![doc = include_str!("../../docs/genomic.md")]
 
 
-mod descriptors; // DO NOT EXPOSE DIRECTLY! Macros here generate types we do not want used!
+//mod descriptors; // DO NOT EXPOSE DIRECTLY! Macros here generate types we do not want used!
 
 pub mod brain_regions; // Made public for external access
 pub mod cortical_area;

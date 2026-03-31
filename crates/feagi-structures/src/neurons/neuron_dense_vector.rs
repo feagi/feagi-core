@@ -1,17 +1,21 @@
+use core::marker::PhantomData;
 use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use crate::neurons::descriptors::{NeuronPotential, NumberNeuronsPerVoxel};
 use crate::neurons::FeagiNeuronError;
 use crate::neurons::traits::{SingleCorticalNeuronCollectionBase, SingleCorticalNeuronCollectionDense};
 
-pub struct NeuronDenseVector<PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
+pub struct NeuronDenseVector<PotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
+where
     PotentialQuant: QuantizableValueType,
     CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+    NeuronVoxelIndexQuant: QuantizableUIntType,
 {
     potentials: Vec<NeuronPotential<PotentialQuant>>,
     cortical_dimensions: NeuronVoxelDimensions<CoordQuant>,
-    cortical_density: NumberNeuronsPerVoxel
+    cortical_density: NumberNeuronsPerVoxel,
+    /// Holds the index quant type so `NeuronVoxelIndexQuant` is not an unused struct parameter.
+    _index_quant: PhantomData<NeuronVoxelIndexQuant>,
 }
 
 impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronDenseVector<PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
@@ -25,10 +29,11 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronDenseVector<Poten
         }
 
         let number_neurons: usize = dimensions.get_number_neurons(density);
-        Ok(Self{
-            potentials: vec![PotentialQuant::ZERO; number_neurons],
+        Ok(Self {
+            potentials: vec![NeuronPotential::ZERO; number_neurons],
             cortical_dimensions: dimensions,
-            cortical_density: density
+            cortical_density: density,
+            _index_quant: PhantomData,
         })
     }
 }
@@ -47,7 +52,9 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> SingleCorticalNeuronCol
     }
 
     fn neuron_index_max_limit(&self) -> NeuronVoxelIndexQuant {
-        &self.cortical_dimensions.get_number_neurons(self.cortical_density)
+        NeuronVoxelIndexQuant::from_usize(
+            self.cortical_dimensions.get_number_neurons(self.cortical_density),
+        )
     }
 }
 

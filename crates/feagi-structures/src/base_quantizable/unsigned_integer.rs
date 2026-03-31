@@ -448,7 +448,7 @@ impl QuantizableUIntType for u32 {
     }
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
+#[cfg(feature = "support_64bit_indexing")]
 impl QuantizableUIntType for u64 {
     const NUMBER_OF_BYTES: usize = size_of::<u64>();
     const ZERO: Self = 0;

@@ -1,15 +1,21 @@
 
+use core::ops::Range;
+use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
+use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
+use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
+use crate::FeagiNPUDataError;
+use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
 
-
-pub trait DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>: BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+pub trait DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>:
+BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType, // Using this here as we may be using coords or dimensions
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizableValueType,
 {
 
 }
@@ -22,13 +28,13 @@ pub trait DimensionalAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, Coo
 BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> +
 DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType, // Using this here as we may be using coords or dimensions
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizableValueType,
 // % synaptic attractivity
 {
     /// Creates a cortical area of given dimensions and neuron density,

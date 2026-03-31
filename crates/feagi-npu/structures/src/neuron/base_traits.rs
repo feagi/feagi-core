@@ -4,16 +4,20 @@
 // NOTE: I recommend parallel arrays for data storage instead an array of structs due to
 // how data may be retrieved
 
+use core::ops::Range;
+use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
+use crate::FeagiNPUDataError;
+use crate::descriptors::{NeuronNPUIndex, CorticalAreaIndex};
 
 pub trait BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType, // Using this here as we may be using coords or dimensions
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizableValueType,
 {
     // NOTE: Due to varying internal implementations, memory fragmentation may occur in various
     // ways, ergo be cautious of calculating internal state. Instead, use the below helper functions.
@@ -22,18 +26,18 @@ where
 
     /// Gets the maximum possible neuron index achievable by current quantization (or in the case
     /// of static implementations, the size of the neuron array).
-    fn get_max_possible_neuron_index(&self) -> NeuronIndexQuant;
+    fn get_max_possible_neuron_index(&self) -> NeuronNPUIndex<NeuronIndexQuant>;
 
     /// Returns the count of valid neurons in the structure. NOT THE SAME AS TOTAL NUMBER OF
     /// NEURONS STORED!
-    fn get_total_number_of_valid_neurons(&self) -> &NeuronIndexQuant;
+    fn get_total_number_of_valid_neurons(&self) -> &NeuronNPUIndex<NeuronIndexQuant>;
 
     /// Returns the count of invalid neurons in the structure. NOT THE SAME AS TOTAL FREE CAPACITY!
-    fn get_total_number_of_invalid_neurons(&self) -> &NeuronIndexQuant;
+    fn get_total_number_of_invalid_neurons(&self) -> &NeuronNPUIndex<NeuronIndexQuant>;
 
     /// Gets the maximum possible cortical area index achievable by current quantization (or in the
     /// case of static implementations, the size of the neuron array).
-    fn get_max_possible_cortical_areas(&self) -> CorticalIndexQuant;
+    fn get_max_possible_cortical_areas(&self) -> CorticalAreaIndex<CorticalIndexQuant>;
 
 
 
@@ -44,27 +48,28 @@ where
 }
 
 #[cfg(feature = "alloc")]
-pub trait BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>: InterneuronDataTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+pub trait BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>:
+BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType, // Using this here as we may be using coords or dimensions
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizableValueType,
 {
     /// Frees unused neuron vector capacity and invalid neurons (assuming they were sorted to the back first!)
     /// albeit allowing a buffer of free space. Returns the number of neurons that were freed.
     /// Returns 0 if no neurons were freed (nothing to free or spare capacity is at or less than
     /// what was requested). Note that invalid neurons not sorted to the back will not be freed.
-    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronIndexQuant) -> NeuronIndexQuant;
+    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronNPUIndex<NeuronIndexQuant>) -> NeuronNPUIndex<NeuronIndexQuant>;
 
 
     /// Deletes a cortical area by invalidating all of its neurons. Returns the neuron indexes
     /// of the disabled neurons
     /// WARNING: BE SURE TO REMOVE ASSOCIATED SYNAPSE MAPPINGS!
-    fn delete_cortical_area(&mut self, cortical_index: CorticalIndexQuant)
-                            ->Result<Range<NeuronIndexQuant>, FeagiNPUDataError>;
+    fn delete_cortical_area(&mut self, cortical_index: CorticalAreaIndex<CorticalIndexQuant>)
+                            ->Result<Range<CorticalAreaIndex<CorticalIndexQuant>>, FeagiNPUDataError>;
 
 }

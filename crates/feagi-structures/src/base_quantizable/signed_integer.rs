@@ -466,7 +466,7 @@ impl QuantizableIntType for i32 {
     }
 }
 
-#[cfg(feature = "support_64bit_indexing_quantization")]
+#[cfg(feature = "support_64bit_indexing")]
 impl QuantizableIntType for i64 {
     const NUMBER_OF_BYTES: usize = size_of::<i64>();
     const ZERO: Self = 0;

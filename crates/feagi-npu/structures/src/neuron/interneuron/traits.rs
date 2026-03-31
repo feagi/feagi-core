@@ -1,15 +1,21 @@
 
 // TODO different firing / refractory mode support eventually
 
-pub trait InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>: BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
+use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
+use crate::descriptors::{FireThreshold, MembranePotential};
+use crate::neuron::base_traits::BaseNeuronStaticStorageTrait;
+
+pub trait InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>:
+BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType, // Using this here as we may be using coords or dimensions
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizableValueType,
 {
     // TODO are these defaults fine?
     // Neuron Defaults

@@ -1,6 +1,6 @@
 use ahash::AHashMap;
-use crate::base_quantizable::unsigned_integer::QuantizableUIntType;
-use crate::base_quantizable::value::QuantizableValueType;
+use crate::base_quantizable::QuantizableUIntType;
+use crate::base_quantizable::QuantizableValueType;
 use crate::genomic::cortical_area::CorticalID;
 use crate::neuron_voxels::dense_potential::neuron_voxel_dense_vector::NeuronVoxelDenseVector;
 use crate::neuron_voxels::descriptors::SingleCorticalNeuronVoxelCollectionType;

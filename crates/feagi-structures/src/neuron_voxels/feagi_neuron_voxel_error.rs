@@ -1,9 +1,9 @@
-use crate::base_quantizable::spatial::{Dimension3DType, UnsignedCoordinate3DType};
 use crate::genomic::cortical_area::CorticalID;
+use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions};
 
 pub enum FeagiNeuronVoxelError {
     NeuronIndexOutOfRange{context: &'static str, given_neuron_index: usize, range: usize},
-    NeuronCoordinateOutOfRange{context: &'static str,given_neuron_coordinate: UnsignedCoordinate3DType<u32>, range: Dimension3DType<u32>},
+    NeuronCoordinateOutOfRange{context: &'static str,given_neuron_coordinate: NeuronVoxelCoordinate<u32>, range: NeuronVoxelDimensions<u32>},
     IncompatibleNeuronDataFormat{context: &'static str},
     NoCorticalIDInNeuronCollection{context: &'static str, cortical_id: CorticalID},
     BadParameters{context: &'static str,},
@@ -52,5 +52,6 @@ impl core::fmt::Display for FeagiNeuronVoxelError {
     }
 }
 
-#[cfg(all(feature = "alloc", feature = "std"))]
-impl std::error::Error for FeagiNeuronVoxelError {}
+// TODO
+//#[cfg(all(feature = "alloc", feature = "std"))]
+//impl std::error::Error for FeagiNeuronVoxelError {}

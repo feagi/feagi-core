@@ -2,7 +2,9 @@
 // TODO turn this stuff into a macro, I dont want to type this 500 times
 
 /// Stores various neuron boolean flags under a single byte (u8)
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
 pub struct NeuronFlag(u8);
 
 impl NeuronFlag {
