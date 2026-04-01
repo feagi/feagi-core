@@ -3,7 +3,7 @@
 
 use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
-use crate::descriptors::{FireThreshold, MembranePotential};
+use crate::descriptors::{FireThreshold, FireThresholdLimit, MembranePotential};
 use crate::neuron::base_traits::BaseNeuronStaticStorageTrait;
 
 pub trait InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>:

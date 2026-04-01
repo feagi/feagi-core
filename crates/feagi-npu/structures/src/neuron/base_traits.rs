@@ -41,8 +41,8 @@ where
 
 
 
-    /// Brings all invalid neurons to the back of the internal arrays and returns the number of
-    /// them. Note that depending on the implementation, neuron order may not be preserved
+    // /// Brings all invalid neurons to the back of the internal arrays and returns the number of
+    // /// them. Note that depending on the implementation, neuron order may not be preserved
     //fn sort_invalid_neurons_to_the_back(&self) -> NeuronIndexQuant; // TODO we need to be more careful here, bind this with synapses
 
 }
