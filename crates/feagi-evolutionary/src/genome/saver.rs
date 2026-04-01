@@ -21,7 +21,7 @@ use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalID};
 use feagi_structures::genomic::cortical_area::{
     CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
 };
-use feagi_structures::genomic::BrainRegion;
+use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
 
 /// Genome saver
 pub struct GenomeSaver;
@@ -149,7 +149,7 @@ impl GenomeSaver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_structures::genomic::RegionType;
+    use feagi_structures::genomic::brain_regions::region_type::RegionType;
 
     #[test]
     fn test_save_minimal_genome() {

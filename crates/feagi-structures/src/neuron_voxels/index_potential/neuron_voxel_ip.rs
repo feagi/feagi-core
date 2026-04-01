@@ -16,7 +16,7 @@ impl<VoxelPotentialQuant, NeuronVoxelIndexQuant>  NeuronVoxelIP<VoxelPotentialQu
     VoxelPotentialQuant: QuantizableValueType,
     NeuronVoxelIndexQuant: QuantizableUIntType
 {
-    pub fn new(i: NeuronVoxelIndexQuant, potential: VoxelPotentialQuant) -> Self {
+    pub fn new(i: NeuronVoxelIndexQuant, potential: NeuronVoxelPotential<VoxelPotentialQuant>) -> Self {
         Self {
             index: i,
             potential,

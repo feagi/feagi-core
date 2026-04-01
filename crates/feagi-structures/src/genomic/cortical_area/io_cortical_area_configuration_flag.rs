@@ -1,6 +1,6 @@
 use crate::genomic::cortical_area::descriptors::{CorticalSubUnitIndex, CorticalUnitIndex};
 use crate::genomic::cortical_area::CorticalID;
-use crate::FeagiDataError;
+use crate::genomic::FeagiStructuresGenomicError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -33,7 +33,7 @@ pub enum IOCorticalAreaConfigurationFlag {
 impl IOCorticalAreaConfigurationFlag {
     pub const fn try_from_data_type_configuration_flag(
         value: IOCorticalAreaConfigurationFlagBitmask,
-    ) -> Result<Self, FeagiDataError> {
+    ) -> Result<Self, FeagiStructuresGenomicError> {
         let variant = value & 0xFF; // Bits 0-7
         let frame_handling = (value >> bit_indexes::FRAME_CHANGE_HANDLING) & 0x01;
         let positioning = (value >> bit_indexes::PERCENTAGE_NEURON_POSITIONING) & 0x01;
@@ -41,13 +41,21 @@ impl IOCorticalAreaConfigurationFlag {
         let frame_handling_enum = match frame_handling {
             0 => FrameChangeHandling::Absolute,
             1 => FrameChangeHandling::Incremental,
-            _ => return Err(FeagiDataError::ConstError("Invalid frame handling value")),
+            _ => {
+                return Err(FeagiStructuresGenomicError::CorticalAreaError {
+                    context: "invalid frame handling bit in IO cortical configuration flag",
+                });
+            }
         };
 
         let positioning_enum = match positioning {
             0 => PercentageNeuronPositioning::Linear,
             1 => PercentageNeuronPositioning::Fractional,
-            _ => return Err(FeagiDataError::ConstError("Invalid positioning value")),
+            _ => {
+                return Err(FeagiStructuresGenomicError::CorticalAreaError {
+                    context: "invalid neuron positioning bit in IO cortical configuration flag",
+                });
+            }
         };
 
         match variant {
@@ -87,9 +95,9 @@ impl IOCorticalAreaConfigurationFlag {
             9 => {
                 // CartesianPlane doesn't use positioning, but we'll accept it if set to 0
                 if positioning != 0 {
-                    return Err(FeagiDataError::ConstError(
-                        "CartesianPlane variant does not support positioning parameter",
-                    ));
+                    return Err(FeagiStructuresGenomicError::CorticalAreaError {
+                        context: "IO CartesianPlane configuration does not allow positioning",
+                    });
                 }
                 Ok(IOCorticalAreaConfigurationFlag::CartesianPlane(
                     frame_handling_enum,
@@ -98,13 +106,15 @@ impl IOCorticalAreaConfigurationFlag {
             10 => {
                 // Misc doesn't use positioning, but we'll accept it if set to 0
                 if positioning != 0 {
-                    return Err(FeagiDataError::ConstError(
-                        "Misc variant does not support positioning parameter",
-                    ));
+                    return Err(FeagiStructuresGenomicError::CorticalAreaError {
+                        context: "IO Misc configuration does not allow positioning",
+                    });
                 }
                 Ok(IOCorticalAreaConfigurationFlag::Misc(frame_handling_enum))
             }
-            _ => Err(FeagiDataError::ConstError("Invalid variant type!")),
+            _ => Err(FeagiStructuresGenomicError::CorticalAreaError {
+                context: "invalid IO cortical configuration variant",
+            }),
         }
     }
 
@@ -157,8 +167,8 @@ impl IOCorticalAreaConfigurationFlag {
             cortical_unit_identifier[2],
             data_type_configuration_bytes[0],
             data_type_configuration_bytes[1],
-            cortical_sub_unit_index.get(),
-            cortical_unit_index.get(),
+            cortical_sub_unit_index.0,
+            cortical_unit_index.0,
         ];
 
         CorticalID {
@@ -180,7 +190,7 @@ impl From<IOCorticalAreaConfigurationFlag> for IOCorticalAreaConfigurationFlagBi
 }
 
 impl TryFrom<IOCorticalAreaConfigurationFlagBitmask> for IOCorticalAreaConfigurationFlag {
-    type Error = FeagiDataError;
+    type Error = FeagiStructuresGenomicError;
 
     fn try_from(value: IOCorticalAreaConfigurationFlagBitmask) -> Result<Self, Self::Error> {
         IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(value)
@@ -234,17 +244,17 @@ pub enum PercentageNeuronPositioning {
 impl PercentageNeuronPositioning {
     pub fn try_from_serde_map(
         map: &serde_json::Map<String, serde_json::Value>,
-    ) -> Result<PercentageNeuronPositioning, FeagiDataError> {
+    ) -> Result<PercentageNeuronPositioning, FeagiStructuresGenomicError> {
         let val = map.get("percentage_neuron_positioning").ok_or(
-            FeagiDataError::DeserializationError(
-                "Unable to extreact percentage_neuron_positioning!".to_string(),
-            ),
+            FeagiStructuresGenomicError::CorticalAreaError {
+                context: "missing or invalid percentage_neuron_positioning in serde map",
+            },
         )?;
         let output: PercentageNeuronPositioning =
-            serde_json::from_value(val.clone()).map_err(|_err| {
-                FeagiDataError::DeserializationError(
-                    "Unable to extreact percentage_neuron_positioning!".to_string(),
-                )
+            serde_json::from_value(val.clone()).map_err(|_| {
+                FeagiStructuresGenomicError::CorticalAreaError {
+                    context: "missing or invalid percentage_neuron_positioning in serde map",
+                }
             })?;
         Ok(output)
     }
@@ -269,16 +279,16 @@ pub enum FrameChangeHandling {
 impl FrameChangeHandling {
     pub fn try_from_serde_map(
         map: &serde_json::Map<String, serde_json::Value>,
-    ) -> Result<FrameChangeHandling, FeagiDataError> {
+    ) -> Result<FrameChangeHandling, FeagiStructuresGenomicError> {
         let val = map
             .get("frame_change_handling")
-            .ok_or(FeagiDataError::DeserializationError(
-                "Unable to extreact frame_change_handling!".to_string(),
-            ))?;
-        let output: FrameChangeHandling = serde_json::from_value(val.clone()).map_err(|_err| {
-            FeagiDataError::DeserializationError(
-                "Unable to extreact frame_change_handling!".to_string(),
-            )
+            .ok_or(FeagiStructuresGenomicError::CorticalAreaError {
+                context: "missing or invalid frame_change_handling in serde map",
+            })?;
+        let output: FrameChangeHandling = serde_json::from_value(val.clone()).map_err(|_| {
+            FeagiStructuresGenomicError::CorticalAreaError {
+                context: "missing or invalid frame_change_handling in serde map",
+            }
         })?;
         Ok(output)
     }

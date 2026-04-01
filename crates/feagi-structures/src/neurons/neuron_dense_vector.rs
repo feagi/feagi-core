@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use crate::neurons::descriptors::{NeuronPotential, NumberNeuronsPerVoxel};
-use crate::neurons::FeagiNeuronError;
+use crate::neurons::FeagiStructuresNeuronError;
 use crate::neurons::traits::{SingleCorticalNeuronCollectionBase, SingleCorticalNeuronCollectionDense};
 
 pub struct NeuronDenseVector<PotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
@@ -23,9 +23,9 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronDenseVector<Poten
     CoordQuant: QuantizableUIntType,
     NeuronVoxelIndexQuant: QuantizableUIntType
 {
-    pub fn new(dimensions: NeuronVoxelDimensions<CoordQuant>, density: NumberNeuronsPerVoxel) -> Result<Self, FeagiNeuronError> {
+    pub fn new(dimensions: NeuronVoxelDimensions<CoordQuant>, density: NumberNeuronsPerVoxel) -> Result<Self, FeagiStructuresNeuronError> {
         if density == 0 {
-            return Err(FeagiNeuronError::BadParameters {context: "Neuron density cannot be zero!"})
+            return Err(FeagiStructuresNeuronError::BadParameters {context: "Neuron density cannot be zero!"})
         }
 
         let number_neurons: usize = dimensions.get_number_neurons(density);

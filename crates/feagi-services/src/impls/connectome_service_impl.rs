@@ -15,7 +15,7 @@ use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::ConnectomeManager;
 use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
 use feagi_npu_burst_engine::BurstLoopRunner;
-use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+use feagi_structures::genomic::brain_regions::RegionID;
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
@@ -32,6 +32,8 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{debug, info, trace, warn};
+use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
+use feagi_structures::genomic::brain_regions::region_type::RegionType;
 
 fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
     let bytes = cortical_id.as_bytes();
@@ -2397,6 +2399,8 @@ mod tests {
     };
     use crate::types::ServiceResult;
     use std::collections::HashMap;
+    use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
+    use feagi_structures::genomic::brain_regions::region_type::RegionType;
 
     #[test]
     fn empty_mapping_deletes_destination_key_and_prunes_container() -> ServiceResult<()> {
@@ -2979,7 +2983,7 @@ mod tests {
     async fn delete_cortical_area_persists_to_runtime_genome() -> ServiceResult<()> {
         use super::ConnectomeServiceImpl;
         use crate::traits::ConnectomeService;
-        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::brain_regions::{RegionID};
         use feagi_structures::genomic::cortical_area::{
             CoreCorticalType, CorticalArea, CorticalAreaDimensions,
         };
@@ -3079,7 +3083,7 @@ mod tests {
         use super::ConnectomeServiceImpl;
         use crate::traits::ConnectomeService;
         use feagi_brain_development::ConnectomeManager;
-        use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+        use feagi_structures::genomic::brain_regions::{RegionID};
         use feagi_structures::genomic::cortical_area::{
             CoreCorticalType, CorticalArea, CorticalAreaDimensions,
         };

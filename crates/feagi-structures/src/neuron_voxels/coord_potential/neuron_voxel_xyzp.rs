@@ -31,7 +31,7 @@ impl<VoxelPotentialQuant, CoordQuant> NeuronVoxel<VoxelPotentialQuant> for Neuro
     VoxelPotentialQuant: QuantizableValueType,
     CoordQuant: QuantizableUIntType
 {
-    const NUMBER_OF_BYTES: usize = NeuronVoxelCoordinate::NUMBER_OF_BYTES + VoxelPotentialQuant::NUMBER_OF_BYTES;
+    const NUMBER_OF_BYTES: usize = NeuronVoxelCoordinate::<CoordQuant>::NUMBER_OF_BYTES + VoxelPotentialQuant::NUMBER_OF_BYTES;
 
     fn get_voxel_potential(&self) -> NeuronVoxelPotential<VoxelPotentialQuant> {
         self.potential

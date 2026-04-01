@@ -41,7 +41,7 @@ use xxhash_rust::xxh64::Xxh64;
 /// Merged region `inputs` / `outputs` (base64 cortical IDs) after `recompute_brain_region_io_registry`.
 pub type BrainRegionIoRegistry = HashMap<String, (Vec<String>, Vec<String>)>;
 
-use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
+use crate::models::{BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use crate::types::{BduError, BduResult};
 use feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY;
 use feagi_npu_neural::types::NeuronId;
@@ -53,6 +53,7 @@ use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
 // State manager access for fatigue calculation
 // Note: feagi-state-manager is always available when std is enabled (it's a default feature)
 use feagi_state_manager::StateManager;
+use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
 
 const DATA_HASH_SEED: u64 = 0;
 // JSON number precision (Godot) is limited to 53 bits; mask to keep hashes stable across transports.
@@ -6524,7 +6525,7 @@ mod tests {
         let root = BrainRegion::new(
             region_id,
             "Root".to_string(),
-            feagi_structures::genomic::brain_regions::RegionType::Undefined,
+            feagi_structures::genomic::brain_regions::region_type::RegionType::Undefined,
         )
         .unwrap();
 

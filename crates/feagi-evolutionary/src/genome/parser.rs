@@ -52,7 +52,8 @@ use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions as Dimensions,
 };
 use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
-use feagi_structures::genomic::{BrainRegion, RegionType};
+use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
+use feagi_structures::genomic::brain_regions::region_type::RegionType;
 
 /// Parsed genome data ready for ConnectomeManager
 #[derive(Debug, Clone)]

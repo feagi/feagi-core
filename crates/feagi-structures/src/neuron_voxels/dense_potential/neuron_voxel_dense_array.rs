@@ -76,16 +76,22 @@ where
         self.potentials.as_mut_slice()
     }
 
-    fn iter_nonzero_index(&self) -> impl Iterator<Item=(&NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)> {
-        todo!()
+    fn iter_nonzero_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)> {
+        self.potentials
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| **p != NeuronVoxelPotential::ZERO)
+            .map(|(i, p)| (NeuronVoxelIndexQuant::from_usize(i), *p))
     }
 
-    fn iter_nonzero_coordinate(&self) -> impl Iterator<Item=(&NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)> {
-        todo!()
+    fn iter_nonzero_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)> {
+        let dims = &self.cortical_dimensions;
+        self.iter_nonzero_index()
+            .map(move |(idx, p)| (dims.linear_index_to_coordinate(idx), p))
     }
 
     fn zero_all_neuron_voxel_potentials(&mut self) {
-        todo!()
+        self.potentials.fill(NeuronVoxelPotential::ZERO);
     }
 
     #[cfg(feature = "alloc")]

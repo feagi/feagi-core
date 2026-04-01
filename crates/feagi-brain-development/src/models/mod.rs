@@ -40,4 +40,5 @@ pub use cortical_area::CorticalAreaExt;
 
 // BrainRegion and RegionType now come from feagi_data_structures
 pub use brain_region_hierarchy::BrainRegionHierarchy;
-pub use feagi_structures::genomic::{BrainRegion, RegionType};
+pub use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
+pub use feagi_structures::genomic::brain_regions::region_type::RegionType;

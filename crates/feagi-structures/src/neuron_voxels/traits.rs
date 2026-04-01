@@ -3,7 +3,7 @@
 use crate::genomic::cortical_area::CorticalID;
 use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
 use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
-use crate::neuron_voxels::FeagiNeuronVoxelError;
+use crate::neuron_voxels::FeagiStructuresNeuronVoxelError;
 
 #[cfg(feature = "alloc")]
 use ahash::AHashMap;
@@ -92,7 +92,7 @@ SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronV
     /// Returns the number of neuron voxels stored in the structure
     fn get_number_neuron_voxel_contained_count(&self) -> NeuronVoxelIndexQuant;
 
-    fn get_neuron_voxel_count_allocated_capacity(&self) -> usize;
+    fn get_neuron_voxel_count_allocated_capacity(&self) -> NeuronVoxelIndexQuant;
 
     fn reserve(&mut self, number_of_neuron_voxels_to_reserve_for: NeuronVoxelIndexQuant);
 
@@ -115,18 +115,18 @@ SingleCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, Neuron
     /// Clears all stored neurons (without deallocating)
     fn clear_all_neurons(&mut self);
 
-    fn iter_index(&self) -> impl Iterator<Item=(&NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)>;
+    fn iter_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)>;
 
-    fn iter_coordinate(&self) -> impl Iterator<Item=(&NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)>;
+    fn iter_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)>;
 
     /// Sort by increasing index / xyz coordinate
     fn sort(&mut self);
 
     #[cfg(feature = "rayon")]
-    fn iter_index_par(&self) -> impl Iterator<Item=(&NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)>;
+    fn iter_index_par(&self) -> impl Iterator<Item=(NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)>;
 
     #[cfg(feature = "rayon")]
-    fn iter_coordinate_par(&self) -> impl Iterator<Item=(&NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)>;
+    fn iter_coordinate_par(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)>;
 }
 
 pub trait SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>:
@@ -140,12 +140,12 @@ SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronV
     fn get_all_neuron_voxel_potentials_mut(&mut self) -> &mut [NeuronVoxelPotential<VoxelPotentialQuant>];
 
     /// Iterate over non-zero potential values by neuron index
-    fn iter_nonzero_index(&self) -> impl Iterator<Item=(&NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)>;
+    fn iter_nonzero_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)>;
 
     /// Iterate over non-zero potential values by neuron coordinate
-    fn iter_nonzero_coordinate(&self) -> impl Iterator<Item=(&NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)>;
+    fn iter_nonzero_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)>;
 
-    // TODO par iterators?
+    // TODO par iterators for nonzero potentials?
 
     fn zero_all_neuron_voxel_potentials(&mut self);
 
@@ -163,17 +163,17 @@ pub trait MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant
     NeuronVoxelIndexQuant: QuantizableUIntType,
     CorticalAreaIndexQuant: QuantizableUIntType
 {
-    fn get_contained_cortical_collection_type(&self, cortical_id: &CorticalID) -> Result<&SingleCorticalNeuronVoxelCollectionType, FeagiNeuronVoxelError>;
+    fn get_contained_cortical_collection_type(&self, cortical_id: &CorticalID) -> Result<&SingleCorticalNeuronVoxelCollectionType, FeagiStructuresNeuronVoxelError>;
 
     fn get_contained_cortical_area_ids(&self) -> &[CorticalID];
 
     /// Only gets the base implementation, you probably should NOT use this as it doesn't allow
     /// access to more specialized performant functions
     fn get_base_collection_implementation(&self, cortical_id: &CorticalID) ->
-                                                                           Result<&impl SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError>;
+                                                                           Result<&impl SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiStructuresNeuronVoxelError>;
 
     fn get_base_collection_implementation_mut(&mut self, cortical_id: &CorticalID) ->
-                                                                               Result<&mut impl SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError>;
+                                                                               Result<&mut impl SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiStructuresNeuronVoxelError>;
 
 }
 
@@ -184,9 +184,9 @@ MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVo
     NeuronVoxelIndexQuant: QuantizableUIntType,
     CorticalAreaIndexQuant: QuantizableUIntType
 {
-    fn get_dense_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError>;
+    fn get_dense_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiStructuresNeuronVoxelError>;
 
-    fn get_dense_collection_implementation_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut impl SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError>;
+    fn get_dense_collection_implementation_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut impl SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiStructuresNeuronVoxelError>;
 }
 
 #[cfg(feature = "alloc")]
@@ -203,7 +203,7 @@ MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVo
 
     // NOTE: Adding must be handled by specific implementations
 
-    fn remove_by_cortical_id(&mut self, cortical_id: &CorticalID) -> Result<(), FeagiNeuronVoxelError>;
+    fn remove_by_cortical_id(&mut self, cortical_id: &CorticalID) -> Result<(), FeagiStructuresNeuronVoxelError>;
 
 }
 

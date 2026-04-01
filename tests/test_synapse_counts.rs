@@ -11,7 +11,7 @@ use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
 use feagi_npu_runtime::StdRuntime;
 use feagi_services::impls::ConnectomeServiceImpl;
 use feagi_services::traits::ConnectomeService;
-use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+use feagi_structures::genomic::brain_regions::RegionID;
 use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
     IOCorticalAreaConfigurationFlag,
@@ -19,6 +19,8 @@ use feagi_structures::genomic::cortical_area::{
 use parking_lot::RwLock;
 use serde_json::json;
 use std::sync::Arc;
+use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
+use feagi_structures::genomic::brain_regions::region_type::RegionType;
 
 fn create_test_manager() -> (ConnectomeManager, Arc<TracingMutex<DynamicNPU>>) {
     let runtime = StdRuntime;

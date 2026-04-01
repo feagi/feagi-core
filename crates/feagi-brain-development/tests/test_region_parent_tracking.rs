@@ -10,7 +10,9 @@
 //! - Regression test for "Parent region does not exist" bug
 
 use feagi_brain_development::models::brain_region_hierarchy::BrainRegionHierarchy;
-use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+use feagi_structures::genomic::brain_regions::RegionID;
+use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
+use feagi_structures::genomic::brain_regions::region_type::RegionType;
 
 /// Helper to create a root region with UUID
 fn create_root_region() -> BrainRegion {

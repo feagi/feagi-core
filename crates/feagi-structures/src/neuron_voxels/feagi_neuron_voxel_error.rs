@@ -1,7 +1,7 @@
 use crate::genomic::cortical_area::CorticalID;
 use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions};
 
-pub enum FeagiNeuronVoxelError {
+pub enum FeagiStructuresNeuronVoxelError {
     NeuronIndexOutOfRange{context: &'static str, given_neuron_index: usize, range: usize},
     NeuronCoordinateOutOfRange{context: &'static str,given_neuron_coordinate: NeuronVoxelCoordinate<u32>, range: NeuronVoxelDimensions<u32>},
     IncompatibleNeuronDataFormat{context: &'static str},
@@ -11,7 +11,7 @@ pub enum FeagiNeuronVoxelError {
 }
 
 #[cfg(feature = "alloc")]
-impl core::fmt::Display for FeagiNeuronVoxelError {
+impl core::fmt::Display for FeagiStructuresNeuronVoxelError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::NeuronIndexOutOfRange {

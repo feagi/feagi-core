@@ -184,16 +184,16 @@ documentation = "https://docs.rs/feagi"
 
 [workspace.dependencies]
 # Core dependencies (shared across crates)
-serde = { version = "1.0.228" }
-serde_json = "1.0.149"
+serde = { version = "1.0.228", default-features = false }
+serde_json = { version = "1.0.149" }
 thiserror = "1.0.50" # TODO we will be phasing this out entirely, so don't bother updating!
-rayon = "1.11.0"
-ndarray = { version = "0.17.2" }
-ahash = { version = "0.8.12"}  # Fast non-cryptographic hashing (no runtime-rng for WASM)
+rayon = { version = "1.11.0", default-features = false }
+ndarray = { version = "0.17.2", default-features = false }
+ahash = { version = "0.8.12", default-features = false}  # Fast non-cryptographic hashing (no runtime-rng for WASM)
 tracing = "0.1.44"  # Structured logging and diagnostics
 bytemuck = { version = "1.14" } # TODO I feel there was a reason this is on 1.14?
 uuid = { version = "1.23"}
-half = {version = "2.7.1"}
+half = {version = "2.7.1", default-features = false}
 defmt = {version = "1.0.1"} # Only used in embedded contexts
 paste = "1.0.15" # only used in development
 

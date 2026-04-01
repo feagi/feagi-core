@@ -26,6 +26,10 @@ use feagi_npu_neural::types::{Precision, QuantizationSpec};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::{debug, error, info, trace, warn};
+// Build brain region structure following Python's normalize_brain_region_membership()
+use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
+// Build brain region structure following Python's normalize_brain_region_membership()
+use feagi_structures::genomic::brain_regions::region_type::RegionType;
 
 /// Label for the CUSTOM/MEMORY subregion when the genome JSON has no `brain_regions` and
 /// neuroembryogenesis must synthesize one. Prefer `metadata.genome_title` so Hub replace/upload
@@ -569,7 +573,7 @@ impl Neuroembryogenesis {
                   ipu_areas.len(), opu_areas.len(), core_areas.len(), custom_memory_areas.len());
 
             // Build brain region structure following Python's normalize_brain_region_membership()
-            use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+            use feagi_structures::genomic::brain_regions::{RegionID};
             let mut regions_map = std::collections::HashMap::new();
 
             // Step 1: Create root region with only IPU/OPU/CORE areas

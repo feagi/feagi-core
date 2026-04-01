@@ -7,7 +7,7 @@ use feagi_structures::genomic::cortical_area::descriptors::*;
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::*;
 use feagi_structures::genomic::cortical_area::*;
 use feagi_structures::genomic::*;
-use feagi_structures::FeagiDataError;
+use feagi_structures::FeagiStructuresError;
 
 // TODO tests for Brain_Regions
 
@@ -765,11 +765,10 @@ mod test_cortical_area {
             fn test_cortical_channel_count_zero_error() {
                 let result = CorticalChannelCount::new(0);
                 assert!(result.is_err());
-                if let Err(FeagiDataError::BadParameters(msg)) = result {
-                    assert!(msg.contains("cannot be zero"));
-                } else {
-                    panic!("Expected BadParameters error");
-                }
+                assert!(matches!(
+                    result,
+                    Err(FeagiStructuresError::InvalidValue { .. })
+                ));
             }
 
             #[test]
@@ -782,11 +781,10 @@ mod test_cortical_area {
             fn test_neuron_depth_zero_error() {
                 let result = NeuronDepth::new(0);
                 assert!(result.is_err());
-                if let Err(FeagiDataError::BadParameters(msg)) = result {
-                    assert!(msg.contains("cannot be zero"));
-                } else {
-                    panic!("Expected BadParameters error");
-                }
+                assert!(matches!(
+                    result,
+                    Err(FeagiStructuresError::InvalidValue { .. })
+                ));
             }
 
             #[test]

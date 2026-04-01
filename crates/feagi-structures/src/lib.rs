@@ -18,6 +18,7 @@ pub mod neurons;
 
 pub use feagi_structures_error::FeagiStructuresError;
 pub use feagi_json::FeagiJSON;
+pub use genomic::FeagiStructuresGenomicError;
 
 
 // Re-export async macros for convenience

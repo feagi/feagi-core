@@ -6,7 +6,7 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
 };
 use feagi_structures::genomic::SensoryCorticalUnit;
 use feagi_structures::neuron_voxels::coord_potential::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPSparseVectors,
+    NeuronVoxelXYZP,
 };
 use std::ops::RangeInclusive;
 

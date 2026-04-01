@@ -11,7 +11,7 @@ Moved from feagi-core/crates/feagi-bdu/src/models/cortical_area.rs
 
 use super::{CorticalAreaDimensions, CorticalAreaType, CorticalID};
 use crate::genomic::descriptors::GenomeCoordinate3D;
-use crate::FeagiDataError;
+use crate::genomic::FeagiStructuresGenomicError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -19,7 +19,8 @@ use std::collections::HashMap;
 ///
 /// Pure data structure containing static genome metadata.
 /// Runtime operations and transformations are implemented in feagi-bdu.
-///
+
+// TODO This seems completely unusued. Disabling this for now, we will rewrite it later
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorticalArea {
     /// Unique typed cortical identifier
@@ -69,12 +70,12 @@ impl CorticalArea {
         dimensions: CorticalAreaDimensions,
         position: GenomeCoordinate3D,
         cortical_type: CorticalAreaType,
-    ) -> Result<Self, FeagiDataError> {
+    ) -> Result<Self, FeagiStructuresGenomicError> {
         // Validate name
         if name.trim().is_empty() {
-            return Err(FeagiDataError::BadParameters(
-                "name cannot be empty".to_string(),
-            ));
+            return Err(FeagiStructuresGenomicError::CorticalAreaError {
+                context: "cortical area name cannot be empty",
+            });
         }
 
         // Note: CorticalID validation happens in CorticalID constructors

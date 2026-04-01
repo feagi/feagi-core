@@ -48,7 +48,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
 
 #[macro_export]
 macro_rules! define_signed_coordinate_2d_type_family {
-    (@impl $base_name:ident) => {
+    ($base_name:ident) => {
         #[derive(
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize
         )]

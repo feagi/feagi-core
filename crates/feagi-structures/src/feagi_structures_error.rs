@@ -1,47 +1,17 @@
-use crate::base_quantizable::spatial::{Dimension2DType, Dimension3DType, UnsignedCoordinate2DType, UnsignedCoordinate3DType};
+// Top level error enum for this crate, holds errors from individual models
+
+use crate::FeagiStructuresGenomicError;
+use crate::neuron_voxels::FeagiStructuresNeuronVoxelError;
+use crate::neurons::FeagiStructuresNeuronError;
 
 pub enum FeagiStructuresError {
-    ValueCannotBeZero{context: &'static str},
-    ValuesMustBeEqual{context: &'static str},
-    Coordinate2DOutOfBounds{context: &'static str, coordinate: UnsignedCoordinate2DType<usize>, dimensions: Dimension2DType<usize>},
-    Coordinate3DOutOfBounds{context: &'static str, coordinate: UnsignedCoordinate3DType<usize>, dimensions: Dimension3DType<usize>},
-    JSONError{context: &'static str},
+    NeuronVoxelError { neuron_voxel_error: FeagiStructuresNeuronVoxelError },
+    NeuronError { neuron_error: FeagiStructuresNeuronError },
+    GenomicError { genomic_error: FeagiStructuresGenomicError},
+    JSONError { context: &'static str},
+    InvalidValue {context: &'static str}
 }
 
-#[cfg(feature = "alloc")]
-impl core::fmt::Display for FeagiStructuresError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::ValueCannotBeZero { context } => {
-                write!(f, "value cannot be zero: {context}")
-            }
-            Self::ValuesMustBeEqual { context } => {
-                write!(f, "values must be equal: {context}")
-            }
-            Self::Coordinate2DOutOfBounds {
-                context,
-                coordinate,
-                dimensions,
-            } => {
-                write!(
-                    f,
-                    "2D coordinate out of bounds ({context}): coordinate {coordinate}, dimensions {dimensions}"
-                )
-            }
-            Self::Coordinate3DOutOfBounds {
-                context,
-                coordinate,
-                dimensions,
-            } => {
-                write!(
-                    f,
-                    "3D coordinate out of bounds ({context}): coordinate {coordinate}, dimensions {dimensions}"
-                )
-            }
-            Self::JSONError { context } => write!(f, "JSON error: {context}"),
-        }
-    }
-}
+// TODO automatic impls
 
-#[cfg(all(feature = "alloc", feature = "std"))]
-impl std::error::Error for FeagiStructuresError {}
+// TODO error stuff
