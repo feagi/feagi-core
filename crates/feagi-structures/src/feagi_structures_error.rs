@@ -4,6 +4,7 @@ use crate::FeagiStructuresGenomicError;
 use crate::neuron_voxels::FeagiStructuresNeuronVoxelError;
 use crate::neurons::FeagiStructuresNeuronError;
 
+#[derive(Debug)]
 pub enum FeagiStructuresError {
     NeuronVoxelError { neuron_voxel_error: FeagiStructuresNeuronVoxelError },
     NeuronError { neuron_error: FeagiStructuresNeuronError },

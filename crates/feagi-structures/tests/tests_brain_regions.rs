@@ -106,8 +106,8 @@ mod test_region_id {
 
 #[cfg(test)]
 mod test_brain_region {
-    use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
-    use feagi_structures::genomic::brain_regions::region_type::RegionType;
+    use feagi_structures::genomic::brain_regions::BrainRegion;
+    use feagi_structures::genomic::brain_regions::RegionType;
     use super::*;
 
     #[test]
