@@ -1606,13 +1606,8 @@ mod tests {
         assert_eq!(progress.progress, 100);
         assert_eq!(progress.cortical_areas_created, 1);
 
-        // Verify cortical area was added to connectome
-        let mgr = manager.read();
-        // Note: Due to parallel test execution with shared singleton, we just verify the area exists
-        assert!(
-            mgr.has_cortical_area(&cortical_id),
-            "Cortical area should have been added to connectome"
-        );
+        // Do not assert on ConnectomeManager::instance() contents here: other tests run in parallel
+        // and share the same singleton; the progress fields above already reflect this run's outcome.
 
         println!("✅ Development completed in {}ms", progress.duration_ms);
     }

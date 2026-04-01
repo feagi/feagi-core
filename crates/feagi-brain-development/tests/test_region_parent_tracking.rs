@@ -58,6 +58,35 @@ fn test_root_region_uuid_storage() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// Test: Omitted parent attaches under existing root (not a second top-level node)
+// ═══════════════════════════════════════════════════════════
+
+#[test]
+fn test_omitted_parent_defaults_to_root_when_root_exists() {
+    let mut hierarchy = BrainRegionHierarchy::new();
+
+    let root_region = create_root_region();
+    let root_id_str = root_region.region_id.to_string();
+
+    hierarchy
+        .add_region(root_region, None)
+        .expect("Failed to add root region");
+
+    let sub = create_subregion();
+    let sub_id_str = sub.region_id.to_string();
+
+    hierarchy
+        .add_region(sub, None)
+        .expect("Second region with omitted parent should attach under root");
+
+    assert_eq!(
+        hierarchy.get_parent(&sub_id_str),
+        Some(&root_id_str),
+        "Omitted parent must resolve to root_id, not a sibling of root"
+    );
+}
+
+// ═══════════════════════════════════════════════════════════
 // Test 2: Subregion can reference parent by UUID
 // ═══════════════════════════════════════════════════════════
 
