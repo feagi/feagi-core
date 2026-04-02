@@ -26,7 +26,7 @@ impl<CoordQuant: QuantizableUIntType> NeuronVoxelDimensions<CoordQuant> {
         (self.x * self.y * self.z).to_usize()
     }
 
-    pub fn get_number_voxels(&self, ) -> usize {
+    pub fn get_number_voxels(&self) -> usize {
         self.get_max_allowed_index_exclusive().to_usize()
     }
 

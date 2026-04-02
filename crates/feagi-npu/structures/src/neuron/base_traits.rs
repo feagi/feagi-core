@@ -32,10 +32,10 @@ where
 
     /// Returns the count of valid neurons in the structure. NOT THE SAME AS TOTAL NUMBER OF
     /// NEURONS STORED!
-    fn get_total_number_of_valid_neurons(&self) -> &NeuronCount<NeuronIndexQuant>;
+    fn get_total_number_of_valid_neurons(&self) -> NeuronCount<NeuronIndexQuant>;
 
     /// Returns the count of invalid neurons in the structure. NOT THE SAME AS TOTAL FREE CAPACITY!
-    fn get_total_number_of_invalid_neurons(&self) -> &NeuronCount<NeuronIndexQuant>;
+    fn get_total_number_of_invalid_neurons(&self) -> NeuronCount<NeuronIndexQuant>;
 
     /// Gets the maximum possible cortical area index achievable by current quantization (or in the
     /// case of static implementations, the size of the array).

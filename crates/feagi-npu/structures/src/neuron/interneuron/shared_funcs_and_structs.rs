@@ -9,8 +9,9 @@ use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUInt
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NeuronMembranePotential, NumberNeuronsPerVoxel};
-use crate::neuron::flags::{InterneuronCorticalFlag, NeuronFlag};
 use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability};
+use crate::neuron::flags::{InterneuronCorticalFlag, NeuronFlag};
+use crate::neuron::interneuron::traits::InterneuronStaticStorageTrait;
 
 /// Stores data as to the property of cortical areas
 /// WARNING: Do not allow modification of this struct outside their implemented interneuron structs, as
@@ -33,6 +34,31 @@ where
     pub refractory_period_limit: BurstDelta<BurstDeltaQuant>,
     pub fire_threshold_limit: FireThresholdLimit<PotentialQuant>,
     pub consecutive_fire_limit: BurstDelta<BurstDeltaQuant>,
+}
+
+impl<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant> InterneuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>
+where
+    NeuronIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
+{
+    pub const fn new_default_valid(neuron_range: Range<NPUNeuronIndex<NeuronIndexQuant>>,
+                                   voxel_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                   number_neurons_per_voxel: NumberNeuronsPerVoxel) -> Self {
+        InterneuronCorticalData {
+            flags: InterneuronCorticalFlag::new_valid(),
+            neuron_range,
+            number_neurons_invalid_from_degeneration: NeuronCount::ZERO,
+            dimensions: voxel_dimensions,
+            number_neurons_per_voxel,
+            excitability: InterneuronStaticStorageTrait::DEFAULT_CORTICAL_EXCITABILITY,
+            refractory_period_limit: InterneuronStaticStorageTrait::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
+            fire_threshold_limit: InterneuronStaticStorageTrait::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
+            consecutive_fire_limit: InterneuronStaticStorageTrait::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
+        }
+    }
 }
 
 

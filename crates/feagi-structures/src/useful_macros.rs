@@ -21,7 +21,7 @@ macro_rules! define_bit_packed_u8_flags {
 
         ::paste::paste! {
             impl $struct_name {
-                $vis const INVALID_FLAG: Self = Self(0);
+                $vis const ALL_ZEROS: Self = Self(0);
 
                 #[inline(always)]
                 $vis const fn from_raw(bits: u8) -> Self {

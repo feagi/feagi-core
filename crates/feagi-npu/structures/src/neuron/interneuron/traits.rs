@@ -6,6 +6,7 @@ use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUInt
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronMembranePotential, NumberNeuronsPerVoxel};
+use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, DimensionalStaticStorageTrait};
 use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability};
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
@@ -49,8 +50,8 @@ where
     fn get_neuron_values_of_specific_interneuron_cortical_area_to_process(&mut self, cortical_area_index: CorticalIndexQuant)
                                                                           -> Result<InterneuronDataRefSliceSingleCorticalArea<'_, NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>, FeagiNPUNeuronError>;
 
-    fn set_neuron_fire_threshold_with_increment(&mut self, cortical_area_index: CorticalIndexQuant, increment_function: &FireThresholdIncrementFunction)  // TODO FireThresholdIncrementFunction
-        -> Result<(), FeagiNPUNeuronError>;
+    fn set_neuron_fire_threshold(&mut self, cortical_area_index: CorticalIndexQuant, executor: &impl NeuronFireThresholdExecutor<PotentialQuant, CoordQuant>)
+                                 -> Result<(), FeagiNPUNeuronError>;
 
 
     // TODO add more specific functions for getting specific fields for neuron processing

@@ -14,6 +14,14 @@ define_bit_packed_u8_flags! {
     )
 }
 
+// TODO double check this!
+
+impl NeuronFlag {
+    pub const fn new_valid() -> NeuronFlag {
+        NeuronFlag::from_raw(0x01)
+    }
+}
+
 /// Stores various interneuron cortical area boolean flags under a single byte
 define_bit_packed_u8_flags! {
     pub struct InterneuronCorticalFlag(
@@ -28,3 +36,10 @@ define_bit_packed_u8_flags! {
     )
 }
 
+// TODO double check this!
+
+impl InterneuronCorticalFlag {
+    pub const fn new_valid() -> InterneuronCorticalFlag {
+        InterneuronCorticalFlag::from_raw(0x01)
+    }
+}
