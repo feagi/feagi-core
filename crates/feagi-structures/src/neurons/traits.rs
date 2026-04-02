@@ -1,6 +1,6 @@
 use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxels::descriptors::NeuronVoxelDimensions;
-use crate::neurons::descriptors::{NeuronPotential, NumberNeuronsPerVoxel};
+use crate::neurons::descriptors::{NeuronMembranePotential, NumberNeuronsPerVoxel};
 
 pub trait SingleCorticalNeuronCollectionBase<PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
     PotentialQuant: QuantizableValueType,
@@ -20,9 +20,9 @@ SingleCorticalNeuronCollectionBase<PotentialQuant, CoordQuant, NeuronVoxelIndexQ
     CoordQuant: QuantizableUIntType,
     NeuronVoxelIndexQuant: QuantizableUIntType
 {
-    fn get_all_neuron_potentials(&self) -> &[NeuronPotential<PotentialQuant>];
+    fn get_all_neuron_potentials(&self) -> &[NeuronMembranePotential<PotentialQuant>];
 
-    fn get_all_neuron_potentials_mut(&mut self) -> &mut [NeuronPotential<PotentialQuant>];
+    fn get_all_neuron_potentials_mut(&mut self) -> &mut [NeuronMembranePotential<PotentialQuant>];
 
     // TODO iterators?
 

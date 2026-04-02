@@ -1,50 +1,56 @@
-use std::iter;
-use ahash::AHashMap;
-
+use core::ops::Range;
+use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
+use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
+use feagi_structures::neurons::descriptors::{NeuronCount, NeuronMembranePotential};
+use crate::neuron::flags::NeuronFlag;
+use crate::neuron::interneuron::shared_funcs_and_structs::InterneuronCorticalData;
+use crate::neuron::interneuron::traits::InterneuronAllocStorageTrait;
+use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, LeakCoefficient, NPUNeuronIndex};
 // In this implementation, we can do a lot by keeping neurons of a cortical area grouped together, albeit they may not be guaranteed to be in cortical index order
 
 
 pub struct InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
 {
     // Per Neuron (including invalids)
-    neuron_cortical_area_index: Vec<CorticalIndexQuant>, // faster than potentially reverse looking up a large hashmap
-    neuron_global_burst_index_of_last_firing: Vec<BurstIndexQuant>,
-    neuron_membrane_potential: Vec<PotentialQuant>,
-    neuron_fire_threshold: Vec<PotentialQuant>,
-    neuron_leak_coefficient: Vec<PercentageQuant>,
-    neuron_flags: Vec<InterneuronFlag>,
-    neuron_refractory_countdown: Vec<BurstDeltaQuant>,
-    neuron_consecutive_fire_count: Vec<BurstDeltaQuant>, // how many times the neuron fired burst recently
+    neuron_cortical_area_index: Vec<CorticalAreaIndex<CorticalIndexQuant>>, // faster than potentially reverse looking up a large hashmap
+    neuron_global_burst_index_of_last_firing: Vec<BurstGlobalIndex<BurstIndexQuant>>,
+    neuron_membrane_potential: Vec<NeuronMembranePotential<PotentialQuant>>,
+    neuron_fire_threshold: Vec<FireThreshold<PotentialQuant>>,
+    neuron_leak_coefficient: Vec<LeakCoefficient<PercentageQuant>>,
+    neuron_flags: Vec<NeuronFlag>,
+    neuron_refractory_countdown: Vec<BurstDelta<BurstDeltaQuant>>,
+    neuron_consecutive_fire_count: Vec<BurstDelta<BurstDeltaQuant>>, // how many times the neuron fired burst recently
 
     // Per Cortical Area (including invalids)
     cortical_data: Vec<InterneuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>>,
 
     // Cached Data
-    cache_number_valid_neurons: NeuronIndexQuant,
-    cache_number_invalid_neurons: NeuronIndexQuant,
-    cache_index_to_write_new_neurons: NeuronIndexQuant, // Index starting where new neurons will be written to
-    cache_skipped_cortical_indexes: Vec<CorticalIndexQuant>, // when a cortical area is removed, put the index here, these will be the first given out
-    cache_invalid_neuron_indexes: Vec<Range<NeuronIndexQuant>>,
+    cache_number_valid_neurons: NeuronCount<NeuronIndexQuant>,
+    cache_number_invalid_neurons: NeuronCount<NeuronIndexQuant>,
+    cache_index_to_write_new_neurons: NPUNeuronIndex<NeuronIndexQuant>, // Index starting where new neurons will be written to
+    cache_skipped_cortical_indexes: Vec<CorticalAreaIndex<CorticalIndexQuant>>, // when a cortical area is removed, put the index here, these will be the first given out
+    cache_invalid_neuron_indexes: Vec<Range<CorticalAreaIndex<NeuronIndexQuant>>>,
 }
 
 // NOTE: Only define the constructor here, as we will be going through traits / generics for all data transfer!
-impl InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+impl<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
 {
     pub fn create_new_interneuron_ram_storage(number_neurons_to_preallocate_space_for: NeuronIndexQuant, number_cortical_areas_to_preallocate_space_for: CorticalIndexQuant) -> Result<Self, FeagiNPUDataError> {
         Ok(
@@ -155,15 +161,16 @@ where
 }
 
 
-impl InterneuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+impl<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+InterneuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
 {
 
     /// Creates a cortical area of given dimensions but using a set of neuron values copied across
@@ -302,13 +309,13 @@ where
 
 impl InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
 {
 
     /// Used to pass around slices easily at low cost for all cortical areas
@@ -358,13 +365,13 @@ where
 
 impl DimensionalAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
 {
     /// Creates a cortical area of given dimensions and neuron density,
     /// and returns its cortical area index and range of neuron indexes it covers
@@ -419,13 +426,13 @@ where
 
 impl DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
 {
 
 }
@@ -433,13 +440,13 @@ where
 
 impl BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
-    BurstDeltaQuant: BurstCount,
-    BurstIndexQuant: BurstCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale,
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
 {
 
     /// Frees unused neuron vector capacity and invalid neurons (assuming they were sorted to the back first!)
@@ -467,12 +474,13 @@ where
 
 impl BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
-    CorticalIndexQuant: CorticalAreaIndex,
-    CoordQuant: NeuronVoxelCoordinate<QuantizableUInt>,
-    BurstQuant: BurstDeltaCount,
-    PotentialQuant: PotentialUnit,
-    PercentageQuant: PercentageScale
+    NeuronIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    PotentialQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
 {
     const NUMBER_BYTES_PER_NEURON = 0; // TODO
 

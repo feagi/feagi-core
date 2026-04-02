@@ -1,3 +1,5 @@
+mod feagi_npu_neuron_error;
+
 pub mod interneuron;
 pub mod memory;
 pub mod sensory_motor_and_core;
@@ -7,3 +9,5 @@ pub mod npu_neuron_type;
 
 pub mod flags;
 // pub mod shared_functions; // TODO
+
+pub use feagi_npu_neuron_error::FeagiNPUNeuronError;

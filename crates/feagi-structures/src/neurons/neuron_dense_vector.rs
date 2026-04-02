@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxels::descriptors::NeuronVoxelDimensions;
-use crate::neurons::descriptors::{NeuronPotential, NumberNeuronsPerVoxel};
+use crate::neurons::descriptors::{NeuronMembranePotential, NumberNeuronsPerVoxel};
 use crate::neurons::FeagiStructuresNeuronError;
 use crate::neurons::traits::{SingleCorticalNeuronCollectionBase, SingleCorticalNeuronCollectionDense};
 
@@ -11,7 +11,7 @@ where
     CoordQuant: QuantizableUIntType,
     NeuronVoxelIndexQuant: QuantizableUIntType,
 {
-    potentials: Vec<NeuronPotential<PotentialQuant>>,
+    potentials: Vec<NeuronMembranePotential<PotentialQuant>>,
     cortical_dimensions: NeuronVoxelDimensions<CoordQuant>,
     cortical_density: NumberNeuronsPerVoxel,
     /// Holds the index quant type so `NeuronVoxelIndexQuant` is not an unused struct parameter.
@@ -30,7 +30,7 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronDenseVector<Poten
 
         let number_neurons: usize = dimensions.get_number_neurons(density);
         Ok(Self {
-            potentials: vec![NeuronPotential::ZERO; number_neurons],
+            potentials: vec![NeuronMembranePotential::ZERO; number_neurons],
             cortical_dimensions: dimensions,
             cortical_density: density,
             _index_quant: PhantomData,
@@ -63,11 +63,11 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> SingleCorticalNeuronCol
     CoordQuant: QuantizableUIntType,
     NeuronVoxelIndexQuant: QuantizableUIntType
 {
-    fn get_all_neuron_potentials(&self) -> &[NeuronPotential<PotentialQuant>] {
+    fn get_all_neuron_potentials(&self) -> &[NeuronMembranePotential<PotentialQuant>] {
         self.potentials.as_slice()
     }
 
-    fn get_all_neuron_potentials_mut(&mut self) -> &mut [NeuronPotential<PotentialQuant>] {
+    fn get_all_neuron_potentials_mut(&mut self) -> &mut [NeuronMembranePotential<PotentialQuant>] {
         self.potentials.as_mut_slice()
     }
 

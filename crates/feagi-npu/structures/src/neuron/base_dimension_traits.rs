@@ -1,21 +1,23 @@
 
 use core::ops::Range;
-use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
+use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
+use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
-use crate::FeagiNPUDataError;
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
+use crate::neuron::FeagiNPUNeuronError;
+use crate::quantizables::NPUNeuronIndex;
 
 pub trait DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>:
 BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
-    CoordQuant: QuantizableUIntType, // Using this here as we may be using coords or dimensions
+    CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
     BurstIndexQuant: QuantizableUIntType,
     PotentialQuant: QuantizableValueType,
-    PercentageQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
 {
 
 }
@@ -30,11 +32,11 @@ DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, 
 where
     NeuronIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
-    CoordQuant: QuantizableUIntType, // Using this here as we may be using coords or dimensions
+    CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
     BurstIndexQuant: QuantizableUIntType,
     PotentialQuant: QuantizableValueType,
-    PercentageQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
 // % synaptic attractivity
 {
     /// Creates a cortical area of given dimensions and neuron density,
@@ -42,7 +44,7 @@ where
     fn create_cortical_area_with_default_neurons(&mut self,
                                                  cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                  neurons_per_voxel: NumberNeuronsPerVoxel)
-                                                 -> Result<(NeuronIndexQuant, Range<NeuronIndexQuant>), FeagiNPUDataError>;
+                                                 -> Result<(CorticalAreaIndex<CorticalIndexQuant>, Range<NPUNeuronIndex<NeuronIndexQuant>>), FeagiNPUNeuronError>;
 
 
     /// Effectively deletes a cortical area (by invalidating their neurons), then rebuilds it to the
@@ -52,7 +54,7 @@ where
     fn resize_cortical_area_with_default_neurons(&mut self,
                                                  cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                  neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                 cortical_index: CorticalIndexQuant)
-                                                 -> Result<(Range<NeuronIndexQuant>, Range<NeuronIndexQuant>), FeagiNPUDataError>;
+                                                 cortical_index: CorticalAreaIndex<CorticalIndexQuant>)
+                                                 -> Result<(Range<NPUNeuronIndex<NeuronIndexQuant>>, Range<NPUNeuronIndex<NeuronIndexQuant>>), FeagiNPUNeuronError>;
 
 }

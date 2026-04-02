@@ -1,8 +1,3 @@
+use crate::define_quantizable_value_type_family;
 
-
-//region Cortical Area Index
-
-crate::define_quantizable_uint_type_family!(CorticalAreaIndex);
-
-
-//endregion
+define_quantizable_value_type_family!(QuantizablePercentage);

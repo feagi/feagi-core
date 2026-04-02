@@ -2,7 +2,7 @@
 
 mod feagi_npu_data_error;
 
-pub mod descriptors;
+pub mod quantizables;
 pub mod neuron;
 pub mod synapse;
 pub mod fire_candidate_list;

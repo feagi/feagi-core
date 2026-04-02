@@ -11,7 +11,6 @@ pub enum SingleCorticalNeuronVoxelCollectionType {
 }
 
 
-
 //region Neuron Voxel Coordinate
 
 crate::define_unsigned_coordinate_3d_type_family!(NeuronVoxelCoordinate);
@@ -25,6 +24,10 @@ crate::define_dimension_3d_type_family!(NeuronVoxelDimensions, NeuronVoxelCoordi
 impl<CoordQuant: QuantizableUIntType> NeuronVoxelDimensions<CoordQuant> {
     pub fn get_max_allowed_index_exclusive(&self) -> usize {
         (self.x * self.y * self.z).to_usize()
+    }
+
+    pub fn get_number_voxels(&self, ) -> usize {
+        self.get_max_allowed_index_exclusive().to_usize()
     }
 
     pub fn get_number_neurons(&self, density: NumberNeuronsPerVoxel) -> usize {

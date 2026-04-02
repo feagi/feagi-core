@@ -68,6 +68,4 @@ serde = { workspace = true, default-features = false, features = [] }
 ahash = { workspace = true, default-features = false, optional = true}
 rayon = { workspace = true, optional = true}
 half = { workspace = true, default-features = false, features = [] } # STD enables autoarch detection, which we may not want
-
-[dev-dependencies]
 paste = { workspace = true }

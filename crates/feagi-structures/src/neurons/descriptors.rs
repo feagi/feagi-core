@@ -3,8 +3,15 @@
 pub type NumberNeuronsPerVoxel = u8;
 
 /// Neuron Potential of neurons (not voxels!)
-//region Potential Unit
+//region Neuron Membrane Potential
 
-crate::define_quantizable_value_type_family!(NeuronPotential);
+crate::define_quantizable_value_type_family!(NeuronMembranePotential);
+
+//endregion
+
+/// Neuron Count (not voxels!)
+//region Neuron Membrane Potential
+
+crate::define_quantizable_uint_type_family!(NeuronCount);
 
 //endregion

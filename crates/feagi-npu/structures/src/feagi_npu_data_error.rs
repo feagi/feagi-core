@@ -1,6 +1,12 @@
+use crate::neuron::FeagiNPUNeuronError;
 
+// TODO how does connectome struct fit here?
 pub enum FeagiNPUDataError {
-    NeuronIndexOutOfRange{given_neuron_index: u32, range: u32},
-    InvalidCorticalIndex{given_cortical_index: u32},
-    InternalError(),
+    NeuronError{error: FeagiNPUNeuronError},
+}
+
+impl From<FeagiNPUNeuronError> for FeagiNPUDataError {
+    fn from(error: FeagiNPUNeuronError) -> Self {
+        Self::NeuronError { error }
+    }
 }

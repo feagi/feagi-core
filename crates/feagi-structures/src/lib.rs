@@ -14,7 +14,7 @@ pub mod base_quantizable;
 pub mod feagi_log;
 pub mod descriptors;
 pub mod neurons;
-
+mod useful_macros;
 
 pub use feagi_structures_error::FeagiStructuresError;
 pub use feagi_json::FeagiJSON;
