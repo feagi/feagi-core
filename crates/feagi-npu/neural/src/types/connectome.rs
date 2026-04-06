@@ -116,6 +116,10 @@ pub struct SerializableSynapseArray {
     /// Synapse types (u8: 0=excitatory, 1=inhibitory)
     pub types: Vec<u8>,
 
+    /// Per-synapse delay in whole bursts (`>= 1`). Omitted in older snapshots defaults at load time.
+    #[serde(default)]
+    pub delay_bursts: Vec<u8>,
+
     /// Valid mask (bool)
     pub valid_mask: Vec<bool>,
 
@@ -135,6 +139,7 @@ impl Default for SerializableSynapseArray {
             weights: Vec::new(),
             postsynaptic_potentials: Vec::new(),
             types: Vec::new(),
+            delay_bursts: Vec::new(),
             valid_mask: Vec::new(),
             source_index: AHashMap::new(),
         }
@@ -153,6 +158,7 @@ impl SerializableSynapseArray {
             weights: std::vec::from_elem(0.0f32, capacity),
             postsynaptic_potentials: std::vec::from_elem(0.0f32, capacity),
             types: std::vec::from_elem(0, capacity),
+            delay_bursts: std::vec::from_elem(1, capacity),
             valid_mask: std::vec::from_elem(false, capacity),
             source_index: AHashMap::new(),
         }

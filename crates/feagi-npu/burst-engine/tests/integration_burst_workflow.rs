@@ -80,6 +80,7 @@ fn create_simple_network() -> RustNPU<StdRuntime, f32, CPUBackend> {
                 SynapticPsp(255.0),
                 SynapseType::Excitatory,
                 0,
+                1,
             )
             .unwrap();
         }
@@ -95,6 +96,7 @@ fn create_simple_network() -> RustNPU<StdRuntime, f32, CPUBackend> {
                 SynapticPsp(255.0),
                 SynapseType::Excitatory,
                 0,
+                1,
             )
             .unwrap();
         }
@@ -223,6 +225,7 @@ fn test_multi_burst_chain_propagation() {
         SynapticPsp(255.0),
         SynapseType::Excitatory,
         0,
+        1,
     )
     .unwrap();
     npu.add_synapse(
@@ -232,6 +235,7 @@ fn test_multi_burst_chain_propagation() {
         SynapticPsp(255.0),
         SynapseType::Excitatory,
         0,
+        1,
     )
     .unwrap();
     npu.add_synapse(
@@ -241,6 +245,7 @@ fn test_multi_burst_chain_propagation() {
         SynapticPsp(255.0),
         SynapseType::Excitatory,
         0,
+        1,
     )
     .unwrap();
 
@@ -318,6 +323,7 @@ fn test_mixed_excitatory_inhibitory_network() {
         SynapticPsp(255.0),
         SynapseType::Excitatory,
         0,
+        1,
     )
     .unwrap();
     npu.add_synapse(
@@ -327,6 +333,7 @@ fn test_mixed_excitatory_inhibitory_network() {
         SynapticPsp(255.0),
         SynapseType::Inhibitory,
         0,
+        1,
     )
     .unwrap();
 

@@ -100,7 +100,8 @@ pub async fn post_mapping_properties(
         if let Some(arr) = conn.as_array() {
             // Array format:
             // [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag,
-            //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window]
+            //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window,
+            //  synaptic_delay_bursts]
             if arr.len() < 8 {
                 return Err(ApiError::invalid_input(format!(
                     "Invalid dstmap rule array (expected 8 elements including plasticity_window), got {}: {:?}",
@@ -132,6 +133,18 @@ pub async fn post_mapping_properties(
                 .as_i64()
                 .ok_or_else(|| ApiError::invalid_input("plasticity_window must be an integer"))?;
 
+            let synaptic_delay_bursts: u64 = if arr.len() >= 9 {
+                arr[8]
+                    .as_u64()
+                    .or_else(|| arr[8].as_i64().map(|i| i as u64))
+                    .ok_or_else(|| {
+                        ApiError::invalid_input("synaptic_delay_bursts must be a non-negative integer")
+                    })?
+            } else {
+                1
+            }
+            .max(1);
+
             formatted.push(serde_json::json!({
                 "morphology_id": morphology_id,
                 "morphology_scalar": morphology_scalar,
@@ -141,6 +154,7 @@ pub async fn post_mapping_properties(
                 "ltp_multiplier": ltp_multiplier,
                 "ltd_multiplier": ltd_multiplier,
                 "plasticity_window": plasticity_window,
+                "synaptic_delay_bursts": synaptic_delay_bursts,
             }));
         } else if let Some(obj) = conn.as_object() {
             // Dict format - strict schema (no implicit defaults)
@@ -179,6 +193,12 @@ pub async fn post_mapping_properties(
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| ApiError::invalid_input("plasticity_window must be an integer"))?;
 
+            let synaptic_delay_bursts: u64 = obj
+                .get("synaptic_delay_bursts")
+                .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|i| i as u64)))
+                .unwrap_or(1)
+                .max(1);
+
             formatted.push(serde_json::json!({
                 "morphology_id": morphology_id,
                 "morphology_scalar": morphology_scalar,
@@ -188,6 +208,7 @@ pub async fn post_mapping_properties(
                 "ltp_multiplier": ltp_multiplier,
                 "ltd_multiplier": ltd_multiplier,
                 "plasticity_window": plasticity_window,
+                "synaptic_delay_bursts": synaptic_delay_bursts,
             }));
         }
     }

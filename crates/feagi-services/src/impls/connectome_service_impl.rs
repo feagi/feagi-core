@@ -2115,6 +2115,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     normalized.insert("plasticity_flag".to_string(), serde_json::json!(true));
                     plasticity_flag = true;
                 }
+                if let Some(existing) = existing_plasticity_by_morphology.get(&morphology_id) {
+                    if !normalized.contains_key("synaptic_delay_bursts")
+                        && existing.contains_key("synaptic_delay_bursts")
+                    {
+                        if let Some(value) = existing.get("synaptic_delay_bursts") {
+                            normalized.insert("synaptic_delay_bursts".to_string(), value.clone());
+                        }
+                    }
+                }
                 if plasticity_flag || is_associative {
                     let required = [
                         "plasticity_constant",

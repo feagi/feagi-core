@@ -112,7 +112,7 @@ fn add_test_synapse(
     psp: SynapticPsp,
     synapse_type: SynapseType,
 ) {
-    npu.add_synapse(source, target, weight, psp, synapse_type, 0)
+    npu.add_synapse(source, target, weight, psp, synapse_type, 0, 1)
         .unwrap();
     npu.rebuild_synapse_index();
 }

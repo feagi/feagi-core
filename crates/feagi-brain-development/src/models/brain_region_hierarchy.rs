@@ -69,7 +69,7 @@ impl BrainRegionHierarchy {
     /// # Arguments
     ///
     /// * `region` - The region to add
-    /// * `parent_id` - Optional parent region ID (None for root)
+    /// * `parent_id` - Optional parent region ID (`None` = become root if no root yet, else attach under the existing root)
     ///
     /// # Errors
     ///
@@ -96,8 +96,21 @@ impl BrainRegionHierarchy {
             )));
         }
 
+        // Resolve parent: omitting parent means "become root" only when no root exists yet;
+        // otherwise attach under the single root (BV expects one root; everything else is a child).
+        let resolved_parent: Option<String> = match parent_id {
+            Some(p) => Some(p),
+            None => {
+                if self.root_id.is_none() {
+                    None
+                } else {
+                    self.root_id.clone()
+                }
+            }
+        };
+
         // Validate parent exists (if specified)
-        if let Some(ref parent) = parent_id {
+        if let Some(ref parent) = resolved_parent {
             if !self.regions.contains_key(parent) {
                 return Err(BduError::InvalidArea(format!(
                     "Parent region {} does not exist",
@@ -110,7 +123,7 @@ impl BrainRegionHierarchy {
         self.regions.insert(region_id_str.clone(), region);
 
         // Update parent/child maps
-        if let Some(parent) = parent_id {
+        if let Some(parent) = resolved_parent {
             self.parent_map
                 .insert(region_id_str.clone(), parent.clone());
             self.children_map

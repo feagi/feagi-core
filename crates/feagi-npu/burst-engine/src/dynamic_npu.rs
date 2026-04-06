@@ -236,10 +236,11 @@ where
         psp: SynapticPsp,
         synapse_type: SynapseType,
         edge_flag: u8,
+        delay_bursts: u8,
     ) -> Result<usize> {
         dispatch_mut!(
             self,
-            add_synapse(source, target, weight, psp, synapse_type, edge_flag)
+            add_synapse(source, target, weight, psp, synapse_type, edge_flag, delay_bursts)
         )
     }
 

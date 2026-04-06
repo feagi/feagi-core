@@ -42,6 +42,9 @@ pub struct SynapseArray {
     /// Per-synapse packed edge flags (associative STDP, etc.)
     pub edge_flags: Vec<u8>,
 
+    /// Per-synapse delay in whole bursts (`>= 1`).
+    pub delay_bursts: Vec<u8>,
+
     /// Valid synapse mask
     pub valid_mask: Vec<bool>,
 
@@ -60,6 +63,7 @@ impl SynapseArray {
             postsynaptic_potentials: Vec::with_capacity(capacity),
             types: Vec::with_capacity(capacity),
             edge_flags: Vec::with_capacity(capacity),
+            delay_bursts: Vec::with_capacity(capacity),
             valid_mask: Vec::with_capacity(capacity),
             source_index: AHashMap::new(),
         }
@@ -74,7 +78,7 @@ impl SynapseArray {
         psp: f32,
         synapse_type: SynapseType,
     ) {
-        SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8, 0)
+        SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8, 0, 1)
             .expect("Failed to add synapse");
     }
 
@@ -148,6 +152,10 @@ impl SynapseStorage for SynapseArray {
         &self.edge_flags[..self.count]
     }
 
+    fn delay_bursts(&self) -> &[u8] {
+        &self.delay_bursts[..self.count]
+    }
+
     fn valid_mask(&self) -> &[bool] {
         &self.valid_mask[..self.count]
     }
@@ -186,7 +194,13 @@ impl SynapseStorage for SynapseArray {
         psp: f32,
         synapse_type: u8,
         edge_flag: u8,
+        delay_bursts: u8,
     ) -> Result<usize> {
+        if delay_bursts < 1 {
+            return Err(crate::traits::RuntimeError::InvalidParameters(
+                "delay_bursts must be >= 1".to_string(),
+            ));
+        }
         let idx = self.count;
 
         self.source_neurons.push(source);
@@ -195,6 +209,7 @@ impl SynapseStorage for SynapseArray {
         self.postsynaptic_potentials.push(psp);
         self.types.push(synapse_type);
         self.edge_flags.push(edge_flag);
+        self.delay_bursts.push(delay_bursts);
         self.valid_mask.push(true);
 
         // Update index
@@ -212,6 +227,7 @@ impl SynapseStorage for SynapseArray {
         psps: &[f32],
         types: &[u8],
         edge_flags: Option<&[u8]>,
+        delays: &[u8],
     ) -> crate::traits::Result<()> {
         let batch_size = sources.len();
         if let Some(flags) = edge_flags {
@@ -223,9 +239,16 @@ impl SynapseStorage for SynapseArray {
                 )));
             }
         }
+        if delays.len() != batch_size {
+            return Err(crate::traits::RuntimeError::InvalidParameters(format!(
+                "delays length {} != batch size {}",
+                delays.len(),
+                batch_size
+            )));
+        }
         for i in 0..batch_size {
             let ef = edge_flags.map(|f| f[i]).unwrap_or(0);
-            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i], ef)?;
+            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i], ef, delays[i])?;
         }
         Ok(())
     }

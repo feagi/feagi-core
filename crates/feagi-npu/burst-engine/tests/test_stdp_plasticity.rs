@@ -408,6 +408,7 @@ fn test_classic_plasticity_updates_existing_synapses_only() {
         SynapticPsp(100.0),
         SynapseType::Excitatory,
         0,
+        1,
     )
     .unwrap();
     npu.rebuild_synapse_index();
@@ -452,6 +453,7 @@ fn test_ltd_reduces_to_zero_and_marks_prunable() {
         SynapticPsp(100.0),
         SynapseType::Excitatory,
         0,
+        1,
     )
     .unwrap();
     npu.rebuild_synapse_index();
