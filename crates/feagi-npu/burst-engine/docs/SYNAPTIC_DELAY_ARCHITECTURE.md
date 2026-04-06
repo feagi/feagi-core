@@ -9,9 +9,34 @@ This is **orthogonal** to STDP/plasticity: plasticity uses **Fire Queue** and **
 ## Genome (cortical mapping)
 
 - Delay is specified **per cortical mapping rule** (same granularity as `postSynapticCurrent_multiplier`).
-- Field name: **`synaptic_delay_bursts`** (integer `>= 1`). **Omitted** means **`1`** (legacy behavior: next burst).
-- Flat array rules extend with a **9th** element (index `8`) for the same value; shorter arrays default index `8` to `1` during flat→object conversion.
+- Object-rule field name: **`synaptic_delay_bursts`** (integer `>= 1`). **Omitted** means **`1`** (legacy behavior: next burst).
+- **Flat array dstmap rule** (same order as `feagi-evolutionary` `process_dstmap` and `feagi-api` `post_mapping_properties`):
+
+| Index | Field |
+|------:|--------|
+| 0 | `morphology_id` (string) |
+| 1 | `morphology_scalar` |
+| 2 | `postSynapticCurrent_multiplier` |
+| 3 | `plasticity_flag` |
+| 4 | `plasticity_constant` |
+| 5 | `ltp_multiplier` |
+| 6 | `ltd_multiplier` |
+| 7 | `plasticity_window` |
+| 8 | **`synaptic_delay_bursts`** |
+
+- Arrays with **fewer than 9** elements: index `8` is treated as **missing** and defaults to **`1`** during flat→object conversion (evolutionary importer) and when the API normalizes an 8-element array for the UI.
 - During synaptogenesis, the resolved value is **stored per synapse** in synapse SoA (`delay_bursts`), so the runtime and future GPU paths read a single column.
+
+### HTTP API (UI and tools)
+
+- **`POST /v1/cortical_mapping/mapping_properties`** reads `cortical_mapping_dst` from the connectome and returns a **normalized JSON object per rule**, always including **`synaptic_delay_bursts`**. Array rules with only 8 elements get delay **`1`**; index `8` is parsed when present and **clamped to `>= 1`** (values below 1 become 1 for the response). Object rules use optional **`synaptic_delay_bursts`**, default **`1`**, same clamp.
+- Raw responses (e.g. **`GET /v1/cortical_mapping/mapping`**, area blueprint JSON) pass through stored rules; clients that need a stable shape for editors should prefer **`POST .../mapping_properties`** or ensure they read **`synaptic_delay_bursts`** on object rules.
+
+### Genome persistence (connectome service)
+
+- Mapping writes (e.g. **`PUT /v1/cortical_mapping/mapping_properties`**, **`PUT /v1/cortical_mapping/mapping`**) go through **`feagi-services`** `update_cortical_mapping`.
+- Full updates that include **`synaptic_delay_bursts`** on each rule are stored as-is in the genome.
+- For **partial** mapping updates that merge into an existing rule, the service may **carry forward** `synaptic_delay_bursts` from the previous rule when the incoming object omits the key (same idea as plasticity-field merge), so delay is not accidentally dropped from the saved genome.
 
 ## Runtime scheduling (CPU path; GPU-compatible data layout)
 
@@ -38,7 +63,8 @@ No STDP or Fire Ledger changes: they still see spikes at the real fire bursts.
 ## Default and validation
 
 - **Default delay = 1** when not specified in genome or when loading old snapshots (missing delay column filled with `1`).
-- **Invalid `0`**: rejected at synapse creation / genome parse; propagation may still clamp with `max(1, d)` only as a defensive invariant.
+- **Invalid `0` in genome / BDU resolution**: `feagi-brain-development` rejects **`synaptic_delay_bursts < 1`** when resolving a rule (strict). The **mapping_properties** POST path clamps sub-1 values to **`1`** for normalized output only; persist **`>= 1`** in saved genomes to avoid ambiguity.
+- Propagation may still clamp with `max(1, d)` only as a defensive invariant on the hot path.
 
 ## Related code (anchors)
 
@@ -47,3 +73,5 @@ No STDP or Fire Ledger changes: they still see spikes at the real fire bursts.
 - Phase 1 and end-of-burst hook: `burst-engine/src/npu.rs`.
 - Mapping resolution: `feagi-brain-development` / `connectome_manager.rs` (`resolve_synapse_params_for_rule`, morphologies calling `add_synapse` with delay).
 - Flat genome conversion: `feagi-evolutionary/.../converter_flat_full.rs` (`process_dstmap`).
+- Normalized mapping for clients: `feagi-api` / `endpoints/cortical_mapping.rs` (`post_mapping_properties`).
+- Connectome / genome merge on update: `feagi-services` / `connectome_service_impl.rs` (cortical mapping update path).
