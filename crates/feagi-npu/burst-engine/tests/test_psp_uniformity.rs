@@ -78,6 +78,7 @@ fn test_psp_uniformity_false_divides_psp() {
             SynapticPsp(10.0), // PSP = 10
             SynapseType::Excitatory,
             0,
+            1,
         )
         .expect("Failed to add synapse");
     }
@@ -167,6 +168,7 @@ fn test_psp_uniformity_true_applies_full_psp() {
             SynapticPsp(10.0), // PSP = 10
             SynapseType::Excitatory,
             0,
+            1,
         )
         .expect("Failed to add synapse");
     }
@@ -264,6 +266,7 @@ fn test_psp_uniformity_default_is_false() {
         SynapticPsp(10.0),
         SynapseType::Excitatory,
         0,
+        1,
     )
     .expect("Failed to add synapse 1");
 
@@ -274,6 +277,7 @@ fn test_psp_uniformity_default_is_false() {
         SynapticPsp(10.0),
         SynapseType::Excitatory,
         0,
+        1,
     )
     .expect("Failed to add synapse 2");
 

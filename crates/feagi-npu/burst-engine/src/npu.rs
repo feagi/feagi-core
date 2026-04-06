@@ -305,6 +305,8 @@ pub(crate) struct FireStructures {
     /// Default LIF parameters per memory `cortical_idx` for the associative path.
     pub(crate) memory_associative_lif_params: MemoryAssociativeLifParamsByArea,
     pub(crate) last_fcl_snapshot: Vec<(NeuronId, f32)>,
+    /// PSP arrivals keyed by future burst index (see `docs/SYNAPTIC_DELAY_ARCHITECTURE.md`).
+    pub(crate) synaptic_arrival_schedule: crate::synaptic_arrival_schedule::SynapticArrivalSchedule,
     /// Scheduled replay injections (burst target -> twin area coords).
     pub(crate) pending_replay_injections: Vec<ReplayInjection>,
     /// Real storage-backed neuron IDs that must appear in the fire queue this burst (manual force).
@@ -391,6 +393,8 @@ impl<
                 sparse_memory_associative_lif: AHashMap::new(),
                 memory_associative_lif_params: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
+                synaptic_arrival_schedule:
+                    crate::synaptic_arrival_schedule::SynapticArrivalSchedule::default(),
                 pending_replay_injections: Vec::new(),
                 pending_authoritative_fq: Vec::with_capacity(256),
             }),
@@ -597,6 +601,8 @@ impl<
                 sparse_memory_associative_lif: AHashMap::new(),
                 memory_associative_lif_params: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
+                synaptic_arrival_schedule:
+                    crate::synaptic_arrival_schedule::SynapticArrivalSchedule::default(),
                 pending_replay_injections: Vec::new(),
                 pending_authoritative_fq: Vec::with_capacity(256),
             };
@@ -1190,6 +1196,7 @@ impl<
         psp: SynapticPsp,
         synapse_type: SynapseType,
         edge_flag: u8,
+        delay_bursts: u8,
     ) -> Result<usize> {
         let result = self
             .synapse_storage
@@ -1202,6 +1209,7 @@ impl<
                 psp.0,
                 synapse_type as u8,
                 edge_flag,
+                delay_bursts,
             )
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapse: {:?}", e)))?;
 
@@ -1230,6 +1238,7 @@ impl<
         postsynaptic_potentials: Vec<SynapticPsp>,
         synapse_types: Vec<SynapseType>,
         edge_flags: Option<Vec<u8>>,
+        delay_bursts: Vec<u8>,
     ) -> Result<()> {
         // Convert NeuronId/Weight types to raw u32/f32 for SynapseArray
         let source_ids: Vec<u32> = sources.iter().map(|n| n.0).collect();
@@ -1256,6 +1265,7 @@ impl<
                 &psp_vals,
                 &type_vals,
                 flags_slice,
+                &delay_bursts,
             )
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapses batch: {:?}", e)))
     }
@@ -1962,7 +1972,6 @@ impl<
         let phase1_start = std::time::Instant::now();
         let previous_fcl_snapshot = fire_structures.last_fcl_snapshot.clone();
         let injection_result = {
-            let synapse_storage = self.synapse_storage.read().unwrap();
             let fatigue_active = self
                 .fatigue_active
                 .load(std::sync::atomic::Ordering::Acquire);
@@ -1971,17 +1980,18 @@ impl<
                 .load(std::sync::atomic::Ordering::Acquire);
             let FireStructures {
                 fire_candidate_list,
+                synaptic_arrival_schedule,
                 memory_associative_fcl_input,
                 ..
             } = &mut *fire_structures;
             phase1_injection_with_synapses(
+                burst_count,
                 fire_candidate_list,
                 &mut *neuron_storage,
-                &mut propagation_engine,
+                synaptic_arrival_schedule,
                 &previous_fq,
                 &previous_fcl_snapshot,
                 power_amount,
-                &*synapse_storage,
                 &pending_mutex,
                 fatigue_active,
                 power_neuron_id,
@@ -2154,6 +2164,32 @@ impl<
             burst_count,
             &mut fire_structures,
         );
+
+        // PSP from fires at `burst_count` arrives at `burst_count + delay_bursts` (see synaptic delay docs).
+        {
+            let synapse_storage = self.synapse_storage.read().unwrap();
+            let fired_ids = dynamics_result.fire_queue.get_all_neuron_ids();
+            let mut neuron_mps: ahash::AHashMap<NeuronId, f32> = ahash::AHashMap::new();
+            for neurons in dynamics_result.fire_queue.neurons_by_area.values() {
+                for neuron in neurons {
+                    let mp_f32 = neuron.membrane_potential;
+                    let mp = if mp_f32.is_finite() {
+                        mp_f32.max(0.0)
+                    } else {
+                        0.0
+                    };
+                    neuron_mps.insert(neuron.neuron_id, mp);
+                }
+            }
+            let delayed = propagation_engine.propagate_delayed(&fired_ids, &*synapse_storage, &neuron_mps)?;
+            fire_structures
+                .synaptic_arrival_schedule
+                .schedule_from_delayed_propagation(
+                    burst_count,
+                    &delayed.fcl_by_delay,
+                    &delayed.memory_associative_by_delay,
+                );
+        }
 
         // Release neuron/synapse locks before plasticity updates to avoid lock contention.
         drop(propagation_engine);
@@ -2915,6 +2951,7 @@ impl<
             weights: synapse_storage.weights().to_vec(),
             postsynaptic_potentials: synapse_storage.postsynaptic_potentials().to_vec(),
             types: synapse_storage.types().to_vec(),
+            delay_bursts: synapse_storage.delay_bursts().to_vec(),
             valid_mask: synapse_storage.valid_mask().to_vec(),
             source_index,
         };
@@ -3044,6 +3081,8 @@ impl<
                 pending_memory_injections: Vec::with_capacity(1024),
                 memory_candidate_cortical_idx: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
+                synaptic_arrival_schedule:
+                    crate::synaptic_arrival_schedule::SynapticArrivalSchedule::default(),
                 pending_replay_injections: Vec::new(),
             }),
             area_id_to_name: std::sync::RwLock::new(snapshot.cortical_area_names),
@@ -4518,6 +4557,7 @@ impl<
                 let type_vals: Vec<u8> = new_types.iter().map(|t| *t as u8).collect();
                 let n_new = source_ids.len();
                 let stdp_edge_flags: Vec<u8> = vec![SYNAPSE_EDGE_ASSOCIATIVE_MEMORY; n_new];
+                let delay_bursts: Vec<u8> = vec![1u8; n_new];
 
                 self.synapse_storage
                     .write()
@@ -4529,6 +4569,7 @@ impl<
                         &psp_vals,
                         &type_vals,
                         Some(stdp_edge_flags.as_slice()),
+                        &delay_bursts,
                     )
                     .map_err(|e| {
                         FeagiError::RuntimeError(format!("Failed to add synapses batch: {:?}", e))
@@ -4596,32 +4637,31 @@ struct InjectionResult {
 /// 🔋 Power neurons are identified by cortical_idx = 1 (_power area)
 /// No separate list - scans neuron array directly!
 #[allow(clippy::too_many_arguments)]
-fn phase1_injection_with_synapses<
-    T: NeuralValue,
-    N: NeuronStorage<Value = T>,
-    S: SynapseStorage,
->(
+fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>>(
+    burst_count: u64,
     fcl: &mut FireCandidateList,
     neuron_storage: &mut N,
-    propagation_engine: &mut SynapticPropagationEngine,
-    // Fires from burst N-1 (`current_fire_queue` at start of burst N); used for synaptic propagation.
+    synaptic_arrival_schedule: &mut crate::synaptic_arrival_schedule::SynapticArrivalSchedule,
+    // Fires from burst N-1 (`current_fire_queue` at start of burst N); used for sparse MP reset.
     previous_fire_queue: &FireQueue,
     // FCL from burst N-1 (`last_fcl_snapshot` at start of burst N); used for sparse MP reset.
     last_fcl_snapshot: &[(NeuronId, f32)],
     power_amount: f32,
-    synapse_storage: &S,
     pending_sensory: &std::sync::Mutex<Vec<(NeuronId, f32)>>,
     fatigue_active: bool,
     power_neuron_id: u32,
     memory_associative_fcl_input: &mut AHashMap<u32, f32>,
 ) -> Result<InjectionResult> {
-    // Clear FCL from previous burst
+    // Clear FCL from previous burst, then apply PSP scheduled for this burst (synaptic delay).
     fcl.clear();
+    memory_associative_fcl_input.clear();
+    synaptic_arrival_schedule.drain_into_phase1(burst_count, fcl, memory_associative_fcl_input);
+    // Scheduled PSP from prior bursts (synaptic delay path); distinct from sensory/power below.
+    let synaptic_count = fcl.len() + memory_associative_fcl_input.len();
 
     let sim_timestep = crate::sim_timestep();
 
     let mut power_count = 0;
-    let mut synaptic_count = 0;
     let mut sensory_count = 0;
 
     // 0. Drain pending sensory injections (AFTER clear, BEFORE power/synapses)
@@ -4793,103 +4833,6 @@ fn phase1_injection_with_synapses<
                 "[FATIGUE-INJECTION] ⚠️  Fatigue detected! Injected {} fatigue neurons into FCL",
                 fatigue_count
             );
-        }
-    }
-
-    // 2. Synaptic Propagation
-    let synaptic_start = std::time::Instant::now();
-    if !previous_fire_queue.is_empty() {
-        let fired_ids = previous_fire_queue.get_all_neuron_ids();
-
-        // Build membrane potential map for fired neurons (needed for mp_driven_psp feature)
-        //
-        // IMPORTANT:
-        // - We must use the *firing-time* membrane potential, not the current neuron_storage value.
-        //   Neurons reset their membrane potential after firing, so neuron_storage will typically
-        //   contain 0 by the time we propagate (which breaks mp_driven_psp).
-        // - FireQueue stores the membrane potential captured at the moment of firing.
-        //
-        // Firing-time membrane potentials for mp_driven_psp (full `f32`; clamp to non-negative finite).
-        let mp_build_start = std::time::Instant::now();
-        let mut neuron_mps: ahash::AHashMap<NeuronId, f32> = ahash::AHashMap::new();
-        for neurons in previous_fire_queue.neurons_by_area.values() {
-            for neuron in neurons {
-                let mp_f32 = neuron.membrane_potential;
-                let mp = if mp_f32.is_finite() {
-                    mp_f32.max(0.0)
-                } else {
-                    0.0
-                };
-                neuron_mps.insert(neuron.neuron_id, mp);
-            }
-        }
-        let mp_build_duration = mp_build_start.elapsed();
-
-        // Call synaptic propagation engine (ZERO-COPY: pass synapse_storage by reference)
-        let propagate_start = std::time::Instant::now();
-        let propagation_result = propagation_engine.propagate(
-            &fired_ids,
-            synapse_storage,
-            &neuron_mps,
-            Some(memory_associative_fcl_input),
-        )?;
-        let propagate_duration = propagate_start.elapsed();
-
-        // Inject propagated potentials into FCL (OPTIMIZED: pre-allocate + direct insertion)
-        let inject_start = std::time::Instant::now();
-
-        // Count total candidates for pre-allocation
-        let total_candidates: usize = propagation_result
-            .values()
-            .map(|targets| targets.len())
-            .sum();
-
-        // Pre-allocate FCL HashMap (critical for performance with millions of insertions)
-        // Heuristic: ~10% unique neurons (many synapses target same neurons)
-        if total_candidates > 100_000 {
-            let estimated_unique = total_candidates / 10;
-            fcl.reserve(estimated_unique);
-        }
-
-        // Direct insertion (faster than flattening first)
-        for (_cortical_area, targets) in propagation_result {
-            for &(target_neuron_id, contribution) in &targets {
-                fcl.add_candidate(target_neuron_id, contribution.0);
-                synaptic_count += 1;
-            }
-        }
-
-        let inject_duration = inject_start.elapsed();
-        let synaptic_duration = synaptic_start.elapsed();
-
-        // Synaptic propagation telemetry - only checked when debug logging is enabled (zero runtime overhead otherwise)
-        if tracing::enabled!(tracing::Level::DEBUG) && synaptic_duration.as_millis() > 10 {
-            debug!(
-                "[PHASE1-SYNAPTIC] Slow synaptic propagation: total={:.2}ms | mp_build={:.2}ms | propagate={:.2}ms | inject={:.2}ms | fired={} | synapses={}",
-                synaptic_duration.as_secs_f64() * 1000.0,
-                mp_build_duration.as_secs_f64() * 1000.0,
-                propagate_duration.as_secs_f64() * 1000.0,
-                inject_duration.as_secs_f64() * 1000.0,
-                fired_ids.len(),
-                synaptic_count
-            );
-
-            // Fine-grained breakdown from the propagation engine (populated per-call).
-            if let Some(profile) = propagation_engine.last_profile() {
-                debug!(
-                    "[PHASE1-SYNAPTIC-PROFILE] fired={} synapse_indices={} unique_sources={} contributions={} | gather={:.2}ms metadata={:.2}ms compute={:.2}ms group={:.2}ms total={:.2}ms | rayon_threads={}",
-                    profile.fired_neurons,
-                    profile.synapse_indices,
-                    profile.unique_sources,
-                    profile.contributions,
-                    profile.gather_ms,
-                    profile.metadata_ms,
-                    profile.compute_ms,
-                    profile.group_ms,
-                    profile.total_ms,
-                    profile.rayon_threads
-                );
-            }
         }
     }
 
@@ -5304,6 +5247,7 @@ mod tests {
             SynapticPsp(1.0),
             SynapseType::Excitatory,
             0,
+            1,
         )
         .unwrap();
         npu.process_burst().unwrap();
@@ -5571,6 +5515,7 @@ mod tests {
             SynapticPsp(255.0),
             SynapseType::Excitatory,
             0,
+            1,
         )
         .unwrap();
 
@@ -5602,6 +5547,7 @@ mod tests {
             SynapticPsp(255.0),
             SynapseType::Excitatory,
             0,
+            1,
         )
         .unwrap();
         npu.add_synapse(
@@ -5611,6 +5557,7 @@ mod tests {
             SynapticPsp(128.0),
             SynapseType::Excitatory,
             0,
+            1,
         )
         .unwrap();
         npu.add_synapse(
@@ -5620,6 +5567,7 @@ mod tests {
             SynapticPsp(64.0),
             SynapseType::Inhibitory,
             0,
+            1,
         )
         .unwrap();
 
@@ -5648,6 +5596,7 @@ mod tests {
             SynapticPsp(255.0),
             SynapseType::Inhibitory,
             0,
+            1,
         )
         .unwrap();
 
@@ -5676,6 +5625,7 @@ mod tests {
             SynapticPsp(255.0),
             SynapseType::Excitatory,
             0,
+            1,
         )
         .unwrap();
         assert_eq!(npu.get_synapse_count(), 1);
@@ -5744,6 +5694,7 @@ mod tests {
                 SynapticPsp(255.0),
                 SynapseType::Excitatory,
                 0,
+                1,
             )
             .unwrap();
         }
@@ -5757,6 +5708,7 @@ mod tests {
                 SynapticPsp(255.0),
                 SynapseType::Excitatory,
                 0,
+                1,
             )
             .unwrap();
         }
@@ -5945,6 +5897,7 @@ mod tests {
             SynapticPsp(1.0),        // PSP = 1 → PSP = 1×1 = 1.0
             SynapseType::Excitatory, // synapse_type (excitatory)
             0,
+            1,
         )
         .unwrap();
         npu.rebuild_synapse_index();
@@ -6187,6 +6140,7 @@ mod tests {
             SynapticPsp(1.0),
             SynapseType::Excitatory,
             0,
+            1,
         )
         .unwrap();
         npu.rebuild_synapse_index();
@@ -6566,6 +6520,7 @@ mod tests {
             SynapticPsp(255.0),
             SynapseType::Excitatory,
             0,
+            1,
         );
 
         assert!(result.is_ok()); // No validation for performance

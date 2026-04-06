@@ -525,10 +525,12 @@ fn process_dstmap(
 
             // Parse rule (flat array format):
             // [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag,
-            //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window]
+            //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window,
+            //  synaptic_delay_bursts]
             //
             // Backward compatibility: 4-element legacy format is extended with defaults
-            // (plasticity_constant=0, ltp_multiplier=0, ltd_multiplier=0, plasticity_window=0).
+            // (plasticity_constant=0, ltp_multiplier=0, ltd_multiplier=0, plasticity_window=0,
+            //  synaptic_delay_bursts=1).
             let plasticity_constant = rule_array
                 .get(4)
                 .cloned()
@@ -545,6 +547,10 @@ fn process_dstmap(
                 .get(7)
                 .cloned()
                 .unwrap_or(serde_json::Value::Number(serde_json::Number::from(0)));
+            let synaptic_delay_bursts = rule_array
+                .get(8)
+                .cloned()
+                .unwrap_or(serde_json::Value::Number(serde_json::Number::from(1)));
 
             let mut rule_dict = serde_json::Map::new();
 
@@ -559,6 +565,7 @@ fn process_dstmap(
             rule_dict.insert("ltp_multiplier".to_string(), ltp_multiplier);
             rule_dict.insert("ltd_multiplier".to_string(), ltd_multiplier);
             rule_dict.insert("plasticity_window".to_string(), plasticity_window);
+            rule_dict.insert("synaptic_delay_bursts".to_string(), synaptic_delay_bursts);
 
             converted_rules.push(Value::Object(rule_dict));
         }
@@ -597,8 +604,8 @@ mod tests {
     fn test_dstmap_parsing() {
         let dstmap_flat = json!({
             "dest_area": [
-                ["block_to_block", 1, 1.0, true, 1, 1, 1, 4],
-                ["projector", 2, 0.5, false, 1, 1, 1, 1]
+                ["block_to_block", 1, 1.0, true, 1, 1, 1, 4, 3],
+                ["projector", 2, 0.5, false, 1, 1, 1, 1, 5]
             ]
         });
 
@@ -612,9 +619,11 @@ mod tests {
         assert_eq!(dest_rules[0]["morphology_id"], "block_to_block");
         assert_eq!(dest_rules[0]["plasticity_constant"], 1);
         assert_eq!(dest_rules[0]["plasticity_window"], 4);
+        assert_eq!(dest_rules[0]["synaptic_delay_bursts"], 3);
         assert_eq!(dest_rules[1]["morphology_id"], "projector");
         assert_eq!(dest_rules[1]["plasticity_constant"], 1);
         assert_eq!(dest_rules[1]["plasticity_window"], 1);
+        assert_eq!(dest_rules[1]["synaptic_delay_bursts"], 5);
     }
 
     #[test]
@@ -640,6 +649,8 @@ mod tests {
         assert_eq!(dest_rules[0]["ltp_multiplier"], 0);
         assert_eq!(dest_rules[0]["ltd_multiplier"], 0);
         assert_eq!(dest_rules[0]["plasticity_window"], 0);
+        assert_eq!(dest_rules[0]["synaptic_delay_bursts"], 1);
+        assert_eq!(dest_rules[1]["synaptic_delay_bursts"], 1);
     }
 
     #[test]

@@ -2444,12 +2444,12 @@ impl ConnectomeManager {
         Ok(())
     }
 
-    /// Resolve synapse weight, PSP, and type from a mapping rule.
+    /// Resolve synapse weight, PSP, type, and per-synapse delay (bursts) from a mapping rule.
     fn resolve_synapse_params_for_rule(
         &self,
         src_area_id: &CorticalID,
         rule: &serde_json::Value,
-    ) -> BduResult<(f32, f32, feagi_npu_neural::SynapseType)> {
+    ) -> BduResult<(f32, f32, feagi_npu_neural::SynapseType, u8)> {
         // Get source area to access PSP property
         let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
             crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
@@ -2485,16 +2485,37 @@ impl ConnectomeManager {
         use crate::models::cortical_area::CorticalAreaExt;
         let psp_f32 = src_area.postsynaptic_current();
 
+        let delay_bursts: u8 = if let Some(obj) = rule.as_object() {
+            obj.get("synaptic_delay_bursts")
+                .and_then(|v| v.as_u64())
+                .map(|d| u8::try_from(d).unwrap_or(1))
+                .unwrap_or(1)
+        } else if let Some(arr) = rule.as_array() {
+            arr.get(8)
+                .and_then(|v| v.as_u64())
+                .map(|d| u8::try_from(d).unwrap_or(1))
+                .unwrap_or(1)
+        } else {
+            1
+        };
+        if delay_bursts < 1 {
+            return Err(crate::types::BduError::Internal(format!(
+                "synaptic_delay_bursts must be >= 1 (src area {})",
+                src_area_id.as_base_64()
+            )));
+        }
+
         tracing::debug!(
             target: "feagi-bdu",
-            "Resolved synapse params src={} weight={} psp={} type={:?}",
+            "Resolved synapse params src={} weight={} psp={} type={:?} delay_bursts={}",
             src_area_id.as_base_64(),
             weight,
             psp_f32,
-            synapse_type
+            synapse_type,
+            delay_bursts
         );
 
-        Ok((weight, psp_f32, synapse_type))
+        Ok((weight, psp_f32, synapse_type, delay_bursts))
     }
 
     /// Apply cortical mapping for a specific area pair
@@ -2597,7 +2618,7 @@ impl ConnectomeManager {
                         "Plasticity mapping rule must be an object format".to_string(),
                     ));
                 };
-                let (_weight, psp, synapse_type) =
+                let (_weight, psp, synapse_type, _delay_bursts) =
                     self.resolve_synapse_params_for_rule(src_area_id, rule)?;
                 let bidirectional_stdp = morphology_id == "associative_memory";
                 if let Err(e) = Self::register_stdp_mapping_for_rule(
@@ -2686,6 +2707,7 @@ impl ConnectomeManager {
         psp: f32,
         synapse_attractivity: u8,
         synapse_type: feagi_npu_neural::SynapseType,
+        delay_bursts: u8,
     ) -> BduResult<usize> {
         match morphology_id {
             "projector" | "transpose_xy" | "transpose_yz" | "transpose_xz" => {
@@ -2737,6 +2759,7 @@ impl ConnectomeManager {
                     synapse_attractivity,
                     synapse_type,
                     0,
+                    delay_bursts,
                 )?;
                 // Ensure the propagation engine sees the newly created synapses immediately
                 npu.rebuild_synapse_index();
@@ -2807,6 +2830,7 @@ impl ConnectomeManager {
                         synapse_attractivity,
                         synapse_type,
                         SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+                        delay_bursts,
                     )?;
                     npu.rebuild_synapse_index();
                     Ok(count as usize)
@@ -2881,6 +2905,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        delay_bursts,
                     )? as usize
                 } else {
                     // Small area: use regular version (faster for small counts)
@@ -2901,6 +2926,7 @@ impl ConnectomeManager {
                             psp,
                             synapse_attractivity,
                             synapse_type,
+                            delay_bursts,
                         )? as usize;
                     tracing::warn!(
                         target: "feagi-bdu",
@@ -2989,6 +3015,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        delay_bursts,
                     )?;
                 if count > 0 {
                     npu.rebuild_synapse_index();
@@ -3018,6 +3045,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        delay_bursts,
                     )?;
                 if count > 0 {
                     npu.rebuild_synapse_index();
@@ -3058,6 +3086,7 @@ impl ConnectomeManager {
                     psp,
                     synapse_attractivity,
                     synapse_type,
+                    delay_bursts,
                 )?;
                 if count > 0 {
                     npu.rebuild_synapse_index();
@@ -3098,6 +3127,7 @@ impl ConnectomeManager {
                     psp,
                     synapse_attractivity,
                     synapse_type,
+                    delay_bursts,
                 )?;
                 if count > 0 {
                     npu.rebuild_synapse_index();
@@ -3172,7 +3202,7 @@ impl ConnectomeManager {
                 morphology_id
             );
 
-            let (weight, psp, synapse_type) =
+            let (weight, psp, synapse_type, delay_bursts) =
                 self.resolve_synapse_params_for_rule(src_area_id, rule)?;
 
             // Extract synapse_attractivity from rule (probability 0-100)
@@ -3206,6 +3236,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        delay_bursts,
                     )
                 }
                 feagi_evolutionary::MorphologyType::Vectors => {
@@ -3242,6 +3273,7 @@ impl ConnectomeManager {
                             psp,                  // PSP from source area, NOT hardcoded!
                             synapse_attractivity, // From rule, not hardcoded
                             synapse_type,
+                            delay_bursts,
                         )?;
                         // Ensure the propagation engine sees the newly created synapses immediately,
                         // and avoid a second outer NPU mutex acquisition later in the mapping update path.
@@ -3327,6 +3359,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        delay_bursts,
                     )?;
                     if count > 0 {
                         npu.rebuild_synapse_index();
@@ -3384,6 +3417,7 @@ impl ConnectomeManager {
                             psp,
                             synapse_attractivity,
                             synapse_type,
+                            delay_bursts,
                         )?;
                     if count > 0 {
                         npu.rebuild_synapse_index();
@@ -5029,6 +5063,7 @@ impl ConnectomeManager {
                 feagi_npu_neural::types::SynapticPsp(psp),
                 syn_type,
                 0,
+                1,
             )
             .map_err(|e| BduError::Internal(format!("Failed to create synapse: {}", e)))?;
 

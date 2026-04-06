@@ -22,6 +22,7 @@ pub fn apply_expander_morphology(
     psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
+    delay_bursts: u8,
 ) -> BduResult<u32> {
     use crate::rng::get_rng;
     use rand::Rng;
@@ -63,6 +64,7 @@ pub fn apply_expander_morphology(
                         SynapticPsp(psp),
                         synapse_type,
                         0,
+                        delay_bursts,
                     )
                     .is_ok()
             {
