@@ -808,6 +808,9 @@ fn migrate_brain_regions(result: &mut MigrationResult) -> EvoResult<()> {
         .ok_or_else(|| EvoError::InvalidGenome("Genome is not an object".to_string()))?;
 
     if let Some(brain_regions_value) = genome.get_mut("brain_regions") {
+        if brain_regions_value.is_null() {
+            *brain_regions_value = Value::Object(serde_json::Map::new());
+        }
         if let Some(brain_regions) = brain_regions_value.as_object_mut() {
             for region in brain_regions.values_mut() {
                 if let Some(region_obj) = region.as_object_mut() {
@@ -1041,6 +1044,29 @@ mod tests {
             &CoreCorticalType::Power.to_cortical_id().to_string()
         ));
         assert!(!needs_migration("custom01"));
+    }
+
+    #[test]
+    fn test_migrate_brain_regions_null_becomes_empty_object() {
+        let genome = json!({
+            "version": "2.0",
+            "blueprint": {
+                "_____10c-iv00_C-cx-__name-t": "Central vision sensor",
+            },
+            "brain_regions": null,
+            "neuron_morphologies": {},
+            "physiology": {}
+        });
+        let result = migrate_genome(&genome).expect("Migration failed");
+        let br = result
+            .genome
+            .get("brain_regions")
+            .expect("brain_regions key present after migration");
+        assert!(
+            br.is_object(),
+            "brain_regions should be an object after migration, got {:?}",
+            br
+        );
     }
 
     #[test]

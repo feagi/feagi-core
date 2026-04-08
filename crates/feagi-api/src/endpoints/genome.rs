@@ -565,6 +565,8 @@ pub async fn post_amalgamation_destination(
             "regions": region.child_regions,
             "inputs": region.properties.get("inputs").cloned().unwrap_or_else(|| serde_json::json!([])),
             "outputs": region.properties.get("outputs").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "designated_inputs": region.properties.get("designated_inputs").cloned().unwrap_or_else(|| serde_json::json!([])),
+            "designated_outputs": region.properties.get("designated_outputs").cloned().unwrap_or_else(|| serde_json::json!([])),
         }));
     }
 

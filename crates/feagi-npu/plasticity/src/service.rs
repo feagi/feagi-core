@@ -25,6 +25,7 @@ use crate::memory_neuron_array::{
 use crate::memory_stats_cache::{self, MemoryStatsCache};
 use crate::pattern_detector::{BatchPatternDetector, PatternConfig};
 use crate::stdp::STDPConfig;
+use ahash::AHashSet;
 use feagi_npu_neural::types::NeuronId;
 use serde::{Deserialize, Serialize};
 
@@ -1029,6 +1030,8 @@ impl PlasticityService {
         // Delete all synapses from/to these memory neurons
         if !memory_neuron_ids.is_empty() {
             let mut npu_lock = self.npu.lock().unwrap();
+            let scrub_ids: AHashSet<u32> = memory_neuron_ids.iter().copied().collect();
+            npu_lock.scrub_synaptic_arrival_schedule_for_neuron_targets(&scrub_ids);
             for &neuron_id in &memory_neuron_ids {
                 // Delete outgoing synapses
                 let outgoing = npu_lock.get_outgoing_synapses(neuron_id);

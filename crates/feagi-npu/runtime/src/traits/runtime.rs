@@ -322,6 +322,10 @@ pub trait SynapseStorage: Send + Sync {
     /// Semantics: `feagi_npu_neural::synapse::SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`, etc.
     fn edge_flags(&self) -> &[u8];
 
+    /// Per-synapse delay in whole bursts (`>= 1`). Contribution from a fire at burst `T` is
+    /// applied at burst `T + delay_bursts`.
+    fn delay_bursts(&self) -> &[u8];
+
     /// Valid synapse mask
     fn valid_mask(&self) -> &[bool];
 
@@ -346,7 +350,9 @@ pub trait SynapseStorage: Send + Sync {
 
     // === Synapse Creation ===
 
-    /// Add a single synapse (`edge_flag`: see `feagi_npu_neural::synapse::edge_flags`).
+    /// Add a single synapse (`edge_flag`: see `feagi_npu_neural::synapse::edge_flags`;
+    /// `delay_bursts`: `>= 1` whole bursts until PSP is applied to the target).
+    #[allow(clippy::too_many_arguments)]
     fn add_synapse(
         &mut self,
         source: u32,
@@ -355,13 +361,16 @@ pub trait SynapseStorage: Send + Sync {
         psp: f32,
         synapse_type: u8,
         edge_flag: u8,
+        delay_bursts: u8,
     ) -> Result<usize>;
 
     // === Batch Operations ===
 
     /// Batch add synapses. When `edge_flags` is `Some`, its length must match the batch size;
     /// each row sets the packed flag for that synapse (`None` = all zeros).
+    /// `delays` must match the batch size; each entry is `>= 1` bursts.
     #[cfg(any(feature = "std", feature = "alloc"))]
+    #[allow(clippy::too_many_arguments)]
     fn add_synapses_batch(
         &mut self,
         sources: &[u32],
@@ -370,6 +379,7 @@ pub trait SynapseStorage: Send + Sync {
         psps: &[f32],
         types: &[u8],
         edge_flags: Option<&[u8]>,
+        delays: &[u8],
     ) -> Result<()>;
 
     // === Synapse Removal ===

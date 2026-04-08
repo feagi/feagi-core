@@ -24,6 +24,7 @@ pub fn apply_vectors_morphology_with_dimensions(
     psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
+    delay_bursts: u8,
 ) -> BduResult<u32> {
     use crate::rng::get_rng;
     use rand::Rng;
@@ -78,6 +79,7 @@ pub fn apply_vectors_morphology_with_dimensions(
                                 SynapticPsp(psp),
                                 synapse_type,
                                 0,
+                                delay_bursts,
                             )
                             .is_ok()
                     {
@@ -106,6 +108,7 @@ pub fn apply_vectors_morphology(
     psp: f32,
     synapse_attractivity: u8,
     synapse_type: SynapseType,
+    delay_bursts: u8,
 ) -> BduResult<u32> {
     use crate::connectivity::core_morphologies::common::calculate_area_dimensions;
     let dst_dimensions = calculate_area_dimensions(npu, dst_area_id);
@@ -119,5 +122,6 @@ pub fn apply_vectors_morphology(
         psp,
         synapse_attractivity,
         synapse_type,
+        delay_bursts,
     )
 }

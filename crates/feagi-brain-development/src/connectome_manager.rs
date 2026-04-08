@@ -2444,12 +2444,12 @@ impl ConnectomeManager {
         Ok(())
     }
 
-    /// Resolve synapse weight, PSP, and type from a mapping rule.
+    /// Resolve synapse weight, PSP, type, and per-synapse delay (bursts) from a mapping rule.
     fn resolve_synapse_params_for_rule(
         &self,
         src_area_id: &CorticalID,
         rule: &serde_json::Value,
-    ) -> BduResult<(f32, f32, feagi_npu_neural::SynapseType)> {
+    ) -> BduResult<(f32, f32, feagi_npu_neural::SynapseType, u8)> {
         // Get source area to access PSP property
         let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
             crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
@@ -2485,16 +2485,37 @@ impl ConnectomeManager {
         use crate::models::cortical_area::CorticalAreaExt;
         let psp_f32 = src_area.postsynaptic_current();
 
+        let delay_bursts: u8 = if let Some(obj) = rule.as_object() {
+            obj.get("synaptic_delay_bursts")
+                .and_then(|v| v.as_u64())
+                .map(|d| u8::try_from(d).unwrap_or(1))
+                .unwrap_or(1)
+        } else if let Some(arr) = rule.as_array() {
+            arr.get(8)
+                .and_then(|v| v.as_u64())
+                .map(|d| u8::try_from(d).unwrap_or(1))
+                .unwrap_or(1)
+        } else {
+            1
+        };
+        if delay_bursts < 1 {
+            return Err(crate::types::BduError::Internal(format!(
+                "synaptic_delay_bursts must be >= 1 (src area {})",
+                src_area_id.as_base_64()
+            )));
+        }
+
         tracing::debug!(
             target: "feagi-bdu",
-            "Resolved synapse params src={} weight={} psp={} type={:?}",
+            "Resolved synapse params src={} weight={} psp={} type={:?} delay_bursts={}",
             src_area_id.as_base_64(),
             weight,
             psp_f32,
-            synapse_type
+            synapse_type,
+            delay_bursts
         );
 
-        Ok((weight, psp_f32, synapse_type))
+        Ok((weight, psp_f32, synapse_type, delay_bursts))
     }
 
     /// Apply cortical mapping for a specific area pair
@@ -2597,7 +2618,7 @@ impl ConnectomeManager {
                         "Plasticity mapping rule must be an object format".to_string(),
                     ));
                 };
-                let (_weight, psp, synapse_type) =
+                let (_weight, psp, synapse_type, _delay_bursts) =
                     self.resolve_synapse_params_for_rule(src_area_id, rule)?;
                 let bidirectional_stdp = morphology_id == "associative_memory";
                 if let Err(e) = Self::register_stdp_mapping_for_rule(
@@ -2686,6 +2707,7 @@ impl ConnectomeManager {
         psp: f32,
         synapse_attractivity: u8,
         synapse_type: feagi_npu_neural::SynapseType,
+        delay_bursts: u8,
     ) -> BduResult<usize> {
         match morphology_id {
             "projector" | "transpose_xy" | "transpose_yz" | "transpose_xz" => {
@@ -2737,6 +2759,7 @@ impl ConnectomeManager {
                     synapse_attractivity,
                     synapse_type,
                     0,
+                    delay_bursts,
                 )?;
                 // Ensure the propagation engine sees the newly created synapses immediately
                 npu.rebuild_synapse_index();
@@ -2807,6 +2830,7 @@ impl ConnectomeManager {
                         synapse_attractivity,
                         synapse_type,
                         SYNAPSE_EDGE_ASSOCIATIVE_MEMORY,
+                        delay_bursts,
                     )?;
                     npu.rebuild_synapse_index();
                     Ok(count as usize)
@@ -2881,6 +2905,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        delay_bursts,
                     )? as usize
                 } else {
                     // Small area: use regular version (faster for small counts)
@@ -2901,6 +2926,7 @@ impl ConnectomeManager {
                             psp,
                             synapse_attractivity,
                             synapse_type,
+                            delay_bursts,
                         )? as usize;
                     tracing::warn!(
                         target: "feagi-bdu",
@@ -2989,6 +3015,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        delay_bursts,
                     )?;
                 if count > 0 {
                     npu.rebuild_synapse_index();
@@ -3018,6 +3045,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        delay_bursts,
                     )?;
                 if count > 0 {
                     npu.rebuild_synapse_index();
@@ -3058,6 +3086,7 @@ impl ConnectomeManager {
                     psp,
                     synapse_attractivity,
                     synapse_type,
+                    delay_bursts,
                 )?;
                 if count > 0 {
                     npu.rebuild_synapse_index();
@@ -3098,6 +3127,7 @@ impl ConnectomeManager {
                     psp,
                     synapse_attractivity,
                     synapse_type,
+                    delay_bursts,
                 )?;
                 if count > 0 {
                     npu.rebuild_synapse_index();
@@ -3172,7 +3202,7 @@ impl ConnectomeManager {
                 morphology_id
             );
 
-            let (weight, psp, synapse_type) =
+            let (weight, psp, synapse_type, delay_bursts) =
                 self.resolve_synapse_params_for_rule(src_area_id, rule)?;
 
             // Extract synapse_attractivity from rule (probability 0-100)
@@ -3206,6 +3236,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        delay_bursts,
                     )
                 }
                 feagi_evolutionary::MorphologyType::Vectors => {
@@ -3242,6 +3273,7 @@ impl ConnectomeManager {
                             psp,                  // PSP from source area, NOT hardcoded!
                             synapse_attractivity, // From rule, not hardcoded
                             synapse_type,
+                            delay_bursts,
                         )?;
                         // Ensure the propagation engine sees the newly created synapses immediately,
                         // and avoid a second outer NPU mutex acquisition later in the mapping update path.
@@ -3327,6 +3359,7 @@ impl ConnectomeManager {
                         psp,
                         synapse_attractivity,
                         synapse_type,
+                        delay_bursts,
                     )?;
                     if count > 0 {
                         npu.rebuild_synapse_index();
@@ -3384,6 +3417,7 @@ impl ConnectomeManager {
                             psp,
                             synapse_attractivity,
                             synapse_type,
+                            delay_bursts,
                         )?;
                     if count > 0 {
                         npu.rebuild_synapse_index();
@@ -5029,6 +5063,7 @@ impl ConnectomeManager {
                 feagi_npu_neural::types::SynapticPsp(psp),
                 syn_type,
                 0,
+                1,
             )
             .map_err(|e| BduError::Internal(format!("Failed to create synapse: {}", e)))?;
 
@@ -5978,54 +6013,83 @@ impl ConnectomeManager {
         let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id_u32)?;
         properties.insert("cortical_area".to_string(), serde_json::json!(cortical_idx));
 
-        // Get neuron state (returns: consecutive_fire_count, consecutive_fire_limit, snooze_period, membrane_potential, threshold, refractory_countdown)
-        if let Some((consec_count, consec_limit, snooze, mp, threshold, refract_countdown)) =
-            npu_lock.get_neuron_state(NeuronId(neuron_id_u32))
-        {
-            properties.insert(
-                "consecutive_fire_count".to_string(),
-                serde_json::json!(consec_count),
-            );
-            properties.insert(
-                "consecutive_fire_limit".to_string(),
-                serde_json::json!(consec_limit),
-            );
-            properties.insert("snooze_period".to_string(), serde_json::json!(snooze));
-            properties.insert("membrane_potential".to_string(), serde_json::json!(mp));
-            properties.insert("threshold".to_string(), serde_json::json!(threshold));
-            properties.insert(
-                "refractory_countdown".to_string(),
-                serde_json::json!(refract_countdown),
-            );
-        }
+        // Per-neuron dynamics flags + cortical-level propagation flags (synaptic engine).
+        properties.insert(
+            "mp_charge_accumulation".to_string(),
+            serde_json::json!(npu_lock.get_mp_charge_accumulation_at(idx).unwrap_or(false)),
+        );
+        properties.insert(
+            "neuron_type".to_string(),
+            serde_json::json!(npu_lock.get_neuron_type_at(idx).unwrap_or(0)),
+        );
+        let (mp_drv, psp_uni) = self
+            .cortical_idx_to_id
+            .get(&cortical_idx)
+            .map(|cid| {
+                (
+                    npu_lock.get_mp_driven_psp_for_cortical(cid),
+                    npu_lock.get_psp_uniform_distribution_for_cortical(cid),
+                )
+            })
+            .unwrap_or((false, false));
+        properties.insert("mp_driven_psp".to_string(), serde_json::json!(mp_drv));
+        properties.insert(
+            "psp_uniform_distribution".to_string(),
+            serde_json::json!(psp_uni),
+        );
 
-        // Get other properties via get_neuron_property_by_index
-        if let Some(leak) = npu_lock.get_neuron_property_by_index(idx, "leak_coefficient") {
-            properties.insert("leak_coefficient".to_string(), serde_json::json!(leak));
-        }
-        if let Some(resting) = npu_lock.get_neuron_property_by_index(idx, "resting_potential") {
-            properties.insert("resting_potential".to_string(), serde_json::json!(resting));
-        }
-        if let Some(excit) = npu_lock.get_neuron_property_by_index(idx, "excitability") {
-            properties.insert("excitability".to_string(), serde_json::json!(excit));
-        }
-        if let Some(threshold_limit) = npu_lock.get_neuron_property_by_index(idx, "threshold_limit")
-        {
-            properties.insert(
-                "threshold_limit".to_string(),
-                serde_json::json!(threshold_limit),
-            );
-        }
+        // Neuron state: always expose the same keys (stable JSON for clients) even when
+        // `get_neuron_state` is unavailable (e.g. invalid mask / edge indexing).
+        let (consec_count, consec_limit, snooze, mp, threshold, refract_countdown) = npu_lock
+            .get_neuron_state(NeuronId(neuron_id_u32))
+            .unwrap_or((0u16, 0u16, 0u16, 0.0f32, 0.0f32, 0u16));
+        properties.insert(
+            "consecutive_fire_count".to_string(),
+            serde_json::json!(consec_count),
+        );
+        properties.insert(
+            "consecutive_fire_limit".to_string(),
+            serde_json::json!(consec_limit),
+        );
+        properties.insert("snooze_period".to_string(), serde_json::json!(snooze));
+        properties.insert("membrane_potential".to_string(), serde_json::json!(mp));
+        properties.insert("threshold".to_string(), serde_json::json!(threshold));
+        properties.insert(
+            "refractory_countdown".to_string(),
+            serde_json::json!(refract_countdown),
+        );
 
-        // Get u16 properties
-        if let Some(refract_period) =
-            npu_lock.get_neuron_property_u16_by_index(idx, "refractory_period")
-        {
-            properties.insert(
-                "refractory_period".to_string(),
-                serde_json::json!(refract_period),
-            );
-        }
+        // Scalar neuron parameters (stable keys; default when storage omits a value).
+        properties.insert(
+            "leak_coefficient".to_string(),
+            serde_json::json!(npu_lock
+                .get_neuron_property_by_index(idx, "leak_coefficient")
+                .unwrap_or(0.0)),
+        );
+        properties.insert(
+            "resting_potential".to_string(),
+            serde_json::json!(npu_lock
+                .get_neuron_property_by_index(idx, "resting_potential")
+                .unwrap_or(0.0)),
+        );
+        properties.insert(
+            "excitability".to_string(),
+            serde_json::json!(npu_lock
+                .get_neuron_property_by_index(idx, "excitability")
+                .unwrap_or(0.0)),
+        );
+        properties.insert(
+            "threshold_limit".to_string(),
+            serde_json::json!(npu_lock
+                .get_neuron_property_by_index(idx, "threshold_limit")
+                .unwrap_or(0.0)),
+        );
+        properties.insert(
+            "refractory_period".to_string(),
+            serde_json::json!(npu_lock
+                .get_neuron_property_u16_by_index(idx, "refractory_period")
+                .unwrap_or(0)),
+        );
 
         Some(properties)
     }
@@ -6709,6 +6773,68 @@ mod tests {
             rules[0].get("morphology_id").and_then(|v| v.as_str()),
             Some("m1")
         );
+    }
+
+    #[test]
+    fn test_get_neuron_properties_always_includes_neuron_state_keys() {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::RustNPU;
+        use feagi_npu_burst_engine::TracingMutex;
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
+        use std::sync::Arc;
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("Failed to create NPU");
+        let dyn_npu = Arc::new(TracingMutex::new(
+            feagi_npu_burst_engine::DynamicNPU::F32(npu),
+            "TestNPU",
+        ));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+
+        let area_id = CorticalID::try_from_bytes(b"cst_nsp_").unwrap();
+        let area = CorticalArea::new(
+            area_id,
+            0,
+            "n".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+
+        manager.add_cortical_area(area).unwrap();
+        let nid = manager
+            .add_neuron(
+                &area_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+            )
+            .unwrap();
+
+        let props = manager
+            .get_neuron_properties(nid)
+            .expect("neuron properties");
+        for key in [
+            "consecutive_fire_count",
+            "consecutive_fire_limit",
+            "snooze_period",
+            "membrane_potential",
+            "threshold",
+            "refractory_countdown",
+            "mp_charge_accumulation",
+            "neuron_type",
+            "mp_driven_psp",
+            "psp_uniform_distribution",
+            "leak_coefficient",
+            "resting_potential",
+            "excitability",
+            "threshold_limit",
+            "refractory_period",
+        ] {
+            assert!(props.contains_key(key), "missing neuron state key: {key}");
+        }
     }
 
     #[test]

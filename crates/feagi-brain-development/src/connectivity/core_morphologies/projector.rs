@@ -40,6 +40,7 @@ pub fn apply_projector_morphology(
     synapse_attractivity: u8,
     synapse_type: SynapseType,
     edge_flag: u8,
+    delay_bursts: u8,
 ) -> BduResult<u32> {
     // Calculate dimensions by finding max coordinates in each area
     // NOTE: This is a fallback - callers should prefer passing dimensions directly
@@ -58,6 +59,7 @@ pub fn apply_projector_morphology(
         synapse_attractivity,
         synapse_type,
         edge_flag,
+        delay_bursts,
     )
 }
 
@@ -92,6 +94,7 @@ pub fn apply_projector_morphology_with_dimensions(
     synapse_attractivity: u8,
     synapse_type: SynapseType,
     edge_flag: u8,
+    delay_bursts: u8,
 ) -> BduResult<u32> {
     use crate::rng::get_rng;
     use rand::Rng;
@@ -145,6 +148,7 @@ pub fn apply_projector_morphology_with_dimensions(
                             SynapticPsp(psp),
                             synapse_type,
                             edge_flag,
+                            delay_bursts,
                         )
                         .is_ok()
                     {

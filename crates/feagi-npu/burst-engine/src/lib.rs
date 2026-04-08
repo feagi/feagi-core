@@ -103,6 +103,7 @@ pub mod sensory; // Rust sensory injection system
                  // Disabled - uses DynamicNPU
                  // pub mod sleep; // Sleep manager for energy efficiency and memory optimization
 pub mod sparse_memory_lif;
+pub mod synaptic_arrival_schedule;
 pub mod synaptic_propagation;
 pub mod viz_shm_writer; // Rust visualization SHM writer // Rust motor SHM writer
 
@@ -130,6 +131,7 @@ pub use sparse_memory_lif::{
     MemoryAssociativeLifParams, MemoryAssociativeLifParamsByArea, MemoryAssociativeLifState,
     SparseMemoryAssociativeLifStates,
 };
+pub use synaptic_arrival_schedule::*;
 pub use synaptic_propagation::*;
 pub use viz_shm_writer::*;
 
