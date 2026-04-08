@@ -228,6 +228,7 @@ where
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_synapse(
         &mut self,
         source: NeuronId,

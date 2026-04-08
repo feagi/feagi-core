@@ -1188,6 +1188,7 @@ impl<
 
     /// Add a synapse to the NPU (`edge_flag`: `feagi_npu_neural::synapse` packed flags, e.g.
     /// [`SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`]; use `0` for ordinary edges).
+    #[allow(clippy::too_many_arguments)]
     pub fn add_synapse(
         &mut self,
         source: NeuronId,
@@ -1230,6 +1231,7 @@ impl<
     /// - Contiguous SoA memory writes
     /// - Batch source_index updates
     ///
+    #[allow(clippy::too_many_arguments)]
     pub fn add_synapses_batch(
         &mut self,
         sources: Vec<NeuronId>,
@@ -6150,12 +6152,11 @@ mod tests {
             .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 5, 0, 0, 0)
             .unwrap();
         {
-            use feagi_npu_neural::types::FireCandidateList;
             let mut fs = npu.fire_structures.lock().unwrap();
             fs.synaptic_arrival_schedule
                 .fcl_by_arrival_burst
                 .entry(10_000)
-                .or_insert_with(FireCandidateList::new)
+                .or_default()
                 .add_candidate(n_id, 3.0);
         }
         assert_eq!(npu.reset_cortical_area_runtime_state(5), 1);

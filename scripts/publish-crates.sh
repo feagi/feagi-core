@@ -9,7 +9,13 @@ set -e  # Exit on error
 
 CARGO_TOKEN="${CARGO_REGISTRY_TOKEN:-}"
 DRY_RUN="${DRY_RUN:-false}"
+ALLOW_DIRTY="${ALLOW_DIRTY:-false}"
 DELAY_SECONDS=30  # Delay between publishes for crates.io indexing
+
+CARGO_PKG_EXTRA=()
+if [ "$ALLOW_DIRTY" = "true" ]; then
+    CARGO_PKG_EXTRA+=(--allow-dirty)
+fi
 
 if [ -z "$CARGO_TOKEN" ] && [ "$DRY_RUN" != "true" ]; then
     echo "❌ Error: CARGO_REGISTRY_TOKEN environment variable must be set"
@@ -98,7 +104,7 @@ publish_crate() {
     
     # Package first to verify
     echo "   📦 Packaging..."
-    if ! cargo package --quiet; then
+    if ! cargo package --quiet "${CARGO_PKG_EXTRA[@]}"; then
         echo "❌ Failed to package $actual_name"
         cd - > /dev/null
         return 1
@@ -107,10 +113,10 @@ publish_crate() {
     # Publish
     if [ "$DRY_RUN" = "true" ]; then
         echo "   🧪 Dry run: cargo publish --dry-run"
-        cargo publish --dry-run
+        cargo publish --dry-run "${CARGO_PKG_EXTRA[@]}"
     else
         echo "   🚀 Publishing to crates.io..."
-        if cargo publish --token "$CARGO_TOKEN"; then
+        if cargo publish --token "$CARGO_TOKEN" "${CARGO_PKG_EXTRA[@]}"; then
             echo "✅ Successfully published $actual_name v$version"
             
             # Delay for crates.io indexing (except for last crate)
@@ -147,7 +153,7 @@ for crate_path in "${CRATES[@]}"; do
     fi
     
     if publish_crate "$crate_path"; then
-        ((PUBLISHED_COUNT++))
+        PUBLISHED_COUNT=$((PUBLISHED_COUNT + 1))
     else
         FAILED_CRATES+=("$crate_path")
     fi

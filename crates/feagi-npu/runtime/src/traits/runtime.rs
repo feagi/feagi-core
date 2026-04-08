@@ -352,6 +352,7 @@ pub trait SynapseStorage: Send + Sync {
 
     /// Add a single synapse (`edge_flag`: see `feagi_npu_neural::synapse::edge_flags`;
     /// `delay_bursts`: `>= 1` whole bursts until PSP is applied to the target).
+    #[allow(clippy::too_many_arguments)]
     fn add_synapse(
         &mut self,
         source: u32,
@@ -369,6 +370,7 @@ pub trait SynapseStorage: Send + Sync {
     /// each row sets the packed flag for that synapse (`None` = all zeros).
     /// `delays` must match the batch size; each entry is `>= 1` bursts.
     #[cfg(any(feature = "std", feature = "alloc"))]
+    #[allow(clippy::too_many_arguments)]
     fn add_synapses_batch(
         &mut self,
         sources: &[u32],

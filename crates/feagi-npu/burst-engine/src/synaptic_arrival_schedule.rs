@@ -27,10 +27,7 @@ impl SynapticArrivalSchedule {
     ) {
         for (&delay_bursts, area_map) in fcl_by_delay {
             let arrival = fire_burst.saturating_add(u64::from(delay_bursts));
-            let bucket = self
-                .fcl_by_arrival_burst
-                .entry(arrival)
-                .or_insert_with(FireCandidateList::new);
+            let bucket = self.fcl_by_arrival_burst.entry(arrival).or_default();
             for targets in area_map.values() {
                 for &(nid, c) in targets {
                     bucket.add_candidate(nid, c.0);
@@ -42,7 +39,7 @@ impl SynapticArrivalSchedule {
             let entry = self
                 .memory_associative_by_arrival_burst
                 .entry(arrival)
-                .or_insert_with(AHashMap::new);
+                .or_default();
             for (&k, &v) in mmap {
                 *entry.entry(k).or_insert(0.0) += v;
             }

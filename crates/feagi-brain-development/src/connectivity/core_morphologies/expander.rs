@@ -14,6 +14,7 @@ use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 
 /// Apply expander morphology directly on NPU
+#[allow(clippy::too_many_arguments)]
 pub fn apply_expander_morphology(
     npu: &mut feagi_npu_burst_engine::DynamicNPU,
     src_area_id: u32,
