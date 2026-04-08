@@ -22,9 +22,9 @@ impl NeuronFlag {
     }
 }
 
-/// Stores various interneuron cortical area boolean flags under a single byte
+/// Stores various dimensional_neuron cortical area boolean flags under a single byte
 define_bit_packed_u8_flags! {
-    pub struct InterneuronCorticalFlag(
+    pub struct DimensionalNeuronCorticalFlag(
         valid,
         mp_charge_accumulation_enabled,
         mp_driven_psp_enabled,
@@ -38,8 +38,8 @@ define_bit_packed_u8_flags! {
 
 // TODO double check this!
 
-impl InterneuronCorticalFlag {
-    pub const fn new_valid() -> InterneuronCorticalFlag {
-        InterneuronCorticalFlag::from_raw(0x01)
+impl DimensionalNeuronCorticalFlag {
+    pub const fn new_valid() -> DimensionalNeuronCorticalFlag {
+        DimensionalNeuronCorticalFlag::from_raw(0x01)
     }
 }

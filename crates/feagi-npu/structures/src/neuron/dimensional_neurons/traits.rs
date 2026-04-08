@@ -11,10 +11,10 @@ use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, Dimensi
 use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability};
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
 use crate::neuron::FeagiNPUNeuronError;
-use crate::neuron::interneuron::shared_funcs_and_structs::{InterneuronDataFromCorticalArea, InterneuronDataRefSliceAllCorticalAreas, InterneuronDataRefSliceSingleCorticalArea};
+use crate::neuron::dimensional_neurons::shared_funcs_and_structs::{DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
 
 
-pub trait InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>:
+pub trait DimensionalNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>:
 BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
@@ -44,11 +44,11 @@ where
     const DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED: bool = false;
 
     /// Returns a struct of references to the slices of all neuron data (include sparse invalids)
-    fn get_neuron_values_of_all_interneuron_cortical_areas_to_process(&mut self) -> InterneuronDataRefSliceAllCorticalAreas<'_, NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>;
+    fn get_neuron_values_of_all_dimensional_neuron_cortical_areas_to_process(&mut self) -> DimensionalNeuronDataRefSliceAllCorticalAreas<'_, NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>;
 
     /// Returns a struct of references to the slices of neuron data of a cortical index if it exists
-    fn get_neuron_values_of_specific_interneuron_cortical_area_to_process(&mut self, cortical_area_index: CorticalIndexQuant)
-                                                                          -> Result<InterneuronDataRefSliceSingleCorticalArea<'_, NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>, FeagiNPUNeuronError>;
+    fn get_neuron_values_of_specific_dimensional_neuron_cortical_area_to_process(&mut self, cortical_area_index: CorticalIndexQuant)
+                                                                                 -> Result<DimensionalNeuronDataRefSliceSingleCorticalArea<'_, NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>, FeagiNPUNeuronError>;
 
     fn set_neuron_fire_threshold(&mut self, cortical_area_index: CorticalIndexQuant, executor: &impl NeuronFireThresholdExecutor<PotentialQuant, CoordQuant>)
                                  -> Result<(), FeagiNPUNeuronError>;
@@ -63,11 +63,11 @@ where
 
 
 #[cfg(feature = "alloc")]
-pub trait InterneuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>:
+pub trait DimensionalNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>:
 DimensionalAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> +
 DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> +
 BaseNeuronAllocStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> +
-InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+DimensionalNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
@@ -103,7 +103,7 @@ where
     fn create_cortical_area_with_individualized_neurons(&mut self,
                                                         cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                         neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                        neuron_data: InterneuronDataFromCorticalArea<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>)
+                                                        neuron_data: DimensionalNeuronDataFromCorticalArea<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>)
                                                         -> Result<(CorticalAreaIndex<CorticalIndexQuant>, Range<NPUNeuronIndex<NeuronIndexQuant>>), FeagiNPUNeuronError>;
 }
 

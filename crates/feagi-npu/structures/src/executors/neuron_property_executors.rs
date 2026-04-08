@@ -10,7 +10,7 @@ use crate::quantizables::{FireThreshold};
 
 //region Neuron Fire Threshold
 
-/// Runs on interneuron cortical areas, to set the neuron fire threshold across the area
+/// Runs on dimensional_neuron cortical areas, to set the neuron fire threshold across the area
 pub trait NeuronFireThresholdExecutor<PotentialQuant, CoordQuant> where
     PotentialQuant: QuantizableValueType,
     CoordQuant: QuantizableUIntType,
@@ -19,7 +19,7 @@ pub trait NeuronFireThresholdExecutor<PotentialQuant, CoordQuant> where
     // Neuron order to be incrementing x->y->z
     fn set_new_fire_thresholds(&self, thresholds: &mut [PotentialQuant],
                           neuron_flags: &[NeuronFlag],
-                          cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>, 
+                          cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>,
                           number_neurons_per_voxel: NumberNeuronsPerVoxel)
         -> Result<(), FeagiNPUNeuronError>;
 }
@@ -46,7 +46,7 @@ impl<PotentialQuant, CoordQuant> NeuronFireThresholdExecutor<PotentialQuant, Coo
     fn set_new_fire_thresholds(&self,
                                thresholds: &mut [PotentialQuant],
                                _neuron_flags: &[NeuronFlag],
-                               _cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>, 
+                               _cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>,
                                _number_neurons_per_voxel: NumberNeuronsPerVoxel)
                                -> Result<(), FeagiNPUNeuronError>
     {
@@ -62,7 +62,7 @@ impl<PotentialQuant, CoordQuant> NeuronFireThresholdExecutor<PotentialQuant, Coo
 
 //region Neuron Leak Coefficient
 
-/// Runs on interneuron cortical areas, to set leak coefficient across neurons
+/// Runs on dimensional_neuron cortical areas, to set leak coefficient across neurons
 pub trait NeuronLeakCoefficientExecutor<PercentageQuant, CoordQuant> {
 
     // Neuron order to be incrementing x->y->z

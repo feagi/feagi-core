@@ -1,7 +1,7 @@
 
 #[repr(u8)]
 pub enum NPUNeuronType {
-    Interneuron,
+    DimensionalNeuron,
     Memory,
     SensoryMotorAndCore
 }

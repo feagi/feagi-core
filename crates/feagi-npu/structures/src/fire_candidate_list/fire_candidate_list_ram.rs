@@ -7,7 +7,7 @@
 pub struct FireCandidateListRam<NeuronIndexQuant> where
     NeuronIndexQuant: QuantizableUInt,
 {
-    interneuron_indexes: Vec<NeuronNPUIndex<NeuronIndexQuant>>,
+    dimensional_neuron_indexes: Vec<NeuronNPUIndex<NeuronIndexQuant>>,
 }
 
 impl<NeuronIndexQuant> FireCandidateListRam<NeuronIndexQuant> where
@@ -15,7 +15,7 @@ impl<NeuronIndexQuant> FireCandidateListRam<NeuronIndexQuant> where
 {
     pub fn new(preallocated_index_count: usize) -> Self {
         Self {
-            interneuron_indexes: Vec::with_capacity(preallocated_index_count),
+            dimensional_neuron_indexes: Vec::with_capacity(preallocated_index_count),
         }
     }
 }
@@ -23,19 +23,19 @@ impl<NeuronIndexQuant> FireCandidateListRam<NeuronIndexQuant> where
 impl<NeuronIndexQuant> FireCandidateList<NeuronIndexQuant> for FireCandidateListRam<NeuronIndexQuant> where
     NeuronIndexQuant: QuantizableUInt,
 {
-    fn get_interneuron_indexes_slice(&self) -> &[NeuronNPUIndex<NeuronIndexQuant>] {
-        self.interneuron_indexes.as_slice()
+    fn get_dimensional_neuron_indexes_slice(&self) -> &[NeuronNPUIndex<NeuronIndexQuant>] {
+        self.dimensional_neuron_indexes.as_slice()
     }
 
-    fn get_interneuron_indexes_slice_mut(&mut self) -> &[NeuronNPUIndex<NeuronIndexQuant>] {
-        self.interneuron_indexes.as_mut_slice()
+    fn get_dimensional_neuron_indexes_slice_mut(&mut self) -> &[NeuronNPUIndex<NeuronIndexQuant>] {
+        self.dimensional_neuron_indexes.as_mut_slice()
     }
 
-    fn get_interneuron_indexes_mut(&self) -> &mut Vec<NeuronNPUIndex<NeuronIndexQuant>> {
-        &mut self.interneuron_indexes
+    fn get_dimensional_neuron_indexes_mut(&self) -> &mut Vec<NeuronNPUIndex<NeuronIndexQuant>> {
+        &mut self.dimensional_neuron_indexes
     }
 
-    fn add_interneuron_index(&mut self, neuron_index_quant: NeuronIndexQuant) {
-        self.interneuron_indexes.push(neuron_index_quant);
+    fn add_dimensional_neuron_index(&mut self, neuron_index_quant: NeuronIndexQuant) {
+        self.dimensional_neuron_indexes.push(neuron_index_quant);
     }
 }

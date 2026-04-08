@@ -4,7 +4,7 @@
 
 pub struct ConnectomeAllocRam<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, SynapseIndexQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
+    NeuronIndexQuant: DimensionalNeuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     SynapseIndexQuant: SynapseIndex,
     CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
@@ -15,7 +15,7 @@ where
 
 {
     // Neurons
-    neuron_interneuron: InterneuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>,
+    neuron_dimensional_neuron: DimensionalNeuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>,
     
     // Synapses
     synapse_nonplastic: NonplasticSynapseAllocRAMStorage<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant>
@@ -24,7 +24,7 @@ where
 
 impl ConnectomeAllocRam<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, SynapseIndexQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
+    NeuronIndexQuant: DimensionalNeuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     SynapseIndexQuant: SynapseIndex,
     CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
@@ -36,7 +36,7 @@ where
 
     pub fn new(number_neurons_to_preallocate_space_for: NeuronIndexQuant, number_synapses_to_preallocate: SynapseIndexQuant, number_cortical_areas_to_preallocate_space_for: CorticalIndexQuant) -> Result<Self, FeagiNPUDataError> {
         Ok(Self {
-            InterneuronAllocRAMStorage::new(number_neurons_to_preallocate_space_for, number_cortical_areas_to_preallocate_space_for),
+            DimensionalNeuronAllocRAMStorage::new(number_neurons_to_preallocate_space_for, number_cortical_areas_to_preallocate_space_for),
             NonplasticSynapseAllocRAMStorage::new(number_synapses_to_preallocate),
         })
     }
@@ -50,7 +50,7 @@ where
 
 impl ConnectomeBaseTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, SynapseIndexQuant, PercentageQuant> for ConnectomeAllocRam<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, SynapseIndexQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
+    NeuronIndexQuant: DimensionalNeuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     SynapseIndexQuant: SynapseIndex,
     CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
@@ -83,16 +83,16 @@ where
 
     // TODO there are faster ways if we just want to set a uniform type!
 
-    fn set_interneuron_fire_thresholds(&mut self, cortical_area_index: CorticalIndexQuant,
+    fn set_dimensional_neuron_fire_thresholds(&mut self, cortical_area_index: CorticalIndexQuant,
                                        executor: &Impl<NeuronFireThresholdExecutor>)
                                        -> Result<(), FeagiNPUDataError> {
-        &mut self.neuron_interneuron.set_fire_thresholds(cortical_area_index, increment_function)
+        &mut self.neuron_dimensional_neuron.set_fire_thresholds(cortical_area_index, increment_function)
     }
 
-    fn set_interneuron_leak_coefficients(&mut self, cortical_area_index: CorticalIndexQuant,
+    fn set_dimensional_neuron_leak_coefficients(&mut self, cortical_area_index: CorticalIndexQuant,
                                          executor: &Impl<NeuronLeakCoefficientExecutor>)
                                          -> Result<(), FeagiNPUDataError> {
-        &mut self.neuron_interneuron.set_leak_coefficient(cortical_area_index, increment_function)
+        &mut self.neuron_dimensional_neuron.set_leak_coefficient(cortical_area_index, increment_function)
     }
 
     //endregion
@@ -102,7 +102,7 @@ where
 
 impl ConnectomeAllocTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, SynapseIndexQuant, PercentageQuant> for ConnectomeAllocRam<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, SynapseIndexQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
+    NeuronIndexQuant: DimensionalNeuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     SynapseIndexQuant: SynapseIndex,
     CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
@@ -114,7 +114,7 @@ where
 
     fn free_unused_neuron_capacity(&mut self, percent_to_keep: f32) -> Result<(), FeagiNPUDataError> {
 
-        //self.neuron_interneuron.free_unused_neuron_capacity(number_interneurons_to_preserve);
+        //self.neuron_dimensional_neuron.free_unused_neuron_capacity(number_dimensional_neurons_to_preserve);
         Ok(())
     }
 
@@ -134,15 +134,15 @@ where
 
     //endregion
 
-    //region Interneuron Cortical Areas
+    //region DimensionalNeuron Cortical Areas
 
 
-    fn create_interneuron_cortical_area_with_default_neurons(&mut self,
+    fn create_dimensional_neuron_cortical_area_with_default_neurons(&mut self,
                                                              cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                              neurons_per_voxel: NumberNeuronsPerVoxel)
                                                              ->  Result<CorticalIndexQuant, FeagiNPUDataError>;
 
-    fn create_interneuron_cortical_area_with_uniform_neurons(&mut self, // TODO change other instances of spanned to uniform
+    fn create_dimensional_neuron_cortical_area_with_uniform_neurons(&mut self, // TODO change other instances of spanned to uniform
                                                              cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                              neurons_per_voxel: NumberNeuronsPerVoxel,
                                                              neuron_global_burst_index_of_last_firing: BurstIndexQuant,
@@ -161,14 +161,14 @@ where
 
     // TODO ask about passing structs or arrays?
     /*
-    fn create_interneuron_cortical_area_with_configured_neurons(&mut self, cortical_area_data: InterneuronCorticalData,
-                                                                neuron_data: InterneuronDataFromCorticalArea)
+    fn create_dimensional_neuron_cortical_area_with_configured_neurons(&mut self, cortical_area_data: DimensionalNeuronCorticalData,
+                                                                neuron_data: DimensionalNeuronDataFromCorticalArea)
                                                                 -> Result<(CorticalIndexQuant, Range<NeuronIndexQuant>), FeagiNPUDataError>)
      */
 
 
 
-    fn resize_interneuron_cortical_area_with_default_neurons(&mut self,
+    fn resize_dimensional_neuron_cortical_area_with_default_neurons(&mut self,
                                                              cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                              neurons_per_voxel: NumberNeuronsPerVoxel,
                                                              cortical_index: CorticalIndexQuant,
@@ -177,7 +177,7 @@ where
 
     // TODO resize with spanned?
 
-    fn delete_interneuron_cortical_area(&mut self,
+    fn delete_dimensional_neuron_cortical_area(&mut self,
                                         cortical_index: CorticalIndexQuant)
                                         -> Result<(), FeagiNPUDataError>;
 

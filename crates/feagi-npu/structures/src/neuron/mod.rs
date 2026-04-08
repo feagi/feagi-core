@@ -1,8 +1,7 @@
 mod feagi_npu_neuron_error;
 
-pub mod interneuron;
+pub mod dimensional_neurons;
 pub mod memory;
-pub mod sensory_motor_and_core;
 pub mod base_traits;
 pub mod base_dimension_traits;
 pub mod npu_neuron_type;

@@ -10,14 +10,14 @@ use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NeuronMembranePotential, NumberNeuronsPerVoxel};
 use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability};
-use crate::neuron::flags::{InterneuronCorticalFlag, NeuronFlag};
-use crate::neuron::interneuron::traits::InterneuronStaticStorageTrait;
+use crate::neuron::flags::{DimensionalNeuronCorticalFlag, NeuronFlag};
+use crate::neuron::dimensional_neurons::traits::DimensionalNeuronStaticStorageTrait;
 
 /// Stores data as to the property of cortical areas
-/// WARNING: Do not allow modification of this struct outside their implemented interneuron structs, as
+/// WARNING: Do not allow modification of this struct outside their implemented dimensional_neuron structs, as
 /// often values here are tied to other cache values and vice versa!
 #[derive(Debug, Clone)]
-pub(crate) struct InterneuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>
+pub(crate) struct DimensionalNeuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
@@ -25,7 +25,7 @@ where
     PotentialQuant: QuantizableValueType,
     PercentageQuant: QuantizablePercentType,
 {
-    pub flags: InterneuronCorticalFlag, // NOTE: do not allow modifying this structure outside this
+    pub flags: DimensionalNeuronCorticalFlag, // NOTE: do not allow modifying this structure outside this
     pub neuron_range: Range<NPUNeuronIndex<NeuronIndexQuant>>,
     pub number_neurons_invalid_from_degeneration: NeuronCount<NeuronIndexQuant>,
     pub dimensions: NeuronVoxelDimensions<CoordQuant>,
@@ -36,7 +36,7 @@ where
     pub consecutive_fire_limit: BurstDelta<BurstDeltaQuant>,
 }
 
-impl<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant> InterneuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>
+impl<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant> DimensionalNeuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
@@ -47,16 +47,16 @@ where
     pub const fn new_default_valid(neuron_range: Range<NPUNeuronIndex<NeuronIndexQuant>>,
                                    voxel_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                    number_neurons_per_voxel: NumberNeuronsPerVoxel) -> Self {
-        InterneuronCorticalData {
-            flags: InterneuronCorticalFlag::new_valid(),
+        DimensionalNeuronCorticalData {
+            flags: DimensionalNeuronCorticalFlag::new_valid(),
             neuron_range,
             number_neurons_invalid_from_degeneration: NeuronCount::ZERO,
             dimensions: voxel_dimensions,
             number_neurons_per_voxel,
-            excitability: InterneuronStaticStorageTrait::DEFAULT_CORTICAL_EXCITABILITY,
-            refractory_period_limit: InterneuronStaticStorageTrait::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
-            fire_threshold_limit: InterneuronStaticStorageTrait::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
-            consecutive_fire_limit: InterneuronStaticStorageTrait::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
+            excitability: DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_EXCITABILITY,
+            refractory_period_limit: DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
+            fire_threshold_limit: DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
+            consecutive_fire_limit: DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
         }
     }
 }
@@ -65,7 +65,7 @@ where
 // TODO I took a best guess at which fields should be mutable
 
 /// Used to pass around slices easily at low cost for all cortical areas
-pub struct InterneuronDataRefSliceAllCorticalAreas<'a, NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+pub struct DimensionalNeuronDataRefSliceAllCorticalAreas<'a, NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
@@ -84,12 +84,12 @@ where
     pub neuron_refractory_countdown: &'a mut [BurstDelta<BurstDeltaQuant>],
     pub neuron_consecutive_fire_count: &'a mut [BurstDelta<BurstDeltaQuant>],
 
-    pub cortical_data: &'a [InterneuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>],
+    pub cortical_data: &'a [DimensionalNeuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>],
 }
 
 
 /// Used to pass around slices easily at low cost for a single cortical area
-pub struct InterneuronDataRefSliceSingleCorticalArea<'a, NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+pub struct DimensionalNeuronDataRefSliceSingleCorticalArea<'a, NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
@@ -108,15 +108,15 @@ where
     pub neuron_refractory_countdown: &'a mut [BurstDelta<BurstDeltaQuant>],
     pub neuron_consecutive_fire_count: &'a mut [BurstDelta<BurstDeltaQuant>],
 
-    pub cortical_data: &'a InterneuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>,
-    /// Sub-range of global neuron indices covered by the slices above (same shape as [`InterneuronCorticalData::neuron_range`]).
+    pub cortical_data: &'a DimensionalNeuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>,
+    /// Sub-range of global neuron indices covered by the slices above (same shape as [`DimensionalNeuronCorticalData::neuron_range`]).
     pub global_neuron_index_range: Range<NPUNeuronIndex<NeuronIndexQuant>>,
 }
 
 
 /// Used to pass data of neurons to be added or moved for a cortical index
 #[cfg(feature = "alloc")]
-pub struct InterneuronDataFromCorticalArea<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+pub struct DimensionalNeuronDataFromCorticalArea<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
@@ -133,5 +133,5 @@ where
     pub neuron_refractory_countdown: Vec<BurstDelta<BurstDeltaQuant>>,
     pub neuron_consecutive_fire_count: Vec<BurstDelta<BurstDeltaQuant>>,
 
-    pub cortical_data: InterneuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>,
+    pub cortical_data: DimensionalNeuronCorticalData<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, PotentialQuant, PercentageQuant>,
 }

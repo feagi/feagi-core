@@ -1,15 +1,15 @@
 use crate::descriptors::{
-    BurstDeltaCount, CorticalAreaIndex, InterneuronIndex, NeuronVoxelCoordinate,
+    BurstDeltaCount, CorticalAreaIndex, DimensionalNeuronIndex, NeuronVoxelCoordinate,
     NumberNeuronsPerVoxel, PercentageScale, PotentialUnit, QuantizableUInt,
 };
 
-use super::interneuron_flag::InterneuronFlag;
+use super::dimensional_neuron_flag::DimensionalNeuronFlag;
 
-// NOTE: neuron_count_per_cortical_index: As interneuron count and cortical area count cannot
+// NOTE: neuron_count_per_cortical_index: As dimensional_neuron count and cortical area count cannot
 // change, we init this array with neurons grouped in xyz (incrementing in order) by cortical area,
 // those groupings being ordered by cortical area size biggest to smallest (in terms of neuron
 // count) such that the most common areas to hit (by chance) are at the start.
-pub struct InterneuronStaticEmbeddedStorage<
+pub struct DimensionalNeuronStaticEmbeddedStorage<
     NeuronIndexQuant,
     CorticalIndexQuant,
     CoordQuant,
@@ -21,7 +21,7 @@ pub struct InterneuronStaticEmbeddedStorage<
     const MAX_CORTICAL_AREA_INDEX: usize,
 >
 where
-    NeuronIndexQuant: InterneuronIndex,
+    NeuronIndexQuant: DimensionalNeuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     CoordQuant: QuantizableUInt, // Using this here as we may be using coords or dimensions
     BurstDeltaQuant: BurstCount,
@@ -38,7 +38,7 @@ where
     neuron_threshold: [PotentialQuant; MAX_NEURON_INDEX],
     neuron_voxel_coordinate: [NeuronVoxelCoordinate<CoordQuant>; MAX_NEURON_INDEX], // TODO do we need this?
     neuron_leak_coefficient: [PercentageQuant; MAX_NEURON_INDEX],
-    neuron_flags: [InterneuronFlag; MAX_NEURON_INDEX],
+    neuron_flags: [DimensionalNeuronFlag; MAX_NEURON_INDEX],
     neuron_refractory_countdown: [BurstQuant; MAX_NEURON_INDEX],
     consecutive_fire_count: [BurstQuant; MAX_NEURON_INDEX],
     consecutive_fire_limit: [BurstQuant; MAX_NEURON_INDEX], c*
@@ -57,9 +57,9 @@ where
     neurons_per_voxel: [NumberNeuronsPerVoxel; MAX_CORTICAL_AREA_INDEX],
 }
 
-impl InterneuronStaticEmbeddedStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+impl DimensionalNeuronStaticEmbeddedStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
+    NeuronIndexQuant: DimensionalNeuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     CoordQuant: NeuronVoxelCoordinate<QuantizableUInt>,
     BurstQuant: BurstDeltaCount,
@@ -73,9 +73,9 @@ where
 
 }
 
-impl InterneuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for InterneuronStaticEmbeddedStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+impl DimensionalNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for DimensionalNeuronStaticEmbeddedStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
+    NeuronIndexQuant: DimensionalNeuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     CoordQuant: NeuronVoxelCoordinate<QuantizableUInt>,
     BurstQuant: BurstDeltaCount,
@@ -84,11 +84,11 @@ where
 {
 
     /// Returns a struct of references to the slices of all neuron data (include sparse invalids)
-    fn get_all_neuron_values_to_process(&mut self) -> InterneuronDataRefSliceMultiCorticalArea<'_>;
+    fn get_all_neuron_values_to_process(&mut self) -> DimensionalNeuronDataRefSliceMultiCorticalArea<'_>;
 
     /// Returns a struct of references to the slices of neuron data of a cortical index if it exists
     fn get_cortical_area_neuron_values_to_process(&mut self, cortical_area_index: CorticalIndexQuant)
-                                                  -> Result<InterneuronDataRefSliceSingleCorticalArea<'_>, FeagiNPUDataError>;
+                                                  -> Result<DimensionalNeuronDataRefSliceSingleCorticalArea<'_>, FeagiNPUDataError>;
 
 
 }
@@ -96,9 +96,9 @@ where
 
 
 
-impl DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for InterneuronStaticEmbeddedStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+impl DimensionalStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for DimensionalNeuronStaticEmbeddedStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
+    NeuronIndexQuant: DimensionalNeuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     CoordQuant: NeuronVoxelCoordinate<QuantizableUInt>,
     BurstQuant: BurstDeltaCount,
@@ -110,9 +110,9 @@ where
 
 
 
-impl BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for InterneuronStaticEmbeddedStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
+impl BaseNeuronStaticStorageTrait<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant> for DimensionalNeuronStaticEmbeddedStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>
 where
-    NeuronIndexQuant: InterneuronIndex,
+    NeuronIndexQuant: DimensionalNeuronIndex,
     CorticalIndexQuant: CorticalAreaIndex,
     CoordQuant: NeuronVoxelCoordinate<QuantizableUInt>,
     BurstQuant: BurstDeltaCount,
