@@ -422,6 +422,10 @@ pub async fn post_amalgamation_destination(
         }
 
         let mut props = area.properties.clone();
+
+        // Remove cortical_mapping_dst from properties - connections will be imported separately
+        props.remove("cortical_mapping_dst");
+
         props.insert(
             "parent_region_id".to_string(),
             serde_json::json!(amalgamation_id.clone()),
@@ -506,6 +510,252 @@ pub async fn post_amalgamation_destination(
             .create_cortical_areas(to_create)
             .await
             .map_err(|e| ApiError::internal(format!("Failed to import cortical areas: {}", e)))?;
+    }
+
+    // 3) Import morphologies used by the imported areas' cortical mappings.
+    //
+    // Collect all morphology IDs referenced in the cortical_mapping_dst of imported areas,
+    // then import those morphologies from the imported genome into the current genome.
+    let imported_area_ids: std::collections::HashSet<String> = imported_genome
+        .cortical_areas
+        .keys()
+        .map(|id| id.as_base_64())
+        .filter(|id| !skipped_existing.contains(id))
+        .collect();
+
+    let mut required_morphologies: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+
+    // Scan imported areas' mappings to collect required morphology IDs
+    for area in imported_genome.cortical_areas.values() {
+        if !imported_area_ids.contains(&area.cortical_id.as_base_64()) {
+            continue;
+        }
+
+        let Some(cortical_mapping_dst) = area.properties.get("cortical_mapping_dst") else {
+            continue;
+        };
+        let Some(dst_map) = cortical_mapping_dst.as_object() else {
+            continue;
+        };
+
+        for mapping_data in dst_map.values() {
+            let Some(mapping_array) = mapping_data.as_array() else {
+                continue;
+            };
+
+            for rule in mapping_array {
+                // Extract morphology_id from rule (can be object or array format)
+                let morphology_id = if let Some(obj) = rule.as_object() {
+                    obj.get("morphology_id").and_then(|v| v.as_str())
+                } else if let Some(arr) = rule.as_array() {
+                    arr.first().and_then(|v| v.as_str())
+                } else {
+                    None
+                };
+
+                if let Some(morph_id) = morphology_id {
+                    required_morphologies.insert(morph_id.to_string());
+                }
+            }
+        }
+    }
+
+    // Import each required morphology if it doesn't already exist
+    let mut imported_morphology_count = 0;
+    let mut skipped_morphology_count = 0;
+
+    for morphology_id in &required_morphologies {
+        // Check if morphology already exists
+        let morphologies = connectome_service.get_morphologies().await.map_err(|e| {
+            ApiError::internal(format!("Failed to get existing morphologies: {}", e))
+        })?;
+
+        if morphologies.contains_key(morphology_id) {
+            skipped_morphology_count += 1;
+            continue;
+        }
+
+        // Get morphology from imported genome
+        let Some(morphology) = imported_genome.morphologies.get(morphology_id) else {
+            tracing::warn!(
+                target: "feagi-api",
+                "🧬 [AMALGAMATION] Morphology '{}' referenced in mappings but not found in imported genome",
+                morphology_id
+            );
+            continue;
+        };
+
+        // Import the morphology
+        match connectome_service
+            .create_morphology(morphology_id.clone(), morphology.clone())
+            .await
+        {
+            Ok(_) => {
+                tracing::debug!(
+                    target: "feagi-api",
+                    "🧬 [AMALGAMATION] Imported morphology '{}'",
+                    morphology_id
+                );
+                imported_morphology_count += 1;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "feagi-api",
+                    "🧬 [AMALGAMATION] Failed to import morphology '{}': {}",
+                    morphology_id,
+                    e
+                );
+            }
+        }
+    }
+
+    if imported_morphology_count > 0 {
+        tracing::info!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Imported {} morphologies (skipped {} existing)",
+            imported_morphology_count,
+            skipped_morphology_count
+        );
+    }
+
+    // 4) Import cortical mappings (internal connections) between imported areas.
+    //
+    // Only import mappings where both source and destination areas were successfully imported.
+    // This preserves internal connectivity of the imported circuit while avoiding dangling references.
+    // Note: imported_area_ids already collected above during morphology import.
+
+    let mut imported_mapping_count = 0;
+    let mut skipped_mapping_count = 0;
+
+    for area in imported_genome.cortical_areas.values() {
+        let src_area_id = area.cortical_id.as_base_64();
+
+        // Skip if this area was not imported (already existed)
+        if !imported_area_ids.contains(&src_area_id) {
+            continue;
+        }
+
+        // Check if area has cortical_mapping_dst property
+        let Some(cortical_mapping_dst) = area.properties.get("cortical_mapping_dst") else {
+            continue;
+        };
+        let Some(dst_map) = cortical_mapping_dst.as_object() else {
+            continue;
+        };
+
+        // Import each mapping where destination exists in connectome
+        for (dst_area_id, mapping_data) in dst_map {
+            // Check if destination area exists in connectome (either newly imported or already existing)
+            let dst_exists = connectome_service
+                .cortical_area_exists(dst_area_id)
+                .await
+                .unwrap_or(false);
+
+            if !dst_exists {
+                // Skip external references to areas not in this brain
+                skipped_mapping_count += 1;
+                continue;
+            }
+
+            let Some(mapping_array) = mapping_data.as_array() else {
+                tracing::warn!(
+                    target: "feagi-api",
+                    "🧬 [AMALGAMATION] Invalid mapping data from {} to {}: not an array",
+                    src_area_id,
+                    dst_area_id
+                );
+                continue;
+            };
+
+            // Import the cortical mapping
+            match connectome_service
+                .update_cortical_mapping(
+                    src_area_id.clone(),
+                    dst_area_id.clone(),
+                    mapping_array.clone(),
+                )
+                .await
+            {
+                Ok(synapse_count) => {
+                    tracing::debug!(
+                        target: "feagi-api",
+                        "🧬 [AMALGAMATION] Imported mapping {} -> {} ({} synapses)",
+                        src_area_id,
+                        dst_area_id,
+                        synapse_count
+                    );
+                    imported_mapping_count += 1;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        target: "feagi-api",
+                        "🧬 [AMALGAMATION] Failed to import mapping {} -> {}: {}",
+                        src_area_id,
+                        dst_area_id,
+                        e
+                    );
+                    skipped_mapping_count += 1;
+                }
+            }
+        }
+    }
+
+    if imported_mapping_count > 0 {
+        tracing::info!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Successfully imported {} cortical mappings (skipped {} external/missing mappings)",
+            imported_mapping_count,
+            skipped_mapping_count
+        );
+    } else if skipped_mapping_count > 0 {
+        tracing::warn!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] No internal mappings imported! Skipped {} mappings (all external or missing)",
+            skipped_mapping_count
+        );
+    } else {
+        tracing::info!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] No cortical mappings found in imported genome"
+        );
+    }
+
+    // 5) Invalidate all relevant health_check hashes to force BV cache refresh.
+    //
+    // Amalgamation modifies:
+    // - Brain regions (new region created)
+    // - Cortical areas (new areas added)
+    // - Brain geometry (positions of new areas)
+    // - Morphologies (new morphologies imported)
+    // - Cortical mappings (new connections created)
+    //
+    // Incrementing these hashes signals BV to refresh its cached data without requiring a restart.
+    {
+        let state_manager = feagi_state_manager::StateManager::instance();
+        let state_manager = state_manager.read();
+
+        // Increment each relevant hash (adding 1 invalidates client cache)
+        state_manager
+            .set_brain_regions_hash(state_manager.get_brain_regions_hash().wrapping_add(1));
+        state_manager
+            .set_cortical_areas_hash(state_manager.get_cortical_areas_hash().wrapping_add(1));
+        state_manager
+            .set_brain_geometry_hash(state_manager.get_brain_geometry_hash().wrapping_add(1));
+        if imported_morphology_count > 0 {
+            state_manager
+                .set_morphologies_hash(state_manager.get_morphologies_hash().wrapping_add(1));
+        }
+        if imported_mapping_count > 0 {
+            state_manager.set_cortical_mappings_hash(
+                state_manager.get_cortical_mappings_hash().wrapping_add(1),
+            );
+        }
+
+        tracing::info!(
+            target: "feagi-api",
+            "🧬 [AMALGAMATION] Invalidated health_check hashes for BV cache refresh"
+        );
     }
 
     // Clear pending + write history entry
