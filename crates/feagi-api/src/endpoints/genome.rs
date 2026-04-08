@@ -405,6 +405,12 @@ pub async fn post_amalgamation_destination(
     let mut to_create: Vec<feagi_services::types::CreateCorticalAreaParams> = Vec::new();
     let mut skipped_existing: Vec<String> = Vec::new();
 
+    // Get root region ID for IPU/OPU areas
+    let root_region_id = connectome_service
+        .get_root_region_id()
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get root region ID: {}", e)))?;
+
     for area in imported_genome.cortical_areas.values() {
         let cortical_id = area.cortical_id.as_base_64();
         let exists = connectome_service
@@ -426,9 +432,48 @@ pub async fn post_amalgamation_destination(
         // Remove cortical_mapping_dst from properties - connections will be imported separately
         props.remove("cortical_mapping_dst");
 
+        // Determine correct parent region based on area type
+        // IPU/OPU areas MUST go to root region, all others go to the amalgamation region
+        let area_type = area.cortical_id.as_cortical_type().map_err(|e| {
+            ApiError::internal(format!(
+                "Failed to get cortical area type for {}: {}",
+                cortical_id, e
+            ))
+        })?;
+
+        let target_parent_region_id = match area_type {
+            feagi_structures::genomic::cortical_area::CorticalAreaType::BrainInput(_)
+            | feagi_structures::genomic::cortical_area::CorticalAreaType::BrainOutput(_) => {
+                // IPU/OPU areas go to root region
+                match root_region_id.as_ref() {
+                    Some(root_id) => {
+                        tracing::info!(
+                            target: "feagi-api",
+                            "🧬 [AMALGAMATION] IPU/OPU area {} will be placed in root region {}",
+                            cortical_id,
+                            root_id
+                        );
+                        root_id.clone()
+                    }
+                    None => {
+                        tracing::warn!(
+                            target: "feagi-api",
+                            "🧬 [AMALGAMATION] No root region found for IPU/OPU area {}, using amalgamation region",
+                            cortical_id
+                        );
+                        amalgamation_id.clone()
+                    }
+                }
+            }
+            _ => {
+                // Custom, Memory, Core areas go to amalgamation region
+                amalgamation_id.clone()
+            }
+        };
+
         props.insert(
             "parent_region_id".to_string(),
-            serde_json::json!(amalgamation_id.clone()),
+            serde_json::json!(target_parent_region_id),
         );
         props.insert(
             "amalgamation_source".to_string(),
