@@ -26,7 +26,9 @@ use std::collections::HashMap;
 ///     "areas": ["area1", "area2"],
 ///     "regions": [],
 ///     "inputs": [],
-///     "outputs": []
+///     "outputs": [],
+///     "designated_inputs": [],
+///     "designated_outputs": []
 ///   }
 /// }
 /// ```
@@ -80,11 +82,36 @@ pub async fn get_regions_members(
                     })
                     .unwrap_or_default();
 
+                // Declared region IO roles (persisted in genome `properties`; drives BV IO preset).
+                let designated_inputs = region
+                    .properties
+                    .get("designated_inputs")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect::<Vec<String>>()
+                    })
+                    .unwrap_or_default();
+
+                let designated_outputs = region
+                    .properties
+                    .get("designated_outputs")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect::<Vec<String>>()
+                    })
+                    .unwrap_or_default();
+
                 trace!(
                     target: "feagi-api",
-                    "Inputs: {} areas, Outputs: {} areas",
+                    "Inputs: {} areas, Outputs: {} areas, designated_in: {}, designated_out: {}",
                     inputs.len(),
-                    outputs.len()
+                    outputs.len(),
+                    designated_inputs.len(),
+                    designated_outputs.len()
                 );
 
                 // Extract coordinate_3d from properties (set by smart positioning in neuroembryogenesis)
@@ -126,7 +153,9 @@ pub async fn get_regions_members(
                         "areas": region.cortical_areas,
                         "regions": region.child_regions,
                         "inputs": inputs,
-                        "outputs": outputs
+                        "outputs": outputs,
+                        "designated_inputs": designated_inputs,
+                        "designated_outputs": designated_outputs,
                     }),
                 );
             }

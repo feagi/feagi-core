@@ -5,8 +5,8 @@
 //!
 //! See `docs/SYNAPTIC_DELAY_ARCHITECTURE.md`.
 
-use ahash::AHashMap;
-use feagi_npu_neural::types::FireCandidateList;
+use ahash::{AHashMap, AHashSet};
+use feagi_npu_neural::types::{FireCandidateList, NeuronId};
 
 /// Pending FCL-style PSP and associative-memory PSP keyed by future burst number.
 #[derive(Debug, Default, Clone)]
@@ -61,10 +61,37 @@ impl SynapticArrivalSchedule {
                 fcl.add_candidate(nid, pot);
             }
         }
-        if let Some(m) = self.memory_associative_by_arrival_burst.remove(&arrival_burst) {
+        if let Some(m) = self
+            .memory_associative_by_arrival_burst
+            .remove(&arrival_burst)
+        {
             for (k, v) in m {
                 *memory_associative.entry(k).or_insert(0.0) += v;
             }
         }
+    }
+
+    /// Remove all pending PSP contributions whose **targets** are in `neuron_ids`.
+    ///
+    /// Used when resetting a cortical area so delayed synaptic arrivals (see
+    /// `docs/SYNAPTIC_DELAY_ARCHITECTURE.md`) and associative-memory buckets do not inject
+    /// residual drive on later bursts. `neuron_ids` is typically every regular neuron in the
+    /// area and/or memory neuron ids being cleared by plasticity.
+    pub fn remove_pending_for_neuron_targets(&mut self, neuron_ids: &AHashSet<u32>) {
+        if neuron_ids.is_empty() {
+            return;
+        }
+        for fcl in self.fcl_by_arrival_burst.values_mut() {
+            for &nid in neuron_ids.iter() {
+                fcl.remove_candidate(NeuronId(nid));
+            }
+        }
+        self.fcl_by_arrival_burst.retain(|_, fcl| !fcl.is_empty());
+
+        for mmap in self.memory_associative_by_arrival_burst.values_mut() {
+            mmap.retain(|k, _| !neuron_ids.contains(k));
+        }
+        self.memory_associative_by_arrival_burst
+            .retain(|_, m| !m.is_empty());
     }
 }

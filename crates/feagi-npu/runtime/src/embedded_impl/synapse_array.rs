@@ -273,7 +273,9 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
 
         for i in 0..n {
             let ef = edge_flags.map(|f| f[i]).unwrap_or(0);
-            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i], ef, delays[i])?;
+            self.add_synapse(
+                sources[i], targets[i], weights[i], psps[i], types[i], ef, delays[i],
+            )?;
         }
 
         Ok(())

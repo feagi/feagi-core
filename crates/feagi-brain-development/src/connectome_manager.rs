@@ -6013,54 +6013,83 @@ impl ConnectomeManager {
         let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id_u32)?;
         properties.insert("cortical_area".to_string(), serde_json::json!(cortical_idx));
 
-        // Get neuron state (returns: consecutive_fire_count, consecutive_fire_limit, snooze_period, membrane_potential, threshold, refractory_countdown)
-        if let Some((consec_count, consec_limit, snooze, mp, threshold, refract_countdown)) =
-            npu_lock.get_neuron_state(NeuronId(neuron_id_u32))
-        {
-            properties.insert(
-                "consecutive_fire_count".to_string(),
-                serde_json::json!(consec_count),
-            );
-            properties.insert(
-                "consecutive_fire_limit".to_string(),
-                serde_json::json!(consec_limit),
-            );
-            properties.insert("snooze_period".to_string(), serde_json::json!(snooze));
-            properties.insert("membrane_potential".to_string(), serde_json::json!(mp));
-            properties.insert("threshold".to_string(), serde_json::json!(threshold));
-            properties.insert(
-                "refractory_countdown".to_string(),
-                serde_json::json!(refract_countdown),
-            );
-        }
+        // Per-neuron dynamics flags + cortical-level propagation flags (synaptic engine).
+        properties.insert(
+            "mp_charge_accumulation".to_string(),
+            serde_json::json!(npu_lock.get_mp_charge_accumulation_at(idx).unwrap_or(false)),
+        );
+        properties.insert(
+            "neuron_type".to_string(),
+            serde_json::json!(npu_lock.get_neuron_type_at(idx).unwrap_or(0)),
+        );
+        let (mp_drv, psp_uni) = self
+            .cortical_idx_to_id
+            .get(&cortical_idx)
+            .map(|cid| {
+                (
+                    npu_lock.get_mp_driven_psp_for_cortical(cid),
+                    npu_lock.get_psp_uniform_distribution_for_cortical(cid),
+                )
+            })
+            .unwrap_or((false, false));
+        properties.insert("mp_driven_psp".to_string(), serde_json::json!(mp_drv));
+        properties.insert(
+            "psp_uniform_distribution".to_string(),
+            serde_json::json!(psp_uni),
+        );
 
-        // Get other properties via get_neuron_property_by_index
-        if let Some(leak) = npu_lock.get_neuron_property_by_index(idx, "leak_coefficient") {
-            properties.insert("leak_coefficient".to_string(), serde_json::json!(leak));
-        }
-        if let Some(resting) = npu_lock.get_neuron_property_by_index(idx, "resting_potential") {
-            properties.insert("resting_potential".to_string(), serde_json::json!(resting));
-        }
-        if let Some(excit) = npu_lock.get_neuron_property_by_index(idx, "excitability") {
-            properties.insert("excitability".to_string(), serde_json::json!(excit));
-        }
-        if let Some(threshold_limit) = npu_lock.get_neuron_property_by_index(idx, "threshold_limit")
-        {
-            properties.insert(
-                "threshold_limit".to_string(),
-                serde_json::json!(threshold_limit),
-            );
-        }
+        // Neuron state: always expose the same keys (stable JSON for clients) even when
+        // `get_neuron_state` is unavailable (e.g. invalid mask / edge indexing).
+        let (consec_count, consec_limit, snooze, mp, threshold, refract_countdown) = npu_lock
+            .get_neuron_state(NeuronId(neuron_id_u32))
+            .unwrap_or((0u16, 0u16, 0u16, 0.0f32, 0.0f32, 0u16));
+        properties.insert(
+            "consecutive_fire_count".to_string(),
+            serde_json::json!(consec_count),
+        );
+        properties.insert(
+            "consecutive_fire_limit".to_string(),
+            serde_json::json!(consec_limit),
+        );
+        properties.insert("snooze_period".to_string(), serde_json::json!(snooze));
+        properties.insert("membrane_potential".to_string(), serde_json::json!(mp));
+        properties.insert("threshold".to_string(), serde_json::json!(threshold));
+        properties.insert(
+            "refractory_countdown".to_string(),
+            serde_json::json!(refract_countdown),
+        );
 
-        // Get u16 properties
-        if let Some(refract_period) =
-            npu_lock.get_neuron_property_u16_by_index(idx, "refractory_period")
-        {
-            properties.insert(
-                "refractory_period".to_string(),
-                serde_json::json!(refract_period),
-            );
-        }
+        // Scalar neuron parameters (stable keys; default when storage omits a value).
+        properties.insert(
+            "leak_coefficient".to_string(),
+            serde_json::json!(npu_lock
+                .get_neuron_property_by_index(idx, "leak_coefficient")
+                .unwrap_or(0.0)),
+        );
+        properties.insert(
+            "resting_potential".to_string(),
+            serde_json::json!(npu_lock
+                .get_neuron_property_by_index(idx, "resting_potential")
+                .unwrap_or(0.0)),
+        );
+        properties.insert(
+            "excitability".to_string(),
+            serde_json::json!(npu_lock
+                .get_neuron_property_by_index(idx, "excitability")
+                .unwrap_or(0.0)),
+        );
+        properties.insert(
+            "threshold_limit".to_string(),
+            serde_json::json!(npu_lock
+                .get_neuron_property_by_index(idx, "threshold_limit")
+                .unwrap_or(0.0)),
+        );
+        properties.insert(
+            "refractory_period".to_string(),
+            serde_json::json!(npu_lock
+                .get_neuron_property_u16_by_index(idx, "refractory_period")
+                .unwrap_or(0)),
+        );
 
         Some(properties)
     }
@@ -6744,6 +6773,68 @@ mod tests {
             rules[0].get("morphology_id").and_then(|v| v.as_str()),
             Some("m1")
         );
+    }
+
+    #[test]
+    fn test_get_neuron_properties_always_includes_neuron_state_keys() {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::RustNPU;
+        use feagi_npu_burst_engine::TracingMutex;
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
+        use std::sync::Arc;
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("Failed to create NPU");
+        let dyn_npu = Arc::new(TracingMutex::new(
+            feagi_npu_burst_engine::DynamicNPU::F32(npu),
+            "TestNPU",
+        ));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+
+        let area_id = CorticalID::try_from_bytes(b"cst_nsp_").unwrap();
+        let area = CorticalArea::new(
+            area_id,
+            0,
+            "n".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+
+        manager.add_cortical_area(area).unwrap();
+        let nid = manager
+            .add_neuron(
+                &area_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+            )
+            .unwrap();
+
+        let props = manager
+            .get_neuron_properties(nid)
+            .expect("neuron properties");
+        for key in [
+            "consecutive_fire_count",
+            "consecutive_fire_limit",
+            "snooze_period",
+            "membrane_potential",
+            "threshold",
+            "refractory_countdown",
+            "mp_charge_accumulation",
+            "neuron_type",
+            "mp_driven_psp",
+            "psp_uniform_distribution",
+            "leak_coefficient",
+            "resting_potential",
+            "excitability",
+            "threshold_limit",
+            "refractory_period",
+        ] {
+            assert!(props.contains_key(key), "missing neuron state key: {key}");
+        }
     }
 
     #[test]

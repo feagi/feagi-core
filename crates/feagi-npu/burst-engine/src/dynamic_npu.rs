@@ -240,7 +240,15 @@ where
     ) -> Result<usize> {
         dispatch_mut!(
             self,
-            add_synapse(source, target, weight, psp, synapse_type, edge_flag, delay_bursts)
+            add_synapse(
+                source,
+                target,
+                weight,
+                psp,
+                synapse_type,
+                edge_flag,
+                delay_bursts
+            )
         )
     }
 
@@ -713,6 +721,28 @@ where
         dispatch!(self, get_neuron_property_u16_by_index(idx, property))
     }
 
+    pub fn get_mp_charge_accumulation_at(&self, idx: usize) -> Option<bool> {
+        dispatch!(self, get_mp_charge_accumulation_at(idx))
+    }
+
+    pub fn get_neuron_type_at(&self, idx: usize) -> Option<i32> {
+        dispatch!(self, get_neuron_type_at(idx))
+    }
+
+    pub fn get_mp_driven_psp_for_cortical(
+        &self,
+        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+    ) -> bool {
+        dispatch!(self, get_mp_driven_psp_for_cortical(cortical_id))
+    }
+
+    pub fn get_psp_uniform_distribution_for_cortical(
+        &self,
+        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+    ) -> bool {
+        dispatch!(self, get_psp_uniform_distribution_for_cortical(cortical_id))
+    }
+
     pub fn get_incoming_synapses(&self, _neuron_id: u32) -> Vec<(u32, f32, f32, u8)> {
         dispatch!(self, get_incoming_synapses(_neuron_id))
     }
@@ -819,6 +849,17 @@ where
     /// Clear FCL entries and reset membrane / refractory / consecutive-fire state for one cortical area.
     pub fn reset_cortical_area_runtime_state(&mut self, cortical_area: u32) -> usize {
         dispatch_mut!(self, reset_cortical_area_runtime_state(cortical_area))
+    }
+
+    /// Remove pending delayed synaptic PSP and associative-memory schedule entries for these targets.
+    pub fn scrub_synaptic_arrival_schedule_for_neuron_targets(
+        &mut self,
+        neuron_ids: &ahash::AHashSet<u32>,
+    ) {
+        dispatch_mut!(
+            self,
+            scrub_synaptic_arrival_schedule_for_neuron_targets(neuron_ids)
+        )
     }
 
     /// Update postsynaptic potential (PSP) for all existing outgoing synapses

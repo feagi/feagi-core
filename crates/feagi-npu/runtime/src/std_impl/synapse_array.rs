@@ -248,7 +248,9 @@ impl SynapseStorage for SynapseArray {
         }
         for i in 0..batch_size {
             let ef = edge_flags.map(|f| f[i]).unwrap_or(0);
-            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i], ef, delays[i])?;
+            self.add_synapse(
+                sources[i], targets[i], weights[i], psps[i], types[i], ef, delays[i],
+            )?;
         }
         Ok(())
     }
