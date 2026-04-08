@@ -1,6 +1,6 @@
 // TODO some things probably dont need to be exposed.
 
-mod feagi_npu_data_error;
+mod feagi_npu_structure_error;
 
 pub mod quantizables;
 pub mod neuron;
@@ -10,4 +10,4 @@ pub mod executors;
 pub mod connectome;
 
 
-pub use feagi_npu_data_error::FeagiNPUDataError;
+pub use feagi_npu_structure_error::FeagiNPUStructureError;

@@ -1,5 +1,5 @@
+//! Traits for synapses describing connections going from dimensional cortical areas to dimensional cortical areas
 
-// NOTE: I suspect in common use, nonplastic connections also tend to be made in bundles. Lets capitalize on that
 
 // TODO some things should be moved to a higher level trait as we understand other synapse types more
 
@@ -9,7 +9,7 @@ use crate::quantizables::{NPUNeuronIndex, NPUSynapseIndex, PSPMultiplier, Synapt
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStaticStorageTrait};
 use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;
 
-pub trait NonplasticSynapseStaticStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >:
+pub trait Dim2DimSynapseStaticStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >:
 BaseSynapseStaticStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >
 where
     SynapseIndexQuant: QuantizableUIntType,
@@ -17,15 +17,14 @@ where
     PercentageQuant: QuantizablePercentType,
     PotentialQuant: QuantizableValueType,
 {
-    const DEFAULT_SYNAPSE_WEIGHT: SynapticWeight<PotentialQuant> = SynapticWeight::ONE;
-    const DEFAULT_SYNAPSE_PSP: PSPMultiplier<PotentialQuant> = PSPMultiplier::ONE;
+
 
 
     // TODO how should we iterate this?
 
 }
 
-pub trait NonplasticSynapseAllocStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >:
+pub trait Dim2DimSynapseAllocStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >:
 BaseSynapseAllocStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >
 where
     SynapseIndexQuant: QuantizableUIntType,
@@ -34,17 +33,17 @@ where
     PotentialQuant: QuantizableValueType,
 {
     fn create_synapse_connections(&mut self, source_neurons_indexes: &[NPUNeuronIndex<NeuronIndexQuant>],
-                                          source_neurons_type: NPUNeuronType,
-                                          destination_neuron_indexes: &[NPUNeuronIndex<NeuronIndexQuant>],
-                                          destination_neurons_type: NPUNeuronType) -> Result<&[NPUSynapseIndex<SynapseIndexQuant>], FeagiNPUSynapseError>;
+                                  source_neurons_type: NPUNeuronType,
+                                  destination_neuron_indexes: &[NPUNeuronIndex<NeuronIndexQuant>],
+                                  destination_neurons_type: NPUNeuronType) -> Result<&[NPUSynapseIndex<SynapseIndexQuant>], FeagiNPUSynapseError>;
 
     fn remove_synapse_connections_by_synapse_index(&mut self, synapse_indexes: &[NPUSynapseIndex<SynapseIndexQuant>]) -> Result<(), FeagiNPUSynapseError>;
 
     fn remove_synapse_connections_by_source_neuron_index(&mut self, source_neurons_type: NPUNeuronType, source_neurons_indexes: &[NPUNeuronIndex<NeuronIndexQuant>]) -> Result<(), FeagiNPUSynapseError>;
 
-    fn remove_synapse_connections_by_destination_neuron_index(&mut self, source_destination_type: NPUNeuronType, source_destination_indexes: &[NPUNeuronIndex<NeuronIndexQuant>]) -> Result<(), FeagiNPUSynapseError>;
+    fn remove_synapse_connections_by_destination_neuron_index(&mut self, destination_destination_type: NPUNeuronType, destination_neuron_indexes: &[NPUNeuronIndex<NeuronIndexQuant>]) -> Result<(), FeagiNPUSynapseError>;
 
-    
+
 
 
 

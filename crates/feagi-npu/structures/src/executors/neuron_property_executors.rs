@@ -1,6 +1,7 @@
 use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
-use crate::FeagiNPUDataError;
+use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
+use crate::FeagiNPUStructureError;
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{FireThreshold};
@@ -18,7 +19,8 @@ pub trait NeuronFireThresholdExecutor<PotentialQuant, CoordQuant> where
     // Neuron order to be incrementing x->y->z
     fn set_new_fire_thresholds(&self, thresholds: &mut [PotentialQuant],
                           neuron_flags: &[NeuronFlag],
-                          cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>)
+                          cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>, 
+                          number_neurons_per_voxel: NumberNeuronsPerVoxel)
         -> Result<(), FeagiNPUNeuronError>;
 }
 
@@ -44,10 +46,11 @@ impl<PotentialQuant, CoordQuant> NeuronFireThresholdExecutor<PotentialQuant, Coo
     fn set_new_fire_thresholds(&self,
                                thresholds: &mut [PotentialQuant],
                                _neuron_flags: &[NeuronFlag],
-                               _cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>)
+                               _cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>, 
+                               _number_neurons_per_voxel: NumberNeuronsPerVoxel)
                                -> Result<(), FeagiNPUNeuronError>
     {
-        // TODO enable par support if feature enabled
+        // TODO enable rayon support if feature enabled
         thresholds.fill(self.fire_threshold);
         Ok(())
     }
@@ -57,6 +60,7 @@ impl<PotentialQuant, CoordQuant> NeuronFireThresholdExecutor<PotentialQuant, Coo
 
 //endregion
 
+//region Neuron Leak Coefficient
 
 /// Runs on interneuron cortical areas, to set leak coefficient across neurons
 pub trait NeuronLeakCoefficientExecutor<PercentageQuant, CoordQuant> {
@@ -64,8 +68,10 @@ pub trait NeuronLeakCoefficientExecutor<PercentageQuant, CoordQuant> {
     // Neuron order to be incrementing x->y->z
     fn set_new_leak_coefficients(thresholds: &mut Vec<PercentageQuant>,
                           neuron_flags: &[NeuronFlag],
-                          cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>)
-        -> Result<(), FeagiNPUDataError>;
+                          cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>,
+                          neuron_density: NumberNeuronsPerVoxel)
+        -> Result<(), FeagiNPUStructureError>;
 }
 
 
+//endregion

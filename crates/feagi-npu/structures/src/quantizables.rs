@@ -27,6 +27,12 @@ define_quantizable_uint_type_family!(NPUSynapseIndex);
 
 //endregion
 
+//region Synapse Count
+define_quantizable_uint_type_family!(SynapseCount);
+
+
+//endregion
+
 //endregion
 
 

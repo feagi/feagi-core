@@ -1,52 +1,29 @@
 
 
-
 // TODO we may need a shared neuron flag, not neuron specific ones
 
-///
-pub trait SynapseMapperNonplasticExecutor<NeuronIndex, CoordQuant> {
+use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
+use crate::neuron::FeagiNPUNeuronError;
+use crate::neuron::flags::NeuronFlag;
+use crate::quantizables::NPUNeuronIndex;
 
-    // Neuron order to be incrementing x->y->z
-    fn map_dimensional_neurons(source_neuron_indexes: Range<NeuronIndex>,
-                          destination_neuron_indexes: Range<NeuronIndex>,
-                          neuron_flags: &[InterneuronFlag],
-                          cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>,
-                          synapse_destination: &mut Impl<NonplasticSynapseAllocStorageTrait>)
-                          -> Result<(), FeagiNPUError>;
-}
+/// Defines source neurons and destination neurons to use for dimensional synapse mapping.
+/// ITERATORS MUST BE OF THE SAME LENGTH!
+pub trait SynapseNeuronMapperDim2DimExecutor<NeuronIndexQuant, CoordQuant> {
 
+    // NOTE: Since dimensional cortical areas can return neuron slices of cortical areas,
+    // we can pass through entire slices as reference!
 
-// EXAMPLE
-struct last_to_first<NeuronIndex, CoordQuant> {
-    offset_from_start: NeuronIndex
-}
+    fn source_dimensional_neuron_iterator<'a>(source_neuron_indexes: core::ops::Range<NPUNeuronIndex<NeuronIndexQuant>>,
+                                  source_neuron_flags: &[NeuronFlag],
+                                  source_cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>)
+        -> Result<impl Iterator<Item=&'a NPUNeuronIndex<NeuronIndexQuant>>, FeagiNPUNeuronError>;
 
-impl last_to_first {
+    fn destination_dimensional_neuron_iterator<'a>(destination_neuron_indexes: core::ops::Range<NPUNeuronIndex<NeuronIndexQuant>>,
+                                       destination_neuron_flags: &[NeuronFlag],
+                                       destination_cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>)
+        -> Result<impl Iterator<Item=&'a NPUNeuronIndex<NeuronIndexQuant>>, FeagiNPUNeuronError>;
+    
+    // TODO rayon support!
 
-    pub fn new(offset_from_start: NeuronIndex) -> last_to_first {
-        last_to_first{offset_from_start}
-    }
-
-}
-
-impl SynapseMapperNonplasticExecutor for last_to_first {
-    fn map_dimensional_neurons(source_neuron_indexes: Range<NeuronIndex>,
-                               destination_neuron_indexes: Range<NeuronIndex>,
-                               neuron_flags: &[InterneuronFlag],
-                               cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>,
-                               synapse_destination: &mut Impl<NonplasticSynapseAllocStorageTrait>)
-                               -> Result<(), FeagiNPUError> {
-
-        let source_area_last_index: NeuronIndex = source_neuron_indexes.end;
-        let destination_area_first_index: NeuronIndex = destination_neuron_indexes.start + self.offset_from_start;
-
-
-        synapse_destination.create_spanned_synapse_connections(
-            &[source_area_last_index],
-            FeagiNPUType::Interneuron,
-            &[destination_area_first_index],
-            FeagiNPUType::Interneuron,
-        );
-        Ok(())
-    }
 }

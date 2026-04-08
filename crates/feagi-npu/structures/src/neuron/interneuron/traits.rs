@@ -80,31 +80,31 @@ where
     /// Creates a cortical area of given dimensions but using a set of neuron values copied across
     /// all neurons.
     /// Returns the cortical area index and the range of neuron indexes it covers
-    fn create_cortical_area_with_spanned_neuron(&mut self,
-                                                cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
-                                                neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                neuron_global_burst_index_of_last_firing: BurstGlobalIndex<BurstIndexQuant>,
-                                                neuron_membrane_potential: NeuronMembranePotential<PotentialQuant>,
-                                                neuron_fire_threshold: FireThreshold<PotentialQuant>,
-                                                neuron_leak_coefficient: LeakCoefficient<PercentageQuant>,
-                                                neuron_refractory_countdown: BurstDelta<BurstDeltaQuant>,
-                                                neuron_consecutive_fire_count: BurstDelta<BurstDeltaQuant>,
-                                                cortical_excitability: NeuronExcitability<PercentageQuant>,
-                                                cortical_refractory_period_limit: BurstDelta<BurstDeltaQuant>,
-                                                cortical_fire_threshold_limit: FireThresholdLimit<PotentialQuant>,
-                                                cortical_consecutive_fire_limit: BurstDelta<BurstDeltaQuant>,
-                                                cortical_is_mp_charge_accumulation_enabled: bool,
-                                                cortical_is_mp_driven_psp_enabled: bool)
-        -> Result<(CorticalAreaIndex<CorticalIndexQuant>, Range<NPUNeuronIndex<NeuronIndexQuant>>), FeagiNPUNeuronError>;
+    fn create_cortical_area_with_uniform_neurons(&mut self,
+                                                 cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                 neurons_per_voxel: NumberNeuronsPerVoxel,
+                                                 neuron_global_burst_index_of_last_firing: BurstGlobalIndex<BurstIndexQuant>,
+                                                 neuron_membrane_potential: NeuronMembranePotential<PotentialQuant>,
+                                                 neuron_fire_threshold: FireThreshold<PotentialQuant>,
+                                                 neuron_leak_coefficient: LeakCoefficient<PercentageQuant>,
+                                                 neuron_refractory_countdown: BurstDelta<BurstDeltaQuant>,
+                                                 neuron_consecutive_fire_count: BurstDelta<BurstDeltaQuant>,
+                                                 cortical_excitability: NeuronExcitability<PercentageQuant>,
+                                                 cortical_refractory_period_limit: BurstDelta<BurstDeltaQuant>,
+                                                 cortical_fire_threshold_limit: FireThresholdLimit<PotentialQuant>,
+                                                 cortical_consecutive_fire_limit: BurstDelta<BurstDeltaQuant>,
+                                                 cortical_is_mp_charge_accumulation_enabled: bool,
+                                                 cortical_is_mp_driven_psp_enabled: bool)
+                                                 -> Result<(CorticalAreaIndex<CorticalIndexQuant>, Range<NPUNeuronIndex<NeuronIndexQuant>>), FeagiNPUNeuronError>;
 
 
     /// Creates a cortical area of given dimensions but using prefilled neuron data values.
     /// Returns the cortical area index and the range of neuron indexes it covers
-    fn create_cortical_area_with_configured_neurons(&mut self,
-                                                    cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
-                                                    neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                    neuron_data: InterneuronDataFromCorticalArea<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>)
-        -> Result<(CorticalAreaIndex<CorticalIndexQuant>, Range<NPUNeuronIndex<NeuronIndexQuant>>), FeagiNPUNeuronError>;
+    fn create_cortical_area_with_individualized_neurons(&mut self,
+                                                        cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                        neurons_per_voxel: NumberNeuronsPerVoxel,
+                                                        neuron_data: InterneuronDataFromCorticalArea<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, PotentialQuant, PercentageQuant>)
+                                                        -> Result<(CorticalAreaIndex<CorticalIndexQuant>, Range<NPUNeuronIndex<NeuronIndexQuant>>), FeagiNPUNeuronError>;
 }
 
 
