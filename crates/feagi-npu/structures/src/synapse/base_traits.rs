@@ -3,19 +3,26 @@ use crate::quantizables::{NPUSynapseIndex, SynapseCount};
 
 // NOTE: we cannot add most properties to the base trait since synapse types vary wildly in implementation
 
-pub trait BaseSynapseStaticStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >
+pub trait BaseSynapseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
-    SynapseIndexQuant: QuantizableUIntType,
     NeuronIndexQuant: QuantizableUIntType,
+    SynapseIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    ValueQuant: QuantizableValueType,
     PercentageQuant: QuantizablePercentType,
-    PotentialQuant: QuantizableValueType,
 {
-    const NUMBER_BYTES_PER_NEURON: usize;
+    const NUMBER_BYTES_PER_SYNAPSE: usize;
 
     /// Gets the maximum possible synapse index achievable by current quantization (or in the case
     /// of static implementations, the size of the synapse array).
     fn get_max_possible_synapse_index(&self) -> NPUSynapseIndex<SynapseIndexQuant>;
 
+    /// Returns the total number of valid and invalid (dead) synapses stored in memory
+    fn get_total_number_of_synapses(&self) -> &SynapseCount<SynapseIndexQuant>;
+    
     /// Returns the count of valid synapses in the structure. NOT THE SAME AS TOTAL NUMBER OF
     /// SYNAPSES STORED!
     fn get_total_number_of_valid_synapses(&self) -> &SynapseCount<SynapseIndexQuant>;
@@ -27,13 +34,32 @@ where
     // why not both?
 }
 
-pub trait BaseSynapseAllocStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant >:
-BaseSynapseStaticStorageTrait<SynapseIndexQuant, NeuronIndexQuant, PercentageQuant, PotentialQuant>
+pub trait BaseSynapseStaticStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
+BaseSynapseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
-    SynapseIndexQuant: QuantizableUIntType,
     NeuronIndexQuant: QuantizableUIntType,
+    SynapseIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    ValueQuant: QuantizableValueType,
     PercentageQuant: QuantizablePercentType,
-    PotentialQuant: QuantizableValueType,
+{
+    
+}
+
+pub trait BaseSynapseAllocStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
+BaseSynapseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+where
+    NeuronIndexQuant: QuantizableUIntType,
+    SynapseIndexQuant: QuantizableUIntType,
+    CorticalIndexQuant: QuantizableUIntType,
+    CoordQuant: QuantizableUIntType,
+    BurstDeltaQuant: QuantizableUIntType,
+    BurstIndexQuant: QuantizableUIntType,
+    ValueQuant: QuantizableValueType,
+    PercentageQuant: QuantizablePercentType,
 {
     fn free_unused_synapse_capacity(&mut self, spare_capacity_to_maintain: SynapseCount<SynapseIndexQuant>) -> SynapseCount<SynapseIndexQuant>;
 }

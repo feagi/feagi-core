@@ -3,5 +3,4 @@
 pub enum NPUNeuronType {
     DimensionalNeuron,
     Memory,
-    SensoryMotorAndCore
 }
