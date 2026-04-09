@@ -21,6 +21,8 @@ define_quantizable_uint_type_family!(NPUNeuronIndex);
 
 //endregion
 
+// Use neuron count from 'Feagi-Structures' Crate!
+
 //region NPU Synapse Index
 define_quantizable_uint_type_family!(NPUSynapseIndex);
 
@@ -30,6 +32,10 @@ define_quantizable_uint_type_family!(NPUSynapseIndex);
 //region Synapse Count
 define_quantizable_uint_type_family!(SynapseCount);
 
+//endregion
+
+//region Synapse Bundle Index
+define_quantizable_uint_type_family!(SynapseBundleIndex);
 
 //endregion
 

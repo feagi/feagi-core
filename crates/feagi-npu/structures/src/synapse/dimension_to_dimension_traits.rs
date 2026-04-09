@@ -12,11 +12,12 @@ use crate::synapse::non_plastic_dimensional::NonPlasticSynapseFull;
 
 // NOTE: We know the type of synapse that will be created will always be a dimension to a dimensional neuron
 
-pub trait Dim2DimSynapseBaseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
-BaseSynapseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+pub trait Dim2DimSynapseBaseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
+BaseSynapseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
@@ -25,8 +26,7 @@ where
     PercentageQuant: QuantizablePercentType,
 {
 
-    //region Get Connected
-
+    //region Get Connections
     fn get_destination_neuron_indexes_from_source_neuron_index(&self, source_neuron_index: NPUNeuronIndex<NeuronIndexQuant>) -> Result<&[NPUNeuronIndex<NeuronIndexQuant>], FeagiNPUSynapseError>;
 
     fn get_source_neuron_indexes_from_destination_neuron_index(&self, destination_neuron_index: NPUNeuronIndex<NeuronIndexQuant>) -> Result<&[NPUNeuronIndex<NeuronIndexQuant>], FeagiNPUSynapseError>;
@@ -59,12 +59,13 @@ where
 }
 
 
-pub trait Dim2DimSynapseStaticStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
-Dim2DimSynapseBaseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant> +
-BaseSynapseStaticStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+pub trait Dim2DimSynapseStaticStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
+Dim2DimSynapseBaseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant> +
+BaseSynapseStaticStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
@@ -76,9 +77,9 @@ where
 
 }
 
-pub trait Dim2DimSynapseAllocStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
-Dim2DimSynapseBaseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant> +
-BaseSynapseAllocStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+pub trait Dim2DimSynapseAllocStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
+Dim2DimSynapseBaseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant> +
+BaseSynapseAllocStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,

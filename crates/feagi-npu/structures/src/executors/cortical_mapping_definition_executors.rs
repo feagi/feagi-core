@@ -30,7 +30,7 @@ pub trait NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseC
                                     destination_neuron_flags: &[NeuronFlag],
                                     destination_cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>,
                                     destination_neuron_density: NumberNeuronsPerVoxel)
-        -> Result<(impl Iterator<Item=NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>>, SynapseCount<SynapseCountQuant>), FeagiNPUNeuronError>;
+        -> Result<(&impl Iterator<Item=NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>>, SynapseCount<SynapseCountQuant>), FeagiNPUNeuronError>;
 
     // TODO we should have a check to ensure that the count matches that runs in debug mode ( do this as a check natively)
 

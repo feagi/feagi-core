@@ -16,10 +16,11 @@ use crate::neuron::dimensional_neurons::shared_funcs_and_structs::DimensionalNeu
 use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability};
 use crate::synapse::non_plastic_dimensional::NonplasticDimensionalSynapseAllocRAMStorage;
 
-pub struct ConnectomeAllocRam<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+pub struct ConnectomeAllocRam<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
@@ -36,11 +37,12 @@ where
 }
 
 
-impl<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
-ConnectomeAllocRam<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+impl<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+ConnectomeAllocRam<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
@@ -51,12 +53,13 @@ where
     
 }
 
-impl<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
-ConnectomeAllocTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant> for
-ConnectomeAllocRam<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+impl<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+ConnectomeAllocTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant> for
+ConnectomeAllocRam<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
@@ -105,12 +108,13 @@ where
     }
 }
 
-impl<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
-ConnectomeBaseTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant> for
-ConnectomeAllocRam<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+impl<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+ConnectomeBaseTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant> for
+ConnectomeAllocRam<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,

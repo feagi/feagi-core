@@ -3,10 +3,11 @@ use crate::quantizables::{NPUSynapseIndex, SynapseCount};
 
 // NOTE: we cannot add most properties to the base trait since synapse types vary wildly in implementation
 
-pub trait BaseSynapseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+pub trait BaseSynapseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
@@ -34,11 +35,12 @@ where
     // why not both?
 }
 
-pub trait BaseSynapseStaticStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
-BaseSynapseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+pub trait BaseSynapseStaticStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
+BaseSynapseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
@@ -49,11 +51,12 @@ where
     
 }
 
-pub trait BaseSynapseAllocStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
-BaseSynapseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+pub trait BaseSynapseAllocStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>:
+BaseSynapseStorageTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,

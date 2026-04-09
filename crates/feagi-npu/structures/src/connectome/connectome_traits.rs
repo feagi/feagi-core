@@ -11,12 +11,13 @@ use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalM
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::FeagiNPUStructureError;
 use crate::neuron::dimensional_neurons::shared_funcs_and_structs::DimensionalNeuronDataFromCorticalArea;
-use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability};
+use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex};
 
-pub trait ConnectomeBaseTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+pub trait ConnectomeBaseTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
@@ -65,10 +66,11 @@ where
 }
 
 /// Connectome functions ONLY for static implementations
-pub trait ConnectomeStaticTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant> // TODO const sizes
+pub trait ConnectomeStaticTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant> // TODO const sizes
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
@@ -80,10 +82,11 @@ where
 }
 
 /// Connectome functions ONLY for alloc capable implementations
-pub trait ConnectomeAllocTrait<NeuronIndexQuant, SynapseIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
+pub trait ConnectomeAllocTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     SynapseIndexQuant: QuantizableUIntType,
+    SynapseBundleIndexQuant: QuantizableUIntType,
     CorticalIndexQuant: QuantizableUIntType,
     CoordQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
@@ -91,16 +94,9 @@ where
     ValueQuant: QuantizableValueType,
     PercentageQuant: QuantizablePercentType,
 {
-
-    fn free_unused_neuron_capacity(&mut self); // TODO take spare capacity number
-
-    fn free_unused_synapse_capacity(&mut self);
-
-    fn free_unused_cortical_area_capacity(&mut self); // TODO may not be needed?
-
     //region Cortical Areas
 
-    //region DimensionalNeuron Cortical Areas
+    //region Dimensional Neuron Cortical Areas
 
     /// Create dimensional_neuron (custom) cortical area with default neuron settings spanned across the
     /// entire cortical area. Returns the cortical index of this new area.
@@ -149,10 +145,10 @@ where
                                                    cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                    neurons_per_voxel: NumberNeuronsPerVoxel,
                                                    cortical_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                   presynaptic_dimensional_mappings: &Vec<(
+                                                   presynaptic_nonplastic_dimensional_mappings: &Vec<(
                                                 CorticalAreaIndex<CorticalIndexQuant>,
                                                 DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseIndexQuant, CoordQuant, CorticalIndexQuant, BurstDeltaQuant, ValueQuant>)>,
-                                                   postsynaptic_dimensional_mappings: &Vec<(
+                                                   postsynaptic_nonplastic_dimensional_mappings: &Vec<(
                                                 CorticalAreaIndex<CorticalIndexQuant>,
                                                 DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseIndexQuant, CoordQuant, CorticalIndexQuant, BurstDeltaQuant, ValueQuant>)>, )
 
@@ -174,8 +170,9 @@ where
     //region dimensional area to dimensional area
 
     // NOTE: These functions exist under alloc since in static contexts we will not be
-    // dynamically creating / destroying nonplastic synapses
+    // dynamically creating / destroying synapses between dimensional areas
 
+    /// Disconnects all synapses between 2 dimensional cortical areas
     fn disconnect_all_synapses_from_dimensional_area_to_dimensional_area(&mut self,
                                                                          source_index: CorticalAreaIndex<CorticalIndexQuant>,
                                                                          source_dimensional_type: DimensionCorticalAreaType,
@@ -183,13 +180,24 @@ where
                                                                          destination_dimensional_type: DimensionCorticalAreaType)
         -> Result<(), FeagiNPUStructureError>;
 
+    /// Adds synapse mappings between 2 cortical areas as defined by a given neuron mapping executor.
+    /// Returns the synapse bundle index of the mapping
     fn add_nonplastic_connection_from_dimensional_area_to_dimensional_area(&mut self,
-                                                               source_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                               destination_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                               neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseIndexQuant, CoordQuant, CorticalIndexQuant, BurstDeltaQuant, ValueQuant>)
+                                                                           source_index: CorticalAreaIndex<CorticalIndexQuant>,
+                                                                           destination_index: CorticalAreaIndex<CorticalIndexQuant>,
+                                                                           neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseIndexQuant, CoordQuant, CorticalIndexQuant, BurstDeltaQuant, ValueQuant>)
+        -> Result<SynapseBundleIndex<SynapseBundleIndexQuant>, FeagiNPUStructureError>;
+
+    /*
+    /// Disconnects just the synapses of the given synapse bundle index between
+    /// 2 dimensional cortical areas
+    fn disconnect_specific_nonplastic_synapse_bundle_from_dimensional_area_to_dimensional_area(&mut self,
+                                                                                     source_index: CorticalAreaIndex<CorticalIndexQuant>,
+                                                                                     destination_index: CorticalAreaIndex<CorticalIndexQuant>,
+                                                                                     synapse_bundle_index: SynapseBundleIndex<SynapseBundleIndexQuant>)
         -> Result<(), FeagiNPUStructureError>;
 
-    // TODO setting mappings from a vector -> possibly complicated since we need to clear synapses, and then go through multiple vectors
+     */
 
 
     /*
@@ -204,6 +212,15 @@ where
 
 
     //endregion
+
+    //endregion
+
+    //region Housekeeping
+    fn free_unused_neuron_capacity(&mut self); // TODO take spare capacity number
+
+    fn free_unused_synapse_capacity(&mut self);
+
+    fn free_unused_cortical_area_capacity(&mut self); // TODO may not be needed?
 
     //endregion
 
