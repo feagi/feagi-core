@@ -44,6 +44,7 @@ Licensed under the Apache License, Version 2.0
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Core modules
+mod amalgamation_remap;
 pub mod converter_flat;
 pub mod converter_flat_full;
 pub mod converter_hierarchical_to_flat;
@@ -58,6 +59,7 @@ pub mod types;
 pub mod validator;
 
 // Re-export commonly used types
+pub use amalgamation_remap::remap_guest_custom_memory_cortical_ids_for_amalgamation;
 pub use converter_flat::convert_flat_to_hierarchical;
 pub use converter_flat_full::convert_flat_to_hierarchical_full;
 pub use converter_hierarchical_to_flat::convert_hierarchical_to_flat;
