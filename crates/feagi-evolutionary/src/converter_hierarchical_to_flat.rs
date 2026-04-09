@@ -143,47 +143,47 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
     // Hosts (empty for now)
     flat_genome.insert("hosts".to_string(), json!({}));
 
-    // Brain regions (with cortical IDs converted to base64)
-    if !genome.brain_regions.is_empty() {
-        let mut brain_regions_map = serde_json::Map::new();
+    // Brain regions (with cortical IDs converted to base64).
+    // Always emit `brain_regions` (at least `{}`) so JSON round-trips and Python
+    // `json.loads` never lose the key when the runtime map is empty (hub / Composer merge).
+    let mut brain_regions_map = serde_json::Map::new();
 
-        for (region_id, region) in &genome.brain_regions {
-            let mut region_data = serde_json::Map::new();
+    for (region_id, region) in &genome.brain_regions {
+        let mut region_data = serde_json::Map::new();
 
-            // Serialize all properties from the BrainRegion
-            let region_json = serde_json::to_value(region)
-                .map_err(|e| crate::EvoError::JsonError(e.to_string()))?;
+        // Serialize all properties from the BrainRegion
+        let region_json = serde_json::to_value(region)
+            .map_err(|e| crate::EvoError::JsonError(e.to_string()))?;
 
-            if let Value::Object(mut props) = region_json {
-                // Convert cortical ID arrays to base64
-                let keys_to_convert = vec!["areas", "inputs", "outputs", "cortical_areas"];
-                for key in keys_to_convert {
-                    if let Some(Value::Array(ids)) = props.get(key) {
-                        let converted_ids: Vec<String> = ids
-                            .iter()
-                            .filter_map(|v| v.as_str())
-                            .map(|id_str| {
-                                // Try to parse as CorticalID and convert to base64
-                                crate::genome::parser::string_to_cortical_id(id_str)
-                                    .map(|cid| cid.as_base_64())
-                                    .unwrap_or_else(|_| id_str.to_string())
-                            })
-                            .collect();
-                        props.insert(key.to_string(), json!(converted_ids));
-                    }
+        if let Value::Object(mut props) = region_json {
+            // Convert cortical ID arrays to base64
+            let keys_to_convert = vec!["areas", "inputs", "outputs", "cortical_areas"];
+            for key in keys_to_convert {
+                if let Some(Value::Array(ids)) = props.get(key) {
+                    let converted_ids: Vec<String> = ids
+                        .iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|id_str| {
+                            // Try to parse as CorticalID and convert to base64
+                            crate::genome::parser::string_to_cortical_id(id_str)
+                                .map(|cid| cid.as_base_64())
+                                .unwrap_or_else(|_| id_str.to_string())
+                        })
+                        .collect();
+                    props.insert(key.to_string(), json!(converted_ids));
                 }
-
-                region_data = props;
             }
 
-            brain_regions_map.insert(region_id.clone(), Value::Object(region_data));
+            region_data = props;
         }
 
-        flat_genome.insert(
-            "brain_regions".to_string(),
-            Value::Object(brain_regions_map),
-        );
+        brain_regions_map.insert(region_id.clone(), Value::Object(region_data));
     }
+
+    flat_genome.insert(
+        "brain_regions".to_string(),
+        Value::Object(brain_regions_map),
+    );
 
     Ok(Value::Object(flat_genome))
 }

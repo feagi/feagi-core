@@ -98,6 +98,45 @@ impl Drop for GenomeTransitionFlagGuard {
     }
 }
 
+/// Mirrors prioritized genome transition in [feagi_state_manager::GenomeState] for health_check.
+/// - [Self::enter]: Loading
+/// - [Self::succeed]: Loaded (call when transition fully finished, including post-load agent IO)
+/// - Drop without succeed: Error (failed or aborted transition)
+struct GenomeTransitionStateLifecycle;
+
+impl GenomeTransitionStateLifecycle {
+    fn enter() -> Self {
+        #[cfg(feature = "services")]
+        {
+            feagi_state_manager::StateManager::instance()
+                .read()
+                .set_genome_state(feagi_state_manager::GenomeState::Loading);
+        }
+        Self
+    }
+
+    fn succeed(self) {
+        #[cfg(feature = "services")]
+        {
+            feagi_state_manager::StateManager::instance()
+                .read()
+                .set_genome_state(feagi_state_manager::GenomeState::Loaded);
+        }
+        std::mem::forget(self);
+    }
+}
+
+impl Drop for GenomeTransitionStateLifecycle {
+    fn drop(&mut self) {
+        #[cfg(feature = "services")]
+        {
+            feagi_state_manager::StateManager::instance()
+                .read()
+                .set_genome_state(feagi_state_manager::GenomeState::Error);
+        }
+    }
+}
+
 /// Execute a genome load with strict priority over concurrent operations.
 ///
 /// Guarantees:
@@ -121,6 +160,7 @@ async fn load_genome_with_priority(
     let _guard = GenomeTransitionFlagGuard {
         in_progress: Arc::clone(&state.genome_transition_in_progress),
     };
+    let genome_sm_lifecycle = GenomeTransitionStateLifecycle::enter();
 
     tracing::info!(
         target: "feagi-api",
@@ -229,6 +269,7 @@ async fn load_genome_with_priority(
         }
     }
 
+    genome_sm_lifecycle.succeed();
     Ok(genome_info)
 }
 
