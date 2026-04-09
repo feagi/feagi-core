@@ -1,8 +1,12 @@
 use ahash::AHashMap;
 use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
+use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
+use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
+use feagi_structures::useful_structs::InvalidatableVector;
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
-use crate::quantizables::{NPUNeuronIndex, NPUSynapseIndex, SynapseCount};
+use crate::neuron::flags::NeuronFlag;
+use crate::quantizables::{NPUNeuronIndex, NPUSynapseIndex, SynapseBundleIndex, SynapseCount};
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStorageTrait};
 use crate::synapse::dimension_to_dimension_traits::{Dim2DimSynapseAllocStorageTrait, Dim2DimSynapseBaseStorageTrait};
 use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;
@@ -36,9 +40,10 @@ where
     cache_valid_synapse_count: SynapseCount<SynapseIndexQuant>,
     cache_invalid_synapse_count: SynapseCount<SynapseIndexQuant>,
     /// Includes ranges of entire valid synapse blocks mapped to their cortical mapping. MAY INCLUDE individual dead synapses
-    cache_valid_synapse_blocks: AHashMap<(
-        CorticalAreaIndex<CorticalIndexQuant>, CorticalAreaIndex<CorticalIndexQuant>),
-        Vec<core::ops::Range<SynapseIndexQuant>>>,
+    cache_valid_synapse_blocks: AHashMap<
+        (CorticalAreaIndex<CorticalIndexQuant>, CorticalAreaIndex<CorticalIndexQuant>),
+        InvalidatableVector<core::ops::Range<SynapseIndexQuant>>
+    >,
     /// Includes ranges of entire invalid synapse blocks. Does NOT include singular dead synapses
     cache_invalid_synapse_blocks: Vec<core::ops::Range<SynapseIndexQuant>>,
 }
@@ -67,6 +72,21 @@ where
             cache_valid_synapse_blocks: AHashMap::new(),
             cache_invalid_synapse_blocks: Vec::new(),
         }
+    }
+
+    fn insert_valid_synapse_block_and_get_index(&mut self,
+                                                synapse_block: core::ops::Range<NPUSynapseIndex<SynapseIndexQuant>>,
+                                                source_area: CorticalAreaIndex<SynapseIndexQuant>,
+                                                destination_area: CorticalAreaIndex<SynapseIndexQuant>)
+        -> SynapseBundleIndex<SynapseBundleIndexQuant>
+    {
+        let key = (source_area, destination_area);
+        if !self.cache_valid_synapse_blocks.contains_key(&key) {
+            self.cache_valid_synapse_blocks.insert(key, InvalidatableVector::new());
+        }
+        let block_vec = self.cache_valid_synapse_blocks.get_mut(&key);
+        let index = block_vec.insert(synapse_block);
+        SynapseBundleIndex::from_usize(index)
     }
 
     //region Get Synapse Data
@@ -119,48 +139,57 @@ where
         Ok(possible_valid)
     }
 
-    fn get_synapse_indexes_from_source_neuron_index(&self, source_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) -> Result<&[NPUSynapseIndex<SynapseIndexQuant>], FeagiNPUSynapseError> {
+    /// Gets all synapse indexes that have the following source_neuron_index. Returns empty if nothing found
+    fn get_synapse_indexes_from_source_neuron_index(&self, source_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) -> &[NPUSynapseIndex<SynapseIndexQuant>] {
         if let Some(val) = self.source_to_synapse.get(source_neuron_index) {
-            return Ok(val.to_slice())
+            return val.to_slice()
         }
-        Err(FeagiNPUSynapseError::NeuronLookupIndexIsInvalid {
-            context: "Given source neuron index does not have any nonplastic synapses!",
-            given_neuron_index: source_neuron_index.to_usize() as u32,
-        })
+        &[]
     }
 
-    fn get_synapse_indexes_from_destination_neuron_index(&self, destination_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) -> Result<&[NPUSynapseIndex<SynapseIndexQuant>], FeagiNPUSynapseError> {
+    /// Gets all synapse indexes that have the following source_neuron_index. Returns empty if nothing found
+    fn get_synapse_indexes_from_destination_neuron_index(&self, destination_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) ->  &[NPUSynapseIndex<SynapseIndexQuant>] {
         if let Some(val) = self.destination_to_synapse.get(destination_neuron_index) {
-            return Ok(val.to_slice())
+            return val.to_slice()
         }
-        Err(FeagiNPUSynapseError::NeuronLookupIndexIsInvalid {
-            context: "Given destination neuron index does not have any nonplastic synapses!",
-            given_neuron_index: destination_neuron_index.to_usize() as u32,
-        })
+        &[]
     }
 
-
-    fn get_synapse_data_from_source_neuron_index(&self, source_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) -> Result<&NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>, FeagiNPUSynapseError> {
-        let synapse_index = self.get_synapse_index_from_source_neuron_index(source_neuron_index)?;
-        self.get_synapse_at_synapse_index(*synapse_index)
+    /// Gets synapse data from a source neuron index as an iterator, and the number of them. DOES NOT FILTER OUT INVALID SYNAPSES
+    fn get_synapse_data_from_source_neuron_index(&self, source_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>>, NeuronCount<NeuronIndexQuant>), FeagiNPUSynapseError> {
+        let synapse_indexes = self.get_synapse_indexes_from_source_neuron_index(source_neuron_index);
+        let iterator = synapse_indexes.iter().map(|synapse_index| self.get_synapse_data_at_synapse_index(*synapse_index).map_err(
+            || FeagiNPUSynapseError::InternalError {context: "Source neuron index pointed to invalid synapse index! Something went wrong!"}
+        )?);
+        Ok((iterator, NeuronCount::from_usize(synapse_indexes.len())))
     }
 
-    fn get_valid_synapse_data_from_source_neuron_index(&self, source_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) -> Result<&NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>, FeagiNPUSynapseError> {
-        let synapse_index = self.get_synapse_index_from_source_neuron_index(source_neuron_index)?;
-        self.get_valid_synapse_at_synapse_index(*synapse_index)
+    /// Gets synapse data from a destination neuron index as an iterator, and the number of them. DOES NOT FILTER OUT INVALID SYNAPSES
+    fn get_synapse_data_from_destination_neuron_index(&self, destination_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>>, NeuronCount<NeuronIndexQuant>), FeagiNPUSynapseError> {
+        let synapse_indexes = self.get_synapse_indexes_from_destination_neuron_index(destination_neuron_index);
+        let iterator = synapse_indexes.iter().map(|synapse_index| self.get_synapse_data_at_synapse_index(*synapse_index).map_err(
+            || FeagiNPUSynapseError::InternalError {context: "Destination neuron index pointed to invalid synapse index! Something went wrong!"}
+        )?);
+        Ok((iterator, NeuronCount::from_usize(synapse_indexes.len())))
     }
 
-    fn get_synapse_data_from_source_neuron_index_mut(&mut self, source_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) -> Result<&mut NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>, FeagiNPUSynapseError> {
-        let synapse_index = self.get_synapse_index_from_source_neuron_index(source_neuron_index)?;
-        self.get_synapse_at_synapse_index_mut(*synapse_index)
+    /// Gets mut synapse data from a source neuron index as an iterator, and the number of them. DOES NOT FILTER OUT INVALID SYNAPSES
+    fn get_synapse_data_from_source_neuron_index_mut(&self, source_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>>, NeuronCount<NeuronIndexQuant>), FeagiNPUSynapseError> {
+        let synapse_indexes = self.get_synapse_indexes_from_source_neuron_index(source_neuron_index);
+        let iterator = synapse_indexes.iter_mut().map(|synapse_index| self.get_synapse_data_at_synapse_index(*synapse_index).map_err(
+            || FeagiNPUSynapseError::InternalError {context: "Source neuron index pointed to invalid synapse index! Something went wrong!"}
+        )?);
+        Ok((iterator, NeuronCount::from_usize(synapse_indexes.len())))
     }
 
-    fn get_valid_synapse_data_from_source_neuron_index_mut(&mut self, source_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) -> Result<&mut NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>, FeagiNPUSynapseError> {
-        let synapse_index = self.get_synapse_index_from_source_neuron_index(source_neuron_index)?;
-        self.get_valid_synapse_at_synapse_index_mut(*synapse_index)
+    /// Gets mut synapse data from a destination neuron index as an iterator, and the number of them. DOES NOT FILTER OUT INVALID SYNAPSES
+    fn get_synapse_data_from_destination_neuron_index_mut(&self, destination_neuron_index: &NPUNeuronIndex<NeuronIndexQuant>) -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>>, NeuronCount<NeuronIndexQuant>), FeagiNPUSynapseError> {
+        let synapse_indexes = self.get_synapse_indexes_from_destination_neuron_index(destination_neuron_index);
+        let iterator = synapse_indexes.iter_mut().map(|synapse_index| self.get_synapse_data_at_synapse_index(*synapse_index).map_err(
+            || FeagiNPUSynapseError::InternalError {context: "Destination neuron index pointed to invalid synapse index! Something went wrong!"}
+        )?);
+        Ok((iterator, NeuronCount::from_usize(synapse_indexes.len())))
     }
-
-
 
     //endregion
 
@@ -181,45 +210,55 @@ where
     ValueQuant: QuantizableValueType,
     PercentageQuant: QuantizablePercentType,
 {
-    fn add_synapses_mapping_between_cortical_areas(&mut self, source_area_index: CorticalAreaIndex<CorticalIndexQuant>,
+    fn add_synapses_mapping_between_cortical_areas(&mut self,
+                                                   source_area_index: CorticalAreaIndex<CorticalIndexQuant>,
+                                                   source_neuron_indexes: core::ops::Range<NPUNeuronIndex<NeuronIndexQuant>>,
+                                                   source_neuron_flags: &[NeuronFlag],
+                                                   source_cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>,
+                                                   source_neuron_density: NumberNeuronsPerVoxel,
                                                    destination_area_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                   neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseIndexQuant, CoordQuant, CorticalIndexQuant, BurstDeltaQuant, ValueQuant>) {
+                                                   destination_neuron_indexes: core::ops::Range<NPUNeuronIndex<NeuronIndexQuant>>,
+                                                   destination_neuron_flags: &[NeuronFlag],
+                                                   destination_cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>,
+                                                   destination_neuron_density: NumberNeuronsPerVoxel,
+                                                   neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseIndexQuant, CoordQuant, CorticalIndexQuant, BurstDeltaQuant, ValueQuant>)
+        -> Result<SynapseBundleIndex<SynapseBundleIndexQuant>, FeagiNPUSynapseError>{
+
+
+        let (synapse_iterator, number_synapses) = neuron_mapping_executor.non_plastic_synapse_iterator(
+            source_neuron_indexes, source_neuron_flags, source_cortical_dimensions, source_neuron_density,
+            destination_neuron_indexes, destination_neuron_flags, destination_cortical_dimensions, destination_neuron_density
+        )?;
 
         // TODO check length is ok
 
-        // actual data
 
-        let (synapse_index_range, is_allocation_at_end_needed): (core::ops::Range<NPUSynapseIndex<NeuronIndexQuant>>, bool) = {
+        // Data
+        let number_synapses: usize = number_synapses.to_usize();
+        let starting_synapse_index: NPUSynapseIndex<SynapseIndexQuant>;
+
+        // TODO check that you dont spawn in dead synapses
+        if false {
             // TODO instead of allocating right to the end, what if we have a way to quickly check through cache_invalid_neuron_indexes (assuming we also group neighboring ranges) and put ourselves there if we fit?
-            //if self.cache_number_invalid_neurons.to_usize() > number_of_neurons {
-            //
-            //}
-            // TODO size checks (not debug only, we need to be careful)
-            (NPUSynapseIndex::from_usize(self.synapses_data.len())..(self.synapses_data.len() + number_of_synapses), true)
-        };
-
-        // TODO this iterator is getting consumed by these functions, or we have to call them multiple times
-        // This isnt acceptable, we will need to find a way to do the following:
-        // - iterate over the iterator
-        // - for each value, open the produced struct, set the hash lookups with the neuron maps
-        // - close the struct and shove it in the overall index at the right spot
-        // There are some ways to do this naively but I am concerne about performance
-
-        if is_allocation_at_end_needed {
-            // TODO expand capacity
-            self.synapses_data.extend(neuron_mapping_executor)
+            starting_synapse_index = NPUSynapseIndex::from_usize(self.synapses_data.len()) // TODO replace with first spot
         } else {
-            self.synapses_data[&synapse_index_range].fill(neuron_mapping_executor)
+            self.synapses_data.reserve(number_synapses);
+            self.source_to_synapse.reserve(number_synapses);
+            self.destination_to_synapse.reserve(number_synapses);
+            starting_synapse_index = NPUSynapseIndex::from_usize(self.synapses_data.len());
+            for (local_index, synapse) in synapse_iterator.enumerate() {
+                let synapse_index = starting_synapse_index + NPUSynapseIndex::from_usize(local_index);
+                self.source_to_synapse.insert(synapse.source_neuron_index.clone(), synapse_index);
+                self.destination_to_synapse.insert(synapse.destination_neuron_index.clone(), synapse_index);
+                self.synapses_data.push(synapse)
+            }
         }
 
-        // cache
-        let mut synapse_ranges: Vec<core::ops::Range<SynapseIndexQuant>> = self.cache_valid_synapse_blocks.get_mut((source_area_index, destination_area_index)).ok_or_else(
-            self.cache_valid_synapse_blocks.push(Vec::new())
-        );
+        // Cache properties
+        let synapse_range = starting_synapse_index..(starting_synapse_index + NPUSynapseIndex::from_usize(number_synapses));
 
-        synapse_ranges.push(synapse_index_range)
-
-
+        self.cache_valid_synapse_count += number_synapses;
+        Ok(self.insert_valid_synapse_block_and_get_index(synapse_range, source_area_index, destination_area_index))
 
     }
 }
@@ -240,12 +279,22 @@ where
 {
 
     //region Get Connections
-    fn get_nonplastic_synapse_data_from_source_neuron_index(&self, source_neuron_index: NPUNeuronIndex<NeuronIndexQuant>) -> Result<&NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>, FeagiNPUSynapseError>
+    fn get_nonplastic_synapse_data_from_source_neuron_index(&self, source_neuron_index: NPUNeuronIndex<NeuronIndexQuant>) -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>>, NeuronCount<NeuronIndexQuant>), FeagiNPUSynapseError>
     {
-        let synapse_index =
+        self.get_synapse_data_from_source_neuron_index(&source_neuron_index)
     }
 
-    fn get_nonplastic_synapse_data_from_destination_neuron_index(&self, destination_neuron_index: NPUNeuronIndex<NeuronIndexQuant>) -> Result<&NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>, FeagiNPUSynapseError>;
+    fn get_nonplastic_synapse_data_from_source_neuron_index_mut(&mut self, source_neuron_index: NPUNeuronIndex<NeuronIndexQuant>) -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>>, NeuronCount<NeuronIndexQuant>), FeagiNPUSynapseError> {
+        todo!()
+    }
+
+    fn get_nonplastic_synapse_data_from_destination_neuron_index(&self, destination_neuron_index: NPUNeuronIndex<NeuronIndexQuant>) -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>>, NeuronCount<NeuronIndexQuant>), FeagiNPUSynapseError> {
+
+    }
+
+    fn get_nonplastic_synapse_data_from_destination_neuron_index_mut(&mut self, destination_neuron_index: NPUNeuronIndex<NeuronIndexQuant>) -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>>, NeuronCount<NeuronIndexQuant>), FeagiNPUSynapseError> {
+        todo!()
+    }
 
 
     //endregion
@@ -301,7 +350,7 @@ where
 
     //endregion
 
-    //region Synapse Invalidation
+    //region Sparse Synapse Invalidation
 
     fn invalidate_synapse_by_synapse_index(&mut self, synapse_index: NPUSynapseIndex<SynapseIndexQuant>) -> Result<(), FeagiNPUSynapseError> {
         todo!()

@@ -35,7 +35,7 @@ where
     //endregion
 
 
-    //region Synapse Invalidation
+    //region Sparse Synapse Invalidation
     /// Invalidates (but does not remove) a single synapse
     fn invalidate_synapse_by_synapse_index(&mut self, synapse_index: NPUSynapseIndex<SynapseIndexQuant>)-> Result<(), FeagiNPUSynapseError>;
 
