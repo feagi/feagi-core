@@ -152,8 +152,8 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
         let mut region_data = serde_json::Map::new();
 
         // Serialize all properties from the BrainRegion
-        let region_json = serde_json::to_value(region)
-            .map_err(|e| crate::EvoError::JsonError(e.to_string()))?;
+        let region_json =
+            serde_json::to_value(region).map_err(|e| crate::EvoError::JsonError(e.to_string()))?;
 
         if let Value::Object(mut props) = region_json {
             // Convert cortical ID arrays to base64

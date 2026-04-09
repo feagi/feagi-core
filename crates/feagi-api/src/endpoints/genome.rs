@@ -99,8 +99,8 @@ impl Drop for GenomeTransitionFlagGuard {
 }
 
 /// Mirrors prioritized genome transition in [feagi_state_manager::GenomeState] for health_check.
-/// - [Self::enter]: Loading
-/// - [Self::succeed]: Loaded (call when transition fully finished, including post-load agent IO)
+/// - [Self::enter][]: Loading
+/// - [Self::succeed][]: Loaded (call when transition fully finished, including post-load agent IO)
 /// - Drop without succeed: Error (failed or aborted transition)
 struct GenomeTransitionStateLifecycle;
 
