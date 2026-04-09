@@ -11,6 +11,8 @@ use crate::connectome::{ConnectomeAllocTrait, ConnectomeBaseTrait};
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::FeagiNPUStructureError;
+use crate::fire_candidate_list::FireCandidateListRam;
+use crate::fire_queue::{FireQueueRam, FireQueueTrait};
 use crate::neuron::base_dimension_traits::DimensionalAllocStorageTrait;
 use crate::neuron::dimensional_neurons::DimensionalNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::shared_funcs_and_structs::DimensionalNeuronDataFromCorticalArea;
@@ -18,7 +20,7 @@ use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount};
 use crate::synapse::non_plastic_dimensional::NonplasticDimensionalSynapseAllocRAMStorage;
-use crate::synapse::non_plastic_dimensional::traits::NonplasticSynapseAllocStorageTrait;
+use crate::synapse::non_plastic_dimensional::traits::{NonplasticSynapseAllocStorageTrait, NonplasticSynapseBaseStorageTrait};
 
 pub struct ConnectomeAllocRam<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
 where
@@ -33,6 +35,10 @@ where
     PercentageQuant: QuantizablePercentType,
 
 {
+    fire_queue: FireQueueRam<NeuronIndexQuant>,
+    fire_candidate_list_ram: FireCandidateListRam<NeuronIndexQuant>,
+
+
     // Neurons
     neurons_dimensional: DimensionalNeuronAllocRAMStorage<NeuronIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>,
     
@@ -59,6 +65,8 @@ where
         preallocated_nonplastic_dimensional_synapse_count: SynapseCount<SynapseIndexQuant>
     ) -> Self {
         Self {
+            fire_queue: FireQueueRam::new(0),
+            fire_candidate_list_ram: FireCandidateListRam::new(0),
             neurons_dimensional: DimensionalNeuronAllocRAMStorage::new(preallocated_dimensional_neuron_count),
             synapse_nonplastic: NonplasticDimensionalSynapseAllocRAMStorage::new(preallocated_nonplastic_dimensional_synapse_count),
         }
@@ -84,9 +92,9 @@ where
 
     //region Dimensional Neuron Cortical Areas
 
-    fn create_dimensional_neuron_cortical_area_with_default_neurons(&mut self, 
-                                                                    cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>, 
-                                                                    neurons_per_voxel: NumberNeuronsPerVoxel) 
+    fn create_dimensional_neuron_cortical_area_with_default_neurons(&mut self,
+                                                                    cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                                    neurons_per_voxel: NumberNeuronsPerVoxel)
         -> Result<(CorticalAreaIndex<CorticalIndexQuant>, Range<NPUNeuronIndex<NeuronIndexQuant>>), FeagiNPUStructureError> {
         self.neurons_dimensional.create_cortical_area_with_default_neurons(
             cortical_area_dimensions,
@@ -94,20 +102,20 @@ where
         ).map_err(|err| err.into())
     }
 
-    fn create_dimensional_neuron_cortical_area_with_uniform_neurons(&mut self, 
-                                                                    cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>, 
-                                                                    neurons_per_voxel: NumberNeuronsPerVoxel, 
+    fn create_dimensional_neuron_cortical_area_with_uniform_neurons(&mut self,
+                                                                    cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                                    neurons_per_voxel: NumberNeuronsPerVoxel,
                                                                     neuron_global_burst_index_of_last_firing: BurstGlobalIndex<BurstIndexQuant>,
-                                                                    neuron_membrane_potential: NeuronMembranePotential<ValueQuant>, 
-                                                                    neuron_fire_threshold: FireThreshold<ValueQuant>, 
-                                                                    neuron_leak_coefficient: LeakCoefficient<PercentageQuant>, 
-                                                                    neuron_refractory_countdown: BurstDelta<BurstDeltaQuant>, 
-                                                                    neuron_consecutive_fire_count: BurstDelta<BurstDeltaQuant>, 
-                                                                    cortical_excitability: NeuronExcitability<PercentageQuant>, 
-                                                                    cortical_refractory_period_limit: BurstDelta<BurstDeltaQuant>, 
-                                                                    cortical_fire_threshold_limit: FireThresholdLimit<ValueQuant>, 
-                                                                    cortical_consecutive_fire_limit: BurstDelta<BurstDeltaQuant>, 
-                                                                    cortical_is_mp_charge_accumulation_enabled: bool, 
+                                                                    neuron_membrane_potential: NeuronMembranePotential<ValueQuant>,
+                                                                    neuron_fire_threshold: FireThreshold<ValueQuant>,
+                                                                    neuron_leak_coefficient: LeakCoefficient<PercentageQuant>,
+                                                                    neuron_refractory_countdown: BurstDelta<BurstDeltaQuant>,
+                                                                    neuron_consecutive_fire_count: BurstDelta<BurstDeltaQuant>,
+                                                                    cortical_excitability: NeuronExcitability<PercentageQuant>,
+                                                                    cortical_refractory_period_limit: BurstDelta<BurstDeltaQuant>,
+                                                                    cortical_fire_threshold_limit: FireThresholdLimit<ValueQuant>,
+                                                                    cortical_consecutive_fire_limit: BurstDelta<BurstDeltaQuant>,
+                                                                    cortical_is_mp_charge_accumulation_enabled: bool,
                                                                     cortical_is_mp_driven_psp_enabled: bool)
         -> Result<CorticalAreaIndex<CorticalIndexQuant>, FeagiNPUStructureError> {
         todo!()
@@ -138,9 +146,9 @@ where
     }
 
     fn add_nonplastic_connection_from_dimensional_area_to_dimensional_area(&mut self, source_area_index: CorticalAreaIndex<CorticalIndexQuant>, destination_area_index: CorticalAreaIndex<CorticalIndexQuant>, neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseIndexQuant, CoordQuant, CorticalIndexQuant, BurstDeltaQuant, ValueQuant>) -> Result<SynapseBundleIndex<SynapseBundleIndexQuant>, FeagiNPUStructureError> {
-        
-        
-        
+
+
+
         let synapse_bundle_index = self.synapse_nonplastic.add_synapses_mapping_between_cortical_areas(
             source_area_index,
             source_neuron_indexes,
@@ -189,8 +197,43 @@ where
     ValueQuant: QuantizableValueType,
     PercentageQuant: QuantizablePercentType,
 {
-    fn process_burst(&mut self, burst_index: BurstGlobalIndex<BurstIndexQuant>) {
-        todo!()
+    fn process_burst(&mut self, burst_index: &BurstGlobalIndex<BurstIndexQuant>) {
+
+        self.fire_candidate_list_ram.clear();
+
+        // TODO rayon feature swapper
+
+        // NOTE I dont think its a good idea to have injectors run in here, they should be done before
+        // maybe motor / sensor stuff should be injected to areas directly
+
+        // TODO many errors here can only occur if something went very wrong. We should map them appropriately to be clear
+
+        for firing_neuron_index in &self.fire_queue.get_dimensional_neuron_indexes_slice() {
+            let downstream_synapses = self.synapse_nonplastic.get_nonplastic_synapse_data_from_source_neuron_index(firing_neuron_index)?;
+            // TODO mp_charge_accumulation ? do we do it at the start of the burst?
+            
+            
+            for downstream_synapse in downstream_synapses {
+                let downstream_neuron_index = downstream_synapse.destination_neuron;
+                self.neurons_dimensional.membrane_potential(downstream_neuron_index)
+                    .update_threshold_nonplastic(
+                        downstream_synapse.weight,
+                        self.neurons_dimensional.membrane_potential(firing_neuron_index)
+                    )
+                
+                
+            }
+
+
+        }
+
+
+
+
+
+        // TODO safer increment?
+        //burst_index++; // TODO it may be better to increment this outside
+
     }
 
     //region Set Neuron Properties

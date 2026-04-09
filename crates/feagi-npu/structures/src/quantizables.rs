@@ -1,4 +1,5 @@
 use feagi_structures::{define_quantizable_percentage_type_family, define_quantizable_uint_type_family, define_quantizable_value_type_family};
+use feagi_structures::base_quantizable::QuantizableValueType;
 use feagi_structures::neurons::descriptors::{NeuronMembranePotential, NumberNeuronsPerVoxel};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 
@@ -45,6 +46,12 @@ define_quantizable_uint_type_family!(SynapseBundleIndex);
 //region Value (float-ish) Quantizations
 
 // Neuron Membrane Potential is in the 'Feagi-Structures' Crate!
+
+impl NeuronMembranePotential<f32> {
+    pub fn update_threshold_nonplastic(&mut self, synaptic_weight: SynapticWeight<f32>, upstream_potential: NeuronMembranePotential<f32>) {
+        self.0 = self.0 * synaptic_weight.0 * upstream_potential.0;
+    }
+}
 
 //region Fire Threshold
 define_quantizable_value_type_family!(FireThreshold);

@@ -25,10 +25,34 @@ use crate::update_sim_timestep_from_hz;
 #[cfg(feature = "std")]
 use crate::{tracing_mutex::TracingMutex, DynamicNPU};
 use feagi_npu_neural::types::NeuronId;
+use feagi_npu_structures::connectome::ConnectomeAllocRam;
 use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+
+
+
+pub struct ConnectomeBurstExecutor {
+    npu: ConnectomeAllocRam,
+}
+
+impl ConnectomeBurstExecutor {
+
+
+    // TODO we probably shouldnt havbe injector calls in here here
+    // TODO move to burst most of this this stuff
+
+
+}
+
+
+
+
+
+
+
 
 /// Type alias for fire queue sample data structure
 type FireQueueSample = ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
@@ -122,10 +146,11 @@ pub struct SensoryIngressPayload {
 /// 🦀 Power neurons are stored in RustNPU, not here - 100% Rust!
 /// 🦀 Burst count is stored in NPU - single source of truth!
 pub struct BurstLoopRunner {
-    /// Shared NPU instance (holds power neurons internally + burst count)
-    /// DynamicNPU dispatches to either F32 or INT8 variant based on genome
-    /// Wrapped in TracingMutex to automatically log all lock acquisitions
+
+    // NOTe this cant be replaces as arc
     npu: Arc<TracingMutex<DynamicNPU>>,
+
+
     /// Target frequency in Hz (shared with burst thread for dynamic updates)
     frequency_hz: Arc<Mutex<f64>>,
     /// Running flag (atomic for thread-safe stop)
@@ -1415,27 +1440,27 @@ mod sensory_ingest_tests {
             },
             SensoryIngressPayload {
                 bytes: vec![3],
-                source_id: None,
-                received_at: now - Duration::from_millis(1),
-            },
-        ];
+                    source_id: None,
+                    received_at: now - Duration::from_millis(1),
+                },
+            ];
 
-        let (selected, dropped, collapsed) =
-            select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
-        assert_eq!(dropped, 0);
-        assert_eq!(collapsed, 2);
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].source_id, None);
-        assert_eq!(selected[0].bytes, vec![3]);
+            let (selected, dropped, collapsed) =
+                select_fresh_payloads_for_burst(now, Duration::from_millis(10), payloads);
+            assert_eq!(dropped, 0);
+            assert_eq!(collapsed, 2);
+            assert_eq!(selected.len(), 1);
+            assert_eq!(selected[0].source_id, None);
+            assert_eq!(selected[0].bytes, vec![3]);
+        }
     }
-}
 
-/// Main burst processing loop (runs in dedicated thread)
-///
-/// This is the HOT PATH - zero Python involvement!
-/// Power neurons are read directly from RustNPU's internal state.
-/// Burst count is tracked by NPU - single source of truth!
-#[allow(clippy::too_many_arguments)]
+    /// Main burst processing loop (runs in dedicated thread)
+    ///
+    /// This is the HOT PATH - zero Python involvement!
+    /// Power neurons are read directly from RustNPU's internal state.
+    /// Burst count is tracked by NPU - single source of truth!
+    #[allow(clippy::too_many_arguments)]
 fn burst_loop(
     npu: Arc<TracingMutex<DynamicNPU>>,
     frequency_hz: Arc<Mutex<f64>>, // Shared frequency - can be updated while running
@@ -1497,31 +1522,31 @@ fn burst_loop(
         // Track time since last burst (to detect blocking)
         static LAST_ITERATION_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
         {
-            let mut last_end = LAST_ITERATION_END.lock().unwrap();
-            if let Some(last) = *last_end {
-                let gap = iteration_start.duration_since(last);
-                // Only warn for extreme gaps (>10 seconds) that might indicate system issues
-                // Normal batch processing (e.g., MRI data) can have multi-second gaps
-                if gap.as_millis() > 10000 {
-                    warn!(
-                        "[BURST-LOOP] ⚠️ Extremely large gap between bursts: {:.2}ms - burst {} (this may indicate system issues)",
-                        gap.as_secs_f64() * 1000.0,
-                        burst_num
-                    );
+                let mut last_end = LAST_ITERATION_END.lock().unwrap();
+                if let Some(last) = *last_end {
+                    let gap = iteration_start.duration_since(last);
+                    // Only warn for extreme gaps (>10 seconds) that might indicate system issues
+                    // Normal batch processing (e.g., MRI data) can have multi-second gaps
+                    if gap.as_millis() > 10000 {
+                        warn!(
+                            "[BURST-LOOP] ⚠️ Extremely large gap between bursts: {:.2}ms - burst {} (this may indicate system issues)",
+                            gap.as_secs_f64() * 1000.0,
+                            burst_num
+                        );
+                    }
+                }
+                *last_end = Some(iteration_start);
+            }
+
+            // Track actual burst interval
+            if let Some(last) = last_burst_time {
+                let interval = burst_start.duration_since(last);
+                burst_times.push(interval);
+                if burst_times.len() > 100 {
+                    burst_times.remove(0);
                 }
             }
-            *last_end = Some(iteration_start);
-        }
-
-        // Track actual burst interval
-        if let Some(last) = last_burst_time {
-            let interval = burst_start.duration_since(last);
-            burst_times.push(interval);
-            if burst_times.len() > 100 {
-                burst_times.remove(0);
-            }
-        }
-        last_burst_time = Some(burst_start);
+            last_burst_time = Some(burst_start);
 
         // CRITICAL: Check shutdown flag immediately after burst processing
         // This ensures we exit as soon as shutdown is requested, even mid-burst

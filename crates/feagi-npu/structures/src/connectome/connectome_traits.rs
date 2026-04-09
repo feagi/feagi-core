@@ -175,9 +175,7 @@ where
     /// Disconnects all synapses between 2 dimensional cortical areas
     fn disconnect_all_synapses_from_dimensional_area_to_dimensional_area(&mut self,
                                                                          source_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                                         source_dimensional_type: DimensionCorticalAreaType,
-                                                                         destination_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                                         destination_dimensional_type: DimensionCorticalAreaType)
+                                                                         destination_index: CorticalAreaIndex<CorticalIndexQuant>,)
         -> Result<(), FeagiNPUStructureError>;
 
     /// Adds synapse mappings between 2 cortical areas as defined by a given neuron mapping executor.
