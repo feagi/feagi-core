@@ -44,7 +44,7 @@ impl<PotentialQuant, CoordQuant> NeuronFireThresholdExecutor<PotentialQuant, Coo
 {
     // Neuron order to be incrementing x->y->z
     fn set_new_fire_thresholds(&self,
-                               thresholds: &mut [PotentialQuant],
+                               thresholds: &mut [FireThreshold<PotentialQuant>],
                                _neuron_flags: &[NeuronFlag],
                                _cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>,
                                _number_neurons_per_voxel: NumberNeuronsPerVoxel)

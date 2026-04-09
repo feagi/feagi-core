@@ -103,7 +103,7 @@ where
     fn create_dimensional_neuron_cortical_area_with_default_neurons(&mut self,
                                                              cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
                                                              neurons_per_voxel: NumberNeuronsPerVoxel)
-                                                             ->  Result<CorticalAreaIndex<CorticalIndexQuant>, FeagiNPUStructureError>;
+        -> Result<(CorticalAreaIndex<CorticalIndexQuant>, Range<NPUNeuronIndex<NeuronIndexQuant>>), FeagiNPUStructureError>;
 
     /// Create dimensional_neuron (custom) cortical area with given neuron settings spanned across the
     /// entire cortical area. Returns the cortical index of this new area.
@@ -183,8 +183,8 @@ where
     /// Adds synapse mappings between 2 cortical areas as defined by a given neuron mapping executor.
     /// Returns the synapse bundle index of the mapping
     fn add_nonplastic_connection_from_dimensional_area_to_dimensional_area(&mut self,
-                                                                           source_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                                           destination_index: CorticalAreaIndex<CorticalIndexQuant>,
+                                                                           source_area_index: CorticalAreaIndex<CorticalIndexQuant>,
+                                                                           destination_area_index: CorticalAreaIndex<CorticalIndexQuant>,
                                                                            neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseIndexQuant, CoordQuant, CorticalIndexQuant, BurstDeltaQuant, ValueQuant>)
         -> Result<SynapseBundleIndex<SynapseBundleIndexQuant>, FeagiNPUStructureError>;
 

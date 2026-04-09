@@ -6,6 +6,7 @@ pub mod quantizables;
 pub mod neuron;
 pub mod synapse;
 pub mod fire_candidate_list;
+pub mod fire_queue;
 pub mod executors;
 pub mod connectome;
 

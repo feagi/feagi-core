@@ -1,20 +1,16 @@
 
-// TODO I dont think this is a good implementation. By using a vector, its very easy to add a neuron
-// multiple times. Now while this can be addressedwith some sorting / searching, I dont like this.
-// This can also be addressed with a hashset, but thats not all compatible with embedded and can be
-// a bit heavy. We should think about this.
 
 use feagi_structures::base_quantizable::QuantizableUIntType;
-use crate::fire_candidate_list::FireCandidateListTrait;
+use crate::fire_queue::traits::FireQueueTrait;
 use crate::quantizables::NPUNeuronIndex;
 
-pub struct FireCandidateListRam<NeuronIndexQuant> where
+pub struct FireQueueRam<NeuronIndexQuant> where
     NeuronIndexQuant: QuantizableUIntType,
 {
     dimensional_neuron_indexes: Vec<NPUNeuronIndex<NeuronIndexQuant>>,
 }
 
-impl<NeuronIndexQuant> FireCandidateListRam<NeuronIndexQuant> where
+impl<NeuronIndexQuant> FireQueueRam<NeuronIndexQuant> where
     NeuronIndexQuant: QuantizableUIntType,
 {
     pub fn new(preallocated_index_count: usize) -> Self {
@@ -24,7 +20,7 @@ impl<NeuronIndexQuant> FireCandidateListRam<NeuronIndexQuant> where
     }
 }
 
-impl<NeuronIndexQuant> FireCandidateListTrait<NeuronIndexQuant> for FireCandidateListRam<NeuronIndexQuant> where
+impl<NeuronIndexQuant> FireQueueTrait<NeuronIndexQuant> for FireQueueRam<NeuronIndexQuant> where
     NeuronIndexQuant: QuantizableUIntType,
 {
     fn get_dimensional_neuron_indexes_slice(&self) -> &[NPUNeuronIndex<NeuronIndexQuant>] {
