@@ -43,6 +43,10 @@ pub struct HealthCheckResponse {
     pub genome_availability: bool,
     pub genome_validity: Option<bool>,
     pub brain_readiness: bool,
+    /// True while a prioritized genome load/upload is in progress (StateManager genome state is Loading).
+    pub genome_loading: bool,
+    /// Genome lifecycle: missing, loading, loaded, saving, or error.
+    pub genome_state: String,
     pub feagi_session: Option<i64>,
     pub fitness: Option<f64>,
     pub cortical_area_count: Option<i32>,
@@ -292,9 +296,22 @@ pub async fn get_health_check(
         morphologies_hash,
         cortical_mappings_hash,
         agent_data_hash,
+        genome_loading,
+        genome_state,
     ) = {
+        use feagi_state_manager::GenomeState;
         let state_manager = feagi_state_manager::StateManager::instance();
         let state_manager = state_manager.read();
+        let gs = state_manager.get_genome_state();
+        let genome_state = match gs {
+            GenomeState::Missing => "missing",
+            GenomeState::Loading => "loading",
+            GenomeState::Loaded => "loaded",
+            GenomeState::Saving => "saving",
+            GenomeState::Error => "error",
+        }
+        .to_string();
+        let genome_loading = gs == GenomeState::Loading;
         (
             Some(state_manager.get_brain_regions_hash()),
             Some(state_manager.get_cortical_areas_hash()),
@@ -302,6 +319,8 @@ pub async fn get_health_check(
             Some(state_manager.get_morphologies_hash()),
             Some(state_manager.get_cortical_mappings_hash()),
             Some(state_manager.get_agent_data_hash()),
+            genome_loading,
+            genome_state,
         )
     };
 
@@ -315,6 +334,8 @@ pub async fn get_health_check(
         genome_availability,
         genome_validity,
         brain_readiness: health.brain_readiness,
+        genome_loading,
+        genome_state,
         feagi_session,
         fitness,
         cortical_area_count: Some(health.cortical_area_count as i32),

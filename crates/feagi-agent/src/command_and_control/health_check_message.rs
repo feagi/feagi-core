@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+fn default_genome_state_label() -> String {
+    "missing".to_string()
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum HealthCheckMessage {
@@ -22,6 +26,10 @@ pub struct HealthCheckResponse {
     pub genome_availability: bool,
     pub genome_validity: Option<bool>,
     pub brain_readiness: bool,
+    #[serde(default)]
+    pub genome_loading: bool,
+    #[serde(default = "default_genome_state_label")]
+    pub genome_state: String,
     pub feagi_session: Option<i64>,
     pub fitness: Option<f64>,
     pub cortical_area_count: Option<i32>,
