@@ -192,7 +192,7 @@ ndarray = { version = "0.17.2", default-features = false }
 ahash = { version = "0.8.12", default-features = false}  # Fast non-cryptographic hashing (no runtime-rng for WASM)
 tracing = "0.1.44"  # Structured logging and diagnostics
 bytemuck = { version = "1.14" } # TODO I feel there was a reason this is on 1.14?
-uuid = { version = "1.23"}
+uuid = { version = "1.23.0"}
 half = {version = "2.7.1", default-features = false}
 defmt = {version = "1.0.1"} # Only used in embedded contexts
 paste = "1.0.15" # only used in development
