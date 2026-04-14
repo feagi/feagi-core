@@ -1,7 +1,18 @@
 use feagi_structures::{define_quantizable_percentage_type_family, define_quantizable_uint_type_family, define_quantizable_value_type_family};
-use feagi_structures::base_quantizable::QuantizableValueType;
-use feagi_structures::neurons::descriptors::{NeuronMembranePotential, NumberNeuronsPerVoxel};
-use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
+use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
+
+/// Defines the quantization for all most uses in this crate // TODO this may need to be moved up a level?
+pub trait NPUQuantization {
+    type NeuronIndex: QuantizableUIntType;
+    type SynapseIndex: QuantizableUIntType;
+    type SynapseBundleIndex: QuantizableUIntType;
+    type CorticalIndex: QuantizableUIntType;
+    type Coord: QuantizableUIntType;
+    type BurstDelta: QuantizableUIntType;
+    type BurstIndex: QuantizableUIntType;
+    type Value: QuantizableValueType;
+    type Percentage: QuantizablePercentType;
+}
 
 //region UInt Quantizations
 
@@ -45,13 +56,16 @@ define_quantizable_uint_type_family!(SynapseBundleIndex);
 
 //region Value (float-ish) Quantizations
 
-// Neuron Membrane Potential is in the 'Feagi-Structures' Crate!
 
-impl NeuronMembranePotential<f32> {
-    pub fn update_threshold_nonplastic(&mut self, synaptic_weight: SynapticWeight<f32>, upstream_potential: NeuronMembranePotential<f32>) {
+//region NPU Neuron Membrane Potential (seperate implementation here for this crate
+define_quantizable_value_type_family!(NPUNeuronMembranePotential);
+
+impl NPUNeuronMembranePotential<f32> {
+    pub fn update_threshold_nonplastic(&mut self, synaptic_weight: SynapticWeight<f32>, upstream_potential: NPUNeuronMembranePotential<f32>) {
         self.0 = self.0 * synaptic_weight.0 * upstream_potential.0;
     }
 }
+//endregion
 
 //region Fire Threshold
 define_quantizable_value_type_family!(FireThreshold);

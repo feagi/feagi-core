@@ -2,7 +2,8 @@ use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueTy
 use crate::quantizables::{BurstDelta, NPUNeuronIndex, PSPMultiplier, SynapticWeight};
 use crate::synapse::synapse_flags::SynapseFlag;
 
-/// Defines the properties and mapping of a nonplastic synapse. Mostly meant for iterators
+
+#[derive(Debug, Copy, Clone)]
 pub struct NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
@@ -22,8 +23,8 @@ where
 {
     pub const NUMBER_OF_BYTES: usize = 
         NeuronIndexQuant::NUMBER_OF_BYTES + 
-        NeuronIndexQuant::NUMBER_OF_BYTES + 
-        NonplasticSynapseProperties::NUMBER_OF_BYTES;
+        NeuronIndexQuant::NUMBER_OF_BYTES +
+            NonplasticSynapseProperties::<ValueQuant, BurstDeltaQuant>::NUMBER_OF_BYTES;
 
     
     pub fn is_valid(&self) -> bool {
@@ -35,6 +36,7 @@ where
 
 
 /// Defines the properties of a nonplastic synapse
+#[derive(Debug, Copy, Clone)]
 pub struct NonplasticSynapseProperties<ValueQuant, BurstDeltaQuant> 
 where
     BurstDeltaQuant: QuantizableUIntType,
@@ -51,7 +53,7 @@ where
     BurstDeltaQuant: QuantizableUIntType,
     ValueQuant: QuantizableValueType
 {
-    pub const NUMBER_OF_BYTES: usize = BurstDeltaQuant::NUMBER_OF_BYTES + BurstDeltaQuant::NUMBER_OF_BYTES;
+    pub const NUMBER_OF_BYTES: usize = 1 + ValueQuant::NUMBER_OF_BYTES + ValueQuant::NUMBER_OF_BYTES + BurstDeltaQuant::NUMBER_OF_BYTES;
     
     #[inline(always)]
     pub fn is_valid(&self) -> bool {

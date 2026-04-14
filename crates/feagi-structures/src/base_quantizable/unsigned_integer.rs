@@ -164,6 +164,8 @@ pub trait QuantizableUIntType:
     + Clone
     + Send
     + Sync
+    + core::cmp::Eq
+    + core::hash::Hash
     + core::cmp::PartialOrd
     + core::ops::Add<Output = Self>
     + core::ops::Sub<Output = Self>
@@ -200,6 +202,8 @@ pub trait QuantizableUIntType:
     + Debug
     + Display
     + Default
+    + core::cmp::Eq
+    + core::hash::Hash
     + core::cmp::PartialOrd
     + core::ops::Add<Output = Self>
     + core::ops::Sub<Output = Self>

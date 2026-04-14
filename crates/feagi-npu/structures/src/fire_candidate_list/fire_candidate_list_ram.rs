@@ -42,4 +42,8 @@ impl<NeuronIndexQuant> FireCandidateListTrait<NeuronIndexQuant> for FireCandidat
     fn add_dimensional_neuron_index(&mut self, neuron_index_quant: NPUNeuronIndex<NeuronIndexQuant>) {
         self.dimensional_neuron_indexes.push(neuron_index_quant);
     }
+
+    fn clear(&mut self) {
+        todo!()
+    }
 }

@@ -12,5 +12,7 @@ pub trait FireCandidateListTrait<NeuronIndexQuant> where
     fn get_dimensional_neuron_indexes_mut(&mut self) -> &mut Vec<NPUNeuronIndex<NeuronIndexQuant>>;
 
     fn add_dimensional_neuron_index(&mut self, neuron_index_quant: NPUNeuronIndex<NeuronIndexQuant>);
+
+    fn clear(&mut self);
 }
 

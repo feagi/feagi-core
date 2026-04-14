@@ -2,41 +2,30 @@
 // we may need to make this an enum wrapping a type, with runtime checks to prevent invalid calls
 
 use std::ops::Range;
-use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
-use feagi_structures::neurons::descriptors::{NeuronMembranePotential, NumberNeuronsPerVoxel};
+use feagi_structures::neurons::descriptors::{NumberNeuronsPerVoxel};
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::FeagiNPUStructureError;
 use crate::neuron::dimensional_neurons::shared_funcs_and_structs::DimensionalNeuronDataFromCorticalArea;
-use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex};
+use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, NPUNeuronMembranePotential};
 
-pub trait ConnectomeBaseTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
-where
-    NeuronIndexQuant: QuantizableUIntType,
-    SynapseIndexQuant: QuantizableUIntType,
-    SynapseBundleIndexQuant: QuantizableUIntType,
-    CorticalIndexQuant: QuantizableUIntType,
-    CoordQuant: QuantizableUIntType,
-    BurstDeltaQuant: QuantizableUIntType,
-    BurstIndexQuant: QuantizableUIntType,
-    ValueQuant: QuantizableValueType,
-    PercentageQuant: QuantizablePercentType,
+pub trait ConnectomeBaseTrait<Q: NPUQuantization>
 {
 
-    fn process_burst(&mut self, burst_index: BurstGlobalIndex<BurstIndexQuant>);
+    fn process_burst(&mut self, burst_index: &BurstGlobalIndex<Q::BurstIndex>);
 
 
     //region Set Neuron Properties
 
-    fn set_dimensional_neuron_fire_thresholds(&mut self, cortical_area_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                       executor: &impl NeuronFireThresholdExecutor<ValueQuant, CoordQuant>)
+    fn set_dimensional_neuron_fire_thresholds(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                       executor: &impl NeuronFireThresholdExecutor<Q::Value, Q::Coord>)
                                                      -> Result<(), FeagiNPUStructureError>;
 
-    fn set_dimensional_neuron_leak_coefficients(&mut self, cortical_area_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                         executor: &impl NeuronFireThresholdExecutor<ValueQuant, CoordQuant>)
+    fn set_dimensional_neuron_leak_coefficients(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                         executor: &impl NeuronFireThresholdExecutor<Q::Value, Q::Coord>)
                                        -> Result<(), FeagiNPUStructureError>;
 
     //endregion
@@ -66,33 +55,13 @@ where
 }
 
 /// Connectome functions ONLY for static implementations
-pub trait ConnectomeStaticTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant> // TODO const sizes
-where
-    NeuronIndexQuant: QuantizableUIntType,
-    SynapseIndexQuant: QuantizableUIntType,
-    SynapseBundleIndexQuant: QuantizableUIntType,
-    CorticalIndexQuant: QuantizableUIntType,
-    CoordQuant: QuantizableUIntType,
-    BurstDeltaQuant: QuantizableUIntType,
-    BurstIndexQuant: QuantizableUIntType,
-    ValueQuant: QuantizableValueType,
-    PercentageQuant: QuantizablePercentType,
+pub trait ConnectomeStaticTrait<Q: NPUQuantization> // TODO const sizes
 {
     // TODO
 }
 
 /// Connectome functions ONLY for alloc capable implementations
-pub trait ConnectomeAllocTrait<NeuronIndexQuant, SynapseIndexQuant, SynapseBundleIndexQuant, CorticalIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>
-where
-    NeuronIndexQuant: QuantizableUIntType,
-    SynapseIndexQuant: QuantizableUIntType,
-    SynapseBundleIndexQuant: QuantizableUIntType,
-    CorticalIndexQuant: QuantizableUIntType,
-    CoordQuant: QuantizableUIntType,
-    BurstDeltaQuant: QuantizableUIntType,
-    BurstIndexQuant: QuantizableUIntType,
-    ValueQuant: QuantizableValueType,
-    PercentageQuant: QuantizablePercentType,
+pub trait ConnectomeAllocTrait<Q: NPUQuantization>
 {
     //region Cortical Areas
 
@@ -101,35 +70,35 @@ where
     /// Create dimensional_neuron (custom) cortical area with default neuron settings spanned across the
     /// entire cortical area. Returns the cortical index of this new area.
     fn create_dimensional_neuron_cortical_area_with_default_neurons(&mut self,
-                                                             cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                             cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
                                                              neurons_per_voxel: NumberNeuronsPerVoxel)
-        -> Result<(CorticalAreaIndex<CorticalIndexQuant>, Range<NPUNeuronIndex<NeuronIndexQuant>>), FeagiNPUStructureError>;
+        -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUStructureError>;
 
     /// Create dimensional_neuron (custom) cortical area with given neuron settings spanned across the
     /// entire cortical area. Returns the cortical index of this new area.
     fn create_dimensional_neuron_cortical_area_with_uniform_neurons(&mut self, // TODO change other instances of spanned to uniform
-                                                             cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                             cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
                                                              neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                             neuron_global_burst_index_of_last_firing: BurstGlobalIndex<BurstIndexQuant>,
-                                                             neuron_membrane_potential: NeuronMembranePotential<ValueQuant>,
-                                                             neuron_fire_threshold: FireThreshold<ValueQuant>,
-                                                             neuron_leak_coefficient: LeakCoefficient<PercentageQuant>,
-                                                             neuron_refractory_countdown: BurstDelta<BurstDeltaQuant>,
-                                                             neuron_consecutive_fire_count: BurstDelta<BurstDeltaQuant>,
-                                                             cortical_excitability: NeuronExcitability<PercentageQuant>,
-                                                             cortical_refractory_period_limit: BurstDelta<BurstDeltaQuant>,
-                                                             cortical_fire_threshold_limit: FireThresholdLimit<ValueQuant>,
-                                                             cortical_consecutive_fire_limit: BurstDelta<BurstDeltaQuant>,
+                                                             neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::BurstIndex>,
+                                                             neuron_membrane_potential: NPUNeuronMembranePotential<Q::Value>,
+                                                             neuron_fire_threshold: FireThreshold<Q::Value>,
+                                                             neuron_leak_coefficient: LeakCoefficient<Q::Percentage>,
+                                                             neuron_refractory_countdown: BurstDelta<Q::BurstDelta>,
+                                                             neuron_consecutive_fire_count: BurstDelta<Q::BurstDelta>,
+                                                             cortical_excitability: NeuronExcitability<Q::Percentage>,
+                                                             cortical_refractory_period_limit: BurstDelta<Q::BurstDelta>,
+                                                             cortical_fire_threshold_limit: FireThresholdLimit<Q::Value>,
+                                                             cortical_consecutive_fire_limit: BurstDelta<Q::BurstDelta>,
                                                              cortical_is_mp_charge_accumulation_enabled: bool,
                                                              cortical_is_mp_driven_psp_enabled: bool)
-                                                             -> Result<CorticalAreaIndex<CorticalIndexQuant>, FeagiNPUStructureError>;
+                                                             -> Result<CorticalAreaIndex<Q::CorticalIndex>, FeagiNPUStructureError>;
 
     /// Create dimensional_neuron (custom) cortical area with given per neuron values
     fn create_dimensional_neuron_cortical_area_with_individualized_neurons(&mut self,
-                                                                    cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                                    cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
                                                                     neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                                    neuron_data: DimensionalNeuronDataFromCorticalArea<NeuronIndexQuant, CoordQuant, BurstDeltaQuant, BurstIndexQuant, ValueQuant, PercentageQuant>)
-                                                                    -> Result<CorticalAreaIndex<CorticalIndexQuant>, FeagiNPUStructureError>;
+                                                                    neuron_data: DimensionalNeuronDataFromCorticalArea<Q>)
+                                                                    -> Result<CorticalAreaIndex<Q::CorticalIndex>, FeagiNPUStructureError>;
 
 
     // NOTE: We will not store mapping definitions in the connectome since that takes space and is
@@ -142,15 +111,15 @@ where
     /// the new dimensions and cortical level settings and then reestablishes the synapses
     /// anew with given mappers (should be the same as what was had before)
     fn resize_dimensional_neuron_cortical_area<'a>(&mut self,
-                                                   cortical_area_dimensions: NeuronVoxelDimensions<CoordQuant>,
+                                                   cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
                                                    neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                   cortical_index: CorticalAreaIndex<CorticalIndexQuant>,
+                                                   cortical_index: CorticalAreaIndex<Q::CorticalIndex>,
                                                    presynaptic_nonplastic_dimensional_mappings: &Vec<(
-                                                CorticalAreaIndex<CorticalIndexQuant>,
-                                                DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseIndexQuant, CoordQuant, CorticalIndexQuant, BurstDeltaQuant, ValueQuant>)>,
+                                                CorticalAreaIndex<Q::CorticalIndex>,
+                                                DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)>,
                                                    postsynaptic_nonplastic_dimensional_mappings: &Vec<(
-                                                CorticalAreaIndex<CorticalIndexQuant>,
-                                                DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseIndexQuant, CoordQuant, CorticalIndexQuant, BurstDeltaQuant, ValueQuant>)>, )
+                                                CorticalAreaIndex<Q::CorticalIndex>,
+                                                DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)>, )
 
                                                    -> Result<(), FeagiNPUStructureError>;
 
@@ -158,8 +127,8 @@ where
     /// First deletes any synaptic connections to / from this area, then deletes the dimensional_neuron
     /// cortical area
     fn delete_dimensional_neuron_cortical_area(&mut self,
-                                        cortical_index: CorticalAreaIndex<CorticalIndexQuant>)
-                                        -> Result<Range<NPUNeuronIndex<NeuronIndexQuant>>, FeagiNPUStructureError>;
+                                        cortical_index: CorticalAreaIndex<Q::CorticalIndex>)
+                                        -> Result<Range<NPUNeuronIndex<Q::NeuronIndex>>, FeagiNPUStructureError>;
 
     //endregion
 
@@ -174,25 +143,25 @@ where
 
     /// Disconnects all synapses between 2 dimensional cortical areas
     fn disconnect_all_synapses_from_dimensional_area_to_dimensional_area(&mut self,
-                                                                         source_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                                         destination_index: CorticalAreaIndex<CorticalIndexQuant>,)
+                                                                         source_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                                                         destination_index: CorticalAreaIndex<Q::CorticalIndex>,)
         -> Result<(), FeagiNPUStructureError>;
 
     /// Adds synapse mappings between 2 cortical areas as defined by a given neuron mapping executor.
     /// Returns the synapse bundle index of the mapping
     fn add_nonplastic_connection_from_dimensional_area_to_dimensional_area(&mut self,
-                                                                           source_area_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                                           destination_area_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                                           neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseIndexQuant, CoordQuant, CorticalIndexQuant, BurstDeltaQuant, ValueQuant>)
-        -> Result<SynapseBundleIndex<SynapseBundleIndexQuant>, FeagiNPUStructureError>;
+                                                                           source_area_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                                                           destination_area_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                                                           neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)
+        -> Result<SynapseBundleIndex<Q::SynapseBundleIndex>, FeagiNPUStructureError>;
 
     /*
     /// Disconnects just the synapses of the given synapse bundle index between
     /// 2 dimensional cortical areas
     fn disconnect_specific_nonplastic_synapse_bundle_from_dimensional_area_to_dimensional_area(&mut self,
-                                                                                     source_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                                                     destination_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                                                     synapse_bundle_index: SynapseBundleIndex<SynapseBundleIndexQuant>)
+                                                                                     source_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                                                                     destination_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                                                                     synapse_bundle_index: SynapseBundleIndex<Q::SynapseBundleIndex>)
         -> Result<(), FeagiNPUStructureError>;
 
      */
@@ -201,8 +170,8 @@ where
     /*
     // TODO this may belong under base
     fn connect_dimensional_area_to_dimensional_area_plastic(&mut self,
-                                                               source_index: CorticalAreaIndex<CorticalIndexQuant>,
-                                                               destination_index: CorticalAreaIndex<CorticalIndexQuant>, TODO);
+                                                               source_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                                               destination_index: CorticalAreaIndex<Q::CorticalIndex>, TODO);
 
      */
 
