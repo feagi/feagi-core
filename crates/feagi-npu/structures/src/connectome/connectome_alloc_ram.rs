@@ -15,8 +15,8 @@ use crate::fire_candidate_list::{FireCandidateListRam, FireCandidateListTrait};
 use crate::fire_queue::{FireQueueRam, FireQueueTrait};
 use crate::neuron::base_dimension_traits::DimensionalAllocStorageTrait;
 use crate::neuron::dimensional_neurons::DimensionalNeuronAllocRAMStorage;
-use crate::neuron::dimensional_neurons::shared_funcs_and_structs::DimensionalNeuronDataFromCorticalArea;
-use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount};
+use crate::neuron::dimensional_neurons::shared_structs::DimensionalNeuronDataFromCorticalArea;
+use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount, NPUNeuronMembranePotential};
 use crate::synapse::non_plastic_dimensional::NonplasticDimensionalSynapseAllocRAMStorage;
 use crate::synapse::non_plastic_dimensional::traits::{NonplasticSynapseAllocStorageTrait, NonplasticSynapseBaseStorageTrait};
 

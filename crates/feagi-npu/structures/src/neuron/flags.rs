@@ -25,9 +25,9 @@ impl NeuronFlag {
 /// Stores various dimensional_neuron cortical area boolean flags under a single byte
 define_bit_packed_u8_flags! {
     pub struct DimensionalNeuronCorticalFlag(
-        valid,
         mp_charge_accumulation_enabled,
         mp_driven_psp_enabled,
+        reserved_2,
         reserved_3,
         reserved_4,
         reserved_5,

@@ -11,7 +11,7 @@ use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, Dimensi
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
 use crate::neuron::FeagiNPUNeuronError;
-use crate::neuron::dimensional_neurons::shared_funcs_and_structs::{DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
+use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
 
 
 pub trait DimensionalNeuronStaticStorageTrait<Q: NPUQuantization>:

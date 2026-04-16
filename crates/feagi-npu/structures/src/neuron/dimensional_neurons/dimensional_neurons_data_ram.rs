@@ -3,13 +3,15 @@ use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
+use feagi_structures::useful_structs::{InvalidatableVector, RangeUintVector};
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, DimensionalStaticStorageTrait};
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::{DimensionalNeuronCorticalFlag, NeuronFlag};
-use crate::neuron::dimensional_neurons::shared_funcs_and_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
-use crate::neuron::dimensional_neurons::traits::{DimensionalNeuronAllocStorageTrait, DimensionalNeuronStaticStorageTrait};
+use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
+use crate::neuron::dimensional_neurons::dimensional_traits::{DimensionalNeuronAllocStorageTrait, DimensionalNeuronStaticStorageTrait};
+use crate::neuron::dimensional_neurons::shared_funcs_ram::{get_cortical_area_ref, invalidate_cortical_area_and_return_invalidated_neuron_range};
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
 // In this implementation, we can do a lot by keeping neurons of a cortical area grouped together, albeit they may not be guaranteed to be in cortical index order
 
@@ -27,14 +29,12 @@ pub struct DimensionalNeuronAllocRAMStorage<Q: NPUQuantization>
     neuron_consecutive_fire_count: Vec<BurstDelta<Q::BurstDelta>>, // how many times the neuron fired burst recently
 
     // Per Cortical Area (including invalids)
-    cortical_data: Vec<DimensionalNeuronCorticalData<Q>>,
+    cortical_datas: InvalidatableVector<DimensionalNeuronCorticalData<Q>>,
 
     // Cached Data
     cache_number_valid_neurons: NeuronCount<Q::NeuronIndex>,
     cache_number_invalid_neurons: NeuronCount<Q::NeuronIndex>,
-    cache_index_to_write_new_neurons: NPUNeuronIndex<Q::NeuronIndex>, // Index starting where new neurons will be written to
-    cache_skipped_cortical_indexes: Vec<CorticalAreaIndex<Q::CorticalIndex>>, // when a cortical area is removed, put the index here, these will be the first given out
-    cache_invalid_neuron_indexes: Vec<Range<NPUNeuronIndex<Q::NeuronIndex>>>,
+    cache_invalid_neuron_index_blocks: RangeUintVector<NPUNeuronIndex<Q::NeuronIndex>>,
 }
 
 // NOTE: Only define the constructor here, as we will be going through traits / generics for all data transfer!
@@ -52,113 +52,15 @@ DimensionalNeuronAllocRAMStorage<Q>
                 neuron_refractory_countdown: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
                 neuron_consecutive_fire_count: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
 
-                cortical_data: Vec::with_capacity(number_cortical_areas_to_preallocate_space_for.to_usize()),
+                cortical_datas: InvalidatableVector::with_capacity(number_cortical_areas_to_preallocate_space_for.to_usize()),
 
                 cache_number_valid_neurons: NeuronCount::ZERO,
                 cache_number_invalid_neurons: NeuronCount::ZERO,
-                cache_index_to_write_new_neurons: NPUNeuronIndex::ZERO,
-                cache_skipped_cortical_indexes: Vec::new(),
-                cache_invalid_neuron_indexes: Vec::new(),
+                cache_invalid_neuron_index_blocks: RangeUintVector::new(),
             }
     }
 
 
-    //region Internal Helper Functions
-
-    /// Marks the neurons of a cortical area as invalid, as well as other cache work in this regard.
-    /// Returns the range of neuron indexes invalidated.
-    fn invalidate_cortical_area(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<Range<NPUNeuronIndex<Q::NeuronIndex>>, FeagiNPUNeuronError> {
-        // These basic checks are fast and we arent iterating over cortical areas THAT fast, right? // TODO shove checks in a debug?
-
-        let cortical_data = self.get_cortical_data_ref_mut(&cortical_area_index)?;
-
-        if !cortical_data.flags.is_valid() {
-            return Err(FeagiNPUNeuronError::InvalidCorticalIndex {
-                context: "Unable to invalidate given internueron cortical index as it is marked as invalid!",
-                given_cortical_index: cortical_area_index.to_usize() as u32
-            });
-        }
-
-        cortical_data.flags.toggle_valid();
-        
-        let number_of_neurons: NeuronCount<Q::NeuronIndex> =  NeuronCount::from_usize({
-            // TODO (debug?) check for validity of range
-
-            let neuron_flag_slice: &mut[NeuronFlag] = self.neuron_flags[cortical_data.neuron_range];
-
-            // so, since we actually do not care for any other flag in the neuron data except for
-            // the is valid flag being set to false, just mass fill the area with the bitpack containing
-            // that setting
-
-            let invalid_flag = NeuronFlag::ALL_ZEROS;
-
-            // TODO look into iterator / par iterator fills
-            neuron_flag_slice.fill(invalid_flag);
-            neuron_flag_slice.len()
-        });
-
-        // Some neurons may have died on their own
-        let number_of_neurons_invalidated = number_of_neurons - cortical_data.number_neurons_invalid_from_degeneration;
-
-        // Mark neurons as dead in the cache too
-        self.cache_number_valid_neurons -= number_of_neurons_invalidated;
-        self.cache_number_invalid_neurons += number_of_neurons_invalidated;
-        self.cache_invalid_neuron_indexes.push(cortical_data.neuron_range.clone()); // TODO maybe we should have a smarter insert? in the case of connecting segments, make them one bigger segment instead
-
-        // Mark this cortical index as free
-        self.cache_skipped_cortical_indexes.push(cortical_area_index);
-        cortical_data.flags.set_valid(false);
-
-        Ok(cortical_data.neuron_range.clone())
-    }
-
-    /// Adds cortical data to the next available cortical area slot (either at the end or in the middle if available. Returns the cortical ID used
-    fn add_cortical_data_to_next_available_cortical_area_index(&mut self, new_cortical_data: DimensionalNeuronCorticalData<Q>) -> Result<CorticalAreaIndex<Q::CorticalIndex>, FeagiNPUNeuronError> {
-        // TODO Extreme edge case error, when we hit quant limit
-        let mut cortical_index: CorticalAreaIndex<Q::CorticalIndex>;
-        if self.cache_skipped_cortical_indexes.is_empty() {
-            cortical_index = CorticalAreaIndex::from_usize(self.cortical_data.len());
-            self.cortical_data.push(new_cortical_data);
-        }
-        else {
-            cortical_index  = self.cache_skipped_cortical_indexes.pop().unwrap();
-            // TODO DEBUG: ensure we arent overwriting a valid cortical area!
-            self.cortical_data[cortical_index.to_usize()] = new_cortical_data;
-        }
-        Ok(cortical_index)
-    }
-
-    /// Returns an empty result if a cortical area exists AND is valid. Otherwise errors.
-    fn verify_cortical_area_index_exist_and_valid(&self, cortical_area_index: &CorticalAreaIndex<Q::CorticalIndex>) -> Result<(), FeagiNPUNeuronError> {
-        let reference = self.get_cortical_data_ref(cortical_area_index)?;
-        if reference.flags.is_valid() {
-            return Ok(())
-        }
-        Err(FeagiNPUNeuronError::InvalidCorticalIndex{
-            context: "Requested Cortical Area Index exists but is not valid!",
-            given_cortical_index: cortical_area_index.to_usize() as u32
-        })
-    }
-
-    /// Get the cortical area properties by index. WARNING: AREA MAY EXIST BUT NOT BE VALID!
-    fn get_cortical_data_ref(&self, cortical_area_index: &CorticalAreaIndex<Q::CorticalIndex>) -> Result<&DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError> {
-        Ok(self.cortical_data.get(cortical_area_index.to_usize())
-            .ok_or_else(|| FeagiNPUNeuronError::InvalidCorticalIndex{
-                context: "Requested Cortical Area Index does not exist!",
-                given_cortical_index: cortical_area_index.to_usize() as u32
-            })?)
-    }
-
-    /// Get the mutable cortical area properties by index. WARNING: AREA MAY EXIST BUT NOT BE VALID!
-    fn get_cortical_data_ref_mut(&mut self, cortical_area_index: &CorticalAreaIndex<Q::CorticalIndex>) -> Result<&mut DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError> {
-        Ok(self.cortical_data.get_mut(cortical_area_index.to_usize())
-            .ok_or_else(|| FeagiNPUNeuronError::InvalidCorticalIndex{
-                context: "Requested Cortical Area Index does not exist!",
-                given_cortical_index: cortical_area_index.to_usize() as u32
-            })?)
-    }
-
-    //endregion
 
 }
 
@@ -189,48 +91,43 @@ for DimensionalNeuronAllocRAMStorage<Q>
                                                  -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError> {
 
         // NOTE: for now neuron flag only checks for validity, so we dont need that parameter.
-        let neuron_flag = NeuronFlag::new_valid();
-
-        // TODO debug: check against allocation with invalid neuron flag
-
-
-        // Find where to write neuron data
-        let number_of_neurons = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
-        let (neuron_index_range, is_allocation_at_end_needed): (Range<NPUNeuronIndex<Q::NeuronIndex>>, bool) = {
-            // TODO instead of allocating right to the end, what if we have a way to quickly check through cache_invalid_neuron_indexes (assuming we also group neighboring ranges) and put ourselves there if we fit?
-            //if self.cache_number_invalid_neurons.to_usize() > number_of_neurons {
-            //
-            //}
-            // TODO size checks (not debug only, we need to be careful)
-            let start = self.cache_index_to_write_new_neurons.clone();
-            self.cache_index_to_write_new_neurons += NPUNeuronIndex::from_usize(number_of_neurons); // increment new index
-            (start..(start + NPUNeuronIndex::from_usize(number_of_neurons)), true)
-        };
-
-        // Create and write cortical data
+        let number_of_neurons: usize = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
+        let neuron_writing_region = self.cache_invalid_neuron_index_blocks.find_space(NPUNeuronIndex::from_usize(number_of_neurons)); // TODO incorrect type! Shouldnt this take in count?
 
         let mut cortical_flags: DimensionalNeuronCorticalFlag = DimensionalNeuronCorticalFlag::new_valid();
         cortical_flags.set_mp_charge_accumulation_enabled(cortical_is_mp_charge_accumulation_enabled);
         cortical_flags.set_mp_driven_psp_enabled(cortical_is_mp_driven_psp_enabled);
 
-        let cortical_data = DimensionalNeuronCorticalData {
-            flags: cortical_flags,
-            neuron_range: neuron_index_range.clone(),
-            number_neurons_invalid_from_degeneration: NeuronCount::ZERO, // no neurons assumed dead yet
-            dimensions: cortical_area_dimensions,
-            number_neurons_per_voxel: neurons_per_voxel,
-            excitability: cortical_excitability,
-            refractory_period_limit: cortical_refractory_period_limit,
-            fire_threshold_limit: cortical_fire_threshold_limit,
-            consecutive_fire_limit: cortical_consecutive_fire_limit,
-        };
+        let mut neuron_flag = NeuronFlag::new_valid();
 
-        let cortical_index = self.add_cortical_data_to_next_available_cortical_area_index(cortical_data)?;
+        let output_cortical_index;
+        let output_neuron_region;
+
+
 
         // TODO use par iter on massive arrays!
-        
-        // Actually allocate if needed, otherwise write to existing memory
-        if is_allocation_at_end_needed {
+
+
+        if neuron_writing_region.is_none() {
+            // No space, Allocate
+            let neuron_writing_region = NPUNeuronIndex::from_usize(self.neuron_flags.len()) .. NPUNeuronIndex::from_usize(self.neuron_flags.len() + number_of_neurons);
+            let cortical_data = DimensionalNeuronCorticalData {
+                flags: cortical_flags,
+                neuron_range: neuron_writing_region.clone(),
+                number_neurons_invalid_from_degeneration: NeuronCount::ZERO, // no neurons assumed dead yet
+                dimensions: cortical_area_dimensions,
+                number_neurons_per_voxel: neurons_per_voxel,
+                excitability: cortical_excitability,
+                refractory_period_limit: cortical_refractory_period_limit,
+                fire_threshold_limit: cortical_fire_threshold_limit,
+                consecutive_fire_limit: cortical_consecutive_fire_limit,
+            };
+
+            let cortical_index =  CorticalAreaIndex::from_usize(self.cortical_datas.push(cortical_data));
+
+            output_cortical_index = cortical_index;
+            output_neuron_region = neuron_writing_region;
+
             self.neuron_cortical_area_index.extend(std::iter::repeat_n(cortical_index, number_of_neurons));
             self.neuron_global_burst_index_of_last_firing.extend(std::iter::repeat_n(neuron_global_burst_index_of_last_firing, number_of_neurons));
             self.neuron_membrane_potential.extend(std::iter::repeat_n(neuron_membrane_potential, number_of_neurons));
@@ -239,19 +136,39 @@ for DimensionalNeuronAllocRAMStorage<Q>
             self.neuron_flags.extend(std::iter::repeat_n(neuron_flag, number_of_neurons));
             self.neuron_refractory_countdown.extend(std::iter::repeat_n(neuron_refractory_countdown, number_of_neurons));
             self.neuron_consecutive_fire_count.extend(std::iter::repeat_n(neuron_consecutive_fire_count, number_of_neurons));
-        }
-        else {
-            self.neuron_cortical_area_index[&neuron_index_range].fill(std::iter::repeat_n(cortical_index, number_of_neurons));
-            self.neuron_global_burst_index_of_last_firing[&neuron_index_range].fill(std::iter::repeat_n(neuron_global_burst_index_of_last_firing, number_of_neurons));
-            self.neuron_membrane_potential[&neuron_index_range].fill(std::iter::repeat_n(neuron_membrane_potential, number_of_neurons));
-            self.neuron_fire_threshold[&neuron_index_range].fill(std::iter::repeat_n(neuron_fire_threshold, number_of_neurons));
-            self.neuron_leak_coefficient[&neuron_index_range].fill(std::iter::repeat_n(neuron_leak_coefficient, number_of_neurons));
-            self.neuron_flags[&neuron_index_range].fill(std::iter::repeat_n(neuron_flag, number_of_neurons));
-            self.neuron_refractory_countdown[&neuron_index_range].fill(std::iter::repeat_n(neuron_refractory_countdown, number_of_neurons));
-            self.neuron_consecutive_fire_count[&neuron_index_range].fill(std::iter::repeat_n(neuron_consecutive_fire_count, number_of_neurons));
+
+
+        } else {
+            // We have space, lets overwrite
+            let neuron_writing_region = neuron_writing_region.unwrap();
+            let cortical_data = DimensionalNeuronCorticalData {
+                flags: cortical_flags,
+                neuron_range: neuron_writing_region.clone(),
+                number_neurons_invalid_from_degeneration: NeuronCount::ZERO, // no neurons assumed dead yet
+                dimensions: cortical_area_dimensions,
+                number_neurons_per_voxel: neurons_per_voxel,
+                excitability: cortical_excitability,
+                refractory_period_limit: cortical_refractory_period_limit,
+                fire_threshold_limit: cortical_fire_threshold_limit,
+                consecutive_fire_limit: cortical_consecutive_fire_limit,
+            };
+            let cortical_index =  CorticalAreaIndex::from_usize(self.cortical_datas.push(cortical_data));
+            self.neuron_cortical_area_index[&neuron_writing_region].fill(std::iter::repeat_n(cortical_index, number_of_neurons));
+            self.neuron_global_burst_index_of_last_firing[&neuron_writing_region].fill(std::iter::repeat_n(neuron_global_burst_index_of_last_firing, number_of_neurons));
+            self.neuron_membrane_potential[&neuron_writing_region].fill(std::iter::repeat_n(neuron_membrane_potential, number_of_neurons));
+            self.neuron_fire_threshold[&neuron_writing_region].fill(std::iter::repeat_n(neuron_fire_threshold, number_of_neurons));
+            self.neuron_leak_coefficient[&neuron_writing_region].fill(std::iter::repeat_n(neuron_leak_coefficient, number_of_neurons));
+            self.neuron_flags[&neuron_writing_region].fill(std::iter::repeat_n(neuron_flag, number_of_neurons));
+            self.neuron_refractory_countdown[&neuron_writing_region].fill(std::iter::repeat_n(neuron_refractory_countdown, number_of_neurons));
+            self.neuron_consecutive_fire_count[&neuron_writing_region].fill(std::iter::repeat_n(neuron_consecutive_fire_count, number_of_neurons));
+
+            output_cortical_index = cortical_index;
+            output_neuron_region = neuron_writing_region;
+
         }
 
-        Ok((cortical_index, neuron_index_range))
+
+        return Ok((output_cortical_index, output_neuron_region))
     }
 
 
@@ -265,29 +182,17 @@ for DimensionalNeuronAllocRAMStorage<Q>
 
         // Find where to write neuron data
         let number_of_neurons: usize = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
-        let (neuron_index_range, is_allocation_at_end_needed): (Range<NPUNeuronIndex<Q::NeuronIndex>>, bool) = {
-            // TODO instead of allocating right to the end, what if we have a way to quickly check through cache_invalid_neuron_indexes (assuming we also group neighboring ranges) and put ourselves there if we fit?
-            //if self.cache_number_invalid_neurons.to_usize() > number_of_neurons {
-            //
-            //}
-            // TODO size checks (not debug only, we need to be careful)
-            let start = self.cache_index_to_write_new_neurons.clone();
-            self.cache_index_to_write_new_neurons += NPUNeuronIndex::from_usize(number_of_neurons); // increment new index
-            (start..(start + NPUNeuronIndex::from_usize(number_of_neurons)), true)
-        };
+        let neuron_writing_region = self.cache_invalid_neuron_index_blocks.find_space(NPUNeuronIndex::from_usize(number_of_neurons)); // TODO incorrect type! Shouldnt this take in count?
 
-        let cortical_area_data= DimensionalNeuronCorticalData::new_default_valid(
-            neuron_index_range,
-            cortical_area_dimensions,
-            neurons_per_voxel,
-        );
+        let output_cortical_index;
+        let output_neuron_region;
 
-        let cortical_index = self.add_cortical_data_to_next_available_cortical_area_index(cortical_area_data)?;
 
-        // TODO use par iter on massive arrays!
-
-        // Actually allocate if needed, otherwise write to existing memory
-        if is_allocation_at_end_needed {
+        if neuron_writing_region.is_none() {
+            // No space, Allocate
+            let neuron_writing_region = NPUNeuronIndex::from_usize(self.neuron_flags.len()) .. NPUNeuronIndex::from_usize(self.neuron_flags.len() + number_of_neurons);
+            let cortical_data = DimensionalNeuronCorticalData::new_default_valid(neuron_writing_region.clone(), cortical_area_dimensions, neurons_per_voxel);
+            let cortical_index =  CorticalAreaIndex::from_usize(self.cortical_datas.push(cortical_data));
             self.neuron_cortical_area_index.extend(std::iter::repeat_n(cortical_index, number_of_neurons));
             self.neuron_global_burst_index_of_last_firing.extend(neuron_data.neuron_global_burst_index_of_last_firing);
             self.neuron_membrane_potential.extend(neuron_data.neuron_membrane_potential);
@@ -296,18 +201,29 @@ for DimensionalNeuronAllocRAMStorage<Q>
             self.neuron_flags.extend(neuron_data.neuron_flags);
             self.neuron_refractory_countdown.extend(neuron_data.neuron_refractory_countdown);
             self.neuron_consecutive_fire_count.extend(neuron_data.neuron_consecutive_fire_count);
+
+            output_cortical_index = cortical_index;
+            output_neuron_region = neuron_writing_region;
+
+        } else {
+            // We have space, lets overwrite
+            let neuron_writing_region = neuron_writing_region.unwrap();
+            let cortical_data = DimensionalNeuronCorticalData::new_default_valid(neuron_writing_region.clone(), cortical_area_dimensions, neurons_per_voxel);
+            let cortical_index =  CorticalAreaIndex::from_usize(self.cortical_datas.push(cortical_data));
+            self.neuron_cortical_area_index[neuron_writing_region].fill(std::iter::repeat_n(cortical_index, number_of_neurons));
+            self.neuron_global_burst_index_of_last_firing[neuron_writing_region].copy_from_slice(&neuron_data.neuron_global_burst_index_of_last_firing);
+            self.neuron_membrane_potential[neuron_writing_region].copy_from_slice(&neuron_data.neuron_membrane_potential);
+            self.neuron_fire_threshold[neuron_writing_region].copy_from_slice(&neuron_data.neuron_fire_threshold);
+            self.neuron_leak_coefficient[neuron_writing_region].copy_from_slice(&neuron_data.neuron_leak_coefficient);
+            self.neuron_flags[neuron_writing_region].copy_from_slice(&neuron_data.neuron_flags);
+            self.neuron_refractory_countdown[neuron_writing_region].copy_from_slice(&neuron_data.neuron_refractory_countdown);
+            self.neuron_consecutive_fire_count[neuron_writing_region].copy_from_slice(&neuron_data.neuron_consecutive_fire_count);
+
+            output_cortical_index = cortical_index;
+            output_neuron_region = neuron_writing_region;
+
         }
-        else {
-            self.neuron_cortical_area_index[neuron_index_range].fill(std::iter::repeat_n(cortical_index, number_of_neurons));
-            self.neuron_global_burst_index_of_last_firing[neuron_index_range].copy_from_slice(&neuron_data.neuron_global_burst_index_of_last_firing);
-            self.neuron_membrane_potential[neuron_index_range].copy_from_slice(&neuron_data.neuron_membrane_potential);
-            self.neuron_fire_threshold[neuron_index_range].copy_from_slice(&neuron_data.neuron_fire_threshold);
-            self.neuron_leak_coefficient[neuron_index_range].copy_from_slice(&neuron_data.neuron_leak_coefficient);
-            self.neuron_flags[neuron_index_range].copy_from_slice(&neuron_data.neuron_flags);
-            self.neuron_refractory_countdown[neuron_index_range].copy_from_slice(&neuron_data.neuron_refractory_countdown);
-            self.neuron_consecutive_fire_count[neuron_index_range].copy_from_slice(&neuron_data.neuron_consecutive_fire_count);
-        }
-        return Ok((cortical_index, neuron_index_range))
+        return Ok((output_cortical_index, output_neuron_region))
     }
 
 }
@@ -330,16 +246,16 @@ for DimensionalNeuronAllocRAMStorage<Q>
             neuron_refractory_countdown: &mut self.neuron_refractory_countdown,
             neuron_consecutive_fire_count: &mut self.neuron_consecutive_fire_count,
 
-            cortical_data: &self.cortical_data,
+            cortical_data: &self.cortical_datas,
         }
     }
 
     /// Returns a struct of references to the slices of neuron data of a cortical index if it exists
-    fn get_neuron_values_of_specific_dimensional_neuron_cortical_area_to_process(&mut self, cortical_area_index: Q::CorticalIndex) -> Result<DimensionalNeuronDataRefSliceSingleCorticalArea<'_, Q>, FeagiNPUNeuronError> {
-        let cortical_data = self.get_cortical_data_ref(cortical_area_index)?;
-        let neuron_range = cortical_data.neuron_range.copy();
+    fn get_neuron_values_of_specific_dimensional_neuron_cortical_area_to_process(&mut self, cortical_area_index: &CorticalAreaIndex<Q::CorticalIndex>) -> Result<DimensionalNeuronDataRefSliceSingleCorticalArea<'_, Q>, FeagiNPUNeuronError> {
+        let cortical_data = get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?;
+        let neuron_range = cortical_data.neuron_range.clone();
 
-        DimensionalNeuronDataRefSliceSingleCorticalArea {
+        Ok(DimensionalNeuronDataRefSliceSingleCorticalArea {
             neuron_cortical_area_index: &self.neuron_cortical_area_index[neuron_range],
             neuron_global_burst_index_of_last_firing: &mut self.neuron_global_burst_index_of_last_firing[neuron_range],
             neuron_membrane_potential: &mut self.neuron_membrane_potential[neuron_range],
@@ -351,7 +267,7 @@ for DimensionalNeuronAllocRAMStorage<Q>
 
             cortical_data: cortical_data,
             global_neuron_index_range: neuron_range
-        }
+        })
     }
 
     fn set_neuron_fire_threshold(&mut self, cortical_area_index: Q::CorticalIndex, executor: &impl NeuronFireThresholdExecutor<Q::Value, Q::Coord>) -> Result<(), FeagiNPUNeuronError> {
@@ -446,8 +362,14 @@ for DimensionalNeuronAllocRAMStorage<Q>
     /// WARNING: BE SURE TO REMOVE ASSOCIATED SYNAPSE MAPPINGS!
     fn delete_cortical_area(&mut self, cortical_index: CorticalAreaIndex<Q::CorticalIndex>)
                             -> Result<Range<NPUNeuronIndex<Q::NeuronIndex>>, FeagiNPUNeuronError> {
-        self.verify_cortical_area_index_exist_and_valid(&cortical_index)?;
-        self.invalidate_cortical_area(cortical_index)
+        invalidate_cortical_area_and_return_invalidated_neuron_range(
+            &cortical_index,
+            &mut self.cortical_datas,
+            &mut self.neuron_flags,
+            &mut self.cache_number_valid_neurons,
+            &mut self.cache_number_invalid_neurons,
+            &mut self.cache_invalid_neuron_index_blocks
+        )
     }
 
 

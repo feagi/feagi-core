@@ -1,5 +1,6 @@
 use feagi_structures::{define_quantizable_percentage_type_family, define_quantizable_uint_type_family, define_quantizable_value_type_family};
 use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
+use feagi_structures::neurons::descriptors::NeuronCount;
 
 /// Defines the quantization for all most uses in this crate // TODO this may need to be moved up a level?
 pub trait NPUQuantization {
@@ -30,6 +31,12 @@ define_quantizable_uint_type_family!(BurstDelta);
 
 //region NPU Neuron Index
 define_quantizable_uint_type_family!(NPUNeuronIndex);
+
+impl<T: QuantizableUIntType> NPUNeuronIndex<T> {
+    pub fn get_count_from_block(range: &core::ops::Range<NPUNeuronIndex<T>>) -> NeuronCount<T> {
+        (range.end - range.start).0.into()
+    }
+}
 
 //endregion
 

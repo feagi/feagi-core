@@ -9,9 +9,10 @@ use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
+use feagi_structures::useful_structs::InvalidatableVector;
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
 use crate::neuron::flags::{DimensionalNeuronCorticalFlag, NeuronFlag};
-use crate::neuron::dimensional_neurons::traits::DimensionalNeuronStaticStorageTrait;
+use crate::neuron::dimensional_neurons::dimensional_traits::DimensionalNeuronStaticStorageTrait;
 
 /// Stores data as to the property of cortical areas
 /// WARNING: Do not allow modification of this struct outside their implemented dimensional_neuron structs, as
@@ -64,7 +65,7 @@ pub struct DimensionalNeuronDataRefSliceAllCorticalAreas<'a, Q: NPUQuantization>
     pub neuron_refractory_countdown: &'a mut [BurstDelta<Q::BurstDelta>],
     pub neuron_consecutive_fire_count: &'a mut [BurstDelta<Q::BurstDelta>],
 
-    pub cortical_data: &'a [DimensionalNeuronCorticalData<Q>],
+    pub cortical_data: &'a InvalidatableVector<DimensionalNeuronCorticalData<Q>>,
 }
 
 
