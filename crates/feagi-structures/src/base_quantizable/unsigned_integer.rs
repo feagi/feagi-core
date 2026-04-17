@@ -153,6 +153,11 @@ macro_rules! define_quantizable_uint_type_family {
             fn from_usize(value: usize) -> Self {
                 Self(T::from_usize(value))
             }
+
+            #[inline(always)]
+            fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+                range.start.0.to_usize()..range.end.0.to_usize()
+            }
         }
     };
 }
@@ -191,6 +196,8 @@ pub trait QuantizableUIntType:
     fn checked_div(self, other: Self) -> Option<Self>;
     fn to_usize(self) -> usize;
     fn from_usize(value: usize) -> Self;
+
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize>;
 }
 
 #[cfg(feature = "alloc")]

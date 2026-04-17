@@ -14,7 +14,10 @@ use crate::FeagiNPUStructureError;
 use crate::fire_candidate_list::{FireCandidateListRam, FireCandidateListTrait};
 use crate::fire_queue::{FireQueueRam, FireQueueTrait};
 use crate::neuron::base_dimension_traits::DimensionalAllocStorageTrait;
-use crate::neuron::dimensional_neurons::DimensionalNeuronAllocRAMStorage;
+use crate::neuron::dimensional_neurons::core_neurons::CoreNeuronAllocRAMStorage;
+use crate::neuron::dimensional_neurons::inter_neurons::InterNeuronAllocRAMStorage;
+use crate::neuron::dimensional_neurons::motor_neurons::MotorNeuronAllocRAMStorage;
+use crate::neuron::dimensional_neurons::sensory_neurons::SensoryNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::shared_structs::DimensionalNeuronDataFromCorticalArea;
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount, NPUNeuronMembranePotential};
 use crate::synapse::non_plastic_dimensional::NonplasticDimensionalSynapseAllocRAMStorage;
@@ -27,7 +30,11 @@ pub struct ConnectomeAllocRam<Q: NPUQuantization>
 
 
     // Neurons
-    neurons_dimensional: DimensionalNeuronAllocRAMStorage<Q>,
+    core_neurons: CoreNeuronAllocRAMStorage<Q>,
+    sensory_neurons: SensoryNeuronAllocRAMStorage<Q>,
+    motor_neurons: MotorNeuronAllocRAMStorage<Q>,
+    inter_neurons: InterNeuronAllocRAMStorage<Q>,
+    
     
     // Synapses
     synapse_nonplastic: NonplasticDimensionalSynapseAllocRAMStorage<Q>
@@ -44,7 +51,7 @@ ConnectomeAllocRam<Q>
         Self {
             fire_queue: FireQueueRam::new(0),
             fire_candidate_list_ram: FireCandidateListRam::new(0),
-            neurons_dimensional: DimensionalNeuronAllocRAMStorage::new(preallocated_dimensional_neuron_count, CorticalAreaIndex::ZERO), // TODO prellocate cortical areas?
+
             synapse_nonplastic: NonplasticDimensionalSynapseAllocRAMStorage::new(preallocated_nonplastic_dimensional_synapse_count),
         }
     }

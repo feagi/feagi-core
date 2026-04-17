@@ -84,9 +84,9 @@ DimensionalNeuronStaticStorageTrait<Q>
 
     /// Creates a cortical area of given dimensions but using prefilled neuron data values.
     /// Returns the cortical area index and the range of neuron indexes it covers
-    fn create_cortical_area_with_individualized_neurons(&mut self,
-                                                        cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
-                                                        neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                        neuron_data: DimensionalNeuronDataFromCorticalArea<Q>)
-                                                        -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError>;
+    fn default_create_cortical_area_with_individualized_neurons(&mut self,
+                                                                cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
+                                                                neurons_per_voxel: NumberNeuronsPerVoxel,
+                                                                neuron_data: DimensionalNeuronDataFromCorticalArea<Q>)
+                                                                -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError>;
 }
