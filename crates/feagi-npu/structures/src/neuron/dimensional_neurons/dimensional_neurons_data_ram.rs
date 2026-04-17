@@ -141,6 +141,7 @@ for DimensionalNeuronAllocRAMStorage<Q>
         } else {
             // We have space, lets overwrite
             let neuron_writing_region = neuron_writing_region.unwrap();
+            let usize_range: Range<usize> = neuron_writing_region.start.to_usize()..neuron_writing_region.end.to_usize();
             let cortical_data = DimensionalNeuronCorticalData {
                 flags: cortical_flags,
                 neuron_range: neuron_writing_region.clone(),
@@ -153,14 +154,14 @@ for DimensionalNeuronAllocRAMStorage<Q>
                 consecutive_fire_limit: cortical_consecutive_fire_limit,
             };
             let cortical_index =  CorticalAreaIndex::from_usize(self.cortical_datas.push(cortical_data));
-            self.neuron_cortical_area_index[&neuron_writing_region].fill(std::iter::repeat_n(cortical_index, number_of_neurons));
-            self.neuron_global_burst_index_of_last_firing[&neuron_writing_region].fill(std::iter::repeat_n(neuron_global_burst_index_of_last_firing, number_of_neurons));
-            self.neuron_membrane_potential[&neuron_writing_region].fill(std::iter::repeat_n(neuron_membrane_potential, number_of_neurons));
-            self.neuron_fire_threshold[&neuron_writing_region].fill(std::iter::repeat_n(neuron_fire_threshold, number_of_neurons));
-            self.neuron_leak_coefficient[&neuron_writing_region].fill(std::iter::repeat_n(neuron_leak_coefficient, number_of_neurons));
-            self.neuron_flags[&neuron_writing_region].fill(std::iter::repeat_n(neuron_flag, number_of_neurons));
-            self.neuron_refractory_countdown[&neuron_writing_region].fill(std::iter::repeat_n(neuron_refractory_countdown, number_of_neurons));
-            self.neuron_consecutive_fire_count[&neuron_writing_region].fill(std::iter::repeat_n(neuron_consecutive_fire_count, number_of_neurons));
+            self.neuron_cortical_area_index[usize_range.clone()].fill(cortical_index);
+            self.neuron_global_burst_index_of_last_firing[usize_range.clone()].fill(neuron_global_burst_index_of_last_firing);
+            self.neuron_membrane_potential[usize_range.clone()].fill(neuron_membrane_potential);
+            self.neuron_fire_threshold[usize_range.clone()].fill(neuron_fire_threshold);
+            self.neuron_leak_coefficient[usize_range.clone()].fill(neuron_leak_coefficient);
+            self.neuron_flags[usize_range.clone()].fill(neuron_flag);
+            self.neuron_refractory_countdown[usize_range.clone()].fill(neuron_refractory_countdown);
+            self.neuron_consecutive_fire_count[usize_range].fill(neuron_consecutive_fire_count);
 
             output_cortical_index = cortical_index;
             output_neuron_region = neuron_writing_region;
@@ -208,16 +209,17 @@ for DimensionalNeuronAllocRAMStorage<Q>
         } else {
             // We have space, lets overwrite
             let neuron_writing_region = neuron_writing_region.unwrap();
+            let neuron_range_usize: Range<usize> = Q::NeuronIndex::to_usize_range(neuron_writing_region.clone());
             let cortical_data = DimensionalNeuronCorticalData::new_default_valid(neuron_writing_region.clone(), cortical_area_dimensions, neurons_per_voxel);
             let cortical_index =  CorticalAreaIndex::from_usize(self.cortical_datas.push(cortical_data));
-            self.neuron_cortical_area_index[neuron_writing_region].fill(std::iter::repeat_n(cortical_index, number_of_neurons));
-            self.neuron_global_burst_index_of_last_firing[neuron_writing_region].copy_from_slice(&neuron_data.neuron_global_burst_index_of_last_firing);
-            self.neuron_membrane_potential[neuron_writing_region].copy_from_slice(&neuron_data.neuron_membrane_potential);
-            self.neuron_fire_threshold[neuron_writing_region].copy_from_slice(&neuron_data.neuron_fire_threshold);
-            self.neuron_leak_coefficient[neuron_writing_region].copy_from_slice(&neuron_data.neuron_leak_coefficient);
-            self.neuron_flags[neuron_writing_region].copy_from_slice(&neuron_data.neuron_flags);
-            self.neuron_refractory_countdown[neuron_writing_region].copy_from_slice(&neuron_data.neuron_refractory_countdown);
-            self.neuron_consecutive_fire_count[neuron_writing_region].copy_from_slice(&neuron_data.neuron_consecutive_fire_count);
+            self.neuron_cortical_area_index[neuron_range_usize.clone()].fill(cortical_index);
+            self.neuron_global_burst_index_of_last_firing[neuron_range_usize.clone()].copy_from_slice(&neuron_data.neuron_global_burst_index_of_last_firing);
+            self.neuron_membrane_potential[neuron_range_usize.clone()].copy_from_slice(&neuron_data.neuron_membrane_potential);
+            self.neuron_fire_threshold[neuron_range_usize.clone()].copy_from_slice(&neuron_data.neuron_fire_threshold);
+            self.neuron_leak_coefficient[neuron_range_usize.clone()].copy_from_slice(&neuron_data.neuron_leak_coefficient);
+            self.neuron_flags[neuron_range_usize.clone()].copy_from_slice(&neuron_data.neuron_flags);
+            self.neuron_refractory_countdown[neuron_range_usize.clone()].copy_from_slice(&neuron_data.neuron_refractory_countdown);
+            self.neuron_consecutive_fire_count[neuron_range_usize].copy_from_slice(&neuron_data.neuron_consecutive_fire_count);
 
             output_cortical_index = cortical_index;
             output_neuron_region = neuron_writing_region;
@@ -251,31 +253,43 @@ for DimensionalNeuronAllocRAMStorage<Q>
     }
 
     /// Returns a struct of references to the slices of neuron data of a cortical index if it exists
-    fn get_neuron_values_of_specific_dimensional_neuron_cortical_area_to_process(&mut self, cortical_area_index: &CorticalAreaIndex<Q::CorticalIndex>) -> Result<DimensionalNeuronDataRefSliceSingleCorticalArea<'_, Q>, FeagiNPUNeuronError> {
+    fn get_neuron_values_of_specific_dimensional_neuron_cortical_area_to_process(&mut self, cortical_area_index: Q::CorticalIndex) -> Result<DimensionalNeuronDataRefSliceSingleCorticalArea<'_, Q>, FeagiNPUNeuronError> {
+        let cortical_area_index = CorticalAreaIndex(cortical_area_index);
         let cortical_data = get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?;
         let neuron_range = cortical_data.neuron_range.clone();
+        let usize_range: Range<usize> = neuron_range.start.to_usize()..neuron_range.end.to_usize();
 
         Ok(DimensionalNeuronDataRefSliceSingleCorticalArea {
-            neuron_cortical_area_index: &self.neuron_cortical_area_index[neuron_range],
-            neuron_global_burst_index_of_last_firing: &mut self.neuron_global_burst_index_of_last_firing[neuron_range],
-            neuron_membrane_potential: &mut self.neuron_membrane_potential[neuron_range],
-            neuron_fire_threshold: &mut self.neuron_fire_threshold[neuron_range],
-            neuron_leak_coefficient: &mut self.neuron_leak_coefficient[neuron_range],
-            neuron_flags: &mut self.neuron_flags[neuron_range],
-            neuron_refractory_countdown: &mut self.neuron_refractory_countdown[neuron_range],
-            neuron_consecutive_fire_count: &mut self.neuron_consecutive_fire_count[neuron_range],
+            neuron_cortical_area_index: &self.neuron_cortical_area_index[usize_range.clone()],
+            neuron_global_burst_index_of_last_firing: &mut self.neuron_global_burst_index_of_last_firing[usize_range.clone()],
+            neuron_membrane_potential: &mut self.neuron_membrane_potential[usize_range.clone()],
+            neuron_fire_threshold: &mut self.neuron_fire_threshold[usize_range.clone()],
+            neuron_leak_coefficient: &mut self.neuron_leak_coefficient[usize_range.clone()],
+            neuron_flags: &mut self.neuron_flags[usize_range.clone()],
+            neuron_refractory_countdown: &mut self.neuron_refractory_countdown[usize_range.clone()],
+            neuron_consecutive_fire_count: &mut self.neuron_consecutive_fire_count[usize_range],
 
-            cortical_data: cortical_data,
+            cortical_data,
             global_neuron_index_range: neuron_range
         })
     }
 
     fn set_neuron_fire_threshold(&mut self, cortical_area_index: Q::CorticalIndex, executor: &impl NeuronFireThresholdExecutor<Q::Value, Q::Coord>) -> Result<(), FeagiNPUNeuronError> {
-        let cortical_data = self.get_cortical_data_ref(cortical_area_index)?;
+        let cortical_area_index = CorticalAreaIndex(cortical_area_index);
+        let (usize_range, dimensions, neurons_per_voxel) = {
+            let cortical_data = get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?;
+            let neuron_range = cortical_data.neuron_range.clone();
+            (
+                neuron_range.start.to_usize()..neuron_range.end.to_usize(),
+                cortical_data.dimensions,
+                cortical_data.number_neurons_per_voxel,
+            )
+        };
         executor.set_new_fire_thresholds(
-            &mut self.neuron_fire_threshold[&cortical_data.neuron_range],
-            &self.neuron_flags[&cortical_data.neuron_range],
-            &cortical_data.dimensions
+            &mut self.neuron_fire_threshold[usize_range.clone()],
+            &self.neuron_flags[usize_range],
+            &dimensions,
+            neurons_per_voxel,
         )
     }
 }
@@ -293,23 +307,23 @@ for DimensionalNeuronAllocRAMStorage<Q>
                                                  -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError> 
     {
 
-        let expected_number_neurons: usize = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
+        let _expected_number_neurons: usize = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
         self.create_cortical_area_with_uniform_neurons(
             cortical_area_dimensions,
             neurons_per_voxel,
-            DimensionalNeuronStaticStorageTrait::DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING,
-            DimensionalNeuronStaticStorageTrait::DEFAULT_NEURON_MEMBRANE_POTENTIAL,
-            DimensionalNeuronStaticStorageTrait::DEFAULT_NEURON_FIRE_THRESHOLD,
-            DimensionalNeuronStaticStorageTrait::DEFAULT_NEURON_LEAK_COEFFICIENT,
-            DimensionalNeuronStaticStorageTrait::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
-            DimensionalNeuronStaticStorageTrait::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_MEMBRANE_POTENTIAL,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_FIRE_THRESHOLD,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_LEAK_COEFFICIENT,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
 
-            DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_EXCITABILITY,
-            DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
-            DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
-            DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
-            DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED,
-            DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_EXCITABILITY,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED,
+            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED,
         )
     }
 
@@ -353,7 +367,7 @@ for DimensionalNeuronAllocRAMStorage<Q>
     /// albeit allowing a buffer of free space. Returns the number of neurons that were freed.
     /// Returns 0 if no neurons were freed (nothing to free or spare capacity is at or less than
     /// what was requested). Note that invalid neurons not sorted to the back will not be freed.
-    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronCount<Q::NeuronIndex>) -> NeuronCount<Q::NeuronIndex> {
+    fn free_unused_neuron_capacity(&mut self, _spare_capacity_to_maintain: NeuronCount<Q::NeuronIndex>) -> NeuronCount<Q::NeuronIndex> {
         todo!()
     }
 

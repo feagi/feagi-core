@@ -229,6 +229,8 @@ pub trait QuantizableUIntType:
     fn checked_div(self, other: Self) -> Option<Self>;
     fn to_usize(self) -> usize;
     fn from_usize(value: usize) -> Self;
+
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize>;
 }
 
 impl QuantizableUIntType for usize {
@@ -281,6 +283,11 @@ impl QuantizableUIntType for usize {
     #[inline(always)]
     fn from_usize(value: usize) -> Self {
         value
+    }
+
+    #[inline(always)]
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+        range.start.to_usize()..range.end.to_usize()
     }
 }
 
@@ -338,6 +345,11 @@ impl QuantizableUIntType for u8 {
             Err(_) => u8::MAX,
         }
     }
+
+    #[inline(always)]
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+        range.start.to_usize()..range.end.to_usize()
+    }
 }
 
 impl QuantizableUIntType for u16 {
@@ -393,6 +405,11 @@ impl QuantizableUIntType for u16 {
             Ok(v) => v,
             Err(_) => u16::MAX,
         }
+    }
+
+    #[inline(always)]
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+        range.start.to_usize()..range.end.to_usize()
     }
 }
 
@@ -450,6 +467,11 @@ impl QuantizableUIntType for u32 {
             Err(_) => u32::MAX,
         }
     }
+
+    #[inline(always)]
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+        range.start.to_usize()..range.end.to_usize()
+    }
 }
 
 #[cfg(feature = "support_64bit_indexing")]
@@ -506,6 +528,11 @@ impl QuantizableUIntType for u64 {
     #[inline(always)]
     fn from_usize(value: usize) -> Self {
         value as u64
+    }
+
+    #[inline(always)]
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+        range.start.to_usize()..range.end.to_usize()
     }
 }
 
