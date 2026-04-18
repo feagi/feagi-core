@@ -1268,12 +1268,16 @@ pub async fn post_save(
     let save_path = if let Some(path) = file_path {
         std::path::PathBuf::from(path)
     } else {
-        // Default to hidden genome directory with timestamp.
+        // Default: under configured data root (not cwd) so containers/read-only roots work.
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        std::path::PathBuf::from(".genome").join(format!("saved_genome_{}.json", timestamp))
+        state
+            .filesystem_data_root
+            .join("cache")
+            .join(".genome")
+            .join(format!("saved_genome_{}.json", timestamp))
     };
 
     // Ensure parent directory exists

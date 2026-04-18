@@ -78,6 +78,9 @@ reqwest = { version = "0.11", features = ["json"] }
 # Concurrency
 parking_lot = "0.12"
 
+# Default data root (~/.feagi) when FEAGI_DATA_DIR / [system].data_dir is unset (matches feagi-python-sdk FeagiPaths)
+dirs = "5.0"
+
 # Async traits
 async-trait = "0.1"
 

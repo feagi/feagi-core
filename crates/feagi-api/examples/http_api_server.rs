@@ -234,6 +234,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (genome_transition_lock, genome_transition_in_progress) =
         ApiState::init_genome_transition_controls();
+    let filesystem_data_root = ApiState::filesystem_data_root_from_config(std::path::Path::new(""));
     let api_state = ApiState {
         network_connection_info_provider: None,
         agent_service: None,
@@ -245,6 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         system_service,
         snapshot_service: None,
         feagi_session_timestamp,
+        filesystem_data_root,
         memory_stats_cache: None,
         amalgamation_state: ApiState::init_amalgamation_state(),
         genome_transition_lock,

@@ -24,6 +24,7 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
 
     let (genome_transition_lock, genome_transition_in_progress) =
         ApiState::init_genome_transition_controls();
+    let filesystem_data_root = ApiState::filesystem_data_root_from_config(std::path::Path::new(""));
     ApiState {
         network_connection_info_provider: None,
         agent_service: None, // No agents in WASM standalone mode
@@ -44,6 +45,7 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as i64,
+        filesystem_data_root,
         memory_stats_cache: None,
         amalgamation_state: ApiState::init_amalgamation_state(),
         genome_transition_lock,
