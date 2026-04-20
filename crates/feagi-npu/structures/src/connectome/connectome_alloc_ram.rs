@@ -19,6 +19,7 @@ use crate::neuron::dimensional_neurons::inter_neurons::InterNeuronAllocRAMStorag
 use crate::neuron::dimensional_neurons::motor_neurons::MotorNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::sensory_neurons::SensoryNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::shared_structs::DimensionalNeuronDataFromCorticalArea;
+use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount, NPUNeuronMembranePotential};
 use crate::synapse::non_plastic_dimensional::NonplasticDimensionalSynapseAllocRAMStorage;
 use crate::synapse::non_plastic_dimensional::traits::{NonplasticSynapseAllocStorageTrait, NonplasticSynapseBaseStorageTrait};
