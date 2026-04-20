@@ -16,6 +16,7 @@ use axum::{
     Router,
 };
 use http_body_util::BodyExt;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -62,6 +63,13 @@ pub struct ApiState {
     /// FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
     /// This is a unique identifier for each FEAGI instance/session
     pub feagi_session_timestamp: i64,
+    /// Base directory for default API filesystem writes when the client omits a path
+    /// (e.g. `POST /v1/genome/save` without `file_path`). Default genome files go under
+    /// `{filesystem_data_root}/cache/.genome/` (aligned with feagi-python-sdk `~/.feagi/cache`).
+    /// Set from `[system].data_dir` / `FEAGI_DATA_DIR` at startup; when unset, resolves to
+    /// `{user_home}/.feagi` (native) so writes do not use cwd or OS temp (see
+    /// [`ApiState::filesystem_data_root_from_config`]).
+    pub filesystem_data_root: PathBuf,
     /// Memory area stats cache (updated by plasticity service, read by health check)
     pub memory_stats_cache: Option<feagi_npu_plasticity::MemoryStatsCache>,
     /// In-memory amalgamation state (pending request + history), surfaced via health_check.
@@ -189,6 +197,32 @@ impl ApiState {
             Arc::new(tokio::sync::Mutex::new(())),
             Arc::new(AtomicBool::new(false)),
         )
+    }
+
+    /// Resolve the base directory for default on-disk API writes (e.g. genome save without `file_path`).
+    ///
+    /// - If `[system].data_dir` is set (including via **`FEAGI_DATA_DIR`**), returns that path as-is.
+    /// - Otherwise returns **`{user_home}/.feagi`**, matching feagi-python-sdk `FeagiPaths` and
+    ///   feagi-desktop runtime layout. If the home directory cannot be resolved, falls back to
+    ///   `std::env::temp_dir().join("feagi")`.
+    /// - **wasm32:** `/tmp/feagi` (no portable home in browser WASM).
+    ///
+    /// Callers append subpaths such as `cache/.genome` for default genome JSON files.
+    pub fn filesystem_data_root_from_config(data_dir: &std::path::Path) -> PathBuf {
+        if !data_dir.as_os_str().is_empty() {
+            data_dir.to_path_buf()
+        } else {
+            #[cfg(target_arch = "wasm32")]
+            {
+                PathBuf::from("/tmp/feagi")
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                dirs::home_dir()
+                    .map(|h| h.join(".feagi"))
+                    .unwrap_or_else(|| std::env::temp_dir().join("feagi"))
+            }
+        }
     }
 }
 

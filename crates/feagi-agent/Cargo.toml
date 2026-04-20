@@ -37,10 +37,10 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 
 # FEAGI internal crates (core)
-feagi-io = { version = "0.0.9", path = "../feagi-io" }
-feagi-serialization = { version = "0.0.9", path = "../feagi-serialization" }
-feagi-structures = { version = "0.0.9", path = "../feagi-structures" }
-feagi-sensorimotor = { version = "0.0.9", path = "../feagi-sensorimotor" }
+feagi-io = { version = "0.0.10", path = "../feagi-io" }
+feagi-serialization = { version = "0.0.10", path = "../feagi-serialization" }
+feagi-structures = { version = "0.0.10", path = "../feagi-structures" }
+feagi-sensorimotor = { version = "0.0.10", path = "../feagi-sensorimotor" }
 base64 = "0.22.1"
 
 # Conditional Dependencies

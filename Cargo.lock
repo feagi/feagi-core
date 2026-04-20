@@ -1406,6 +1406,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44c45a9d03d6676652bcb5e724c7e988de1acad23a711b5217ab9cbecbec2225"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "520f05a5cbd335fae5a99ff7a6ab8627577660ee5cfd6a94a6a929b52ff0321c"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "displaydoc"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1814,7 +1835,7 @@ dependencies = [
 
 [[package]]
 name = "feagi"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "feagi-agent",
@@ -1839,7 +1860,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-agent"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "base64 0.22.1",
  "feagi-io",
@@ -1855,7 +1876,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-api"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "argon2",
  "assert-json-diff",
@@ -1864,6 +1885,7 @@ dependencies = [
  "base64 0.21.7",
  "chacha20poly1305",
  "chrono",
+ "dirs",
  "feagi-agent",
  "feagi-brain-development",
  "feagi-config",
@@ -1906,7 +1928,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-brain-development"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "chrono",
@@ -1936,7 +1958,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-config"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "serde",
  "serde_json",
@@ -1947,7 +1969,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-evolutionary"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "chrono",
  "env_logger",
@@ -1969,7 +1991,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-hal"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "cortex-m",
@@ -1990,7 +2012,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-io"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "base64 0.22.1",
  "feagi-serialization",
@@ -2004,7 +2026,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-burst-engine"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "base64 0.22.1",
@@ -2033,7 +2055,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-neural"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "serde",
@@ -2043,7 +2065,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-plasticity"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "feagi-npu-burst-engine",
@@ -2061,7 +2083,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-runtime"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "feagi-npu-neural",
@@ -2072,7 +2094,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-observability"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2092,7 +2114,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-sensorimotor"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "clap",
  "feagi-serialization",
@@ -2108,7 +2130,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-serialization"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "byteorder",
  "feagi-structures",
@@ -2118,7 +2140,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-services"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "async-trait",
@@ -2146,7 +2168,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-state-manager"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "atomic-polyfill",
@@ -2167,7 +2189,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-structures"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "base64 0.22.1",
  "futures-channel",
@@ -4215,6 +4237,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
 name = "ordered-float"
 version = "3.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4882,6 +4910,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce70a74e890531977d37e532c34d45e9055d2409ed08ddba14529471ed0be16"
 dependencies = [
  "bitflags 2.11.0",
+]
+
+[[package]]
+name = "redox_users"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba009ff324d1fc1b900bd1fdb31564febe58a8ccc8a6fdbb93b543d33b13ca43"
+dependencies = [
+ "getrandom 0.2.17",
+ "libredox",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

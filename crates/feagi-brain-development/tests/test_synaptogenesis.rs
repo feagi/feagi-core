@@ -684,3 +684,136 @@ fn test_multiple_morphology_rules() {
 
     println!("✅ Test 6: Multiple morphology rules - PASSED");
 }
+
+// ============================================================================
+// TEST 7: Parallel morphologies (projector + block_to_block) — bug regression
+// ============================================================================
+//
+// Repro for the Counter -> Counter Register issue:
+// - Area A (1x1x1, 1 neuron) with `projector` and `block_to_block` mappings to
+//   Area B (1x1x10, 10 neurons).
+// - Both morphologies target the same src/dst pair at voxel (0,0,0).
+// - Expected: two PARALLEL synapses exist from A[0,0,0] to B[0,0,0]:
+//     * projector: weight = 1  (psc_mult=1)
+//     * block_to_block: weight = 10 (psc_mult=10)
+// - The additional 9 synapses from `projector` (z=1..9) must also exist.
+// - Before the fix, the vector-type dedup check skipped the `block_to_block`
+//   synapse because the projector synapse was already present, losing the 10x
+//   multiplier and preventing B[0,0,0] from reaching its firing threshold.
+#[test]
+fn test_parallel_projector_and_block_to_block_preserves_both() {
+    let mut manager = create_test_manager();
+
+    // 1x1x1 source
+    let (src_area, src_id) = create_test_area("src_par", 1, 1, 1, 0);
+    manager
+        .add_cortical_area(src_area)
+        .expect("Failed to add source area");
+
+    // 1x1x10 destination
+    let (dst_area, dst_id) = create_test_area("dst_par", 1, 1, 10, 1);
+    manager
+        .add_cortical_area(dst_area)
+        .expect("Failed to add destination area");
+
+    let src_neurons = create_grid_neurons(&mut manager, &src_id, 1, 1, 1);
+    let dst_neurons = create_grid_neurons(&mut manager, &dst_id, 1, 1, 10);
+
+    assert_eq!(src_neurons.len(), 1, "Source should have 1 neuron");
+    assert_eq!(dst_neurons.len(), 10, "Destination should have 10 neurons");
+
+    // Two parallel mapping rules from A -> B for the same voxel pair.
+    // Order matters for the regression: `projector` is declared first (as in the
+    // user's genome), which used to cause `block_to_block` to be dropped.
+    let projector_rule = json!({
+        "morphology_id": "projector",
+        "morphology_scalar": [1, 1, 1],
+        "postSynapticCurrent_multiplier": 1,
+        "synapse_attractivity": 100,
+        "plasticity_flag": false,
+        "synaptic_delay_bursts": 1,
+    });
+    let block_to_block_rule = json!({
+        "morphology_id": "block_to_block",
+        "morphology_scalar": [1, 1, 1],
+        "postSynapticCurrent_multiplier": 10,
+        "synapse_attractivity": 100,
+        "plasticity_flag": false,
+        "synaptic_delay_bursts": 1,
+    });
+
+    manager
+        .update_cortical_mapping(&src_id, &dst_id, vec![projector_rule, block_to_block_rule])
+        .expect("Failed to update cortical mapping");
+
+    let synapse_count = manager
+        .apply_cortical_mapping(&src_id)
+        .expect("Failed to apply cortical mapping");
+
+    // projector => 10 synapses (z=0..9), block_to_block => 1 additional synapse at z=0
+    assert_eq!(
+        synapse_count, 11,
+        "Expected 10 projector + 1 block_to_block synapse, got {}",
+        synapse_count
+    );
+
+    // Validate the outgoing synapses from the single source neuron.
+    let Some(npu_arc) = manager.get_npu() else {
+        panic!("Test manager must have an attached NPU");
+    };
+    let src_nid = src_neurons[0] as u32;
+    let mut npu_guard = npu_arc.lock().unwrap();
+
+    let outgoing: Vec<(u32, f32, f32, u8)> = match *npu_guard {
+        DynamicNPU::F32(ref mut npu) => npu.get_outgoing_synapses(src_nid),
+        DynamicNPU::INT8(ref mut npu) => npu.get_outgoing_synapses(src_nid),
+    };
+
+    assert_eq!(
+        outgoing.len(),
+        11,
+        "Source neuron should have exactly 11 outgoing synapses, found {}",
+        outgoing.len()
+    );
+
+    // Validate: every target is a real destination neuron (no orphans).
+    let dst_neuron_ids: std::collections::HashSet<u32> =
+        dst_neurons.iter().map(|&id| id as u32).collect();
+    for (target, _weight, _psp, _syn_type) in &outgoing {
+        assert!(
+            dst_neuron_ids.contains(target),
+            "Outgoing synapse target {} is not a valid destination neuron",
+            target
+        );
+    }
+
+    // Validate the block_to_block synapse (weight=10) exists alongside the
+    // projector synapse (weight=1) for the same src/dst pair at voxel (0,0,0).
+    let target_at_z0 = dst_neurons[0] as u32;
+    let synapses_to_z0: Vec<&(u32, f32, f32, u8)> = outgoing
+        .iter()
+        .filter(|(t, _, _, _)| *t == target_at_z0)
+        .collect();
+
+    assert_eq!(
+        synapses_to_z0.len(),
+        2,
+        "Expected 2 parallel synapses to dst[0,0,0] (projector + block_to_block), found {}",
+        synapses_to_z0.len()
+    );
+
+    let weights: Vec<f32> = synapses_to_z0.iter().map(|(_, w, _, _)| *w).collect();
+    assert!(
+        weights.contains(&1.0),
+        "Expected a projector synapse (weight=1.0) to dst[0,0,0], found weights {:?}",
+        weights
+    );
+    assert!(
+        weights.contains(&10.0),
+        "Expected a block_to_block synapse (weight=10.0) to dst[0,0,0] — \
+         this is the regression: the 10x multiplier is dropped. Found weights {:?}",
+        weights
+    );
+
+    println!("✅ Test 7: Parallel morphologies preserve both synapses - PASSED");
+}

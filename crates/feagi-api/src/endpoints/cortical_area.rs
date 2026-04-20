@@ -1798,19 +1798,61 @@ pub async fn put_multi_cortical_area(
     ])))
 }
 
-/// Delete multiple cortical areas by their IDs. (Not yet implemented)
+/// Delete multiple cortical areas by their IDs.
 #[utoipa::path(
     delete,
     path = "/v1/cortical_area/multi/cortical_area",
     tag = "cortical_area"
 )]
-#[allow(unused_variables)] // In development
 pub async fn delete_multi_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<Vec<String>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Delete multiple cortical areas
-    Err(ApiError::internal("Not yet implemented"))
+    if request.is_empty() {
+        return Err(ApiError::invalid_input(
+            "Request must contain at least one cortical ID",
+        ));
+    }
+
+    let connectome_service = state.connectome_service.as_ref();
+
+    tracing::debug!(
+        target: "feagi-api",
+        "DELETE /v1/cortical_area/multi/cortical_area - deleting {} areas",
+        request.len()
+    );
+
+    for cortical_id in &request {
+        match connectome_service.delete_cortical_area(cortical_id).await {
+            Ok(_) => {
+                tracing::debug!(
+                    target: "feagi-api",
+                    "DELETE /v1/cortical_area/multi/cortical_area - deleted {}",
+                    cortical_id
+                );
+            }
+            Err(e) => {
+                tracing::error!(
+                    target: "feagi-api",
+                    "DELETE /v1/cortical_area/multi/cortical_area - failed for {}: {}",
+                    cortical_id,
+                    e
+                );
+                return Err(ApiError::internal(format!(
+                    "Failed to delete cortical area {}: {}",
+                    cortical_id, e
+                )));
+            }
+        }
+    }
+
+    Ok(Json(HashMap::from([
+        (
+            "message".to_string(),
+            format!("Deleted {} cortical areas", request.len()),
+        ),
+        ("cortical_ids".to_string(), request.join(", ")),
+    ])))
 }
 
 /// Update the 2D visualization coordinates of a cortical area. (Not yet implemented)
