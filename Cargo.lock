@@ -1835,7 +1835,7 @@ dependencies = [
 
 [[package]]
 name = "feagi"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "feagi-agent",
@@ -1860,7 +1860,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-agent"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "base64 0.22.1",
  "feagi-io",
@@ -1876,7 +1876,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-api"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "argon2",
  "assert-json-diff",
@@ -1928,7 +1928,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-brain-development"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "chrono",
@@ -1958,7 +1958,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-config"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "serde",
  "serde_json",
@@ -1969,7 +1969,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-evolutionary"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "chrono",
  "env_logger",
@@ -1991,7 +1991,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-hal"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "cortex-m",
@@ -2012,7 +2012,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-io"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "base64 0.22.1",
  "feagi-serialization",
@@ -2026,7 +2026,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-burst-engine"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "base64 0.22.1",
@@ -2055,7 +2055,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-neural"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "serde",
@@ -2065,7 +2065,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-plasticity"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "feagi-npu-burst-engine",
@@ -2083,7 +2083,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-runtime"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "feagi-npu-neural",
@@ -2094,7 +2094,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-observability"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2114,7 +2114,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-sensorimotor"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "clap",
  "feagi-serialization",
@@ -2130,7 +2130,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-serialization"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "byteorder",
  "feagi-structures",
@@ -2140,7 +2140,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-services"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "async-trait",
@@ -2168,7 +2168,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-state-manager"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "ahash",
  "atomic-polyfill",
@@ -2189,7 +2189,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-structures"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "base64 0.22.1",
  "futures-channel",
