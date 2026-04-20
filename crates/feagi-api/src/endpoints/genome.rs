@@ -256,8 +256,8 @@ async fn load_genome_with_priority(
             let guard = handler.lock().unwrap();
             guard
                 .get_all_registered_agents()
-                .iter()
-                .filter_map(|(sid, _)| guard.get_device_registrations_by_agent(*sid).cloned())
+                .keys()
+                .filter_map(|sid| guard.get_device_registrations_by_agent(*sid).cloned())
                 .collect()
         };
         for device_regs in device_regs_list {
