@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Bump the single umbrella version for feagi-core (unified versioning).
-# Reads [workspace.package].version from root Cargo.toml, increments the
-# beta segment (e.g. 0.0.1-beta.18 -> 0.0.1-beta.19), updates root and
-# all path dependency version references, then outputs NEW_VERSION and
+# Reads [workspace.package].version from root Cargo.toml, computes the next
+# version (0.0.1-beta.N -> N+1, or X.Y.Z semver -> X.Y.(Z+1)), updates root
+# and all path dependency version references, then outputs NEW_VERSION and
 # CHANGED_CRATES for the release workflow.
 
 set -e
@@ -31,17 +31,28 @@ if [ -z "$CURRENT" ]; then
     exit 1
 fi
 
-# Bump 0.0.1-beta.N -> 0.0.1-beta.(N+1)
-NEW=$(python3 -c "
+# Bump rules:
+#   0.0.1-beta.N -> 0.0.1-beta.(N+1)
+#   X.Y.Z (semver) -> X.Y.(Z+1)
+NEW=$(CURRENT="$CURRENT" python3 <<'PY'
+import os
 import re
-v = '''$CURRENT'''
-m = re.match(r'^(.*-beta\.)([0-9]+)$', v)
+import sys
+
+v = os.environ["CURRENT"].strip()
+m = re.match(r"^(.*-beta\.)([0-9]+)$", v)
 if m:
     prefix, num = m.group(1), int(m.group(2))
-    print(f'{prefix}{num + 1}')
-else:
-    raise SystemExit(f'Unsupported version format for bump: {v}')
-")
+    print(f"{prefix}{num + 1}")
+    sys.exit(0)
+m2 = re.match(r"^([0-9]+)\.([0-9]+)\.([0-9]+)$", v)
+if m2:
+    major, minor, patch = int(m2.group(1)), int(m2.group(2)), int(m2.group(3))
+    print(f"{major}.{minor}.{patch + 1}")
+    sys.exit(0)
+raise SystemExit(f"Unsupported version format for bump: {v}")
+PY
+)
 
 if [ -z "$NEW" ]; then
     echo "ERROR: Failed to compute next version from $CURRENT" >&2
