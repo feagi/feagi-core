@@ -60,16 +60,19 @@ pub fn apply_vectors_morphology_with_dimensions(
                 // Note: Cannot collapse this if in Rust 2021 (let chains require Rust 2024)
                 #[allow(clippy::collapsible_if)]
                 if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
+                    // Within-call dedup: prevent the same morphology rule from producing
+                    // duplicate synapses when multiple vectors collapse to the same target
+                    // (e.g. after bounds clamping).
                     if !seen_pairs.insert((src_nid, dst_nid)) {
                         continue;
                     }
-                    if npu
-                        .get_outgoing_synapses(src_nid)
-                        .iter()
-                        .any(|(target, _, _, _)| *target == dst_nid)
-                    {
-                        continue;
-                    }
+                    // NOTE: We intentionally do NOT skip creating a synapse when an
+                    // outgoing synapse to the same target already exists. Separate
+                    // morphology rules within a cortical mapping (e.g. a `projector`
+                    // and a `block_to_block` both declared for the same src->dst pair)
+                    // are parallel connections whose weights/PSPs are additive at
+                    // propagation time. Dropping the second synapse loses the caller's
+                    // configured post-synaptic current multiplier.
                     if rng.gen_range(0..100) < synapse_attractivity
                         && npu
                             .add_synapse(
