@@ -58,6 +58,92 @@ impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronVoxelCoordVec
         self.coord_z.push(coordinate.z);
         self.potentials.push(potential);
     }
+
+    // ---- Structure-of-Arrays accessors ----
+    //
+    // These expose the underlying per-axis vectors so callers with bulk-copy
+    // patterns (image-frame encoders, segmentors, serialization fast paths)
+    // can push/extend directly. The accessors are purely additive; the
+    // trait-based iter_coordinate / iter_index APIs remain the preferred
+    // entry points for callers that don't need raw SoA access.
+
+    #[inline]
+    pub fn coord_x_slice(&self) -> &[CoordQuant] {
+        &self.coord_x
+    }
+
+    #[inline]
+    pub fn coord_y_slice(&self) -> &[CoordQuant] {
+        &self.coord_y
+    }
+
+    #[inline]
+    pub fn coord_z_slice(&self) -> &[CoordQuant] {
+        &self.coord_z
+    }
+
+    #[inline]
+    pub fn potentials_slice(&self) -> &[NeuronVoxelPotential<VoxelPotentialQuant>] {
+        &self.potentials
+    }
+
+    /// Runs `f` with mutable borrows of the four underlying vectors. The
+    /// vectors must stay the same length on exit; callers mutate by
+    /// extending all four in lockstep. Length invariants are not checked
+    /// here — encoders that rely on this pattern are expected to keep the
+    /// SoA vectors aligned (this mirrors the pre-refactor
+    /// `update_vectors_from_external` contract used by feagi-sensorimotor).
+    #[inline]
+    pub fn with_parts_mut<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(
+            &mut Vec<CoordQuant>,
+            &mut Vec<CoordQuant>,
+            &mut Vec<CoordQuant>,
+            &mut Vec<NeuronVoxelPotential<VoxelPotentialQuant>>,
+        ) -> R,
+    {
+        f(
+            &mut self.coord_x,
+            &mut self.coord_y,
+            &mut self.coord_z,
+            &mut self.potentials,
+        )
+    }
+
+    /// Constructs a `NeuronVoxelCoordVector` directly from pre-built
+    /// Structure-of-Arrays vectors. Vectors must share the same length,
+    /// otherwise returns [`FeagiStructuresError::BadParameters`].
+    #[cfg(feature = "alloc")]
+    pub fn from_parts(
+        cortical_dimensions: NeuronVoxelDimensions<CoordQuant>,
+        coord_x: Vec<CoordQuant>,
+        coord_y: Vec<CoordQuant>,
+        coord_z: Vec<CoordQuant>,
+        potentials: Vec<NeuronVoxelPotential<VoxelPotentialQuant>>,
+    ) -> Result<Self, crate::FeagiStructuresError> {
+        let n = potentials.len();
+        if coord_x.len() != n || coord_y.len() != n || coord_z.len() != n {
+            return Err(crate::FeagiStructuresError::BadParameters(
+                format!(
+                    "NeuronVoxelCoordVector::from_parts length mismatch: \
+                     x={}, y={}, z={}, p={}",
+                    coord_x.len(),
+                    coord_y.len(),
+                    coord_z.len(),
+                    n
+                ),
+            ));
+        }
+        Ok(Self {
+            cortical_dimensions,
+            coord_x,
+            coord_y,
+            coord_z,
+            potentials,
+            _index_quant: PhantomData,
+        })
+    }
 }
 
 

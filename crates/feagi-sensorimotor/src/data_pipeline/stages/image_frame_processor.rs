@@ -5,6 +5,9 @@
 //! It wraps an `ImageFrameTransformerDefinition` to provide streaming functionality
 //! with caching and efficient processing.
 
+
+use crate::_compat::prelude::*;
+
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::{ImageFrame, ImageFrameProcessor};

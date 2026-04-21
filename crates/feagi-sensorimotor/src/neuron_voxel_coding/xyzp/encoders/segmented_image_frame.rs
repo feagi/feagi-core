@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONEncoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
@@ -60,7 +62,7 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
                     let updated_segmented_image: &SegmentedImageFrame = updated_data.try_into()?;
 
                     updated_segmented_image
-                        .overwrite_neuron_data(scratches, (*channel_write_target).into())?;
+                        .overwrite_neuron_data(scratches, (channel_write_target.value()).into())?;
 
                     Ok(())
                 },
@@ -113,17 +115,17 @@ impl SegmentedImageFrameNeuronVoxelXYZPEncoder {
             cortical_write_targets: cortical_ids,
             neuron_scratch_spaces: vec![
                 [
-                    NeuronVoxelXYZPSparseVectors::new(),
-                    NeuronVoxelXYZPSparseVectors::new(),
-                    NeuronVoxelXYZPSparseVectors::new(),
-                    NeuronVoxelXYZPSparseVectors::new(),
-                    NeuronVoxelXYZPSparseVectors::new(),
-                    NeuronVoxelXYZPSparseVectors::new(),
-                    NeuronVoxelXYZPSparseVectors::new(),
-                    NeuronVoxelXYZPSparseVectors::new(),
-                    NeuronVoxelXYZPSparseVectors::new()
+                    crate::_compat::empty_sparse_vectors(),
+                    crate::_compat::empty_sparse_vectors(),
+                    crate::_compat::empty_sparse_vectors(),
+                    crate::_compat::empty_sparse_vectors(),
+                    crate::_compat::empty_sparse_vectors(),
+                    crate::_compat::empty_sparse_vectors(),
+                    crate::_compat::empty_sparse_vectors(),
+                    crate::_compat::empty_sparse_vectors(),
+                    crate::_compat::empty_sparse_vectors()
                 ];
-                *number_channels as usize
+                number_channels.get() as usize
             ],
         };
         Ok(Box::new(encoder))

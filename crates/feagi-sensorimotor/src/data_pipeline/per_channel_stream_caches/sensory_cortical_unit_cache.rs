@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::{
     JSONDeviceGrouping, JSONEncoderProperties, JSONUnitDefinition,
 };
@@ -43,7 +45,7 @@ impl SensoryCorticalUnitCache {
         let pipeline_runners: Vec<SensoryPipelineStageRunner> = std::iter::repeat_with(|| {
             SensoryPipelineStageRunner::new(initial_cached_value.clone()).unwrap()
         })
-        .take(*number_channels as usize)
+        .take(number_channels.get() as usize)
         .collect();
 
         Ok(Self {
@@ -125,7 +127,7 @@ impl SensoryCorticalUnitCache {
     /// The count of channels as a `CorticalChannelCount`.
     #[allow(dead_code)]
     pub fn number_of_channels(&self) -> CorticalChannelCount {
-        (self.pipeline_runners.len() as u32).try_into().unwrap()
+        CorticalChannelCount::new(self.pipeline_runners.len() as u32).unwrap()
     }
 
     /// Verifies that a channel with the given index exists in this cache system.
@@ -451,7 +453,7 @@ impl SensoryCorticalUnitCache {
         &self,
         cortical_channel_index: CorticalChannelIndex,
     ) -> Result<&SensoryPipelineStageRunner, FeagiDataError> {
-        match self.pipeline_runners.get(*cortical_channel_index as usize) {
+        match self.pipeline_runners.get(cortical_channel_index.get() as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
             None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
                                                               cortical_channel_index, self.pipeline_runners.len())))
@@ -475,7 +477,7 @@ impl SensoryCorticalUnitCache {
         cortical_channel_index: CorticalChannelIndex,
     ) -> Result<&mut SensoryPipelineStageRunner, FeagiDataError> {
         let runner_count = self.pipeline_runners.len();
-        match self.pipeline_runners.get_mut(*cortical_channel_index as usize) {
+        match self.pipeline_runners.get_mut(cortical_channel_index.get() as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
             None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
                                                               cortical_channel_index, runner_count)))

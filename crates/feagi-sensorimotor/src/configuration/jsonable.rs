@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality,
@@ -30,6 +32,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Top level JSON representation of registered devices and feedbacks
+
 
 #[derive(Serialize, Deserialize, PartialEq, Clone, Debug)]
 pub struct JSONInputOutputDefinition {
@@ -162,7 +165,7 @@ impl JSONUnitDefinition {
         let number_channels = self.device_grouping.len() as u32;
         for device_grouping in &self.device_grouping {
             if let Some(channel_override) = device_grouping.channel_index_override {
-                if *channel_override > number_channels {
+                if channel_override.value() > number_channels {
                     return Err(FeagiDataError::DeserializationError(
                         "Device has invalid channel override!".to_string(),
                     ));

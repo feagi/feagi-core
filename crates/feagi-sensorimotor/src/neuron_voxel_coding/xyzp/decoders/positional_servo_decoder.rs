@@ -1,5 +1,7 @@
 //! Decoder for PositionalServo with both absolute and incremental cortical areas.
 
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::Percentage;
@@ -43,20 +45,20 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
     ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
         const ABSOLUTE_WIDTH_PER_CHANNEL: u32 = 1;
-        let absolute_total_width = *number_channels * ABSOLUTE_WIDTH_PER_CHANNEL;
+        let absolute_total_width = number_channels.value() * ABSOLUTE_WIDTH_PER_CHANNEL;
 
         let decoder = PositionalServoNeuronVoxelXYZPDecoder {
             channel_absolute_dimensions: CorticalChannelDimensions::new(
                 absolute_total_width,
                 CHANNEL_Y_HEIGHT,
-                *z_depth,
+                z_depth.get(),
             )?,
             cortical_absolute_read_target: absolute_cortical_id,
             cortical_incremental_read_target: incremental_cortical_id,
             interpolation,
-            z_depth_absolute_scratch_space: vec![Vec::new(); *number_channels as usize],
-            z_depth_incremental_forward_scratch_space: vec![Vec::new(); *number_channels as usize],
-            z_depth_incremental_backward_scratch_space: vec![Vec::new(); *number_channels as usize],
+            z_depth_absolute_scratch_space: vec![Vec::new(); number_channels.get() as usize],
+            z_depth_incremental_forward_scratch_space: vec![Vec::new(); number_channels.get() as usize],
+            z_depth_incremental_backward_scratch_space: vec![Vec::new(); number_channels.get() as usize],
         };
         Ok(Box::new(decoder))
     }
@@ -78,7 +80,7 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
             PercentageNeuronPositioning::Linear => {
                 decode_unsigned_percentage_from_linear_neurons(
                     z_vector,
-                    self.channel_absolute_dimensions.depth,
+                    self.channel_absolute_dimensions.depth(),
                     target,
                 );
             }
@@ -87,7 +89,7 @@ impl PositionalServoNeuronVoxelXYZPDecoder {
                 // (PositionalServo typically uses Linear positioning)
                 decode_unsigned_percentage_from_linear_neurons(
                     z_vector,
-                    self.channel_absolute_dimensions.depth,
+                    self.channel_absolute_dimensions.depth(),
                     target,
                 );
             }
@@ -102,7 +104,7 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
 
     fn get_as_properties(&self) -> JSONDecoderProperties {
         JSONDecoderProperties::PositionalServo(
-            NeuronDepth::new(self.channel_absolute_dimensions.depth).unwrap(),
+            NeuronDepth::new(self.channel_absolute_dimensions.depth()).unwrap(),
             self.interpolation,
         )
     }
@@ -129,12 +131,12 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
         self.clear_scratch_spaces();
 
         let number_of_channels = pipelines_with_data_to_update.len();
-        let z_depth = self.channel_absolute_dimensions.depth;
+        let z_depth = self.channel_absolute_dimensions.depth();
 
         // Collect neurons from absolute area (1 neuron width per channel)
         if let Some(neurons) = absolute_neuron_array {
             for neuron in neurons.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == NeuronVoxelPotential::from(0.0f32) {
                     continue;
                 }
                 if neuron.coordinate.z >= z_depth {
@@ -155,7 +157,7 @@ impl NeuronVoxelXYZPDecoder for PositionalServoNeuronVoxelXYZPDecoder {
         // Collect neurons from incremental area (2 neuron widths per channel: even=forward, odd=backward)
         if let Some(neurons) = incremental_neuron_array {
             for neuron in neurons.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == NeuronVoxelPotential::from(0.0f32) {
                     continue;
                 }
                 if neuron.coordinate.z >= z_depth {

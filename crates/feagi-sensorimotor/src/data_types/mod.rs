@@ -11,6 +11,9 @@
 //! These types handle memory layout, color space conversions, and provide
 //! efficient interfaces for common sensor/actuator data formats.
 
+
+use crate::_compat::prelude::*;
+
 pub mod descriptors;
 mod gaze_properties;
 mod image_filtering_settings;

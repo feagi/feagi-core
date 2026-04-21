@@ -1,3 +1,6 @@
+
+use crate::_compat::prelude::*;
+
 mod feedback_registrar;
 mod feedback_registration;
 mod feedback_registration_targets;

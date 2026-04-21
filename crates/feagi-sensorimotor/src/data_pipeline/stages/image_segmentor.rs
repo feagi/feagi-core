@@ -1,3 +1,6 @@
+
+use crate::_compat::prelude::*;
+
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_types::descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};

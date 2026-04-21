@@ -40,7 +40,13 @@ impl FeagiMessage {
 impl TryFrom<&FeagiByteContainer> for FeagiMessage {
     type Error = FeagiAgentError;
     fn try_from(value: &FeagiByteContainer) -> Result<Self, Self::Error> {
-        let serialized_data = value.try_create_new_struct_from_index(0)?;
+        // The quantization generics here are only consumed by
+        // CorticalMapped* container types; `FeagiJSON` (our target below)
+        // doesn't depend on them, so the std-desktop instantiation
+        // (f32 potentials / u32 coords / u32 neuron index / u16 cortical
+        // area index) is chosen to match every other std-path call site
+        // inside feagi-agent.
+        let serialized_data = value.try_create_new_struct_from_index::<f32, u32, u32, u16>(0)?;
         let feagi_json: FeagiJSON = serialized_data.try_into()?;
         let json = feagi_json.borrow_json_value().clone();
         serde_json::from_value(json)

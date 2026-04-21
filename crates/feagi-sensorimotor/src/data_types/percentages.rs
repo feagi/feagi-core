@@ -1,6 +1,9 @@
+use crate::_compat::prelude::*;
+
 use crate::_compat::FeagiDataError;
 
 //region 1D Percentage Types
+
 
 /// A validated percentage value constrained to [0.0, 1.0].
 ///

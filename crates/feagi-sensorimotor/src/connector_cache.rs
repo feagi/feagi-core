@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::caching::MotorDeviceCache;
 use crate::caching::SensorDeviceCache;
 use crate::configuration::jsonable::JSONInputOutputDefinition;
@@ -7,6 +9,7 @@ use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 // TODO this file may be redudant, we may want to clear it
+
 
 fn lock_recover<'a, T>(mutex: &'a Mutex<T>) -> MutexGuard<'a, T> {
     match mutex.lock() {

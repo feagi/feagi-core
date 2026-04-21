@@ -1,3 +1,6 @@
+
+use crate::_compat::prelude::*;
+
 use crate::feagi_interfaces::feagi_connection_enums::FeagiInterfaceStatus;
 use crate::feagi_interfaces::feagi_connector_interface_definition::FeagiConnectionInterfaceDefinition;
 use crate::_compat::FeagiDataError;

@@ -2,6 +2,9 @@
 //!
 //! This module provides data structures and enums for describing dat properties
 
+
+use crate::_compat::prelude::*;
+
 use super::{ImageFrame, SegmentedImageFrame};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelDimensions;
 // NeuronDepth is used in macro expansion

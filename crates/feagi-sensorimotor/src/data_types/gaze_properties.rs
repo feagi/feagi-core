@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::data_types::descriptors::{CornerPoints, ImageXYPoint, ImageXYResolution};
 use crate::data_types::{Percentage, Percentage2D, Percentage3D};
 use feagi_evolutionary::genome_types::CorticalAreaDimensions;
@@ -115,14 +117,14 @@ impl GazeProperties {
         let modulation_normal: (f32, f32) = // Calculate ranges as per aspect ratio of cortical dimensions
         {
 
-            if destination_segmented_center_cortical_dimensions.width
-                > destination_segmented_center_cortical_dimensions.height
+            if destination_segmented_center_cortical_dimensions.width()
+                > destination_segmented_center_cortical_dimensions.height()
             {
                 // widescreen
                 let max_cortical_length =
-                    destination_segmented_center_cortical_dimensions.width;
+                    destination_segmented_center_cortical_dimensions.width();
                 let min_cortical_length =
-                    destination_segmented_center_cortical_dimensions.height;
+                    destination_segmented_center_cortical_dimensions.height();
                 let max_offset =
                     (min_cortical_length as f32) / (max_cortical_length as f32);
                 (max_offset * self.modulation_size.get_as_0_1(), self.modulation_size.get_as_0_1())
@@ -131,9 +133,9 @@ impl GazeProperties {
             } else {
                 // portrait / square
                 let max_cortical_length =
-                    destination_segmented_center_cortical_dimensions.height;
+                    destination_segmented_center_cortical_dimensions.height();
                 let min_cortical_length =
-                    destination_segmented_center_cortical_dimensions.width;
+                    destination_segmented_center_cortical_dimensions.width();
                 let max_offset =
                     (min_cortical_length as f32) / (max_cortical_length as f32);
                 (self.modulation_size.get_as_0_1(), max_offset * self.modulation_size.get_as_0_1())

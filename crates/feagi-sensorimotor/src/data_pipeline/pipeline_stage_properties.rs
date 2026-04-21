@@ -3,6 +3,9 @@
 //! This enum defines all possible pipeline stage configurations.
 //! Properties are serializable and can be dynamically updated at runtime.
 
+
+use crate::_compat::prelude::*;
+
 use crate::data_pipeline::stages::{
     ImageFrameProcessorStage, ImageFrameQuickDiffStage, ImageFrameSegmentatorStage,
     ImagePixelValueCountThresholdStage,

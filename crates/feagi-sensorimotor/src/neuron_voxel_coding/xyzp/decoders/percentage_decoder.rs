@@ -1,5 +1,7 @@
 //! Unified decoder for all percentage types (unsigned/signed, 1D-4D, linear/exponential).
 
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::descriptors::PercentageChannelDimensionality;
@@ -59,8 +61,8 @@ impl PercentageNeuronVoxelXYZPDecoder {
         } else {
             WIDTH_PER_UNSIGNED_PERCENTAGE * number_pairs_per_channel
         };
-        let total_width = *number_channels * per_channel_width;
-        let scratch_size = *number_channels as usize * number_pairs_per_channel as usize;
+        let total_width = number_channels.value() * per_channel_width;
+        let scratch_size = number_channels.get() as usize * number_pairs_per_channel as usize;
 
         let z_depth_scratch_space_negative = if is_signed {
             vec![Vec::new(); scratch_size]
@@ -72,7 +74,7 @@ impl PercentageNeuronVoxelXYZPDecoder {
             channel_dimensions: CorticalChannelDimensions::new(
                 total_width,
                 CHANNEL_Y_HEIGHT,
-                *z_resolution,
+                z_resolution.get(),
             )?,
             cortical_read_target,
             interpolation,
@@ -101,7 +103,7 @@ impl PercentageNeuronVoxelXYZPDecoder {
             PercentageNeuronPositioning::Linear => {
                 decode_unsigned_percentage_from_linear_neurons(
                     z_vector,
-                    self.channel_dimensions.depth,
+                    self.channel_dimensions.depth(),
                     target,
                 );
             }
@@ -123,7 +125,7 @@ impl PercentageNeuronVoxelXYZPDecoder {
                 decode_signed_percentage_from_linear_neurons(
                     z_vector_positive,
                     z_vector_negative,
-                    self.channel_dimensions.depth,
+                    self.channel_dimensions.depth(),
                     target,
                 );
             }
@@ -354,7 +356,7 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
 
     fn get_as_properties(&self) -> JSONDecoderProperties {
         JSONDecoderProperties::Percentage(
-            NeuronDepth::new(self.channel_dimensions.depth).unwrap(),
+            NeuronDepth::new(self.channel_dimensions.depth()).unwrap(),
             self.interpolation,
             self.is_signed,
             self.number_percentages,
@@ -384,13 +386,13 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
 
         let number_of_channels = pipelines_with_data_to_update.len() as u32;
         let max_possible_x_index = self.number_percentages.as_u32() * number_of_channels;
-        let z_depth = self.channel_dimensions.depth;
+        let z_depth = self.channel_dimensions.depth();
 
         // Collect neuron data into scratch spaces
         match self.is_signed {
             false => {
                 for neuron in neuron_array.iter() {
-                    if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0
+                    if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == NeuronVoxelPotential::from(0.0f32)
                     {
                         continue;
                     }
@@ -410,7 +412,7 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
             }
             true => {
                 for neuron in neuron_array.iter() {
-                    if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0
+                    if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == NeuronVoxelPotential::from(0.0f32)
                     {
                         continue;
                     }

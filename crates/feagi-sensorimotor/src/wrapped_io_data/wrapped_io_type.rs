@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
 };
@@ -48,6 +50,7 @@ pub enum WrappedIOType {
 
 // NOTE: Due to some variations in some of the types, this isn't practical to turn into a macro.
 // This isn't too bad though.
+
 
 impl WrappedIOType {
     /// Checks if two types are the same variant, ignoring associated data.

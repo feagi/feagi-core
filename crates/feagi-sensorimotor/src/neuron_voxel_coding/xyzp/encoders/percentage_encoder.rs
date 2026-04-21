@@ -1,5 +1,7 @@
 //! Unified encoder for all percentage types (unsigned/signed, 1D-4D, linear/exponential).
 
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONEncoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
@@ -83,13 +85,13 @@ impl PercentageNeuronVoxelXYZPEncoder {
 
         let num_dims = number_percentages.as_u32();
         let channel_width = if is_signed { num_dims * 2 } else { num_dims };
-        let num_channels = *number_channels as usize;
+        let num_channels = number_channels.get() as usize;
 
         let encoder = PercentageNeuronVoxelXYZPEncoder {
             channel_dimensions: CorticalChannelDimensions::new(
-                *number_channels * channel_width,
+                number_channels.value() * channel_width,
                 CHANNEL_Y_HEIGHT,
-                *z_resolution,
+                z_resolution.get(),
             )?,
             cortical_write_target,
             interpolation,
@@ -127,7 +129,7 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
 
     fn get_as_properties(&self) -> JSONEncoderProperties {
         JSONEncoderProperties::Percentage(
-            NeuronDepth::new(self.channel_dimensions.depth).unwrap(),
+            NeuronDepth::new(self.channel_dimensions.depth()).unwrap(),
             self.interpolation,
             self.is_signed,
             self.number_percentages,
@@ -143,7 +145,7 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
         let neuron_array_target =
             write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target);
 
-        let z_depth = self.channel_dimensions.depth;
+        let z_depth = self.channel_dimensions.depth();
         let z_depth_float = z_depth as f32;
         let interpolation = self.interpolation;
         let is_signed = self.is_signed;
@@ -182,7 +184,7 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         pipeline.get_channel_index_override().unwrap_or_else(|| {
                             CorticalChannelIndex::from(current_channel_index as u32)
                         }); // Get override if available
-                    let c = *channel_write_target;
+                    let c = channel_write_target.value();
                     const Y: u32 = 0;
                     for z in s {
                         neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0);
@@ -239,7 +241,7 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         pipeline.get_channel_index_override().unwrap_or_else(|| {
                             CorticalChannelIndex::from(current_channel_index as u32)
                         }); // Get override if available
-                    let c = *channel_write_target;
+                    let c = channel_write_target.value();
                     const Y: u32 = 0;
                     if is_signed {
                         for z in &s.0 {
@@ -318,7 +320,7 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         pipeline.get_channel_index_override().unwrap_or_else(|| {
                             CorticalChannelIndex::from(current_channel_index as u32)
                         }); // Get override if available
-                    let c = *channel_write_target;
+                    let c = channel_write_target.value();
                     const Y: u32 = 0;
                     if is_signed {
                         for z in &s.0 {
@@ -415,7 +417,7 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         pipeline.get_channel_index_override().unwrap_or_else(|| {
                             CorticalChannelIndex::from(current_channel_index as u32)
                         }); // Get override if available
-                    let c = *channel_write_target;
+                    let c = channel_write_target.value();
                     const Y: u32 = 0;
                     if is_signed {
                         for z in &s.0 {

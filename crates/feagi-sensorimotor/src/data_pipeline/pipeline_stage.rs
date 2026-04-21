@@ -4,6 +4,9 @@
 //! for all data pipeline processing in the FEAGI system. Processors implementing this
 //! trait can be chained together to create complex data processing pipelines.
 
+
+use crate::_compat::prelude::*;
+
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::_compat::FeagiDataError;

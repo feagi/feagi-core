@@ -1,3 +1,6 @@
+
+use crate::_compat::prelude::*;
+
 use crate::define_index;
 
 define_index!(

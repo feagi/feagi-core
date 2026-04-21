@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner};
 use crate::configuration::jsonable::JSONDeviceProperties;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
@@ -87,6 +89,7 @@ impl SensoryPipelineStageRunner {
     }
 
     //region Data
+
 
     /// Returns the type of data expected to be inputted
     ///

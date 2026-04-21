@@ -1,8 +1,11 @@
+use crate::_compat::prelude::*;
+
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::_compat::FeagiDataError;
 
 // These static functions are kept separate as adding them to the trait makes them no longer dyn compatible
+
 
 pub(crate) fn stage_properties_to_stages(
     pipeline_stage_properties: &[PipelineStageProperties],

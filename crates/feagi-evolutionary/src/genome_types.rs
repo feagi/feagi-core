@@ -53,6 +53,24 @@ impl CorticalAreaDimensions {
         })
     }
 
+    // `.width() / .height() / .depth()` accessors are provided alongside the
+    // pub fields so uniform `.depth()`-style method-call syntax works on both
+    // this genome-layer type and on the `CorticalChannelDimensionsType<u32>`
+    // accessor shim in `feagi-sensorimotor::_compat`. The pub fields remain
+    // in place for the existing genome-editor code that reads them directly.
+    #[inline]
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+    #[inline]
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+    #[inline]
+    pub fn depth(&self) -> u32 {
+        self.depth
+    }
+
     /// Total voxel count. Uses saturating multiplication to avoid u32 overflow
     /// while still surfacing suspicious sizes to genome validators.
     #[inline]

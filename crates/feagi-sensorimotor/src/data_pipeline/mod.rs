@@ -6,6 +6,9 @@
 //!
 //! Pipelines are configured via properties and can be dynamically modified at runtime.
 
+
+use crate::_compat::prelude::*;
+
 mod descriptors;
 pub(crate) mod per_channel_stream_caches;
 mod pipeline_stage;

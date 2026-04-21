@@ -22,6 +22,29 @@
 //! `feagi-sensorimotor` is kept on the legacy shape here because its 15k-LOC
 //! surface would require an independent design pass to migrate in-place.
 
+// ---- Prelude ----------------------------------------------------------------
+//
+// Every file in this crate that relies on the restored legacy surface should
+// start with:
+//
+// ```rust
+// use crate::_compat::prelude::*;
+// ```
+//
+// so that extension-trait methods (width/height/depth, get_neurons_of,
+// borrow_xyzp_vectors, etc.) resolve at call sites.
+#[doc(hidden)]
+pub mod prelude {
+    pub use super::LegacyChannelDimensions;
+    pub use super::LegacyChannelIndexValue;
+    pub use super::LegacyCorticalMappedXyzpApi;
+    pub use super::LegacyNeuronVoxelXyzpApi;
+    // Frequently-used descriptor types that pre-refactor code reached via
+    // bare unqualified names; re-exporting here lets call sites that only
+    // `use crate::_compat::prelude::*;` still compile unchanged.
+    pub use feagi_structures::neuron_voxels::descriptors::NeuronVoxelPotential;
+}
+
 // ---- Error type aliases -----------------------------------------------------
 
 /// Re-export of `feagi_structures::FeagiStructuresError` under its legacy name.
@@ -50,7 +73,9 @@ pub use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelNe
 // desktop/std instantiation, which matches `feagi_npu_structures::StdNPUQuantization`
 // and `feagi-npu-burst-engine`. We expose that instantiation under the legacy
 // names so call sites don't need to be re-parameterised.
-pub use feagi_structures::neuron_voxels::coord_potential::{CorticalMappedNeuronVoxelCoordVectors, NeuronVoxelCoordVector};
+pub use feagi_structures::neuron_voxels::coord_potential::{
+    CorticalMappedNeuronVoxelCoordVectors, NeuronVoxelCoordVector, NeuronVoxelXYZP,
+};
 
 /// Legacy name for the pre-refactor per-cortical-area XYZP voxel-data container,
 /// instantiated for the standard desktop path (f32 potentials, u32 coords,
@@ -61,6 +86,378 @@ pub type CorticalMappedXYZPNeuronVoxels =
 /// Legacy name for the pre-refactor sparse (x, y, z, potential) per-area
 /// container, instantiated for the same desktop path.
 pub type NeuronVoxelXYZPSparseVectors = NeuronVoxelCoordVector<f32, u32, u32>;
+
+// ---- Legacy method shims: CorticalMappedNeuronVoxelCoordVectors -------------
+//
+// The pre-refactor `CorticalMappedXYZPNeuronVoxels` exposed a method surface
+// (`get_neurons_of`, `ensure_clear_and_borrow_mut`, `clear_neurons_only`) that
+// encoders/decoders in feagi-sensorimotor rely on extensively. The new
+// `CorticalMappedNeuronVoxelCoordVectors<V, C, N, A>` surface uses `.get`,
+// `.get_mut`, `.insert`, `.iter_mut` instead. Rather than rewrite ~20 files,
+// we expose an extension trait that re-introduces the old names as thin
+// adapters. Scoped to this crate only; downstream code should use the new
+// API directly.
+
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::neuron_voxels::descriptors::{
+    NeuronVoxelDimensions, NeuronVoxelPotential,
+};
+use feagi_structures::neuron_voxels::traits::{
+    SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionSparse,
+};
+
+/// Extension trait restoring the pre-refactor surface of
+/// `CorticalMappedXYZPNeuronVoxels`.
+///
+/// Implemented *only* for the std/desktop instantiation
+/// `CorticalMappedNeuronVoxelCoordVectors<f32, u32, u32, u16>`.
+pub trait LegacyCorticalMappedXyzpApi {
+    /// Read access to a cortical area's voxel collection. Returns `None` when
+    /// the area is not present (matches the old contract, which was used by
+    /// decoders to short-circuit when an area hadn't produced data this tick).
+    fn get_neurons_of(
+        &self,
+        cortical_id: &CorticalID,
+    ) -> Option<&NeuronVoxelXYZPSparseVectors>;
+
+    /// Ensures an entry exists for `cortical_id`, clears any previous voxel
+    /// data, and returns a mutable borrow. If the area is new, it is created
+    /// with a `(1, 1, 1)` placeholder dimension — dimensions are not carried
+    /// in the legacy wire format, and the encoders that use this method
+    /// drive coordinates directly from the pipeline so the dim field is
+    /// never read on the write path. The deserialization contract
+    /// documented on `CorticalMappedNeuronVoxelCoordVectors` still applies:
+    /// if callers plan to round-trip this through serialization they must
+    /// set proper dimensions via `insert`.
+    fn ensure_clear_and_borrow_mut(
+        &mut self,
+        cortical_id: &CorticalID,
+    ) -> &mut NeuronVoxelXYZPSparseVectors;
+
+    /// Clears all per-area voxel data in place, keeping the cortical-area
+    /// mapping entries (and their dimensions) intact.
+    fn clear_neurons_only(&mut self);
+}
+
+impl LegacyCorticalMappedXyzpApi for CorticalMappedXYZPNeuronVoxels {
+    #[inline]
+    fn get_neurons_of(
+        &self,
+        cortical_id: &CorticalID,
+    ) -> Option<&NeuronVoxelXYZPSparseVectors> {
+        self.get(cortical_id)
+    }
+
+    fn ensure_clear_and_borrow_mut(
+        &mut self,
+        cortical_id: &CorticalID,
+    ) -> &mut NeuronVoxelXYZPSparseVectors {
+        if !self.contains_key(cortical_id) {
+            let placeholder_dims = NeuronVoxelDimensions::<u32>::new(1, 1, 1)
+                .expect("(1,1,1) is a valid non-zero dimension");
+            let empty = NeuronVoxelCoordVector::<f32, u32, u32>::new(placeholder_dims, 0u32);
+            self.insert(*cortical_id, empty);
+        } else {
+            let entry = self
+                .get_mut(cortical_id)
+                .expect("contains_key was just checked");
+            entry.clear_all_neurons();
+        }
+        self.get_mut(cortical_id)
+            .expect("inserted or pre-existing entry must be present")
+    }
+
+    fn clear_neurons_only(&mut self) {
+        for (_id, area) in self.iter_mut() {
+            area.clear_all_neurons();
+        }
+    }
+}
+
+// ---- Legacy method shims: NeuronVoxelCoordVector ----------------------------
+//
+// Restores `borrow_xyzp_vectors`, `new_from_vectors`, `len`, `clear`,
+// `ensure_capacity`, and `update_vectors_from_external` on the std/desktop
+// instantiation. These are implemented on top of the additive SoA accessors
+// added to `feagi_structures::neuron_voxels::coord_potential::NeuronVoxelCoordVector`
+// (`coord_x_slice` / `coord_y_slice` / `coord_z_slice` / `potentials_slice`,
+// `with_parts_mut`, `from_parts`).
+
+pub trait LegacyNeuronVoxelXyzpApi {
+    /// Returns SoA slices over the underlying (x, y, z, potential) vectors.
+    /// Potentials are exposed as raw `f32` rather than `NeuronVoxelPotential<f32>`
+    /// to match the pre-refactor signature consumed by encoders.
+    fn borrow_xyzp_vectors(&self) -> (&[u32], &[u32], &[u32], &[f32]);
+
+    /// Total number of neuron voxels currently stored.
+    fn len(&self) -> usize;
+
+    /// True when no voxels are stored.
+    fn is_empty(&self) -> bool;
+
+    /// Iterator over `NeuronVoxelXYZP<f32, u32>` items. Legacy decoders
+    /// consume `neuron.coordinate.{x,y,z}` and `neuron.potential` off the
+    /// yielded items.
+    fn iter(
+        &self,
+    ) -> Box<
+        dyn Iterator<
+                Item = feagi_structures::neuron_voxels::coord_potential::NeuronVoxelXYZP<f32, u32>,
+            > + '_,
+    >;
+
+    /// Pushes a single `(x, y, z, potential)` voxel without bounds-checking
+    /// against the per-area dimensions. This matches the pre-refactor
+    /// `push_raw` on `NeuronVoxelXYZPSparseVectors` that encoders rely on
+    /// for per-channel fan-out.
+    fn push_raw(&mut self, x: u32, y: u32, z: u32, potential: f32);
+
+    /// Clears all voxels (dimensions are preserved).
+    fn clear(&mut self);
+
+    /// Reserves capacity for `n` additional voxels.
+    fn ensure_capacity(&mut self, n: usize);
+
+    /// Runs `f` with mutable borrows of the (x, y, z, potential) SoA vectors.
+    /// Matches the pre-refactor signature: the closure returns
+    /// `Result<(), FeagiDataError>` and the outer method propagates the
+    /// same. Potentials are exposed as `Vec<f32>` via a transparent
+    /// reinterpretation of `Vec<NeuronVoxelPotential<f32>>`.
+    fn update_vectors_from_external<F>(&mut self, f: F) -> Result<(), FeagiDataError>
+    where
+        F: FnOnce(
+            &mut Vec<u32>,
+            &mut Vec<u32>,
+            &mut Vec<u32>,
+            &mut Vec<f32>,
+        ) -> Result<(), FeagiDataError>;
+
+    /// Legacy constructor: builds a sparse per-area voxel collection from
+    /// four parallel vectors. A `(1, 1, 1)` placeholder dimension is used
+    /// (see rationale on `LegacyCorticalMappedXyzpApi::ensure_clear_and_borrow_mut`).
+    fn new_from_vectors(
+        x: Vec<u32>,
+        y: Vec<u32>,
+        z: Vec<u32>,
+        p: Vec<f32>,
+    ) -> NeuronVoxelXYZPSparseVectors;
+}
+
+/// Legacy 0-arg constructor replacement for `NeuronVoxelXYZPSparseVectors::new()`
+/// from the pre-refactor API. The new type's inherent `new(dims, count)`
+/// takes mandatory parameters, so call sites that relied on the empty
+/// constructor (`vec![...; N]`, placeholder scratch buffers, etc.) use this
+/// shim instead. Produces an empty collection with a `(1, 1, 1)` placeholder
+/// dimension and zero pre-allocation.
+#[inline]
+pub fn empty_sparse_vectors() -> NeuronVoxelXYZPSparseVectors {
+    let dims = NeuronVoxelDimensions::<u32>::new(1, 1, 1)
+        .expect("(1,1,1) is a valid non-zero dimension");
+    NeuronVoxelCoordVector::<f32, u32, u32>::new(dims, 0u32)
+}
+
+impl LegacyNeuronVoxelXyzpApi for NeuronVoxelXYZPSparseVectors {
+    #[inline]
+    fn borrow_xyzp_vectors(&self) -> (&[u32], &[u32], &[u32], &[f32]) {
+        let potentials_slice = self.potentials_slice();
+        // NeuronVoxelPotential<f32> is #[repr(transparent)] over f32 (see
+        // feagi-structures::neuron_voxels::descriptors). We reinterpret the
+        // slice to hand callers the raw-potential shape they expect.
+        //
+        // SAFETY: NeuronVoxelPotential<f32> is declared with
+        // `#[repr(transparent)]` wrapping exactly one `f32` field, and the
+        // length/pointer of the resulting slice are preserved.
+        let potentials_raw: &[f32] = unsafe {
+            core::slice::from_raw_parts(
+                potentials_slice.as_ptr() as *const f32,
+                potentials_slice.len(),
+            )
+        };
+        (
+            self.coord_x_slice(),
+            self.coord_y_slice(),
+            self.coord_z_slice(),
+            potentials_raw,
+        )
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.get_number_neuron_voxel_contained_count() as usize
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    fn iter(
+        &self,
+    ) -> Box<
+        dyn Iterator<
+                Item = feagi_structures::neuron_voxels::coord_potential::NeuronVoxelXYZP<f32, u32>,
+            > + '_,
+    > {
+        Box::new(self.iter_coordinate().map(|(coord, potential)| {
+            feagi_structures::neuron_voxels::coord_potential::NeuronVoxelXYZP {
+                coordinate: coord,
+                potential,
+            }
+        }))
+    }
+
+    #[inline]
+    fn push_raw(&mut self, x: u32, y: u32, z: u32, potential: f32) {
+        // The coordinate is not validated against the (possibly-placeholder)
+        // per-area dimensions — this mirrors the pre-refactor contract.
+        self.push_neuron_voxel_unchecked(
+            feagi_structures::neuron_voxels::descriptors::NeuronVoxelCoordinate::new(x, y, z),
+            feagi_structures::neuron_voxels::descriptors::NeuronVoxelPotential::from(potential),
+        );
+    }
+
+    #[inline]
+    fn clear(&mut self) {
+        self.clear_all_neurons();
+    }
+
+    #[inline]
+    fn ensure_capacity(&mut self, n: usize) {
+        self.reserve(n as u32);
+    }
+
+    fn update_vectors_from_external<F>(&mut self, f: F) -> Result<(), FeagiDataError>
+    where
+        F: FnOnce(
+            &mut Vec<u32>,
+            &mut Vec<u32>,
+            &mut Vec<u32>,
+            &mut Vec<f32>,
+        ) -> Result<(), FeagiDataError>,
+    {
+        let mut outcome: Result<(), FeagiDataError> = Ok(());
+        self.with_parts_mut(|x, y, z, p| {
+            // Reinterpret Vec<NeuronVoxelPotential<f32>> as Vec<f32> for the
+            // duration of the closure. NeuronVoxelPotential<f32> is
+            // #[repr(transparent)] over f32, so the layout is identical.
+            //
+            // SAFETY: transparent wrapper over f32; we restore the Vec into
+            // its original shape before returning by forgetting the
+            // reinterpreted vector and re-materialising the original from
+            // the same (ptr, len, cap) triple.
+            let cap = p.capacity();
+            let len = p.len();
+            let ptr = p.as_mut_ptr() as *mut f32;
+            // Pull the original vector out so the reinterpreted Vec<f32>
+            // is the sole owner for the duration of the closure.
+            let original = core::mem::replace(p, Vec::new());
+            core::mem::forget(original);
+            let mut raw_p: Vec<f32> = unsafe { Vec::from_raw_parts(ptr, len, cap) };
+            outcome = f(x, y, z, &mut raw_p);
+            // Recover the typed vector from the (possibly-reallocated)
+            // raw vector.
+            let new_len = raw_p.len();
+            let new_cap = raw_p.capacity();
+            let new_ptr = raw_p.as_mut_ptr() as *mut NeuronVoxelPotential<f32>;
+            core::mem::forget(raw_p);
+            let restored: Vec<NeuronVoxelPotential<f32>> =
+                unsafe { Vec::from_raw_parts(new_ptr, new_len, new_cap) };
+            *p = restored;
+        });
+        outcome
+    }
+
+    fn new_from_vectors(
+        x: Vec<u32>,
+        y: Vec<u32>,
+        z: Vec<u32>,
+        p: Vec<f32>,
+    ) -> NeuronVoxelXYZPSparseVectors {
+        let placeholder_dims = NeuronVoxelDimensions::<u32>::new(1, 1, 1)
+            .expect("(1,1,1) is a valid non-zero dimension");
+        // Reinterpret Vec<f32> as Vec<NeuronVoxelPotential<f32>> via
+        // the transparent-wrapper pun.
+        //
+        // SAFETY: NeuronVoxelPotential<f32> is #[repr(transparent)] over f32.
+        let mut p_vec = p;
+        let len = p_vec.len();
+        let cap = p_vec.capacity();
+        let ptr = p_vec.as_mut_ptr() as *mut NeuronVoxelPotential<f32>;
+        core::mem::forget(p_vec);
+        let p_typed: Vec<NeuronVoxelPotential<f32>> =
+            unsafe { Vec::from_raw_parts(ptr, len, cap) };
+        NeuronVoxelCoordVector::<f32, u32, u32>::from_parts(placeholder_dims, x, y, z, p_typed)
+            .expect("SoA vector lengths must match")
+    }
+}
+
+// ---- CorticalChannelDimensionsType width/height/depth shim ------------------
+//
+// Pre-refactor call sites read `.width` / `.height` / `.depth` as `u32`.
+// The new type uses `.x` / `.y` / `.z` each wrapped in `NonzeroCount<u32>`.
+// Expose a thin extension trait with the old field-like getters.
+
+// The generic `CorticalChannel*Type<T>` aliases are defined inside a private
+// `mod generated { ... }` block of `feagi_structures`; only the `u32`
+// instantiations are re-exported. That's fine — every sensorimotor call site
+// uses the `u32` alias, so we implement the compat traits against those
+// aliases directly.
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex,
+};
+
+pub trait LegacyChannelDimensions {
+    fn width(&self) -> u32;
+    fn height(&self) -> u32;
+    fn depth(&self) -> u32;
+}
+
+impl LegacyChannelDimensions for CorticalChannelDimensions {
+    #[inline]
+    fn width(&self) -> u32 {
+        self.x.get()
+    }
+    #[inline]
+    fn height(&self) -> u32 {
+        self.y.get()
+    }
+    #[inline]
+    fn depth(&self) -> u32 {
+        self.z.get()
+    }
+}
+
+// ---- CorticalChannelIndex / CorticalChannelCount value accessors ------------
+//
+// Pre-refactor these were thin `u32` wrappers implementing `Deref<Target=u32>`.
+// The new versions wrap `T` (or `NonzeroCount<T>`) and require an explicit
+// accessor. Provide a `.value() -> u32` method to match old usage patterns
+// concisely without trying to re-implement `Deref`.
+
+pub trait LegacyChannelIndexValue {
+    fn value(&self) -> u32;
+    /// Legacy alias for [`Self::value`]; pre-refactor code accessed the
+    /// inner payload via `.get()` on both `CorticalChannelIndex` and
+    /// `CorticalChannelCount`.
+    #[inline]
+    fn get(&self) -> u32 {
+        self.value()
+    }
+}
+
+impl LegacyChannelIndexValue for CorticalChannelIndex {
+    #[inline]
+    fn value(&self) -> u32 {
+        self.0
+    }
+}
+
+impl LegacyChannelIndexValue for CorticalChannelCount {
+    #[inline]
+    fn value(&self) -> u32 {
+        (*self).get()
+    }
+}
 
 // ---- FeagiSignal / FeagiSignalIndex (event bus) -----------------------------
 
@@ -304,6 +701,13 @@ macro_rules! define_xy_dimensions {
                 }
                 Ok(Self { width: x, height: y })
             }
+
+            // Method forms, provided alongside the pub fields so uniform
+            // `.width()` / `.height()` syntax works on every *Dimensions
+            // type inside feagi-sensorimotor (the legacy macro-generated
+            // structs and `CorticalChannelDimensionsType<u32>` shim both).
+            #[inline] pub fn width(&self) -> $var_type { self.width }
+            #[inline] pub fn height(&self) -> $var_type { self.height }
         }
 
         impl std::fmt::Display for $name {
@@ -398,6 +802,11 @@ macro_rules! define_xyz_dimensions {
             pub fn contains(&self, pos: ($var_type, $var_type, $var_type)) -> bool {
                 pos.0 < self.width && pos.1 < self.height && pos.2 < self.depth
             }
+
+            // Method-form accessors (see rationale on the xy macro above).
+            #[inline] pub fn width(&self) -> $var_type { self.width }
+            #[inline] pub fn height(&self) -> $var_type { self.height }
+            #[inline] pub fn depth(&self) -> $var_type { self.depth }
         }
 
         impl std::fmt::Display for $name {
@@ -437,10 +846,22 @@ macro_rules! define_xyz_dimensions {
 macro_rules! define_xyz_mapping {
     ($XYZ_a:ident, $XYZ_b:ident) => {
         impl From<$XYZ_a> for $XYZ_b {
-            fn from(a: $XYZ_a) -> Self { $XYZ_b::new(a.width, a.height, a.depth).unwrap() }
+            fn from(a: $XYZ_a) -> Self {
+                // Method-form accessors so the mapping works uniformly for
+                // both the legacy macro-generated dimension types (which
+                // expose both fields AND methods) and
+                // `feagi_structures::CorticalChannelDimensions` (which
+                // gains width/height/depth via the `LegacyChannelDimensions`
+                // extension trait in this module).
+                use $crate::_compat::LegacyChannelDimensions as _;
+                $XYZ_b::new(a.width(), a.height(), a.depth()).unwrap()
+            }
         }
         impl From<$XYZ_b> for $XYZ_a {
-            fn from(b: $XYZ_b) -> Self { $XYZ_a::new(b.width, b.height, b.depth).unwrap() }
+            fn from(b: $XYZ_b) -> Self {
+                use $crate::_compat::LegacyChannelDimensions as _;
+                $XYZ_a::new(b.width(), b.height(), b.depth()).unwrap()
+            }
         }
     };
 }

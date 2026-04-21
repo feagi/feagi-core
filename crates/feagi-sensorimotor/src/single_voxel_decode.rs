@@ -3,6 +3,9 @@
 //! Uses the same decoding logic as feagi-sensorimotor's batch decoders so that
 //! what Brain Visualizer displays matches what a robot/controller would process.
 
+
+use crate::_compat::prelude::*;
+
 use crate::data_types::{Percentage, SignedPercentage};
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
     decode_signed_percentage_from_fractional_exponential_neurons,

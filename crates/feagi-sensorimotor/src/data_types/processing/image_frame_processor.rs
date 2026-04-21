@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::data_types::descriptors::{
     ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution,
 };
@@ -314,7 +316,7 @@ impl ImageFrameProcessor {
                     None => {
                         // Do Nothing
                     }
-                    Some(_color_space) => return Err(FeagiDataError::NotImplemented),
+                    Some(_color_space) => return Err(FeagiDataError::NotImplemented(String::new())),
                 }
 
                 match self.offset_brightness_by {
@@ -336,7 +338,7 @@ impl ImageFrameProcessor {
                 }
 
                 if self.convert_to_grayscale {
-                    return Err(FeagiDataError::NotImplemented);
+                    return Err(FeagiDataError::NotImplemented(String::new()));
                 }
 
                 // Copy ONLY pixel data into the pre-allocated destination buffer.
@@ -354,6 +356,7 @@ impl ImageFrameProcessor {
 
     //region set settings
     // TODO safety bound checks!
+
 
     pub fn set_cropping_from(
         &mut self,
@@ -414,7 +417,7 @@ impl ImageFrameProcessor {
         convert_to_grayscale: bool,
     ) -> Result<&mut Self, FeagiDataError> {
         if self.input_image_properties.get_color_channel_layout() == ColorChannelLayout::RG {
-            return Err(FeagiDataError::NotImplemented);
+            return Err(FeagiDataError::NotImplemented(String::new()));
         }
         self.convert_to_grayscale = convert_to_grayscale;
         Ok(self)

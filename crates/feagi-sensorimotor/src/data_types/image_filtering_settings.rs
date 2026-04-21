@@ -1,3 +1,6 @@
+
+use crate::_compat::prelude::*;
+
 use crate::data_types::{Percentage, Percentage2D};
 use std::fmt::Display;
 

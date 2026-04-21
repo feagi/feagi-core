@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONEncoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
@@ -58,7 +60,7 @@ impl NeuronVoxelXYZPEncoder for CartesianPlaneNeuronVoxelXYZPEncoder {
                         }); // Get override if available
                     let updated_data = pipeline.get_postprocessed_sensor_value();
                     let updated_image: &ImageFrame = updated_data.try_into()?;
-                    updated_image.overwrite_neuron_data(scratch, (*channel_write_target).into())?;
+                    updated_image.overwrite_neuron_data(scratch, (channel_write_target.value()).into())?;
                     Ok(())
                 },
             )?;
@@ -95,7 +97,7 @@ impl CartesianPlaneNeuronVoxelXYZPEncoder {
         let encoder = CartesianPlaneNeuronVoxelXYZPEncoder {
             image_properties: *image_properties,
             cortical_write_target,
-            scratch_space: vec![NeuronVoxelXYZPSparseVectors::new(); *number_channels as usize],
+            scratch_space: vec![crate::_compat::empty_sparse_vectors(); number_channels.get() as usize],
         };
         Ok(Box::new(encoder))
     }

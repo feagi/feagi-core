@@ -1,5 +1,7 @@
 //! Unified decoder for ImageFilteringSettings (brightness, contrast, diff threshold).
 
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::ImageFilteringSettings;
@@ -71,22 +73,22 @@ impl ImageFilteringSettingsNeuronVoxelXYZPDecoder {
             channel_brightness_dimensions: CorticalChannelDimensions::new(
                 BRIGHTNESS_CHANNEL_WIDTH,
                 CHANNEL_Y_HEIGHT,
-                *brightness_z_depth,
+                brightness_z_depth.get(),
             )?,
             channel_contrast_dimensions: CorticalChannelDimensions::new(
                 CONTRAST_CHANNEL_WIDTH,
                 CHANNEL_Y_HEIGHT,
-                *contrast_z_depth,
+                contrast_z_depth.get(),
             )?,
             channel_diff_dimensions: CorticalChannelDimensions::new(
                 DIFF_CHANNEL_WIDTH,
                 CHANNEL_Y_HEIGHT,
-                *diff_z_depth,
+                diff_z_depth.get(),
             )?,
             channel_diff_image_dimensions: CorticalChannelDimensions::new(
                 DIFF_CHANNEL_WIDTH,
                 CHANNEL_Y_HEIGHT,
-                *diff_z_depth,
+                diff_z_depth.get(),
             )?,
             brightness_cortical_id,
             contrast_cortical_id,
@@ -94,21 +96,21 @@ impl ImageFilteringSettingsNeuronVoxelXYZPDecoder {
             interpolation,
             z_depth_brightness_scratch_space: vec![
                 Vec::new();
-                *number_channels as usize
+                number_channels.get() as usize
                     * BRIGHTNESS_CHANNEL_WIDTH as usize
             ],
             z_depth_contrast_scratch_space: vec![
                 Vec::new();
-                *number_channels as usize
+                number_channels.get() as usize
                     * CONTRAST_CHANNEL_WIDTH as usize
             ],
             z_depth_diff_scratch_space: vec![
                 Vec::new();
-                *number_channels as usize * DIFF_CHANNEL_WIDTH as usize
+                number_channels.get() as usize * DIFF_CHANNEL_WIDTH as usize
             ],
             z_depth_image_diff_scratch_space: vec![
                 Vec::new();
-                *number_channels as usize
+                number_channels.get() as usize
                     * DIFF_CHANNEL_WIDTH as usize
             ],
         };
@@ -123,9 +125,9 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
 
     fn get_as_properties(&self) -> JSONDecoderProperties {
         JSONDecoderProperties::ImageFilteringSettings(
-            NeuronDepth::new(self.channel_brightness_dimensions.depth).unwrap(),
-            NeuronDepth::new(self.channel_contrast_dimensions.depth).unwrap(),
-            NeuronDepth::new(self.channel_diff_dimensions.depth).unwrap(),
+            NeuronDepth::new(self.channel_brightness_dimensions.depth()).unwrap(),
+            NeuronDepth::new(self.channel_contrast_dimensions.depth()).unwrap(),
+            NeuronDepth::new(self.channel_diff_dimensions.depth()).unwrap(),
             self.interpolation,
         )
     }
@@ -168,14 +170,14 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
         }
 
         let number_of_channels = pipelines_with_data_to_update.len() as u32;
-        let brightness_z_depth: u32 = self.channel_brightness_dimensions.depth;
-        let contrast_z_depth: u32 = self.channel_contrast_dimensions.depth;
-        let diff_z_depth: u32 = self.channel_diff_dimensions.depth;
+        let brightness_z_depth: u32 = self.channel_brightness_dimensions.depth();
+        let contrast_z_depth: u32 = self.channel_contrast_dimensions.depth();
+        let diff_z_depth: u32 = self.channel_diff_dimensions.depth();
 
         // Collect brightness neuron data
         if let Some(brightness_neurons) = brightness_neuron_array {
             for neuron in brightness_neurons.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == NeuronVoxelPotential::from(0.0f32) {
                     continue;
                 }
 
@@ -197,7 +199,7 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
         // Collect contrast neuron data
         if let Some(contrast_neurons) = contrast_neuron_array {
             for neuron in contrast_neurons.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == NeuronVoxelPotential::from(0.0f32) {
                     continue;
                 }
 
@@ -218,7 +220,7 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
         // Collect diff threshold neuron data
         if let Some(diff_neurons) = diff_neuron_array {
             for neuron in diff_neurons.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == NeuronVoxelPotential::from(0.0f32) {
                     continue;
                 }
 
@@ -239,7 +241,7 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
         // Collect image diff threshold neuron data
         if let Some(diff_neurons) = diff_image_neuron_array {
             for neuron in diff_neurons.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == NeuronVoxelPotential::from(0.0f32) {
                     continue;
                 }
 
@@ -315,42 +317,42 @@ impl NeuronVoxelXYZPDecoder for ImageFilteringSettingsNeuronVoxelXYZPDecoder {
                     if !brightness_z_vector.is_empty() {
                         decode_unsigned_percentage_from_linear_neurons(
                             brightness_z_vector,
-                            self.channel_brightness_dimensions.depth,
+                            self.channel_brightness_dimensions.depth(),
                             prev_settings.brightness_mut(),
                         );
                     }
                     if !contrast_z_vector.is_empty() {
                         decode_unsigned_percentage_from_linear_neurons(
                             contrast_z_vector,
-                            self.channel_contrast_dimensions.depth,
+                            self.channel_contrast_dimensions.depth(),
                             prev_settings.contrast_mut(),
                         );
                     }
                     if !diff_lower_z_vector.is_empty() {
                         decode_unsigned_percentage_from_linear_neurons(
                             diff_lower_z_vector,
-                            self.channel_diff_dimensions.depth,
+                            self.channel_diff_dimensions.depth(),
                             prev_settings.per_pixel_diff_threshold_mut().a_mut(),
                         );
                     }
                     if !diff_upper_z_vector.is_empty() {
                         decode_unsigned_percentage_from_linear_neurons(
                             diff_upper_z_vector,
-                            self.channel_diff_dimensions.depth,
+                            self.channel_diff_dimensions.depth(),
                             prev_settings.per_pixel_diff_threshold_mut().b_mut(),
                         );
                     }
                     if !diff_image_lower_z_vector.is_empty() {
                         decode_unsigned_percentage_from_linear_neurons(
                             diff_image_lower_z_vector,
-                            self.channel_diff_image_dimensions.depth,
+                            self.channel_diff_image_dimensions.depth(),
                             prev_settings.image_diff_threshold_mut().a_mut(),
                         );
                     }
                     if !diff_image_upper_z_vector.is_empty() {
                         decode_unsigned_percentage_from_linear_neurons(
                             diff_image_upper_z_vector,
-                            self.channel_diff_image_dimensions.depth,
+                            self.channel_diff_image_dimensions.depth(),
                             prev_settings.image_diff_threshold_mut().b_mut(),
                         );
                     }

@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::ImageFrameProperties;
@@ -93,6 +95,7 @@ impl PipelineStage for ImagePixelValueCountThresholdStage {
                 }
 
                 // no point running checks here for change
+
 
                 self.inclusive_pixel_range = inclusive_pixel_range;
                 self.acceptable_amount_of_activity_in_image = acceptable_amount_of_activity_in_image;

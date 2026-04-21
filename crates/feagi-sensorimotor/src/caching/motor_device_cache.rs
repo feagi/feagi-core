@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONInputOutputDefinition;
 use crate::data_pipeline::per_channel_stream_caches::MotorCorticalUnitCache;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
@@ -183,6 +185,7 @@ macro_rules! motor_unit_functions {
         }
     };
     //endregion
+
 
     // Arm for WrappedIOType::GazeProperties
     (@generate_functions

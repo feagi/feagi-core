@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::{JSONDeviceGrouping, JSONDeviceProperties};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::{
@@ -85,7 +87,7 @@ pub(crate) trait PipelineStageRunner {
         stage_index: PipelineStagePropertyIndex,
     ) -> Result<PipelineStageProperties, FeagiDataError> {
         self.verify_pipeline_stage_index_in_range(stage_index)?;
-        Ok(self.get_stages()[*stage_index as usize].create_properties())
+        Ok(self.get_stages()[stage_index.get() as usize].create_properties())
     }
 
     /// Retrieves the properties of all stages in the pipeline.
@@ -114,7 +116,7 @@ pub(crate) trait PipelineStageRunner {
         updated_properties: PipelineStageProperties,
     ) -> Result<(), FeagiDataError> {
         self.verify_pipeline_stage_index_in_range(updating_stage_index)?;
-        self.get_stages_mut_internal()[*updating_stage_index as usize]
+        self.get_stages_mut_internal()[updating_stage_index.get() as usize]
             .load_properties(updated_properties)?;
         Ok(())
     }
@@ -193,7 +195,7 @@ pub(crate) trait PipelineStageRunner {
             replacing_at_index,
             self.get_direction(),
         )?;
-        self.get_stages_mut_internal()[*replacing_at_index as usize] =
+        self.get_stages_mut_internal()[replacing_at_index.get() as usize] =
             new_pipeline_stage_properties.create_stage();
         Ok(())
     }
@@ -368,7 +370,7 @@ pub(crate) fn verify_replacing_stage_properties(
             if is_first {
                 Some(*fixed_type)
             } else {
-                Some(current_stages[*new_stage_index as usize - 1].get_output_data_type())
+                Some(current_stages[new_stage_index.get() as usize - 1].get_output_data_type())
             }
         }
         PipelineDirection::Sensory => {
@@ -376,7 +378,7 @@ pub(crate) fn verify_replacing_stage_properties(
             if is_first {
                 None
             } else {
-                Some(current_stages[*new_stage_index as usize - 1].get_output_data_type())
+                Some(current_stages[new_stage_index.get() as usize - 1].get_output_data_type())
             }
         }
     };
@@ -388,7 +390,7 @@ pub(crate) fn verify_replacing_stage_properties(
             if is_last {
                 None
             } else {
-                Some(current_stages[*new_stage_index as usize + 1].get_input_data_type())
+                Some(current_stages[new_stage_index.get() as usize + 1].get_input_data_type())
             }
         }
         PipelineDirection::Sensory => {
@@ -396,7 +398,7 @@ pub(crate) fn verify_replacing_stage_properties(
             if is_last {
                 Some(*fixed_type)
             } else {
-                Some(current_stages[*new_stage_index as usize + 1].get_input_data_type())
+                Some(current_stages[new_stage_index.get() as usize + 1].get_input_data_type())
             }
         }
     };

@@ -1,3 +1,6 @@
+
+use crate::_compat::prelude::*;
+
 use crate::caching::{MotorDeviceCache, SensorDeviceCache};
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::data_types::descriptors::{

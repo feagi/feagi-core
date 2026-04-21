@@ -71,4 +71,28 @@ impl core::fmt::Display for FeagiStructuresError {
 #[cfg(feature = "std")]
 impl std::error::Error for FeagiStructuresError {}
 
-// TODO automatic From<> impls from sub-errors
+// ---- Sub-error conversions --------------------------------------------------
+//
+// These `From` impls let callers use `?` directly on sub-error results without
+// boilerplate. The wrapping variants preserve the original enum verbatim.
+
+impl From<FeagiStructuresGenomicError> for FeagiStructuresError {
+    #[inline]
+    fn from(value: FeagiStructuresGenomicError) -> Self {
+        FeagiStructuresError::GenomicError { genomic_error: value }
+    }
+}
+
+impl From<FeagiStructuresNeuronVoxelError> for FeagiStructuresError {
+    #[inline]
+    fn from(value: FeagiStructuresNeuronVoxelError) -> Self {
+        FeagiStructuresError::NeuronVoxelError { neuron_voxel_error: value }
+    }
+}
+
+impl From<FeagiStructuresNeuronError> for FeagiStructuresError {
+    #[inline]
+    fn from(value: FeagiStructuresNeuronError) -> Self {
+        FeagiStructuresError::NeuronError { neuron_error: value }
+    }
+}

@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONInputOutputDefinition;
 use crate::data_pipeline::per_channel_stream_caches::SensoryCorticalUnitCache;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
@@ -31,6 +33,7 @@ use std::time::Instant;
 // InputOutputDefinition is used in commented-out code (lines 622, 645)
 // Uncomment when implementing set_from_input_definition and export_to_input_definition
 // use crate::configuration::jsonable::InputOutputDefinition;
+
 
 #[allow(unused_macros)] // Macro may be used in future
 macro_rules! sensor_unit_functions {
@@ -359,7 +362,7 @@ macro_rules! sensor_unit_functions {
 
                 let stage_properties = PipelineStageProperties::new_image_frame_segmentator(input_image_properties.clone(), segmented_image_properties.clone(), initial_gaze.clone());
 
-                for channel_index in 0..*number_channels {
+                for channel_index in 0..number_channels.value() {
                     let segmentator_pipeline = vec![stage_properties.clone()];
                     self.[<$sensory_unit:snake _replace_all_stages>](unit, channel_index.into(), segmentator_pipeline);
                 }

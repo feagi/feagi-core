@@ -1,7 +1,7 @@
 //! Unified error types for the FEAGI agent (client and server).
 
 use feagi_io::FeagiNetworkError;
-use feagi_structures::FeagiDataError;
+use feagi_structures::FeagiStructuresError;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
@@ -62,29 +62,39 @@ impl Error for FeagiAgentError {
     }
 }
 
-impl From<FeagiDataError> for FeagiAgentError {
-    fn from(err: FeagiDataError) -> Self {
+impl From<FeagiStructuresError> for FeagiAgentError {
+    fn from(err: FeagiStructuresError) -> Self {
         match err {
-            FeagiDataError::DeserializationError(msg) => {
+            FeagiStructuresError::DeserializationError(msg) => {
                 FeagiAgentError::UnableToDecodeReceivedData(msg)
             }
-            FeagiDataError::SerializationError(msg) => FeagiAgentError::UnableToSendData(msg),
-            FeagiDataError::BadParameters(msg) => {
+            FeagiStructuresError::SerializationError(msg) => {
+                FeagiAgentError::UnableToSendData(msg)
+            }
+            FeagiStructuresError::BadParameters(msg) => {
                 FeagiAgentError::Other(format!("Bad parameters: {}", msg))
             }
-            FeagiDataError::NeuronError(msg) => {
-                FeagiAgentError::Other(format!("Neuron error: {}", msg))
-            }
-            FeagiDataError::InternalError(msg) => {
+            FeagiStructuresError::InternalError(msg) => {
                 FeagiAgentError::Other(format!("Internal error: {}", msg))
             }
-            FeagiDataError::ResourceLockedWhileRunning(msg) => {
-                FeagiAgentError::Other(format!("Resource locked: {}", msg))
+            FeagiStructuresError::NotImplemented(msg) => {
+                FeagiAgentError::Other(format!("Not implemented: {}", msg))
             }
-            FeagiDataError::ConstError(msg) => {
-                FeagiAgentError::Other(format!("Const error: {}", msg))
+            FeagiStructuresError::NeuronVoxelError { neuron_voxel_error } => {
+                FeagiAgentError::Other(format!("Neuron voxel error: {:?}", neuron_voxel_error))
             }
-            FeagiDataError::NotImplemented => FeagiAgentError::Other("Not implemented".to_string()),
+            FeagiStructuresError::NeuronError { neuron_error } => {
+                FeagiAgentError::Other(format!("Neuron error: {:?}", neuron_error))
+            }
+            FeagiStructuresError::GenomicError { genomic_error } => {
+                FeagiAgentError::Other(format!("Genomic error: {:?}", genomic_error))
+            }
+            FeagiStructuresError::JSONError { context } => {
+                FeagiAgentError::UnableToDecodeReceivedData(format!("JSON error: {}", context))
+            }
+            FeagiStructuresError::InvalidValue { context } => {
+                FeagiAgentError::Other(format!("Invalid value: {}", context))
+            }
         }
     }
 }

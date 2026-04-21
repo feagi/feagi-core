@@ -1,3 +1,6 @@
+
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::descriptors::ImageFrameProperties;
@@ -84,7 +87,7 @@ impl NeuronVoxelXYZPDecoder for CartesianPlaneNeuronVoxelXYZPDecoder {
             // Canonical image decoding (absolute intensity):
             // - Neuron potential (p) carries raw pixel intensity in 0..255.
             // - Clamp defensively to the representable u8 range.
-            let color_val = neuron.potential.clamp(0.0, 255.0).round() as u8;
+            let color_val = neuron.potential.0.clamp(0.0, 255.0).round() as u8;
 
             pixels[[row, col, color_channel]] = color_val;
         }

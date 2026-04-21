@@ -1,4 +1,7 @@
+
 // TODO there is a bug on all encoders in that they will send all channel data even if not updated since scratch is cleared only if channel is active!
+use crate::_compat::prelude::*;
+
 mod boolean;
 mod cartesian_plane;
 mod misc_data;

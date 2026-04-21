@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONEncoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::{
     PipelineStageRunner, SensoryPipelineStageRunner,
@@ -87,10 +89,10 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
                         ));
                     }
                     BoolState::True => {
-                        neuron_array_target.push_raw(*channel_to_write, Y, Z, NEURON_TRUE_VAL)
+                        neuron_array_target.push_raw(channel_to_write.value(), Y, Z, NEURON_TRUE_VAL)
                     }
                     BoolState::False => {
-                        neuron_array_target.push_raw(*channel_to_write, Y, Z, NEURON_FALSE_VAL)
+                        neuron_array_target.push_raw(channel_to_write.value(), Y, Z, NEURON_FALSE_VAL)
                     }
                 }
             }
@@ -108,7 +110,7 @@ impl BooleanNeuronVoxelXYZPEncoder {
     ) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
         let encoder = BooleanNeuronVoxelXYZPEncoder {
             cortical_write_target,
-            scratch_space: vec![BoolState::Unchanged; *number_channels as usize],
+            scratch_space: vec![BoolState::Unchanged; number_channels.get() as usize],
         };
         Ok(Box::new(encoder))
     }

@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::descriptors::MiscDataDimensions;
@@ -45,9 +47,9 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
         }
 
         let number_of_channels = pipelines_with_data_to_update.len() as u32;
-        let max_possible_x_index = self.misc_dimensions.width * number_of_channels; // Something is wrong if we reach here
-        let max_possible_y_index = self.misc_dimensions.height;
-        let max_possible_z_index = self.misc_dimensions.depth;
+        let max_possible_x_index = self.misc_dimensions.width() * number_of_channels; // Something is wrong if we reach here
+        let max_possible_y_index = self.misc_dimensions.height();
+        let max_possible_z_index = self.misc_dimensions.depth();
 
         for neuron in neuron_array.iter() {
             if neuron.coordinate.x >= max_possible_x_index
@@ -57,9 +59,9 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
                 continue;
             }
 
-            let channel_index: u32 = neuron.coordinate.x / self.misc_dimensions.width;
+            let channel_index: u32 = neuron.coordinate.x / self.misc_dimensions.width();
             let in_channel_x_index: u32 =
-                neuron.coordinate.x % self.misc_dimensions.width;
+                neuron.coordinate.x % self.misc_dimensions.width();
             let misc_data: &mut MiscData = pipelines_with_data_to_update
                 .get_mut(channel_index as usize)
                 .unwrap()
@@ -74,7 +76,7 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
                 in_channel_x_index as usize,
                 neuron.coordinate.y as usize,
                 neuron.coordinate.z as usize,
-            )] = neuron.potential.clamp(-1.0, 1.0);
+            )] = neuron.potential.0.clamp(-1.0, 1.0);
         }
 
         Ok(())

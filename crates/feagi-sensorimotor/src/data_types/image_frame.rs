@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use super::descriptors::{
     ColorChannelLayout, ColorSpace, ImageFrameProperties, ImageXYResolution, ImageXYZDimensions,
     MemoryOrderLayout,
@@ -566,7 +568,7 @@ impl ImageFrame {
     ) -> Result<(), FeagiDataError> {
         const EPSILON: u8 = 1; // avoid writing near zero vals
 
-        let x_offset: u32 = *channel_index * self.get_xy_resolution().width;
+        let x_offset: u32 = channel_index.value() * self.get_xy_resolution().width;
         let resolution = self.get_xy_resolution();
         let total_pixels = self.get_number_elements();
         write_target.clear();

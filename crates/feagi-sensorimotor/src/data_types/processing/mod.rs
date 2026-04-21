@@ -3,6 +3,9 @@
 //! Provides helper functions and processors for manipulating image frames
 //! and other data types. Not part of the public API.
 
+
+use crate::_compat::prelude::*;
+
 mod image_frame_processor;
 mod image_frame_segmentator;
 

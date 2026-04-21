@@ -4,4 +4,7 @@
 //! (percentages, images, etc.) and FEAGI's neuron voxel representations (XYZP format).
 //! Supports linear and exponential encoding strategies for various dimensionalities.
 
+
+use crate::_compat::prelude::*;
+
 pub(crate) mod xyzp;

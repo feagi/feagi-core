@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_types::descriptors::ImageFrameProperties;
@@ -99,6 +101,7 @@ impl PipelineStage for ImageFrameQuickDiffStage {
                 }
 
                 // no point running checks here for change
+
 
                 // Update the threshold and activity range
                 self.inclusive_pixel_range = per_pixel_allowed_range;

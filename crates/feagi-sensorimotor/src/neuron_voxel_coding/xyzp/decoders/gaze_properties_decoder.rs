@@ -1,5 +1,7 @@
 //! Unified decoder for GazeProperties (linear or exponential).
 
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::GazeProperties;
@@ -48,24 +50,24 @@ impl GazePropertiesNeuronVoxelXYZPDecoder {
             channel_eccentricity_dimensions: CorticalChannelDimensions::new(
                 ECCENTRICITY_CHANNEL_WIDTH,
                 CHANNEL_Y_HEIGHT,
-                *eccentricity_z_depth,
+                eccentricity_z_depth.get(),
             )?,
             channel_modularity_dimensions: CorticalChannelDimensions::new(
                 MODULARITY_CHANNEL_WIDTH,
                 CHANNEL_Y_HEIGHT,
-                *modularity_z_depth,
+                modularity_z_depth.get(),
             )?,
             cortical_eccentricity_read_target: eccentricity_cortical_id,
             cortical_modularity_read_target: modularity_cortical_id,
             interpolation,
             z_depth_eccentricity_scratch_space: vec![
                 Vec::new();
-                *number_channels as usize
+                number_channels.get() as usize
                     * ECCENTRICITY_CHANNEL_WIDTH as usize
             ],
             z_depth_modularity_scratch_space: vec![
                 Vec::new();
-                *number_channels as usize
+                number_channels.get() as usize
                     * MODULARITY_CHANNEL_WIDTH as usize
             ],
         };
@@ -80,8 +82,8 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
 
     fn get_as_properties(&self) -> JSONDecoderProperties {
         JSONDecoderProperties::GazeProperties(
-            NeuronDepth::new(self.channel_eccentricity_dimensions.depth).unwrap(),
-            NeuronDepth::new(self.channel_modularity_dimensions.depth).unwrap(),
+            NeuronDepth::new(self.channel_eccentricity_dimensions.depth()).unwrap(),
+            NeuronDepth::new(self.channel_modularity_dimensions.depth()).unwrap(),
             self.interpolation,
         )
     }
@@ -123,13 +125,13 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
         }
 
         let number_of_channels = pipelines_with_data_to_update.len() as u32;
-        let eccentricity_z_depth: u32 = self.channel_eccentricity_dimensions.depth;
-        let modularity_z_depth: u32 = self.channel_modularity_dimensions.depth;
+        let eccentricity_z_depth: u32 = self.channel_eccentricity_dimensions.depth();
+        let modularity_z_depth: u32 = self.channel_modularity_dimensions.depth();
 
         // Collect eccentricity neuron data
         if let Some(eccentricity_neuron_array) = eccentricity_neuron_array {
             for neuron in eccentricity_neuron_array.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == NeuronVoxelPotential::from(0.0f32) {
                     continue;
                 }
 
@@ -155,7 +157,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
         // Collect modularity neuron data
         if let Some(modularity_neuron_array) = modularity_neuron_array {
             for neuron in modularity_neuron_array.iter() {
-                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == NeuronVoxelPotential::from(0.0f32) {
                     continue;
                 }
 
@@ -224,21 +226,21 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
                     if !eccentricity_z_a_vector.is_empty() {
                         decode_unsigned_percentage_from_linear_neurons(
                             eccentricity_z_a_vector,
-                            self.channel_eccentricity_dimensions.depth,
+                            self.channel_eccentricity_dimensions.depth(),
                             &mut prev_gaze.eccentricity_location_xy.a,
                         );
                     }
                     if !eccentricity_z_b_vector.is_empty() {
                         decode_unsigned_percentage_from_linear_neurons(
                             eccentricity_z_b_vector,
-                            self.channel_eccentricity_dimensions.depth,
+                            self.channel_eccentricity_dimensions.depth(),
                             &mut prev_gaze.eccentricity_location_xy.b,
                         );
                     }
                     if !modularity_z_vector.is_empty() {
                         decode_unsigned_percentage_from_linear_neurons(
                             modularity_z_vector,
-                            self.channel_modularity_dimensions.depth,
+                            self.channel_modularity_dimensions.depth(),
                             &mut prev_gaze.modulation_size,
                         );
                     }
@@ -300,7 +302,7 @@ use crate::_compat::NeuronVoxelXYZPSparseVectors;
 
         // Motor packet contains ONLY eccentricity array, modularity missing.
         let mut voxels = CorticalMappedXYZPNeuronVoxels::new();
-        let _ = voxels.insert(eccentricity_id, NeuronVoxelXYZPSparseVectors::new());
+        let _ = voxels.insert(eccentricity_id, crate::_compat::empty_sparse_vectors());
 
         let mut pipelines: Vec<MotorPipelineStageRunner> = Vec::new();
         let mut changed: Vec<bool> = Vec::new();

@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::data_types::{Percentage, SignedPercentage};
 
 //region Decode Percentages
@@ -69,6 +71,7 @@ pub(crate) fn decode_signed_percentage_from_fractional_exponential_neurons(
 }
 
 //endregion
+
 
 //region Encode Percentages
 #[inline]

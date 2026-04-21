@@ -6,6 +6,9 @@
 //! mimicking how human vision works with high acuity in the center and lower acuity in
 //! the periphery.
 
+
+use crate::_compat::prelude::*;
+
 use super::descriptors::{
     ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions,
 };

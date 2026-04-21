@@ -1,5 +1,8 @@
 #![allow(unused_imports)] // These are used, but by macros that some IDEs cannot see
 
+
+use crate::_compat::prelude::*;
+
 mod gaze_properties_decoder;
 mod misc_data;
 mod percentage_decoder;

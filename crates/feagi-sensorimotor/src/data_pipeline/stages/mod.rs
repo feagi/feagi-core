@@ -1,8 +1,11 @@
+
 //! Concrete pipeline stage implementations.
 //!
 //! Provides actual processing stages that transform data flowing through
 //! the FEAGI connector pipeline. Each stage has corresponding properties
 //! defined in [`crate::data_pipeline::stage_properties`].
+use crate::_compat::prelude::*;
+
 mod image_frame_processor;
 mod image_pixel_value_count_threshold;
 mod image_quick_diff;

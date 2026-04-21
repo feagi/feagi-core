@@ -6,6 +6,9 @@
 //!
 //! These types are tightly integrated with the neuron encoding/decoding system.
 
+
+use crate::_compat::prelude::*;
+
 mod wrapped_io_data_types;
 mod wrapped_io_type;
 

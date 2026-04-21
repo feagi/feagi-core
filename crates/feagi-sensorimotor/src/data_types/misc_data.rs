@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use super::descriptors::MiscDataDimensions;
 use super::ImageFrame;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
@@ -25,6 +27,7 @@ pub struct MiscData {
 
 impl MiscData {
     //region Common Constructors
+
 
     /// Creates a new MiscData container filled with zeros.
     pub fn new(resolution: &MiscDataDimensions) -> Result<MiscData, FeagiDataError> {
@@ -108,7 +111,7 @@ impl MiscData {
     ) -> Result<(), FeagiDataError> {
         const EPSILON: f32 = 0.0001; // avoid writing near zero vals
 
-        let x_offset: u32 = *x_channel_offset * self.get_dimensions().width;
+        let x_offset: u32 = x_channel_offset.value() * self.get_dimensions().width;
         write_target.clear();
         write_target.ensure_capacity(self.get_dimensions().number_elements() as usize);
 

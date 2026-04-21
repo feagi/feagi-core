@@ -1,3 +1,6 @@
+
+use crate::_compat::prelude::*;
+
 use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
 use crate::_compat::NeuronVoxelXYZPSparseVectors;
@@ -139,7 +142,7 @@ pub fn encode_token_id_to_xyzp_bitplanes(
         }
     }
 
-    NeuronVoxelXYZPSparseVectors::new_from_vectors(x_vec, y_vec, z_vec, p_vec)
+    Ok(NeuronVoxelXYZPSparseVectors::new_from_vectors(x_vec, y_vec, z_vec, p_vec))
 }
 
 /// Decode a token id from a 1x1xZ `MiscData` bitplane buffer (see [`TextToken`] contract).
@@ -229,7 +232,7 @@ mod tests {
 
     #[test]
     fn test_gap_decodes_to_none() {
-        let voxels = NeuronVoxelXYZPSparseVectors::new();
+        let voxels = crate::_compat::empty_sparse_vectors();
         let decoded = decode_token_id_from_xyzp_bitplanes(&voxels, 16).unwrap();
         assert_eq!(decoded, None);
     }

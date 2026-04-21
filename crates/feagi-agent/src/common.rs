@@ -1,4 +1,4 @@
-use feagi_structures::FeagiDataError;
+use feagi_structures::FeagiStructuresError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -152,7 +152,7 @@ impl AgentDescriptor {
         manufacturer: &str,
         agent_name: &str,
         agent_version: u32,
-    ) -> Result<Self, FeagiDataError> {
+    ) -> Result<Self, FeagiStructuresError> {
         Self::validate(manufacturer, agent_name, agent_version)?;
 
         Ok(AgentDescriptor {
@@ -209,14 +209,14 @@ impl AgentDescriptor {
 
     /*
     /// Create AgentDescriptor from base64-encoded agent_id (REST API compatibility)
-    pub fn try_from_base64(agent_id_b64: &str) -> Result<Self, FeagiDataError> {
+    pub fn try_from_base64(agent_id_b64: &str) -> Result<Self, FeagiStructuresError> {
         use base64::Engine;
         let decoded = base64::engine::general_purpose::STANDARD
             .decode(agent_id_b64)
-            .map_err(|e| FeagiDataError::DeserializationError(format!("Invalid base64: {}", e)))?;
+            .map_err(|e| FeagiStructuresError::DeserializationError(format!("Invalid base64: {}", e)))?;
 
         if decoded.len() != Self::SIZE_BYTES {
-            return Err(FeagiDataError::DeserializationError(format!(
+            return Err(FeagiStructuresError::DeserializationError(format!(
                 "Invalid agent_id length: expected {} bytes, got {}",
                 Self::SIZE_BYTES,
                 decoded.len()
@@ -261,33 +261,33 @@ impl AgentDescriptor {
         manufacturer: &str,
         agent_name: &str,
         agent_version: u32,
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), FeagiStructuresError> {
         if !manufacturer.is_ascii() {
-            return Err(FeagiDataError::BadParameters(
+            return Err(FeagiStructuresError::BadParameters(
                 "Manufacturer must contain ASCII characters only!".to_string(),
             ));
         }
         if !agent_name.is_ascii() {
-            return Err(FeagiDataError::BadParameters(
+            return Err(FeagiStructuresError::BadParameters(
                 "Agent name must contain ASCII characters only!".to_string(),
             ));
         }
         if manufacturer.len() > Self::MAX_MANUFACTURER_NAME_BYTE_COUNT {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(FeagiStructuresError::BadParameters(format!(
                 "Manufacturer is too long! Max length is {} bytes, got {}",
                 Self::MAX_MANUFACTURER_NAME_BYTE_COUNT,
                 manufacturer.len()
             )));
         }
         if agent_name.len() > Self::MAX_AGENT_NAME_BYTE_COUNT {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(FeagiStructuresError::BadParameters(format!(
                 "Agent name is too long! Max length is {} bytes, got {}",
                 Self::MAX_AGENT_NAME_BYTE_COUNT,
                 agent_name.len()
             )));
         }
         if agent_version == 0 {
-            return Err(FeagiDataError::BadParameters(
+            return Err(FeagiStructuresError::BadParameters(
                 "Agent version cannot be zero!".to_string(),
             ));
         }

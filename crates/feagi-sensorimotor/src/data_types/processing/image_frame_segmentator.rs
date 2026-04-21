@@ -1,3 +1,6 @@
+
+use crate::_compat::prelude::*;
+
 use crate::data_types::descriptors::{
     ColorChannelLayout, ImageFrameProperties, SegmentedImageFrameProperties,
 };

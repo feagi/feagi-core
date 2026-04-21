@@ -1,3 +1,5 @@
+use crate::_compat::prelude::*;
+
 use crate::configuration::jsonable::{
     JSONDecoderProperties, JSONDeviceGrouping, JSONUnitDefinition,
 };
@@ -35,13 +37,13 @@ impl MotorCorticalUnitCache {
         let pipeline_runners: Vec<MotorPipelineStageRunner> = std::iter::repeat_with(|| {
             MotorPipelineStageRunner::new(initial_cached_value.clone()).unwrap()
         })
-        .take(*number_channels as usize)
+        .take(number_channels.get() as usize)
         .collect();
 
         // One signal per channel for "data processed" callbacks.
         // IMPORTANT: this must be a fully-sized Vec, not just reserved capacity, otherwise
         // callback registration will panic on indexing.
-        let callbacks: Vec<FeagiSignal<WrappedIOData>> = (0..*number_channels as usize)
+        let callbacks: Vec<FeagiSignal<WrappedIOData>> = (0..number_channels.get() as usize)
             .map(|_| FeagiSignal::new())
             .collect();
 
@@ -49,7 +51,7 @@ impl MotorCorticalUnitCache {
             neuron_decoder,
             io_configuration_flags,
             pipeline_runners,
-            has_channel_been_updated: vec![false; *number_channels as usize],
+            has_channel_been_updated: vec![false; number_channels.get() as usize],
             value_updated_callbacks: callbacks,
             device_friendly_name: None,
         })
@@ -117,7 +119,7 @@ impl MotorCorticalUnitCache {
 
     #[allow(dead_code)]
     pub fn number_of_channels(&self) -> CorticalChannelCount {
-        (self.pipeline_runners.len() as u32).try_into().unwrap()
+        CorticalChannelCount::new(self.pipeline_runners.len() as u32).unwrap()
     }
 
     #[allow(dead_code)]
@@ -277,7 +279,7 @@ impl MotorCorticalUnitCache {
         F: Fn(&WrappedIOData) + Send + Sync + 'static,
     {
         _ = self.try_get_pipeline_runner(cortical_channel_index)?;
-        let idx = *cortical_channel_index as usize;
+        let idx = cortical_channel_index.get() as usize;
         let callbacks_len = self.value_updated_callbacks.len();
         let runners_len = self.pipeline_runners.len();
         let signal = self.value_updated_callbacks.get_mut(idx).ok_or_else(|| {
@@ -297,7 +299,7 @@ impl MotorCorticalUnitCache {
         signal_index: FeagiSignalIndex,
     ) -> Result<(), FeagiDataError> {
         _ = self.try_get_pipeline_runner(cortical_channel_index)?;
-        let idx = *cortical_channel_index as usize;
+        let idx = cortical_channel_index.get() as usize;
         let callbacks_len = self.value_updated_callbacks.len();
         let runners_len = self.pipeline_runners.len();
         let signal = self.value_updated_callbacks.get_mut(idx).ok_or_else(|| {
@@ -368,7 +370,7 @@ impl MotorCorticalUnitCache {
         self.pipeline_runners
             .par_iter_mut()
             .zip(&self.has_channel_been_updated)
-            .try_for_each(|(pipeline_runner, has_channel_been_updated)| {
+            .try_for_each(|(pipeline_runner, has_channel_been_updated)| -> Result<(), FeagiDataError> {
                 if *has_channel_been_updated {
                     _ = pipeline_runner.process_cached_decoded_motor_value(time_of_decode)?;
                     // Don't do call backs here, we want everything to be done first
@@ -385,7 +387,7 @@ impl MotorCorticalUnitCache {
         &self,
         cortical_channel_index: CorticalChannelIndex,
     ) -> Result<&MotorPipelineStageRunner, FeagiDataError> {
-        match self.pipeline_runners.get(*cortical_channel_index as usize) {
+        match self.pipeline_runners.get(cortical_channel_index.get() as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
             None => Err(FeagiDataError::BadParameters(format!(
                 "Channel Index {} is out of bounds for MotorChannelStreamCaches with {} channels!",
@@ -403,7 +405,7 @@ impl MotorCorticalUnitCache {
         let num_runners = self.pipeline_runners.len();
         match self
             .pipeline_runners
-            .get_mut(*cortical_channel_index as usize)
+            .get_mut(cortical_channel_index.get() as usize)
         {
             Some(pipeline_runner) => Ok(pipeline_runner),
             None => Err(FeagiDataError::BadParameters(format!(

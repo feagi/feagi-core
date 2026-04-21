@@ -1,3 +1,6 @@
+
+use crate::_compat::prelude::*;
+
 use crate::caching::{MotorDeviceCache, SensorDeviceCache};
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelIndex, CorticalUnitIndex};
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
