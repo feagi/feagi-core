@@ -3,11 +3,13 @@ use core::ops::Range;
 use ahash::AHashMap;
 use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::FeagiStructuresError;
+use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
+use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
 use feagi_structures::useful_structs::{IndexTracker, IndexedDataTracker, RangeUintVector};
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
-use crate::neuron::dimensional_neurons::shared_structs::{DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex, NPUDimensionalAreaType};
+use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{NPUQuantization, NPUNeuronIndex, NPUSynapseIndex, SynapseBundleIndex, SynapseCount};
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStorageTrait};
@@ -202,25 +204,18 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {
     fn add_synapses_mapping_between_cortical_areas(&mut self,
                                                    source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndex>,
-                                                   source_neuron_indexes: Range<NPUNeuronIndex<Q::NeuronIndex>>,
+                                                   source_cortical_data: &DimensionalNeuronCorticalData<Q>,
                                                    source_neuron_flags: &[NeuronFlag],
-                                                   source_cortical_dimensions: &NeuronVoxelDimensions<Q::Coord>,
-                                                   source_neuron_density: NumberNeuronsPerVoxel,
                                                    destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndex>,
-                                                   destination_neuron_indexes: Range<NPUNeuronIndex<Q::NeuronIndex>>,
+                                                   destination_cortical_data: &DimensionalNeuronCorticalData<Q>,
                                                    destination_neuron_flags: &[NeuronFlag],
-                                                   destination_cortical_dimensions: &NeuronVoxelDimensions<Q::Coord>,
-                                                   destination_neuron_density: NumberNeuronsPerVoxel,
-                                                   neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)
+                                                   neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q>)
         -> Result<SynapseBundleIndex<Q::SynapseBundleIndex>, FeagiStructuresError>{
 
 
-        let (synapse_iterator, number_synapses)
-            = neuron_mapping_executor.non_plastic_synapse_iterator(
-                source_neuron_indexes, source_neuron_flags, source_cortical_dimensions, source_neuron_density,
-                source_area_index.dimensional_type, destination_neuron_indexes, destination_neuron_flags,
-                destination_cortical_dimensions, destination_neuron_density,
-                destination_area_index.dimensional_type
+        let (synapse_iterator, number_synapses) = neuron_mapping_executor.non_plastic_synapse_iterator(
+            source_area_index.dimensional_type, source_cortical_data, source_neuron_flags,
+            destination_area_index.dimensional_type, destination_cortical_data, destination_neuron_flags
         )?;
 
         // TODO debug check length is ok
@@ -234,7 +229,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
                 let synapse_writing_region = NPUSynapseIndex::from_usize(self.synapses_data.len()) .. NPUSynapseIndex::from_usize(self.synapses_data.len() + number_synapses.to_usize());
                 let synapse_bundle_index = self.insert_valid_synapse_block_and_get_index(synapse_writing_region, source_area_index, destination_area_index);
 
-                
+
 
                 // Allocate at the end
                 self.synapses_data.reserve(number_synapses.to_usize());
@@ -284,14 +279,14 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
         -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
         self.get_synapse_data_from_source_neuron_index(&source_neuron_index)
     }
-    
+
 
     fn get_nonplastic_synapse_data_from_destination_neuron_index(&self,
                                                                  destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
         self.get_synapse_data_from_destination_neuron_index(&destination_neuron_index)
     }
-    
+
     //endregion
 
 }

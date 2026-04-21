@@ -72,6 +72,52 @@ DimensionalNeuronStaticStorageTrait<Q>
 for CoreNeuronAllocRAMStorage<Q>
 {
 
+    fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstGlobalIndex<Q::BurstIndex>], FeagiNPUNeuronError> {
+        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        let range = NPUNeuronIndex::to_usize_range(range.clone());
+        Ok(&self.neuron_global_burst_index_of_last_firing[range])
+    }
+
+    fn get_neuron_membrane_potential(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[NPUNeuronMembranePotential<Q::Value>], FeagiNPUNeuronError> {
+        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        let range = NPUNeuronIndex::to_usize_range(range.clone());
+        Ok(&self.neuron_membrane_potential[range])
+    }
+
+    fn get_fire_threshold(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[FireThreshold<Q::Value>], FeagiNPUNeuronError> {
+        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        let range = NPUNeuronIndex::to_usize_range(range.clone());
+        Ok(&self.neuron_fire_threshold[range])
+    }
+
+    fn get_leak_coefficient(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[LeakCoefficient<Q::Percentage>], FeagiNPUNeuronError> {
+        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        let range = NPUNeuronIndex::to_usize_range(range.clone());
+        Ok(&self.neuron_leak_coefficient[range])
+    }
+
+    fn get_neuron_flags(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[NeuronFlag], FeagiNPUNeuronError> {
+        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        let range = NPUNeuronIndex::to_usize_range(range.clone());
+        Ok(&self.neuron_flags[range])
+    }
+
+    fn get_refractory_countdown(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstDelta<Q::BurstDelta>], FeagiNPUNeuronError> {
+        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        let range = NPUNeuronIndex::to_usize_range(range.clone());
+        Ok(&self.neuron_refractory_countdown[range])
+    }
+
+    fn get_consecutive_fire_count(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstDelta<Q::BurstDelta>], FeagiNPUNeuronError> {
+        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        let range = NPUNeuronIndex::to_usize_range(range.clone());
+        Ok(&self.neuron_consecutive_fire_count[range])
+    }
+
+    fn get_cortical_data(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError> {
+        get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)
+    }
+
     /// Used to pass around slices easily at low cost for all cortical areas
     fn get_neuron_values_of_all_dimensional_neuron_cortical_areas_to_process(&mut self) -> DimensionalNeuronDataRefSliceAllCorticalAreas<'_, Q> {
         DimensionalNeuronDataRefSliceAllCorticalAreas {
@@ -89,8 +135,7 @@ for CoreNeuronAllocRAMStorage<Q>
     }
 
     /// Returns a struct of references to the slices of neuron data of a cortical index if it exists
-    fn get_neuron_values_of_specific_dimensional_neuron_cortical_area_to_process(&mut self, cortical_area_index: Q::CorticalIndex) -> Result<DimensionalNeuronDataRefSliceSingleCorticalArea<'_, Q>, FeagiNPUNeuronError> {
-        let cortical_area_index = CorticalAreaIndex(cortical_area_index);
+    fn get_neuron_values_of_specific_dimensional_neuron_cortical_area_to_process(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<DimensionalNeuronDataRefSliceSingleCorticalArea<'_, Q>, FeagiNPUNeuronError> {
         let cortical_data = get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?;
         let neuron_range = cortical_data.neuron_range.clone();
         let usize_range: Range<usize> = NPUNeuronIndex::<Q::NeuronIndex>::to_usize_range(neuron_range.clone());
@@ -110,8 +155,7 @@ for CoreNeuronAllocRAMStorage<Q>
         })
     }
 
-    fn set_neuron_fire_threshold(&mut self, cortical_area_index: Q::CorticalIndex, executor: &impl NeuronFireThresholdExecutor<Q::Value, Q::Coord>) -> Result<(), FeagiNPUNeuronError> {
-        let cortical_area_index = CorticalAreaIndex(cortical_area_index);
+    fn set_neuron_fire_threshold(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>, executor: &impl NeuronFireThresholdExecutor<Q::Value, Q::Coord>) -> Result<(), FeagiNPUNeuronError> {
         let (usize_range, dimensions, neurons_per_voxel) = {
             let cortical_data = get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?;
             (

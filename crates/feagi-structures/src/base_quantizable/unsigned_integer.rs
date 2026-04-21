@@ -220,6 +220,7 @@ pub trait QuantizableUIntType:
     + core::ops::SubAssign
     + core::ops::MulAssign
     + core::ops::DivAssign
+    //+ core::slice::SliceIndex<[Self]> // TODO
     + 'static
 {
     const NUMBER_OF_BYTES: usize;

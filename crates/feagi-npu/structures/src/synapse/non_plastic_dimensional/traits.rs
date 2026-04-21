@@ -6,10 +6,11 @@
 use feagi_structures::base_quantizable::QuantizableValueType;
 use feagi_structures::FeagiStructuresError;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
+use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
-use crate::neuron::dimensional_neurons::shared_structs::{DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex, NPUDimensionalAreaType};
+use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{NPUQuantization, NPUNeuronIndex, PSPMultiplier, SynapseBundleIndex, SynapticWeight};
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStorageTrait};
@@ -31,10 +32,10 @@ BaseSynapseStorageTrait<Q>
 
     fn get_nonplastic_synapse_data_from_destination_neuron_index(&self, destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError>;
-    
-    
+
+
     //endregion
-    
+
 }
 
 
@@ -52,16 +53,12 @@ BaseSynapseAllocStorageTrait<Q>
 {
     fn add_synapses_mapping_between_cortical_areas(&mut self,
                                                    source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndex>,
-                                                   source_neuron_indexes: core::ops::Range<NPUNeuronIndex<Q::NeuronIndex>>,
+                                                   source_cortical_data: &DimensionalNeuronCorticalData<Q>,
                                                    source_neuron_flags: &[NeuronFlag],
-                                                   source_cortical_dimensions: &NeuronVoxelDimensions<Q::Coord>,
-                                                   source_neuron_density: NumberNeuronsPerVoxel,
                                                    destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndex>,
-                                                   destination_neuron_indexes: core::ops::Range<NPUNeuronIndex<Q::NeuronIndex>>,
+                                                   destination_cortical_data: &DimensionalNeuronCorticalData<Q>,
                                                    destination_neuron_flags: &[NeuronFlag],
-                                                   destination_cortical_dimensions: &NeuronVoxelDimensions<Q::Coord>,
-                                                   destination_neuron_density: NumberNeuronsPerVoxel,
-                                                   neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)
+                                                   neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q>)
         -> Result<SynapseBundleIndex<Q::SynapseBundleIndex>, FeagiStructuresError>;
 
 

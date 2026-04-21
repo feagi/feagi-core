@@ -16,11 +16,12 @@ use crate::fire_queue::{FireQueueRam, FireQueueTrait};
 use crate::neuron::base_dimension_traits::DimensionalAllocStorageTrait;
 use crate::neuron::base_traits::BaseNeuronAllocStorageTrait;
 use crate::neuron::dimensional_neurons::core_neurons::CoreNeuronAllocRAMStorage;
-use crate::neuron::dimensional_neurons::dimensional_traits::DimensionalNeuronAllocStorageTrait;
+use crate::neuron::dimensional_neurons::dimensional_traits::{DimensionalNeuronAllocStorageTrait, DimensionalNeuronStaticStorageTrait};
 use crate::neuron::dimensional_neurons::inter_neurons::InterNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::motor_neurons::MotorNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::sensory_neurons::SensoryNeuronAllocRAMStorage;
-use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronDataFromCorticalArea, DimensionalTypedCorticalIndex};
+use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
+use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount, NPUNeuronMembranePotential};
 use crate::synapse::non_plastic_dimensional::NonplasticDimensionalSynapseAllocRAMStorage;
@@ -29,7 +30,7 @@ use crate::synapse::non_plastic_dimensional::traits::{NonplasticSynapseAllocStor
 pub struct ConnectomeAllocRam<Q: NPUQuantization>
 {
     fire_queue: FireQueueRam<Q::NeuronIndex>,
-    fire_candidate_list_ram: FireCandidateListRam<Q::NeuronIndex>,
+    fire_candidate_list: FireCandidateListRam<Q::NeuronIndex>,
 
 
     // Neurons
@@ -47,17 +48,26 @@ pub struct ConnectomeAllocRam<Q: NPUQuantization>
 impl<Q: NPUQuantization>
 ConnectomeAllocRam<Q>
 {
-    pub fn new(
-        preallocated_dimensional_neuron_count: NeuronCount<Q::NeuronIndex>,
-        preallocated_nonplastic_dimensional_synapse_count: SynapseCount<Q::SynapseIndex>
-    ) -> Self {
-        Self {
-            fire_queue: FireQueueRam::new(0),
-            fire_candidate_list_ram: FireCandidateListRam::new(0),
 
-            synapse_nonplastic: NonplasticDimensionalSynapseAllocRAMStorage::new(preallocated_nonplastic_dimensional_synapse_count),
+    pub fn new() -> ConnectomeAllocRam<Q> {
+        ConnectomeAllocRam {
+            fire_queue: FireQueueRam::new(0),
+            fire_candidate_list: FireCandidateListRam::new(0),
+            core_neurons: CoreNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
+            sensory_neurons: SensoryNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
+            motor_neurons: MotorNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
+            inter_neurons: InterNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
+            synapse_nonplastic: NonplasticDimensionalSynapseAllocRAMStorage::new(SynapseCount::ZERO),
         }
     }
+
+    //region helpers
+
+
+
+    //endregion
+
+
 }
 
 impl<Q: NPUQuantization>
@@ -156,10 +166,10 @@ ConnectomeAllocRam<Q>
                                             cortical_index: CorticalAreaIndex<Q::CorticalIndex>,
                                             presynaptic_nonplastic_dimensional_mappings: &Vec<(
                                                 CorticalAreaIndex<Q::CorticalIndex>,
-                                                DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)>,
+                                                DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<Q>)>,
                                             postsynaptic_nonplastic_dimensional_mappings: &Vec<(
                                                 CorticalAreaIndex<Q::CorticalIndex>,
-                                                DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)>, )
+                                                DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<Q>)>, )
 
                                             -> Result<(), FeagiNPUStructureError>
     {
@@ -194,9 +204,55 @@ ConnectomeAllocRam<Q>
                                                                            source_area_dimension_type: DimensionCorticalAreaType,
                                                                            destination_area_index: CorticalAreaIndex<Q::CorticalIndex>,
                                                                            destination_area_dimension_type: DimensionCorticalAreaType,
-                                                                           neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)
+                                                                           neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q>)
         -> Result<SynapseBundleIndex<Q::SynapseBundleIndex>, FeagiNPUStructureError> {
 
+
+        let (source_cortical_data, source_neuron_flags) = match &source_area_dimension_type {
+            DimensionCorticalAreaType::Sensor => {
+                let source_cortical_data= self.sensory_neurons.get_cortical_data(source_area_index)?;
+                let source_neuron_flags = self.sensory_neurons.get_neuron_flags(source_area_index)?;
+                (source_cortical_data, source_neuron_flags)
+            }
+            DimensionCorticalAreaType::Motor => {
+                let source_cortical_data= self.motor_neurons.get_cortical_data(source_area_index)?;
+                let source_neuron_flags = self.motor_neurons.get_neuron_flags(source_area_index)?;
+                (source_cortical_data, source_neuron_flags)
+            }
+            DimensionCorticalAreaType::Core => {
+                let source_cortical_data= self.core_neurons.get_cortical_data(source_area_index)?;
+                let source_neuron_flags = self.core_neurons.get_neuron_flags(source_area_index)?;
+                (source_cortical_data, source_neuron_flags)
+            }
+            DimensionCorticalAreaType::Custom => {
+                let source_cortical_data= self.sensory_neurons.get_cortical_data(source_area_index)?;
+                let source_neuron_flags = self.sensory_neurons.get_neuron_flags(source_area_index)?;
+                (source_cortical_data, source_neuron_flags)
+            }
+        };
+
+        let (destination_cortical_data, destination_neuron_flags) = match &destination_area_dimension_type {
+            DimensionCorticalAreaType::Sensor => {
+                let destination_cortical_data= self.sensory_neurons.get_cortical_data(destination_area_index)?;
+                let destination_neuron_flags = self.sensory_neurons.get_neuron_flags(destination_area_index)?;
+                (destination_cortical_data, destination_neuron_flags)
+            }
+            DimensionCorticalAreaType::Motor => {
+                let destination_cortical_data= self.motor_neurons.get_cortical_data(destination_area_index)?;
+                let destination_neuron_flags = self.motor_neurons.get_neuron_flags(destination_area_index)?;
+                (destination_cortical_data, destination_neuron_flags)
+            }
+            DimensionCorticalAreaType::Core => {
+                let destination_cortical_data= self.core_neurons.get_cortical_data(destination_area_index)?;
+                let destination_neuron_flags = self.core_neurons.get_neuron_flags(destination_area_index)?;
+                (destination_cortical_data, destination_neuron_flags)
+            }
+            DimensionCorticalAreaType::Custom => {
+                let destination_cortical_data= self.sensory_neurons.get_cortical_data(destination_area_index)?;
+                let destination_neuron_flags = self.sensory_neurons.get_neuron_flags(destination_area_index)?;
+                (destination_cortical_data, destination_neuron_flags)
+            }
+        };
 
         let source_area_index = DimensionalTypedCorticalIndex {
             index: source_area_index,
@@ -207,22 +263,17 @@ ConnectomeAllocRam<Q>
             dimensional_type: destination_area_dimension_type,
         };
 
-        let source_data =
-
-
 
         let synapse_bundle_index = self.synapse_nonplastic.add_synapses_mapping_between_cortical_areas(
             source_area_index,
-            source_neuron_indexes,
+            source_cortical_data,
             source_neuron_flags,
-            source_cortical_dimensions,
-            source_neuron_density,
             destination_area_index,
-            destination_neuron_indexes,
-            destination_neuron_flags: &[NeuronFlag],
-            destination_cortical_dimensions,
-            destination_neuron_density,
-            neuron_mapping_executor).map_err(|err| err.into())?;
+            destination_cortical_data,
+            destination_neuron_flags,
+            neuron_mapping_executor).map_err(|err| FeagiNPUStructureError::NeuronError { error: FeagiNPUNeuronError::InternalError { context: "TODO" } })?;
+
+        Ok(synapse_bundle_index)
     }
 
     fn disconnect_all_synapses_from_dimensional_area_to_dimensional_area(&mut self,
@@ -256,9 +307,9 @@ impl<Q: NPUQuantization>
 ConnectomeBaseTrait<Q> for
 ConnectomeAllocRam<Q>
 {
-    fn process_burst(&mut self, burst_index: &BurstGlobalIndex<<Q as NPUQuantization>::BurstIndex>) {
+    fn process_burst(&mut self, burst_index: &BurstGlobalIndex<<Q as NPUQuantization>::BurstIndex>) -> Result<(), FeagiNPUStructureError> {
 
-        self.fire_candidate_list_ram.clear();
+        self.fire_candidate_list.clear();
 
         // TODO rayon feature swapper
 
@@ -267,18 +318,20 @@ ConnectomeAllocRam<Q>
 
         // TODO many errors here can only occur if something went very wrong. We should map them appropriately to be clear
 
-        for firing_neuron_index in &self.fire_queue.get_dimensional_neuron_indexes_slice() {
-            let downstream_synapses = self.synapse_nonplastic.get_nonplastic_synapse_data_from_source_neuron_index(firing_neuron_index)?;
+        for firing_neuron_index in self.fire_queue.get_core_neuron_indexes_slice() {
+            let (downstream_synapses_iterator, neuron_count) = self.synapse_nonplastic.get_nonplastic_synapse_data_from_source_neuron_index(
+                DimensionalTypedNeuronIndex {
+                    index: firing_neuron_index.clone(),
+                    dimensional_type: DimensionCorticalAreaType::Core
+                }
+            )?;
             // TODO mp_charge_accumulation ? do we do it at the start of the burst?
-            
-            
-            for downstream_synapse in downstream_synapses {
-                let downstream_neuron_index = downstream_synapse.destination_neuron;
-                self.neurons_dimensional.membrane_potential(downstream_neuron_index)
-                    .update_threshold_nonplastic(
-                        downstream_synapse.weight,
-                        self.neurons_dimensional.membrane_potential(firing_neuron_index)
-                    )
+
+
+            for downstream_synapse in downstream_synapses_iterator {
+                let downstream_neuron_index = downstream_synapse.destination_neuron_index;
+
+
                 
                 
             }
@@ -288,7 +341,7 @@ ConnectomeAllocRam<Q>
 
 
 
-
+        Ok(())
         // TODO safer increment?
         //burst_index++; // TODO it may be better to increment this outside
 

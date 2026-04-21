@@ -4,7 +4,7 @@
 // TODO some things should be moved to a higher level trait as we understand other synapse types more
 
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
-use crate::neuron::dimensional_neurons::shared_structs::{DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex, NPUDimensionalAreaType};
+use crate::neuron::dimensional_neurons::shared_structs::{DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
 use crate::quantizables::{NPUQuantization, NPUNeuronIndex, NPUSynapseIndex, SynapseCount};
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStaticStorageTrait, BaseSynapseStorageTrait};
 use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;

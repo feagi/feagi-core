@@ -10,12 +10,13 @@ use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, Dimensi
 use crate::quantizables::{NPUQuantization, BurstDelta, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability, BurstGlobalIndex};
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
 use crate::neuron::FeagiNPUNeuronError;
-use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
+use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
 use crate::neuron::flags::NeuronFlag;
 
 pub trait DimensionalNeuronStaticStorageTrait<Q: NPUQuantization>:
 BaseNeuronStaticStorageTrait<Q>
 {
+    fn get_cortical_data(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError>;
     fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstGlobalIndex<Q::BurstIndex>], FeagiNPUNeuronError>;
 
     fn get_neuron_membrane_potential(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[NPUNeuronMembranePotential<Q::Value>], FeagiNPUNeuronError>;
@@ -24,12 +25,12 @@ BaseNeuronStaticStorageTrait<Q>
 
     fn get_leak_coefficient(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[LeakCoefficient<Q::Percentage>], FeagiNPUNeuronError>;
 
-    fn get_flags(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[NeuronFlag], FeagiNPUNeuronError>;
+    fn get_neuron_flags(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[NeuronFlag], FeagiNPUNeuronError>;
 
     fn get_refractory_countdown(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstDelta<Q::BurstDelta>], FeagiNPUNeuronError>;
 
     fn get_consecutive_fire_count(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstDelta<Q::BurstDelta>], FeagiNPUNeuronError>;
-    
+
     /// Returns a struct of references to the slices of all neuron data (include sparse invalids)
     fn get_neuron_values_of_all_dimensional_neuron_cortical_areas_to_process(&mut self) -> DimensionalNeuronDataRefSliceAllCorticalAreas<'_, Q>;
 
