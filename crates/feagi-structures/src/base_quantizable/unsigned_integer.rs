@@ -10,6 +10,12 @@ macro_rules! define_quantizable_uint_type_family {
         #[cfg_attr(feature = "alloc", serde(transparent))]
         pub struct $base_name<T: $crate::base_quantizable::QuantizableUIntType>(pub T);
 
+        impl<T: $crate::base_quantizable::QuantizableUIntType> $base_name<T> {
+            pub const fn from_const(value: T) -> Self {
+                Self(value)
+            }
+        }
+
         impl<T: $crate::base_quantizable::QuantizableUIntType> From<T> for $base_name<T> {
             #[inline(always)]
             fn from(value: T) -> Self {
@@ -228,6 +234,7 @@ pub trait QuantizableUIntType:
     const ONE: Self;
     const MAX_VALUE: Self;
     const MIN_VALUE: Self;
+
     fn saturating_add(self, other: Self) -> Self;
     fn checked_add(self, other: Self) -> Option<Self>;
     fn saturating_sub(self, other: Self) -> Self;

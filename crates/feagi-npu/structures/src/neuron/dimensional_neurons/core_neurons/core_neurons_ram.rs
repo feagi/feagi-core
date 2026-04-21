@@ -44,37 +44,37 @@ CoreNeuronAllocRAMStorage<Q>
             neuron_global_burst_index_of_last_firing:  [BurstGlobalIndex::ZERO; NUMBER_SINGLE_NEURON_CORE_AREAS],
             neuron_membrane_potential: [NPUNeuronMembranePotential::ZERO; NUMBER_SINGLE_NEURON_CORE_AREAS],
             neuron_fire_threshold: [
-                CoreNeuronPowerDefaults::DEFAULT_NEURON_FIRE_THRESHOLD, 
-                CoreNeuronDeathDefaults::DEFAULT_NEURON_FIRE_THRESHOLD, 
-                CoreNeuronFatigueDefaults::DEFAULT_NEURON_FIRE_THRESHOLD],
+                CoreNeuronPowerDefaults::<Q>::DEFAULT_NEURON_FIRE_THRESHOLD,
+                CoreNeuronDeathDefaults::<Q>::DEFAULT_NEURON_FIRE_THRESHOLD,
+                CoreNeuronFatigueDefaults::<Q>::DEFAULT_NEURON_FIRE_THRESHOLD],
             neuron_leak_coefficient: [
-                CoreNeuronPowerDefaults::DEFAULT_NEURON_LEAK_COEFFICIENT,
-                CoreNeuronDeathDefaults::DEFAULT_NEURON_LEAK_COEFFICIENT,
-                CoreNeuronFatigueDefaults::DEFAULT_NEURON_LEAK_COEFFICIENT],
+                CoreNeuronPowerDefaults::<Q>::DEFAULT_NEURON_LEAK_COEFFICIENT,
+                CoreNeuronDeathDefaults::<Q>::DEFAULT_NEURON_LEAK_COEFFICIENT,
+                CoreNeuronFatigueDefaults::<Q>::DEFAULT_NEURON_LEAK_COEFFICIENT],
             neuron_flags: [
-                CoreNeuronPowerDefaults::DEFAULT_NEURON_FLAG,
-                CoreNeuronDeathDefaults::DEFAULT_NEURON_FLAG,
-                CoreNeuronFatigueDefaults::DEFAULT_NEURON_FLAG],
+                CoreNeuronPowerDefaults::<Q>::DEFAULT_NEURON_FLAG,
+                CoreNeuronDeathDefaults::<Q>::DEFAULT_NEURON_FLAG,
+                CoreNeuronFatigueDefaults::<Q>::DEFAULT_NEURON_FLAG],
             neuron_refractory_countdown: [
-                CoreNeuronPowerDefaults::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
-                CoreNeuronDeathDefaults::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
-                CoreNeuronFatigueDefaults::DEFAULT_NEURON_REFRACTORY_COUNTDOWN],
+                CoreNeuronPowerDefaults::<Q>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
+                CoreNeuronDeathDefaults::<Q>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
+                CoreNeuronFatigueDefaults::<Q>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN],
             neuron_consecutive_fire_count: [
-                CoreNeuronPowerDefaults::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
-                CoreNeuronDeathDefaults::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
-                CoreNeuronFatigueDefaults::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT],
+                CoreNeuronPowerDefaults::<Q>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
+                CoreNeuronDeathDefaults::<Q>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
+                CoreNeuronFatigueDefaults::<Q>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT],
 
             cortical_datas: [
-                CoreNeuronPowerDefaults::DEFAULT_CORTICAL_DATA,
-                CoreNeuronDeathDefaults::DEFAULT_CORTICAL_DATA,
-                CoreNeuronFatigueDefaults::DEFAULT_CORTICAL_DATA],
+                CoreNeuronPowerDefaults::<Q>::DEFAULT_CORTICAL_DATA,
+                CoreNeuronDeathDefaults::<Q>::DEFAULT_CORTICAL_DATA,
+                CoreNeuronFatigueDefaults::<Q>::DEFAULT_CORTICAL_DATA],
         }
     }
     
     pub const NEURON_CORTICAL_AREA_INDEX: [CorticalAreaIndex<Q::CorticalIndex>; 3] = [
         CorticalAreaIndex::ZERO,
         CorticalAreaIndex::ONE,
-        CorticalAreaIndex::ONE + CorticalAreaIndex::ONE
+        CorticalAreaIndex::from_const(CorticalAreaIndex::from_const(2))
     ];
 
 
@@ -88,49 +88,80 @@ for CoreNeuronAllocRAMStorage<Q>
 {
 
     fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstGlobalIndex<Q::BurstIndex>], FeagiNPUNeuronError> {
-        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        if cortical_area_index > self.get_max_possible_cortical_area_index() {
+            return Err(FeagiNPUNeuronError::InvalidCorticalIndex { context: "Only 3 Core Cortical areas exist! Given index out of range!", given_cortical_index: cortical_area_index.to_usize() as u32 })
+        }
+        let range = &self.cortical_datas.get(cortical_area_index.to_usize()).unwrap().neuron_range;
         let range = NPUNeuronIndex::to_usize_range(range.clone());
         Ok(&self.neuron_global_burst_index_of_last_firing[range])
     }
 
     fn get_neuron_membrane_potential(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[NPUNeuronMembranePotential<Q::Value>], FeagiNPUNeuronError> {
-        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        if cortical_area_index > self.get_max_possible_cortical_area_index() {
+            return Err(FeagiNPUNeuronError::InvalidCorticalIndex { context: "Only 3 Core Cortical areas exist! Given index out of range!", given_cortical_index: cortical_area_index.to_usize() as u32 })
+        }
+
+        let range = &self.cortical_datas.get(cortical_area_index.to_usize()).unwrap().neuron_range;
         let range = NPUNeuronIndex::to_usize_range(range.clone());
         Ok(&self.neuron_membrane_potential[range])
     }
 
     fn get_fire_threshold(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[FireThreshold<Q::Value>], FeagiNPUNeuronError> {
-        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        if cortical_area_index > self.get_max_possible_cortical_area_index() {
+            return Err(FeagiNPUNeuronError::InvalidCorticalIndex { context: "Only 3 Core Cortical areas exist! Given index out of range!", given_cortical_index: cortical_area_index.to_usize() as u32 })
+        }
+
+        let range = &self.cortical_datas.get(cortical_area_index.to_usize()).unwrap().neuron_range;
         let range = NPUNeuronIndex::to_usize_range(range.clone());
         Ok(&self.neuron_fire_threshold[range])
     }
 
     fn get_leak_coefficient(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[LeakCoefficient<Q::Percentage>], FeagiNPUNeuronError> {
-        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        if cortical_area_index > self.get_max_possible_cortical_area_index() {
+            return Err(FeagiNPUNeuronError::InvalidCorticalIndex { context: "Only 3 Core Cortical areas exist! Given index out of range!", given_cortical_index: cortical_area_index.to_usize() as u32 })
+        }
+
+        let range = &self.cortical_datas.get(cortical_area_index.to_usize()).unwrap().neuron_range;
         let range = NPUNeuronIndex::to_usize_range(range.clone());
         Ok(&self.neuron_leak_coefficient[range])
     }
 
     fn get_neuron_flags(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[NeuronFlag], FeagiNPUNeuronError> {
-        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        if cortical_area_index > self.get_max_possible_cortical_area_index() {
+            return Err(FeagiNPUNeuronError::InvalidCorticalIndex { context: "Only 3 Core Cortical areas exist! Given index out of range!", given_cortical_index: cortical_area_index.to_usize() as u32 })
+        }
+
+        let range = &self.cortical_datas.get(cortical_area_index.to_usize()).unwrap().neuron_range;
         let range = NPUNeuronIndex::to_usize_range(range.clone());
         Ok(&self.neuron_flags[range])
     }
 
     fn get_refractory_countdown(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstDelta<Q::BurstDelta>], FeagiNPUNeuronError> {
-        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        if cortical_area_index > self.get_max_possible_cortical_area_index() {
+            return Err(FeagiNPUNeuronError::InvalidCorticalIndex { context: "Only 3 Core Cortical areas exist! Given index out of range!", given_cortical_index: cortical_area_index.to_usize() as u32 })
+        }
+
+        let range = &self.cortical_datas.get(cortical_area_index.to_usize()).unwrap().neuron_range;
         let range = NPUNeuronIndex::to_usize_range(range.clone());
         Ok(&self.neuron_refractory_countdown[range])
     }
 
     fn get_consecutive_fire_count(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstDelta<Q::BurstDelta>], FeagiNPUNeuronError> {
-        let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        if cortical_area_index > self.get_max_possible_cortical_area_index() {
+            return Err(FeagiNPUNeuronError::InvalidCorticalIndex { context: "Only 3 Core Cortical areas exist! Given index out of range!", given_cortical_index: cortical_area_index.to_usize() as u32 })
+        }
+
+        let range = &self.cortical_datas.get(cortical_area_index.to_usize()).unwrap().neuron_range;
         let range = NPUNeuronIndex::to_usize_range(range.clone());
         Ok(&self.neuron_consecutive_fire_count[range])
     }
 
     fn get_cortical_data(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError> {
-        get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)
+        if cortical_area_index > self.get_max_possible_cortical_area_index() {
+            return Err(FeagiNPUNeuronError::InvalidCorticalIndex { context: "Only 3 Core Cortical areas exist! Given index out of range!", given_cortical_index: cortical_area_index.to_usize() as u32 })
+        }
+
+        Ok(self.cortical_datas.get(cortical_area_index.to_usize()).unwrap())
     }
 
     /// Used to pass around slices easily at low cost for all cortical areas

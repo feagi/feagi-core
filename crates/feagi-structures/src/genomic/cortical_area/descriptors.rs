@@ -11,6 +11,7 @@ pub use generated::CorticalChannelDimensions;
 // Used to denote the cortical area index within the NPU directly. May have various quantizations
 crate::define_quantizable_uint_type_family!(CorticalAreaIndex);
 
+
 // NOTE: Since these macros generate generic public types, generate them in this module, and expose  only the quantizations we want above
 mod generated {
     use crate::{define_dimension_3d_type_family, define_nonzero_count_family, define_quantizable_uint_type_family, define_unsigned_coordinate_3d_type_family};

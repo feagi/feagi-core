@@ -1,5 +1,6 @@
 use feagi_structures::{define_quantizable_percentage_type_family, define_quantizable_uint_type_family, define_quantizable_value_type_family};
 use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
+use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neurons::descriptors::NeuronCount;
 
 /// Defines the quantization for all most uses in this crate // TODO this may need to be moved up a level?
@@ -33,10 +34,41 @@ define_quantizable_uint_type_family!(BurstDelta);
 define_quantizable_uint_type_family!(NPUNeuronIndex);
 
 impl<T: QuantizableUIntType> NPUNeuronIndex<T> {
+    
     pub fn get_count_from_block(range: &core::ops::Range<NPUNeuronIndex<T>>) -> NeuronCount<T> {
         (range.end - range.start).0.into()
     }
+    
+    
 }
+
+impl NPUNeuronIndex<u8> {
+    pub const CORE_POWER_INDEX: Self = NPUNeuronIndex(0u8);
+    pub const CORE_DEATH_INDEX: Self = NPUNeuronIndex(1u8);
+    pub const CORE_FATIGUE_INDEX: Self = NPUNeuronIndex(2u8);
+}
+
+impl NPUNeuronIndex<u16> {
+    pub const CORE_POWER_INDEX: Self = NPUNeuronIndex(0u16);
+    pub const CORE_DEATH_INDEX: Self = NPUNeuronIndex(1u16);
+    pub const CORE_FATIGUE_INDEX: Self = NPUNeuronIndex(2u16);
+}
+
+impl NPUNeuronIndex<u32> {
+    pub const CORE_POWER_INDEX: Self = NPUNeuronIndex(0u32);
+    pub const CORE_DEATH_INDEX: Self = NPUNeuronIndex(1u32);
+    pub const CORE_FATIGUE_INDEX: Self = NPUNeuronIndex(2u32);
+}
+
+// Why would you do this lol
+#[cfg(feature = "support_64bit_indexing")]
+impl NPUNeuronIndex<u64> {
+    pub const CORE_POWER_INDEX: Self = NPUNeuronIndex(0u64);
+    pub const CORE_DEATH_INDEX: Self = NPUNeuronIndex(1u64);
+    pub const CORE_FATIGUE_INDEX: Self = NPUNeuronIndex(2u64);
+}
+
+
 
 //endregion
 
