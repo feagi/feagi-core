@@ -7,6 +7,7 @@
 use core::ops::Range;
 use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
+use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
 use feagi_structures::useful_structs::IndexedDataTracker;
@@ -14,25 +15,16 @@ use crate::neuron::defaults::DimensionalNeuronDefaults;
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
 use crate::neuron::flags::{DimensionalNeuronCorticalFlag, NeuronFlag};
 
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
-pub enum NPUDimensionalAreaType {
-    Core,
-    Sensory,
-    Motor,
-    Interneuron
-}
-
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub struct DimensionalTypedNeuronIndex<T: QuantizableUIntType> {
     pub index: NPUNeuronIndex<T>,
-    pub dimensional_type: NPUDimensionalAreaType
+    pub dimensional_type: DimensionCorticalAreaType
 }
 
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub struct DimensionalTypedCorticalIndex<T: QuantizableUIntType> {
     pub index: CorticalAreaIndex<T>,
-    pub dimensional_type: NPUDimensionalAreaType
+    pub dimensional_type: DimensionCorticalAreaType
 }
 
 

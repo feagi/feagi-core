@@ -26,7 +26,7 @@ use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThr
 pub struct InterNeuronAllocRAMStorage<Q: NPUQuantization>
 {
     // Per Neuron (including invalids)
-    neuron_cortical_area_index: Vec<CorticalAreaIndex<Q::CorticalIndex>>, // faster than potentially reverse looking up a large hashmap
+    neuron_cortical_area_index: Vec<CorticalAreaIndex<Q::CorticalIndex>>, // faster than potentially reverse looking up a large hashmap // TODO lookup table?
     neuron_global_burst_index_of_last_firing: Vec<BurstGlobalIndex<Q::BurstIndex>>,
     neuron_membrane_potential: Vec<NPUNeuronMembranePotential<Q::Value>>,
     neuron_fire_threshold: Vec<FireThreshold<Q::Value>>,
@@ -66,6 +66,7 @@ InterNeuronAllocRAMStorage<Q>
             cache_invalid_neuron_index_blocks: RangeUintVector::new(),
         }
     }
+
 
 
 
@@ -160,6 +161,34 @@ impl<Q: NPUQuantization>
 DimensionalNeuronStaticStorageTrait<Q>
 for InterNeuronAllocRAMStorage<Q>
 {
+    fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstGlobalIndex<Q::BurstIndex>], FeagiNPUNeuronError> {
+        let range = get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
+        Ok(self.neuron_global_burst_index_of_last_firing[range])
+    }
+
+    fn get_neuron_membrane_potential(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[NPUNeuronMembranePotential<Q::Value>], FeagiNPUNeuronError> {
+        todo!()
+    }
+
+    fn get_fire_threshold(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[FireThreshold<Q::Value>], FeagiNPUNeuronError> {
+        todo!()
+    }
+
+    fn get_leak_coefficient(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[LeakCoefficient<Q::Percentage>], FeagiNPUNeuronError> {
+        todo!()
+    }
+
+    fn get_flags(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[NeuronFlag], FeagiNPUNeuronError> {
+        todo!()
+    }
+
+    fn get_refractory_countdown(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstDelta<Q::BurstDelta>], FeagiNPUNeuronError> {
+        todo!()
+    }
+
+    fn get_consecutive_fire_count(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstDelta<Q::BurstDelta>], FeagiNPUNeuronError> {
+        todo!()
+    }
 
     /// Used to pass around slices easily at low cost for all cortical areas
     fn get_neuron_values_of_all_dimensional_neuron_cortical_areas_to_process(&mut self) -> DimensionalNeuronDataRefSliceAllCorticalAreas<'_, Q> {
@@ -199,7 +228,7 @@ for InterNeuronAllocRAMStorage<Q>
         })
     }
 
-    fn set_neuron_fire_threshold(&mut self, cortical_area_index: Q::CorticalIndex, executor: &impl NeuronFireThresholdExecutor<Q::Value, Q::Coord>) -> Result<(), FeagiNPUNeuronError> {
+    fn set_neuron_fire_threshold(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>, executor: &impl NeuronFireThresholdExecutor<Q::Value, Q::Coord>) -> Result<(), FeagiNPUNeuronError> {
         let cortical_area_index = CorticalAreaIndex(cortical_area_index);
         let (usize_range, dimensions, neurons_per_voxel) = {
             let cortical_data = get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?;
@@ -261,7 +290,7 @@ for InterNeuronAllocRAMStorage<Q>
                                                  neurons_per_voxel: NumberNeuronsPerVoxel,
                                                  cortical_index: CorticalAreaIndex<Q::CorticalIndex>)
                                                  -> Result<(Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError> {
-        
+
         // TODO broken!
         todo!()
 
@@ -272,7 +301,7 @@ for InterNeuronAllocRAMStorage<Q>
         // TODO best to make an explicit system instead! We should be able to have a shared function here
         let new_indexes = self.create_cortical_area_with_default_neurons(cortical_area_dimensions, neurons_per_voxel)?;
         Ok((deleted_indexes, new_indexes.1))
-        
+
          */
     }
 }

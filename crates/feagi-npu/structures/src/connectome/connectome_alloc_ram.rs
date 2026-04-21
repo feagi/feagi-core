@@ -20,7 +20,7 @@ use crate::neuron::dimensional_neurons::dimensional_traits::DimensionalNeuronAll
 use crate::neuron::dimensional_neurons::inter_neurons::InterNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::motor_neurons::MotorNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::sensory_neurons::SensoryNeuronAllocRAMStorage;
-use crate::neuron::dimensional_neurons::shared_structs::DimensionalNeuronDataFromCorticalArea;
+use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronDataFromCorticalArea, DimensionalTypedCorticalIndex};
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount, NPUNeuronMembranePotential};
 use crate::synapse::non_plastic_dimensional::NonplasticDimensionalSynapseAllocRAMStorage;
@@ -90,7 +90,7 @@ ConnectomeAllocRam<Q>
     fn create_interneuron_area_with_default_neurons(&mut self,
                                                     cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
                                                     neurons_per_voxel: NumberNeuronsPerVoxel)
-                                                    -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUStructureError>{
+                                                    -> Result<(CorticalAreaIndex<Q::CorticalIndex>), FeagiNPUStructureError>{
         self.inter_neurons.create_cortical_area_with_default_neurons(
             cortical_area_dimensions,
             neurons_per_voxel
@@ -115,7 +115,7 @@ ConnectomeAllocRam<Q>
                                                              cortical_is_mp_charge_accumulation_enabled: bool,
                                                              cortical_is_mp_driven_psp_enabled: bool)
                                                              -> Result<CorticalAreaIndex<Q::CorticalIndex>, FeagiNPUStructureError> {
-       let (cortical_index, _) = self.inter_neurons.create_cortical_area_with_uniform_neurons(
+       let cortical_index = self.inter_neurons.create_cortical_area_with_uniform_neurons(
             cortical_area_dimensions,
             neurons_per_voxel,
             neuron_global_burst_index_of_last_firing,
@@ -174,6 +174,7 @@ ConnectomeAllocRam<Q>
                                         cortical_index: CorticalAreaIndex<Q::CorticalIndex>)
                                         -> Result<(), FeagiNPUStructureError> {
         _ = self.inter_neurons.delete_cortical_area(cortical_index)?;
+        // TODO delete mappings!
         Ok(())
     }
 
@@ -190,9 +191,26 @@ ConnectomeAllocRam<Q>
 
     fn add_nonplastic_connection_from_dimensional_area_to_dimensional_area(&mut self,
                                                                            source_area_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                                                           source_area_dimension_type: DimensionCorticalAreaType,
                                                                            destination_area_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                                                           destination_area_dimension_type: DimensionCorticalAreaType,
                                                                            neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)
         -> Result<SynapseBundleIndex<Q::SynapseBundleIndex>, FeagiNPUStructureError> {
+
+
+        let source_area_index = DimensionalTypedCorticalIndex {
+            index: source_area_index,
+            dimensional_type: source_area_dimension_type,
+        };
+        let destination_area_index = DimensionalTypedCorticalIndex {
+            index: destination_area_index,
+            dimensional_type: destination_area_dimension_type,
+        };
+
+        let source_data =
+
+
+
         let synapse_bundle_index = self.synapse_nonplastic.add_synapses_mapping_between_cortical_areas(
             source_area_index,
             source_neuron_indexes,

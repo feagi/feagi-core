@@ -162,19 +162,22 @@ pub trait ConnectomeAllocTrait<Q: NPUQuantization>
     // NOTE: These functions exist under alloc since in static contexts we will not be
     // dynamically creating / destroying synapses between dimensional areas
 
+    /// Adds synapse mappings between 2 cortical areas as defined by a given neuron mapping executor.
+    /// Returns the synapse bundle index of the mapping
+    fn add_nonplastic_connection_from_dimensional_area_to_dimensional_area(&mut self,
+                                                                           source_area_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                                                           source_area_dimension_type: DimensionCorticalAreaType,
+                                                                           destination_area_index: CorticalAreaIndex<Q::CorticalIndex>,
+                                                                           destination_area_dimension_type: DimensionCorticalAreaType,
+                                                                           neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)
+                                                                           -> Result<SynapseBundleIndex<Q::SynapseBundleIndex>, FeagiNPUStructureError>;
+    
     /// Disconnects all synapses between 2 dimensional cortical areas
     fn disconnect_all_synapses_from_dimensional_area_to_dimensional_area(&mut self,
                                                                          source_index: CorticalAreaIndex<Q::CorticalIndex>,
                                                                          destination_index: CorticalAreaIndex<Q::CorticalIndex>,)
         -> Result<(), FeagiNPUStructureError>;
-
-    /// Adds synapse mappings between 2 cortical areas as defined by a given neuron mapping executor.
-    /// Returns the synapse bundle index of the mapping
-    fn add_nonplastic_connection_from_dimensional_area_to_dimensional_area(&mut self,
-                                                                           source_area_index: CorticalAreaIndex<Q::CorticalIndex>,
-                                                                           destination_area_index: CorticalAreaIndex<Q::CorticalIndex>,
-                                                                           neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)
-        -> Result<SynapseBundleIndex<Q::SynapseBundleIndex>, FeagiNPUStructureError>;
+    
 
     /*
     /// Disconnects just the synapses of the given synapse bundle index between

@@ -11,19 +11,33 @@ use crate::quantizables::{NPUQuantization, BurstDelta, FireThreshold, FireThresh
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
-
+use crate::neuron::flags::NeuronFlag;
 
 pub trait DimensionalNeuronStaticStorageTrait<Q: NPUQuantization>:
 BaseNeuronStaticStorageTrait<Q>
 {
+    fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstGlobalIndex<Q::BurstIndex>], FeagiNPUNeuronError>;
+
+    fn get_neuron_membrane_potential(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[NPUNeuronMembranePotential<Q::Value>], FeagiNPUNeuronError>;
+
+    fn get_fire_threshold(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[FireThreshold<Q::Value>], FeagiNPUNeuronError>;
+
+    fn get_leak_coefficient(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[LeakCoefficient<Q::Percentage>], FeagiNPUNeuronError>;
+
+    fn get_flags(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[NeuronFlag], FeagiNPUNeuronError>;
+
+    fn get_refractory_countdown(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstDelta<Q::BurstDelta>], FeagiNPUNeuronError>;
+
+    fn get_consecutive_fire_count(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<&[BurstDelta<Q::BurstDelta>], FeagiNPUNeuronError>;
+    
     /// Returns a struct of references to the slices of all neuron data (include sparse invalids)
     fn get_neuron_values_of_all_dimensional_neuron_cortical_areas_to_process(&mut self) -> DimensionalNeuronDataRefSliceAllCorticalAreas<'_, Q>;
 
     /// Returns a struct of references to the slices of neuron data of a cortical index if it exists
-    fn get_neuron_values_of_specific_dimensional_neuron_cortical_area_to_process(&mut self, cortical_area_index: Q::CorticalIndex)
+    fn get_neuron_values_of_specific_dimensional_neuron_cortical_area_to_process(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>)
                                                                                  -> Result<DimensionalNeuronDataRefSliceSingleCorticalArea<'_, Q>, FeagiNPUNeuronError>;
 
-    fn set_neuron_fire_threshold(&mut self, cortical_area_index: Q::CorticalIndex, executor: &impl NeuronFireThresholdExecutor<Q::Value, Q::Coord>)
+    fn set_neuron_fire_threshold(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>, executor: &impl NeuronFireThresholdExecutor<Q::Value, Q::Coord>)
                                  -> Result<(), FeagiNPUNeuronError>;
 
 
