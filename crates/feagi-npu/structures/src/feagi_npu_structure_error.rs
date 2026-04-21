@@ -2,6 +2,8 @@ use crate::neuron::FeagiNPUNeuronError;
 use crate::synapse::FeagiNPUSynapseError;
 
 // TODO how does connectome struct fit here?
+
+#[derive(Debug)]
 pub enum FeagiNPUStructureError {
     NeuronError{error: FeagiNPUNeuronError},
     SynapseError{error: FeagiNPUSynapseError},
