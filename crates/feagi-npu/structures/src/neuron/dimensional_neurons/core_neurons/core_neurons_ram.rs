@@ -1,11 +1,12 @@
 use core::ops::Range;
-use feagi_structures::base_quantizable::QuantizableUIntType;
+use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neurons::descriptors::{NeuronCount};
 use feagi_structures::useful_structs::{IndexedDataTracker, RangeUintVector};
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_dimension_traits::{DimensionalStaticStorageTrait};
 use crate::neuron::base_traits::{BaseNeuronStaticStorageTrait};
+use crate::neuron::dimensional_neurons::core_neurons::default_core_areas::{CoreNeuronDeathDefaults, CoreNeuronFatigueDefaults, CoreNeuronPowerDefaults, NUMBER_SINGLE_NEURON_CORE_AREAS};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
@@ -15,28 +16,23 @@ use crate::neuron::dimensional_neurons::shared_funcs_ram::{
 };
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential};
 
-// TODO Core Traits
-// TODO right now we are copying every other interneuron. However, we know core areas are rather constant. we should model that with that in mind
 
+// NOTE: As of now, coire is statically sized and we shall treat it as such
 pub struct CoreNeuronAllocRAMStorage<Q: NPUQuantization>
 {
     // Per Neuron (including invalids)
-    neuron_cortical_area_index: Vec<CorticalAreaIndex<Q::CorticalIndex>>, // faster than potentially reverse looking up a large hashmap
-    neuron_global_burst_index_of_last_firing: Vec<BurstGlobalIndex<Q::BurstIndex>>,
-    neuron_membrane_potential: Vec<NPUNeuronMembranePotential<Q::Value>>,
-    neuron_fire_threshold: Vec<FireThreshold<Q::Value>>,
-    neuron_leak_coefficient: Vec<LeakCoefficient<Q::Percentage>>,
-    neuron_flags: Vec<NeuronFlag>,
-    neuron_refractory_countdown: Vec<BurstDelta<Q::BurstDelta>>,
-    neuron_consecutive_fire_count: Vec<BurstDelta<Q::BurstDelta>>, // how many times the neuron fired burst recently
+    neuron_global_burst_index_of_last_firing: [BurstGlobalIndex<Q::BurstIndex>; NUMBER_SINGLE_NEURON_CORE_AREAS],
+    neuron_membrane_potential: [NPUNeuronMembranePotential<Q::Value>; NUMBER_SINGLE_NEURON_CORE_AREAS],
+    neuron_fire_threshold: [FireThreshold<Q::Value>; NUMBER_SINGLE_NEURON_CORE_AREAS],
+    neuron_leak_coefficient: [LeakCoefficient<Q::Percentage>; NUMBER_SINGLE_NEURON_CORE_AREAS],
+    neuron_flags: [NeuronFlag; NUMBER_SINGLE_NEURON_CORE_AREAS],
+    neuron_refractory_countdown: [BurstDelta<Q::BurstDelta>; NUMBER_SINGLE_NEURON_CORE_AREAS],
+    neuron_consecutive_fire_count: [BurstDelta<Q::BurstDelta>; NUMBER_SINGLE_NEURON_CORE_AREAS], // how many times the neuron fired burst recently
 
     // Per Cortical Area (including invalids)
-    cortical_datas: IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndex>>,
+    cortical_datas: [DimensionalNeuronCorticalData<Q>; NUMBER_SINGLE_NEURON_CORE_AREAS],
+    
 
-    // Cached Data
-    cache_number_valid_neurons: NeuronCount<Q::NeuronIndex>,
-    cache_number_invalid_neurons: NeuronCount<Q::NeuronIndex>,
-    cache_invalid_neuron_index_blocks: RangeUintVector<NPUNeuronIndex<Q::NeuronIndex>, NeuronCount<Q::NeuronIndex>>,
 }
 
 // NOTE: Only define the constructor here, as we will be going through traits / generics for all data transfer!
@@ -45,24 +41,43 @@ CoreNeuronAllocRAMStorage<Q>
 {
     pub fn new(number_neurons_to_preallocate_space_for: NeuronCount<Q::NeuronIndex>, number_cortical_areas_to_preallocate_space_for: CorticalAreaIndex<Q::CorticalIndex>) -> Self {
         Self {
-            neuron_cortical_area_index: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
-            neuron_global_burst_index_of_last_firing: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
-            neuron_membrane_potential: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
-            neuron_fire_threshold: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
-            neuron_leak_coefficient: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
-            neuron_flags: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
-            neuron_refractory_countdown: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
-            neuron_consecutive_fire_count: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
+            neuron_global_burst_index_of_last_firing:  [BurstGlobalIndex::ZERO; NUMBER_SINGLE_NEURON_CORE_AREAS],
+            neuron_membrane_potential: [NPUNeuronMembranePotential::ZERO; NUMBER_SINGLE_NEURON_CORE_AREAS],
+            neuron_fire_threshold: [
+                CoreNeuronPowerDefaults::DEFAULT_NEURON_FIRE_THRESHOLD, 
+                CoreNeuronDeathDefaults::DEFAULT_NEURON_FIRE_THRESHOLD, 
+                CoreNeuronFatigueDefaults::DEFAULT_NEURON_FIRE_THRESHOLD],
+            neuron_leak_coefficient: [
+                CoreNeuronPowerDefaults::DEFAULT_NEURON_LEAK_COEFFICIENT,
+                CoreNeuronDeathDefaults::DEFAULT_NEURON_LEAK_COEFFICIENT,
+                CoreNeuronFatigueDefaults::DEFAULT_NEURON_LEAK_COEFFICIENT],
+            neuron_flags: [
+                CoreNeuronPowerDefaults::DEFAULT_NEURON_FLAG,
+                CoreNeuronDeathDefaults::DEFAULT_NEURON_FLAG,
+                CoreNeuronFatigueDefaults::DEFAULT_NEURON_FLAG],
+            neuron_refractory_countdown: [
+                CoreNeuronPowerDefaults::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
+                CoreNeuronDeathDefaults::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
+                CoreNeuronFatigueDefaults::DEFAULT_NEURON_REFRACTORY_COUNTDOWN],
+            neuron_consecutive_fire_count: [
+                CoreNeuronPowerDefaults::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
+                CoreNeuronDeathDefaults::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
+                CoreNeuronFatigueDefaults::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT],
 
-            cortical_datas: IndexedDataTracker::with_capacity(number_cortical_areas_to_preallocate_space_for),
-
-            cache_number_valid_neurons: NeuronCount::ZERO,
-            cache_number_invalid_neurons: NeuronCount::ZERO,
-            cache_invalid_neuron_index_blocks: RangeUintVector::new(),
+            cortical_datas: [
+                CoreNeuronPowerDefaults::DEFAULT_CORTICAL_DATA,
+                CoreNeuronDeathDefaults::DEFAULT_CORTICAL_DATA,
+                CoreNeuronFatigueDefaults::DEFAULT_CORTICAL_DATA],
         }
     }
+    
+    pub const NEURON_CORTICAL_AREA_INDEX: [CorticalAreaIndex<Q::CorticalIndex>; 3] = [
+        CorticalAreaIndex::ZERO,
+        CorticalAreaIndex::ONE,
+        CorticalAreaIndex::ONE + CorticalAreaIndex::ONE
+    ];
 
-    // TODO move to core specific functions, particularly for initialization
+
 
 }
 
@@ -121,7 +136,7 @@ for CoreNeuronAllocRAMStorage<Q>
     /// Used to pass around slices easily at low cost for all cortical areas
     fn get_neuron_values_of_all_dimensional_neuron_cortical_areas_to_process(&mut self) -> DimensionalNeuronDataRefSliceAllCorticalAreas<'_, Q> {
         DimensionalNeuronDataRefSliceAllCorticalAreas {
-            neuron_cortical_area_index: &self.neuron_cortical_area_index,
+            neuron_cortical_area_index: &Self::NEURON_CORTICAL_AREA_INDEX,
             neuron_global_burst_index_of_last_firing: &mut self.neuron_global_burst_index_of_last_firing,
             neuron_membrane_potential: &mut self.neuron_membrane_potential,
             neuron_fire_threshold: &mut self.neuron_fire_threshold,
@@ -136,12 +151,12 @@ for CoreNeuronAllocRAMStorage<Q>
 
     /// Returns a struct of references to the slices of neuron data of a cortical index if it exists
     fn get_neuron_values_of_specific_dimensional_neuron_cortical_area_to_process(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndex>) -> Result<DimensionalNeuronDataRefSliceSingleCorticalArea<'_, Q>, FeagiNPUNeuronError> {
-        let cortical_data = get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?;
+        let cortical_data = get_cortical_area_ref(&cortical_area_index, &Self::NEURON_CORTICAL_AREA_INDEX)?;
         let neuron_range = cortical_data.neuron_range.clone();
         let usize_range: Range<usize> = NPUNeuronIndex::<Q::NeuronIndex>::to_usize_range(neuron_range.clone());
 
         Ok(DimensionalNeuronDataRefSliceSingleCorticalArea {
-            neuron_cortical_area_index: &self.neuron_cortical_area_index[usize_range.clone()],
+            neuron_cortical_area_index: &Self::NEURON_CORTICAL_AREA_INDEX[usize_range.clone()],
             neuron_global_burst_index_of_last_firing: &mut self.neuron_global_burst_index_of_last_firing[usize_range.clone()],
             neuron_membrane_potential: &mut self.neuron_membrane_potential[usize_range.clone()],
             neuron_fire_threshold: &mut self.neuron_fire_threshold[usize_range.clone()],
@@ -197,17 +212,17 @@ for CoreNeuronAllocRAMStorage<Q>
     /// Returns the count of valid neurons in the structure. NOT THE SAME AS TOTAL NUMBER OF
     /// NEURONS STORED!
     fn get_total_number_of_valid_neurons(&self) -> NeuronCount<Q::NeuronIndex> {
-        self.cache_number_valid_neurons
+        NeuronCount::from_usize(NUMBER_SINGLE_NEURON_CORE_AREAS)
     }
 
 
     /// Returns the count of invalid neurons in the structure. NOT THE SAME AS TOTAL FREE CAPACITY!
     fn get_total_number_of_invalid_neurons(&self) -> NeuronCount<Q::NeuronIndex> {
-        self.cache_number_invalid_neurons
+        NeuronCount::ZERO
     }
 
 
     fn get_max_possible_cortical_area_index(&self) -> CorticalAreaIndex<Q::CorticalIndex> {
-        CorticalAreaIndex::MAX_VALUE
+        CorticalAreaIndex::from_usize(NUMBER_SINGLE_NEURON_CORE_AREAS) - CorticalAreaIndex::ONE
     }
 }

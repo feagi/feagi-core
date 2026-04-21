@@ -25,31 +25,10 @@ use crate::update_sim_timestep_from_hz;
 #[cfg(feature = "std")]
 use crate::{tracing_mutex::TracingMutex, DynamicNPU};
 use feagi_npu_neural::types::NeuronId;
-use feagi_npu_structures::connectome::ConnectomeAllocRam;
 use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
-
-
-
-pub struct ConnectomeBurstExecutor {
-    npu: ConnectomeAllocRam,
-}
-
-impl ConnectomeBurstExecutor {
-
-
-    // TODO we probably shouldnt havbe injector calls in here here
-    // TODO move to burst most of this this stuff
-
-
-}
-
-
-
-
 
 
 

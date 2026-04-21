@@ -5,7 +5,7 @@ use crate::quantizables::NPUQuantization;
 
 pub trait CoreNeuronBaseTrait<Q: NPUQuantization>:
 {
-    fn create_core_areas(&mut self); // NOTe: The struct needs to have the memory for these already defined!
+
 }
 
 pub trait CoreNeuronStaticStorageTrait<Q: NPUQuantization>:
