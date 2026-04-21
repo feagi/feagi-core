@@ -158,6 +158,16 @@ macro_rules! define_quantizable_uint_type_family {
             fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
                 range.start.0.to_usize()..range.end.0.to_usize()
             }
+
+            #[inline(always)]
+            fn write_le_bytes(self, dst: &mut [u8]) {
+                self.0.write_le_bytes(dst);
+            }
+
+            #[inline(always)]
+            fn read_le_bytes(src: &[u8]) -> Self {
+                Self(T::read_le_bytes(src))
+            }
         }
     };
 }
@@ -198,6 +208,14 @@ pub trait QuantizableUIntType:
     fn from_usize(value: usize) -> Self;
 
     fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize>;
+
+    /// Writes this value as little-endian bytes into `dst`. `dst` must have length
+    /// at least `Self::NUMBER_OF_BYTES`; excess bytes are untouched.
+    fn write_le_bytes(self, dst: &mut [u8]);
+
+    /// Reads a value from `src` interpreted as little-endian bytes. `src` must
+    /// have length at least `Self::NUMBER_OF_BYTES`; excess bytes are ignored.
+    fn read_le_bytes(src: &[u8]) -> Self;
 }
 
 #[cfg(feature = "alloc")]
@@ -238,8 +256,22 @@ pub trait QuantizableUIntType:
     fn to_usize(self) -> usize;
     fn from_usize(value: usize) -> Self;
 
+    /// Writes this value as little-endian bytes into `dst`. `dst` must have length
+    /// at least `Self::NUMBER_OF_BYTES`; excess bytes are untouched.
+    fn write_le_bytes(self, dst: &mut [u8]);
+
+    /// Reads a value from `src` interpreted as little-endian bytes. `src` must
+    /// have length at least `Self::NUMBER_OF_BYTES`; excess bytes are ignored.
+    fn read_le_bytes(src: &[u8]) -> Self;
+
     fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize>;
 }
+
+/// Width of `usize` on this target, used by the `write_le_bytes`/`read_le_bytes`
+/// impl below. Serializing `usize` across machines with different pointer widths
+/// is not portable; callers that need cross-platform wire compatibility should
+/// pick an explicit width (`u32`, `u64`) instead of `usize`.
+const USIZE_LE_BYTES: usize = size_of::<usize>();
 
 impl QuantizableUIntType for usize {
     const NUMBER_OF_BYTES: usize = size_of::<usize>();
@@ -296,6 +328,18 @@ impl QuantizableUIntType for usize {
     #[inline(always)]
     fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
         range.start.to_usize()..range.end.to_usize()
+    }
+
+    #[inline(always)]
+    fn write_le_bytes(self, dst: &mut [u8]) {
+        dst[..USIZE_LE_BYTES].copy_from_slice(&self.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn read_le_bytes(src: &[u8]) -> Self {
+        let mut buf = [0u8; USIZE_LE_BYTES];
+        buf.copy_from_slice(&src[..USIZE_LE_BYTES]);
+        usize::from_le_bytes(buf)
     }
 }
 
@@ -358,6 +402,16 @@ impl QuantizableUIntType for u8 {
     fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
         range.start.to_usize()..range.end.to_usize()
     }
+
+    #[inline(always)]
+    fn write_le_bytes(self, dst: &mut [u8]) {
+        dst[0] = self;
+    }
+
+    #[inline(always)]
+    fn read_le_bytes(src: &[u8]) -> Self {
+        src[0]
+    }
 }
 
 impl QuantizableUIntType for u16 {
@@ -418,6 +472,18 @@ impl QuantizableUIntType for u16 {
     #[inline(always)]
     fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
         range.start.to_usize()..range.end.to_usize()
+    }
+
+    #[inline(always)]
+    fn write_le_bytes(self, dst: &mut [u8]) {
+        dst[..2].copy_from_slice(&self.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn read_le_bytes(src: &[u8]) -> Self {
+        let mut buf = [0u8; 2];
+        buf.copy_from_slice(&src[..2]);
+        u16::from_le_bytes(buf)
     }
 }
 
@@ -480,6 +546,18 @@ impl QuantizableUIntType for u32 {
     fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
         range.start.to_usize()..range.end.to_usize()
     }
+
+    #[inline(always)]
+    fn write_le_bytes(self, dst: &mut [u8]) {
+        dst[..4].copy_from_slice(&self.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn read_le_bytes(src: &[u8]) -> Self {
+        let mut buf = [0u8; 4];
+        buf.copy_from_slice(&src[..4]);
+        u32::from_le_bytes(buf)
+    }
 }
 
 #[cfg(feature = "support_64bit_indexing")]
@@ -541,6 +619,18 @@ impl QuantizableUIntType for u64 {
     #[inline(always)]
     fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
         range.start.to_usize()..range.end.to_usize()
+    }
+
+    #[inline(always)]
+    fn write_le_bytes(self, dst: &mut [u8]) {
+        dst[..8].copy_from_slice(&self.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn read_le_bytes(src: &[u8]) -> Self {
+        let mut buf = [0u8; 8];
+        buf.copy_from_slice(&src[..8]);
+        u64::from_le_bytes(buf)
     }
 }
 

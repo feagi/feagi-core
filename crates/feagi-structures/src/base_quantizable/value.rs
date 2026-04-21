@@ -154,6 +154,16 @@ macro_rules! define_quantizable_value_type_family {
             fn from_f32(value: f32) -> Self {
                 Self(T::from_f32(value))
             }
+
+            #[inline(always)]
+            fn write_le_bytes(self, dst: &mut [u8]) {
+                self.0.write_le_bytes(dst);
+            }
+
+            #[inline(always)]
+            fn read_le_bytes(src: &[u8]) -> Self {
+                Self(T::read_le_bytes(src))
+            }
         }
     };
 }
@@ -191,6 +201,14 @@ pub trait QuantizableValueType:
     fn checked_div(self, other: Self) -> Option<Self>;
     fn to_f32(self) -> f32;
     fn from_f32(value: f32) -> Self;
+
+    /// Writes this value as little-endian bytes into `dst`. `dst` must have length
+    /// at least `Self::NUMBER_OF_BYTES`; excess bytes are untouched.
+    fn write_le_bytes(self, dst: &mut [u8]);
+
+    /// Reads a value from `src` interpreted as little-endian bytes. `src` must
+    /// have length at least `Self::NUMBER_OF_BYTES`; excess bytes are ignored.
+    fn read_le_bytes(src: &[u8]) -> Self;
 }
 
 #[cfg(feature = "alloc")]
@@ -228,6 +246,14 @@ pub trait QuantizableValueType:
     fn checked_div(self, other: Self) -> Option<Self>;
     fn to_f32(self) -> f32;
     fn from_f32(value: f32) -> Self;
+
+    /// Writes this value as little-endian bytes into `dst`. `dst` must have length
+    /// at least `Self::NUMBER_OF_BYTES`; excess bytes are untouched.
+    fn write_le_bytes(self, dst: &mut [u8]);
+
+    /// Reads a value from `src` interpreted as little-endian bytes. `src` must
+    /// have length at least `Self::NUMBER_OF_BYTES`; excess bytes are ignored.
+    fn read_le_bytes(src: &[u8]) -> Self;
 }
 
 impl QuantizableValueType for f32 {
@@ -312,6 +338,18 @@ impl QuantizableValueType for f32 {
             value
         }
     }
+
+    #[inline(always)]
+    fn write_le_bytes(self, dst: &mut [u8]) {
+        dst[..4].copy_from_slice(&self.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn read_le_bytes(src: &[u8]) -> Self {
+        let mut buf = [0u8; 4];
+        buf.copy_from_slice(&src[..4]);
+        f32::from_le_bytes(buf)
+    }
 }
 
 impl QuantizableValueType for f16 {
@@ -393,6 +431,18 @@ impl QuantizableValueType for f16 {
             f16::from_f32(value)
         }
     }
+
+    #[inline(always)]
+    fn write_le_bytes(self, dst: &mut [u8]) {
+        dst[..2].copy_from_slice(&self.to_le_bytes());
+    }
+
+    #[inline(always)]
+    fn read_le_bytes(src: &[u8]) -> Self {
+        let mut buf = [0u8; 2];
+        buf.copy_from_slice(&src[..2]);
+        f16::from_le_bytes(buf)
+    }
 }
 
 impl QuantizableValueType for u8 {
@@ -453,5 +503,15 @@ impl QuantizableValueType for u8 {
         } else {
             value as u8
         }
+    }
+
+    #[inline(always)]
+    fn write_le_bytes(self, dst: &mut [u8]) {
+        dst[0] = self;
+    }
+
+    #[inline(always)]
+    fn read_le_bytes(src: &[u8]) -> Self {
+        src[0]
     }
 }
