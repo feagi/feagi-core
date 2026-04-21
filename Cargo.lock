@@ -2164,6 +2164,7 @@ dependencies = [
 name = "feagi-serialization"
 version = "0.0.10"
 dependencies = [
+ "ahash",
  "byteorder",
  "feagi-structures",
  "serde",

@@ -192,6 +192,119 @@ where
     > {
         self.mappings.iter_mut()
     }
+
+    /// Pre-populates `self` with one empty [`NeuronVoxelCoordVector`] per cortical id
+    /// present in the wire header of `byte_slice`, using authoritative per-CA
+    /// dimensions looked up in `dims_by_cortical_id`.
+    ///
+    /// Intended to satisfy the deserialization contract of
+    /// [`FeagiSerializable::try_deserialize_and_update_self_from_byte_slice`]:
+    /// the wire format does not carry [`crate::neuron_voxels::descriptors::NeuronVoxelDimensions`],
+    /// so the caller — which already has authoritative dimensions from the genome/API
+    /// layer — must install them before the data pass. Typical use:
+    ///
+    /// ```ignore
+    /// let mut target: CorticalMappedNeuronVoxelCoordVectors<f32, u32, u32, u16> =
+    ///     CorticalMappedNeuronVoxelCoordVectors::new();
+    /// target.prepopulate_from_byte_slice(&bytes, &dims_by_id)?;
+    /// target.try_deserialize_and_update_self_from_byte_slice(&bytes)?;
+    /// ```
+    ///
+    /// This reads ONLY the struct + cortical-count headers + per-CA id headers; it
+    /// does NOT touch voxel payload bytes. Calling it on a non-empty `self` replaces
+    /// existing entries whose id appears in the header (and leaves unrelated ids
+    /// untouched); this is intentional so callers can reuse a `self` buffer across
+    /// packets.
+    ///
+    /// # Errors
+    /// - `DeserializationError` if the byte header is malformed.
+    /// - `BadParameters` if any cortical id in the header is missing from `dims_by_cortical_id`.
+    pub fn prepopulate_from_byte_slice(
+        &mut self,
+        byte_slice: &[u8],
+        dims_by_cortical_id: &AHashMap<
+            CorticalID,
+            crate::neuron_voxels::descriptors::NeuronVoxelDimensions<CoordQuant>,
+        >,
+    ) -> Result<(), crate::FeagiStructuresError> {
+        use crate::FeagiStructuresError;
+
+        const STRUCT_HEADER_BYTE_COUNT: usize = 2;
+        let header_end =
+            STRUCT_HEADER_BYTE_COUNT + Self::NUMBER_BYTES_CORTICAL_COUNT_HEADER;
+        if byte_slice.len() < header_end {
+            return Err(FeagiStructuresError::DeserializationError(format!(
+                "CorticalMappedNeuronVoxelCoordVectors::prepopulate_from_byte_slice: slice too \
+                 short ({} bytes) to contain cortical-count header ({} bytes)",
+                byte_slice.len(),
+                header_end
+            )));
+        }
+
+        let number_cortical_areas: usize = u16::from_le_bytes(
+            byte_slice[STRUCT_HEADER_BYTE_COUNT..header_end]
+                .try_into()
+                .map_err(|_| {
+                    FeagiStructuresError::DeserializationError(
+                        "CorticalMappedNeuronVoxelCoordVectors::prepopulate_from_byte_slice: \
+                         failed to read cortical-area count"
+                            .into(),
+                    )
+                })?,
+        ) as usize;
+
+        let mut reading_header_byte_index: usize = header_end;
+        for _cortical_index in 0..number_cortical_areas {
+            let header_end_index =
+                reading_header_byte_index + Self::NUMBER_BYTES_PER_CORTICAL_ID_HEADER;
+            if byte_slice.len() < header_end_index {
+                return Err(FeagiStructuresError::DeserializationError(
+                    "CorticalMappedNeuronVoxelCoordVectors::prepopulate_from_byte_slice: slice \
+                     too short to read per-cortical-area id header"
+                        .into(),
+                ));
+            }
+
+            let cortical_id_slice: &[u8; CorticalID::NUMBER_OF_BYTES] = byte_slice
+                [reading_header_byte_index
+                    ..reading_header_byte_index + CorticalID::NUMBER_OF_BYTES]
+                .try_into()
+                .map_err(|_| {
+                    FeagiStructuresError::DeserializationError(
+                        "CorticalMappedNeuronVoxelCoordVectors::prepopulate_from_byte_slice: \
+                         failed to slice CorticalID bytes"
+                            .into(),
+                    )
+                })?;
+            let cortical_id = CorticalID::try_from_bytes(cortical_id_slice).map_err(|e| {
+                FeagiStructuresError::DeserializationError(format!(
+                    "CorticalMappedNeuronVoxelCoordVectors::prepopulate_from_byte_slice: \
+                     failed to parse CorticalID from bytes: {:?}",
+                    e
+                ))
+            })?;
+
+            let dims = dims_by_cortical_id.get(&cortical_id).ok_or_else(|| {
+                FeagiStructuresError::BadParameters(format!(
+                    "CorticalMappedNeuronVoxelCoordVectors::prepopulate_from_byte_slice: \
+                     incoming cortical id {:?} is missing from dims_by_cortical_id; callers \
+                     must supply dimensions for every cortical id present in the wire header",
+                    cortical_id
+                ))
+            })?;
+
+            let empty = NeuronVoxelCoordVector::<
+                VoxelPotentialQuant,
+                CoordQuant,
+                NeuronVoxelIndexQuant,
+            >::new(*dims, NeuronVoxelIndexQuant::from_usize(0));
+            self.insert(cortical_id, empty);
+
+            reading_header_byte_index += Self::NUMBER_BYTES_PER_CORTICAL_ID_HEADER;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(feature = "alloc")]
