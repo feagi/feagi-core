@@ -81,8 +81,12 @@ pub(crate) fn sim_timestep() -> Duration {
     Duration::from_nanos(timestep_ns)
 }
 
-#[cfg(any(feature = "async-tokio", feature = "wasm"))]
-pub mod async_burst_loop; // Pure Rust burst loop
+// The async burst loop was written against `feagi_structures::r#async::FeagiAsyncRuntime`,
+// which has been removed in the ongoing refactor. The module has zero in-tree callers
+// (only the sync `burst_loop_runner` is used today), so it is disabled until a
+// replacement async-runtime abstraction lands.
+// #[cfg(any(feature = "async-tokio", feature = "wasm"))]
+// pub mod async_burst_loop;
 pub mod backend;
 #[cfg(feature = "std")]
 pub mod burst_loop_runner;

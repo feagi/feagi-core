@@ -35,8 +35,14 @@ npu-lock-tracing = []
 feagi-npu-neural = { version = "0.0.10", path = "../neural" }
 
 # Runtime trait abstraction (generic over any runtime implementation)
-# Standard runtime implementation available via "std" feature
-feagi-npu-runtime = { version = "0.0.10", path = "../runtime", optional = true }
+# Standard runtime implementation available via "std" feature.
+# Used unconditionally in burst-engine source today; keeping it non-optional
+# avoids feature-gating every use site across 7+ files and 6k+ LOC.
+feagi-npu-runtime = { version = "0.0.10", path = "../runtime", features = ["std"] }
+# New NPU structures crate (connectome, storage, traits) used by the burst loop
+# and integration path. Added as a transition dependency alongside
+# feagi-npu-runtime until the runtime surface fully migrates.
+feagi-npu-structures = { version = "0.0.10", path = "../structures" }
 
 feagi-state-manager = { version = "0.0.10", path = "../../feagi-state-manager" } # For BurstEngineState enum
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)

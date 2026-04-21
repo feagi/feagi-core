@@ -890,7 +890,7 @@ fn process_single_neuron<T: NeuralValue>(
                 );
             }
             // Reset membrane potential
-            neuron_array.membrane_potentials_mut()[idx] = T::ZERO;
+            neuron_array.membrane_potentials_mut()[idx] = T::zero();
 
             // Increment consecutive fire count (saturating to prevent overflow)
             let old_count = neuron_array.consecutive_fire_counts()[idx];

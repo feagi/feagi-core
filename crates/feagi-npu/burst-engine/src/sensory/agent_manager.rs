@@ -377,8 +377,21 @@ fn agent_polling_loop(
 
         // Extract neuron data from each structure
         for struct_idx in 0..num_structures {
+            // Burst-engine picks the std/desktop quantization (see burst_loop_runner::BE* type aliases)
+            // when asking the container to hand back a typed structure.
+            use feagi_structures::neuron_voxels::coord_potential::{
+                CorticalMappedNeuronVoxelCoordVectors, NeuronVoxelCoordVector,
+            };
+            use feagi_structures::neuron_voxels::traits::SingleCorticalNeuronVoxelCollectionSparse;
+            type SensoryCMNVCV =
+                CorticalMappedNeuronVoxelCoordVectors<f32, u32, u32, u16>;
+            #[allow(dead_code)]
+            type SensoryNVCV = NeuronVoxelCoordVector<f32, u32, u32>;
+
             let boxed_struct =
-                match byte_container.try_create_new_struct_from_index(struct_idx as u8) {
+                match byte_container.try_create_new_struct_from_index::<f32, u32, u32, u16>(
+                    struct_idx as u8,
+                ) {
                     Ok(s) => s,
                     Err(e) => {
                         error!(
@@ -389,16 +402,14 @@ fn agent_polling_loop(
                     }
                 };
 
-            // Downcast to CorticalMappedXYZPNeuronData
-            use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
             let cortical_mapped = match boxed_struct
                 .as_any()
-                .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()
+                .downcast_ref::<SensoryCMNVCV>()
             {
                 Some(cm) => cm,
                 None => {
                     warn!(
-                        "[SENSORY-{}] Structure {} is not CorticalMappedXYZPNeuronData",
+                        "[SENSORY-{}] Structure {} is not CorticalMappedNeuronVoxelCoordVectors",
                         config.agent_id, struct_idx
                     );
                     continue;
@@ -421,18 +432,11 @@ fn agent_polling_loop(
                     }
                 };
 
-                // Extract (x,y,z,p) coordinates with potentials and pass to callback
-                // Callback will use NPU's spatial hash to convert → neuron_id
-                let (x_coords, y_coords, z_coords, potentials) =
-                    neuron_arrays.borrow_xyzp_vectors();
-
-                // Build coordinate+potential tuples (XYZP)
-                let xyzp_data: Vec<(u32, u32, u32, f32)> = x_coords
-                    .iter()
-                    .zip(y_coords.iter())
-                    .zip(z_coords.iter())
-                    .zip(potentials.iter())
-                    .map(|(((x, y), z), p)| (*x, *y, *z, *p))
+                // Extract (x,y,z,p) coordinates with potentials and pass to callback.
+                // Callback will use NPU's spatial hash to convert -> neuron_id.
+                let xyzp_data: Vec<(u32, u32, u32, f32)> = neuron_arrays
+                    .iter_coordinate()
+                    .map(|(c, p)| (c.x, c.y, c.z, p.0))
                     .collect();
 
                 // 🔍 DEBUG: Log coordinate and potential distribution

@@ -2054,6 +2054,7 @@ dependencies = [
  "cudarc",
  "feagi-npu-neural",
  "feagi-npu-runtime",
+ "feagi-npu-structures",
  "feagi-observability",
  "feagi-serialization",
  "feagi-state-manager",

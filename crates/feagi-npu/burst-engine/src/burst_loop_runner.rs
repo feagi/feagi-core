@@ -26,6 +26,7 @@ use crate::update_sim_timestep_from_hz;
 use crate::{tracing_mutex::TracingMutex, DynamicNPU};
 use feagi_npu_neural::types::NeuronId;
 use feagi_npu_structures::connectome::ConnectomeAllocRam;
+use feagi_npu_structures::quantizables::StdNPUQuantization;
 use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -35,7 +36,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 
 pub struct ConnectomeBurstExecutor {
-    npu: ConnectomeAllocRam,
+    #[allow(dead_code)]
+    npu: ConnectomeAllocRam<StdNPUQuantization>,
 }
 
 impl ConnectomeBurstExecutor {
@@ -84,7 +86,30 @@ fn should_emit_throttled_warning(last_emitted_ms: &AtomicU64, interval_ms: u64) 
 use tracing::{debug, error, info, trace, warn};
 
 use std::thread;
-use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxels::coord_potential::{
+    CorticalMappedNeuronVoxelCoordVectors, NeuronVoxelCoordVector,
+};
+use feagi_structures::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential};
+use feagi_structures::neuron_voxels::traits::SingleCorticalNeuronVoxelCollectionSparse;
+
+/// Quant-parameters used throughout the std/desktop burst-engine path.
+/// Matches the fields of `feagi_npu_structures::quantizables::StdNPUQuantization`:
+/// Value=f32, Coord=u32, NeuronIndex=u32, CorticalIndex=u16.
+type BEVoxelPotentialQuant = f32;
+type BECoordQuant = u32;
+type BENeuronVoxelIndexQuant = u32;
+type BECorticalAreaIndexQuant = u16;
+
+/// Canonical `CorticalMappedNeuronVoxelCoordVectors` instantiation for the burst engine.
+type BECorticalMappedNeuronVoxelCoordVectors = CorticalMappedNeuronVoxelCoordVectors<
+    BEVoxelPotentialQuant,
+    BECoordQuant,
+    BENeuronVoxelIndexQuant,
+    BECorticalAreaIndexQuant,
+>;
+
+type BENeuronVoxelCoordVector =
+    NeuronVoxelCoordVector<BEVoxelPotentialQuant, BECoordQuant, BENeuronVoxelIndexQuant>;
 
 /// Trait for visualization publishing (abstraction to avoid circular dependency with feagi-io)
 /// Any component that can publish visualization data implements this trait.
@@ -1056,11 +1081,15 @@ fn encode_fire_data_to_xyzp(
     cortical_id_filter: Option<&ahash::AHashSet<String>>,
 ) -> Result<Vec<u8>, String> {
     use feagi_structures::genomic::cortical_area::CorticalID;
-    use feagi_structures::neuron_voxels::coord_potential::{
-        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
-    };
 
-    let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
+    // Wire format v2 carries per-cortical voxel data without per-area dimensions,
+    // so we use a placeholder NeuronVoxelDimensions<u32> of (1,1,1) when constructing
+    // each NeuronVoxelCoordVector here. The decode side is expected to be
+    // pre-populated with authoritative dimensions before deserialization.
+    let placeholder_dims = NeuronVoxelDimensions::<BECoordQuant>::new(1, 1, 1)
+        .expect("(1,1,1) is a valid non-zero dimension");
+
+    let mut cortical_mapped = BECorticalMappedNeuronVoxelCoordVectors::new();
 
     for (area_id, area_data) in fire_data {
         let x_vec = area_data.coords_x;
@@ -1132,28 +1161,26 @@ fn encode_fire_data_to_xyzp(
             continue;
         }
 
-        // Create neuron voxel arrays (MOVE vectors for zero-copy)
-        match NeuronVoxelXYZPSparseVectors::new_from_vectors(
-            x_vec, // ✅ MOVE (no clone)
-            y_vec, // ✅ MOVE (no clone)
-            z_vec, // ✅ MOVE (no clone)
-            p_vec, // ✅ MOVE (no clone)
-        ) {
-            Ok(arrays) => {
-                debug!(
-                    "[ENCODE-XYZP] ✅ Created arrays for area {} with {} neurons",
-                    area_id, vec_len
-                );
-                cortical_mapped.mappings.insert(cortical_id, arrays);
-            }
-            Err(e) => {
-                error!(
-                    "[ENCODE-XYZP] ❌ Failed to create arrays for area {}: {:?}",
-                    area_id, e
-                );
-                continue;
-            }
+        // Build a NeuronVoxelCoordVector from the raw parallel vectors. This is the
+        // sparse successor to the old NeuronVoxelXYZPSparseVectors. Since we already
+        // validated parallel lengths above, we push voxels unchecked for zero-overhead.
+        let mut arrays: BENeuronVoxelCoordVector =
+            NeuronVoxelCoordVector::new(placeholder_dims, vec_len as BENeuronVoxelIndexQuant);
+        for ((x, y), (z, p)) in x_vec
+            .into_iter()
+            .zip(y_vec.into_iter())
+            .zip(z_vec.into_iter().zip(p_vec.into_iter()))
+        {
+            arrays.push_neuron_voxel_unchecked(
+                NeuronVoxelCoordinate::new(x, y, z),
+                NeuronVoxelPotential::from(p),
+            );
         }
+        debug!(
+            "[ENCODE-XYZP] Created arrays for area {} with {} neurons",
+            area_id, vec_len
+        );
+        cortical_mapped.mappings.insert(cortical_id, arrays);
     }
 
     // Check if we have any data to send
@@ -1201,8 +1228,6 @@ fn get_timestamp() -> String {
 /// Decode sensory bytes (FeagiByteContainer) into cortical XYZP list.
 /// Transport-agnostic; same format whether source is ZMQ, WebSocket, or SHM.
 fn decode_sensory_bytes(bytes: &[u8]) -> Result<SensoryXyzpDecoded, String> {
-    use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
-
     let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
     let mut data_vec = bytes.to_vec();
     byte_container
@@ -1219,7 +1244,12 @@ fn decode_sensory_bytes(bytes: &[u8]) -> Result<SensoryXyzpDecoded, String> {
     let mut out = Vec::new();
     for struct_idx in 0..num_structures {
         let boxed_struct = byte_container
-            .try_create_new_struct_from_index(struct_idx as u8)
+            .try_create_new_struct_from_index::<
+                BEVoxelPotentialQuant,
+                BECoordQuant,
+                BENeuronVoxelIndexQuant,
+                BECorticalAreaIndexQuant,
+            >(struct_idx as u8)
             .map_err(|e| {
                 format!(
                     "create_new_struct_from_index {} failed: {:?}",
@@ -1229,12 +1259,12 @@ fn decode_sensory_bytes(bytes: &[u8]) -> Result<SensoryXyzpDecoded, String> {
 
         let cortical_mapped = match boxed_struct
             .as_any()
-            .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()
+            .downcast_ref::<BECorticalMappedNeuronVoxelCoordVectors>()
         {
             Some(cm) => cm,
             None => {
                 trace!(
-                    "[SENSORY-DECODE] Structure {} is not CorticalMappedXYZPNeuronVoxels, skipping",
+                    "[SENSORY-DECODE] Structure {} is not CorticalMappedNeuronVoxelCoordVectors, skipping",
                     struct_idx
                 );
                 continue;
@@ -1242,13 +1272,9 @@ fn decode_sensory_bytes(bytes: &[u8]) -> Result<SensoryXyzpDecoded, String> {
         };
 
         for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
-            let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
-            let xyzp_data: Vec<(u32, u32, u32, f32)> = x_coords
-                .iter()
-                .zip(y_coords.iter())
-                .zip(z_coords.iter())
-                .zip(potentials.iter())
-                .map(|(((x, y), z), p)| (*x, *y, *z, *p))
+            let xyzp_data: Vec<(u32, u32, u32, f32)> = neuron_arrays
+                .iter_coordinate()
+                .map(|(c, p)| (c.x, c.y, c.z, p.0))
                 .collect();
             if !xyzp_data.is_empty() {
                 out.push((*cortical_id, xyzp_data));

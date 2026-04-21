@@ -138,3 +138,23 @@ define_quantizable_percentage_type_family!(LeakCoefficient);
 //endregion
 
 
+/// Production std/desktop quantization choice.
+///
+/// This is the single blessed `NPUQuantization` used by feagi-npu-burst-engine
+/// and any std/desktop path in feagi-rs. Mirrors the `TestQuantization` shape
+/// defined in `tests/ram_tests.rs`: 32-bit indices, f32 values. Embedded /
+/// WASM / quantized profiles will define their own impls later.
+pub struct StdNPUQuantization;
+
+impl NPUQuantization for StdNPUQuantization {
+    type NeuronIndex = u32;
+    type SynapseIndex = u32;
+    type SynapseBundleIndex = u32;
+    type CorticalIndex = u16;
+    type Coord = u32;
+    type BurstDelta = u16;
+    type BurstIndex = u32;
+    type Value = f32;
+    type Percentage = f32;
+}
+
