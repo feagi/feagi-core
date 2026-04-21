@@ -6,7 +6,12 @@ mod neuron_voxel_xyzp;
 #[cfg(feature = "alloc")]
 mod neuron_voxel_coord_vector;
 
+#[cfg(feature = "alloc")]
+mod cortical_mapped_neuron_voxel_coord_vectors;
+
 pub use neuron_voxel_xyzp::NeuronVoxelXYZP;
 #[cfg(feature = "alloc")]
 pub use neuron_voxel_coord_vector::NeuronVoxelCoordVector;
+#[cfg(feature = "alloc")]
+pub use cortical_mapped_neuron_voxel_coord_vectors::CorticalMappedNeuronVoxelCoordVectors;
 
