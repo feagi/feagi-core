@@ -22,6 +22,15 @@ impl<DataType, IndexType: QuantizableUIntType> IndexedDataTracker<DataType, Inde
         }
     }
 
+    /// Creates a new empty IndexedDataTracker with preallocated capacity
+    pub fn with_capacity(capacity: IndexType) -> Self {
+        Self {
+            data: Vec::with_capacity(capacity.to_usize()),
+            skipped_indexes: Vec::new(),
+            index_length: IndexType::ZERO,
+        }
+    }
+
     /// Returns number of indexes skipped internally
     pub fn get_number_skipped_indexes(&self) -> usize {
         self.skipped_indexes.len()

@@ -88,7 +88,7 @@ pub struct DimensionalNeuronDataRefSliceAllCorticalAreas<'a, Q: NPUQuantization>
     pub neuron_refractory_countdown: &'a mut [BurstDelta<Q::BurstDelta>],
     pub neuron_consecutive_fire_count: &'a mut [BurstDelta<Q::BurstDelta>],
 
-    pub cortical_data: &'a IndexedDataTracker<DimensionalNeuronCorticalData<Q>>,
+    pub cortical_data: &'a IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndex>>,
 }
 
 

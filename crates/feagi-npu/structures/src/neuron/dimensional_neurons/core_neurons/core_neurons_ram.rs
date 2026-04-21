@@ -1,23 +1,19 @@
 use core::ops::Range;
 use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
-use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
-use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
+use feagi_structures::neurons::descriptors::{NeuronCount};
 use feagi_structures::useful_structs::{IndexedDataTracker, RangeUintVector};
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
-use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, DimensionalStaticStorageTrait};
-use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
+use crate::neuron::base_dimension_traits::{DimensionalStaticStorageTrait};
+use crate::neuron::base_traits::{BaseNeuronStaticStorageTrait};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
-use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
-use crate::neuron::dimensional_neurons::dimensional_traits::{DimensionalNeuronAllocStorageTrait, DimensionalNeuronStaticStorageTrait};
+use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
+use crate::neuron::dimensional_neurons::dimensional_traits::{DimensionalNeuronStaticStorageTrait};
 use crate::neuron::dimensional_neurons::shared_funcs_ram::{
-    create_cortical_area_with_individualized_neurons,
-    default_create_cortical_area_with_uniform_neurons,
     get_cortical_area_ref,
-    invalidate_cortical_area_and_return_invalidated_neuron_range,
 };
-use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
+use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential};
 
 // TODO Core Traits
 // TODO right now we are copying every other interneuron. However, we know core areas are rather constant. we should model that with that in mind
@@ -35,12 +31,12 @@ pub struct CoreNeuronAllocRAMStorage<Q: NPUQuantization>
     neuron_consecutive_fire_count: Vec<BurstDelta<Q::BurstDelta>>, // how many times the neuron fired burst recently
 
     // Per Cortical Area (including invalids)
-    cortical_datas: IndexedDataTracker<DimensionalNeuronCorticalData<Q>>,
+    cortical_datas: IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndex>>,
 
     // Cached Data
     cache_number_valid_neurons: NeuronCount<Q::NeuronIndex>,
     cache_number_invalid_neurons: NeuronCount<Q::NeuronIndex>,
-    cache_invalid_neuron_index_blocks: RangeUintVector<NPUNeuronIndex<Q::NeuronIndex>>,
+    cache_invalid_neuron_index_blocks: RangeUintVector<NPUNeuronIndex<Q::NeuronIndex>, NeuronCount<Q::NeuronIndex>>,
 }
 
 // NOTE: Only define the constructor here, as we will be going through traits / generics for all data transfer!
@@ -58,7 +54,7 @@ CoreNeuronAllocRAMStorage<Q>
             neuron_refractory_countdown: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
             neuron_consecutive_fire_count: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
 
-            cortical_datas: IndexedDataTracker::with_capacity(number_cortical_areas_to_preallocate_space_for.to_usize()),
+            cortical_datas: IndexedDataTracker::with_capacity(number_cortical_areas_to_preallocate_space_for),
 
             cache_number_valid_neurons: NeuronCount::ZERO,
             cache_number_invalid_neurons: NeuronCount::ZERO,

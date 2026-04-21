@@ -60,7 +60,7 @@ DimensionalNeuronStaticStorageTrait<Q>
                                                  cortical_consecutive_fire_limit: BurstDelta<Q::BurstDelta>,
                                                  cortical_is_mp_charge_accumulation_enabled: bool,
                                                  cortical_is_mp_driven_psp_enabled: bool)
-                                                 -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError>;
+                                                 -> Result<(CorticalAreaIndex<Q::CorticalIndex>), FeagiNPUNeuronError>;
 
 
     /// Creates a cortical area of given dimensions but using prefilled neuron data values.
@@ -69,5 +69,5 @@ DimensionalNeuronStaticStorageTrait<Q>
                                                                 cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
                                                                 neurons_per_voxel: NumberNeuronsPerVoxel,
                                                                 neuron_data: DimensionalNeuronDataFromCorticalArea<Q>)
-                                                                -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError>;
+                                                                -> Result<(CorticalAreaIndex<Q::CorticalIndex>), FeagiNPUNeuronError>;
 }

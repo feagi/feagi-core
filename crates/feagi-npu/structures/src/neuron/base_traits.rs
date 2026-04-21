@@ -56,5 +56,7 @@ BaseNeuronStaticStorageTrait<Q>
     /// WARNING: BE SURE TO REMOVE ASSOCIATED SYNAPSE MAPPINGS!
     fn delete_cortical_area(&mut self, cortical_index: CorticalAreaIndex<Q::CorticalIndex>)
                             -> Result<Range<NPUNeuronIndex<Q::NeuronIndex>>, FeagiNPUNeuronError>;
+    
+    // TODO Duplicate Cortical Area
 
 }

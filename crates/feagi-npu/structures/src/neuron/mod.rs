@@ -4,7 +4,6 @@ pub mod dimensional_neurons;
 pub mod memory;
 pub mod base_traits;
 pub mod base_dimension_traits;
-pub mod npu_neuron_type;
 
 pub mod flags;
 pub(crate) mod defaults;

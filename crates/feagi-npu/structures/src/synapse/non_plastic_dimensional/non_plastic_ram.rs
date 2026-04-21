@@ -191,48 +191,6 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
         Ok((iterator, NeuronCount::from_usize(synapse_indexes.len())))
     }
 
-    /// Gets mut synapse data from a source neuron index as an iterator, and the number of them. DOES NOT FILTER OUT INVALID SYNAPSES
-    fn get_synapse_data_from_source_neuron_index_mut(&mut self, source_neuron_index: &DimensionalTypedNeuronIndex<Q::NeuronIndex>)
-        -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
-        let synapse_indexes = self.get_synapse_indexes_from_source_neuron_index(source_neuron_index);
-        let neuron_count = NeuronCount::from_usize(synapse_indexes.len());
-
-        // TODO debug check only!
-        for synapse_index in synapse_indexes {
-            if synapse_index.to_usize() >= self.synapses_data.len() {
-                return Err(FeagiNPUSynapseError::InternalError {
-                    context: "Source neuron index pointed to invalid synapse index! Internal state corrupted!"
-                });
-            }
-        }
-
-        let iterator = synapse_indexes.iter().map(|synapse_index|
-            &mut self.synapses_data[synapse_index.to_usize()]
-        );
-        Ok((iterator, neuron_count))
-    }
-
-    /// Gets mut synapse data from a destination neuron index as an iterator, and the number of them. DOES NOT FILTER OUT INVALID SYNAPSES
-    fn get_synapse_data_from_destination_neuron_index_mut(&mut self, destination_neuron_index: &DimensionalTypedNeuronIndex<Q::NeuronIndex>)
-        -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
-        let synapse_indexes = self.get_synapse_indexes_from_destination_neuron_index(destination_neuron_index);
-
-        // TODO debug check only!
-        let data_len = self.synapses_data.len();
-        for synapse_index in synapse_indexes {
-            if synapse_index.to_usize() >= data_len {
-                return Err(FeagiNPUSynapseError::InternalError {
-                    context: "Destination neuron index pointed to invalid synapse index! Internal state corrupted!"
-                });
-            }
-        }
-
-        let iterator = synapse_indexes.iter().map(|synapse_index|
-            &self.synapses_data[synapse_index.to_usize()]
-        );
-        Ok((iterator, NeuronCount::from_usize(synapse_indexes.len())))
-    }
-
     //endregion
 
 
@@ -276,8 +234,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
                 let synapse_writing_region = NPUSynapseIndex::from_usize(self.synapses_data.len()) .. NPUSynapseIndex::from_usize(self.synapses_data.len() + number_synapses.to_usize());
                 let synapse_bundle_index = self.insert_valid_synapse_block_and_get_index(synapse_writing_region, source_area_index, destination_area_index);
 
-
-                // TODO and entry miught be wrong
+                
 
                 // Allocate at the end
                 self.synapses_data.reserve(number_synapses.to_usize());
@@ -327,25 +284,14 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
         -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
         self.get_synapse_data_from_source_neuron_index(&source_neuron_index)
     }
-
-    fn get_nonplastic_synapse_data_from_source_neuron_index_mut(&mut self,
-                                                                source_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
-        -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
-        self.get_synapse_data_from_source_neuron_index_mut(&source_neuron_index)
-    }
+    
 
     fn get_nonplastic_synapse_data_from_destination_neuron_index(&self,
                                                                  destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
         self.get_synapse_data_from_destination_neuron_index(&destination_neuron_index)
     }
-
-    fn get_nonplastic_synapse_data_from_destination_neuron_index_mut(&mut self,
-                                                                     destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
-        -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
-        self.get_synapse_data_from_destination_neuron_index_mut(&destination_neuron_index)
-    }
-
+    
     //endregion
 
 }

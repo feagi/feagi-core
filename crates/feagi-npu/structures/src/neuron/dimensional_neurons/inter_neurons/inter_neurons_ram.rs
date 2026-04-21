@@ -36,12 +36,12 @@ pub struct InterNeuronAllocRAMStorage<Q: NPUQuantization>
     neuron_consecutive_fire_count: Vec<BurstDelta<Q::BurstDelta>>, // how many times the neuron fired burst recently
 
     // Per Cortical Area (including invalids)
-    cortical_datas: IndexedDataTracker<DimensionalNeuronCorticalData<Q>>,
+    cortical_datas: IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndex>>,
 
     // Cached Data
     cache_number_valid_neurons: NeuronCount<Q::NeuronIndex>,
     cache_number_invalid_neurons: NeuronCount<Q::NeuronIndex>,
-    cache_invalid_neuron_index_blocks: RangeUintVector<NPUNeuronIndex<Q::NeuronIndex>>,
+    cache_invalid_neuron_index_blocks: RangeUintVector<NPUNeuronIndex<Q::NeuronIndex>, NeuronCount<Q::NeuronIndex>>,
 }
 
 // NOTE: Only define the constructor here, as we will be going through traits / generics for all data transfer!
@@ -59,7 +59,7 @@ InterNeuronAllocRAMStorage<Q>
             neuron_refractory_countdown: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
             neuron_consecutive_fire_count: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
 
-            cortical_datas: IndexedDataTracker::with_capacity(number_cortical_areas_to_preallocate_space_for.to_usize()),
+            cortical_datas: IndexedDataTracker::with_capacity(number_cortical_areas_to_preallocate_space_for),
 
             cache_number_valid_neurons: NeuronCount::ZERO,
             cache_number_invalid_neurons: NeuronCount::ZERO,
@@ -95,8 +95,8 @@ for InterNeuronAllocRAMStorage<Q>
                                                  cortical_consecutive_fire_limit: BurstDelta<Q::BurstDelta>,
                                                  cortical_is_mp_charge_accumulation_enabled: bool,
                                                  cortical_is_mp_driven_psp_enabled: bool)
-                                                 -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError> {
-        let (output_cortical_index,  output_neuron_region, _) = default_create_cortical_area_with_uniform_neurons::<Q, InterNeuronsDefaults<Q>>(
+                                                 -> Result<(CorticalAreaIndex<Q::CorticalIndex>), FeagiNPUNeuronError> {
+        let (output_cortical_index, extending) = default_create_cortical_area_with_uniform_neurons::<Q, InterNeuronsDefaults<Q>>(
             cortical_area_dimensions,
             neurons_per_voxel,
             neuron_global_burst_index_of_last_firing,
@@ -123,7 +123,7 @@ for InterNeuronAllocRAMStorage<Q>
             &mut self.cache_invalid_neuron_index_blocks,
         )?;
         
-        Ok((output_cortical_index, output_neuron_region))
+        Ok((output_cortical_index))
     }
 
 
@@ -133,8 +133,8 @@ for InterNeuronAllocRAMStorage<Q>
                                                                 cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
                                                                 neurons_per_voxel: NumberNeuronsPerVoxel,
                                                                 neuron_data: DimensionalNeuronDataFromCorticalArea<Q>)
-                                                                -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError> {
-        let (output_cortical_index,  output_neuron_region, _) = create_cortical_area_with_individualized_neurons::<Q, InterNeuronsDefaults<Q>>(
+                                                                -> Result<(CorticalAreaIndex<Q::CorticalIndex>), FeagiNPUNeuronError> {
+        let (output_cortical_index, is_extending) = create_cortical_area_with_individualized_neurons::<Q, InterNeuronsDefaults<Q>>(
             cortical_area_dimensions,
             neurons_per_voxel,
             neuron_data,
@@ -150,7 +150,7 @@ for InterNeuronAllocRAMStorage<Q>
             &mut self.cache_invalid_neuron_index_blocks,
         )?;
         
-        Ok((output_cortical_index, output_neuron_region))
+        Ok((output_cortical_index))
     }
 
 }
@@ -228,7 +228,7 @@ for InterNeuronAllocRAMStorage<Q>
     fn create_cortical_area_with_default_neurons(&mut self,
                                                  cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
                                                  neurons_per_voxel: NumberNeuronsPerVoxel)
-                                                 -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError>
+                                                 -> Result<(CorticalAreaIndex<Q::CorticalIndex>), FeagiNPUNeuronError>
     {
         self.create_cortical_area_with_uniform_neurons(
             cortical_area_dimensions,
@@ -260,14 +260,20 @@ for InterNeuronAllocRAMStorage<Q>
                                                  cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
                                                  neurons_per_voxel: NumberNeuronsPerVoxel,
                                                  cortical_index: CorticalAreaIndex<Q::CorticalIndex>)
-                                                 -> Result<(Range<NPUNeuronIndex<Q::NeuronIndex>>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError> {
+                                                 -> Result<(Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError> {
+        
+        // TODO broken!
+        todo!()
 
+        /*
         // no need to verify cortical index since the delete function handles that for us
         let deleted_indexes = self.delete_cortical_area(cortical_index)?;
         // TODO This is currently broken due to different indexing system!
         // TODO best to make an explicit system instead! We should be able to have a shared function here
         let new_indexes = self.create_cortical_area_with_default_neurons(cortical_area_dimensions, neurons_per_voxel)?;
         Ok((deleted_indexes, new_indexes.1))
+        
+         */
     }
 }
 
