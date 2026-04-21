@@ -9,9 +9,8 @@ use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
-use crate::neuron::dimensional_neurons::shared_structs::DimensionalTypedCorticalIndex;
+use crate::neuron::dimensional_neurons::shared_structs::{DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex, NPUDimensionalAreaType};
 use crate::neuron::flags::NeuronFlag;
-use crate::neuron::npu_neuron_type::NPUDimensionalNeuronType;
 use crate::quantizables::{NPUQuantization, NPUNeuronIndex, PSPMultiplier, SynapseBundleIndex, SynapticWeight};
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStorageTrait};
 use crate::synapse::dimension_to_dimension_traits::Dim2DimSynapseStaticStorageTrait;
@@ -27,16 +26,16 @@ BaseSynapseStorageTrait<Q>
     //region Get Connections
 
 
-    fn get_nonplastic_synapse_data_from_source_neuron_index(&self, source_neuron_index: NPUNeuronIndex<Q::NeuronIndex>, source_neuron_type: &NPUDimensionalNeuronType)
+    fn get_nonplastic_synapse_data_from_source_neuron_index(&self, source_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>, )
         -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError>;
 
-    fn get_nonplastic_synapse_data_from_source_neuron_index_mut(&mut self, source_neuron_index: NPUNeuronIndex<Q::NeuronIndex>, source_neuron_type: &NPUDimensionalNeuronType)
+    fn get_nonplastic_synapse_data_from_source_neuron_index_mut(&mut self, source_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError>;
 
-    fn get_nonplastic_synapse_data_from_destination_neuron_index(&self, destination_neuron_index: NPUNeuronIndex<Q::NeuronIndex>, destination_neuron_type: &NPUDimensionalNeuronType)
+    fn get_nonplastic_synapse_data_from_destination_neuron_index(&self, destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError>;
 
-    fn get_nonplastic_synapse_data_from_destination_neuron_index_mut(&mut self, destination_neuron_index: NPUNeuronIndex<Q::NeuronIndex>, destination_neuron_type: &NPUDimensionalNeuronType)
+    fn get_nonplastic_synapse_data_from_destination_neuron_index_mut(&mut self, destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError>;
 
 

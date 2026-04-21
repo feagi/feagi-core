@@ -1,21 +1,24 @@
 use core::ops::Range;
+use core::marker::PhantomData;
 use crate::base_quantizable::QuantizableUIntType;
 
 #[derive(Debug, Clone)]
-pub struct RangeUintVector<T> {
-    ranges: Vec<Range<T>>,
+pub struct RangeUintVector<RangeIndex, RangeCount> {
+    ranges: Vec<Range<RangeIndex>>,
+    _phantom: PhantomData<RangeCount>
 }
 
-impl<T> RangeUintVector<T>
+impl<RangeIndex, RangeCount> RangeUintVector<RangeIndex, RangeCount>
 where
-    T: QuantizableUIntType,
+    RangeIndex: QuantizableUIntType,
+    RangeCount: QuantizableUIntType,
 {
     pub fn new() -> Self {
-        RangeUintVector { ranges: Vec::new() }
+        RangeUintVector { ranges: Vec::new(), _phantom: PhantomData }
     }
 
     /// Adds a range to the vector, merging with existing ranges if overlapping or adjacent
-    pub fn add_range(&mut self, inserting_range: Range<T>) {
+    pub fn add_range(&mut self, inserting_range: Range<RangeIndex>) {
 
         let mut insert_at: usize = 0;
         // Process existing ranges to find where to insert/merge
@@ -54,10 +57,10 @@ where
     /// Finds a range big enough to contain the given length and takes from it
     /// Returns Some((start, length)) if found, None otherwise
     /// Updates internal ranges accordingly when allocation is made
-    pub fn find_space(&mut self, length: T) -> Option<(Range<T>)>
-    where
-        T: QuantizableUIntType,
+    pub fn find_space(&mut self, length: RangeCount) -> Option<(Range<RangeIndex>)>
     {
+        let length: RangeIndex =  RangeIndex::from_usize(length.to_usize());
+
         for i in 0..self.ranges.len() {
             let range_length = self.ranges[i].end - self.ranges[i].start;
 
@@ -77,7 +80,7 @@ where
     }
 
     /// Gets an iterator over all ranges
-    pub fn iter(&self) -> core::slice::Iter<Range<T>> {
+    pub fn iter(&self) -> core::slice::Iter<Range<RangeIndex>> {
         self.ranges.iter()
     }
 

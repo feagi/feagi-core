@@ -1,7 +1,6 @@
 use ahash::AHashMap;
 use crate::base_quantizable::QuantizableUIntType;
 use crate::FeagiStructuresError;
-use crate::useful_structs::IndexedDataTracker;
 // TODO move some checks to work only under debug
 
 /// Tracks the next best usable index, should a user nullify an earlier one
