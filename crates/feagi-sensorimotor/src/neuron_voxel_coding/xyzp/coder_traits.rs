@@ -3,8 +3,8 @@ use crate::data_pipeline::per_channel_stream_caches::{
     MotorPipelineStageRunner, SensoryPipelineStageRunner,
 };
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
-use feagi_structures::FeagiDataError;
+use crate::_compat::CorticalMappedXYZPNeuronVoxels;
+use crate::_compat::FeagiDataError;
 use std::fmt::Debug;
 use std::time::Instant;
 

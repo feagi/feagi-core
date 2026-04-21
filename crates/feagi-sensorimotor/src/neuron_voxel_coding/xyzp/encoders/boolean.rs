@@ -4,12 +4,10 @@ use crate::data_pipeline::per_channel_stream_caches::{
 };
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex,
-};
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
-use feagi_structures::FeagiDataError;
+use crate::_compat::CorticalMappedXYZPNeuronVoxels;
+use crate::_compat::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
 

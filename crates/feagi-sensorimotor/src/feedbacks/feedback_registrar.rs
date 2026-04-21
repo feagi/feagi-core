@@ -1,7 +1,7 @@
 use crate::caching::{MotorDeviceCache, SensorDeviceCache};
 use crate::feedbacks::feedback_registration::FeedBackRegistration;
 use crate::feedbacks::feedback_registration_targets::FeedbackRegistrationTargets;
-use feagi_structures::FeagiDataError;
+use crate::_compat::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 

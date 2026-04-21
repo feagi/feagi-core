@@ -3,8 +3,8 @@ use super::descriptors::{
     MemoryOrderLayout,
 };
 use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
-use feagi_structures::neuron_voxels::coord_potential::NeuronVoxelXYZPSparseVectors;
-use feagi_structures::FeagiDataError;
+use crate::_compat::NeuronVoxelXYZPSparseVectors;
+use crate::_compat::FeagiDataError;
 use image::{DynamicImage, GenericImageView};
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 

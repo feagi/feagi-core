@@ -1,3 +1,10 @@
+// Compat shim bridging the pre-refactor `feagi_structures` surface
+// (FeagiDataError, FeagiSignal[Index], NeuronDepth, legacy `define_*` macros)
+// to the current quant-generic `feagi-structures`. See `_compat.rs` for the
+// migration rationale.
+#[doc(hidden)]
+pub mod _compat;
+
 pub mod caching;
 mod neuron_voxel_coding;
 

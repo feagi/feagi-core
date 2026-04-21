@@ -2148,6 +2148,7 @@ name = "feagi-sensorimotor"
 version = "0.0.10"
 dependencies = [
  "clap",
+ "feagi-evolutionary",
  "feagi-serialization",
  "feagi-structures",
  "image",

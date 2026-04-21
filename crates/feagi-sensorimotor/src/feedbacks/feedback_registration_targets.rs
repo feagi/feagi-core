@@ -1,9 +1,7 @@
 use crate::caching::{MotorDeviceCache, SensorDeviceCache};
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelIndex, CorticalUnitIndex,
-};
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelIndex, CorticalUnitIndex};
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
-use feagi_structures::FeagiDataError;
+use crate::_compat::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::sync::MutexGuard;
 

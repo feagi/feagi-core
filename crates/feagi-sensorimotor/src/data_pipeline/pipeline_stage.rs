@@ -6,7 +6,7 @@
 
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::FeagiDataError;
+use crate::_compat::FeagiDataError;
 use std::any::Any;
 use std::fmt;
 use std::fmt::Debug;

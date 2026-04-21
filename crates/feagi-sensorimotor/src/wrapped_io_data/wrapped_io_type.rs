@@ -7,7 +7,7 @@ use crate::data_types::{
     SignedPercentage3D, SignedPercentage4D,
 };
 use crate::wrapped_io_data::WrappedIOData;
-use feagi_structures::FeagiDataError;
+use crate::_compat::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::mem::discriminant;
 

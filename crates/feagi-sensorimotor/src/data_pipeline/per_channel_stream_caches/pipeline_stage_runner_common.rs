@@ -5,7 +5,7 @@ use crate::data_pipeline::{
 };
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
-use feagi_structures::FeagiDataError;
+use crate::_compat::FeagiDataError;
 use std::cmp::PartialEq;
 use std::time::Instant;
 

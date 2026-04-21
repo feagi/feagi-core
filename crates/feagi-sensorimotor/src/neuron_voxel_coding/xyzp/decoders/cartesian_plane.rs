@@ -6,8 +6,8 @@ use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
-use feagi_structures::FeagiDataError;
+use crate::_compat::CorticalMappedXYZPNeuronVoxels;
+use crate::_compat::FeagiDataError;
 use std::time::Instant;
 
 #[derive(Debug)]

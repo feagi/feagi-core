@@ -3,7 +3,7 @@ use crate::data_types::{
     Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
     SignedPercentage3D, SignedPercentage4D,
 };
-use feagi_structures::FeagiDataError;
+use crate::_compat::FeagiDataError;
 
 /// Internal macro to define the WrappedIOData enum with automatic trait implementations.
 ///

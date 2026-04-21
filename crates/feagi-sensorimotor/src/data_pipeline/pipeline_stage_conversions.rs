@@ -1,6 +1,6 @@
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
-use feagi_structures::FeagiDataError;
+use crate::_compat::FeagiDataError;
 
 // These static functions are kept separate as adding them to the trait makes them no longer dyn compatible
 

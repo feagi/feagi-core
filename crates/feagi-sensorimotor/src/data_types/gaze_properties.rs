@@ -1,7 +1,7 @@
 use crate::data_types::descriptors::{CornerPoints, ImageXYPoint, ImageXYResolution};
 use crate::data_types::{Percentage, Percentage2D, Percentage3D};
-use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
-use feagi_structures::FeagiDataError;
+use feagi_evolutionary::genome_types::CorticalAreaDimensions;
+use crate::_compat::FeagiDataError;
 use std::cmp;
 use std::fmt::Display;
 

@@ -13,6 +13,9 @@ description = "Sensorimotor System - Data processing, caching, and neuron voxel 
 ndarray = { workspace = true, features = ["rayon"] }
 feagi-structures = { version = "0.0.10", path = "../feagi-structures" }
 feagi-serialization = { version = "0.0.10", path = "../feagi-serialization" }
+# Needed for CorticalArea / CorticalAreaDimensions which moved to the
+# genome/editor layer in feagi-evolutionary::genome_types.
+feagi-evolutionary = { version = "0.0.10", path = "../feagi-evolutionary" }
 image = {workspace = true}
 rayon = { workspace = true}
 paste = { workspace = true}

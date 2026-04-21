@@ -7,16 +7,17 @@ use crate::neuron_voxel_coding::xyzp::decoders::*;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_serialization::FeagiByteContainer;
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
-};
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex};
+use crate::_compat::NeuronDepth;
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::MotorCorticalUnit;
-use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
-use feagi_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
+use crate::_compat::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::{motor_cortical_units};
+use crate::_compat::FeagiDataError;
+use crate::_compat::FeagiSignalIndex;
 use serde_json::json;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};

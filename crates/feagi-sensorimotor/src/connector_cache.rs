@@ -2,7 +2,7 @@ use crate::caching::MotorDeviceCache;
 use crate::caching::SensorDeviceCache;
 use crate::configuration::jsonable::JSONInputOutputDefinition;
 use crate::feedbacks::{FeedBackRegistration, FeedbackRegistrar, FeedbackRegistrationTargets};
-use feagi_structures::FeagiDataError;
+use crate::_compat::FeagiDataError;
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
 

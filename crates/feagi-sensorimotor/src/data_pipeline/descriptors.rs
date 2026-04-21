@@ -1,4 +1,4 @@
-use feagi_structures::define_index;
+use crate::define_index;
 
 define_index!(
     PipelineStagePropertyIndex,

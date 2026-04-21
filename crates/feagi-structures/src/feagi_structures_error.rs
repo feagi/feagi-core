@@ -23,6 +23,11 @@ pub enum FeagiStructuresError {
     BadParameters(String),
     #[cfg(feature = "alloc")]
     InternalError(String),
+    /// Surface area that is deliberately not yet implemented. Used by higher-
+    /// level crates (e.g. feagi-sensorimotor pipeline stages) to signal
+    /// unsupported input/output paths without panicking.
+    #[cfg(feature = "alloc")]
+    NotImplemented(String),
 }
 
 #[cfg(feature = "std")]
@@ -55,6 +60,9 @@ impl core::fmt::Display for FeagiStructuresError {
             }
             FeagiStructuresError::InternalError(msg) => {
                 write!(f, "Internal Error (please report): {}", msg)
+            }
+            FeagiStructuresError::NotImplemented(msg) => {
+                write!(f, "Not Implemented: {}", msg)
             }
         }
     }
