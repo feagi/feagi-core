@@ -50,6 +50,7 @@ pub mod converter_flat_full;
 pub mod converter_hierarchical_to_flat;
 pub mod cortical_type_parser;
 pub mod genome;
+pub mod genome_types;
 pub mod plasticity_detector;
 pub mod random;
 pub mod runtime;

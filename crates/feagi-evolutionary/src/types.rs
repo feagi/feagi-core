@@ -52,14 +52,21 @@ impl From<std::io::Error> for EvoError {
     }
 }
 
-// Convert from FeagiDataError
-impl From<feagi_structures::FeagiDataError> for EvoError {
-    fn from(err: feagi_structures::FeagiDataError) -> Self {
+// Convert from feagi-structures' unified error type
+impl From<feagi_structures::FeagiStructuresError> for EvoError {
+    fn from(err: feagi_structures::FeagiStructuresError) -> Self {
         match &err {
-            feagi_structures::FeagiDataError::BadParameters(msg) => {
+            feagi_structures::FeagiStructuresError::BadParameters(msg) => {
                 EvoError::InvalidArea(msg.clone())
             }
             _ => EvoError::Internal(err.to_string()),
         }
+    }
+}
+
+// Convert from feagi-structures' genomic-error type (used by BrainRegion constructors, etc.)
+impl From<feagi_structures::genomic::FeagiStructuresGenomicError> for EvoError {
+    fn from(err: feagi_structures::genomic::FeagiStructuresGenomicError) -> Self {
+        EvoError::InvalidRegion(err.to_string())
     }
 }

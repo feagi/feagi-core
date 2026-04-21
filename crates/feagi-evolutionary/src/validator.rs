@@ -721,10 +721,9 @@ mod tests {
         };
 
         // Add a valid cortical area (use CoreCorticalType::Power)
+        use crate::genome_types::{CorticalArea, CorticalAreaDimensions};
         use feagi_structures::genomic::cortical_area::CustomCorticalType;
-        use feagi_structures::genomic::cortical_area::{
-            CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalAreaType,
-        };
+        use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalAreaType};
         let test_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
             test_id,

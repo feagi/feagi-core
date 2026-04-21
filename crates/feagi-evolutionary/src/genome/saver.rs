@@ -13,15 +13,18 @@ Licensed under the Apache License, Version 2.0
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
+use crate::genome_types::CorticalArea;
 use crate::types::{EvoError, EvoResult};
 #[cfg(test)]
 use feagi_structures::genomic::brain_regions::RegionID;
-use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalID};
+use feagi_structures::genomic::cortical_area::CorticalID;
+#[cfg(test)]
+use crate::genome_types::CorticalAreaDimensions;
 #[cfg(test)]
 use feagi_structures::genomic::cortical_area::{
-    CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
+    CorticalAreaType, IOCorticalAreaConfigurationFlag,
 };
-use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
+use crate::genome_types::BrainRegion;
 
 /// Genome saver
 pub struct GenomeSaver;

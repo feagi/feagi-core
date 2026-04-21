@@ -12,13 +12,12 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+use crate::genome_types::{BrainRegion, CorticalArea};
 use crate::random::random_bytes;
 use crate::runtime::RuntimeGenome;
-use feagi_structures::genomic::cortical_area::CorticalArea;
 use feagi_structures::genomic::cortical_area::CorticalAreaType;
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::BrainRegion;
-use feagi_structures::FeagiDataError;
+use feagi_structures::FeagiStructuresError;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
@@ -29,7 +28,7 @@ const MAX_ID_ALLOC_ATTEMPTS: u32 = 100_000;
 fn allocate_unique_typed_id(
     prefix: u8,
     reserved: &mut HashSet<String>,
-) -> Result<CorticalID, FeagiDataError> {
+) -> Result<CorticalID, FeagiStructuresError> {
     for _ in 0..MAX_ID_ALLOC_ATTEMPTS {
         let mut bytes = [0u8; CorticalID::CORTICAL_ID_LENGTH];
         bytes[0] = prefix;
@@ -42,7 +41,7 @@ fn allocate_unique_typed_id(
             }
         }
     }
-    Err(FeagiDataError::InternalError(
+    Err(FeagiStructuresError::InternalError(
         "Failed to allocate a unique cortical ID for amalgamation remapping".into(),
     ))
 }
@@ -94,7 +93,7 @@ fn remap_cortical_mapping_dst_keys(
 pub fn remap_guest_custom_memory_cortical_ids_for_amalgamation(
     genome: &mut RuntimeGenome,
     host_reserved_base64_ids: &HashSet<String>,
-) -> Result<HashMap<String, String>, FeagiDataError> {
+) -> Result<HashMap<String, String>, FeagiStructuresError> {
     let mut reserved: HashSet<String> = host_reserved_base64_ids.clone();
     for id in genome.cortical_areas.keys() {
         reserved.insert(id.as_base_64());
@@ -162,10 +161,8 @@ mod tests {
     use crate::runtime::{GenomeMetadata, GenomeSignatures, GenomeStats, PhysiologyConfig};
     use crate::MorphologyRegistry;
     use crate::RuntimeGenome;
-    use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaDimensions;
-    use feagi_structures::genomic::cortical_area::CorticalArea;
+    use crate::genome_types::{CorticalArea, CorticalAreaDimensions, GenomeCoordinate3D};
     use feagi_structures::genomic::cortical_area::CustomCorticalType;
-    use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
 
     fn sample_custom_cortical_id() -> CorticalID {
         let mut bytes = [0u8; CorticalID::CORTICAL_ID_LENGTH];

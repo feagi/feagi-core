@@ -45,15 +45,13 @@ use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;
 
+use crate::genome_types::{
+    BrainRegion, CorticalArea, CorticalAreaDimensions as Dimensions, GenomeCoordinate3D,
+    RegionType,
+};
 use crate::types::{EvoError, EvoResult};
 use feagi_structures::genomic::brain_regions::RegionID;
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::cortical_area::{
-    CorticalArea, CorticalAreaDimensions as Dimensions,
-};
-use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
-use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
-use feagi_structures::genomic::brain_regions::region_type::RegionType;
 
 /// Parsed genome data ready for ConnectomeManager
 #[derive(Debug, Clone)]

@@ -191,7 +191,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
 /// Convert a single cortical area to flat format keys
 fn convert_area_to_flat(
     cortical_id_base64: &str,
-    area: &feagi_structures::genomic::cortical_area::CorticalArea,
+    area: &crate::genome_types::CorticalArea,
     flat_blueprint: &mut serde_json::Map<String, Value>,
 ) -> EvoResult<()> {
     let prefix = format!("_____10c-{}", cortical_id_base64);
@@ -487,11 +487,13 @@ mod tests {
 
     #[test]
     fn test_cortical_group_derived_from_type() {
-        use feagi_structures::genomic::cortical_area::{
-            io_cortical_area_configuration_flag::FrameChangeHandling, CorticalArea,
-            CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
+        use crate::genome_types::{
+            CorticalArea, CorticalAreaDimensions, GenomeCoordinate3D,
         };
-        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+        use feagi_structures::genomic::cortical_area::{
+            io_cortical_area_configuration_flag::FrameChangeHandling, CorticalAreaType, CorticalID,
+            IOCorticalAreaConfigurationFlag,
+        };
 
         let mut genome = RuntimeGenome {
             metadata: GenomeMetadata {
@@ -568,11 +570,12 @@ mod tests {
 
     #[test]
     fn test_memory_twin_reference_saved_to_flat() {
-        use feagi_structures::genomic::cortical_area::{
-            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
-            IOCorticalAreaConfigurationFlag,
+        use crate::genome_types::{
+            CorticalArea, CorticalAreaDimensions, GenomeCoordinate3D,
         };
-        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
+        };
 
         let mut genome = RuntimeGenome {
             metadata: GenomeMetadata {
