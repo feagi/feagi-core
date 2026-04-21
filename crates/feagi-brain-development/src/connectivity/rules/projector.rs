@@ -11,7 +11,7 @@ PERFORMANCE TARGET: <100ms for 128×128×3 → 128×128×1 projection (400x fast
 */
 
 use crate::types::{BduError, BduResult, Position};
-use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaDimensions as Dimensions;
+use feagi_evolutionary::genome_types::CorticalAreaDimensions as Dimensions;
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;

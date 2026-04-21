@@ -20,9 +20,8 @@ Licensed under the Apache License, Version 2.0
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 #[cfg(test)]
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
-use feagi_structures::genomic::cortical_area::{
-    CorticalArea, CorticalAreaType, IOCorticalAreaConfigurationFlag,
-};
+use feagi_evolutionary::genome_types::CorticalArea;
+use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
 
 /// Extract detailed IOCorticalAreaDataFlag from a cortical area
 ///
@@ -212,7 +211,7 @@ pub fn validate_connectivity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaDimensions;
+    use feagi_evolutionary::genome_types::CorticalAreaDimensions;
 
     #[test]
     fn test_get_io_data_type() {

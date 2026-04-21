@@ -67,6 +67,24 @@ impl CorticalAreaDimensions {
     pub fn to_runtime(&self) -> Result<NeuronVoxelDimensions<u32>, FeagiStructuresError> {
         NeuronVoxelDimensions::<u32>::new(self.width, self.height, self.depth)
     }
+
+    /// Builder form used by legacy brain-development call sites. Preserved on the
+    /// genome-layer type so we can wire it through `u32` tuples without forcing
+    /// callers to match the runtime non-zero contract yet.
+    #[inline]
+    pub fn from_tuple(
+        (w, h, d): (u32, u32, u32),
+    ) -> Result<Self, FeagiStructuresError> {
+        Self::new(w, h, d)
+    }
+
+    /// Checks that an `(x, y, z)` position (in voxels, `u32`) falls inside the
+    /// dimensions. Mirrors the pre-refactor helper consumed by
+    /// `feagi-brain-development::connectivity::rules::projector`.
+    #[inline]
+    pub fn contains(&self, pos: (u32, u32, u32)) -> bool {
+        pos.0 < self.width && pos.1 < self.height && pos.2 < self.depth
+    }
 }
 
 impl From<NeuronVoxelDimensions<u32>> for CorticalAreaDimensions {

@@ -48,12 +48,12 @@ use feagi_npu_neural::types::NeuronId;
 use feagi_structures::genomic::cortical_area::{
     CoreCorticalType, CorticalAreaType, CorticalID, CustomCorticalType,
 };
-use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+use feagi_structures::genomic::GenomeCoordinate3DI32 as GenomeCoordinate3D;
 
 // State manager access for fatigue calculation
 // Note: feagi-state-manager is always available when std is enabled (it's a default feature)
 use feagi_state_manager::StateManager;
-use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
+use feagi_evolutionary::genome_types::BrainRegion;
 
 const DATA_HASH_SEED: u64 = 0;
 // JSON number precision (Godot) is limited to 53 bits; mask to keep hashes stable across transports.
@@ -4750,9 +4750,8 @@ impl ConnectomeManager {
     pub fn ensure_core_cortical_areas(&mut self) -> BduResult<()> {
         info!(target: "feagi-bdu", "🔧 [CORE-AREA] Ensuring core cortical areas exist...");
 
-        use feagi_structures::genomic::cortical_area::{
-            CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalAreaType,
-        };
+        use feagi_evolutionary::genome_types::{CorticalArea, CorticalAreaDimensions};
+        use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalAreaType};
 
         // Core areas are always 1x1x1 as per requirements
         let core_dimensions = CorticalAreaDimensions::new(1, 1, 1).map_err(|e| {
@@ -4760,7 +4759,7 @@ impl ConnectomeManager {
         })?;
 
         // Default position for core areas (origin)
-        let core_position = (0, 0, 0).into();
+        let core_position = GenomeCoordinate3D::new(0, 0, 0);
 
         // Check and create _death (cortical_idx=0)
         let death_id = CoreCorticalType::Death.to_cortical_id();
@@ -5851,7 +5850,7 @@ impl ConnectomeManager {
                     if let Some(type_str) = value.as_str() {
                         // Note: RegionType is currently a placeholder (Undefined only)
                         // Specific region types will be added in the future
-                        region.region_type = feagi_structures::genomic::RegionType::Undefined;
+                        region.region_type = feagi_evolutionary::genome_types::RegionType::Undefined;
                         debug!(target: "feagi-bdu", "Updated brain region {} type = {}", region_id, type_str);
                     }
                 }
@@ -6584,12 +6583,12 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        let region_id = feagi_structures::genomic::brain_regions::RegionID::new();
+        let region_id = feagi_evolutionary::genome_types::RegionID::new();
         let region_id_str = region_id.to_string();
         let root = BrainRegion::new(
             region_id,
             "Root".to_string(),
-            feagi_structures::genomic::brain_regions::region_type::RegionType::Undefined,
+            feagi_evolutionary::genome_types::RegionType::Undefined,
         )
         .unwrap();
 

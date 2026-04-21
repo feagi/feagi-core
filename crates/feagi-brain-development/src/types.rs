@@ -75,9 +75,9 @@ impl From<feagi_npu_neural::types::FeagiError> for BduError {
     }
 }
 
-// Convert from feagi_structures::FeagiDataError
-impl From<feagi_structures::FeagiDataError> for BduError {
-    fn from(err: feagi_structures::FeagiDataError) -> Self {
+// Convert from feagi_structures::FeagiStructuresError (was: FeagiDataError).
+impl From<feagi_structures::FeagiStructuresError> for BduError {
+    fn from(err: feagi_structures::FeagiStructuresError) -> Self {
         BduError::Internal(err.to_string())
     }
 }

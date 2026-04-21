@@ -27,9 +27,9 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::{debug, error, info, trace, warn};
 // Build brain region structure following Python's normalize_brain_region_membership()
-use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
+use feagi_evolutionary::genome_types::BrainRegion;
 // Build brain region structure following Python's normalize_brain_region_membership()
-use feagi_structures::genomic::brain_regions::region_type::RegionType;
+use feagi_evolutionary::genome_types::RegionType;
 
 /// Label for the CUSTOM/MEMORY subregion when the genome JSON has no `brain_regions` and
 /// neuroembryogenesis must synthesize one. Prefer `metadata.genome_title` so Hub replace/upload
@@ -573,7 +573,7 @@ impl Neuroembryogenesis {
                   ipu_areas.len(), opu_areas.len(), core_areas.len(), custom_memory_areas.len());
 
             // Build brain region structure following Python's normalize_brain_region_membership()
-            use feagi_structures::genomic::brain_regions::{RegionID};
+            use feagi_evolutionary::genome_types::RegionID;
             let mut regions_map = std::collections::HashMap::new();
 
             // Step 1: Create root region with only IPU/OPU/CORE areas
@@ -1421,7 +1421,7 @@ impl Neuroembryogenesis {
 
         for cortical_id in root_area_ids {
             if let Some(area) = genome.cortical_areas.get(cortical_id) {
-                let pos: (i32, i32, i32) = area.position.into();
+                let pos: (i32, i32, i32) = (area.position.x, area.position.y, area.position.z);
                 let dims = (
                     area.dimensions.width as i32,
                     area.dimensions.height as i32,
@@ -1535,7 +1535,7 @@ impl Neuroembryogenesis {
 mod tests {
     use super::*;
     use feagi_evolutionary::create_genome_with_core_morphologies;
-    use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
+    use feagi_evolutionary::genome_types::CorticalAreaDimensions;
 
     #[test]
     fn test_neuroembryogenesis_creation() {

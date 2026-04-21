@@ -13,10 +13,10 @@ use std::collections::HashMap;
 
 use crate::types::{BduError, BduResult, Position};
 
-// Import core types from feagi_data_structures
-pub use feagi_structures::genomic::cortical_area::{
-    CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalID,
-};
+// Import core types. CorticalArea + CorticalAreaDimensions are genome/editor-layer
+// (feagi-evolutionary); CorticalID + CoreCorticalType are runtime (feagi-structures).
+pub use feagi_evolutionary::genome_types::{CorticalArea, CorticalAreaDimensions};
+pub use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
 
 /// Extension trait providing business logic methods for CorticalArea
 pub trait CorticalAreaExt {
