@@ -7,6 +7,9 @@ pub mod base_dimension_traits;
 pub mod npu_neuron_type;
 
 pub mod flags;
+pub(crate) mod defaults;
 // pub mod shared_functions; // TODO
 
 pub use feagi_npu_neuron_error::FeagiNPUNeuronError;
+
+// TODO cortical area duplication

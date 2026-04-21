@@ -3,10 +3,11 @@ use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
-use feagi_structures::useful_structs::{InvalidatableVector, RangeUintVector};
+use feagi_structures::useful_structs::{IndexedDataTracker, RangeUintVector};
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, DimensionalStaticStorageTrait};
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
+use crate::neuron::defaults::InterNeuronsDefaults;
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
@@ -20,6 +21,7 @@ use crate::neuron::dimensional_neurons::shared_funcs_ram::{
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
 // In this implementation, we can do a lot by keeping neurons of a cortical area grouped together, albeit they may not be guaranteed to be in cortical index order
 
+// TODO interneuron traits
 
 pub struct InterNeuronAllocRAMStorage<Q: NPUQuantization>
 {
@@ -34,7 +36,7 @@ pub struct InterNeuronAllocRAMStorage<Q: NPUQuantization>
     neuron_consecutive_fire_count: Vec<BurstDelta<Q::BurstDelta>>, // how many times the neuron fired burst recently
 
     // Per Cortical Area (including invalids)
-    cortical_datas: InvalidatableVector<DimensionalNeuronCorticalData<Q>>,
+    cortical_datas: IndexedDataTracker<DimensionalNeuronCorticalData<Q>>,
 
     // Cached Data
     cache_number_valid_neurons: NeuronCount<Q::NeuronIndex>,
@@ -57,7 +59,7 @@ InterNeuronAllocRAMStorage<Q>
             neuron_refractory_countdown: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
             neuron_consecutive_fire_count: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
 
-            cortical_datas: InvalidatableVector::with_capacity(number_cortical_areas_to_preallocate_space_for.to_usize()),
+            cortical_datas: IndexedDataTracker::with_capacity(number_cortical_areas_to_preallocate_space_for.to_usize()),
 
             cache_number_valid_neurons: NeuronCount::ZERO,
             cache_number_invalid_neurons: NeuronCount::ZERO,
@@ -94,7 +96,7 @@ for InterNeuronAllocRAMStorage<Q>
                                                  cortical_is_mp_charge_accumulation_enabled: bool,
                                                  cortical_is_mp_driven_psp_enabled: bool)
                                                  -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError> {
-        default_create_cortical_area_with_uniform_neurons(
+        let (output_cortical_index,  output_neuron_region, _) = default_create_cortical_area_with_uniform_neurons::<Q, InterNeuronsDefaults<Q>>(
             cortical_area_dimensions,
             neurons_per_voxel,
             neuron_global_burst_index_of_last_firing,
@@ -119,7 +121,9 @@ for InterNeuronAllocRAMStorage<Q>
             &mut self.neuron_consecutive_fire_count,
             &mut self.cortical_datas,
             &mut self.cache_invalid_neuron_index_blocks,
-        )
+        )?;
+        
+        Ok((output_cortical_index, output_neuron_region))
     }
 
 
@@ -130,7 +134,7 @@ for InterNeuronAllocRAMStorage<Q>
                                                                 neurons_per_voxel: NumberNeuronsPerVoxel,
                                                                 neuron_data: DimensionalNeuronDataFromCorticalArea<Q>)
                                                                 -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError> {
-        create_cortical_area_with_individualized_neurons(
+        let (output_cortical_index,  output_neuron_region, _) = create_cortical_area_with_individualized_neurons::<Q, InterNeuronsDefaults<Q>>(
             cortical_area_dimensions,
             neurons_per_voxel,
             neuron_data,
@@ -144,7 +148,9 @@ for InterNeuronAllocRAMStorage<Q>
             &mut self.neuron_consecutive_fire_count,
             &mut self.cortical_datas,
             &mut self.cache_invalid_neuron_index_blocks,
-        )
+        )?;
+        
+        Ok((output_cortical_index, output_neuron_region))
     }
 
 }
@@ -227,19 +233,19 @@ for InterNeuronAllocRAMStorage<Q>
         self.create_cortical_area_with_uniform_neurons(
             cortical_area_dimensions,
             neurons_per_voxel,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_MEMBRANE_POTENTIAL,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_FIRE_THRESHOLD,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_LEAK_COEFFICIENT,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_MEMBRANE_POTENTIAL,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_FIRE_THRESHOLD,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_LEAK_COEFFICIENT,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
 
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_EXCITABILITY,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_EXCITABILITY,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED,
         )
     }
 

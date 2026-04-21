@@ -2,13 +2,12 @@
 // TODO different firing / refractory mode support eventually
 
 use core::ops::Range;
-use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NumberNeuronsPerVoxel};
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, DimensionalStaticStorageTrait};
-use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
+use crate::quantizables::{NPUQuantization, BurstDelta, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability, BurstGlobalIndex};
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
@@ -17,24 +16,6 @@ use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronDataFr
 pub trait DimensionalNeuronStaticStorageTrait<Q: NPUQuantization>:
 BaseNeuronStaticStorageTrait<Q>
 {
-    // TODO are these defaults fine?
-    // Neuron Defaults
-    const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::BurstIndex> = BurstGlobalIndex(Q::BurstIndex::ZERO);
-    const DEFAULT_NEURON_MEMBRANE_POTENTIAL: NPUNeuronMembranePotential<Q::Value> = NPUNeuronMembranePotential(Q::Value::ZERO);
-    const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::Value> = FireThreshold(Q::Value::ZERO);
-    const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::Percentage> = LeakCoefficient(Q::Percentage::ZERO_PERCENT);
-    const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDelta> = BurstDelta(Q::BurstDelta::ZERO);
-    const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDelta> = BurstDelta(Q::BurstDelta::ONE);
-
-    // Cortical Area Defaults
-    const DEFAULT_CORTICAL_NEURONS_PER_VOXEL: NumberNeuronsPerVoxel = 1;
-    const DEFAULT_CORTICAL_EXCITABILITY: NeuronExcitability<Q::Percentage> = NeuronExcitability(Q::Percentage::ZERO_PERCENT);
-    const DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT: BurstDelta<Q::BurstDelta> = BurstDelta(Q::BurstDelta::ZERO);
-    const DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT: FireThresholdLimit<Q::Value> = FireThresholdLimit(Q::Value::ZERO);
-    const DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT: BurstDelta<Q::BurstDelta> = BurstDelta(Q::BurstDelta::ZERO);
-    const DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED: bool = false;
-    const DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED: bool = false;
-
     /// Returns a struct of references to the slices of all neuron data (include sparse invalids)
     fn get_neuron_values_of_all_dimensional_neuron_cortical_areas_to_process(&mut self) -> DimensionalNeuronDataRefSliceAllCorticalAreas<'_, Q>;
 

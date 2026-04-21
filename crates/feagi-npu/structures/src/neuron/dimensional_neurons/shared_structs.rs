@@ -9,16 +9,38 @@ use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
-use feagi_structures::useful_structs::InvalidatableVector;
+use feagi_structures::useful_structs::IndexedDataTracker;
+use crate::neuron::defaults::DimensionalNeuronDefaults;
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
 use crate::neuron::flags::{DimensionalNeuronCorticalFlag, NeuronFlag};
-use crate::neuron::dimensional_neurons::dimensional_traits::DimensionalNeuronStaticStorageTrait;
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug)]
+pub enum NPUDimensionalAreaType {
+    Core,
+    Sensory,
+    Motor,
+    Interneuron
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct DimensionalTypedNeuronIndex<T: QuantizableUIntType> {
+    pub index: NPUNeuronIndex<T>,
+    pub dimensional_type: NPUDimensionalAreaType
+}
+
+#[derive(Clone)]
+pub struct DimensionalTypedCorticalIndex<T: QuantizableUIntType> {
+    pub index: CorticalAreaIndex<T>,
+    pub dimensional_type: NPUDimensionalAreaType
+}
+
 
 /// Stores data as to the property of cortical areas
 /// WARNING: Do not allow modification of this struct outside their implemented dimensional_neuron structs, as
 /// often values here are tied to other cache values and vice versa!
 #[derive(Debug, Clone)]
-pub(crate) struct DimensionalNeuronCorticalData<Q: NPUQuantization>
+pub struct DimensionalNeuronCorticalData<Q: NPUQuantization>
 {
     pub flags: DimensionalNeuronCorticalFlag, // NOTE: do not allow modifying this structure outside this
     pub neuron_range: Range<NPUNeuronIndex<Q::NeuronIndex>>,
@@ -33,19 +55,20 @@ pub(crate) struct DimensionalNeuronCorticalData<Q: NPUQuantization>
 
 impl<Q: NPUQuantization> DimensionalNeuronCorticalData<Q>
 {
-    pub const fn new_default_valid(neuron_range: Range<NPUNeuronIndex<Q::NeuronIndex>>,
-                                   voxel_dimensions: NeuronVoxelDimensions<Q::Coord>,
-                                   number_neurons_per_voxel: NumberNeuronsPerVoxel) -> Self {
+
+    pub const fn new_default_valid<D: DimensionalNeuronDefaults<Q>>(neuron_range: Range<NPUNeuronIndex<Q::NeuronIndex>>,
+                                                                    voxel_dimensions: NeuronVoxelDimensions<Q::Coord>,
+                                                                    number_neurons_per_voxel: NumberNeuronsPerVoxel) -> Self {
         DimensionalNeuronCorticalData {
             flags: DimensionalNeuronCorticalFlag::new_valid(),
             neuron_range,
             number_neurons_invalid_from_degeneration: NeuronCount::ZERO,
             dimensions: voxel_dimensions,
             number_neurons_per_voxel,
-            excitability: DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_EXCITABILITY,
-            refractory_period_limit: DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
-            fire_threshold_limit: DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
-            consecutive_fire_limit: DimensionalNeuronStaticStorageTrait::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
+            excitability: D::DEFAULT_CORTICAL_EXCITABILITY,
+            refractory_period_limit: D::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
+            fire_threshold_limit: D::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
+            consecutive_fire_limit: D::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
         }
     }
 }
@@ -65,7 +88,7 @@ pub struct DimensionalNeuronDataRefSliceAllCorticalAreas<'a, Q: NPUQuantization>
     pub neuron_refractory_countdown: &'a mut [BurstDelta<Q::BurstDelta>],
     pub neuron_consecutive_fire_count: &'a mut [BurstDelta<Q::BurstDelta>],
 
-    pub cortical_data: &'a InvalidatableVector<DimensionalNeuronCorticalData<Q>>,
+    pub cortical_data: &'a IndexedDataTracker<DimensionalNeuronCorticalData<Q>>,
 }
 
 

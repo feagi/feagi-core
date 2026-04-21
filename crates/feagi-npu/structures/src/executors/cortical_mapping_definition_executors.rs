@@ -2,6 +2,7 @@ use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueTy
 use feagi_structures::FeagiStructuresError;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
+use crate::neuron::dimensional_neurons::shared_structs::NPUDimensionalAreaType;
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{NPUNeuronIndex, SynapseCount};
@@ -27,10 +28,12 @@ pub trait NonPlasticCorticalMappingDefinitionExecutor<NeuronIndexQuant, SynapseC
                                     source_neuron_flags: &[NeuronFlag],
                                     source_cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>,
                                     source_neuron_density: NumberNeuronsPerVoxel,
+                                    source_area_type: NPUDimensionalAreaType,
                                     destination_neuron_indexes: core::ops::Range<NPUNeuronIndex<NeuronIndexQuant>>,
                                     destination_neuron_flags: &[NeuronFlag],
                                     destination_cortical_dimensions: &NeuronVoxelDimensions<CoordQuant>,
-                                    destination_neuron_density: NumberNeuronsPerVoxel)
+                                    destination_neuron_density: NumberNeuronsPerVoxel,
+                                    destination_area_type: NPUDimensionalAreaType)
         -> Result<(impl Iterator<Item=NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>>, SynapseCount<SynapseCountQuant>), FeagiStructuresError>;
 
     // TODO we should have a check to ensure that the count matches that runs in debug mode ( do this as a check natively)

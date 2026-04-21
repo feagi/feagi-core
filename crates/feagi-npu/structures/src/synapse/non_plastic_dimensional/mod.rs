@@ -1,8 +1,8 @@
 pub mod traits;
-mod non_plastic_data_alloc;
+mod non_plastic_ram;
 mod shared_funcs_and_structs;
 
-pub use non_plastic_data_alloc::NonplasticDimensionalSynapseAllocRAMStorage;
+pub use non_plastic_ram::NonplasticDimensionalSynapseAllocRAMStorage;
 pub use shared_funcs_and_structs::*;
 
 

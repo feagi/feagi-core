@@ -1,12 +1,13 @@
 use core::ops::Range;
-use feagi_structures::base_quantizable::QuantizableUIntType;
+use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
-use feagi_structures::useful_structs::{InvalidatableVector, RangeUintVector};
+use feagi_structures::useful_structs::{IndexedDataTracker, RangeUintVector};
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, DimensionalStaticStorageTrait};
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
+use crate::neuron::defaults::SensoryNeuronDefaults;
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
@@ -35,7 +36,7 @@ pub struct SensoryNeuronAllocRAMStorage<Q: NPUQuantization>
     neuron_consecutive_fire_count: Vec<BurstDelta<Q::BurstDelta>>, // how many times the neuron fired burst recently
 
     // Per Cortical Area (including invalids)
-    cortical_datas: InvalidatableVector<DimensionalNeuronCorticalData<Q>>,
+    cortical_datas: IndexedDataTracker<DimensionalNeuronCorticalData<Q>>,
 
     // Cached Data
     cache_number_valid_neurons: NeuronCount<Q::NeuronIndex>,
@@ -49,6 +50,7 @@ SensoryNeuronAllocRAMStorage<Q>
 {
     pub fn new(number_neurons_to_preallocate_space_for: NeuronCount<Q::NeuronIndex>, number_cortical_areas_to_preallocate_space_for: CorticalAreaIndex<Q::CorticalIndex>) -> Self {
         Self {
+            sensory_neuron_cached_value: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
             neuron_cortical_area_index: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
             neuron_global_burst_index_of_last_firing: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
             neuron_membrane_potential: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
@@ -58,7 +60,7 @@ SensoryNeuronAllocRAMStorage<Q>
             neuron_refractory_countdown: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
             neuron_consecutive_fire_count: Vec::with_capacity(number_neurons_to_preallocate_space_for.to_usize()),
 
-            cortical_datas: InvalidatableVector::with_capacity(number_cortical_areas_to_preallocate_space_for.to_usize()),
+            cortical_datas: IndexedDataTracker::with_capacity(number_cortical_areas_to_preallocate_space_for.to_usize()),
 
             cache_number_valid_neurons: NeuronCount::ZERO,
             cache_number_invalid_neurons: NeuronCount::ZERO,
@@ -95,7 +97,7 @@ for SensoryNeuronAllocRAMStorage<Q>
                                                  cortical_is_mp_charge_accumulation_enabled: bool,
                                                  cortical_is_mp_driven_psp_enabled: bool)
                                                  -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError> {
-        default_create_cortical_area_with_uniform_neurons(
+        let (output_cortical_index,  output_neuron_region, is_extending) = default_create_cortical_area_with_uniform_neurons::<Q, SensoryNeuronDefaults<Q>>(
             cortical_area_dimensions,
             neurons_per_voxel,
             neuron_global_burst_index_of_last_firing,
@@ -120,7 +122,14 @@ for SensoryNeuronAllocRAMStorage<Q>
             &mut self.neuron_consecutive_fire_count,
             &mut self.cortical_datas,
             &mut self.cache_invalid_neuron_index_blocks,
-        )
+        )?;
+
+        if is_extending {
+            let extending_length = (output_neuron_region.end - output_neuron_region.start).to_usize();
+            self.sensory_neuron_cached_value.extend(core::iter::repeat_n(NPUNeuronMembranePotential::ZERO, extending_length));
+        }
+        Ok((output_cortical_index, output_neuron_region))
+        
     }
 
 
@@ -131,7 +140,7 @@ for SensoryNeuronAllocRAMStorage<Q>
                                                                 neurons_per_voxel: NumberNeuronsPerVoxel,
                                                                 neuron_data: DimensionalNeuronDataFromCorticalArea<Q>)
                                                                 -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError> {
-        create_cortical_area_with_individualized_neurons(
+        let (output_cortical_index,  output_neuron_region, is_extending) = create_cortical_area_with_individualized_neurons::<Q, SensoryNeuronDefaults<Q>>(
             cortical_area_dimensions,
             neurons_per_voxel,
             neuron_data,
@@ -145,7 +154,13 @@ for SensoryNeuronAllocRAMStorage<Q>
             &mut self.neuron_consecutive_fire_count,
             &mut self.cortical_datas,
             &mut self.cache_invalid_neuron_index_blocks,
-        )
+        )?;
+        
+        if is_extending {
+            let extending_length = (output_neuron_region.end - output_neuron_region.start).to_usize();
+            self.sensory_neuron_cached_value.extend(core::iter::repeat_n(NPUNeuronMembranePotential::ZERO, extending_length));
+        }
+        Ok((output_cortical_index, output_neuron_region))
     }
 
 }
@@ -156,6 +171,7 @@ DimensionalNeuronStaticStorageTrait<Q>
 for SensoryNeuronAllocRAMStorage<Q>
 {
 
+    // NOTE: These are neuron values, we are not including the sensory cached data with this!
     /// Used to pass around slices easily at low cost for all cortical areas
     fn get_neuron_values_of_all_dimensional_neuron_cortical_areas_to_process(&mut self) -> DimensionalNeuronDataRefSliceAllCorticalAreas<'_, Q> {
         DimensionalNeuronDataRefSliceAllCorticalAreas {
@@ -194,6 +210,7 @@ for SensoryNeuronAllocRAMStorage<Q>
         })
     }
 
+    // TODO we should turn this type of thing into a macro
     fn set_neuron_fire_threshold(&mut self, cortical_area_index: Q::CorticalIndex, executor: &impl NeuronFireThresholdExecutor<Q::Value, Q::Coord>) -> Result<(), FeagiNPUNeuronError> {
         let cortical_area_index = CorticalAreaIndex(cortical_area_index);
         let (usize_range, dimensions, neurons_per_voxel) = {
@@ -228,19 +245,18 @@ for SensoryNeuronAllocRAMStorage<Q>
         self.create_cortical_area_with_uniform_neurons(
             cortical_area_dimensions,
             neurons_per_voxel,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_MEMBRANE_POTENTIAL,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_FIRE_THRESHOLD,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_LEAK_COEFFICIENT,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
-
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_EXCITABILITY,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED,
-            <Self as DimensionalNeuronStaticStorageTrait<Q>>::DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED,
+            SensoryNeuronDefaults::<Q>::DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING,
+            SensoryNeuronDefaults::<Q>::DEFAULT_NEURON_MEMBRANE_POTENTIAL,
+            SensoryNeuronDefaults::<Q>::DEFAULT_NEURON_FIRE_THRESHOLD,
+            SensoryNeuronDefaults::<Q>::DEFAULT_NEURON_LEAK_COEFFICIENT,
+            SensoryNeuronDefaults::<Q>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
+            SensoryNeuronDefaults::<Q>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
+            SensoryNeuronDefaults::<Q>::DEFAULT_CORTICAL_EXCITABILITY,
+            SensoryNeuronDefaults::<Q>::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
+            SensoryNeuronDefaults::<Q>::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
+            SensoryNeuronDefaults::<Q>::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
+            SensoryNeuronDefaults::<Q>::DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED,
+            SensoryNeuronDefaults::<Q>::DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED,
         )
     }
 
@@ -293,6 +309,7 @@ for SensoryNeuronAllocRAMStorage<Q>
     /// WARNING: BE SURE TO REMOVE ASSOCIATED SYNAPSE MAPPINGS!
     fn delete_cortical_area(&mut self, cortical_index: CorticalAreaIndex<Q::CorticalIndex>)
                             -> Result<Range<NPUNeuronIndex<Q::NeuronIndex>>, FeagiNPUNeuronError> {
+        // NOTE: We can leave the old sensory values where they were
         invalidate_cortical_area_and_return_invalidated_neuron_range(
             &cortical_index,
             &mut self.cortical_datas,

@@ -1,8 +1,10 @@
 use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
+use crate::neuron::dimensional_neurons::shared_structs::DimensionalTypedNeuronIndex;
 use crate::quantizables::{BurstDelta, NPUNeuronIndex, PSPMultiplier, SynapticWeight};
 use crate::synapse::synapse_flags::SynapseFlag;
 
 
+// TODO we can optimize this by shoving the cortical types into the flags
 #[derive(Debug, Copy, Clone)]
 pub struct NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>
 where
@@ -10,8 +12,8 @@ where
     BurstDeltaQuant: QuantizableUIntType,
     ValueQuant: QuantizableValueType,
 {
-    pub source_neuron_index: NPUNeuronIndex<NeuronIndexQuant>,
-    pub destination_neuron_index: NPUNeuronIndex<NeuronIndexQuant>,
+    pub source_neuron_index: DimensionalTypedNeuronIndex<NeuronIndexQuant>,
+    pub destination_neuron_index: DimensionalTypedNeuronIndex<NeuronIndexQuant>,
     pub synapse_properties: NonplasticSynapseProperties<ValueQuant, BurstDeltaQuant>,
 }
 

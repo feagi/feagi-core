@@ -63,72 +63,93 @@ pub trait ConnectomeStaticTrait<Q: NPUQuantization> // TODO const sizes
 /// Connectome functions ONLY for alloc capable implementations
 pub trait ConnectomeAllocTrait<Q: NPUQuantization>
 {
+    // NOTE: We will not store mapping definitions in the connectome since that takes space and is
+    // the job of the genome. We do not want to replicate cached data and maintain it!
+    
+    // TODO discuss insane idea for storing data for sensors / motors
+
     //region Cortical Areas
 
     //region Dimensional Neuron Cortical Areas
 
-    /// Create dimensional_neuron (custom) cortical area with default neuron settings spanned across the
-    /// entire cortical area. Returns the cortical index of this new area.
-    fn create_dimensional_neuron_cortical_area_with_default_neurons(&mut self,
-                                                             cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
-                                                             neurons_per_voxel: NumberNeuronsPerVoxel)
-        -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUStructureError>;
+    //region Core Cortical Areas
 
-    /// Create dimensional_neuron (custom) cortical area with given neuron settings spanned across the
-    /// entire cortical area. Returns the cortical index of this new area.
-    fn create_dimensional_neuron_cortical_area_with_uniform_neurons(&mut self, // TODO change other instances of spanned to uniform
-                                                             cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
-                                                             neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                             neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::BurstIndex>,
-                                                             neuron_membrane_potential: NPUNeuronMembranePotential<Q::Value>,
-                                                             neuron_fire_threshold: FireThreshold<Q::Value>,
-                                                             neuron_leak_coefficient: LeakCoefficient<Q::Percentage>,
-                                                             neuron_refractory_countdown: BurstDelta<Q::BurstDelta>,
-                                                             neuron_consecutive_fire_count: BurstDelta<Q::BurstDelta>,
-                                                             cortical_excitability: NeuronExcitability<Q::Percentage>,
-                                                             cortical_refractory_period_limit: BurstDelta<Q::BurstDelta>,
-                                                             cortical_fire_threshold_limit: FireThresholdLimit<Q::Value>,
-                                                             cortical_consecutive_fire_limit: BurstDelta<Q::BurstDelta>,
-                                                             cortical_is_mp_charge_accumulation_enabled: bool,
-                                                             cortical_is_mp_driven_psp_enabled: bool)
-                                                             -> Result<CorticalAreaIndex<Q::CorticalIndex>, FeagiNPUStructureError>;
+    // You cannot create or destroy core cortical areas!
 
-    /// Create dimensional_neuron (custom) cortical area with given per neuron values
-    fn create_dimensional_neuron_cortical_area_with_individualized_neurons(&mut self,
+    //endregion
+
+    //region Sensor Cortical Areas
+
+    //endregion
+
+    //region Motor Cortical Areas
+
+    //endregion
+
+    //region Interneuron Cortical Areas
+
+    /// Create interneuron (custom) cortical area with default neuron settings spanned across the
+    /// entire cortical area. Returns the cortical index of this new area.
+    fn create_interneuron_area_with_default_neurons(&mut self,
+                                                                    cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
+                                                                    neurons_per_voxel: NumberNeuronsPerVoxel)
+                                                                    -> Result<(CorticalAreaIndex<Q::CorticalIndex>, Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUStructureError>;
+
+    /// Create interneuron (custom) cortical area with given neuron settings spanned across the
+    /// entire cortical area. Returns the cortical index of this new area.
+    fn create_interneuron_cortical_area_with_uniform_neurons(&mut self, // TODO change other instances of spanned to uniform
                                                                     cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
                                                                     neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                                    neuron_data: DimensionalNeuronDataFromCorticalArea<Q>)
+                                                                    neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::BurstIndex>,
+                                                                    neuron_membrane_potential: NPUNeuronMembranePotential<Q::Value>,
+                                                                    neuron_fire_threshold: FireThreshold<Q::Value>,
+                                                                    neuron_leak_coefficient: LeakCoefficient<Q::Percentage>,
+                                                                    neuron_refractory_countdown: BurstDelta<Q::BurstDelta>,
+                                                                    neuron_consecutive_fire_count: BurstDelta<Q::BurstDelta>,
+                                                                    cortical_excitability: NeuronExcitability<Q::Percentage>,
+                                                                    cortical_refractory_period_limit: BurstDelta<Q::BurstDelta>,
+                                                                    cortical_fire_threshold_limit: FireThresholdLimit<Q::Value>,
+                                                                    cortical_consecutive_fire_limit: BurstDelta<Q::BurstDelta>,
+                                                                    cortical_is_mp_charge_accumulation_enabled: bool,
+                                                                    cortical_is_mp_driven_psp_enabled: bool)
                                                                     -> Result<CorticalAreaIndex<Q::CorticalIndex>, FeagiNPUStructureError>;
 
+    /// Create interneuron (custom) cortical area with given per neuron values
+    fn create_interneuron_cortical_area_with_individualized_neurons(&mut self,
+                                                                           cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
+                                                                           neurons_per_voxel: NumberNeuronsPerVoxel,
+                                                                           neuron_data: DimensionalNeuronDataFromCorticalArea<Q>)
+                                                                           -> Result<CorticalAreaIndex<Q::CorticalIndex>, FeagiNPUStructureError>;
+    
 
-    // NOTE: We will not store mapping definitions in the connectome since that takes space and is
-    // the job of the genome. We do not want to replicate cached data and maintain it!
-
-    /// Resizes an dimensional neuron cortical area toa  new dimension and or density. Attempts to maintain
+    /// Resizes an interneuron neuron cortical area toa  new dimension and or density. Attempts to maintain
     /// cortical area level values, but per neuron values will be reset! First disconnects
     /// all existing synapses, saves the cortical level values, deletes the cortical area,
     /// recreates the cortical area with
     /// the new dimensions and cortical level settings and then reestablishes the synapses
     /// anew with given mappers (should be the same as what was had before)
-    fn resize_dimensional_neuron_cortical_area<'a>(&mut self,
+    fn resize_interneuron_cortical_area<'a>(&mut self,
                                                    cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
                                                    neurons_per_voxel: NumberNeuronsPerVoxel,
                                                    cortical_index: CorticalAreaIndex<Q::CorticalIndex>,
                                                    presynaptic_nonplastic_dimensional_mappings: &Vec<(
-                                                CorticalAreaIndex<Q::CorticalIndex>,
-                                                DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)>,
+                                                       CorticalAreaIndex<Q::CorticalIndex>,
+                                                       DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)>,
                                                    postsynaptic_nonplastic_dimensional_mappings: &Vec<(
-                                                CorticalAreaIndex<Q::CorticalIndex>,
-                                                DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)>, )
+                                                       CorticalAreaIndex<Q::CorticalIndex>,
+                                                       DimensionCorticalAreaType, &'a impl NonPlasticCorticalMappingDefinitionExecutor<Q::NeuronIndex, Q::SynapseIndex, Q::Coord, Q::CorticalIndex, Q::BurstDelta, Q::Value>)>, )
 
                                                    -> Result<(), FeagiNPUStructureError>;
 
 
-    /// First deletes any synaptic connections to / from this area, then deletes the dimensional_neuron
+    /// First deletes any synaptic connections to / from this area, then deletes the interneuron
     /// cortical area
-    fn delete_dimensional_neuron_cortical_area(&mut self,
-                                        cortical_index: CorticalAreaIndex<Q::CorticalIndex>)
-                                        -> Result<Range<NPUNeuronIndex<Q::NeuronIndex>>, FeagiNPUStructureError>;
+    fn delete_interneuron_cortical_area(&mut self,
+                                               cortical_index: CorticalAreaIndex<Q::CorticalIndex>)
+                                               -> Result<(), FeagiNPUStructureError>;
+
+    //endregion
+
 
     //endregion
 
