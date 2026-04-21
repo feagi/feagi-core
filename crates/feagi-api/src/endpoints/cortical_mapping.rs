@@ -138,7 +138,9 @@ pub async fn post_mapping_properties(
                     .as_u64()
                     .or_else(|| arr[8].as_i64().map(|i| i as u64))
                     .ok_or_else(|| {
-                        ApiError::invalid_input("synaptic_delay_bursts must be a non-negative integer")
+                        ApiError::invalid_input(
+                            "synaptic_delay_bursts must be a non-negative integer",
+                        )
                     })?
             } else {
                 1

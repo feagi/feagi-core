@@ -33,6 +33,7 @@ use feagi_api::common::agent_registration::{
 };
 use feagi_api::common::{Json as ApiJson, State as ApiStateExtract};
 use feagi_api::endpoints::agent::register_agent;
+use feagi_api::endpoints::cortical_area::delete_multi_cortical_area;
 #[cfg(feature = "feagi-agent")]
 use feagi_api::endpoints::genome::post_upload;
 use feagi_api::transports::http::server::{create_http_server, ApiState};
@@ -297,6 +298,7 @@ fn build_test_state() -> ApiState {
 
     let (genome_transition_lock, genome_transition_in_progress) =
         ApiState::init_genome_transition_controls();
+    let filesystem_data_root = ApiState::filesystem_data_root_from_config(std::path::Path::new(""));
     ApiState {
         network_connection_info_provider: None,
         agent_service: None,
@@ -308,6 +310,7 @@ fn build_test_state() -> ApiState {
         system_service,
         snapshot_service: None,
         feagi_session_timestamp,
+        filesystem_data_root,
         memory_stats_cache: None,
         amalgamation_state: ApiState::init_amalgamation_state(),
         genome_transition_lock,
@@ -2328,6 +2331,99 @@ async fn test_create_and_get_cortical_area() {
     // Fresh manager: created area not present
     assert_eq!(status2, StatusCode::OK);
     assert!(response2.as_object().map(|o| o.is_empty()).unwrap_or(false));
+}
+
+#[tokio::test]
+async fn test_delete_multi_cortical_area_success() {
+    let state = build_test_state();
+
+    let area_1 = general_purpose::STANDARD.encode(*b"cMDLT001");
+    let area_2 = general_purpose::STANDARD.encode(*b"cMDLT002");
+
+    let create_params_1 = CreateCorticalAreaParams {
+        cortical_id: area_1.clone(),
+        name: "multi-delete-area-1".to_string(),
+        dimensions: (1, 1, 1),
+        position: (0, 0, 0),
+        area_type: "Custom".to_string(),
+        visible: None,
+        sub_group: None,
+        neurons_per_voxel: None,
+        postsynaptic_current: None,
+        plasticity_constant: None,
+        degeneration: None,
+        psp_uniform_distribution: None,
+        firing_threshold_increment: None,
+        firing_threshold_limit: None,
+        consecutive_fire_count: None,
+        snooze_period: None,
+        refractory_period: None,
+        leak_coefficient: None,
+        leak_variability: None,
+        burst_engine_active: None,
+        properties: None,
+    };
+    let create_params_2 = CreateCorticalAreaParams {
+        cortical_id: area_2.clone(),
+        name: "multi-delete-area-2".to_string(),
+        dimensions: (1, 1, 1),
+        position: (1, 0, 0),
+        area_type: "Custom".to_string(),
+        visible: None,
+        sub_group: None,
+        neurons_per_voxel: None,
+        postsynaptic_current: None,
+        plasticity_constant: None,
+        degeneration: None,
+        psp_uniform_distribution: None,
+        firing_threshold_increment: None,
+        firing_threshold_limit: None,
+        consecutive_fire_count: None,
+        snooze_period: None,
+        refractory_period: None,
+        leak_coefficient: None,
+        leak_variability: None,
+        burst_engine_active: None,
+        properties: None,
+    };
+
+    state
+        .connectome_service
+        .create_cortical_area(create_params_1)
+        .await
+        .expect("Failed to create first cortical area for multi-delete test");
+    state
+        .connectome_service
+        .create_cortical_area(create_params_2)
+        .await
+        .expect("Failed to create second cortical area for multi-delete test");
+
+    let response = delete_multi_cortical_area(
+        ApiStateExtract(state.clone()),
+        ApiJson(vec![area_1.clone(), area_2.clone()]),
+    )
+    .await
+    .expect("Multi-delete endpoint should succeed");
+
+    let body = response.0;
+    assert_eq!(
+        body.get("message").map(String::as_str),
+        Some("Deleted 2 cortical areas")
+    );
+
+    let area_1_exists = state
+        .connectome_service
+        .cortical_area_exists(&area_1)
+        .await
+        .expect("Failed to check first cortical area existence");
+    let area_2_exists = state
+        .connectome_service
+        .cortical_area_exists(&area_2)
+        .await
+        .expect("Failed to check second cortical area existence");
+
+    assert!(!area_1_exists);
+    assert!(!area_2_exists);
 }
 
 // ============================================================================

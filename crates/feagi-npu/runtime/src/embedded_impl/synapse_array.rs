@@ -209,9 +209,17 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         delay_bursts: u8,
     ) -> Result<usize> {
         if delay_bursts < 1 {
-            return Err(RuntimeError::InvalidParameters(
-                "delay_bursts must be >= 1".to_string(),
-            ));
+            // `InvalidParameters` is std-only; embedded (`embedded` without `std`) uses `GenericError`.
+            #[cfg(feature = "std")]
+            {
+                return Err(RuntimeError::InvalidParameters(
+                    "delay_bursts must be >= 1".to_string(),
+                ));
+            }
+            #[cfg(not(feature = "std"))]
+            {
+                return Err(RuntimeError::GenericError);
+            }
         }
         if self.count >= N {
             return Err(RuntimeError::CapacityExceeded {
@@ -256,24 +264,40 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
 
         if let Some(flags) = edge_flags {
             if flags.len() != n {
-                return Err(RuntimeError::InvalidParameters(format!(
-                    "edge_flags length {} != batch size {}",
-                    flags.len(),
-                    n
-                )));
+                #[cfg(feature = "std")]
+                {
+                    return Err(RuntimeError::InvalidParameters(format!(
+                        "edge_flags length {} != batch size {}",
+                        flags.len(),
+                        n
+                    )));
+                }
+                #[cfg(not(feature = "std"))]
+                {
+                    return Err(RuntimeError::GenericError);
+                }
             }
         }
         if delays.len() != n {
-            return Err(RuntimeError::InvalidParameters(format!(
-                "delays length {} != batch size {}",
-                delays.len(),
-                n
-            )));
+            #[cfg(feature = "std")]
+            {
+                return Err(RuntimeError::InvalidParameters(format!(
+                    "delays length {} != batch size {}",
+                    delays.len(),
+                    n
+                )));
+            }
+            #[cfg(not(feature = "std"))]
+            {
+                return Err(RuntimeError::GenericError);
+            }
         }
 
         for i in 0..n {
             let ef = edge_flags.map(|f| f[i]).unwrap_or(0);
-            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i], ef, delays[i])?;
+            self.add_synapse(
+                sources[i], targets[i], weights[i], psps[i], types[i], ef, delays[i],
+            )?;
         }
 
         Ok(())

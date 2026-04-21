@@ -381,31 +381,32 @@ impl SynapticPropagationEngine {
 
         if use_fast_path {
             let compute_start = profile_enabled.then(std::time::Instant::now);
-            let contributions: Vec<(u32, NeuronId, CorticalID, SynapticContribution)> = synapse_indices
-                .par_iter()
-                .filter_map(|&syn_idx| {
-                    let target_neuron = NeuronId(synapse_storage.target_neurons()[syn_idx]);
-                    let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
-                    let delay_bursts = synapse_storage.delay_bursts()[syn_idx].max(1) as u32;
-                    let weight = synapse_storage.weights()[syn_idx];
-                    let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
-                    let synapse_type = match synapse_storage.types()[syn_idx] {
-                        0 => FeagiSynapseType::Excitatory,
-                        _ => FeagiSynapseType::Inhibitory,
-                    };
+            let contributions: Vec<(u32, NeuronId, CorticalID, SynapticContribution)> =
+                synapse_indices
+                    .par_iter()
+                    .filter_map(|&syn_idx| {
+                        let target_neuron = NeuronId(synapse_storage.target_neurons()[syn_idx]);
+                        let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
+                        let delay_bursts = synapse_storage.delay_bursts()[syn_idx].max(1) as u32;
+                        let weight = synapse_storage.weights()[syn_idx];
+                        let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
+                        let synapse_type = match synapse_storage.types()[syn_idx] {
+                            0 => FeagiSynapseType::Excitatory,
+                            _ => FeagiSynapseType::Inhibitory,
+                        };
 
-                    Some((
-                        delay_bursts,
-                        target_neuron,
-                        cortical_area,
-                        SynapticContribution(compute_synaptic_contribution(
-                            weight,
-                            psp,
-                            synapse_type,
-                        )),
-                    ))
-                })
-                .collect();
+                        Some((
+                            delay_bursts,
+                            target_neuron,
+                            cortical_area,
+                            SynapticContribution(compute_synaptic_contribution(
+                                weight,
+                                psp,
+                                synapse_type,
+                            )),
+                        ))
+                    })
+                    .collect();
             let compute_ms = compute_start
                 .map(|start| start.elapsed().as_secs_f64() * 1000.0)
                 .unwrap_or(0.0);
@@ -420,7 +421,9 @@ impl SynapticPropagationEngine {
                     if target.0 < MEMORY_NEURON_ID_START {
                         return None;
                     }
-                    if (synapse_storage.edge_flags()[syn_idx] & SYNAPSE_EDGE_ASSOCIATIVE_MEMORY) == 0 {
+                    if (synapse_storage.edge_flags()[syn_idx] & SYNAPSE_EDGE_ASSOCIATIVE_MEMORY)
+                        == 0
+                    {
                         return None;
                     }
                     let delay_bursts = synapse_storage.delay_bursts()[syn_idx].max(1) as u32;
@@ -440,18 +443,15 @@ impl SynapticPropagationEngine {
                         acc
                     },
                 )
-                .reduce(
-                    AHashMap::<u32, AHashMap<u32, f32>>::new,
-                    |mut a, b| {
-                        for (delay, inner) in b {
-                            let e = a.entry(delay).or_default();
-                            for (k, v) in inner {
-                                *e.entry(k).or_insert(0.0) += v;
-                            }
+                .reduce(AHashMap::<u32, AHashMap<u32, f32>>::new, |mut a, b| {
+                    for (delay, inner) in b {
+                        let e = a.entry(delay).or_default();
+                        for (k, v) in inner {
+                            *e.entry(k).or_insert(0.0) += v;
                         }
-                        a
-                    },
-                );
+                    }
+                    a
+                });
 
             let group_start = profile_enabled.then(std::time::Instant::now);
             let fcl_by_delay = fold_contributions_by_delay(contributions);
@@ -459,7 +459,10 @@ impl SynapticPropagationEngine {
                 .map(|start| start.elapsed().as_secs_f64() * 1000.0)
                 .unwrap_or(0.0);
 
-            let contrib_count: usize = fcl_by_delay.values().map(|v| v.values().map(|x| x.len()).sum::<usize>()).sum();
+            let contrib_count: usize = fcl_by_delay
+                .values()
+                .map(|v| v.values().map(|x| x.len()).sum::<usize>())
+                .sum();
 
             self.last_profile = Some(PropagationProfile {
                 fired_neurons: fired_neurons.len(),
@@ -782,7 +785,8 @@ impl SynapticPropagationEngine {
         neuron_membrane_potentials: &AHashMap<NeuronId, f32>,
         memory_associative_psp_out: Option<&mut AHashMap<u32, f32>>,
     ) -> Result<PropagationResult> {
-        let mut delayed = self.propagate_delayed(fired_neurons, synapse_storage, neuron_membrane_potentials)?;
+        let mut delayed =
+            self.propagate_delayed(fired_neurons, synapse_storage, neuron_membrane_potentials)?;
         if let Some(out) = memory_associative_psp_out {
             out.clear();
             if let Some(m) = delayed.memory_associative_by_delay.remove(&1) {

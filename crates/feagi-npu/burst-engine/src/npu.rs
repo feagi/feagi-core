@@ -1188,6 +1188,7 @@ impl<
 
     /// Add a synapse to the NPU (`edge_flag`: `feagi_npu_neural::synapse` packed flags, e.g.
     /// [`SYNAPSE_EDGE_ASSOCIATIVE_MEMORY`]; use `0` for ordinary edges).
+    #[allow(clippy::too_many_arguments)]
     pub fn add_synapse(
         &mut self,
         source: NeuronId,
@@ -1230,6 +1231,7 @@ impl<
     /// - Contiguous SoA memory writes
     /// - Batch source_index updates
     ///
+    #[allow(clippy::too_many_arguments)]
     pub fn add_synapses_batch(
         &mut self,
         sources: Vec<NeuronId>,
@@ -2181,7 +2183,8 @@ impl<
                     neuron_mps.insert(neuron.neuron_id, mp);
                 }
             }
-            let delayed = propagation_engine.propagate_delayed(&fired_ids, &*synapse_storage, &neuron_mps)?;
+            let delayed =
+                propagation_engine.propagate_delayed(&fired_ids, &*synapse_storage, &neuron_mps)?;
             fire_structures
                 .synaptic_arrival_schedule
                 .schedule_from_delayed_propagation(
@@ -2501,6 +2504,46 @@ impl<
             "consecutive_fire_limit" => neuron_storage.consecutive_fire_limits().get(idx).copied(),
             _ => None,
         }
+    }
+
+    /// Per-neuron membrane-potential accumulation flag (dense `idx`).
+    pub fn get_mp_charge_accumulation_at(&self, idx: usize) -> Option<bool> {
+        let neuron_storage = self.neuron_storage.read().unwrap();
+        if idx >= neuron_storage.count() || !neuron_storage.valid_mask()[idx] {
+            return None;
+        }
+        Some(neuron_storage.mp_charge_accumulation()[idx])
+    }
+
+    /// Per-neuron type encoding (e.g. excitatory vs inhibitory).
+    pub fn get_neuron_type_at(&self, idx: usize) -> Option<i32> {
+        let neuron_storage = self.neuron_storage.read().unwrap();
+        if idx >= neuron_storage.count() || !neuron_storage.valid_mask()[idx] {
+            return None;
+        }
+        Some(neuron_storage.neuron_types()[idx])
+    }
+
+    /// Synaptic propagation: PSP scales with source neuron MP when enabled for this cortical area.
+    pub fn get_mp_driven_psp_for_cortical(&self, cortical_id: &CorticalID) -> bool {
+        self.propagation_engine
+            .read()
+            .unwrap()
+            .area_mp_driven_psp
+            .get(cortical_id)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// Synaptic propagation: full PSP per outgoing synapse vs divided across outgoings.
+    pub fn get_psp_uniform_distribution_for_cortical(&self, cortical_id: &CorticalID) -> bool {
+        self.propagation_engine
+            .read()
+            .unwrap()
+            .area_psp_uniform_distribution
+            .get(cortical_id)
+            .copied()
+            .unwrap_or(false)
     }
 
     /// Get neuron array snapshot for FCL inspection (for Python bindings)
@@ -3752,6 +3795,10 @@ impl<
     /// Also clears [`FireStructures::last_fcl_snapshot`] entries and staged injections for those
     /// neurons so monitoring / FCL APIs do not keep showing stale potentials until the next burst.
     ///
+    /// Clears [`FireStructures::synaptic_arrival_schedule`] entries targeting neurons in this area
+    /// (delayed PSP buckets) and drops pending memory-replay injections whose twin target is this
+    /// cortical index, so recursive self-connections cannot leave residual drive across bursts.
+    ///
     /// Returns the number of neurons updated in storage (same as membrane reset count).
     pub fn reset_cortical_area_runtime_state(&mut self, cortical_area: u32) -> usize {
         let neuron_ids_in_area: AHashSet<u32> = {
@@ -3805,6 +3852,11 @@ impl<
                     previous_removed
                 );
             }
+
+            fs.synaptic_arrival_schedule
+                .remove_pending_for_neuron_targets(&neuron_ids_in_area);
+            fs.pending_replay_injections
+                .retain(|r| r.twin_area_idx != cortical_area);
         }
 
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
@@ -3820,6 +3872,22 @@ impl<
             }
         }
         reset_count
+    }
+
+    /// Remove delayed PSP schedule entries and associative-memory buckets for the given neuron ids.
+    ///
+    /// Used when clearing memory neurons (ids outside [`NeuronStorage`]) so pending arrivals do not
+    /// inject into the next burst. Regular cortical reset uses [`Self::reset_cortical_area_runtime_state`].
+    pub fn scrub_synaptic_arrival_schedule_for_neuron_targets(
+        &mut self,
+        neuron_ids: &AHashSet<u32>,
+    ) {
+        if neuron_ids.is_empty() {
+            return;
+        }
+        let mut fs = self.fire_structures.lock().unwrap();
+        fs.synaptic_arrival_schedule
+            .remove_pending_for_neuron_targets(neuron_ids);
     }
 
     /// Update MP charge accumulation for all neurons in a cortical area.
@@ -6071,6 +6139,35 @@ mod tests {
         }
         let fs = npu.fire_structures.lock().unwrap();
         assert!(fs.fire_candidate_list.get(n_id).is_none());
+    }
+
+    #[test]
+    fn test_reset_cortical_area_runtime_state_clears_delayed_synaptic_schedule() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(5, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        let n_id = npu
+            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 5, 0, 0, 0)
+            .unwrap();
+        {
+            let mut fs = npu.fire_structures.lock().unwrap();
+            fs.synaptic_arrival_schedule
+                .fcl_by_arrival_burst
+                .entry(10_000)
+                .or_default()
+                .add_candidate(n_id, 3.0);
+        }
+        assert_eq!(npu.reset_cortical_area_runtime_state(5), 1);
+        let fs = npu.fire_structures.lock().unwrap();
+        assert!(
+            fs.synaptic_arrival_schedule
+                .fcl_by_arrival_burst
+                .values()
+                .all(|fcl| fcl.get(n_id).is_none()),
+            "delayed FCL arrivals targeting reset neurons must be scrubbed"
+        );
     }
 
     #[test]

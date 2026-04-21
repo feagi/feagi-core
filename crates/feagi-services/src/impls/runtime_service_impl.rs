@@ -29,6 +29,8 @@ use crate::types::{RuntimeStatus, ServiceError, ServiceResult};
 pub struct RuntimeServiceImpl {
     burst_runner: Arc<RwLock<BurstLoopRunner>>,
     paused: Arc<RwLock<bool>>,
+    /// Only present when `plasticity` feature is enabled (used in `reset_cortical_area_states`).
+    #[cfg(feature = "plasticity")]
     plasticity_service: Option<Arc<dyn std::any::Any + Send + Sync>>,
 }
 
@@ -38,6 +40,7 @@ impl RuntimeServiceImpl {
         Self {
             burst_runner,
             paused: Arc::new(RwLock::new(false)),
+            #[cfg(feature = "plasticity")]
             plasticity_service: None,
         }
     }
@@ -64,7 +67,6 @@ impl RuntimeServiceImpl {
         Self {
             burst_runner,
             paused: Arc::new(RwLock::new(false)),
-            plasticity_service: None,
         }
     }
 }

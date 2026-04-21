@@ -1155,14 +1155,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
                         .get("dev_count")
                         .and_then(|v| v.as_u64().map(|n| n as usize))
                     {
-                        if dev_count > 0 {
-                            let total_width = area.dimensions.width as usize;
-                            let height = area.dimensions.height as usize;
-                            let depth = area.dimensions.depth as usize;
-                            Some((total_width / dev_count, height, depth))
-                        } else {
-                            from_properties
-                        }
+                        let total_width = area.dimensions.width as usize;
+                        let height = area.dimensions.height as usize;
+                        let depth = area.dimensions.depth as usize;
+                        total_width
+                            .checked_div(dev_count)
+                            .map(|w| (w, height, depth))
                     } else {
                         from_properties
                     }
