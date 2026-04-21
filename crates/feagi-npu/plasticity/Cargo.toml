@@ -25,8 +25,6 @@ roaring = "0.10"  # For FireLedger bitmap compatibility
 default = ["std"]
 std = ["feagi-state-manager/std"]
 
-[dev-dependencies]
-feagi-npu-runtime = { version = "0.0.10", path = "../runtime", features = ["std"] }
 
 
 

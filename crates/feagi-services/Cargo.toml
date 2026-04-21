@@ -64,6 +64,5 @@ plasticity = ["feagi-brain-development/plasticity", "dep:feagi-npu-plasticity"] 
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }
-feagi-npu-runtime = { path = "../feagi-npu/runtime" }
 tempfile = "3.8"
 
