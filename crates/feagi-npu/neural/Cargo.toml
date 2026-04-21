@@ -15,9 +15,9 @@ alloc = []
 
 [dependencies]
 # Optional std dependencies
-serde = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
 serde_json = { workspace = true, optional = true }
-ahash = { workspace = true, optional = true }  # For FireCandidateList
+ahash = { workspace = true, features = ["std", "serde", "compile-time-rng"], optional = true }  # For FireCandidateList
 thiserror = { workspace = true }  # For error types
 
 [dev-dependencies]
