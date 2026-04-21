@@ -84,9 +84,19 @@ impl From<feagi_npu_neural::types::FeagiError> for ServiceError {
     }
 }
 
-impl From<feagi_structures::FeagiDataError> for ServiceError {
-    fn from(err: feagi_structures::FeagiDataError) -> Self {
+impl From<feagi_structures::FeagiStructuresError> for ServiceError {
+    fn from(err: feagi_structures::FeagiStructuresError) -> Self {
         ServiceError::InvalidInput(err.to_string())
+    }
+}
+
+// Post-refactor: genome-area descriptors now use a dedicated genomic-error
+// enum which callers routinely bubble up with `?`. Forward it into the
+// existing `InvalidInput` channel since every current use site surfaces
+// these as client-validation failures rather than internal faults.
+impl From<feagi_structures::FeagiStructuresGenomicError> for ServiceError {
+    fn from(err: feagi_structures::FeagiStructuresGenomicError) -> Self {
+        ServiceError::InvalidInput(format!("{:?}", err))
     }
 }
 

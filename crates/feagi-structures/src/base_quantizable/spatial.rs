@@ -206,6 +206,26 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
+        // Additive tuple <-> struct conversions. Call sites in
+        // higher-level crates (e.g. `feagi-services`) pass or receive
+        // `(T, T, T)` for genome-editor payloads and rely on `.into()`
+        // in both directions; expose the symmetric `From` impls here so
+        // those callers don't have to reach into the struct fields
+        // manually.
+        impl<T: $crate::base_quantizable::QuantizableIntType> From<(T, T, T)> for $base_name<T> {
+            #[inline(always)]
+            fn from(value: (T, T, T)) -> Self {
+                Self::new(value.0, value.1, value.2)
+            }
+        }
+
+        impl<T: $crate::base_quantizable::QuantizableIntType> From<$base_name<T>> for (T, T, T) {
+            #[inline(always)]
+            fn from(value: $base_name<T>) -> Self {
+                (value.x, value.y, value.z)
+            }
+        }
+
         #[cfg(feature = "alloc")]
         impl<T: $crate::base_quantizable::QuantizableIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]

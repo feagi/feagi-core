@@ -22,9 +22,12 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag;
-use feagi_structures::genomic::cortical_area::{
-    CorticalArea, CorticalAreaDimensions, CorticalAreaType,
-};
+use feagi_structures::genomic::cortical_area::CorticalAreaType;
+// Post-refactor split: editor-facing genome-area metadata (CorticalArea,
+// CorticalAreaDimensions) lives in feagi-evolutionary's genome_types
+// module, not in feagi-structures. See crates/feagi-evolutionary/src/
+// genome_types.rs for the rationale.
+use feagi_evolutionary::genome_types::{CorticalArea, CorticalAreaDimensions};
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 // Note: decode_cortical_id removed - use feagi_structures::CorticalID directly
 use parking_lot::RwLock;
@@ -32,8 +35,7 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{debug, info, trace, warn};
-use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
-use feagi_structures::genomic::brain_regions::region_type::RegionType;
+use feagi_structures::genomic::brain_regions::{BrainRegion, RegionType};
 
 fn derive_friendly_cortical_name(cortical_id: &CorticalID) -> Option<String> {
     let bytes = cortical_id.as_bytes();

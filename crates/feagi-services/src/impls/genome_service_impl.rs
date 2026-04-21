@@ -23,9 +23,11 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 use feagi_structures::genomic::cortical_area::{
-    CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
-    IOCorticalAreaConfigurationFlag,
+    CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
 };
+// Post-refactor split: editor-facing genome-area metadata lives in
+// feagi-evolutionary::genome_types, not in feagi-structures.
+use feagi_evolutionary::genome_types::{CorticalArea, CorticalAreaDimensions};
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use parking_lot::RwLock;
 use serde_json::Value;

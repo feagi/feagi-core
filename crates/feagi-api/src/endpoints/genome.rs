@@ -1776,7 +1776,7 @@ pub async fn get_cortical_template(
         // Initialize subunits with topology-derived properties.
         for (sub_idx, topo) in topology {
             subunits.insert(
-                sub_idx.get().to_string(),
+                sub_idx.0.to_string(),
                 json!({
                     "relative_position": topo.relative_position,
                     "channel_dimensions_default": topo.channel_dimensions_default,
@@ -1893,7 +1893,7 @@ pub async fn get_cortical_template(
 
         for (sub_idx, topo) in topology {
             subunits.insert(
-                sub_idx.get().to_string(),
+                sub_idx.0.to_string(),
                 json!({
                     "relative_position": topo.relative_position,
                     "channel_dimensions_default": topo.channel_dimensions_default,

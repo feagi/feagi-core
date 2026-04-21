@@ -12,8 +12,8 @@ Licensed under the Apache License, Version 2.0
 
 use super::cortical_area_dtos::CorticalTypeInfo;
 use feagi_brain_development::models::CorticalAreaExt;
+use feagi_evolutionary::genome_types::CorticalArea;
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
-use feagi_structures::genomic::cortical_area::CorticalArea;
 use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
 // Note: CorticalTypeAdapter removed - use feagi_structures::CorticalID directly
 

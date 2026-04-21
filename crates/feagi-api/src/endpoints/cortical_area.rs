@@ -2253,7 +2253,7 @@ pub async fn get_ipu_types(
             .into_iter()
             .map(|(idx, topo)| {
                 (
-                    *idx as usize,
+                    idx.0 as usize,
                     UnitTopologyData {
                         relative_position: topo.relative_position,
                         dimensions: topo.channel_dimensions_default,
@@ -2324,7 +2324,7 @@ pub async fn get_opu_types(
             .into_iter()
             .map(|(idx, topo)| {
                 (
-                    *idx as usize,
+                    idx.0 as usize,
                     UnitTopologyData {
                         relative_position: topo.relative_position,
                         dimensions: topo.channel_dimensions_default,

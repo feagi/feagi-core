@@ -739,7 +739,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             let mut assembly_min_x: Option<i32> = None;
                             let mut assembly_max_x: Option<i32> = None;
                             for (sub_index, unit_topology) in &topology {
-                                let sub_idx_usize = sub_index.get() as usize;
+                                let sub_idx_usize = sub_index.0 as usize;
                                 let dimensions = resolve_sensory_dimensions_from_encoder_properties(
                                     grouped_encoder_properties,
                                     sub_idx_usize,
@@ -936,7 +936,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     let mut properties: HashMap<String, serde_json::Value> = HashMap::new();
                     properties.insert(
                         "cortical_subunit_index".to_string(),
-                        serde_json::Value::Number(serde_json::Number::from(sub_index.get())),
+                        serde_json::Value::Number(serde_json::Number::from(sub_index.0)),
                     );
                     properties.insert(
                         "dev_count".to_string(),
