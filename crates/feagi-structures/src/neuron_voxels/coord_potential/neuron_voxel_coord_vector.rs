@@ -9,6 +9,7 @@ use crate::neuron_voxels::descriptors::{
 };
 use crate::neuron_voxels::traits::{SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionSparse};
 
+#[derive(Debug, Clone)]
 pub struct NeuronVoxelCoordVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
     VoxelPotentialQuant: QuantizableValueType,
     CoordQuant: QuantizableUIntType,
@@ -38,6 +39,24 @@ impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronVoxelCoordVec
             potentials: Vec::with_capacity(number_neurons_preallocated.to_usize()),
             _index_quant: PhantomData
         }
+    }
+
+    /// Appends a single neuron voxel (coordinate + potential) to the collection.
+    ///
+    /// The coordinate is NOT validated against `cortical_dimensions`; callers that
+    /// need bounds checking should do it prior to calling. This intentionally
+    /// minimal insertion API exists primarily for deserialization, where every
+    /// voxel has already been range-validated by whatever produced the bytes.
+    #[inline]
+    pub fn push_neuron_voxel_unchecked(
+        &mut self,
+        coordinate: NeuronVoxelCoordinate<CoordQuant>,
+        potential: NeuronVoxelPotential<VoxelPotentialQuant>,
+    ) {
+        self.coord_x.push(coordinate.x);
+        self.coord_y.push(coordinate.y);
+        self.coord_z.push(coordinate.z);
+        self.potentials.push(potential);
     }
 }
 

@@ -4,8 +4,8 @@
 //! arbitrary JSON data to be stored in FEAGI byte containers.
 
 use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
-use feagi_structures::FeagiDataError;
 use feagi_structures::FeagiJSON;
+use feagi_structures::FeagiStructuresError;
 use std::any::Any;
 
 /// Current version of the JSON serialization format.
@@ -27,7 +27,7 @@ impl FeagiSerializable for FeagiJSON {
     fn try_serialize_struct_to_byte_slice(
         &self,
         byte_destination: &mut [u8],
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), FeagiStructuresError> {
         byte_destination[0] = self.get_type() as u8;
         byte_destination[1] = self.get_version();
 
@@ -36,7 +36,7 @@ impl FeagiSerializable for FeagiJSON {
         let header = FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT;
         let end = header + json_bytes.len();
         if end > byte_destination.len() {
-            return Err(FeagiDataError::SerializationError(format!(
+            return Err(FeagiStructuresError::SerializationError(format!(
                 "JSON serialization overflow: need {} bytes, have {}",
                 end,
                 byte_destination.len()
@@ -50,7 +50,7 @@ impl FeagiSerializable for FeagiJSON {
     fn try_deserialize_and_update_self_from_byte_slice(
         &mut self,
         byte_structure_slice: &[u8],
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), FeagiStructuresError> {
         // Assuming type is correct
         self.verify_byte_slice_is_of_correct_version(byte_structure_slice)?;
 
@@ -60,7 +60,7 @@ impl FeagiSerializable for FeagiJSON {
         let json_value = match serde_json::from_slice(json_bytes) {
             Ok(value) => value,
             Err(e) => {
-                return Err(FeagiDataError::DeserializationError(format!(
+                return Err(FeagiStructuresError::DeserializationError(format!(
                     "Invalid JSON data: {}",
                     e
                 )))

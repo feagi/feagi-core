@@ -1,7 +1,8 @@
 use crate::feagi_serializable::FeagiSerializable;
 use crate::FeagiByteStructureType;
 use byteorder::{ByteOrder, LittleEndian};
-use feagi_structures::FeagiDataError;
+use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
+use feagi_structures::FeagiStructuresError;
 
 const MAX_NUMBER_OF_STRUCTS: usize = u8::MAX as usize;
 /// Agent identifier is 48-byte AgentDescriptor (instance_id(4) + manufacturer(20) + agent_name(20) + version(4)).
@@ -122,9 +123,9 @@ impl FeagiByteContainer {
     pub fn try_write_data_to_container_and_verify<F>(
         &mut self,
         byte_writer: &mut F,
-    ) -> Result<(), FeagiDataError>
+    ) -> Result<(), FeagiStructuresError>
     where
-        F: FnMut(&mut Vec<u8>) -> Result<(), FeagiDataError>,
+        F: FnMut(&mut Vec<u8>) -> Result<(), FeagiStructuresError>,
     {
         byte_writer(&mut self.bytes)?;
         self.verify_container_valid_and_populate()
@@ -147,7 +148,7 @@ impl FeagiByteContainer {
     pub fn try_write_data_by_ownership_to_container_and_verify(
         &mut self,
         new_data: Vec<u8>,
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), FeagiStructuresError> {
         self.bytes = new_data;
         self.verify_container_valid_and_populate()
     }
@@ -169,7 +170,7 @@ impl FeagiByteContainer {
     pub fn try_write_data_by_copy_and_verify(
         &mut self,
         new_data: &[u8],
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), FeagiStructuresError> {
         self.bytes.clear();
         self.bytes.extend_from_slice(new_data);
         self.verify_container_valid_and_populate()
@@ -207,11 +208,11 @@ impl FeagiByteContainer {
     /// let container = FeagiByteContainer::new_empty();
     /// assert_eq!(container.try_get_number_contained_structures().unwrap(), 0);
     /// ```
-    pub fn try_get_number_contained_structures(&self) -> Result<usize, FeagiDataError> {
+    pub fn try_get_number_contained_structures(&self) -> Result<usize, FeagiStructuresError> {
         if self.is_data_valid {
             return Ok(self.contained_struct_references.len());
         }
-        Err(FeagiDataError::DeserializationError(
+        Err(FeagiStructuresError::DeserializationError(
             "Given Byte Container is invalid and thus cannot be read!".into(),
         ))
     }
@@ -258,18 +259,18 @@ impl FeagiByteContainer {
     /// let container = FeagiByteContainer::new_empty();
     /// assert_eq!(container.get_increment_counter().unwrap(), 0u16);
     /// ```
-    pub fn get_increment_counter(&self) -> Result<u16, FeagiDataError> {
+    pub fn get_increment_counter(&self) -> Result<u16, FeagiStructuresError> {
         if self.is_data_valid {
             return Ok(LittleEndian::read_u16(&self.bytes[1..3]));
         }
-        Err(FeagiDataError::DeserializationError(
+        Err(FeagiStructuresError::DeserializationError(
             "Given Byte Container is invalid and thus cannot be read!".into(),
         ))
     }
 
     pub fn get_agent_identifier_bytes(
         &self,
-    ) -> Result<&[u8; Self::AGENT_ID_BYTE_COUNT], FeagiDataError> {
+    ) -> Result<&[u8; Self::AGENT_ID_BYTE_COUNT], FeagiStructuresError> {
         if self.is_data_valid {
             let session_id_bytes = &self.bytes[Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
                 ..Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT];
@@ -277,7 +278,7 @@ impl FeagiByteContainer {
                 session_id_bytes.try_into().unwrap();
             return Ok(session_id_bytes);
         }
-        Err(FeagiDataError::DeserializationError(
+        Err(FeagiStructuresError::DeserializationError(
             "Given Byte Container is invalid and thus cannot be read!".into(),
         ))
     }
@@ -299,17 +300,23 @@ impl FeagiByteContainer {
     /// // This will fail since there are no structures
     /// assert!(container.try_create_new_struct_from_index(0).is_err());
     /// ```
-    pub fn try_create_new_struct_from_index(
+    pub fn try_create_new_struct_from_index<V, C, N, A>(
         &self,
         index: StructureIndex,
-    ) -> Result<Box<dyn FeagiSerializable>, FeagiDataError> {
+    ) -> Result<Box<dyn FeagiSerializable>, FeagiStructuresError>
+    where
+        V: QuantizableValueType,
+        C: QuantizableUIntType,
+        N: QuantizableUIntType,
+        A: QuantizableUIntType,
+    {
         self.verify_structure_index_valid(index)?;
         let relevant_slice =
             self.contained_struct_references[index as usize].get_as_byte_slice(&self.bytes);
         let mut boxed_struct: Box<dyn FeagiSerializable> = self.contained_struct_references
             [index as usize]
             .structure_type
-            .create_new_struct_of_type();
+            .create_new_struct_of_type::<V, C, N, A>();
         boxed_struct.try_deserialize_and_update_self_from_byte_slice(relevant_slice)?;
         Ok(boxed_struct)
     }
@@ -318,16 +325,22 @@ impl FeagiByteContainer {
     ///
     /// Searches for the first structure matching the specified type and deserializes it.
     /// Returns None if no structure of that type is found.
-    pub fn try_create_struct_from_first_found_struct_of_type(
+    pub fn try_create_struct_from_first_found_struct_of_type<V, C, N, A>(
         &self,
         structure_type: FeagiByteStructureType,
-    ) -> Result<Option<Box<dyn FeagiSerializable>>, FeagiDataError> {
+    ) -> Result<Option<Box<dyn FeagiSerializable>>, FeagiStructuresError>
+    where
+        V: QuantizableValueType,
+        C: QuantizableUIntType,
+        N: QuantizableUIntType,
+        A: QuantizableUIntType,
+    {
         let getting_slice = self.try_get_first_structure_slice_of_type(structure_type);
         if getting_slice.is_none() {
             return Ok(None);
         }
         let mut boxed_struct: Box<dyn FeagiSerializable> =
-            structure_type.create_new_struct_of_type();
+            structure_type.create_new_struct_of_type::<V, C, N, A>();
         boxed_struct.try_deserialize_and_update_self_from_byte_slice(getting_slice.unwrap())?;
         Ok(Some(boxed_struct))
     }
@@ -339,7 +352,7 @@ impl FeagiByteContainer {
         &self,
         index: StructureIndex,
         updating_boxed_struct: &mut dyn FeagiSerializable,
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), FeagiStructuresError> {
         self.verify_structure_index_valid(index)?;
         let relevant_slice =
             self.contained_struct_references[index as usize].get_as_byte_slice(&self.bytes);
@@ -354,7 +367,7 @@ impl FeagiByteContainer {
     pub fn try_update_struct_from_first_found_struct_of_type(
         &self,
         updating_boxed_struct: &mut dyn FeagiSerializable,
-    ) -> Result<bool, FeagiDataError> {
+    ) -> Result<bool, FeagiStructuresError> {
         let structure_type: FeagiByteStructureType = updating_boxed_struct.get_type();
         let getting_slice = self.try_get_first_structure_slice_of_type(structure_type);
         if getting_slice.is_none() {
@@ -399,9 +412,9 @@ impl FeagiByteContainer {
         &mut self,
         incoming_structs: Vec<&dyn FeagiSerializable>,
         new_increment_value: u16,
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), FeagiStructuresError> {
         if incoming_structs.len() > MAX_NUMBER_OF_STRUCTS {
-            return Err(FeagiDataError::BadParameters(format!(
+            return Err(FeagiStructuresError::BadParameters(format!(
                 "FeagiByteContainers only support a max of {} contained structs, {} were given!",
                 MAX_NUMBER_OF_STRUCTS,
                 incoming_structs.len()
@@ -477,7 +490,7 @@ impl FeagiByteContainer {
         &mut self,
         incoming_struct: &dyn FeagiSerializable,
         new_increment_value: u16,
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), FeagiStructuresError> {
         //self.bytes.clear(); // NOTE: Just... Don't clear the bytes. We are overwriting them or expanding if needed anyways
         self.contained_struct_references.clear();
         self.is_data_valid = false;
@@ -545,9 +558,9 @@ impl FeagiByteContainer {
     pub fn set_increment_counter_state(
         &mut self,
         new_increment_value: u16,
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), FeagiStructuresError> {
         if !self.is_data_valid {
-            return Err(FeagiDataError::DeserializationError("Given Byte Container is invalid and thus cannot have its increment counter changed!".into()));
+            return Err(FeagiStructuresError::DeserializationError("Given Byte Container is invalid and thus cannot have its increment counter changed!".into()));
         };
         LittleEndian::write_u16(&mut self.bytes[1..3], new_increment_value);
         Ok(())
@@ -556,9 +569,9 @@ impl FeagiByteContainer {
     pub fn set_agent_identifier(
         &mut self,
         agent_identifier: impl AgentIdentifier,
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), FeagiStructuresError> {
         if !self.is_data_valid {
-            return Err(FeagiDataError::DeserializationError(
+            return Err(FeagiStructuresError::DeserializationError(
                 "Given Byte Container is invalid and thus cannot have its session id changed!"
                     .into(),
             ));
@@ -599,7 +612,7 @@ impl FeagiByteContainer {
     /// Verifies the bytes loaded in create a valid FBC container, with indexing that doesn't leave bounds,
     /// and also configures contained_struct_references.
     /// WARNING: Does not verify the contained structures themselves!
-    fn verify_container_valid_and_populate(&mut self) -> Result<(), FeagiDataError> {
+    fn verify_container_valid_and_populate(&mut self) -> Result<(), FeagiStructuresError> {
         self.is_data_valid = false;
         self.contained_struct_references.clear();
         let byte_length = self.bytes.len();
@@ -607,12 +620,12 @@ impl FeagiByteContainer {
         // Verify Global Header
         if byte_length < Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::AGENT_ID_BYTE_COUNT {
             // If we cant even fit the global header + session ID, something is wrong
-            return Err(FeagiDataError::DeserializationError(
+            return Err(FeagiStructuresError::DeserializationError(
                 "Given Feagi Byte Structure byte length is too short! (Less than global header + 48-byte agent id)".into(),
             ));
         }
         if self.bytes[0] != Self::CURRENT_FBS_VERSION {
-            return Err(FeagiDataError::DeserializationError(format!("Given FEAGI Byte Structure is using version {} when this application only supports version {}!", self.bytes[0], Self::CURRENT_FBS_VERSION)));
+            return Err(FeagiStructuresError::DeserializationError(format!("Given FEAGI Byte Structure is using version {} when this application only supports version {}!", self.bytes[0], Self::CURRENT_FBS_VERSION)));
         }
         let number_contained_structs = self.bytes[3] as usize;
         if number_contained_structs == 0 {
@@ -627,7 +640,7 @@ impl FeagiByteContainer {
             + Self::AGENT_ID_BYTE_COUNT
             + structure_lookup_header_size_in_bytes;
         if byte_length < total_header_size {
-            return Err(FeagiDataError::DeserializationError(format!(
+            return Err(FeagiStructuresError::DeserializationError(format!(
                 "Feagi Byte Data specifies the existence of {} structures, but the given byte array is under the required {} byte length!",
                 structure_lookup_header_size_in_bytes, total_header_size
             )));
@@ -644,7 +657,7 @@ impl FeagiByteContainer {
             );
 
             if structure_data_byte_index + structure_length as usize > byte_length {
-                return Err(FeagiDataError::DeserializationError(
+                return Err(FeagiStructuresError::DeserializationError(
                     format!("Structure of index {} goes out of bound reaching position {} when given byte length is only {} long!", contained_structure_index, structure_data_byte_index + structure_length as usize, byte_length)));
             }
 
@@ -668,9 +681,9 @@ impl FeagiByteContainer {
     fn verify_structure_index_valid(
         &self,
         structure_index: StructureIndex,
-    ) -> Result<(), FeagiDataError> {
+    ) -> Result<(), FeagiStructuresError> {
         if structure_index as usize >= self.contained_struct_references.len() {
-            return Err(FeagiDataError::BadParameters(format!("Structure index {} out of bounds! Feagi Byte Container only contains {} structures!", structure_index, self.contained_struct_references.len())));
+            return Err(FeagiStructuresError::BadParameters(format!("Structure index {} out of bounds! Feagi Byte Container only contains {} structures!", structure_index, self.contained_struct_references.len())));
         }
         Ok(())
     }

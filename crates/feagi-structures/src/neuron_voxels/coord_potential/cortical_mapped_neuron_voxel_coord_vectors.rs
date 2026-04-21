@@ -30,6 +30,7 @@ use crate::neuron_voxels::FeagiStructuresNeuronVoxelError;
 /// Primarily intended as the in-memory representation for serializing or
 /// transmitting neuron voxel snapshots spanning multiple cortical areas.
 #[cfg(feature = "alloc")]
+#[derive(Debug, Clone)]
 pub struct CorticalMappedNeuronVoxelCoordVectors<
     VoxelPotentialQuant,
     CoordQuant,

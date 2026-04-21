@@ -3,6 +3,7 @@ use crate::base_quantizable::QuantizableValueType;
 use crate::neurons::descriptors::NumberNeuronsPerVoxel;
 
 /// Denotes how neurons are being stored
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SingleCorticalNeuronVoxelCollectionType {
     DenseArray,
     DenseVector,
