@@ -33,5 +33,5 @@ BaseSynapseStorageTrait<Q>
 pub trait BaseSynapseAllocStorageTrait<Q: NPUQuantization>:
 BaseSynapseStorageTrait<Q>
 {
-    fn free_unused_synapse_capacity(&mut self, spare_capacity_to_maintain: SynapseCount<Q::SynapseIndex>) -> SynapseCount<Q::SynapseIndex>;
+    fn free_unused_synapse_capacity(&mut self, spare_capacity_to_maintain: SynapseCount<Q::SynapseIndex>)
 }

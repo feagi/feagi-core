@@ -15,7 +15,7 @@ use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThr
 use crate::neuron::flags::{DimensionalNeuronCorticalFlag, NeuronFlag};
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum NPUDimensionalAreaType {
     Core,
     Sensory,
@@ -23,13 +23,13 @@ pub enum NPUDimensionalAreaType {
     Interneuron
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub struct DimensionalTypedNeuronIndex<T: QuantizableUIntType> {
     pub index: NPUNeuronIndex<T>,
     pub dimensional_type: NPUDimensionalAreaType
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub struct DimensionalTypedCorticalIndex<T: QuantizableUIntType> {
     pub index: CorticalAreaIndex<T>,
     pub dimensional_type: NPUDimensionalAreaType

@@ -33,13 +33,13 @@ pub struct NonplasticDimensionalSynapseAllocRAMStorage<Q: NPUQuantization>
     // Cached Data
     cache_valid_synapse_count: SynapseCount<Q::SynapseIndex>,
     cache_invalid_synapse_count: SynapseCount<Q::SynapseIndex>,
-    
+
     /// Includes ranges of entire valid synapse blocks mapped to their cortical mapping. MAY INCLUDE individual dead synapses
     cache_valid_synapse_blocks: AHashMap<
         (DimensionalTypedCorticalIndex<Q::CorticalIndex>, DimensionalTypedCorticalIndex<Q::CorticalIndex>),
-        IndexedDataTracker<Range<NPUSynapseIndex<Q::SynapseIndex>>, NPUSynapseIndex<Q::NeuronIndex>>
+        IndexedDataTracker<Range<NPUSynapseIndex<Q::SynapseIndex>>, SynapseBundleIndex<Q::SynapseBundleIndex>>
     >,
-    
+
     /// Includes ranges of entire invalid synapse blocks. Does NOT notate singular dead synapses
     cache_invalid_synapse_blocks: RangeUintVector<NPUSynapseIndex<Q::SynapseIndex>, SynapseCount<Q::SynapseIndex>>,
 
@@ -69,18 +69,17 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
                                                 destination_area: DimensionalTypedCorticalIndex<Q::CorticalIndex>)
         -> SynapseBundleIndex<Q::SynapseBundleIndex>
     {
-        // TODO optimize away multiple hash lookups
         let key = (source_area, destination_area);
-        if !self.cache_valid_synapse_blocks.contains_key(&key) {
-            self.cache_valid_synapse_blocks.insert(key, IndexedDataTracker::new());
-        }
-        let indexed_data_tracker: &mut IndexedDataTracker<Range<NPUSynapseIndex<Q::SynapseIndex>>, NPUSynapseIndex<Q::NeuronIndex>>
-            = self.cache_valid_synapse_blocks.get_mut(&key).unwrap();
+        let indexed_data_tracker = self.cache_valid_synapse_blocks.entry(key).or_insert(IndexedDataTracker::new());
         let index = indexed_data_tracker.insert_data_and_get_unique_index(synapse_block);
         index
     }
 
     //region Get Synapse Data
+
+    fn get_total_synapse_count(&self) -> SynapseCount<Q::SynapseIndex> {
+        self.cache_valid_synapse_count + self.cache_invalid_synapse_count
+    }
 
     /// Tries to get synapse at given index. Errors if index is invalid. DOES NOT CHECK IF SYNAPSE IS VALID
     fn get_synapse_data_at_synapse_index(&self, synapse_index: NPUSynapseIndex<Q::SynapseIndex>)
@@ -133,7 +132,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
         }
         Ok(possible_valid)
     }
-    
+
     /// Gets all synapse indexes that have the following source_neuron_index. Returns empty if nothing found
     fn get_synapse_indexes_from_source_neuron_index(&self, source_neuron_index: &DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> &[NPUSynapseIndex<Q::SynapseIndex>] {
@@ -151,7 +150,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
         }
         &[]
     }
-    
+
     /// Gets synapse data from a source neuron index as an iterator, and the number of them. DOES NOT FILTER OUT INVALID SYNAPSES
     fn get_synapse_data_from_source_neuron_index(&self, source_neuron_index: &DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
@@ -196,6 +195,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
     fn get_synapse_data_from_source_neuron_index_mut(&mut self, source_neuron_index: &DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
         let synapse_indexes = self.get_synapse_indexes_from_source_neuron_index(source_neuron_index);
+        let neuron_count = NeuronCount::from_usize(synapse_indexes.len());
 
         // TODO debug check only!
         for synapse_index in synapse_indexes {
@@ -209,7 +209,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
         let iterator = synapse_indexes.iter().map(|synapse_index|
             &mut self.synapses_data[synapse_index.to_usize()]
         );
-        Ok((iterator, NeuronCount::from_usize(synapse_indexes.len())))
+        Ok((iterator, neuron_count))
     }
 
     /// Gets mut synapse data from a destination neuron index as an iterator, and the number of them. DOES NOT FILTER OUT INVALID SYNAPSES
@@ -257,7 +257,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
         -> Result<SynapseBundleIndex<Q::SynapseBundleIndex>, FeagiStructuresError>{
 
 
-        let (synapse_iterator, number_synapses) 
+        let (synapse_iterator, number_synapses)
             = neuron_mapping_executor.non_plastic_synapse_iterator(
                 source_neuron_indexes, source_neuron_flags, source_cortical_dimensions, source_neuron_density,
                 source_area_index.dimensional_type, destination_neuron_indexes, destination_neuron_flags,
@@ -275,10 +275,10 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
             None => {
                 let synapse_writing_region = NPUSynapseIndex::from_usize(self.synapses_data.len()) .. NPUSynapseIndex::from_usize(self.synapses_data.len() + number_synapses.to_usize());
                 let synapse_bundle_index = self.insert_valid_synapse_block_and_get_index(synapse_writing_region, source_area_index, destination_area_index);
-                
+
 
                 // TODO and entry miught be wrong
-                
+
                 // Allocate at the end
                 self.synapses_data.reserve(number_synapses.to_usize());
                 self.source_to_synapse.reserve(number_synapses.to_usize());
@@ -286,8 +286,8 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
                 let starting_synapse_index = NPUSynapseIndex::from_usize(self.synapses_data.len());
                 for (local_index, synapse) in synapse_iterator.enumerate() {
                     let synapse_index = starting_synapse_index + NPUSynapseIndex::from_usize(local_index);
-                    self.source_to_synapse.entry(synapse.source_neuron_index).or_insert_with(vec![synapse_index]);
-                    self.destination_to_synapse.entry(synapse.destination_neuron_index).or_insert_with(vec![synapse_index]);
+                    self.source_to_synapse.entry(synapse.source_neuron_index).or_insert_with(|| vec![synapse_index]);
+                    self.destination_to_synapse.entry(synapse.destination_neuron_index).or_insert_with(|| vec![synapse_index]);
                     self.synapses_data.push(synapse);
                 }
                 (synapse_bundle_index, true)
@@ -299,17 +299,17 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
 
                 for (local_index, synapse) in synapse_iterator.enumerate() {
                     let synapse_index = starting_synapse_index + NPUSynapseIndex::from_usize(local_index);
-                    self.source_to_synapse.entry(synapse.source_neuron_index).or_insert_with(vec![synapse_index]);
-                    self.destination_to_synapse.entry(synapse.destination_neuron_index).or_insert_with(vec![synapse_index]);
+                    self.source_to_synapse.entry(synapse.source_neuron_index).or_insert_with(|| vec![synapse_index]);
+                    self.destination_to_synapse.entry(synapse.destination_neuron_index).or_insert_with(|| vec![synapse_index]);
                     self.synapses_data[synapse_index.to_usize()] = synapse
                 }
 
                 (synapse_bundle_index, false)
             }
         };
-        
+
         // Cache properties
-        
+
         self.cache_valid_synapse_count += number_synapses;
         Ok(synapse_bundle_index)
 
@@ -322,25 +322,25 @@ NonplasticSynapseBaseStorageTrait<Q> for
 NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {
     //region Get Connections
-    fn get_nonplastic_synapse_data_from_source_neuron_index(&self, 
-                                                            source_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>) 
+    fn get_nonplastic_synapse_data_from_source_neuron_index(&self,
+                                                            source_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
         self.get_synapse_data_from_source_neuron_index(&source_neuron_index)
     }
 
-    fn get_nonplastic_synapse_data_from_source_neuron_index_mut(&mut self, 
-                                                                source_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>) 
+    fn get_nonplastic_synapse_data_from_source_neuron_index_mut(&mut self,
+                                                                source_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
         self.get_synapse_data_from_source_neuron_index_mut(&source_neuron_index)
     }
 
-    fn get_nonplastic_synapse_data_from_destination_neuron_index(&self, 
-                                                                 destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>) 
+    fn get_nonplastic_synapse_data_from_destination_neuron_index(&self,
+                                                                 destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
         self.get_synapse_data_from_destination_neuron_index(&destination_neuron_index)
     }
 
-    fn get_nonplastic_synapse_data_from_destination_neuron_index_mut(&mut self, 
+    fn get_nonplastic_synapse_data_from_destination_neuron_index_mut(&mut self,
                                                                      destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
         -> Result<(impl Iterator<Item=&mut NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError> {
         self.get_synapse_data_from_destination_neuron_index_mut(&destination_neuron_index)
@@ -412,13 +412,12 @@ impl<Q: NPUQuantization>
 BaseSynapseAllocStorageTrait<Q> for
 NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {
-    fn free_unused_synapse_capacity(&mut self, spare_capacity_to_maintain: SynapseCount<Q::SynapseIndex>) -> SynapseCount<Q::SynapseIndex> {
-        let target = self.cache_total_synapse_count.to_usize() + spare_capacity_to_maintain.to_usize();
+    fn free_unused_synapse_capacity(&mut self, spare_capacity_to_maintain: SynapseCount<Q::SynapseIndex>) {
+        let target = self.get_total_synapse_count().to_usize() + spare_capacity_to_maintain.to_usize();
         self.synapses_data.shrink_to(target);
         self.source_to_synapse.shrink_to_fit();
         self.destination_to_synapse.shrink_to_fit();
         // TODO delete empty vec keys?
-        self.cache_total_synapse_count
     }
 }
 
@@ -433,7 +432,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
     }
 
     fn get_total_number_of_synapses(&self) -> &SynapseCount<Q::SynapseIndex> {
-        &self.cache_total_synapse_count
+        todo!()
     }
 
     fn get_total_number_of_valid_synapses(&self) -> &SynapseCount<Q::SynapseIndex> {
