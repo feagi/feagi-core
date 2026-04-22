@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
-use crate::neuron_voxels::descriptors::NeuronVoxelDimensions;
-use crate::neurons::descriptors::{NeuronMembranePotential, NumberNeuronsPerVoxel};
+use crate::neuron_voxels::descriptors::{NeuronVoxelCount, NeuronVoxelDimensions, NeuronVoxelIndex};
+use crate::neurons::descriptors::{NeuronCount, NeuronIndex, NeuronMembranePotential, NumberNeuronsPerVoxel};
 use crate::neurons::FeagiStructuresNeuronError;
 use crate::neurons::traits::{SingleCorticalNeuronCollectionBase, SingleCorticalNeuronCollectionDense};
 
@@ -28,9 +28,9 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronDenseVector<Poten
             return Err(FeagiStructuresNeuronError::BadParameters {context: "Neuron density cannot be zero!"})
         }
 
-        let number_neurons: usize = dimensions.get_number_neurons(density);
+        let number_neurons: NeuronCount<NeuronVoxelIndexQuant> = dimensions.get_number_neurons(density);
         Ok(Self {
-            potentials: vec![NeuronMembranePotential::ZERO; number_neurons],
+            potentials: vec![NeuronMembranePotential::ZERO; number_neurons.to_usize()],
             cortical_dimensions: dimensions,
             cortical_density: density,
             _index_quant: PhantomData,
@@ -51,10 +51,17 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> SingleCorticalNeuronCol
         &self.cortical_dimensions
     }
 
-    fn neuron_index_max_limit(&self) -> NeuronVoxelIndexQuant {
-        NeuronVoxelIndexQuant::from_usize(
-            self.cortical_dimensions.get_number_neurons(self.cortical_density),
-        )
+    fn neuron_index_max_limit(&self) -> NeuronIndex<NeuronVoxelIndexQuant> {
+        NeuronIndex::from_usize(self.cortical_dimensions.get_number_neurons::<NeuronVoxelIndexQuant>(self.cortical_density).to_usize())
+    }
+
+    fn neuron_voxel_index_max_limit(&self) -> NeuronVoxelIndex<NeuronVoxelIndexQuant> {
+        NeuronVoxelIndex::from_usize(self.cortical_dimensions.get_number_voxels::<NeuronVoxelIndexQuant>().to_usize())
+    }
+
+    fn number_of_voxels(&self) -> NeuronVoxelCount<NeuronVoxelIndexQuant> {
+        let number: NeuronVoxelCount<NeuronVoxelIndexQuant> = self.cortical_dimensions.get_number_voxels();
+        number
     }
 }
 

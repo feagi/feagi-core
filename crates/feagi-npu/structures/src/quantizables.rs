@@ -34,38 +34,12 @@ define_quantizable_uint_type_family!(BurstDelta);
 define_quantizable_uint_type_family!(NPUNeuronIndex);
 
 impl<T: QuantizableUIntType> NPUNeuronIndex<T> {
-    
+
     pub fn get_count_from_block(range: &core::ops::Range<NPUNeuronIndex<T>>) -> NeuronCount<T> {
         (range.end - range.start).0.into()
     }
-    
-    
-}
 
-impl NPUNeuronIndex<u8> {
-    pub const CORE_POWER_INDEX: Self = NPUNeuronIndex(0u8);
-    pub const CORE_DEATH_INDEX: Self = NPUNeuronIndex(1u8);
-    pub const CORE_FATIGUE_INDEX: Self = NPUNeuronIndex(2u8);
-}
 
-impl NPUNeuronIndex<u16> {
-    pub const CORE_POWER_INDEX: Self = NPUNeuronIndex(0u16);
-    pub const CORE_DEATH_INDEX: Self = NPUNeuronIndex(1u16);
-    pub const CORE_FATIGUE_INDEX: Self = NPUNeuronIndex(2u16);
-}
-
-impl NPUNeuronIndex<u32> {
-    pub const CORE_POWER_INDEX: Self = NPUNeuronIndex(0u32);
-    pub const CORE_DEATH_INDEX: Self = NPUNeuronIndex(1u32);
-    pub const CORE_FATIGUE_INDEX: Self = NPUNeuronIndex(2u32);
-}
-
-// Why would you do this lol
-#[cfg(feature = "support_64bit_indexing")]
-impl NPUNeuronIndex<u64> {
-    pub const CORE_POWER_INDEX: Self = NPUNeuronIndex(0u64);
-    pub const CORE_DEATH_INDEX: Self = NPUNeuronIndex(1u64);
-    pub const CORE_FATIGUE_INDEX: Self = NPUNeuronIndex(2u64);
 }
 
 
@@ -74,8 +48,8 @@ impl NPUNeuronIndex<u64> {
 
 // Use neuron count from 'Feagi-Structures' Crate!
 
-//region NPU Synapse Index
-define_quantizable_uint_type_family!(NPUSynapseIndex);
+//region Synapse Index
+define_quantizable_uint_type_family!(SynapseIndex);
 
 
 //endregion
@@ -96,7 +70,7 @@ define_quantizable_uint_type_family!(SynapseBundleIndex);
 //region Value (float-ish) Quantizations
 
 
-//region NPU Neuron Membrane Potential (seperate implementation here for this crate
+//region NPU Neuron Membrane Potential (separate implementation here for this crate
 define_quantizable_value_type_family!(NPUNeuronMembranePotential);
 
 impl NPUNeuronMembranePotential<f32> {

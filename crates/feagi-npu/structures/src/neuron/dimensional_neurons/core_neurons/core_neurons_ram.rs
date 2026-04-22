@@ -17,7 +17,8 @@ use crate::neuron::dimensional_neurons::shared_funcs_ram::{
 use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential};
 
 
-// NOTE: As of now, coire is statically sized and we shall treat it as such
+// NOTE: As of now, core is statically sized and we shall treat it as such
+
 pub struct CoreNeuronAllocRAMStorage<Q: NPUQuantization>
 {
     // Per Neuron (including invalids)
@@ -39,7 +40,7 @@ pub struct CoreNeuronAllocRAMStorage<Q: NPUQuantization>
 impl<Q: NPUQuantization>
 CoreNeuronAllocRAMStorage<Q>
 {
-    pub fn new(number_neurons_to_preallocate_space_for: NeuronCount<Q::NeuronIndex>, number_cortical_areas_to_preallocate_space_for: CorticalAreaIndex<Q::CorticalIndex>) -> Self {
+    pub fn new() -> Self {
         Self {
             neuron_global_burst_index_of_last_firing:  [BurstGlobalIndex::ZERO; NUMBER_SINGLE_NEURON_CORE_AREAS],
             neuron_membrane_potential: [NPUNeuronMembranePotential::ZERO; NUMBER_SINGLE_NEURON_CORE_AREAS],
@@ -52,9 +53,9 @@ CoreNeuronAllocRAMStorage<Q>
                 CoreNeuronDeathDefaults::<Q>::DEFAULT_NEURON_LEAK_COEFFICIENT,
                 CoreNeuronFatigueDefaults::<Q>::DEFAULT_NEURON_LEAK_COEFFICIENT],
             neuron_flags: [
-                CoreNeuronPowerDefaults::<Q>::DEFAULT_NEURON_FLAG,
-                CoreNeuronDeathDefaults::<Q>::DEFAULT_NEURON_FLAG,
-                CoreNeuronFatigueDefaults::<Q>::DEFAULT_NEURON_FLAG],
+                CoreNeuronPowerDefaults::<Q>::get_default_neuron_flag(),
+                CoreNeuronDeathDefaults::<Q>::get_default_neuron_flag(),
+                CoreNeuronFatigueDefaults::<Q>::get_default_neuron_flag()],
             neuron_refractory_countdown: [
                 CoreNeuronPowerDefaults::<Q>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
                 CoreNeuronDeathDefaults::<Q>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
@@ -65,16 +66,16 @@ CoreNeuronAllocRAMStorage<Q>
                 CoreNeuronFatigueDefaults::<Q>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT],
 
             cortical_datas: [
-                CoreNeuronPowerDefaults::<Q>::DEFAULT_CORTICAL_DATA,
-                CoreNeuronDeathDefaults::<Q>::DEFAULT_CORTICAL_DATA,
-                CoreNeuronFatigueDefaults::<Q>::DEFAULT_CORTICAL_DATA],
+                CoreNeuronPowerDefaults::<Q>::get_default_cortical_data(),
+                CoreNeuronDeathDefaults::<Q>::get_default_cortical_data(),
+                CoreNeuronFatigueDefaults::<Q>::get_default_cortical_data()],
         }
     }
     
     pub const NEURON_CORTICAL_AREA_INDEX: [CorticalAreaIndex<Q::CorticalIndex>; 3] = [
-        CorticalAreaIndex::ZERO,
+        CorticalAreaIndex::DEFa,
         CorticalAreaIndex::ONE,
-        CorticalAreaIndex::from_const(CorticalAreaIndex::from_const(2))
+        CorticalAreaIndex::TWO
     ];
 
 

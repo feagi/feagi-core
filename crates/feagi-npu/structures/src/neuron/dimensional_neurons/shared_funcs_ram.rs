@@ -109,8 +109,8 @@ pub(crate) fn default_create_cortical_area_with_uniform_neurons<Q: NPUQuantizati
     cache_invalid_neuron_index_blocks: &mut RangeUintVector<NPUNeuronIndex<Q::NeuronIndex>, NeuronCount<Q::NeuronIndex>>,
 ) -> Result<(CorticalAreaIndex<Q::CorticalIndex>, bool), FeagiNPUNeuronError> {
 
-    let number_of_neurons: usize = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
-    let neuron_writing_region = cache_invalid_neuron_index_blocks.find_space(NeuronCount::from_usize(number_of_neurons));
+    let number_of_neurons = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
+    let neuron_writing_region = cache_invalid_neuron_index_blocks.find_space(number_of_neurons);
 
     // NOTE: for now neuron flag only checks for validity, so we dont need that parameter.
     let mut cortical_flags: DimensionalNeuronCorticalFlag = DimensionalNeuronCorticalFlag::new_valid();
@@ -124,7 +124,7 @@ pub(crate) fn default_create_cortical_area_with_uniform_neurons<Q: NPUQuantizati
     let (output_cortical_index, extending) = match neuron_writing_region {
         None => {
             // No space, allocate at the end of the arrays
-            let neuron_writing_region = NPUNeuronIndex::from_usize(neuron_flags.len()) .. NPUNeuronIndex::from_usize(neuron_flags.len() + number_of_neurons);
+            let neuron_writing_region = NPUNeuronIndex::from_usize(neuron_flags.len()) .. NPUNeuronIndex::from_usize(neuron_flags.len() + number_of_neurons.to_usize());
             let cortical_data = DimensionalNeuronCorticalData {
                 flags: cortical_flags,
                 neuron_range: neuron_writing_region.clone(),
@@ -137,7 +137,8 @@ pub(crate) fn default_create_cortical_area_with_uniform_neurons<Q: NPUQuantizati
                 consecutive_fire_limit: cortical_consecutive_fire_limit,
             };
             let cortical_index = cortical_datas.insert_data_and_get_unique_index(cortical_data);
-
+            let number_of_neurons = number_of_neurons.to_usize();
+            
             neuron_cortical_area_indexes.extend(core::iter::repeat_n(cortical_index, number_of_neurons));
             neuron_global_burst_indexes_of_last_firing.extend(core::iter::repeat_n(neuron_global_burst_index_of_last_firing, number_of_neurons));
             neuron_membrane_potentials.extend(core::iter::repeat_n(neuron_membrane_potential, number_of_neurons));
@@ -206,13 +207,13 @@ pub(crate) fn create_cortical_area_with_individualized_neurons<Q: NPUQuantizatio
     cache_invalid_neuron_index_blocks: &mut RangeUintVector<NPUNeuronIndex<Q::NeuronIndex>, NeuronCount<Q::NeuronIndex>>,
 ) -> Result<(CorticalAreaIndex<Q::CorticalIndex>, bool), FeagiNPUNeuronError> {
 
-    let number_of_neurons: usize = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
-    let neuron_writing_region = cache_invalid_neuron_index_blocks.find_space(NeuronCount::from_usize(number_of_neurons));
+    let number_of_neurons = cortical_area_dimensions.get_number_neurons(neurons_per_voxel);
+    let neuron_writing_region = cache_invalid_neuron_index_blocks.find_space(number_of_neurons);
 
     let (output_cortical_index, extending) = match neuron_writing_region {
         None => {
             // No space, allocate at the end of the arrays
-            let neuron_writing_region = NPUNeuronIndex::from_usize(neuron_flags.len()) .. NPUNeuronIndex::from_usize(neuron_flags.len() + number_of_neurons);
+            let neuron_writing_region = NPUNeuronIndex::from_usize(neuron_flags.len()) .. NPUNeuronIndex::from_usize(neuron_flags.len() + number_of_neurons.to_usize());
             let cortical_data = DimensionalNeuronCorticalData::new_default_valid::<D>(
                 neuron_writing_region.clone(),
                 cortical_area_dimensions,
@@ -220,7 +221,7 @@ pub(crate) fn create_cortical_area_with_individualized_neurons<Q: NPUQuantizatio
             );
             let cortical_index = cortical_datas.insert_data_and_get_unique_index(cortical_data);
 
-            neuron_cortical_area_indexes.extend(core::iter::repeat_n(cortical_index, number_of_neurons));
+            neuron_cortical_area_indexes.extend(core::iter::repeat_n(cortical_index, number_of_neurons.to_usize()));
             neuron_global_burst_indexes_of_last_firing.extend(neuron_data.neuron_global_burst_index_of_last_firing);
             neuron_membrane_potentials.extend(neuron_data.neuron_membrane_potential);
             neuron_fire_thresholds.extend(neuron_data.neuron_fire_threshold);

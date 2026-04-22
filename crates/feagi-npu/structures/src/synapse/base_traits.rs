@@ -1,4 +1,4 @@
-use crate::quantizables::{NPUQuantization, NPUSynapseIndex, SynapseCount};
+use crate::quantizables::{NPUQuantization, SynapseIndex, SynapseCount};
 
 // NOTE: we cannot add most properties to the base trait since synapse types vary wildly in implementation
 
@@ -8,7 +8,7 @@ pub trait BaseSynapseStorageTrait<Q: NPUQuantization>
 
     /// Gets the maximum possible synapse index achievable by current quantization (or in the case
     /// of static implementations, the size of the synapse array).
-    fn get_max_possible_synapse_index(&self) -> NPUSynapseIndex<Q::SynapseIndex>;
+    fn get_max_possible_synapse_index(&self) -> SynapseIndex<Q::SynapseIndex>;
 
     /// Returns the total number of valid and invalid (dead) synapses stored in memory
     fn get_total_number_of_synapses(&self) -> &SynapseCount<Q::SynapseIndex>;

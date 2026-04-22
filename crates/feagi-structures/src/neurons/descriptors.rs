@@ -9,8 +9,13 @@ crate::define_quantizable_value_type_family!(NeuronMembranePotential);
 
 //endregion
 
-/// Neuron Count (not voxels!)
-//region Neuron Membrane Potential
+//region Neuron Count (not voxels!)
+
+crate::define_quantizable_uint_type_family!(NeuronIndex);
+
+//endregion
+
+//region Neuron Count (not voxels!)
 
 crate::define_quantizable_uint_type_family!(NeuronCount);
 

@@ -144,6 +144,8 @@ pub struct NonzeroCount<T: QuantizableUIntType>(T);
 impl<T: QuantizableUIntType> NonzeroCount<T> {
 
     pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
+    
+    pub const ONE: Self = Self(T::ONE);
 
     pub(crate) fn new_unchecked(n: T) -> Self {
         Self(n)

@@ -1,24 +1,28 @@
 use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
-use crate::neuron_voxels::descriptors::NeuronVoxelDimensions;
-use crate::neurons::descriptors::{NeuronMembranePotential, NumberNeuronsPerVoxel};
+use crate::neuron_voxels::descriptors::{NeuronVoxelCount, NeuronVoxelDimensions, NeuronVoxelIndex};
+use crate::neurons::descriptors::{NeuronIndex, NeuronMembranePotential, NumberNeuronsPerVoxel};
 
-pub trait SingleCorticalNeuronCollectionBase<PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
+pub trait SingleCorticalNeuronCollectionBase<PotentialQuant, CoordQuant, IndexQuant> where
     PotentialQuant: QuantizableValueType,
     CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+    IndexQuant: QuantizableUIntType
 {
     fn get_neuron_voxel_density(&self) -> NumberNeuronsPerVoxel;
 
     fn get_representing_cortical_area_dimensions(&self) -> &NeuronVoxelDimensions<CoordQuant>;
 
-    fn neuron_index_max_limit(&self) -> NeuronVoxelIndexQuant;
+    fn neuron_index_max_limit(&self) -> NeuronIndex<IndexQuant>;
+
+    fn neuron_voxel_index_max_limit(&self) -> NeuronVoxelIndex<IndexQuant>;
+
+    fn number_of_voxels(&self) -> NeuronVoxelCount<IndexQuant>;
 }
 
-pub trait SingleCorticalNeuronCollectionDense<PotentialQuant, CoordQuant, NeuronVoxelIndexQuant>:
-SingleCorticalNeuronCollectionBase<PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
+pub trait SingleCorticalNeuronCollectionDense<PotentialQuant, CoordQuant, IndexQuant>:
+SingleCorticalNeuronCollectionBase<PotentialQuant, CoordQuant, IndexQuant> where
     PotentialQuant: QuantizableValueType,
     CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+    IndexQuant: QuantizableUIntType
 {
     fn get_all_neuron_potentials(&self) -> &[NeuronMembranePotential<PotentialQuant>];
 

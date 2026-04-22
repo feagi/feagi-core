@@ -7,9 +7,29 @@ pub use generated::CorticalChannelCount;
 pub use generated::CorticalChannelNeuronDepth;
 pub use generated::CorticalChannelCoordinate;
 pub use generated::CorticalChannelDimensions;
+use crate::base_quantizable::QuantizableUIntType;
 
 // Used to denote the cortical area index within the NPU directly. May have various quantizations
 crate::define_quantizable_uint_type_family!(CorticalAreaIndex);
+
+impl CorticalAreaIndex<u8> {
+    const DEFAULT_CORE_POWER: u8 = 0;
+    const DEFAULT_CORE_DEATH: u8 = 1;
+    const DEFAULT_CORE_FATIGUE: u8 = 2;
+}
+
+impl CorticalAreaIndex<u16> {
+    const DEFAULT_CORE_POWER: u16 = 0;
+    const DEFAULT_CORE_DEATH: u16 = 1;
+    const DEFAULT_CORE_FATIGUE: u16 = 2;
+}
+
+impl CorticalAreaIndex<u32> {
+    const DEFAULT_CORE_POWER: u32 = 0;
+    const DEFAULT_CORE_DEATH: u32 = 1;
+    const DEFAULT_CORE_FATIGUE: u32 = 2;
+}
+
 
 
 // NOTE: Since these macros generate generic public types, generate them in this module, and expose  only the quantizations we want above

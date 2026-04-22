@@ -5,7 +5,7 @@
 
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
-use crate::quantizables::{NPUQuantization, NPUNeuronIndex, NPUSynapseIndex, SynapseCount};
+use crate::quantizables::{NPUQuantization, NPUNeuronIndex, SynapseIndex, SynapseCount};
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStaticStorageTrait, BaseSynapseStorageTrait};
 use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;
 
