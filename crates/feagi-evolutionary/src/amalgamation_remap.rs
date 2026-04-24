@@ -5,7 +5,7 @@
 Remap **Custom** and **Memory** cortical IDs on an imported guest genome so they do not collide
 with the host connectome.
 
-Core (`___death`, `___power`, `___fatig`) and IPU/OPU identifiers are **not** remapped: they are
+Core (`___death`, `___power`, `___fatig`, `___pain_`, `___pleas`) and IPU/OPU identifiers are **not** remapped: they are
 canonical and must continue to match the host’s shared IO and core regions.
 
 Copyright 2025 Neuraville Inc.

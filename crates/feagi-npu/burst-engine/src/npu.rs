@@ -2306,11 +2306,13 @@ impl<
     /// Register a cortical area name for visualization encoding
     /// This mapping is populated during neuroembryogenesis
     ///
-    /// ARCHITECTURE: For core areas (0=_death, 1=_power, 2=_fatigue), automatically creates
+    /// ARCHITECTURE: For core areas (0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure), automatically creates
     /// a single neuron (1x1x1) with deterministic ID matching the area ID:
     /// - Area 0 → neuron ID 0
     /// - Area 1 → neuron ID 1
     /// - Area 2 → neuron ID 2
+    /// - Area 3 → neuron ID 3
+    /// - Area 4 → neuron ID 4
     ///
     /// This eliminates the need to scan for power neurons (O(1) lookup instead of O(n))
     pub fn register_cortical_area(&mut self, area_id: u32, cortical_name: String) {
@@ -2320,8 +2322,8 @@ impl<
             .insert(area_id, cortical_name);
 
         // CRITICAL ARCHITECTURE: Create core area neurons with deterministic IDs
-        // Core areas (0, 1, 2) get neurons at matching IDs (0, 1, 2)
-        if area_id <= 2 {
+        // Core areas (0..=4) get neurons at matching IDs.
+        if area_id <= 4 {
             let neuron_storage = self.neuron_storage.read().unwrap();
             let neuron_id = NeuronId(area_id);
             let neuron_idx = neuron_id.0 as usize;
@@ -2366,7 +2368,7 @@ impl<
             }
 
             if needs_creation {
-                // Ensure previous core area neurons exist (must be created in order: 0, then 1, then 2)
+                // Ensure previous core area neurons exist (must be created in order: 0..=4)
                 if area_id > 0 {
                     let prev_neuron_storage = self.neuron_storage.read().unwrap();
                     let prev_neuron_idx = (area_id - 1) as usize;
@@ -2380,7 +2382,7 @@ impl<
 
                     if !prev_exists {
                         warn!(
-                            "[NPU] Core area {} registered before area {} - core areas should be registered in order (0, 1, 2)",
+                            "[NPU] Core area {} registered before area {} - core areas should be registered in order (0..=4)",
                             area_id, area_id - 1
                         );
                     }

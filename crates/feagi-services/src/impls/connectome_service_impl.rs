@@ -1200,6 +1200,23 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn list_cortical_areas(&self) -> ServiceResult<Vec<CorticalAreaInfo>> {
         trace!(target: "feagi-services", "Listing all cortical areas");
 
+        {
+            // Auto-heal legacy loaded genomes that only include the original core set.
+            let mut manager = self.connectome.write();
+            let has_any_core = [
+                CoreCorticalType::Death,
+                CoreCorticalType::Power,
+                CoreCorticalType::Fatigue,
+                CoreCorticalType::Pain,
+                CoreCorticalType::Pleasure,
+            ]
+            .iter()
+            .any(|core| manager.cortical_area_exists(&core.to_cortical_id()));
+            if has_any_core {
+                manager.ensure_core_cortical_areas().map_err(ServiceError::from)?;
+            }
+        }
+
         let cortical_ids: Vec<String> = {
             let manager = self.connectome.read();
             manager
@@ -1628,6 +1645,23 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn get_brain_region(&self, region_id: &str) -> ServiceResult<BrainRegionInfo> {
         trace!(target: "feagi-services", "Getting brain region: {}", region_id);
 
+        {
+            // Auto-heal legacy loaded genomes that only include the original core set.
+            let mut manager = self.connectome.write();
+            let has_any_core = [
+                CoreCorticalType::Death,
+                CoreCorticalType::Power,
+                CoreCorticalType::Fatigue,
+                CoreCorticalType::Pain,
+                CoreCorticalType::Pleasure,
+            ]
+            .iter()
+            .any(|core| manager.cortical_area_exists(&core.to_cortical_id()));
+            if has_any_core {
+                manager.ensure_core_cortical_areas().map_err(ServiceError::from)?;
+            }
+        }
+
         let manager = self.connectome.read();
 
         let region = manager
@@ -1652,19 +1686,21 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .map(|id| id.as_base_64())
             .collect();
 
-        // Ensure root region always includes power/death if they exist (fixes BV disappearing)
+        // Ensure root region always includes invariant core areas if they exist (fixes BV disappearing)
         if parent_id.is_none() {
-            let power_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
-            let death_id = CoreCorticalType::Death.to_cortical_id().as_base_64();
-            if manager.cortical_area_exists(&CoreCorticalType::Power.to_cortical_id())
-                && !cortical_areas.contains(&power_id)
-            {
-                cortical_areas.push(power_id);
-            }
-            if manager.cortical_area_exists(&CoreCorticalType::Death.to_cortical_id())
-                && !cortical_areas.contains(&death_id)
-            {
-                cortical_areas.push(death_id);
+            for core in [
+                CoreCorticalType::Death,
+                CoreCorticalType::Power,
+                CoreCorticalType::Fatigue,
+                CoreCorticalType::Pain,
+                CoreCorticalType::Pleasure,
+            ] {
+                let core_id = core.to_cortical_id();
+                let core_id_b64 = core_id.as_base_64();
+                if manager.cortical_area_exists(&core_id) && !cortical_areas.contains(&core_id_b64)
+                {
+                    cortical_areas.push(core_id_b64);
+                }
             }
         }
 

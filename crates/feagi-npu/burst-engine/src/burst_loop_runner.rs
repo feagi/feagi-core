@@ -2409,7 +2409,7 @@ fn burst_loop(
                     }
 
                     // Get cortical_id from cached mappings (no NPU lock needed!)
-                    // CRITICAL: For reserved areas (0=_death, 1=_power, 2=_fatigue), use CoreCorticalType
+                    // CRITICAL: For reserved areas (0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure), use CoreCorticalType
                     // even if cache is empty, so BV can identify them correctly
                     // For other areas, skip if not in cache (cache should be populated from ConnectomeManager)
                     let cortical_id = match cortical_id_mappings_clone.get(area_id) {
@@ -2421,6 +2421,8 @@ fn burst_loop(
                                 0 => CoreCorticalType::Death.to_cortical_id().as_base_64(),
                                 1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
                                 2 => CoreCorticalType::Fatigue.to_cortical_id().as_base_64(),
+                                3 => CoreCorticalType::Pain.to_cortical_id().as_base_64(),
+                                4 => CoreCorticalType::Pleasure.to_cortical_id().as_base_64(),
                                 _ => {
                                     // Self-heal cache drift: resolve missing mapping directly from NPU area registry.
                                     // This keeps behavior deterministic while avoiding a full cache rebuild in the hot path.
@@ -2721,7 +2723,7 @@ fn burst_loop(
                     }
 
                     // Get cortical_id from cached mappings (no NPU lock needed!)
-                    // CRITICAL: For reserved areas (0=_death, 1=_power, 2=_fatigue), use CoreCorticalType
+                    // CRITICAL: For reserved areas (0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure), use CoreCorticalType
                     // even if cache is empty, so BV can identify them correctly
                     // For other areas, skip if not in cache (cache should be populated from ConnectomeManager)
                     let cortical_id = match cortical_id_mappings_motor.get(area_id) {
@@ -2733,6 +2735,8 @@ fn burst_loop(
                                 0 => CoreCorticalType::Death.to_cortical_id().as_base_64(),
                                 1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
                                 2 => CoreCorticalType::Fatigue.to_cortical_id().as_base_64(),
+                                3 => CoreCorticalType::Pain.to_cortical_id().as_base_64(),
+                                4 => CoreCorticalType::Pleasure.to_cortical_id().as_base_64(),
                                 _ => {
                                     // Self-heal cache drift: resolve missing mapping directly from NPU area registry.
                                     // This keeps behavior deterministic while avoiding a full cache rebuild in the hot path.

@@ -64,9 +64,9 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
-                #[doc = "Servo position sensor for monitoring actuator position."]
+                #[doc = "Servo encoder feedback for monitoring actuator position."]
                 Servo => {
-                    friendly_name: "Servo Sensor",
+                    friendly_name: "Servo Encoder",
                     accepted_wrapped_io_data_type: Percentage,
                     cortical_id_unit_reference: *b"svm",
                     number_cortical_areas: 1,
@@ -75,7 +75,7 @@ macro_rules! sensor_cortical_units {
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [25, 0, -10], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1])
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [25, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
