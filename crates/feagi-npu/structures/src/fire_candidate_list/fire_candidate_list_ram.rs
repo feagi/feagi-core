@@ -6,7 +6,7 @@
 
 use feagi_structures::base_quantizable::QuantizableUIntType;
 use crate::fire_candidate_list::FireCandidateListTrait;
-use crate::quantizables::NPUNeuronIndex;
+use crate::quantizables::{NPUNeuronIndex, NPUNeuronIndexType};
 
 pub struct FireCandidateListRam<NeuronIndexQuant> where
     NeuronIndexQuant: QuantizableUIntType,
@@ -31,7 +31,7 @@ impl<NeuronIndexQuant> FireCandidateListRam<NeuronIndexQuant> where
 }
 
 impl<NeuronIndexQuant> FireCandidateListTrait<NeuronIndexQuant> for FireCandidateListRam<NeuronIndexQuant> where
-    NeuronIndexQuant: QuantizableUIntType,
+    NeuronIndexQuant: QuantizableUIntType + NPUNeuronIndexType,
 {
     fn get_core_neuron_indexes_slice(&self) -> &[NPUNeuronIndex<NeuronIndexQuant>] {
         self.core_neuron_indexes.as_slice()

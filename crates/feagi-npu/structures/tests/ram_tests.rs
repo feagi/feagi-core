@@ -17,15 +17,15 @@ mod connectome {
 
     struct TestQuantization;
     impl NPUQuantization for TestQuantization {
-        type NeuronIndex = u32;
-        type SynapseIndex = u32;
-        type SynapseBundleIndex = u32;
-        type CorticalIndex = u16;
-        type Coord = u32;
-        type BurstDelta = u16;
-        type BurstIndex = u32;
-        type Value = f32;
-        type Percentage = f32;
+        type NeuronIndexQuant = u32;
+        type SynapseIndexQuant = u32;
+        type SynapseBundleIndexQuant = u32;
+        type CorticalIndexQuant = u16;
+        type CoordQuantQuant = u32;
+        type BurstDeltaQuant = u16;
+        type BurstIndexQuant = u32;
+        type ValueQuant = f32;
+        type PercentageQuant = f32;
     }
     
     struct TestSynapseMapper {
@@ -39,30 +39,30 @@ mod connectome {
                                         destination_area_type: DimensionCorticalAreaType, 
                                         _destination_cortical_data: &DimensionalNeuronCorticalData<Q>, 
                                         _destination_neuron_flags: &[NeuronFlag]) 
-            -> Result<(impl Iterator<Item=NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, SynapseCount<Q::SynapseIndex>), FeagiStructuresError> {
+            -> Result<(impl Iterator<Item=NonPlasticSynapseFull<Q::NeuronIndexQuant, Q::BurstDeltaQuant, Q::ValueQuant>>, SynapseCount<Q::SynapseIndexQuant>), FeagiStructuresError> {
             let iter = (0usize..=5).map(move |i| {
                 let mut synapse_flag = SynapseFlag::ALL_ZEROS;
                 synapse_flag.set_valid(true);
 
                 NonPlasticSynapseFull {
                     source_neuron_index: DimensionalTypedNeuronIndex {
-                        index: NPUNeuronIndex(Q::NeuronIndex::ZERO),
+                        index: NPUNeuronIndex(Q::NeuronIndexQuant::ZERO),
                         dimensional_type: source_area_type,
                     },
                     destination_neuron_index: DimensionalTypedNeuronIndex {
-                        index: NPUNeuronIndex(Q::NeuronIndex::from_usize(i)),
+                        index: NPUNeuronIndex(Q::NeuronIndexQuant::from_usize(i)),
                         dimensional_type: destination_area_type,
                     },
                     synapse_properties: NonplasticSynapseProperties {
                         synapse_flag,
-                        synapse_weight: SynapticWeight(Q::Value::ZERO),
-                        postsynaptic_potential_multiplier: PSPMultiplier(Q::Value::ZERO),
-                        synaptic_delay: BurstDelta(Q::BurstDelta::ZERO),
+                        synapse_weight: SynapticWeight(Q::ValueQuant::ZERO),
+                        postsynaptic_potential_multiplier: PSPMultiplier(Q::ValueQuant::ZERO),
+                        synaptic_delay: BurstDelta(Q::BurstDeltaQuant::ZERO),
                     },
                 }
             });
 
-            Ok((iter, SynapseCount(Q::SynapseIndex::from_usize(6))))
+            Ok((iter, SynapseCount(Q::SynapseIndexQuant::from_usize(6))))
         }
     }
 
@@ -71,10 +71,10 @@ mod connectome {
     #[test]
     fn test_ram_npu<>() {
 
-        let dimensions_a = NeuronVoxelDimensions::<<TestQuantization as NPUQuantization>::Coord>::new(20, 20, 20).unwrap();
+        let dimensions_a = NeuronVoxelDimensions::<<TestQuantization as NPUQuantization>::CoordQuantQuant>::new(20, 20, 20).unwrap();
         let density_a: NumberNeuronsPerVoxel = 1;
         
-        let dimensions_b =  NeuronVoxelDimensions::<<TestQuantization as NPUQuantization>::Coord>::new(10, 10, 10).unwrap();
+        let dimensions_b =  NeuronVoxelDimensions::<<TestQuantization as NPUQuantization>::CoordQuantQuant>::new(10, 10, 10).unwrap();
         let density_b: NumberNeuronsPerVoxel = 2;
 
         let mut connectome: ConnectomeAllocRam<TestQuantization> = ConnectomeAllocRam::new();

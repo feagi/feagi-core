@@ -20,6 +20,10 @@ impl NeuronFlag {
     pub const fn new_valid() -> NeuronFlag {
         NeuronFlag::from_raw(0x01)
     }
+    
+    pub(crate) const fn new_default_core() -> NeuronFlag {
+    NeuronFlag::from_raw(0x01)
+}
 }
 
 /// Stores various dimensional_neuron cortical area boolean flags under a single byte

@@ -9,19 +9,19 @@ use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThr
 
 pub(crate) trait DimensionalNeuronDefaults<Q: NPUQuantization> {
     // Neuron Defaults
-    const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::BurstIndex>;
-    const DEFAULT_NEURON_MEMBRANE_POTENTIAL: NPUNeuronMembranePotential<Q::Value>;
-    const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::Value>;
-    const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::Percentage>;
-    const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDelta>;
-    const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDelta>;
+    const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::BurstIndexQuant>;
+    const DEFAULT_NEURON_MEMBRANE_POTENTIAL: NPUNeuronMembranePotential<Q::ValueQuant>;
+    const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::ValueQuant>;
+    const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::PercentageQuant>;
+    const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDeltaQuant>;
+    const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDeltaQuant>;
 
     // Cortical Area Defaults
     const DEFAULT_CORTICAL_NEURONS_PER_VOXEL: NumberNeuronsPerVoxel;
-    const DEFAULT_CORTICAL_EXCITABILITY: NeuronExcitability<Q::Percentage>;
-    const DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT: BurstDelta<Q::BurstDelta>;
-    const DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT: FireThresholdLimit<Q::Value>;
-    const DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT: BurstDelta<Q::BurstDelta>;
+    const DEFAULT_CORTICAL_EXCITABILITY: NeuronExcitability<Q::PercentageQuant>;
+    const DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT: BurstDelta<Q::BurstDeltaQuant>;
+    const DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT: FireThresholdLimit<Q::ValueQuant>;
+    const DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT: BurstDelta<Q::BurstDeltaQuant>;
     const DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED: bool;
     const DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED: bool;
 }
@@ -35,56 +35,56 @@ macro_rules! impl_dimensional_neuron_defaults {
         impl<Q: NPUQuantization> DimensionalNeuronDefaults<Q> for $defaults_type<Q> {
             // TODO are these defaults fine?
             // Neuron Defaults
-            const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::BurstIndex> =
-                BurstGlobalIndex(Q::BurstIndex::ZERO);
-            const DEFAULT_NEURON_MEMBRANE_POTENTIAL: NPUNeuronMembranePotential<Q::Value> =
-                NPUNeuronMembranePotential(Q::Value::ZERO);
-            const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::Value> =
-                FireThreshold(Q::Value::ZERO);
-            const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::Percentage> =
-                LeakCoefficient(Q::Percentage::ZERO_PERCENT);
-            const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDelta> =
-                BurstDelta(Q::BurstDelta::ZERO);
-            const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDelta> =
-                BurstDelta(Q::BurstDelta::ONE);
+            const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::BurstIndexQuant> =
+                BurstGlobalIndex(Q::BurstIndexQuant::ZERO);
+            const DEFAULT_NEURON_MEMBRANE_POTENTIAL: NPUNeuronMembranePotential<Q::ValueQuant> =
+                NPUNeuronMembranePotential(Q::ValueQuant::ZERO);
+            const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::ValueQuant> =
+                FireThreshold(Q::ValueQuant::ZERO);
+            const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::PercentageQuant> =
+                LeakCoefficient(Q::PercentageQuant::ZERO_PERCENT);
+            const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDeltaQuant> =
+                BurstDelta(Q::BurstDeltaQuant::ZERO);
+            const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDeltaQuant> =
+                BurstDelta(Q::BurstDeltaQuant::ONE);
 
             // Cortical Area Defaults
             const DEFAULT_CORTICAL_NEURONS_PER_VOXEL: NumberNeuronsPerVoxel = 1;
-            const DEFAULT_CORTICAL_EXCITABILITY: NeuronExcitability<Q::Percentage> =
-                NeuronExcitability(Q::Percentage::ZERO_PERCENT);
-            const DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT: BurstDelta<Q::BurstDelta> =
-                BurstDelta(Q::BurstDelta::ZERO);
-            const DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT: FireThresholdLimit<Q::Value> =
-                FireThresholdLimit(Q::Value::ZERO);
-            const DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT: BurstDelta<Q::BurstDelta> =
-                BurstDelta(Q::BurstDelta::ZERO);
+            const DEFAULT_CORTICAL_EXCITABILITY: NeuronExcitability<Q::PercentageQuant> =
+                NeuronExcitability(Q::PercentageQuant::ZERO_PERCENT);
+            const DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT: BurstDelta<Q::BurstDeltaQuant> =
+                BurstDelta(Q::BurstDeltaQuant::ZERO);
+            const DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT: FireThresholdLimit<Q::ValueQuant> =
+                FireThresholdLimit(Q::ValueQuant::ZERO);
+            const DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT: BurstDelta<Q::BurstDeltaQuant> =
+                BurstDelta(Q::BurstDeltaQuant::ZERO);
             const DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED: bool = false;
             const DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED: bool = false;
         }
 
         impl<Q: NPUQuantization> $defaults_type<Q> {
-            pub(crate) const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::BurstIndex> =
+            pub(crate) const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::BurstIndexQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING;
-            pub(crate) const DEFAULT_NEURON_MEMBRANE_POTENTIAL: NPUNeuronMembranePotential<Q::Value> =
+            pub(crate) const DEFAULT_NEURON_MEMBRANE_POTENTIAL: NPUNeuronMembranePotential<Q::ValueQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_NEURON_MEMBRANE_POTENTIAL;
-            pub(crate) const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::Value> =
+            pub(crate) const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::ValueQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_NEURON_FIRE_THRESHOLD;
-            pub(crate) const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::Percentage> =
+            pub(crate) const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::PercentageQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_NEURON_LEAK_COEFFICIENT;
-            pub(crate) const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDelta> =
+            pub(crate) const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDeltaQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN;
-            pub(crate) const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDelta> =
+            pub(crate) const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDeltaQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT;
 
             pub(crate) const DEFAULT_CORTICAL_NEURONS_PER_VOXEL: NumberNeuronsPerVoxel =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_CORTICAL_NEURONS_PER_VOXEL;
-            pub(crate) const DEFAULT_CORTICAL_EXCITABILITY: NeuronExcitability<Q::Percentage> =
+            pub(crate) const DEFAULT_CORTICAL_EXCITABILITY: NeuronExcitability<Q::PercentageQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_CORTICAL_EXCITABILITY;
-            pub(crate) const DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT: BurstDelta<Q::BurstDelta> =
+            pub(crate) const DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT: BurstDelta<Q::BurstDeltaQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT;
-            pub(crate) const DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT: FireThresholdLimit<Q::Value> =
+            pub(crate) const DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT: FireThresholdLimit<Q::ValueQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT;
-            pub(crate) const DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT: BurstDelta<Q::BurstDelta> =
+            pub(crate) const DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT: BurstDelta<Q::BurstDeltaQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT;
             pub(crate) const DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED: bool =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED;

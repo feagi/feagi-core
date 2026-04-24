@@ -19,18 +19,18 @@ pub trait BaseNeuronStaticStorageTrait<Q: NPUQuantization>
 
     /// Gets the maximum possible neuron index achievable by current quantization (or in the case
     /// of static implementations, the size of the array).
-    fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<Q::NeuronIndex>;
+    fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<Q::NeuronIndexQuant>;
 
     /// Returns the count of valid neurons in the structure. NOT THE SAME AS TOTAL NUMBER OF
     /// NEURONS STORED!
-    fn get_total_number_of_valid_neurons(&self) -> NeuronCount<Q::NeuronIndex>;
+    fn get_total_number_of_valid_neurons(&self) -> NeuronCount<Q::NeuronIndexQuant>;
 
     /// Returns the count of invalid neurons in the structure. NOT THE SAME AS TOTAL FREE CAPACITY!
-    fn get_total_number_of_invalid_neurons(&self) -> NeuronCount<Q::NeuronIndex>;
+    fn get_total_number_of_invalid_neurons(&self) -> NeuronCount<Q::NeuronIndexQuant>;
 
     /// Gets the maximum possible cortical area index achievable by current quantization (or in the
     /// case of static implementations, the size of the array).
-    fn get_max_possible_cortical_area_index(&self) -> CorticalAreaIndex<Q::CorticalIndex>;
+    fn get_max_possible_cortical_area_index(&self) -> CorticalAreaIndex<Q::CorticalIndexQuant>;
 
 
 
@@ -48,14 +48,14 @@ BaseNeuronStaticStorageTrait<Q>
     /// albeit allowing a buffer of free space. Returns the number of neurons that were freed.
     /// Returns 0 if no neurons were freed (nothing to free or spare capacity is at or less than
     /// what was requested). Note that invalid neurons not sorted to the back will not be freed.
-    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronCount<Q::NeuronIndex>) -> NeuronCount<Q::NeuronIndex>;
+    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronCount<Q::NeuronIndexQuant>) -> NeuronCount<Q::NeuronIndexQuant>;
 
 
     /// Deletes a cortical area by invalidating all of its neurons. Returns the neuron indexes
     /// of the disabled neurons
     /// WARNING: BE SURE TO REMOVE ASSOCIATED SYNAPSE MAPPINGS!
-    fn delete_cortical_area(&mut self, cortical_index: CorticalAreaIndex<Q::CorticalIndex>)
-                            -> Result<Range<NPUNeuronIndex<Q::NeuronIndex>>, FeagiNPUNeuronError>;
+    fn delete_cortical_area(&mut self, cortical_index: CorticalAreaIndex<Q::CorticalIndexQuant>)
+                            -> Result<Range<NPUNeuronIndex<Q::NeuronIndexQuant>>, FeagiNPUNeuronError>;
     
     // TODO Duplicate Cortical Area
 

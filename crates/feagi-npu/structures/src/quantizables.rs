@@ -1,19 +1,19 @@
 use feagi_structures::{define_quantizable_percentage_type_family, define_quantizable_uint_type_family, define_quantizable_value_type_family};
 use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
-use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
+use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndexQuantization;
 use feagi_structures::neurons::descriptors::NeuronCount;
 
 /// Defines the quantization for all most uses in this crate // TODO this may need to be moved up a level?
 pub trait NPUQuantization {
-    type NeuronIndex: QuantizableUIntType;
-    type SynapseIndex: QuantizableUIntType;
-    type SynapseBundleIndex: QuantizableUIntType;
-    type CorticalIndex: QuantizableUIntType;
-    type Coord: QuantizableUIntType;
-    type BurstDelta: QuantizableUIntType;
-    type BurstIndex: QuantizableUIntType;
-    type Value: QuantizableValueType;
-    type Percentage: QuantizablePercentType;
+    type NeuronIndexQuant: QuantizableUIntType + NPUNeuronIndexType;
+    type SynapseIndexQuant: QuantizableUIntType;
+    type SynapseBundleIndexQuant: QuantizableUIntType;
+    type CorticalIndexQuant: CorticalAreaIndexQuantization;
+    type CoordQuantQuant: QuantizableUIntType;
+    type BurstDeltaQuant: QuantizableUIntType;
+    type BurstIndexQuant: QuantizableUIntType;
+    type ValueQuant: QuantizableValueType;
+    type PercentageQuant: QuantizablePercentType;
 }
 
 //region UInt Quantizations
@@ -34,13 +34,44 @@ define_quantizable_uint_type_family!(BurstDelta);
 define_quantizable_uint_type_family!(NPUNeuronIndex);
 
 impl<T: QuantizableUIntType> NPUNeuronIndex<T> {
-
     pub fn get_count_from_block(range: &core::ops::Range<NPUNeuronIndex<T>>) -> NeuronCount<T> {
         (range.end - range.start).0.into()
     }
-
-
 }
+
+/// Defines some default neuron indexes. Since we don't really work with NPU neuron indexes outside
+/// the NPU, this should not be exposed.
+pub(crate) trait NPUNeuronIndexType: QuantizableUIntType {
+    const DEFAULT_CORE_POWER: Self;
+    const DEFAULT_CORE_DEATH: Self;
+    const DEFAULT_CORE_FATIGUE: Self;
+}
+
+impl NPUNeuronIndexType for u8 {
+    const DEFAULT_CORE_POWER: Self = 0;
+    const DEFAULT_CORE_DEATH: Self = 1;
+    const DEFAULT_CORE_FATIGUE: Self = 2;
+}
+
+impl NPUNeuronIndexType for u16 {
+    const DEFAULT_CORE_POWER: Self = 0;
+    const DEFAULT_CORE_DEATH: Self = 1;
+    const DEFAULT_CORE_FATIGUE: Self = 2;
+}
+
+impl NPUNeuronIndexType for u32 {
+    const DEFAULT_CORE_POWER: Self = 0;
+    const DEFAULT_CORE_DEATH: Self = 1;
+    const DEFAULT_CORE_FATIGUE: Self = 2;
+}
+
+impl<T: NPUNeuronIndexType> NPUNeuronIndex<T> {
+    pub const DEFAULT_CORE_POWER: Self = Self(T::DEFAULT_CORE_POWER);
+    pub const DEFAULT_CORE_DEATH: Self = Self(T::DEFAULT_CORE_DEATH);
+    pub const DEFAULT_CORE_FATIGUE: Self = Self(T::DEFAULT_CORE_FATIGUE);
+}
+
+
 
 
 

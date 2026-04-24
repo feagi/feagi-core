@@ -25,9 +25,9 @@ DimensionalStaticStorageTrait<Q>
     /// Creates a cortical area of given dimensions and neuron density,
     /// and returns its cortical area index and range of neuron indexes it covers
     fn create_cortical_area_with_default_neurons(&mut self,
-                                                 cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
+                                                 cortical_area_dimensions: NeuronVoxelDimensions<Q::CoordQuantQuant>,
                                                  neurons_per_voxel: NumberNeuronsPerVoxel)
-                                                 -> Result<(CorticalAreaIndex<Q::CorticalIndex>), FeagiNPUNeuronError>;
+                                                 -> Result<(CorticalAreaIndex<Q::CorticalIndexQuant>), FeagiNPUNeuronError>;
 
 
     /// Effectively deletes a cortical area (by invalidating their neurons), then rebuilds it to the
@@ -35,9 +35,9 @@ DimensionalStaticStorageTrait<Q>
     /// reset to default. Returns a tuple of the old invalid neuron index range, and the new
     /// created neuron index range.
     fn resize_cortical_area_with_default_neurons(&mut self,
-                                                 cortical_area_dimensions: NeuronVoxelDimensions<Q::Coord>,
+                                                 cortical_area_dimensions: NeuronVoxelDimensions<Q::CoordQuantQuant>,
                                                  neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                 cortical_index: CorticalAreaIndex<Q::CorticalIndex>)
-                                                 -> Result<(Range<NPUNeuronIndex<Q::NeuronIndex>>), FeagiNPUNeuronError>;
+                                                 cortical_index: CorticalAreaIndex<Q::CorticalIndexQuant>)
+                                                 -> Result<(Range<NPUNeuronIndex<Q::NeuronIndexQuant>>), FeagiNPUNeuronError>;
 
 }

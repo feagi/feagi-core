@@ -16,17 +16,12 @@ pub(crate) struct CoreNeuronPowerDefaults<Q: NPUQuantization> {
 }
 
 impl<Q: NPUQuantization> CoreNeuronPowerDefaults<Q> {
-    pub const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::Value> = FireThreshold::ZERO;
-    pub const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::Percentage> = LeakCoefficient::ZERO_PERCENT;
-    pub const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDelta> = BurstDelta::ZERO;
-    pub const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDelta> = BurstDelta::ZERO;
-
-    #[inline(always)]
-    pub fn get_default_neuron_flag() -> NeuronFlag { NeuronFlag::new_valid() }
-    #[inline(always)]
-    pub fn get_neuron_index() -> NPUNeuronIndex<Q::NeuronIndex> {NPUNeuronIndex::ZERO}
-    #[inline(always)]
-    pub fn get_cortical_index() -> CorticalAreaIndex<Q::CorticalIndex> {CorticalAreaIndex::ZERO}
+    pub const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::ValueQuant> = FireThreshold::ZERO;
+    pub const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::PercentageQuant> = LeakCoefficient::ZERO_PERCENT;
+    pub const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDeltaQuant> = BurstDelta::ZERO;
+    pub const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDeltaQuant> = BurstDelta::ZERO;
+    pub const DEFAULT_NEURON_FLAG: NeuronFlag = NeuronFlag::new_default_core();
+    
     #[inline(always)]
     pub fn get_default_cortical_data() -> DimensionalNeuronCorticalData<Q> {
         DimensionalNeuronCorticalData{
@@ -36,7 +31,7 @@ impl<Q: NPUQuantization> CoreNeuronPowerDefaults<Q> {
                 flag.set_mp_charge_accumulation_enabled(false);
                 flag
             },
-            neuron_range: Self::get_neuron_index()..Self::get_neuron_index() + NPUNeuronIndex::ONE,
+            neuron_range: NPUNeuronIndex::DEFAULT_CORE_POWER..NPUNeuronIndex::DEFAULT_CORE_POWER + NPUNeuronIndex::ONE,
             number_neurons_invalid_from_degeneration: NeuronCount::ZERO,
             dimensions: NeuronVoxelDimensions::default_1_1_1_cube(),
             number_neurons_per_voxel: 1,
@@ -53,17 +48,12 @@ pub(crate) struct CoreNeuronDeathDefaults<Q: NPUQuantization> {
 }
 
 impl<Q: NPUQuantization> CoreNeuronDeathDefaults<Q> {
-    pub const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::Value> = FireThreshold::ZERO;
-    pub const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::Percentage> = LeakCoefficient::ZERO_PERCENT;
-    pub const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDelta> = BurstDelta::ZERO;
-    pub const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDelta> = BurstDelta::ZERO;
-
-    #[inline(always)]
-    pub fn get_default_neuron_flag() -> NeuronFlag { NeuronFlag::new_valid() }
-    #[inline(always)]
-    pub fn get_neuron_index() -> NPUNeuronIndex<Q::NeuronIndex> {CoreNeuronPowerDefaults::<Q>::get_neuron_index() + NPUNeuronIndex::ONE}
-    #[inline(always)]
-    pub fn get_cortical_index() -> CorticalAreaIndex<Q::CorticalIndex> {CoreNeuronPowerDefaults::<Q>::get_cortical_index() + CorticalAreaIndex::ONE}
+    pub const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::ValueQuant> = FireThreshold::ZERO;
+    pub const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::PercentageQuant> = LeakCoefficient::ZERO_PERCENT;
+    pub const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDeltaQuant> = BurstDelta::ZERO;
+    pub const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDeltaQuant> = BurstDelta::ZERO;
+    pub const DEFAULT_NEURON_FLAG: NeuronFlag = NeuronFlag::new_default_core();
+    
     #[inline(always)]
     pub fn get_default_cortical_data() -> DimensionalNeuronCorticalData<Q> {
         DimensionalNeuronCorticalData{
@@ -73,7 +63,7 @@ impl<Q: NPUQuantization> CoreNeuronDeathDefaults<Q> {
                 flag.set_mp_charge_accumulation_enabled(false);
                 flag
             },
-            neuron_range: Self::get_neuron_index()..Self::get_neuron_index() + NPUNeuronIndex::ONE,
+            neuron_range: NPUNeuronIndex::DEFAULT_CORE_DEATH..NPUNeuronIndex::DEFAULT_CORE_DEATH + NPUNeuronIndex::ONE,
             number_neurons_invalid_from_degeneration: NeuronCount::ZERO,
             dimensions: NeuronVoxelDimensions::default_1_1_1_cube(),
             number_neurons_per_voxel: 1,
@@ -91,17 +81,12 @@ pub(crate) struct CoreNeuronFatigueDefaults<Q: NPUQuantization> {
 }
 
 impl<Q: NPUQuantization> CoreNeuronFatigueDefaults<Q> {
-    pub const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::Value> = FireThreshold::ZERO;
-    pub const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::Percentage> = LeakCoefficient::ZERO_PERCENT;
-    pub const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDelta> = BurstDelta::ZERO;
-    pub const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDelta> = BurstDelta::ZERO;
-
-    #[inline(always)]
-    pub fn get_default_neuron_flag() -> NeuronFlag { NeuronFlag::new_valid() }
-    #[inline(always)]
-    pub fn get_neuron_index() -> NPUNeuronIndex<Q::NeuronIndex> {CoreNeuronDeathDefaults::<Q>::get_neuron_index() + NPUNeuronIndex::ONE}
-    #[inline(always)]
-    pub fn get_cortical_index() -> CorticalAreaIndex<Q::CorticalIndex> {CoreNeuronDeathDefaults::<Q>::get_cortical_index() + CorticalAreaIndex::ONE}
+    pub const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::ValueQuant> = FireThreshold::ZERO;
+    pub const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::PercentageQuant> = LeakCoefficient::ZERO_PERCENT;
+    pub const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDeltaQuant> = BurstDelta::ZERO;
+    pub const DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT: BurstDelta<Q::BurstDeltaQuant> = BurstDelta::ZERO;
+    pub const DEFAULT_NEURON_FLAG: NeuronFlag = NeuronFlag::new_default_core();
+    
     #[inline(always)]
     pub fn get_default_cortical_data() -> DimensionalNeuronCorticalData<Q> {
         DimensionalNeuronCorticalData{
@@ -111,7 +96,7 @@ impl<Q: NPUQuantization> CoreNeuronFatigueDefaults<Q> {
                 flag.set_mp_charge_accumulation_enabled(false);
                 flag
             },
-            neuron_range: Self::get_neuron_index()..Self::get_neuron_index() + NPUNeuronIndex::ONE,
+            neuron_range: NPUNeuronIndex::DEFAULT_CORE_FATIGUE..NPUNeuronIndex::DEFAULT_CORE_FATIGUE + NPUNeuronIndex::ONE,
             number_neurons_invalid_from_degeneration: NeuronCount::ZERO,
             dimensions: NeuronVoxelDimensions::default_1_1_1_cube(),
             number_neurons_per_voxel: 1,

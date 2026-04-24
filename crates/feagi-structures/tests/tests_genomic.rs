@@ -87,6 +87,26 @@ mod descriptor_tests {
         assert_eq!(idx.0, 7u8);
     }
 
+    fn default_core_indexes<T: CorticalAreaIndexQuantization>() -> [CorticalAreaIndex<T>; 3] {
+        [
+            CorticalAreaIndex::DEFAULT_CORE_POWER,
+            CorticalAreaIndex::DEFAULT_CORE_DEATH,
+            CorticalAreaIndex::DEFAULT_CORE_FATIGUE,
+        ]
+    }
+
+    #[test]
+    fn cortical_area_index_defaults_work_for_generic_quantization() {
+        assert_eq!(
+            default_core_indexes::<u16>(),
+            [
+                CorticalAreaIndex::from(0u16),
+                CorticalAreaIndex::from(1u16),
+                CorticalAreaIndex::from(2u16),
+            ]
+        );
+    }
+
     #[test]
     fn cortical_channel_count_ok_and_zero_err() {
         let count = CorticalChannelCount::new(5u32).unwrap();

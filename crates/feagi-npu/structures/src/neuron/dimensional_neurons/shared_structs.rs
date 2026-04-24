@@ -35,21 +35,21 @@ pub struct DimensionalTypedCorticalIndex<T: QuantizableUIntType> {
 pub struct DimensionalNeuronCorticalData<Q: NPUQuantization>
 {
     pub flags: DimensionalNeuronCorticalFlag, // NOTE: do not allow modifying this structure outside this
-    pub neuron_range: Range<NPUNeuronIndex<Q::NeuronIndex>>,
-    pub number_neurons_invalid_from_degeneration: NeuronCount<Q::NeuronIndex>,
-    pub dimensions: NeuronVoxelDimensions<Q::Coord>,
+    pub neuron_range: Range<NPUNeuronIndex<Q::NeuronIndexQuant>>,
+    pub number_neurons_invalid_from_degeneration: NeuronCount<Q::NeuronIndexQuant>,
+    pub dimensions: NeuronVoxelDimensions<Q::CoordQuantQuant>,
     pub number_neurons_per_voxel: NumberNeuronsPerVoxel,
-    pub excitability: NeuronExcitability<Q::Percentage>,
-    pub refractory_period_limit: BurstDelta<Q::BurstDelta>,
-    pub fire_threshold_limit: FireThresholdLimit<Q::Value>,
-    pub consecutive_fire_limit: BurstDelta<Q::BurstDelta>,
+    pub excitability: NeuronExcitability<Q::PercentageQuant>,
+    pub refractory_period_limit: BurstDelta<Q::BurstDeltaQuant>,
+    pub fire_threshold_limit: FireThresholdLimit<Q::ValueQuant>,
+    pub consecutive_fire_limit: BurstDelta<Q::BurstDeltaQuant>,
 }
 
 impl<Q: NPUQuantization> DimensionalNeuronCorticalData<Q>
 {
 
-    pub const fn new_default_valid<D: DimensionalNeuronDefaults<Q>>(neuron_range: Range<NPUNeuronIndex<Q::NeuronIndex>>,
-                                                                    voxel_dimensions: NeuronVoxelDimensions<Q::Coord>,
+    pub const fn new_default_valid<D: DimensionalNeuronDefaults<Q>>(neuron_range: Range<NPUNeuronIndex<Q::NeuronIndexQuant>>,
+                                                                    voxel_dimensions: NeuronVoxelDimensions<Q::CoordQuantQuant>,
                                                                     number_neurons_per_voxel: NumberNeuronsPerVoxel) -> Self {
         DimensionalNeuronCorticalData {
             flags: DimensionalNeuronCorticalFlag::new_valid(),
@@ -71,34 +71,34 @@ impl<Q: NPUQuantization> DimensionalNeuronCorticalData<Q>
 /// Used to pass around slices easily at low cost for all cortical areas
 pub struct DimensionalNeuronDataRefSliceAllCorticalAreas<'a, Q: NPUQuantization>
 {
-    pub neuron_cortical_area_index: &'a [CorticalAreaIndex<Q::CorticalIndex>],
-    pub neuron_global_burst_index_of_last_firing: &'a mut [BurstGlobalIndex<Q::BurstIndex>],
-    pub neuron_membrane_potential: &'a mut [NPUNeuronMembranePotential<Q::Value>],
-    pub neuron_fire_threshold: &'a mut [FireThreshold<Q::Value>],
-    pub neuron_leak_coefficient: &'a mut [LeakCoefficient<Q::Percentage>],
+    pub neuron_cortical_area_index: &'a [CorticalAreaIndex<Q::CorticalIndexQuant>],
+    pub neuron_global_burst_index_of_last_firing: &'a mut [BurstGlobalIndex<Q::BurstIndexQuant>],
+    pub neuron_membrane_potential: &'a mut [NPUNeuronMembranePotential<Q::ValueQuant>],
+    pub neuron_fire_threshold: &'a mut [FireThreshold<Q::ValueQuant>],
+    pub neuron_leak_coefficient: &'a mut [LeakCoefficient<Q::PercentageQuant>],
     pub neuron_flags: &'a mut [NeuronFlag],
-    pub neuron_refractory_countdown: &'a mut [BurstDelta<Q::BurstDelta>],
-    pub neuron_consecutive_fire_count: &'a mut [BurstDelta<Q::BurstDelta>],
+    pub neuron_refractory_countdown: &'a mut [BurstDelta<Q::BurstDeltaQuant>],
+    pub neuron_consecutive_fire_count: &'a mut [BurstDelta<Q::BurstDeltaQuant>],
 
-    pub cortical_data: &'a IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndex>>,
+    pub cortical_data: &'a IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndexQuant>>,
 }
 
 
 /// Used to pass around slices easily at low cost for a single cortical area
 pub struct DimensionalNeuronDataRefSliceSingleCorticalArea<'a, Q: NPUQuantization>
 {
-    pub neuron_cortical_area_index: &'a [CorticalAreaIndex<Q::CorticalIndex>],
-    pub neuron_global_burst_index_of_last_firing: &'a mut [BurstGlobalIndex<Q::BurstIndex>],
-    pub neuron_membrane_potential: &'a mut [NPUNeuronMembranePotential<Q::Value>],
-    pub neuron_fire_threshold: &'a mut [FireThreshold<Q::Value>],
-    pub neuron_leak_coefficient: &'a mut [LeakCoefficient<Q::Percentage>],
+    pub neuron_cortical_area_index: &'a [CorticalAreaIndex<Q::CorticalIndexQuant>],
+    pub neuron_global_burst_index_of_last_firing: &'a mut [BurstGlobalIndex<Q::BurstIndexQuant>],
+    pub neuron_membrane_potential: &'a mut [NPUNeuronMembranePotential<Q::ValueQuant>],
+    pub neuron_fire_threshold: &'a mut [FireThreshold<Q::ValueQuant>],
+    pub neuron_leak_coefficient: &'a mut [LeakCoefficient<Q::PercentageQuant>],
     pub neuron_flags: &'a mut [NeuronFlag],
-    pub neuron_refractory_countdown: &'a mut [BurstDelta<Q::BurstDelta>],
-    pub neuron_consecutive_fire_count: &'a mut [BurstDelta<Q::BurstDelta>],
+    pub neuron_refractory_countdown: &'a mut [BurstDelta<Q::BurstDeltaQuant>],
+    pub neuron_consecutive_fire_count: &'a mut [BurstDelta<Q::BurstDeltaQuant>],
 
     pub cortical_data: &'a DimensionalNeuronCorticalData<Q>,
     /// Sub-range of global neuron indices covered by the slices above (same shape as [`DimensionalNeuronCorticalData::neuron_range`]).
-    pub global_neuron_index_range: Range<NPUNeuronIndex<Q::NeuronIndex>>,
+    pub global_neuron_index_range: Range<NPUNeuronIndex<Q::NeuronIndexQuant>>,
 }
 
 
@@ -106,13 +106,13 @@ pub struct DimensionalNeuronDataRefSliceSingleCorticalArea<'a, Q: NPUQuantizatio
 #[cfg(feature = "alloc")]
 pub struct DimensionalNeuronDataFromCorticalArea<Q: NPUQuantization>
 {
-    pub neuron_global_burst_index_of_last_firing: Vec<BurstGlobalIndex<Q::BurstIndex>>,
-    pub neuron_membrane_potential: Vec<NPUNeuronMembranePotential<Q::Value>>,
-    pub neuron_fire_threshold: Vec<FireThreshold<Q::Value>>,
-    pub neuron_leak_coefficient: Vec<LeakCoefficient<Q::Percentage>>,
+    pub neuron_global_burst_index_of_last_firing: Vec<BurstGlobalIndex<Q::BurstIndexQuant>>,
+    pub neuron_membrane_potential: Vec<NPUNeuronMembranePotential<Q::ValueQuant>>,
+    pub neuron_fire_threshold: Vec<FireThreshold<Q::ValueQuant>>,
+    pub neuron_leak_coefficient: Vec<LeakCoefficient<Q::PercentageQuant>>,
     pub neuron_flags: Vec<NeuronFlag>,
-    pub neuron_refractory_countdown: Vec<BurstDelta<Q::BurstDelta>>,
-    pub neuron_consecutive_fire_count: Vec<BurstDelta<Q::BurstDelta>>,
+    pub neuron_refractory_countdown: Vec<BurstDelta<Q::BurstDeltaQuant>>,
+    pub neuron_consecutive_fire_count: Vec<BurstDelta<Q::BurstDeltaQuant>>,
 
     pub cortical_data: DimensionalNeuronCorticalData<Q>,
 }

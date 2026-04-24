@@ -12,22 +12,35 @@ use crate::base_quantizable::QuantizableUIntType;
 // Used to denote the cortical area index within the NPU directly. May have various quantizations
 crate::define_quantizable_uint_type_family!(CorticalAreaIndex);
 
-impl CorticalAreaIndex<u8> {
-    const DEFAULT_CORE_POWER: u8 = 0;
-    const DEFAULT_CORE_DEATH: u8 = 1;
-    const DEFAULT_CORE_FATIGUE: u8 = 2;
+/// Quantizations that support the  built-in core cortical area indexes.
+pub trait CorticalAreaIndexQuantization: QuantizableUIntType {
+    const DEFAULT_CORE_POWER: Self;
+    const DEFAULT_CORE_DEATH: Self;
+    const DEFAULT_CORE_FATIGUE: Self;
 }
 
-impl CorticalAreaIndex<u16> {
-    const DEFAULT_CORE_POWER: u16 = 0;
-    const DEFAULT_CORE_DEATH: u16 = 1;
-    const DEFAULT_CORE_FATIGUE: u16 = 2;
+impl CorticalAreaIndexQuantization for u8 {
+    const DEFAULT_CORE_POWER: Self = 0;
+    const DEFAULT_CORE_DEATH: Self = 1;
+    const DEFAULT_CORE_FATIGUE: Self = 2;
 }
 
-impl CorticalAreaIndex<u32> {
-    const DEFAULT_CORE_POWER: u32 = 0;
-    const DEFAULT_CORE_DEATH: u32 = 1;
-    const DEFAULT_CORE_FATIGUE: u32 = 2;
+impl CorticalAreaIndexQuantization for u16 {
+    const DEFAULT_CORE_POWER: Self = 0;
+    const DEFAULT_CORE_DEATH: Self = 1;
+    const DEFAULT_CORE_FATIGUE: Self = 2;
+}
+
+impl CorticalAreaIndexQuantization for u32 {
+    const DEFAULT_CORE_POWER: Self = 0;
+    const DEFAULT_CORE_DEATH: Self = 1;
+    const DEFAULT_CORE_FATIGUE: Self = 2;
+}
+
+impl<T: CorticalAreaIndexQuantization> CorticalAreaIndex<T> {
+    pub const DEFAULT_CORE_POWER: Self = Self(T::DEFAULT_CORE_POWER);
+    pub const DEFAULT_CORE_DEATH: Self = Self(T::DEFAULT_CORE_DEATH);
+    pub const DEFAULT_CORE_FATIGUE: Self = Self(T::DEFAULT_CORE_FATIGUE);
 }
 
 

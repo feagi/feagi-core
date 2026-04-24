@@ -24,7 +24,7 @@ pub trait NonPlasticCorticalMappingDefinitionExecutor<Q: NPUQuantization>
                                     destination_area_type: DimensionCorticalAreaType,
                                     destination_cortical_data: &DimensionalNeuronCorticalData<Q>,
                                     destination_neuron_flags: &[NeuronFlag])
-        -> Result<(impl Iterator<Item=NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, SynapseCount<Q::SynapseIndex>), FeagiStructuresError>;
+        -> Result<(impl Iterator<Item=NonPlasticSynapseFull<Q::NeuronIndexQuant, Q::BurstDeltaQuant, Q::ValueQuant>>, SynapseCount<Q::SynapseIndexQuant>), FeagiStructuresError>;
 
     // TODO we should have a check to ensure that the count matches that runs in debug mode ( do this as a check natively)
 

@@ -36,6 +36,7 @@ pub trait FireCandidateListTrait<NeuronIndexQuant> where
 
     fn add_inter_neuron_index(&mut self, neuron_index_quant: NPUNeuronIndex<NeuronIndexQuant>);
 
+    /// Clears the Fire Queue (does not deallocate memory) and sets the pwr neuron
     fn clear(&mut self);
 }
 

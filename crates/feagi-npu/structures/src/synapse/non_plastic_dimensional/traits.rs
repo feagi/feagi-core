@@ -21,17 +21,17 @@ use crate::synapse::non_plastic_dimensional::NonPlasticSynapseFull;
 pub trait NonplasticSynapseBaseStorageTrait<Q: NPUQuantization> :
 BaseSynapseStorageTrait<Q>
 {
-    const DEFAULT_SYNAPSE_WEIGHT: SynapticWeight<Q::Value> = SynapticWeight::ONE;
-    const DEFAULT_SYNAPSE_PSP: PSPMultiplier<Q::Value> = PSPMultiplier::ONE;
+    const DEFAULT_SYNAPSE_WEIGHT: SynapticWeight<Q::ValueQuant> = SynapticWeight::ONE;
+    const DEFAULT_SYNAPSE_PSP: PSPMultiplier<Q::ValueQuant> = PSPMultiplier::ONE;
 
     //region Get Connections
 
 
-    fn get_nonplastic_synapse_data_from_source_neuron_index(&self, source_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>, )
-        -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError>;
+    fn get_nonplastic_synapse_data_from_source_neuron_index(&self, source_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndexQuant>, )
+                                                            -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndexQuant, Q::BurstDeltaQuant, Q::ValueQuant>>, NeuronCount<Q::NeuronIndexQuant>), FeagiNPUSynapseError>;
 
-    fn get_nonplastic_synapse_data_from_destination_neuron_index(&self, destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndex>)
-        -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndex, Q::BurstDelta, Q::Value>>, NeuronCount<Q::NeuronIndex>), FeagiNPUSynapseError>;
+    fn get_nonplastic_synapse_data_from_destination_neuron_index(&self, destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndexQuant>)
+        -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndexQuant, Q::BurstDeltaQuant, Q::ValueQuant>>, NeuronCount<Q::NeuronIndexQuant>), FeagiNPUSynapseError>;
 
 
     //endregion
@@ -52,14 +52,14 @@ pub trait NonplasticSynapseAllocStorageTrait<Q: NPUQuantization> :
 BaseSynapseAllocStorageTrait<Q>
 {
     fn add_synapses_mapping_between_cortical_areas(&mut self,
-                                                   source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndex>,
+                                                   source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>,
                                                    source_cortical_data: &DimensionalNeuronCorticalData<Q>,
                                                    source_neuron_flags: &[NeuronFlag],
-                                                   destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndex>,
+                                                   destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>,
                                                    destination_cortical_data: &DimensionalNeuronCorticalData<Q>,
                                                    destination_neuron_flags: &[NeuronFlag],
                                                    neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q>)
-        -> Result<SynapseBundleIndex<Q::SynapseBundleIndex>, FeagiStructuresError>;
+                                                   -> Result<SynapseBundleIndex<Q::SynapseBundleIndexQuant>, FeagiStructuresError>;
 
 
 
