@@ -217,8 +217,8 @@ impl ConnectomeManager {
             cortical_areas: HashMap::new(),
             cortical_id_to_idx: HashMap::new(),
             cortical_idx_to_id: HashMap::new(),
-            // CRITICAL: Reserve indices for invariant core areas (0..=4).
-            next_cortical_idx: 5, // Reserve 0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure
+            // CRITICAL: Reserve indices for invariant core areas (0..=6).
+            next_cortical_idx: 7, // Reserve 0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure, 5=_fear, 6=_hope
             brain_regions: BrainRegionHierarchy::new(),
             morphology_registry: feagi_evolutionary::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
@@ -330,7 +330,7 @@ impl ConnectomeManager {
             cortical_areas: HashMap::new(),
             cortical_id_to_idx: HashMap::new(),
             cortical_idx_to_id: HashMap::new(),
-            next_cortical_idx: 5,
+            next_cortical_idx: 7,
             brain_regions: BrainRegionHierarchy::new(),
             morphology_registry: feagi_evolutionary::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
@@ -695,7 +695,7 @@ impl ConnectomeManager {
             )));
         }
 
-        // CRITICAL: Reserve cortical_idx 0..=4 for invariant core areas.
+        // CRITICAL: Reserve cortical_idx 0..=6 for invariant core areas.
         // Use feagi-data-processing types as single source of truth
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
@@ -704,12 +704,16 @@ impl ConnectomeManager {
         let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
         let pain_id = CoreCorticalType::Pain.to_cortical_id();
         let pleasure_id = CoreCorticalType::Pleasure.to_cortical_id();
+        let fear_id = CoreCorticalType::Fear.to_cortical_id();
+        let hope_id = CoreCorticalType::Hope.to_cortical_id();
 
         let is_death_area = area.cortical_id == death_id;
         let is_power_area = area.cortical_id == power_id;
         let is_fatigue_area = area.cortical_id == fatigue_id;
         let is_pain_area = area.cortical_id == pain_id;
         let is_pleasure_area = area.cortical_id == pleasure_id;
+        let is_fear_area = area.cortical_id == fear_id;
+        let is_hope_area = area.cortical_id == hope_id;
 
         if is_death_area {
             trace!(
@@ -746,20 +750,34 @@ impl ConnectomeManager {
                 area.cortical_id
             );
             area.cortical_idx = 4;
+        } else if is_fear_area {
+            trace!(
+                target: "feagi-bdu",
+                "[CORE-AREA] Assigning RESERVED cortical_idx=5 to _fear area (id={})",
+                area.cortical_id
+            );
+            area.cortical_idx = 5;
+        } else if is_hope_area {
+            trace!(
+                target: "feagi-bdu",
+                "[CORE-AREA] Assigning RESERVED cortical_idx=6 to _hope area (id={})",
+                area.cortical_id
+            );
+            area.cortical_idx = 6;
         } else {
-            // Regular areas: assign cortical_idx if not set (will be >=5 due to reservation)
+            // Regular areas: assign cortical_idx if not set (will be >=7 due to reservation)
             if area.cortical_idx == 0 {
                 area.cortical_idx = self.next_cortical_idx;
                 self.next_cortical_idx += 1;
                 trace!(
                     target: "feagi-bdu",
-                    "[REGULAR-AREA] Assigned cortical_idx={} to area '{}' (should be >=5)",
+                    "[REGULAR-AREA] Assigned cortical_idx={} to area '{}' (should be >=7)",
                     area.cortical_idx,
                     area.cortical_id.as_base_64()
                 );
             } else {
                 // Check for reserved index collision
-                if area.cortical_idx <= 4 {
+                if area.cortical_idx <= 6 {
                     warn!(
                         "Regular area '{}' attempted to use RESERVED cortical_idx={}! Reassigning to next available.",
                         area.cortical_id, area.cortical_idx);
@@ -4750,7 +4768,7 @@ impl ConnectomeManager {
     // Genome I/O
     // ======================================================================
 
-    /// Ensure core cortical areas (_death, _power, _fatigue, _pain, _pleasure) exist
+    /// Ensure core cortical areas (_death, _power, _fatigue, _pain, _pleasure, _fear, _hope) exist
     ///
     /// Core areas are required for brain operation:
     /// - `_death` (cortical_idx=0): Manages neuron death and cleanup
@@ -4758,6 +4776,8 @@ impl ConnectomeManager {
     /// - `_fatigue` (cortical_idx=2): Monitors brain fatigue and triggers sleep mode
     /// - `_pain` (cortical_idx=3): Pain signal processing
     /// - `_pleasure` (cortical_idx=4): Pleasure signal processing
+    /// - `_fear` (cortical_idx=5): Fear signal processing
+    /// - `_hope` (cortical_idx=6): Hope signal processing
     ///
     /// If any core area is missing from the genome, it will be automatically created
     /// with default properties (1x1x1 dimensions, minimal configuration).
@@ -4837,6 +4857,8 @@ impl ConnectomeManager {
         let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
         let pain_id = CoreCorticalType::Pain.to_cortical_id();
         let pleasure_id = CoreCorticalType::Pleasure.to_cortical_id();
+        let fear_id = CoreCorticalType::Fear.to_cortical_id();
+        let hope_id = CoreCorticalType::Hope.to_cortical_id();
         if !self.cortical_areas.contains_key(&fatigue_id) {
             info!(target: "feagi-bdu", "🔧 [CORE-AREA] Creating missing _fatigue area (cortical_idx=2)");
             let fatigue_area = CorticalArea::new(
@@ -4909,6 +4931,56 @@ impl ConnectomeManager {
             }
         } else {
             info!(target: "feagi-bdu", "  ✓ _pleasure area already exists");
+        }
+
+        // Check and create _fear (cortical_idx=5)
+        if !self.cortical_areas.contains_key(&fear_id) {
+            info!(target: "feagi-bdu", "🔧 [CORE-AREA] Creating missing _fear area (cortical_idx=5)");
+            let fear_area = CorticalArea::new(
+                fear_id,
+                5, // Will be overridden by add_cortical_area to 5
+                "_fear".to_string(),
+                core_dimensions,
+                core_position,
+                CorticalAreaType::Core(CoreCorticalType::Fear),
+            )
+            .map_err(|e| BduError::Internal(format!("Failed to create _fear area: {}", e)))?;
+            match self.add_cortical_area(fear_area) {
+                Ok(idx) => {
+                    info!(target: "feagi-bdu", "  ✅ Created _fear area with cortical_idx={}", idx);
+                }
+                Err(e) => {
+                    error!(target: "feagi-bdu", "  ❌ Failed to add _fear area: {}", e);
+                    return Err(e);
+                }
+            }
+        } else {
+            info!(target: "feagi-bdu", "  ✓ _fear area already exists");
+        }
+
+        // Check and create _hope (cortical_idx=6)
+        if !self.cortical_areas.contains_key(&hope_id) {
+            info!(target: "feagi-bdu", "🔧 [CORE-AREA] Creating missing _hope area (cortical_idx=6)");
+            let hope_area = CorticalArea::new(
+                hope_id,
+                6, // Will be overridden by add_cortical_area to 6
+                "_hope".to_string(),
+                core_dimensions,
+                core_position,
+                CorticalAreaType::Core(CoreCorticalType::Hope),
+            )
+            .map_err(|e| BduError::Internal(format!("Failed to create _hope area: {}", e)))?;
+            match self.add_cortical_area(hope_area) {
+                Ok(idx) => {
+                    info!(target: "feagi-bdu", "  ✅ Created _hope area with cortical_idx={}", idx);
+                }
+                Err(e) => {
+                    error!(target: "feagi-bdu", "  ❌ Failed to add _hope area: {}", e);
+                    return Err(e);
+                }
+            }
+        } else {
+            info!(target: "feagi-bdu", "  ✓ _hope area already exists");
         }
 
         info!(target: "feagi-bdu", "🔧 [CORE-AREA] Core area check complete");
@@ -5000,9 +5072,9 @@ impl ConnectomeManager {
         self.cortical_areas.clear();
         self.cortical_id_to_idx.clear();
         self.cortical_idx_to_id.clear();
-        // CRITICAL: Reserve 0..=4 for invariant core areas.
-        self.next_cortical_idx = 5;
-        info!("🔧 [BRAIN-RESET] Cortical mapping cleared, next_cortical_idx reset to 5 (reserves 0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure)");
+        // CRITICAL: Reserve 0..=6 for invariant core areas.
+        self.next_cortical_idx = 7;
+        info!("🔧 [BRAIN-RESET] Cortical mapping cleared, next_cortical_idx reset to 7 (reserves 0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure, 5=_fear, 6=_hope)");
 
         // Clear brain regions
         self.brain_regions = BrainRegionHierarchy::new();

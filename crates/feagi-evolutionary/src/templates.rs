@@ -186,6 +186,54 @@ pub fn create_pleasure_area() -> CorticalArea {
     area
 }
 
+/// Create _fear cortical area (cortical_idx = 5) from template
+pub fn create_fear_area() -> CorticalArea {
+    let cortical_id = CoreCorticalType::Fear.to_cortical_id();
+    let cortical_type = cortical_id
+        .as_cortical_type()
+        .expect("Fear cortical ID should map to Core type");
+
+    let mut area = CorticalArea::new(
+        cortical_id,
+        5, // cortical_idx = 5 (reserved)
+        "Fear".to_string(),
+        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
+        GenomeCoordinate3D::new(0, 0, -60),
+        cortical_type,
+    )
+    .expect("Failed to create _fear area");
+
+    let mut props = get_default_neural_properties();
+    props.insert("cortical_group".to_string(), Value::from("CORE"));
+    props.insert("2d_coordinate".to_string(), Value::from(vec![-10, 30]));
+    area.properties = props;
+    area
+}
+
+/// Create _hope cortical area (cortical_idx = 6) from template
+pub fn create_hope_area() -> CorticalArea {
+    let cortical_id = CoreCorticalType::Hope.to_cortical_id();
+    let cortical_type = cortical_id
+        .as_cortical_type()
+        .expect("Hope cortical ID should map to Core type");
+
+    let mut area = CorticalArea::new(
+        cortical_id,
+        6, // cortical_idx = 6 (reserved)
+        "Hope".to_string(),
+        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
+        GenomeCoordinate3D::new(0, 0, -70),
+        cortical_type,
+    )
+    .expect("Failed to create _hope area");
+
+    let mut props = get_default_neural_properties();
+    props.insert("cortical_group".to_string(), Value::from("CORE"));
+    props.insert("2d_coordinate".to_string(), Value::from(vec![-10, 40]));
+    area.properties = props;
+    area
+}
+
 /// Create a minimal empty genome
 pub fn create_minimal_genome(genome_id: String, genome_title: String) -> RuntimeGenome {
     RuntimeGenome {
@@ -214,7 +262,7 @@ pub fn create_minimal_genome(genome_id: String, genome_title: String) -> Runtime
     }
 }
 
-/// Create a genome with core areas (_death, _power, _fatigue, _pain, _pleasure)
+/// Create a genome with core areas (_death, _power, _fatigue, _pain, _pleasure, _fear, _hope)
 pub fn create_genome_with_core_areas(genome_id: String, genome_title: String) -> RuntimeGenome {
     let mut genome = create_minimal_genome(genome_id, genome_title);
 
@@ -228,6 +276,8 @@ pub fn create_genome_with_core_areas(genome_id: String, genome_title: String) ->
     let pain_id = crate::genome::parser::string_to_cortical_id("_pain").expect("Valid cortical ID");
     let pleasure_id =
         crate::genome::parser::string_to_cortical_id("_pleasure").expect("Valid cortical ID");
+    let fear_id = crate::genome::parser::string_to_cortical_id("_fear").expect("Valid cortical ID");
+    let hope_id = crate::genome::parser::string_to_cortical_id("_hope").expect("Valid cortical ID");
 
     genome.cortical_areas.insert(death_id, create_death_area());
     genome.cortical_areas.insert(power_id, create_power_area());
@@ -238,6 +288,8 @@ pub fn create_genome_with_core_areas(genome_id: String, genome_title: String) ->
     genome
         .cortical_areas
         .insert(pleasure_id, create_pleasure_area());
+    genome.cortical_areas.insert(fear_id, create_fear_area());
+    genome.cortical_areas.insert(hope_id, create_hope_area());
 
     genome
 }
@@ -283,6 +335,8 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
     let pain_id = crate::genome::parser::string_to_cortical_id("_pain").expect("Valid cortical ID");
     let pleasure_id =
         crate::genome::parser::string_to_cortical_id("_pleasure").expect("Valid cortical ID");
+    let fear_id = crate::genome::parser::string_to_cortical_id("_fear").expect("Valid cortical ID");
+    let hope_id = crate::genome::parser::string_to_cortical_id("_hope").expect("Valid cortical ID");
 
     // 1. Ensure core cortical areas exist
     if let std::collections::hash_map::Entry::Vacant(e) = genome.cortical_areas.entry(death_id) {
@@ -318,6 +372,20 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         e.insert(pleasure_area);
         areas_added += 1;
         tracing::info!("Added missing core area: _pleasure (cortical_idx=4)");
+    }
+
+    if let std::collections::hash_map::Entry::Vacant(e) = genome.cortical_areas.entry(fear_id) {
+        let fear_area = create_fear_area();
+        e.insert(fear_area);
+        areas_added += 1;
+        tracing::info!("Added missing core area: _fear (cortical_idx=5)");
+    }
+
+    if let std::collections::hash_map::Entry::Vacant(e) = genome.cortical_areas.entry(hope_id) {
+        let hope_area = create_hope_area();
+        e.insert(hope_area);
+        areas_added += 1;
+        tracing::info!("Added missing core area: _hope (cortical_idx=6)");
     }
 
     // 2. Ensure core morphologies exist
@@ -762,7 +830,7 @@ mod tests {
             create_genome_with_core_areas("test_genome".to_string(), "Test Genome".to_string());
 
         assert_eq!(genome.metadata.genome_id, "test_genome");
-        assert_eq!(genome.cortical_areas.len(), 5);
+        assert_eq!(genome.cortical_areas.len(), 7);
 
         let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
         let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
@@ -771,11 +839,15 @@ mod tests {
         let pain_id = crate::genome::parser::string_to_cortical_id("_pain").expect("Valid ID");
         let pleasure_id =
             crate::genome::parser::string_to_cortical_id("_pleasure").expect("Valid ID");
+        let fear_id = crate::genome::parser::string_to_cortical_id("_fear").expect("Valid ID");
+        let hope_id = crate::genome::parser::string_to_cortical_id("_hope").expect("Valid ID");
         assert!(genome.cortical_areas.contains_key(&death_id));
         assert!(genome.cortical_areas.contains_key(&power_id));
         assert!(genome.cortical_areas.contains_key(&fatigue_id));
         assert!(genome.cortical_areas.contains_key(&pain_id));
         assert!(genome.cortical_areas.contains_key(&pleasure_id));
+        assert!(genome.cortical_areas.contains_key(&fear_id));
+        assert!(genome.cortical_areas.contains_key(&hope_id));
 
         // Verify _power has correct properties
         let power = genome.cortical_areas.get(&power_id).unwrap();
@@ -853,8 +925,8 @@ mod tests {
         // Ensure core components
         let (areas_added, _) = ensure_core_components(&mut genome);
 
-        // Should have added _death, _power, _fatigue, _pain, and _pleasure
-        assert_eq!(areas_added, 5);
+        // Should have added _death, _power, _fatigue, _pain, _pleasure, _fear, _hope
+        assert_eq!(areas_added, 7);
 
         let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
         let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
@@ -863,11 +935,15 @@ mod tests {
         let pain_id = crate::genome::parser::string_to_cortical_id("_pain").expect("Valid ID");
         let pleasure_id =
             crate::genome::parser::string_to_cortical_id("_pleasure").expect("Valid ID");
+        let fear_id = crate::genome::parser::string_to_cortical_id("_fear").expect("Valid ID");
+        let hope_id = crate::genome::parser::string_to_cortical_id("_hope").expect("Valid ID");
         assert!(genome.cortical_areas.contains_key(&death_id));
         assert!(genome.cortical_areas.contains_key(&power_id));
         assert!(genome.cortical_areas.contains_key(&fatigue_id));
         assert!(genome.cortical_areas.contains_key(&pain_id));
         assert!(genome.cortical_areas.contains_key(&pleasure_id));
+        assert!(genome.cortical_areas.contains_key(&fear_id));
+        assert!(genome.cortical_areas.contains_key(&hope_id));
 
         // Verify cortical_idx assignments
         assert_eq!(
@@ -891,6 +967,8 @@ mod tests {
                 .cortical_idx,
             4
         );
+        assert_eq!(genome.cortical_areas.get(&fear_id).unwrap().cortical_idx, 5);
+        assert_eq!(genome.cortical_areas.get(&hope_id).unwrap().cortical_idx, 6);
     }
 
     #[test]

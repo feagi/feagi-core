@@ -223,6 +223,12 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
         if bytes == *b"___pleas" {
             return Ok(CoreCorticalType::Pleasure.to_cortical_id());
         }
+        if bytes == *b"___fear_" {
+            return Ok(CoreCorticalType::Fear.to_cortical_id());
+        }
+        if bytes == *b"___hope_" {
+            return Ok(CoreCorticalType::Hope.to_cortical_id());
+        }
         return Ok(cortical_id);
     }
 
@@ -254,6 +260,12 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
     if id_str == "___pleas" {
         return Ok(CoreCorticalType::Pleasure.to_cortical_id());
     }
+    if id_str == "___fear_" {
+        return Ok(CoreCorticalType::Fear.to_cortical_id());
+    }
+    if id_str == "___hope_" {
+        return Ok(CoreCorticalType::Hope.to_cortical_id());
+    }
     if id_str == "_death" {
         return Ok(CoreCorticalType::Death.to_cortical_id());
     }
@@ -265,6 +277,12 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
     }
     if id_str == "_pleasure" {
         return Ok(CoreCorticalType::Pleasure.to_cortical_id());
+    }
+    if id_str == "_fear" {
+        return Ok(CoreCorticalType::Fear.to_cortical_id());
+    }
+    if id_str == "_hope" {
+        return Ok(CoreCorticalType::Hope.to_cortical_id());
     }
 
     // For non-core areas, use CorticalID's legacy ASCII parser (6-char and 8-char)

@@ -306,12 +306,16 @@ mod test_cortical_area {
                 let fatigue_type = CoreCorticalType::Fatigue;
                 let pain_type = CoreCorticalType::Pain;
                 let pleasure_type = CoreCorticalType::Pleasure;
+                let fear_type = CoreCorticalType::Fear;
+                let hope_type = CoreCorticalType::Hope;
 
                 assert_eq!(format!("{}", death_type), "CoreCorticalType(Death)");
                 assert_eq!(format!("{}", power_type), "CoreCorticalType(Power)");
                 assert_eq!(format!("{}", fatigue_type), "CoreCorticalType(Fatigue)");
                 assert_eq!(format!("{}", pain_type), "CoreCorticalType(Pain)");
                 assert_eq!(format!("{}", pleasure_type), "CoreCorticalType(Pleasure)");
+                assert_eq!(format!("{}", fear_type), "CoreCorticalType(Fear)");
+                assert_eq!(format!("{}", hope_type), "CoreCorticalType(Hope)");
             }
 
             #[test]
@@ -329,6 +333,8 @@ mod test_cortical_area {
                     CoreCorticalType::Fatigue,
                     CoreCorticalType::Pain,
                     CoreCorticalType::Pleasure,
+                    CoreCorticalType::Fear,
+                    CoreCorticalType::Hope,
                 ] {
                     let cortical_id = core_type.to_cortical_id();
                     let recovered = cortical_id.as_cortical_type().unwrap();

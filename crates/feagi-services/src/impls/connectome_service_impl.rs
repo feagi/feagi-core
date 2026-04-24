@@ -1209,6 +1209,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 CoreCorticalType::Fatigue,
                 CoreCorticalType::Pain,
                 CoreCorticalType::Pleasure,
+                CoreCorticalType::Fear,
+                CoreCorticalType::Hope,
             ]
             .iter()
             .any(|core| manager.cortical_area_exists(&core.to_cortical_id()));
@@ -1654,6 +1656,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 CoreCorticalType::Fatigue,
                 CoreCorticalType::Pain,
                 CoreCorticalType::Pleasure,
+                CoreCorticalType::Fear,
+                CoreCorticalType::Hope,
             ]
             .iter()
             .any(|core| manager.cortical_area_exists(&core.to_cortical_id()));
@@ -1694,6 +1698,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 CoreCorticalType::Fatigue,
                 CoreCorticalType::Pain,
                 CoreCorticalType::Pleasure,
+                CoreCorticalType::Fear,
+                CoreCorticalType::Hope,
             ] {
                 let core_id = core.to_cortical_id();
                 let core_id_b64 = core_id.as_base_64();

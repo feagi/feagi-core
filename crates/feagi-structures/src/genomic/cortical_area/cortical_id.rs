@@ -337,6 +337,8 @@ mod tests {
             CoreCorticalType::Fatigue,
             CoreCorticalType::Pain,
             CoreCorticalType::Pleasure,
+            CoreCorticalType::Fear,
+            CoreCorticalType::Hope,
         ];
 
         for core_type in &core_types {
