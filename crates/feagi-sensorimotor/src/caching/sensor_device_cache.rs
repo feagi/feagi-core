@@ -14,7 +14,7 @@ use crate::data_types::descriptors::{
 // type" error inside the macro expansion, not at this `use` line.
 use crate::data_types::{
     GazeProperties, ImageFrame, MiscData, Percentage, RawIMU, SegmentedImageFrame,
-    SignedPercentage4D, RAW_IMU_SUBUNIT_COUNT,
+    SignedPercentage3D, SignedPercentage4D, RAW_IMU_SUBUNIT_COUNT,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::*;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
@@ -399,6 +399,88 @@ macro_rules! sensor_unit_functions {
                     io_props,
                     number_channels,
                     initial_val,
+                )?;
+                Ok(())
+            }
+
+            // Partial-write API for the Raw IMU composite.
+            //
+            // The whole-composite `_write` (generated below by
+            // `@generate_similar_functions`) overwrites all three sub-axes
+            // every call. Real-world IMUs frequently expose only a subset
+            // of (accel, gyro, mag); writing the missing axis as zero each
+            // tick is an implicit fallback the project policy forbids.
+            // The three helpers below perform a read-modify-write on the
+            // pre-processed cache slot so that absent axes literally retain
+            // whatever was previously written (the registered initial zero
+            // until/unless the controller writes them). Sub-component
+            // ordering is delegated to `RawIMU::set_*`, which is the
+            // single source of truth for axis identity.
+            pub fn [<$sensory_unit:snake _write_accelerometer>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                channel: CorticalChannelIndex,
+                accelerometer: SignedPercentage3D,
+            ) -> Result<(), FeagiDataError> {
+                const SENSOR_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$sensory_unit;
+                let mut current: RawIMU = {
+                    let cached: &WrappedIOData =
+                        self.try_read_preprocessed_cached_value(SENSOR_TYPE, unit, channel)?;
+                    cached.try_into()?
+                };
+                current.set_accelerometer(accelerometer);
+                self.try_update_value(
+                    SENSOR_TYPE,
+                    unit,
+                    channel,
+                    WrappedIOData::RawIMU(current),
+                    Instant::now(),
+                )?;
+                Ok(())
+            }
+
+            pub fn [<$sensory_unit:snake _write_gyroscope>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                channel: CorticalChannelIndex,
+                gyroscope: SignedPercentage3D,
+            ) -> Result<(), FeagiDataError> {
+                const SENSOR_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$sensory_unit;
+                let mut current: RawIMU = {
+                    let cached: &WrappedIOData =
+                        self.try_read_preprocessed_cached_value(SENSOR_TYPE, unit, channel)?;
+                    cached.try_into()?
+                };
+                current.set_gyroscope(gyroscope);
+                self.try_update_value(
+                    SENSOR_TYPE,
+                    unit,
+                    channel,
+                    WrappedIOData::RawIMU(current),
+                    Instant::now(),
+                )?;
+                Ok(())
+            }
+
+            pub fn [<$sensory_unit:snake _write_magnetometer>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                channel: CorticalChannelIndex,
+                magnetometer: SignedPercentage3D,
+            ) -> Result<(), FeagiDataError> {
+                const SENSOR_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$sensory_unit;
+                let mut current: RawIMU = {
+                    let cached: &WrappedIOData =
+                        self.try_read_preprocessed_cached_value(SENSOR_TYPE, unit, channel)?;
+                    cached.try_into()?
+                };
+                current.set_magnetometer(magnetometer);
+                self.try_update_value(
+                    SENSOR_TYPE,
+                    unit,
+                    channel,
+                    WrappedIOData::RawIMU(current),
+                    Instant::now(),
                 )?;
                 Ok(())
             }
