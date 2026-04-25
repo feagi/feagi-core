@@ -18,12 +18,15 @@ use std::collections::BTreeMap;
 use serde_json::Value;
 use thiserror::Error;
 
+use crate::genome::normalizers::{NormalizationDiagnostics, Normalizer};
 use crate::genome::schema::GenomeSchemaVersion;
 use crate::genome::validators::{ValidationReport, Validator};
 
 pub mod chain;
+pub mod v2_to_v3;
 
 pub use chain::ChainRunner;
+pub use v2_to_v3::V2ToV3Migrator;
 
 /// Errors emitted by migrators and by the chain machinery itself.
 #[derive(Debug, Error)]
@@ -127,14 +130,17 @@ pub trait Migrator: Send + Sync {
 ///
 /// Contains everything `validate-and-repair` needs to surface to clients
 /// per decision #8 in the design doc: the version range traversed, which
-/// named migrators ran, per-step diagnostics, advisory warnings collected
-/// between hops, and any blocking errors raised by the final validator.
+/// named migrators and normalizers ran, per-step diagnostics, advisory
+/// warnings collected between hops, and any blocking errors raised by
+/// the final validator.
 #[derive(Debug, Clone)]
 pub struct ChainResult {
     pub from_version: GenomeSchemaVersion,
     pub to_version: GenomeSchemaVersion,
     pub migrators_applied: Vec<&'static str>,
+    pub normalizers_applied: Vec<&'static str>,
     pub per_step_diagnostics: Vec<MigrationStepDiagnostics>,
+    pub per_normalizer_diagnostics: Vec<NormalizationDiagnostics>,
     pub advisory_warnings: Vec<String>,
     pub blocking_errors: Vec<String>,
 }
@@ -146,15 +152,17 @@ impl ChainResult {
     }
 }
 
-/// Holds the registered migrators and validators that the chain runner
-/// will dispatch through.
+/// Holds the registered migrators, normalizers, and validators that the
+/// chain runner will dispatch through.
 ///
 /// Migrators are keyed by `from_version` (one per integer; duplicates are
-/// rejected at registration). Validators are keyed by `schema_version`.
+/// rejected at registration). Normalizers are keyed by `schema_version`,
+/// at most one per version. Validators are keyed by `schema_version`.
 /// Contiguity (no gaps in the migrator chain) is checked at runner-start
 /// time over the actual range being traversed, not at registration time.
 pub struct ChainRegistry {
     migrators: BTreeMap<u32, Box<dyn Migrator>>,
+    normalizers: BTreeMap<u32, Box<dyn Normalizer>>,
     validators: BTreeMap<u32, Box<dyn Validator>>,
 }
 
@@ -162,6 +170,7 @@ impl ChainRegistry {
     pub fn new() -> Self {
         Self {
             migrators: BTreeMap::new(),
+            normalizers: BTreeMap::new(),
             validators: BTreeMap::new(),
         }
     }
@@ -181,11 +190,28 @@ impl ChainRegistry {
         }
         if self.migrators.contains_key(&from.as_u32()) {
             return Err(MigrationError::InvalidRegistry(format!(
-                "duplicate migrator with from_version={}",
-                from
+                "duplicate migrator with from_version={from}"
             )));
         }
         self.migrators.insert(from.as_u32(), migrator);
+        Ok(())
+    }
+
+    /// Register a normalizer. Rejects duplicates at the same schema
+    /// version. At most one normalizer per version is supported on
+    /// purpose: composing multiple normalizers in a stable order is
+    /// future work and not needed today.
+    pub fn register_normalizer(
+        &mut self,
+        normalizer: Box<dyn Normalizer>,
+    ) -> Result<(), MigrationError> {
+        let v = normalizer.schema_version();
+        if self.normalizers.contains_key(&v.as_u32()) {
+            return Err(MigrationError::InvalidRegistry(format!(
+                "duplicate normalizer at schema_version={v}"
+            )));
+        }
+        self.normalizers.insert(v.as_u32(), normalizer);
         Ok(())
     }
 
@@ -200,6 +226,11 @@ impl ChainRegistry {
     /// Look up the migrator that consumes genomes at `from`.
     pub fn migrator_for(&self, from: GenomeSchemaVersion) -> Option<&dyn Migrator> {
         self.migrators.get(&from.as_u32()).map(|b| b.as_ref())
+    }
+
+    /// Look up the normalizer at `version`.
+    pub fn normalizer_for(&self, version: GenomeSchemaVersion) -> Option<&dyn Normalizer> {
+        self.normalizers.get(&version.as_u32()).map(|b| b.as_ref())
     }
 
     /// Look up the validator at `version`.
@@ -220,6 +251,11 @@ impl ChainRegistry {
     /// Number of migrators currently registered.
     pub fn migrator_count(&self) -> usize {
         self.migrators.len()
+    }
+
+    /// Number of normalizers currently registered.
+    pub fn normalizer_count(&self) -> usize {
+        self.normalizers.len()
     }
 
     /// Number of validators currently registered.

@@ -62,16 +62,25 @@ pub fn peek_quantization_precision<P: AsRef<Path>>(path: P) -> EvoResult<String>
     Ok(precision.to_lowercase())
 }
 
-/// Load a genome from a JSON string
+/// Load a genome from a JSON string.
+///
+/// Pipeline:
+/// 1. Deserialize JSON.
+/// 2. If the top-level shape is the flat (encoded-key) form, expand it to
+///    the hierarchical form. This is representation coercion, not schema
+///    migration; it runs before schema-version detection.
+/// 3. Hand the hierarchical `Value` to the chain runner. The chain
+///    detects the schema version, walks `vN -> vLatest`, applies each
+///    registered migrator, the post-hop normalizer, and runs the
+///    `vLatest` validator as blocking. See
+///    `feagi-core/docs/GENOME_SCHEMA_VERSIONING.md`.
+/// 4. Re-serialize the chain output, parse to `ParsedGenome`, and
+///    convert to `RuntimeGenome`.
 pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
-    // Parse JSON to Value first to check format
-    let json_value: Value = serde_json::from_str(json_str).map_err(|e| {
-        crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e))
-    })?;
+    let json_value: Value = serde_json::from_str(json_str)
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {e}")))?;
 
-    // Check if genome is in flat format and convert if needed
     let hierarchical_json = if is_flat_format(&json_value) {
-        // Convert flat format to hierarchical format
         crate::converter_flat_full::convert_flat_to_hierarchical_full(&json_value).map_err(|e| {
             tracing::error!(target: "feagi-evo", "convert_flat_to_hierarchical_full failed: {}", e);
             e
@@ -80,69 +89,97 @@ pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
         json_value
     };
 
-    // CRITICAL: Migrate old cortical ID formats to new feagi-data-processing compliant format
-    // This converts old IDs like iic000 → svi0____, _power → ___power, etc.
-    let migrated_json = match crate::genome::migrator::migrate_genome(&hierarchical_json) {
-        Ok(migration_result) => {
-            if migration_result.cortical_ids_migrated > 0 {
-                tracing::info!(
-                    "🔄 [GENOME-LOAD] Migrated {} cortical IDs from old format to new format",
-                    migration_result.cortical_ids_migrated
-                );
-                // Log some example migrations for debugging
-                for (old_id, new_id) in migration_result.id_mapping.iter().take(5) {
-                    tracing::info!("🔄 [GENOME-LOAD]   Example: '{}' → '{}'", old_id, new_id);
-                }
-                if !migration_result.warnings.is_empty() {
-                    for warning in &migration_result.warnings {
-                        tracing::warn!("⚠️  [GENOME-LOAD] Migration warning: {}", warning);
-                    }
-                }
-            } else {
-                tracing::debug!("🔄 [GENOME-LOAD] No cortical IDs needed migration");
-            }
-            migration_result.genome
-        }
-        Err(e) => {
-            tracing::warn!(
-                "⚠️  [GENOME-LOAD] Migration failed: {}, continuing without migration",
-                e
-            );
-            hierarchical_json
-        }
-    };
+    let migrated_json = run_default_chain(hierarchical_json)?;
 
-    // Convert back to JSON string for parsing
-    let hierarchical_json_str = serde_json::to_string(&migrated_json).map_err(|e| {
-        crate::types::EvoError::InvalidGenome(format!(
-            "Failed to serialize converted genome: {}",
-            e
-        ))
+    let migrated_json_str = serde_json::to_string(&migrated_json).map_err(|e| {
+        crate::types::EvoError::InvalidGenome(format!("Failed to serialize migrated genome: {e}"))
     })?;
 
-    // Parse JSON to ParsedGenome
-    let parsed = GenomeParser::parse(&hierarchical_json_str).map_err(|e| {
+    let parsed = GenomeParser::parse(&migrated_json_str).map_err(|e| {
         tracing::error!(target: "feagi-evo", "GenomeParser::parse failed: {}", e);
         e
     })?;
 
-    // Convert to RuntimeGenome
-    let mut runtime_genome = to_runtime_genome(parsed, &hierarchical_json_str).map_err(|e| {
+    let runtime_genome = to_runtime_genome(parsed, &migrated_json_str).map_err(|e| {
         tracing::error!(target: "feagi-evo", "to_runtime_genome failed: {}", e);
         e
     })?;
 
-    // CRITICAL: Auto-fix common issues before validation
-    // This prevents genomes with 0 dimensions or 0 per_voxel_neuron_cnt from failing
-    let fixes_applied = crate::validator::auto_fix_genome(&mut runtime_genome);
-    if fixes_applied > 0 {
+    Ok(runtime_genome)
+}
+
+/// Run the default chain registry on `hierarchical_json` to bring it to
+/// `CURRENT_SCHEMA_VERSION`. Logs migrators and normalizers applied,
+/// surfaces advisory warnings at debug level, and surfaces blocking
+/// errors as a `EvoError::InvalidGenome`.
+///
+/// A blocking validation error from the latest validator is reported
+/// here as a hard failure. This is the load-time enforcement point that
+/// closes the silent-auto-save gap documented in the
+/// `EXPERIMENT_GENOME_SAVE_GAP_ANALYSIS.md`: the loader can no longer
+/// hand back a `RuntimeGenome` that the latest validator rejected.
+fn run_default_chain(mut hierarchical_json: Value) -> EvoResult<Value> {
+    use crate::genome::default_chain_registry;
+    use crate::genome::migration::ChainRunner;
+    use crate::genome::schema::CURRENT_SCHEMA_VERSION;
+
+    let registry = default_chain_registry();
+    let runner = ChainRunner::new(&registry);
+
+    let result = runner
+        .run_to(&mut hierarchical_json, CURRENT_SCHEMA_VERSION)
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Genome chain failed: {e}")))?;
+
+    if !result.migrators_applied.is_empty() {
         tracing::info!(
-            "🔧 [GENOME-LOAD] Applied {} auto-fixes to genome",
-            fixes_applied
+            target: "feagi-evo",
+            "[GENOME-LOAD] Migrated v{} -> v{} via {:?}",
+            result.from_version.as_u32(),
+            result.to_version.as_u32(),
+            result.migrators_applied
         );
+        for diag in &result.per_step_diagnostics {
+            for transform in &diag.transformations {
+                tracing::debug!(
+                    target: "feagi-evo",
+                    "[GENOME-LOAD]   v{} -> v{}: {}",
+                    diag.from_version.as_u32(),
+                    diag.to_version.as_u32(),
+                    transform
+                );
+            }
+        }
     }
 
-    Ok(runtime_genome)
+    if !result.normalizers_applied.is_empty() {
+        for diag in &result.per_normalizer_diagnostics {
+            if !diag.is_clean() {
+                tracing::info!(
+                    target: "feagi-evo",
+                    "[GENOME-LOAD] Normalizer at v{} applied {} corrections",
+                    diag.schema_version.as_u32(),
+                    diag.transformations.len()
+                );
+                for transform in &diag.transformations {
+                    tracing::debug!(target: "feagi-evo", "[GENOME-LOAD]   {}", transform);
+                }
+            }
+        }
+    }
+
+    for warning in &result.advisory_warnings {
+        tracing::debug!(target: "feagi-evo", "[GENOME-LOAD] advisory: {}", warning);
+    }
+
+    if !result.is_blocking_clean() {
+        return Err(crate::types::EvoError::InvalidGenome(format!(
+            "Genome failed v{} validation: {}",
+            result.to_version.as_u32(),
+            result.blocking_errors.join("; ")
+        )));
+    }
+
+    Ok(hierarchical_json)
 }
 
 /// Check if genome is in flat format

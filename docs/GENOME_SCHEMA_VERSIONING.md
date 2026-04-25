@@ -119,11 +119,19 @@ once per genome:
 | Legacy `version` string | Assigned `genome_schema_version` |
 |---|---|
 | `"2.0"` | `2` |
+| `"2.1"` | `2` |
 | `"3.0"` | `3` |
 | anything else (including missing) | reject with structured error |
 
+`"2.1"` is included because it is carried by shipped embedded fixtures
+(`essential_genome.json`, `vision_genome.json`). It is structurally
+identical to `"2.0"`; both pass through V2ToV3Migrator unchanged.
+
 This table is closed. New schema versions are introduced by writing the
 integer field directly; they do not get a corresponding legacy string.
+Adding a new entry to the table (e.g. if another minor variant is found
+in the wild) requires an explicit code change and corresponding test in
+`schema/detector.rs`.
 
 ## Diagnostics
 
@@ -170,8 +178,8 @@ response.
 ## Implementation order
 
 Each numbered item is a separate PR. The real-world version space at
-design time is exactly two values (`"2.0"` and `"3.0"` in the legacy
-string field — see [Legacy back-fill](#legacy-version-string-back-fill)),
+design time is the closed back-fill table (`"2.0"`, `"2.1"`, and `"3.0"`
+in the legacy string field — see [Legacy back-fill](#legacy-version-string-back-fill)),
 which keeps the initial chain trivially small.
 
 1. Land `GenomeSchemaVersion(u32)`, `MIN_SCHEMA_VERSION = 2`,

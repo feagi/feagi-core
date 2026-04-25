@@ -37,12 +37,16 @@ pub fn detect_schema_version(genome: &Value) -> EvoResult<GenomeSchemaVersion> {
 
     let legacy = genome.get("version").and_then(|v| v.as_str());
     match legacy {
-        Some("2.0") => Ok(GenomeSchemaVersion(2)),
+        // `"2.1"` is structurally identical to `"2.0"` for schema-version
+        // purposes; both pass through V2ToV3Migrator unchanged. It exists
+        // in shipped embedded fixtures (`essential_genome.json`,
+        // `vision_genome.json`). Per the closed-table contract in this
+        // module's README, every accepted minor variant is listed by hand.
+        Some("2.0") | Some("2.1") => Ok(GenomeSchemaVersion(2)),
         Some("3.0") => Ok(GenomeSchemaVersion(3)),
         Some(other) => Err(EvoError::InvalidGenome(format!(
-            "Unsupported legacy genome version string '{}'. Expected '2.0' or '3.0', \
-             or an explicit integer `genome_schema_version` field.",
-            other
+            "Unsupported legacy genome version string '{other}'. Expected '2.0', '2.1', or \
+             '3.0', or an explicit integer `genome_schema_version` field."
         ))),
         None => Err(EvoError::InvalidGenome(
             "Genome is missing both `genome_schema_version` (integer) and `version` (legacy \
@@ -132,10 +136,22 @@ mod tests {
     }
 
     #[test]
-    fn legacy_string_with_non_canonical_minor_is_rejected() {
-        // "2.1" is the human-readable label some saved files carry, but the
-        // back-fill table is closed: only "2.0" and "3.0" map.
+    fn legacy_2_1_string_maps_to_two() {
+        // "2.1" is a label carried by shipped embedded fixtures
+        // (essential and vision template genomes). It is structurally
+        // identical to "2.0" and is part of the closed back-fill table
+        // by explicit decision; see comments in `detect_schema_version`.
         let g = json!({ "version": "2.1" });
+        assert_eq!(detect_schema_version(&g).unwrap(), GenomeSchemaVersion(2));
+    }
+
+    #[test]
+    fn legacy_2_5_string_is_rejected() {
+        // The closed back-fill table only enumerates labels we have
+        // observed in real artifacts (2.0, 2.1, 3.0). A novel label like
+        // "2.5" must be rejected so that introducing it requires an
+        // explicit code change and review.
+        let g = json!({ "version": "2.5" });
         assert!(matches!(
             detect_schema_version(&g),
             Err(EvoError::InvalidGenome(_))

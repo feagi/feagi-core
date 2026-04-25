@@ -21,7 +21,7 @@ The legacy `version` string field is preserved as a human-readable label
 only. It MUST NOT be used to drive code logic. Anything that branches
 on `genome.version` is a bug. The detector at `schema/detector.rs`
 back-fills the integer field from the legacy string at the deserialize
-boundary using a closed table — `"2.0" → 2`, `"3.0" → 3`, anything
+boundary using a closed table — `"2.0" → 2`, `"2.1" → 2`, `"3.0" → 3`, anything
 else rejected. New schema versions do not get a corresponding legacy
 string; they live as integers only.
 

@@ -45,8 +45,23 @@ impl<'a> ChainRunner<'a> {
         }
 
         let mut migrators_applied: Vec<&'static str> = Vec::new();
+        let mut normalizers_applied: Vec<&'static str> = Vec::new();
         let mut per_step_diagnostics = Vec::new();
+        let mut per_normalizer_diagnostics = Vec::new();
         let mut advisory_warnings: Vec<String> = Vec::new();
+
+        // If no migration is needed, the chain still owes the caller a
+        // normalize+validate pass at the starting (== target) version.
+        // The post-hop branch below handles the migration case symmetrically.
+        if from == target {
+            run_normalizer_if_present(
+                self.registry,
+                target,
+                genome,
+                &mut normalizers_applied,
+                &mut per_normalizer_diagnostics,
+            )?;
+        }
 
         let mut current = from;
         while current < target {
@@ -75,20 +90,35 @@ impl<'a> ChainRunner<'a> {
             stamp_schema_version(genome, next);
             per_step_diagnostics.push(diagnostics);
 
+            // Normalizer (if any) cleans bad values within the new
+            // version before that version's validator inspects the genome.
+            run_normalizer_if_present(
+                self.registry,
+                next,
+                genome,
+                &mut normalizers_applied,
+                &mut per_normalizer_diagnostics,
+            )?;
+
             // Advisory validation between hops. Errors are demoted to
             // warnings here; only the final-target validator is blocking.
-            let intermediate = self.registry.run_validator(next, genome);
-            for w in intermediate.warnings {
-                advisory_warnings.push(format!("v{}: {}", next.as_u32(), w));
-            }
-            for e in intermediate.errors {
-                advisory_warnings.push(format!("v{} (advisory): {}", next.as_u32(), e));
+            let is_final_hop = next == target;
+            if !is_final_hop {
+                let intermediate = self.registry.run_validator(next, genome);
+                for w in intermediate.warnings {
+                    advisory_warnings.push(format!("v{}: {}", next.as_u32(), w));
+                }
+                for e in intermediate.errors {
+                    advisory_warnings.push(format!("v{} (advisory): {}", next.as_u32(), e));
+                }
             }
 
             current = next;
         }
 
-        // Final blocking validation at the target version.
+        // Final blocking validation at the target version. Runs once,
+        // exactly here, regardless of whether we got here via migration
+        // hops or were already at target.
         let final_report = self.registry.run_validator(target, genome);
         let blocking_errors = final_report.errors;
         for w in final_report.warnings {
@@ -99,11 +129,31 @@ impl<'a> ChainRunner<'a> {
             from_version: from,
             to_version: target,
             migrators_applied,
+            normalizers_applied,
             per_step_diagnostics,
+            per_normalizer_diagnostics,
             advisory_warnings,
             blocking_errors,
         })
     }
+}
+
+/// Run the normalizer at `version` if one is registered, recording its
+/// name and diagnostics. No-op when no normalizer is registered for that
+/// version.
+fn run_normalizer_if_present(
+    registry: &ChainRegistry,
+    version: GenomeSchemaVersion,
+    genome: &mut Value,
+    applied: &mut Vec<&'static str>,
+    diagnostics: &mut Vec<crate::genome::normalizers::NormalizationDiagnostics>,
+) -> Result<(), MigrationError> {
+    if let Some(normalizer) = registry.normalizer_for(version) {
+        let diag = normalizer.normalize(genome)?;
+        applied.push(normalizer.name());
+        diagnostics.push(diag);
+    }
+    Ok(())
 }
 
 /// Write the integer `genome_schema_version` field on the genome.
@@ -250,5 +300,114 @@ mod tests {
             .run_to(&mut genome, GenomeSchemaVersion(3))
             .unwrap_err();
         assert!(matches!(err, MigrationError::DetectionFailed(_)));
+    }
+
+    /// Synthetic normalizer that adds a `was_normalized_at` array entry
+    /// recording the version it was invoked at, so tests can assert the
+    /// runner invoked it the right number of times in the right order.
+    struct SyntheticNormalizer {
+        version: GenomeSchemaVersion,
+        name: &'static str,
+    }
+
+    impl crate::genome::normalizers::Normalizer for SyntheticNormalizer {
+        fn schema_version(&self) -> GenomeSchemaVersion {
+            self.version
+        }
+        fn name(&self) -> &'static str {
+            self.name
+        }
+        fn normalize(
+            &self,
+            genome: &mut Value,
+        ) -> Result<crate::genome::normalizers::NormalizationDiagnostics, MigrationError> {
+            let mut diag = crate::genome::normalizers::NormalizationDiagnostics::new(self.version);
+            let arr = genome
+                .as_object_mut()
+                .expect("test genome must be a JSON object")
+                .entry("was_normalized_at".to_string())
+                .or_insert_with(|| json!([]));
+            arr.as_array_mut()
+                .expect("was_normalized_at must be array")
+                .push(json!(self.version.as_u32()));
+            diag.record(format!("normalized at v{}", self.version.as_u32()));
+            Ok(diag)
+        }
+    }
+
+    #[test]
+    fn normalizer_runs_when_already_at_target() {
+        let mut reg = ChainRegistry::new();
+        reg.register_normalizer(Box::new(SyntheticNormalizer {
+            version: GenomeSchemaVersion(3),
+            name: "v3_norm",
+        }))
+        .unwrap();
+        let runner = ChainRunner::new(&reg);
+        let mut genome = json!({ "genome_schema_version": 3 });
+
+        let result = runner.run_to(&mut genome, GenomeSchemaVersion(3)).unwrap();
+
+        assert_eq!(result.normalizers_applied, vec!["v3_norm"]);
+        assert_eq!(result.per_normalizer_diagnostics.len(), 1);
+        assert_eq!(genome["was_normalized_at"], json!([3]));
+    }
+
+    #[test]
+    fn normalizer_runs_after_each_hop() {
+        let mut reg = registry_with_chain(100, 103);
+        for v in 101..=103 {
+            reg.register_normalizer(Box::new(SyntheticNormalizer {
+                version: GenomeSchemaVersion(v),
+                name: match v {
+                    101 => "v101_norm",
+                    102 => "v102_norm",
+                    103 => "v103_norm",
+                    _ => unreachable!(),
+                },
+            }))
+            .unwrap();
+        }
+        let runner = ChainRunner::new(&reg);
+        let mut genome = json!({ "genome_schema_version": 100 });
+
+        let result = runner
+            .run_to(&mut genome, GenomeSchemaVersion(103))
+            .unwrap();
+
+        assert_eq!(
+            result.normalizers_applied,
+            vec!["v101_norm", "v102_norm", "v103_norm"]
+        );
+        assert_eq!(genome["was_normalized_at"], json!([101, 102, 103]));
+    }
+
+    #[test]
+    fn missing_normalizer_is_silent() {
+        // No normalizer registered for v3; runner should still succeed.
+        let reg = registry_with_chain(2, 3);
+        let runner = ChainRunner::new(&reg);
+        let mut genome = json!({ "version": "2.0" });
+
+        let result = runner.run_to(&mut genome, GenomeSchemaVersion(3)).unwrap();
+        assert!(result.normalizers_applied.is_empty());
+        assert!(result.per_normalizer_diagnostics.is_empty());
+    }
+
+    #[test]
+    fn registry_rejects_duplicate_normalizer() {
+        let mut reg = ChainRegistry::new();
+        reg.register_normalizer(Box::new(SyntheticNormalizer {
+            version: GenomeSchemaVersion(3),
+            name: "first",
+        }))
+        .unwrap();
+        let err = reg
+            .register_normalizer(Box::new(SyntheticNormalizer {
+                version: GenomeSchemaVersion(3),
+                name: "second",
+            }))
+            .unwrap_err();
+        assert!(matches!(err, MigrationError::InvalidRegistry(_)));
     }
 }
