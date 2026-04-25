@@ -69,6 +69,10 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
         json!(genome.metadata.genome_description),
     );
     flat_genome.insert("version".to_string(), json!("3.0"));
+    flat_genome.insert(
+        "genome_schema_version".to_string(),
+        json!(crate::genome::schema::CURRENT_SCHEMA_VERSION.as_u32()),
+    );
     flat_genome.insert("timestamp".to_string(), json!(genome.metadata.timestamp));
 
     // Root region ID (if available)

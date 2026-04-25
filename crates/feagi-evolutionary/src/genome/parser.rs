@@ -82,6 +82,12 @@ pub struct RawGenome {
     pub genome_title: Option<String>,
     pub genome_description: Option<String>,
     pub version: String,
+    /// Integer schema version. Optional on the wire so older genomes that
+    /// pre-date this field still deserialize. The authoritative resolver
+    /// is `crate::genome::schema::detect_schema_version` and consumers
+    /// MUST go through it instead of branching on this field directly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub genome_schema_version: Option<u32>,
     pub blueprint: HashMap<String, RawCorticalArea>,
     #[serde(default)]
     pub brain_regions: HashMap<String, RawBrainRegion>,
