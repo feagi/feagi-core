@@ -186,7 +186,10 @@ pub async fn get_health_check(
     let influxdb_availability = false; // TODO: Get from monitoring service
     let latest_changes_saved_externally = false; // TODO: Get from state manager
     let genome_availability = health.cortical_area_count > 0;
-    let genome_validity = Some(health.brain_readiness);
+    // Real genome validity comes from the chain report, written by the
+    // loader into core state. Falls back to `None` until a genome has
+    // been loaded in this process. See `SystemHealth::genome_validity`.
+    let genome_validity = health.genome_validity;
 
     // Get FEAGI session timestamp (unique identifier for this FEAGI instance)
     let feagi_session = Some(state.feagi_session_timestamp);

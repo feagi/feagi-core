@@ -307,9 +307,33 @@ impl GenomeService for GenomeServiceImpl {
     async fn load_genome(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
         info!(target: "feagi-services", "Loading genome from JSON");
 
-        // Parse genome using feagi-evo (this is CPU-bound, but relatively fast)
-        let mut genome = feagi_evolutionary::load_genome_from_json(&params.json_str)
-            .map_err(|e| ServiceError::InvalidInput(format!("Failed to parse genome: {}", e)))?;
+        // Parse genome using feagi-evo (this is CPU-bound, but relatively fast).
+        //
+        // We use `load_genome_with_report` so the chain report is
+        // available to write into `genome_validity` on core state.
+        // The library does NOT convert validator errors into `Err`
+        // per the "validator is reporter" policy, so a `false` validity
+        // is reported via the `/health` endpoint while this load still
+        // succeeds. Consumers (desktop, composer) react to the flag.
+        let (mut genome, chain_report) =
+            feagi_evolutionary::load_genome_with_report(&params.json_str).map_err(|e| {
+                ServiceError::InvalidInput(format!("Failed to parse genome: {}", e))
+            })?;
+        {
+            let instance = feagi_state_manager::StateManager::instance();
+            let manager = instance.read();
+            manager
+                .get_core_state()
+                .set_genome_validity(Some(chain_report.is_blocking_clean()));
+        }
+        if !chain_report.is_blocking_clean() {
+            warn!(
+                target: "feagi-services",
+                "Loaded genome has {} blocking validator error(s); running in degraded mode (genome_validity=false). First: {}",
+                chain_report.blocking_errors.len(),
+                chain_report.blocking_errors.first().map(String::as_str).unwrap_or("")
+            );
+        }
         let (_areas_added, morphs_added) = feagi_evolutionary::ensure_core_components(&mut genome);
         if morphs_added > 0 {
             info!(

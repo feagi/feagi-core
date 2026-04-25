@@ -119,7 +119,11 @@ pub struct MemoryMappedState {
     pub api_state: AtomicU8,
     pub zmq_state: AtomicU8,
     pub brain_readiness: AtomicU8,
-    pub _reserved1: AtomicU8,
+    /// Genome validity (tri-state: 0 = unknown / no genome loaded,
+    /// 1 = invalid (loaded but failed latest validator), 2 = valid).
+    /// Set by genome-loading paths from `ChainResult.is_blocking_clean()`.
+    /// Consumers map back to `Option<bool>` via `get_genome_validity`.
+    pub genome_validity: AtomicU8,
 
     // Counters (8 bytes)
     pub agent_count: AtomicU32,
@@ -170,7 +174,7 @@ impl MemoryMappedState {
             api_state: AtomicU8::new(ServiceState::Unavailable as u8),
             zmq_state: AtomicU8::new(ServiceState::Unavailable as u8),
             brain_readiness: AtomicU8::new(0),
-            _reserved1: AtomicU8::new(0),
+            genome_validity: AtomicU8::new(0),
 
             agent_count: AtomicU32::new(0),
             burst_frequency: AtomicU32::new(0),
@@ -266,6 +270,32 @@ impl MemoryMappedState {
     pub fn set_brain_ready(&self, ready: bool) {
         self.brain_readiness
             .store(if ready { 1 } else { 0 }, Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get genome validity (atomic read).
+    ///
+    /// Returns `None` when no genome has been loaded yet in this process,
+    /// `Some(true)` when the latest-loaded genome's chain report was
+    /// blocking-clean, and `Some(false)` when the latest-loaded genome
+    /// had blocking validator errors (running in degraded mode).
+    pub fn get_genome_validity(&self) -> Option<bool> {
+        match self.genome_validity.load(Ordering::Acquire) {
+            1 => Some(false),
+            2 => Some(true),
+            _ => None,
+        }
+    }
+
+    /// Set genome validity (atomic write). Pass `None` to reset to the
+    /// "no genome loaded" state, e.g. during shutdown or unload.
+    pub fn set_genome_validity(&self, validity: Option<bool>) {
+        let encoded = match validity {
+            None => 0u8,
+            Some(false) => 1u8,
+            Some(true) => 2u8,
+        };
+        self.genome_validity.store(encoded, Ordering::Release);
         self.increment_version();
     }
 
@@ -690,6 +720,23 @@ mod tests {
 
         state.set_brain_ready(false);
         assert!(!state.is_brain_ready());
+    }
+
+    #[test]
+    fn test_genome_validity_tri_state() {
+        let state = MemoryMappedState::new();
+        // Fresh state => no genome loaded yet.
+        assert_eq!(state.get_genome_validity(), None);
+
+        state.set_genome_validity(Some(true));
+        assert_eq!(state.get_genome_validity(), Some(true));
+
+        state.set_genome_validity(Some(false));
+        assert_eq!(state.get_genome_validity(), Some(false));
+
+        // Explicit reset (unload / shutdown) returns to `None`.
+        state.set_genome_validity(None);
+        assert_eq!(state.get_genome_validity(), None);
     }
 
     #[test]

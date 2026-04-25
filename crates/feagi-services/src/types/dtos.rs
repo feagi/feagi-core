@@ -363,6 +363,13 @@ pub struct ConnectivityStats {
 pub struct SystemHealth {
     pub burst_engine_active: bool,
     pub brain_readiness: bool,
+    /// Validity of the most-recently-loaded genome according to the
+    /// `CURRENT_SCHEMA_VERSION` validator. `None` means no genome has
+    /// been loaded yet; `Some(false)` means a genome was loaded but
+    /// carried blocking validator errors (running in degraded mode).
+    /// Sourced from the core state's `genome_validity` atomic, which
+    /// genome-loading paths set from `ChainResult.is_blocking_clean()`.
+    pub genome_validity: Option<bool>,
     pub neuron_count: usize,
     pub neuron_capacity: usize,
     pub synapse_capacity: usize,
