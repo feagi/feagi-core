@@ -16,6 +16,7 @@ Licensed under the Apache License, Version 2.0
 
 pub mod converter;
 pub mod loader;
+pub mod migration;
 pub mod migrator;
 pub mod parser;
 pub mod region_export;
@@ -23,10 +24,14 @@ pub mod runtime_saver;
 pub mod saver;
 pub mod schema;
 pub mod signatures;
+pub mod validators;
 
 // Re-export main types
 pub use converter::to_runtime_genome;
 pub use loader::{load_genome_from_file, load_genome_from_json, peek_quantization_precision};
+pub use migration::{
+    ChainRegistry, ChainResult, ChainRunner, MigrationError, MigrationStepDiagnostics, Migrator,
+};
 pub use migrator::{map_old_id_to_new, migrate_genome, MigrationResult};
 pub use parser::{GenomeParser, ParsedGenome};
 pub use region_export::subset_runtime_genome_for_region_branch;
@@ -36,3 +41,4 @@ pub use schema::{
     detect_schema_version, GenomeSchemaVersion, CURRENT_SCHEMA_VERSION, MIN_SCHEMA_VERSION,
 };
 pub use signatures::generate_signatures;
+pub use validators::{V3Validator, ValidationReport, Validator};
