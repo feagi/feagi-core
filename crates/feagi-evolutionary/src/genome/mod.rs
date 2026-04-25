@@ -29,7 +29,10 @@ pub mod validators;
 
 // Re-export main types
 pub use converter::to_runtime_genome;
-pub use loader::{load_genome_from_file, load_genome_from_json, peek_quantization_precision};
+pub use loader::{
+    load_genome_from_file, load_genome_from_json, load_genome_with_report,
+    load_genome_with_report_from_file, peek_quantization_precision,
+};
 pub use migration::{
     ChainRegistry, ChainResult, ChainRunner, MigrationError, MigrationStepDiagnostics, Migrator,
     V2ToV3Migrator,
