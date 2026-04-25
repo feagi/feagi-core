@@ -1215,7 +1215,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .iter()
             .any(|core| manager.cortical_area_exists(&core.to_cortical_id()));
             if has_any_core {
-                manager.ensure_core_cortical_areas().map_err(ServiceError::from)?;
+                manager
+                    .ensure_core_cortical_areas()
+                    .map_err(ServiceError::from)?;
             }
         }
 
@@ -1662,7 +1664,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .iter()
             .any(|core| manager.cortical_area_exists(&core.to_cortical_id()));
             if has_any_core {
-                manager.ensure_core_cortical_areas().map_err(ServiceError::from)?;
+                manager
+                    .ensure_core_cortical_areas()
+                    .map_err(ServiceError::from)?;
             }
         }
 

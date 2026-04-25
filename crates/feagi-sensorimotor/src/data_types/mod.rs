@@ -18,6 +18,7 @@ mod image_frame;
 mod misc_data;
 mod percentages;
 pub mod processing;
+mod raw_imu;
 mod segmented_image_frame;
 pub mod text_token;
 
@@ -27,6 +28,10 @@ pub use image_frame::ImageFrame;
 pub use misc_data::MiscData;
 pub use percentages::*;
 pub(crate) use processing::*;
+pub use raw_imu::{
+    RawIMU, RAW_IMU_INDEX_ACCELEROMETER, RAW_IMU_INDEX_GYROSCOPE, RAW_IMU_INDEX_MAGNETOMETER,
+    RAW_IMU_SUBUNIT_COUNT,
+};
 pub use segmented_image_frame::SegmentedImageFrame;
 pub use text_token::{
     decode_token_id_from_misc_data, decode_token_id_from_xyzp_bitplanes,

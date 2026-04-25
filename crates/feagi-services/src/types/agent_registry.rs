@@ -124,8 +124,11 @@ pub enum SensoryUnit {
     CountInput,
     Vision,
     SegmentedVision,
-    Accelerometer,
-    Gyroscope,
+    /// Composite linear-vector IMU: 3 sub-cortical-areas (accelerometer,
+    /// gyroscope, magnetometer), each a 3-axis signed percentage.
+    RawImu,
+    /// Quaternion orientation IMU: a single 4-axis signed-percentage area.
+    SmartImu,
 }
 
 /// Language-agnostic motor unit identifiers for registration contracts.

@@ -3,7 +3,7 @@ use crate::data_types::descriptors::{
 };
 use crate::data_types::{
     GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
-    Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
+    Percentage3D, Percentage4D, RawIMU, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
     SignedPercentage3D, SignedPercentage4D,
 };
 use crate::wrapped_io_data::WrappedIOData;
@@ -41,6 +41,9 @@ pub enum WrappedIOType {
     SignedPercentage_4D,
     ImageFrame(Option<ImageFrameProperties>),
     SegmentedImageFrame(Option<SegmentedImageFrameProperties>),
+    /// Composite Raw IMU reading (accelerometer + gyroscope + magnetometer),
+    /// each a 3-axis signed percentage. Spans 3 sub-cortical-areas.
+    RawIMU,
     MiscData(Option<MiscDataDimensions>),
     GazeProperties,
     ImageFilteringSettings,
@@ -129,6 +132,7 @@ impl WrappedIOType {
                     )?,
                 ))
             }
+            WrappedIOType::RawIMU => Ok(WrappedIOData::RawIMU(RawIMU::new_zero())),
             WrappedIOType::MiscData(misc_dimensions) => {
                 if misc_dimensions.is_none() {
                     return Err(FeagiDataError::BadParameters(
@@ -175,6 +179,7 @@ impl std::fmt::Display for WrappedIOType {
                 };
                 write!(f, "SegmentedImageFrame({})", s)
             }
+            WrappedIOType::RawIMU => write!(f, "IOTypeVariant(RawIMU)"),
             WrappedIOType::MiscData(dimensions) => {
                 let s: String = match dimensions {
                     Some(dimensions) => dimensions.to_string(),
@@ -208,6 +213,7 @@ impl From<WrappedIOData> for WrappedIOType {
             WrappedIOData::SegmentedImageFrame(segments) => WrappedIOType::SegmentedImageFrame(
                 Some(segments.get_segmented_image_frame_properties()),
             ),
+            WrappedIOData::RawIMU(_) => WrappedIOType::RawIMU,
             WrappedIOData::MiscData(dimensions) => {
                 WrappedIOType::MiscData(Some(dimensions.get_dimensions()))
             }
@@ -235,6 +241,7 @@ impl From<&WrappedIOData> for WrappedIOType {
             WrappedIOData::SegmentedImageFrame(segments) => WrappedIOType::SegmentedImageFrame(
                 Some(segments.get_segmented_image_frame_properties()),
             ),
+            WrappedIOData::RawIMU(_) => WrappedIOType::RawIMU,
             WrappedIOData::MiscData(dimensions) => {
                 WrappedIOType::MiscData(Some(dimensions.get_dimensions()))
             }

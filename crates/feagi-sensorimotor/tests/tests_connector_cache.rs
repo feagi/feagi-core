@@ -209,3 +209,127 @@ mod test_display {
         assert_eq!(display, "ConnectorAgent");
     }
 }
+
+/// Regression coverage for the IMU register/write contract.
+///
+/// Two macro arms in `sensor_unit_functions!` (`Percentage_3D` and
+/// `SignedPercentage_4D`) historically seeded the cache slot with
+/// `WrappedIOData::Percentage(...)` regardless of the arm's declared data
+/// type. Until the introduction of `RawIMU` and `SmartIMU`, no template
+/// targeted those arms, so the latent bug went unnoticed. The first
+/// `_write` against a SmartIMU group then failed with
+/// `Expected Percentage but got SignedPercentage_4D` because the cache slot
+/// held the wrong wrapper variant.
+///
+/// These tests lock in the expected behavior: the register call must seed
+/// the slot with the wrapper variant matching the arm's declared type, so
+/// a same-typed `_write` is accepted.
+#[cfg(test)]
+mod test_imu_register_write_contract {
+    use super::*;
+    use feagi_sensorimotor::data_types::{
+        Percentage, RawIMU, SignedPercentage, SignedPercentage3D, SignedPercentage4D,
+    };
+    use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
+    use feagi_structures::genomic::cortical_area::descriptors::{
+        CorticalChannelIndex, NeuronDepth,
+    };
+
+    /// Smart IMU is the first user of the `SignedPercentage_4D` macro arm.
+    /// Without the initial-value fix this write fails with a type-mismatch
+    /// error from the cache's wrapper-type guard.
+    #[test]
+    fn smart_imu_register_then_quaternion_write_succeeds() {
+        let cache = ConnectorCache::new();
+        let mut sensor_cache = cache.get_sensor_cache();
+
+        sensor_cache
+            .smart_i_m_u_register(
+                CorticalUnitIndex::from(0u8),
+                CorticalChannelCount::new(1).unwrap(),
+                FrameChangeHandling::Absolute,
+                NeuronDepth::new(10).unwrap(),
+                PercentageNeuronPositioning::Linear,
+            )
+            .expect("SmartIMU register must succeed");
+
+        let identity_quat = SignedPercentage4D::new(
+            SignedPercentage::new_from_m1_1(1.0).unwrap(),
+            SignedPercentage::new_from_m1_1(0.0).unwrap(),
+            SignedPercentage::new_from_m1_1(0.0).unwrap(),
+            SignedPercentage::new_from_m1_1(0.0).unwrap(),
+        );
+
+        sensor_cache
+            .smart_i_m_u_write(
+                CorticalUnitIndex::from(0u8),
+                CorticalChannelIndex::from(0u32),
+                WrappedIOData::SignedPercentage_4D(identity_quat),
+            )
+            .expect(
+                "SmartIMU _write must accept SignedPercentage_4D; \
+                 regression for the `initial_val: Percentage` macro bug",
+            );
+    }
+
+    /// Reject writes whose wrapper variant does not match the registered slot.
+    /// Demonstrates that the type guard is still active after the fix; a
+    /// scalar `Percentage` payload must NOT silently coerce into the SmartIMU
+    /// slot.
+    #[test]
+    fn smart_imu_rejects_mismatched_wrapper_type() {
+        let cache = ConnectorCache::new();
+        let mut sensor_cache = cache.get_sensor_cache();
+
+        sensor_cache
+            .smart_i_m_u_register(
+                CorticalUnitIndex::from(0u8),
+                CorticalChannelCount::new(1).unwrap(),
+                FrameChangeHandling::Absolute,
+                NeuronDepth::new(10).unwrap(),
+                PercentageNeuronPositioning::Linear,
+            )
+            .unwrap();
+
+        let mismatched = WrappedIOData::Percentage(Percentage::new_from_0_1(0.5).unwrap());
+        let result = sensor_cache.smart_i_m_u_write(
+            CorticalUnitIndex::from(0u8),
+            CorticalChannelIndex::from(0u32),
+            mismatched,
+        );
+        assert!(
+            result.is_err(),
+            "Mismatched wrapper variant must be rejected by the type guard"
+        );
+    }
+
+    /// Raw IMU exercises the bespoke composite arm. The first write after
+    /// registration must accept a `WrappedIOData::RawIMU(...)` value.
+    #[test]
+    fn raw_imu_register_then_composite_write_succeeds() {
+        let cache = ConnectorCache::new();
+        let mut sensor_cache = cache.get_sensor_cache();
+
+        sensor_cache
+            .raw_i_m_u_register(
+                CorticalUnitIndex::from(0u8),
+                CorticalChannelCount::new(1).unwrap(),
+                FrameChangeHandling::Absolute,
+                NeuronDepth::new(10).unwrap(),
+                PercentageNeuronPositioning::Linear,
+            )
+            .expect("RawIMU register must succeed");
+
+        let signed_pct = |v: f32| SignedPercentage::new_from_m1_1(v).unwrap();
+        let triple = SignedPercentage3D::new(signed_pct(0.1), signed_pct(-0.2), signed_pct(0.3));
+        let composite = RawIMU::new(triple, triple, triple);
+
+        sensor_cache
+            .raw_i_m_u_write(
+                CorticalUnitIndex::from(0u8),
+                CorticalChannelIndex::from(0u32),
+                WrappedIOData::RawIMU(composite),
+            )
+            .expect("RawIMU _write must accept the composite wrapper variant");
+    }
+}

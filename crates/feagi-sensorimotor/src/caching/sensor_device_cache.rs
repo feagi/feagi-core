@@ -5,9 +5,16 @@ use crate::data_types::descriptors::PercentageChannelDimensionality;
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
 };
+// Several of these symbols are referenced only from inside the
+// `sensor_unit_functions!` macro after `@generate_similar_functions`
+// expansion; the compiler sees them as required only when at least one
+// template targets the corresponding arm. Imports therefore enumerate every
+// data-type the macro can name today (`Percentage`, `RawIMU`,
+// `SignedPercentage4D`, ...). Removing one will surface as an "unresolved
+// type" error inside the macro expansion, not at this `use` line.
 use crate::data_types::{
-    GazeProperties, ImageFrame, MiscData, Percentage, Percentage3D, SegmentedImageFrame,
-    SignedPercentage4D,
+    GazeProperties, ImageFrame, MiscData, Percentage, RawIMU, SegmentedImageFrame,
+    SignedPercentage4D, RAW_IMU_SUBUNIT_COUNT,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::*;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
@@ -281,7 +288,14 @@ macro_rules! sensor_unit_functions {
                     "percentage_neuron_positioning": percentage_neuron_positioning
                 }).as_object().unwrap().clone();
 
-                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                // Initial cache slot must wrap the same data type the arm
+                // declares so subsequent _write calls type-check. Previously
+                // this fell through to WrappedIOData::Percentage, which
+                // poisoned the cache slot's type for any future Percentage_3D
+                // sensor; harmless until now because no template targeted
+                // this arm. Use the canonical blank-data factory to keep this
+                // arm symmetric with SignedPercentage_4D / RawIMU.
+                let initial_val: WrappedIOData = WrappedIOType::Percentage_3D.create_blank_data_of_type()?;
                 self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
@@ -320,13 +334,77 @@ macro_rules! sensor_unit_functions {
                     "percentage_neuron_positioning": percentage_neuron_positioning
                 }).as_object().unwrap().clone();
 
-                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                // Initial cache slot must wrap SignedPercentage_4D so that
+                // subsequent SmartIMU writes (the first user of this arm)
+                // pass the type guard in _write. Without this the cache
+                // slot was being seeded with WrappedIOData::Percentage, and
+                // any 4D signed quaternion write was rejected at runtime.
+                let initial_val: WrappedIOData = WrappedIOType::SignedPercentage_4D.create_blank_data_of_type()?;
                 self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
         sensor_unit_functions!(@generate_similar_functions $sensory_unit, SignedPercentage4D);
+    };
+
+    // Arm for WrappedIOType::RawIMU
+    //
+    // Raw IMU is a composite, multi-sub-area sensor unit. ONE cache entry per
+    // (RawIMU, unit_index) holds the latest 3-axis signed-percentage values for
+    // accelerometer, gyroscope, and magnetometer; the encoder spreads them
+    // across the 3 sub-cortical-areas at burst time. Cortical-area sub-index
+    // ordering (0=accel, 1=gyro, 2=mag) MUST match the template entry and
+    // [`RawIMU::get_ordered_sub_components`].
+    (@generate_functions
+        $sensory_unit:ident,
+        RawIMU
+    ) => {
+        ::paste::paste! {
+            pub fn [<$sensory_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                z_neuron_resolution: NeuronDepth,
+                percentage_neuron_positioning: PercentageNeuronPositioning,
+            ) -> Result<(), FeagiDataError> {
+                let cortical_ids: [CorticalID; RAW_IMU_SUBUNIT_COUNT] =
+                    SensoryCorticalUnit::[<get_cortical_ids_array_for_ $sensory_unit:snake _with_parameters>](
+                        frame_change_handling,
+                        percentage_neuron_positioning,
+                        unit,
+                    );
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> =
+                    RawIMUNeuronVoxelXYZPEncoder::new_box(
+                        cortical_ids,
+                        z_neuron_resolution,
+                        number_channels,
+                        percentage_neuron_positioning,
+                    )?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                })
+                .as_object()
+                .unwrap()
+                .clone();
+
+                let initial_val: WrappedIOData = WrappedIOType::RawIMU.create_blank_data_of_type()?;
+                self.register(
+                    SensoryCorticalUnit::$sensory_unit,
+                    unit,
+                    encoder,
+                    io_props,
+                    number_channels,
+                    initial_val,
+                )?;
+                Ok(())
+            }
+        }
+
+        sensor_unit_functions!(@generate_similar_functions $sensory_unit, RawIMU);
     };
 
     // Arm for WrappedIOType::SegmentedImageFrame
