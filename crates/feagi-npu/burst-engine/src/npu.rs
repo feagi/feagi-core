@@ -3945,7 +3945,10 @@ impl<
     /// Restore all outgoing synapse PSP values for a cortical area from the configured baseline.
     ///
     /// Returns number of synapses updated, or 0 when no baseline is available.
-    fn restore_cortical_area_postsynaptic_current_from_config(&mut self, cortical_area: u32) -> usize {
+    fn restore_cortical_area_postsynaptic_current_from_config(
+        &mut self,
+        cortical_area: u32,
+    ) -> usize {
         let Some(cortical_name) = self.get_cortical_area_name(cortical_area) else {
             return 0;
         };
@@ -6270,7 +6273,10 @@ mod tests {
             fs.last_fcl_snapshot.push((n_id, 99.0));
         }
         let reset_count = npu.reset_cortical_area_runtime_state(5);
-        assert!(reset_count >= 1, "expected at least source neuron to be reset");
+        assert!(
+            reset_count >= 1,
+            "expected at least source neuron to be reset"
+        );
         assert!(
             !npu.get_last_fcl_snapshot()
                 .iter()
@@ -6306,7 +6312,10 @@ mod tests {
                 .add_candidate(n_id, 3.0);
         }
         let reset_count = npu.reset_cortical_area_runtime_state(5);
-        assert!(reset_count >= 1, "expected at least source neuron to be reset");
+        assert!(
+            reset_count >= 1,
+            "expected at least source neuron to be reset"
+        );
         let fs = npu.fire_structures.lock().unwrap();
         assert!(
             fs.synaptic_arrival_schedule
@@ -6360,7 +6369,10 @@ mod tests {
 
         // Reset source area runtime state; this must revive outgoing PSP to configured baseline.
         let reset_count = npu.reset_cortical_area_runtime_state(5);
-        assert!(reset_count >= 1, "expected at least source neuron to be reset");
+        assert!(
+            reset_count >= 1,
+            "expected at least source neuron to be reset"
+        );
 
         // Fire again; target should fire again, proving PSP was restored to 1.0.
         npu.inject_sensory_with_potentials(&[(source, 2.0)]);

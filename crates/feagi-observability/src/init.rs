@@ -142,6 +142,17 @@ pub fn init_logging(
 
     layers.push(combined_layer);
 
+    // Ring-buffer layer for in-process log retrieval via /v1/system/log_tail.
+    // Capacity is controlled via FEAGI_LOG_RING_BUFFER_CAPACITY (default 2000, set 0 to disable).
+    let ring_capacity = crate::ring_layer::capacity_from_env();
+    if ring_capacity > 0 {
+        let ring = crate::ring_layer::install_global_ring(ring_capacity);
+        let ring_layer = crate::ring_layer::RingBufferLayer::new(ring)
+            .with_filter(env_filter.clone())
+            .boxed();
+        layers.push(ring_layer);
+    }
+
     // Initialize subscriber with all layers
     Registry::default().with(layers).init();
 
@@ -172,10 +183,23 @@ pub fn init_logging(
         .with_target(false)
         .with_file(false)
         .with_line_number(false)
-        .with_filter(env_filter);
+        .with_filter(env_filter.clone());
 
-    // Initialize subscriber with console layer only
-    Registry::default().with(console_layer.boxed()).init();
+    let mut layers: Vec<Box<dyn tracing_subscriber::Layer<Registry> + Send + Sync>> = Vec::new();
+    layers.push(console_layer.boxed());
+
+    // Ring-buffer layer for in-process log retrieval via /v1/system/log_tail.
+    let ring_capacity = crate::ring_layer::capacity_from_env();
+    if ring_capacity > 0 {
+        let ring = crate::ring_layer::install_global_ring(ring_capacity);
+        let ring_layer = crate::ring_layer::RingBufferLayer::new(ring)
+            .with_filter(env_filter)
+            .boxed();
+        layers.push(ring_layer);
+    }
+
+    // Initialize subscriber with combined layers
+    Registry::default().with(layers).init();
 
     Ok(LoggingGuard {})
 }

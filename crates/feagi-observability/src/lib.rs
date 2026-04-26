@@ -20,6 +20,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod cli;
 pub mod config;
 pub mod init;
+pub mod ring_layer;
 
 // Placeholder modules - to be implemented
 pub mod context {
@@ -61,6 +62,10 @@ pub mod tracing {
 pub use cli::*;
 pub use config::*;
 pub use init::*;
+pub use ring_layer::{
+    capacity_from_env, global_ring, install_global_ring, LogRecord, LogRingBuffer, RingBufferLayer,
+    CAPACITY_ENV_VAR, DEFAULT_CAPACITY,
+};
 
 /// Known FEAGI crate names for debug flags
 pub const KNOWN_CRATES: &[&str] = &[

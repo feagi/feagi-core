@@ -308,7 +308,8 @@ impl SynapticPropagationEngine {
 
     /// Set configured baseline PSP for one cortical area.
     pub fn set_postsynaptic_current_flag(&mut self, cortical_id: CorticalID, postsynaptic: f32) {
-        self.area_postsynaptic_current.insert(cortical_id, postsynaptic);
+        self.area_postsynaptic_current
+            .insert(cortical_id, postsynaptic);
     }
 
     /// Set degeneration coefficients for cortical areas.

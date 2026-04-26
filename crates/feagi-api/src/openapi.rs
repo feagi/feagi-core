@@ -115,6 +115,7 @@ use crate::{
         crate::endpoints::system::post_fcl_reset_system,
         crate::endpoints::system::get_processes,
         crate::endpoints::system::get_unique_logs,
+        crate::endpoints::system::get_log_tail,
         crate::endpoints::system::post_logs,
         crate::endpoints::system::get_beacon_subscribers,
         crate::endpoints::system::post_beacon_subscribe,
@@ -349,10 +350,12 @@ use crate::{
         // Input endpoints
         crate::endpoints::input::get_vision,
         crate::endpoints::input::post_vision,
+        crate::endpoints::input::get_sensor_snapshot_last,
 
         // Outputs endpoints
         crate::endpoints::outputs::get_targets,
         crate::endpoints::outputs::post_configure,
+        crate::endpoints::outputs::get_motor_snapshot_last,
 
         // Physiology endpoints
         crate::endpoints::physiology::get_physiology,
@@ -428,6 +431,15 @@ use crate::{
             crate::v1::OutputTargetsResponse,
             crate::v1::OutputConfigRequest,
             crate::v1::OutputConfigResponse,
+            crate::endpoints::outputs::MotorSnapshotResponse,
+            crate::endpoints::outputs::MotorTapArea,
+            crate::endpoints::outputs::MotorTapSample,
+            crate::endpoints::outputs::MotorTapAgent,
+
+            // Input
+            crate::endpoints::input::SensorSnapshotResponse,
+            crate::endpoints::input::SensorTapArea,
+            crate::endpoints::input::SensorTapSample,
 
             // Physiology
             crate::v1::PhysiologyResponse,
@@ -529,6 +541,8 @@ use crate::{
 
             // System
             crate::endpoints::system::HealthCheckResponse,
+            crate::endpoints::system::LogTailResponse,
+            crate::endpoints::system::LogTailRecord,
 
             // Cortical Area
             crate::endpoints::cortical_area::CorticalAreaIdListResponse,
