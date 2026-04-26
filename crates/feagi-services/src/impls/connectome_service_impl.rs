@@ -736,6 +736,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
         //
         // Note: ConnectomeManager::remove_cortical_area currently does NOT remove the
         // ID from brain regions, so we do it explicitly here.
+        let mut pruned_outgoing_synapses = 0usize;
+        let mut pruned_incoming_synapses = 0usize;
         let region_io = {
             let mut manager = self.connectome.write();
             let region_ids: Vec<String> = manager
@@ -749,32 +751,90 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 }
             }
 
-            manager
-                .remove_cortical_area(&cortical_id_typed)
-                .map_err(ServiceError::from)?;
-
-            // Scrub any remaining mappings that target the deleted area to avoid stale UI state.
+            // CRITICAL: Cascade synapse cleanup BEFORE removing the cortical area itself.
+            //
+            // `ConnectomeManager::remove_cortical_area` is a thin dictionary delete: it removes
+            // the area entry and lookup maps but does NOT prune synapses. If we let it run first,
+            // every src→deleted and deleted→dst synapse becomes orphaned in the NPU, retaining
+            // (potentially saturated) learned R-STDP weights and consuming compute every burst.
+            //
+            // The canonical pruning path is `update_cortical_mapping(src, dst, [])` followed by
+            // `regenerate_synapses_for_mapping(src, dst)` — the latter requires both endpoints to
+            // still be resolvable in `cortical_id_to_idx`. We therefore clear all mapping rules
+            // (incoming AND outgoing relative to the doomed area) and prune their synapses first,
+            // then remove the area as the final step.
             let cortical_ids: Vec<CorticalID> = manager
                 .get_cortical_area_ids()
                 .into_iter()
                 .cloned()
                 .collect();
-            for src_id in cortical_ids {
+
+            // 1) Incoming side: src → deleted_id. For every other area mapping to the doomed area,
+            //    clear rules and prune the resulting orphan synapses out of the NPU.
+            for src_id in &cortical_ids {
+                if src_id == &cortical_id_typed {
+                    continue;
+                }
                 let has_mapping = manager
-                    .get_cortical_area(&src_id)
+                    .get_cortical_area(src_id)
                     .and_then(|area| area.properties.get("cortical_mapping_dst"))
                     .and_then(|value| value.as_object())
                     .map(|mapping| mapping.contains_key(&deleted_id_base64))
                     .unwrap_or(false);
                 if has_mapping {
                     manager
-                        .update_cortical_mapping(&src_id, &cortical_id_typed, Vec::new())
+                        .update_cortical_mapping(src_id, &cortical_id_typed, Vec::new())
                         .map_err(ServiceError::from)?;
+                    let pruned = manager
+                        .regenerate_synapses_for_mapping(src_id, &cortical_id_typed)
+                        .map_err(|e| {
+                            ServiceError::Backend(format!(
+                                "Failed to prune synapses for {} -> {}: {}",
+                                src_id, cortical_id_typed, e
+                            ))
+                        })?;
+                    pruned_incoming_synapses = pruned_incoming_synapses.saturating_add(pruned);
                     removed_mapping_count += 1;
                 }
+            }
 
+            // 2) Outgoing side: deleted_id → dst. Same treatment so the doomed area leaves no
+            //    orphan synapses pointing into still-live targets.
+            let outgoing_targets: Vec<CorticalID> = manager
+                .get_cortical_area(&cortical_id_typed)
+                .and_then(|area| area.properties.get("cortical_mapping_dst"))
+                .and_then(|value| value.as_object())
+                .map(|mapping| {
+                    mapping
+                        .keys()
+                        .filter_map(|k| CorticalID::try_from_base_64(k).ok())
+                        .collect()
+                })
+                .unwrap_or_default();
+            for dst_id in outgoing_targets {
+                manager
+                    .update_cortical_mapping(&cortical_id_typed, &dst_id, Vec::new())
+                    .map_err(ServiceError::from)?;
+                let pruned = manager
+                    .regenerate_synapses_for_mapping(&cortical_id_typed, &dst_id)
+                    .map_err(|e| {
+                        ServiceError::Backend(format!(
+                            "Failed to prune synapses for {} -> {}: {}",
+                            cortical_id_typed, dst_id, e
+                        ))
+                    })?;
+                pruned_outgoing_synapses = pruned_outgoing_synapses.saturating_add(pruned);
+                removed_mapping_count += 1;
+            }
+
+            // 3) Upstream-cortical-areas property cleanup on every remaining area. Done while
+            //    the deleted_idx is still valid (post-removal we'd have to scan numerically).
+            for src_id in &cortical_ids {
+                if src_id == &cortical_id_typed {
+                    continue;
+                }
                 if let Some(deleted_idx) = deleted_cortical_idx {
-                    if let Some(area) = manager.get_cortical_area_mut(&src_id) {
+                    if let Some(area) = manager.get_cortical_area_mut(src_id) {
                         if let Some(upstream) = area
                             .properties
                             .get_mut("upstream_cortical_areas")
@@ -794,6 +854,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     }
                 }
             }
+
+            // 4) Finally remove the cortical area itself, after all synapses involving it have
+            //    been pruned. Anything that remains is purely connectome bookkeeping.
+            manager
+                .remove_cortical_area(&cortical_id_typed)
+                .map_err(ServiceError::from)?;
 
             Some(manager.recompute_brain_region_io_registry().map_err(|e| {
                 ServiceError::Backend(format!("Failed to recompute region IO registry: {}", e))
@@ -874,12 +940,19 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 "[GENOME-UPDATE] No RuntimeGenome loaded - deletion will not persist to saved genome"
             );
         }
-        if removed_mapping_count > 0 || removed_upstream_count > 0 {
+        if removed_mapping_count > 0
+            || removed_upstream_count > 0
+            || pruned_incoming_synapses > 0
+            || pruned_outgoing_synapses > 0
+        {
             info!(
                 target: "feagi-services",
-                "Deleted area cleanup: {} mapping references removed, {} upstream references pruned",
+                "Deleted area cleanup: {} mapping references removed, {} upstream references pruned, \
+                 {} incoming synapses pruned, {} outgoing synapses pruned",
                 removed_mapping_count,
-                removed_upstream_count
+                removed_upstream_count,
+                pruned_incoming_synapses,
+                pruned_outgoing_synapses
             );
         }
 
@@ -3236,6 +3309,245 @@ mod tests {
             assert!(genome.brain_regions.contains_key(&root_key));
             assert!(!genome.cortical_areas.contains_key(&power_id));
             assert!(!genome.cortical_areas.contains_key(&death_id));
+        }
+
+        Ok(())
+    }
+
+    /// Regression: deleting a cortical area must cascade-prune outgoing synapses owned by every
+    /// source area that mapped into it. Prior to the cascade fix, `delete_cortical_area` cleared
+    /// `cortical_mapping_dst` rules but never invoked `regenerate_synapses_for_mapping`, leaving
+    /// orphaned synapses (with potentially saturated R-STDP weights) in the source area.
+    ///
+    /// This guards both directions:
+    ///   1) src -> deleted_area synapses must be pruned (the explicit user-reported bug).
+    ///   2) deleted_area -> downstream synapses must also be pruned (full cascade hygiene).
+    #[tokio::test]
+    async fn delete_cortical_area_cascade_prunes_orphan_synapses() -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+            IOCorticalAreaConfigurationFlag,
+        };
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("npu construct");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+
+        let mut mgr = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+
+        // src --(mapping)--> doomed --(mapping)--> sink. After deleting `doomed`, neither src's
+        // outgoing synapses nor doomed's outgoing synapses may remain in the NPU.
+        let src_id = CorticalID::try_from_bytes(b"cstcsrc1").expect("src id");
+        let doomed_id = CorticalID::try_from_bytes(b"cstcdoom").expect("doomed id");
+        let sink_id = CorticalID::try_from_bytes(b"cstsink1").expect("sink id");
+
+        for (id, label) in [(src_id, "src"), (doomed_id, "doomed"), (sink_id, "sink")] {
+            let area = CorticalArea::new(
+                id,
+                0,
+                label.to_string(),
+                CorticalAreaDimensions::new(2, 1, 1).unwrap(),
+                (0, 0, 0).into(),
+                CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+            )
+            .unwrap();
+            mgr.add_cortical_area(area).unwrap();
+        }
+
+        // Two neurons per area for non-trivial fan-out.
+        let s0 = mgr
+            .add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        let s1 = mgr
+            .add_neuron(&src_id, 1, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        let d0 = mgr
+            .add_neuron(
+                &doomed_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+            )
+            .unwrap();
+        let d1 = mgr
+            .add_neuron(
+                &doomed_id, 1, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+            )
+            .unwrap();
+        let k0 = mgr
+            .add_neuron(
+                &sink_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false,
+            )
+            .unwrap();
+
+        // Pre-existing synapses src->doomed (the orphan-source path) and doomed->sink (the other
+        // direction we also clean up). Use heavy fake weights to mimic R-STDP saturation.
+        mgr.create_synapse(s0, d0, 882_000.0, 200.0, 0).unwrap();
+        mgr.create_synapse(s1, d1, 882_000.0, 200.0, 0).unwrap();
+        mgr.create_synapse(d0, k0, 1.0, 1.0, 0).unwrap();
+
+        // Register the mapping rule entries so `delete_cortical_area` can discover the pairs to
+        // prune via `cortical_mapping_dst` lookups.
+        mgr.update_cortical_mapping(
+            &src_id,
+            &doomed_id,
+            vec![serde_json::json!({"morphology_id": "all_to_all"})],
+        )
+        .unwrap();
+        mgr.update_cortical_mapping(
+            &doomed_id,
+            &sink_id,
+            vec![serde_json::json!({"morphology_id": "all_to_all"})],
+        )
+        .unwrap();
+
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            npu.rebuild_synapse_index();
+            assert_eq!(
+                npu.get_synapse_count(),
+                3,
+                "fixture should expose 3 synapses"
+            );
+            assert_eq!(npu.get_outgoing_synapses(s0 as u32).len(), 1);
+            assert_eq!(npu.get_outgoing_synapses(s1 as u32).len(), 1);
+            assert_eq!(npu.get_outgoing_synapses(d0 as u32).len(), 1);
+        }
+
+        let connectome = Arc::new(RwLock::new(mgr));
+        let current_genome = Arc::new(RwLock::new(None));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+
+        svc.delete_cortical_area(&doomed_id.as_base_64()).await?;
+
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            npu.rebuild_synapse_index();
+            assert_eq!(
+                npu.get_synapse_count(),
+                0,
+                "delete_cortical_area must cascade-prune all synapses involving the deleted area"
+            );
+            assert!(
+                npu.get_outgoing_synapses(s0 as u32).is_empty(),
+                "src->doomed orphan synapses must be cleared from src"
+            );
+            assert!(
+                npu.get_outgoing_synapses(s1 as u32).is_empty(),
+                "src->doomed orphan synapses must be cleared from src"
+            );
+            assert!(
+                npu.get_outgoing_synapses(d0 as u32).is_empty(),
+                "doomed->sink synapses must also be pruned"
+            );
+        }
+
+        // Connectome should no longer expose the deleted area, and src's mapping_dst entry for the
+        // doomed area must be removed (to keep RuntimeGenome consistent on subsequent saves).
+        {
+            let mgr = connectome.read();
+            assert!(!mgr.has_cortical_area(&doomed_id));
+            let src = mgr.get_cortical_area(&src_id).expect("src must remain");
+            let mapping_dst = src.properties.get("cortical_mapping_dst");
+            if let Some(mapping_dst) = mapping_dst {
+                assert!(
+                    !mapping_dst
+                        .as_object()
+                        .map(|m| m.contains_key(&doomed_id.as_base_64()))
+                        .unwrap_or(false),
+                    "src must not retain a mapping rule pointing at the deleted area"
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Regression: `update_cortical_mapping` with an empty rule list (the canonical path used by
+    /// the `DELETE /v1/cortical_mapping/mapping` endpoint) must prune all existing synapses for
+    /// that src->dst pair, even when the previous mapping has no entry yet (guards a TOCTOU edge
+    /// where `existing_mapping` is `None` and the early-return-on-equal-rules optimization would
+    /// otherwise short-circuit).
+    #[tokio::test]
+    async fn delete_mapping_via_empty_update_clears_synapses() -> ServiceResult<()> {
+        use super::ConnectomeServiceImpl;
+        use crate::traits::ConnectomeService;
+        use feagi_brain_development::ConnectomeManager;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+            IOCorticalAreaConfigurationFlag,
+        };
+        use parking_lot::RwLock;
+        use std::sync::Arc;
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("npu construct");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut mgr = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+
+        let src_id = CorticalID::try_from_bytes(b"cstdms01").expect("src id");
+        let dst_id = CorticalID::try_from_bytes(b"cstdmd01").expect("dst id");
+
+        for (id, label) in [(src_id, "src"), (dst_id, "dst")] {
+            mgr.add_cortical_area(
+                CorticalArea::new(
+                    id,
+                    0,
+                    label.to_string(),
+                    CorticalAreaDimensions::new(2, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        }
+        let s0 = mgr
+            .add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        let t0 = mgr
+            .add_neuron(&dst_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        mgr.create_synapse(s0, t0, 882_000.0, 200.0, 0).unwrap();
+        mgr.update_cortical_mapping(
+            &src_id,
+            &dst_id,
+            vec![serde_json::json!({"morphology_id": "all_to_all"})],
+        )
+        .unwrap();
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            npu.rebuild_synapse_index();
+            assert_eq!(npu.get_synapse_count(), 1);
+        }
+
+        let connectome = Arc::new(RwLock::new(mgr));
+        let current_genome = Arc::new(RwLock::new(None));
+        let svc = ConnectomeServiceImpl::new(connectome.clone(), current_genome.clone());
+
+        // Drive the service path used by `DELETE /v1/cortical_mapping/mapping`.
+        svc.update_cortical_mapping(src_id.as_base_64(), dst_id.as_base_64(), vec![])
+            .await?;
+
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            npu.rebuild_synapse_index();
+            assert_eq!(
+                npu.get_synapse_count(),
+                0,
+                "DELETE mapping must drop all synapses for the src->dst pair"
+            );
+            assert!(npu.get_outgoing_synapses(s0 as u32).is_empty());
         }
 
         Ok(())

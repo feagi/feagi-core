@@ -2468,6 +2468,36 @@ impl ConnectomeManager {
             .and_then(|v| v.as_str())
             .map(str::to_string);
 
+        // Optional upper-bound clamp for plasticity weight commits. Absent / null means no
+        // clamp (legacy unbounded behaviour). When provided, must be a strictly positive
+        // f32 (finite or `+inf`); `NaN`, zero, and negatives are rejected so the runtime
+        // never sees a malformed sentinel.
+        let max_weight_provided = rule_obj.get("max_weight").is_some()
+            && !rule_obj
+                .get("max_weight")
+                .map(|v| v.is_null())
+                .unwrap_or(true);
+        let max_weight: f32 = if max_weight_provided {
+            let raw = rule_obj
+                .get("max_weight")
+                .and_then(|v| v.as_f64())
+                .ok_or_else(|| {
+                    BduError::Internal(format!(
+                        "max_weight must be a number on mapping {} -> {}",
+                        src_area_id, dst_area_id
+                    ))
+                })?;
+            if raw.is_nan() || raw <= 0.0 {
+                return Err(BduError::Internal(format!(
+                    "max_weight must be strictly positive (got {}) on mapping {} -> {}",
+                    raw, src_area_id, dst_area_id
+                )));
+            }
+            raw as f32
+        } else {
+            f32::INFINITY
+        };
+
         // Validate R-STDP fields are absent when not in RStdp mode (catches genome typos early).
         if !matches!(
             plasticity_mode,
@@ -2483,6 +2513,20 @@ impl ConnectomeManager {
             )));
         }
 
+        // `max_weight` is only meaningful when plasticity is active. Reject explicit values
+        // on Off-mode mappings to surface genome typos early; an absent field silently
+        // resolves to `f32::INFINITY` above and is fine.
+        if matches!(
+            plasticity_mode,
+            feagi_npu_burst_engine::npu::PlasticityMode::Off
+        ) && max_weight_provided
+        {
+            return Err(BduError::Internal(format!(
+                "max_weight is only valid when plasticity_mode is 'stdp' or 'rstdp' (got off) on mapping {} -> {}",
+                src_area_id, dst_area_id
+            )));
+        }
+
         trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: attempting NPU lock");
         let mut npu_lock = npu
             .lock()
@@ -2493,21 +2537,21 @@ impl ConnectomeManager {
         // areas must already be registered with the NPU before this mapping is parsed; the
         // genome ordering normally handles this because cortical areas are processed before
         // their cross-area mapping rules.
-        let resolve_optional_area = |label: &str,
-                                     name_opt: &Option<String>|
-         -> BduResult<Option<u32>> {
-            let Some(name) = name_opt else {
-                return Ok(None);
+        let resolve_optional_area =
+            |label: &str, name_opt: &Option<String>| -> BduResult<Option<u32>> {
+                let Some(name) = name_opt else {
+                    return Ok(None);
+                };
+                match npu_lock.get_cortical_area_id(name.as_str()) {
+                    Some(idx) => Ok(Some(idx)),
+                    None => Err(BduError::Internal(format!(
+                        "Unknown {} cortical area '{}' on R-STDP mapping {} -> {}",
+                        label, name, src_area_id, dst_area_id
+                    ))),
+                }
             };
-            match npu_lock.get_cortical_area_id(name.as_str()) {
-                Some(idx) => Ok(Some(idx)),
-                None => Err(BduError::Internal(format!(
-                    "Unknown {} cortical area '{}' on R-STDP mapping {} -> {}",
-                    label, name, src_area_id, dst_area_id
-                ))),
-            }
-        };
-        let reward_source_area = resolve_optional_area("reward_source_area", &reward_source_area_id)?;
+        let reward_source_area =
+            resolve_optional_area("reward_source_area", &reward_source_area_id)?;
         let punishment_source_area =
             resolve_optional_area("punishment_source_area", &punishment_source_area_id)?;
 
@@ -2531,6 +2575,7 @@ impl ConnectomeManager {
             eligibility_decay_bursts,
             reward_source_area,
             punishment_source_area,
+            max_weight,
         };
 
         npu_lock
@@ -7947,6 +7992,205 @@ mod tests {
                 .get("memory_twin_for")
                 .and_then(|v| v.as_str()),
             Some(mem_id.as_base_64().as_str())
+        );
+    }
+
+    /// Helper for the `max_weight` validation tests below: stand up a minimal connectome with
+    /// a plastic mapping `src -> dst` plus the two detector areas required for R-STDP rules.
+    /// Returns the manager (so individual tests can drive `update_cortical_mapping` against
+    /// it) along with the four cortical IDs in (src, dst, reward, pain) order.
+    fn build_max_weight_test_manager() -> (ConnectomeManager, CorticalID, CorticalID, CorticalID, CorticalID)
+    {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::TracingMutex;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("npu");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut mgr = ConnectomeManager::new_for_testing_with_npu(dyn_npu);
+        // Seed the core morphology registry; `all_to_all` is the simplest plastic morphology
+        // available and is required to exercise the STDP rule parser path in
+        // `regenerate_synapses_for_mapping`.
+        feagi_evolutionary::templates::add_core_morphologies(&mut mgr.morphology_registry);
+
+        let src = CorticalID::try_from_bytes(b"cstmwsrc").unwrap();
+        let dst = CorticalID::try_from_bytes(b"cstmwdst").unwrap();
+        let reward = CorticalID::try_from_bytes(b"cstmwrwd").unwrap();
+        let pain = CorticalID::try_from_bytes(b"cstmwpan").unwrap();
+
+        for (id, label, kind) in [
+            (
+                src,
+                "src",
+                CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+            ),
+            (
+                dst,
+                "dst",
+                CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
+            ),
+            (
+                reward,
+                "reward",
+                CorticalAreaType::Custom(
+                    feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                ),
+            ),
+            (
+                pain,
+                "pain",
+                CorticalAreaType::Custom(
+                    feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                ),
+            ),
+        ] {
+            mgr.add_cortical_area(
+                CorticalArea::new(
+                    id,
+                    0,
+                    label.to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    kind,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            mgr.add_neuron(&id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+                .unwrap();
+        }
+        (mgr, src, dst, reward, pain)
+    }
+
+    /// Drive the full BDU mapping pipeline (store rules then regenerate synapses, which is
+    /// where the STDP rule parser actually runs) so the validation tests below exercise the
+    /// same code path as a `PUT /v1/cortical_mapping/mapping_properties` followed by the
+    /// regeneration step kicked off by the connectome service.
+    fn write_and_regenerate_mapping(
+        mgr: &mut ConnectomeManager,
+        src: &CorticalID,
+        dst: &CorticalID,
+        rule: serde_json::Value,
+    ) -> BduResult<usize> {
+        mgr.update_cortical_mapping(src, dst, vec![rule])?;
+        mgr.regenerate_synapses_for_mapping(src, dst)
+    }
+
+    /// Acceptance test: an R-STDP mapping rule with a finite, positive `max_weight` parses
+    /// cleanly through the BDU pipeline used by `PUT /v1/cortical_mapping/mapping_properties`
+    /// + the post-write regeneration step.
+    #[test]
+    fn test_max_weight_finite_positive_accepted_on_rstdp_rule() {
+        let (mut mgr, src, dst, reward, pain) = build_max_weight_test_manager();
+
+        let result = write_and_regenerate_mapping(
+            &mut mgr,
+            &src,
+            &dst,
+            serde_json::json!({
+                "morphology_id": "block_to_block",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1,
+                "plasticity_flag": true,
+                "plasticity_constant": 1,
+                "ltp_multiplier": 1,
+                "ltd_multiplier": 1,
+                "plasticity_window": 10,
+                "synaptic_delay_bursts": 1,
+                "plasticity_mode": "rstdp",
+                "eligibility_decay_bursts": 50,
+                "reward_source_area": reward.as_base_64(),
+                "punishment_source_area": pain.as_base_64(),
+                "max_weight": 12.5,
+            }),
+        );
+        assert!(
+            result.is_ok(),
+            "valid max_weight=12.5 must be accepted, got {:?}",
+            result
+        );
+    }
+
+    /// Validation test: zero, negative, and non-numeric `max_weight` values must be rejected
+    /// at parse time so the runtime never sees a malformed sentinel. (`NaN` and `Infinity`
+    /// cannot appear in valid JSON -- `serde_json::json!(f64::NAN)` already serializes to
+    /// `Null` -- so we cover the in-band wrong-type case via a string instead.)
+    #[test]
+    fn test_max_weight_invalid_values_rejected() {
+        for bad in &[
+            serde_json::json!(0.0),
+            serde_json::json!(-1.5),
+            serde_json::json!("not_a_number"),
+        ] {
+            let (mut mgr, src, dst, reward, pain) = build_max_weight_test_manager();
+            let result = write_and_regenerate_mapping(
+                &mut mgr,
+                &src,
+                &dst,
+                serde_json::json!({
+                    "morphology_id": "block_to_block",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": true,
+                    "plasticity_constant": 1,
+                    "ltp_multiplier": 1,
+                    "ltd_multiplier": 1,
+                    "plasticity_window": 10,
+                    "synaptic_delay_bursts": 1,
+                    "plasticity_mode": "rstdp",
+                    "eligibility_decay_bursts": 50,
+                    "reward_source_area": reward.as_base_64(),
+                    "punishment_source_area": pain.as_base_64(),
+                    "max_weight": bad,
+                }),
+            );
+            assert!(
+                result.is_err(),
+                "max_weight={:?} should have been rejected, got {:?}",
+                bad,
+                result
+            );
+        }
+    }
+
+    /// Validation test: setting an explicit `max_weight` on an off-mode (non-plastic) rule
+    /// is meaningless and must surface as a clear error instead of being silently ignored.
+    #[test]
+    fn test_max_weight_rejected_when_plasticity_off() {
+        let (mut mgr, src, dst, _reward, _pain) = build_max_weight_test_manager();
+
+        let result = write_and_regenerate_mapping(
+            &mut mgr,
+            &src,
+            &dst,
+            serde_json::json!({
+                "morphology_id": "block_to_block",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1,
+                // `plasticity_flag: true` is required to enter the rule-parsing branch in
+                // `regenerate_synapses_for_mapping`; the off-mode validation is then driven
+                // by the explicit `plasticity_mode: "off"` selector below, which is the
+                // canonical successor of the legacy boolean flag.
+                "plasticity_flag": true,
+                "plasticity_constant": 0,
+                "ltp_multiplier": 0,
+                "ltd_multiplier": 0,
+                "plasticity_window": 0,
+                "synaptic_delay_bursts": 1,
+                "plasticity_mode": "off",
+                "max_weight": 10.0,
+            }),
+        );
+        assert!(
+            result.is_err(),
+            "max_weight on off-mode rule must be rejected; got {:?}",
+            result
         );
     }
 }

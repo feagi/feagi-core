@@ -75,6 +75,7 @@ fn stdp_params(
         eligibility_decay_bursts: 0,
         reward_source_area: None,
         punishment_source_area: None,
+        max_weight: f32::INFINITY,
     }
 }
 

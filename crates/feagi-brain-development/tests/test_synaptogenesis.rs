@@ -899,3 +899,340 @@ fn test_parallel_projector_and_block_to_block_preserves_both() {
 
     println!("✅ Test 7: Parallel morphologies preserve both synapses - PASSED");
 }
+
+// ============================================================================
+// TEST 8: End-to-end spike delivery via apply_cortical_mapping
+//          (regression for cartpole detector silence)
+// ============================================================================
+//
+// Regression for the cartpole R-STDP detector silence bug:
+// Live FEAGI showed that after `update_cortical_mapping` + `apply_cortical_mapping`
+// (or the equivalent dynamic build_reflex_mapping flow), `get_outgoing_synapses`
+// correctly returned the synapses, but the per-burst spike-delivery loop never
+// delivered any spikes across them. The destination neuron's membrane potential
+// never increased and it never fired despite the source firing thousands of
+// consecutive bursts.
+//
+// The other tests in this file only verify that synapses become visible via the
+// propagation index after `apply_cortical_mapping`. They never run a burst chain
+// to verify that spikes actually propagate across those synapses, so they cannot
+// catch this regression.
+//
+// This test fills that gap: it exercises the same dynamic mapping flow used by
+// the live REST API, then drives the source neuron via
+// `inject_sensory_with_potentials` + `process_burst`, and asserts that the
+// destination neuron fires within the expected synaptic-delay window.
+#[test]
+fn test_apply_cortical_mapping_delivers_spikes_to_target() {
+    use feagi_npu_neural::types::NeuronId;
+
+    let mut manager = create_test_manager();
+
+    // Tiny 1x1x1 -> 1x1x1 graph: deterministic and rules out fan-out as a confounder.
+    let (src_area, src_id) = create_test_area("src_e2e", 1, 1, 1, 0);
+    manager
+        .add_cortical_area(src_area)
+        .expect("Failed to add source area");
+    let (dst_area, dst_id) = create_test_area("dst_e2e", 1, 1, 1, 1);
+    manager
+        .add_cortical_area(dst_area)
+        .expect("Failed to add destination area");
+
+    // Use neuron parameters matching the canonical integration_burst_workflow tests
+    // (mp_charge_accumulation=true, no consecutive-fire/snooze cap, no leak) so we
+    // know the neuron itself is firing-capable. This isolates the test to the
+    // mapping/propagation path rather than neuron dynamics tuning.
+    let add_one = |manager: &mut ConnectomeManager, area: &CorticalID, x, y, z| -> u64 {
+        manager
+            .add_neuron(
+                area,
+                x,
+                y,
+                z,
+                1.0,      // firing_threshold
+                f32::MAX, // firing_threshold_limit (no cap)
+                0.0,      // leak_coefficient
+                0.0,      // resting_potential
+                0,        // neuron_type
+                5,        // refractory_period
+                1.0,      // excitability
+                0,        // consecutive_fire_limit (0 = no cap)
+                0,        // snooze_length
+                true,     // mp_charge_accumulation
+            )
+            .expect("add_neuron failed")
+    };
+
+    let src_neuron_id = add_one(&mut manager, &src_id, 0, 0, 0);
+    let dst_neuron_id = add_one(&mut manager, &dst_id, 0, 0, 0);
+
+    // Strong unconditional connection. PSC multiplier is generous so a single
+    // spike from src must drive dst above threshold (default firing_threshold = 1.0
+    // in `create_grid_neurons`).
+    let rule = json!({
+        "morphology_id": "projector",
+        "morphology_scalar": [1, 1, 1],
+        "postSynapticCurrent_multiplier": 5,
+        "synapse_attractivity": 100,
+        "plasticity_flag": false,
+        "synaptic_delay_bursts": 1,
+    });
+
+    manager
+        .update_cortical_mapping(&src_id, &dst_id, vec![rule])
+        .expect("Failed to update cortical mapping");
+    let synapse_count = manager
+        .apply_cortical_mapping(&src_id)
+        .expect("Failed to apply cortical mapping");
+    assert_eq!(
+        synapse_count, 1,
+        "projector should produce exactly one src->dst synapse for matching 1x1x1 dims"
+    );
+
+    let src_nid = NeuronId(src_neuron_id as u32);
+    let dst_nid = NeuronId(dst_neuron_id as u32);
+
+    let npu_arc = manager
+        .get_npu()
+        .expect("Test manager must have an attached NPU");
+    let mut npu_guard = npu_arc.lock().unwrap();
+
+    match *npu_guard {
+        DynamicNPU::F32(ref mut npu) => {
+            // Sanity check: synapse is in the propagation engine's index.
+            let outgoing = npu.get_outgoing_synapses(src_nid.0);
+            assert_eq!(
+                outgoing.len(),
+                1,
+                "Outgoing synapse should be visible via propagation index after apply_cortical_mapping"
+            );
+            assert_eq!(
+                outgoing[0].0, dst_nid.0,
+                "Outgoing synapse must target the dst neuron (got target_id={})",
+                outgoing[0].0
+            );
+
+            // The actual regression check: drive src above threshold and verify
+            // dst fires within the synaptic-delay window.
+            npu.inject_sensory_with_potentials(&[(src_nid, 5.0)]);
+            let burst1 = npu.process_burst().expect("burst 1 failed");
+            assert!(
+                burst1.fired_neurons.contains(&src_nid),
+                "Source neuron must fire on burst 1 after sensory injection \
+                 (fired={:?})",
+                burst1.fired_neurons
+            );
+
+            // synaptic_delay_bursts=1 means the src spike from burst 1 arrives at
+            // dst during burst 2 processing. dst should reach threshold and fire
+            // on burst 2.
+            let burst2 = npu.process_burst().expect("burst 2 failed");
+            assert!(
+                burst2.fired_neurons.contains(&dst_nid),
+                "REGRESSION: destination neuron did not fire on burst 2 despite \
+                 synapse being visible via propagation index. This is the cartpole \
+                 detector silence bug. burst2.fired_neurons={:?}",
+                burst2.fired_neurons
+            );
+        }
+        DynamicNPU::INT8(_) => panic!("Test only configured for F32 NPU"),
+    }
+
+    println!("✅ Test 8: End-to-end spike delivery via apply_cortical_mapping - PASSED");
+}
+
+// ============================================================================
+// TEST 9: Fan-out PSP dilution silences low-threshold targets
+//          (regression for cartpole detector silence after adding R-STDP fan-out)
+// ============================================================================
+//
+// In `synaptic_propagation.rs`, when a source area's `psp_uniform_distribution`
+// is false (the default), the source neuron's per-burst contribution is divided
+// across the total number of outgoing synapses:
+//
+//     final_contribution = base_contribution / source_meta.synapse_count
+//
+// This is the exact mechanism behind the cartpole detector silence:
+//   - Initially, the encoder had 2 outgoing synapses (to detectors at z=0,9):
+//       contribution per synapse = 1.0 / 2 = 0.5  → above detector threshold 0.1, fires.
+//   - After adding 20 R-STDP synapses (encoder → motor), encoder fan-out = 21:
+//       contribution per synapse = 1.0 / 21 = 0.048 → below 0.1, detector silent.
+//
+// This test reconstructs that exact topology and asserts the symptom. It is a
+// behavioral regression test: any future change that silently alters fan-out
+// dilution semantics (e.g., toggling the default of psp_uniform_distribution)
+// will move this assertion. Owners are expected to update this test
+// intentionally if they change the contract.
+#[test]
+fn test_fanout_psp_dilution_silences_low_threshold_target() {
+    use feagi_npu_neural::types::NeuronId;
+
+    let mut manager = create_test_manager();
+
+    // Source: 1x1x10 (matches the cartpole encoder shape)
+    let (src_area, src_id) = create_test_area("src_fan", 1, 1, 10, 0);
+    manager
+        .add_cortical_area(src_area)
+        .expect("Failed to add source area");
+
+    // Detector: 1x1x1 (matches pain_fallen / pleasure_upright)
+    let (det_area, det_id) = create_test_area("det_fan", 1, 1, 1, 1);
+    manager
+        .add_cortical_area(det_area)
+        .expect("Failed to add detector area");
+
+    // Motor sink: 2x1x10 (matches ungrouped-1 fan-out target)
+    let (mot_area, mot_id) = create_test_area("mot_fan", 2, 1, 10, 2);
+    manager
+        .add_cortical_area(mot_area)
+        .expect("Failed to add motor area");
+
+    // Add a single firing neuron at src[0,0,0] (encoder z=0 = "fallen" position).
+    let src_neuron_id = manager
+        .add_neuron(
+            &src_id,
+            0,
+            0,
+            0,
+            1.0, // firing_threshold
+            f32::MAX,
+            0.0,
+            0.0,
+            0,
+            5,
+            1.0,
+            0,
+            0,
+            true,
+        )
+        .expect("add encoder neuron failed");
+
+    // Detector neuron with cartpole-matching threshold 0.1.
+    let det_neuron_id = manager
+        .add_neuron(
+            &det_id,
+            0,
+            0,
+            0,
+            0.1, // firing_threshold = 0.1 (cartpole pain/pleasure threshold)
+            f32::MAX,
+            0.0,
+            0.0,
+            0,
+            5,
+            1.0,
+            0,
+            0,
+            true,
+        )
+        .expect("add detector neuron failed");
+
+    // Motor sink neurons (20 of them, 2x1x10 grid).
+    for x in 0..2 {
+        for z in 0..10 {
+            manager
+                .add_neuron(
+                    &mot_id,
+                    x,
+                    0,
+                    z,
+                    1.0,
+                    f32::MAX,
+                    0.0,
+                    0.0,
+                    0,
+                    5,
+                    1.0,
+                    0,
+                    0,
+                    true,
+                )
+                .expect("add motor neuron failed");
+        }
+    }
+
+    // Mapping 1: src → detector, single synapse from src origin to dst origin.
+    // morphology_scalar [0,0,0] for "0-0-0_to_all" pattern with 1x1x1 dst means a
+    // single synapse src[0,0,0]→det[0,0,0] (matches cartpole detector wiring).
+    let det_rule = json!({
+        "morphology_id": "0-0-0_to_all",
+        "morphology_scalar": [1, 1, 1],
+        "postSynapticCurrent_multiplier": 1,
+        "synapse_attractivity": 100,
+        "plasticity_flag": false,
+        "synaptic_delay_bursts": 1,
+    });
+    manager
+        .update_cortical_mapping(&src_id, &det_id, vec![det_rule])
+        .expect("update src→det mapping failed");
+
+    // Mapping 2: src → motor, all_to_all with origin source = 20 synapses
+    // from src[0,0,0] to all motor neurons (matches encoder→ungrouped-1 R-STDP fan-out).
+    let mot_rule = json!({
+        "morphology_id": "0-0-0_to_all",
+        "morphology_scalar": [1, 1, 1],
+        "postSynapticCurrent_multiplier": 1,
+        "synapse_attractivity": 100,
+        "plasticity_flag": false,
+        "synaptic_delay_bursts": 1,
+    });
+    manager
+        .update_cortical_mapping(&src_id, &mot_id, vec![mot_rule])
+        .expect("update src→mot mapping failed");
+
+    // Apply both mappings.
+    let total_synapses = manager
+        .apply_cortical_mapping(&src_id)
+        .expect("apply_cortical_mapping failed");
+    assert_eq!(
+        total_synapses, 21,
+        "Expected 21 total synapses (1 src→det + 20 src→mot)"
+    );
+
+    let src_nid = NeuronId(src_neuron_id as u32);
+    let det_nid = NeuronId(det_neuron_id as u32);
+
+    let npu_arc = manager
+        .get_npu()
+        .expect("Test manager must have an attached NPU");
+    let mut npu_guard = npu_arc.lock().unwrap();
+
+    match *npu_guard {
+        DynamicNPU::F32(ref mut npu) => {
+            // Sanity: src has exactly 21 outgoing synapses.
+            let outgoing = npu.get_outgoing_synapses(src_nid.0);
+            assert_eq!(
+                outgoing.len(),
+                21,
+                "Expected encoder src to have 21 outgoing synapses (cartpole topology)"
+            );
+
+            // Drive src above its own threshold.
+            npu.inject_sensory_with_potentials(&[(src_nid, 5.0)]);
+            let burst1 = npu.process_burst().expect("burst 1 failed");
+            assert!(
+                burst1.fired_neurons.contains(&src_nid),
+                "Source must fire on burst 1; fired={:?}",
+                burst1.fired_neurons
+            );
+
+            // Burst 2: contribution to detector is base / 21 = 1.0/21 ≈ 0.048,
+            // below detector threshold 0.1. Detector must therefore stay silent.
+            let burst2 = npu.process_burst().expect("burst 2 failed");
+            assert!(
+                !burst2.fired_neurons.contains(&det_nid),
+                "REGRESSION: detector fired on burst 2 — fan-out PSP dilution \
+                 contract has changed. Either psp_uniform_distribution default \
+                 flipped, or per-synapse division was removed. Update this test \
+                 intentionally if the contract changed. burst2.fired={:?}",
+                burst2.fired_neurons
+            );
+        }
+        DynamicNPU::INT8(_) => panic!("Test only configured for F32 NPU"),
+    }
+
+    println!(
+        "✅ Test 9: Fan-out PSP dilution silences low-threshold target - PASSED \
+         (this confirms the cartpole detector silence root cause: 1/21 < 0.1)"
+    );
+}

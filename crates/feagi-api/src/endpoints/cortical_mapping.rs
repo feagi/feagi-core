@@ -209,9 +209,8 @@ pub async fn post_mapping_properties(
                 .get("plasticity_mode")
                 .and_then(|v| v.as_str())
                 .map(str::to_string);
-            let eligibility_decay_bursts = obj
-                .get("eligibility_decay_bursts")
-                .and_then(|v| v.as_u64());
+            let eligibility_decay_bursts =
+                obj.get("eligibility_decay_bursts").and_then(|v| v.as_u64());
             let reward_source_area = obj
                 .get("reward_source_area")
                 .and_then(|v| v.as_str())
@@ -220,6 +219,15 @@ pub async fn post_mapping_properties(
                 .get("punishment_source_area")
                 .and_then(|v| v.as_str())
                 .map(str::to_string);
+            // Optional R-STDP / STDP weight ceiling. Validated downstream by the BDU; we only
+            // shape it here so the rule round-trips cleanly through GET.
+            let max_weight = obj.get("max_weight").and_then(|v| {
+                if v.is_null() {
+                    None
+                } else {
+                    v.as_f64()
+                }
+            });
 
             let mut rule = serde_json::json!({
                 "morphology_id": morphology_id,
@@ -250,6 +258,9 @@ pub async fn post_mapping_properties(
                     "punishment_source_area".to_string(),
                     serde_json::json!(area),
                 );
+            }
+            if let Some(mw) = max_weight {
+                rule_obj.insert("max_weight".to_string(), serde_json::json!(mw));
             }
             formatted.push(rule);
         }
@@ -438,24 +449,93 @@ pub async fn get_mapping_list(State(state): State<ApiState>) -> ApiResult<Json<V
 }
 
 /// DELETE /v1/cortical_mapping/mapping
-/// Delete a cortical mapping
+///
+/// Delete the cortical mapping between two areas. This clears the rule data on the source
+/// area, prunes all synapses from `src_cortical_area` to `dst_cortical_area`, and persists
+/// the change to the RuntimeGenome. Equivalent to `PUT /v1/cortical_mapping/mapping_properties`
+/// with `mapping_string=[]`, but exposes a clean DELETE semantic for clients that need to
+/// drop a mapping (and reset its learned synapse weights) without enumerating an empty
+/// rules array.
+///
+/// Source/target IDs are accepted as query string parameters to match the existing
+/// `GET /v1/cortical_mapping/mapping` route and avoid HTTP 415 surprises on bodyless DELETEs.
 #[utoipa::path(
     delete,
     path = "/v1/cortical_mapping/mapping",
     tag = "cortical_mapping",
+    params(
+        ("src_cortical_area" = String, Query, description = "Source cortical area ID"),
+        ("dst_cortical_area" = String, Query, description = "Destination cortical area ID")
+    ),
     responses(
-        (status = 200, description = "Mapping deleted", body = HashMap<String, String>)
+        (status = 200, description = "Mapping deleted", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Missing src_cortical_area or dst_cortical_area"),
+        (status = 404, description = "Cortical area not found"),
+        (status = 500, description = "Internal server error")
     )
 )]
 pub async fn delete_mapping(
-    State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, String>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Implement mapping deletion
-    Ok(Json(HashMap::from([(
+    State(state): State<ApiState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    use tracing::info;
+
+    let src_area = params
+        .get("src_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("src_cortical_area required"))?
+        .to_string();
+    let dst_area = params
+        .get("dst_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("dst_cortical_area required"))?
+        .to_string();
+
+    info!(
+        target: "feagi-api",
+        "DELETE cortical mapping: {} -> {}",
+        src_area,
+        dst_area
+    );
+
+    let connectome_service = state.connectome_service.as_ref();
+
+    // Reuse the canonical update path with empty rules. `update_cortical_mapping` is the
+    // single source of truth for: clearing the rule data, pruning synapses via the BDU
+    // `regenerate_synapses_for_mapping` codepath, refreshing the burst runner cache, and
+    // persisting to RuntimeGenome / region IO registry. Returning anything else here would
+    // diverge from the PUT-with-empty-rules behaviour and risk drift.
+    let synapse_count = connectome_service
+        .update_cortical_mapping(src_area.clone(), dst_area.clone(), Vec::new())
+        .await
+        .map_err(|e| match e {
+            feagi_services::types::ServiceError::InvalidInput(msg) => ApiError::invalid_input(msg),
+            feagi_services::types::ServiceError::Conflict(msg) => ApiError::conflict(msg),
+            _ => ApiError::internal(format!("Failed to delete cortical mapping: {}", e)),
+        })?;
+
+    info!(
+        target: "feagi-api",
+        "Cortical mapping deleted: {} -> {} ({} synapses remaining)",
+        src_area,
+        dst_area,
+        synapse_count
+    );
+
+    let mut response = HashMap::new();
+    response.insert(
         "message".to_string(),
-        "Mapping deletion not yet implemented".to_string(),
-    )])))
+        serde_json::json!(format!(
+            "Cortical mapping deleted from {} to {}",
+            src_area, dst_area
+        )),
+    );
+    response.insert("src_cortical_area".to_string(), serde_json::json!(src_area));
+    response.insert("dst_cortical_area".to_string(), serde_json::json!(dst_area));
+    response.insert(
+        "synapse_count".to_string(),
+        serde_json::json!(synapse_count),
+    );
+
+    Ok(Json(response))
 }
 
 /// POST /v1/cortical_mapping/batch_update

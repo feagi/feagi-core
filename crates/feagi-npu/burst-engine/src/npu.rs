@@ -185,6 +185,20 @@ pub struct StdpMappingParams {
     /// Source cortical area whose firing density contributes negatively to `R(t)` (punishment).
     /// `None` means no negative reward channel.
     pub punishment_source_area: Option<u32>,
+    /// Upper bound applied to `w_ij` after a positive (potentiating) commit in the unified
+    /// plasticity update path. Prevents runaway weight growth under sustained reward when the
+    /// integer-valued `delta_plus` and persistent eligibility traces would otherwise compound
+    /// without bound (see runaway-PSP postmortem in feagi-mcp/docs/FAQ.md).
+    ///
+    /// Semantics:
+    /// - `f32::INFINITY` (default): no clamp; legacy behaviour preserved.
+    /// - Finite, strictly positive: each potentiating commit produces
+    ///   `w_ij_new = (w_ij_old + delta_w).min(max_weight)`.
+    /// - `NaN`, zero, or negative values are rejected at JSON parse time (BDU layer).
+    ///
+    /// Negative (depressing) commits are NOT affected by this field; they are still floored at
+    /// `0.0` as before, so LTD / punishment can always drive a synapse all the way to zero.
+    pub max_weight: f32,
 }
 
 impl Default for StdpMappingParams {
@@ -201,6 +215,7 @@ impl Default for StdpMappingParams {
             eligibility_decay_bursts: 0,
             reward_source_area: None,
             punishment_source_area: None,
+            max_weight: f32::INFINITY,
         }
     }
 }
@@ -4625,7 +4640,10 @@ impl<
             return 0.0;
         };
         // bitmap.cardinality() can exceed total_neurons if memory neurons are tracked, so clamp.
-        let fired = bitmap.iter().filter(|&id| id < MEMORY_NEURON_ID_START).count();
+        let fired = bitmap
+            .iter()
+            .filter(|&id| id < MEMORY_NEURON_ID_START)
+            .count();
         (fired as f32 / total_neurons as f32).clamp(0.0, 1.0)
     }
 
@@ -4788,13 +4806,23 @@ impl<
                         let pleasure = params
                             .reward_source_area
                             .map(|area| {
-                                self.activity_density(area, burst_timestep, fire_ledger, &neuron_storage)
+                                self.activity_density(
+                                    area,
+                                    burst_timestep,
+                                    fire_ledger,
+                                    &neuron_storage,
+                                )
                             })
                             .unwrap_or(0.0);
                         let pain = params
                             .punishment_source_area
                             .map(|area| {
-                                self.activity_density(area, burst_timestep, fire_ledger, &neuron_storage)
+                                self.activity_density(
+                                    area,
+                                    burst_timestep,
+                                    fire_ledger,
+                                    &neuron_storage,
+                                )
                             })
                             .unwrap_or(0.0);
                         pleasure - pain
@@ -4881,11 +4909,18 @@ impl<
                     synapse_storage.eligibility_traces_mut()[syn_idx] = e_ij;
 
                     // Step 3: R(t)-modulated weight commit.
+                    //
+                    // Positive deltas are clamped to `params.max_weight` (default
+                    // `f32::INFINITY`) to prevent runaway potentiation when the integer-valued
+                    // `delta_plus` and persistent eligibility traces would otherwise compound
+                    // without bound under sustained reward. Negative deltas are floored at
+                    // `0.0` as before so LTD / punishment can still drive a synapse to zero
+                    // regardless of `max_weight`.
                     if reward != 0.0 && e_ij != 0.0 {
                         let delta_w = reward * e_ij;
                         let old = synapse_storage.weights()[syn_idx];
                         let new_w = if delta_w >= 0.0 {
-                            old + delta_w
+                            (old + delta_w).min(params.max_weight)
                         } else {
                             (old + delta_w).max(0.0)
                         };

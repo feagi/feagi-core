@@ -94,6 +94,7 @@ fn rstdp_params(
         eligibility_decay_bursts,
         reward_source_area,
         punishment_source_area,
+        max_weight: f32::INFINITY,
     }
 }
 
@@ -404,4 +405,111 @@ fn test_wireheading_allows_off_mode_input_into_reward_area() {
     let p2 = rstdp_params(PlasticityMode::Off, 0, None, None);
     npu.register_stdp_mapping(10, 12, p2)
         .expect("Off-mode mapping into reward area must be allowed");
+}
+
+/// `max_weight` clamps positive R-STDP commits at the configured ceiling. Drives sustained
+/// pre-post co-firing with continuous reward and verifies the synaptic weight saturates at
+/// `max_weight` rather than growing without bound. Regression for the runaway-PSP postmortem
+/// (cartpole motor weights reached ~5.4M before the clamp existed; see
+/// feagi-mcp/docs/FAQ.md "My motor PSPs are saturating to millions").
+#[test]
+fn test_rstdp_max_weight_clamps_runaway_potentiation() {
+    let (mut npu, src, dst, reward, _pain) = create_rstdp_network();
+    wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
+
+    let cap: f32 = 7.5;
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    params.max_weight = cap;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    // Drive 50 bursts of co-fire + reward. With delta_plus=8 and decay=10 the steady-state
+    // trace is ≈ 8/(1-exp(-1/10)) ≈ 84 per burst; without a clamp the weight would grow into
+    // the thousands. Clamp must hold the weight at exactly `cap` instead.
+    for _ in 0..50 {
+        npu.inject_sensory_with_potentials(&[
+            (src[0], 128.0),
+            (dst[0], 128.0),
+            (reward, 128.0),
+        ]);
+        npu.process_burst().unwrap();
+    }
+
+    let w_final = synapse_weight(&npu, src[0]);
+    assert!(
+        (w_final - cap).abs() < 1e-4,
+        "max_weight must clamp positive growth at cap={}, got w_final={}",
+        cap,
+        w_final
+    );
+}
+
+/// `max_weight = f32::INFINITY` (the default) preserves the legacy unbounded-growth behaviour
+/// so existing genomes round-trip cleanly through the new code path. Mirrors the "delayed
+/// reward commits weight" regression but adds an explicit infinity cap to confirm the
+/// .min(f32::INFINITY) edge case behaves as identity.
+#[test]
+fn test_rstdp_max_weight_infinity_preserves_legacy_growth() {
+    let (mut npu, src, dst, reward, _pain) = create_rstdp_network();
+    wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
+
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    params.max_weight = f32::INFINITY;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    // Single co-fire burst, then a reward burst (matches existing
+    // test_rstdp_delayed_reward_commits_weight scenario).
+    npu.inject_sensory_with_potentials(&[(src[0], 128.0), (dst[0], 128.0)]);
+    npu.process_burst().unwrap();
+    npu.inject_sensory_with_potentials(&[(reward, 128.0)]);
+    npu.process_burst().unwrap();
+
+    let w_after = synapse_weight(&npu, src[0]);
+    assert!(
+        w_after > 5.0,
+        "infinity cap must allow weight to grow as in the legacy path, got {}",
+        w_after
+    );
+
+    // Same expected_delta computation as test_rstdp_delayed_reward_commits_weight (delta_plus
+    // = 4 * 2 = 8, one burst of decay at tau=10).
+    let expected_delta = 8.0_f32 * (-1.0_f32 / 10.0_f32).exp();
+    let observed_delta = w_after - 5.0;
+    assert!(
+        (observed_delta - expected_delta).abs() < 0.1,
+        "infinity cap must not perturb growth magnitude: expected ≈ {}, got {}",
+        expected_delta,
+        observed_delta
+    );
+}
+
+/// `max_weight` is a one-sided ceiling: punishment / LTD must still be able to drive the
+/// weight all the way to 0 even when a clamp is configured. Regression for the case where a
+/// naïve clamp implementation would also clamp the lower bound.
+#[test]
+fn test_rstdp_max_weight_does_not_block_punishment_to_zero() {
+    let (mut npu, src, dst, _reward, pain) = create_rstdp_network();
+    wire_test_synapse(&mut npu, src[0], dst[0], 20.0);
+
+    let mut params = rstdp_params(PlasticityMode::RStdp, 10, Some(12), Some(13));
+    params.max_weight = 50.0; // Well above starting weight; clamp inactive on this path.
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    // Burst 1: build a positive trace via co-fire (no reward, no pain).
+    npu.inject_sensory_with_potentials(&[(src[0], 128.0), (dst[0], 128.0)]);
+    npu.process_burst().unwrap();
+    assert_eq!(synapse_weight(&npu, src[0]), 20.0);
+
+    // Drive sustained pain. R(t) = -1 each burst and the trace is positive, so commits are
+    // negative. Floor must remain 0.0; the clamp must not interfere.
+    for _ in 0..50 {
+        npu.inject_sensory_with_potentials(&[(pain, 128.0)]);
+        npu.process_burst().unwrap();
+    }
+
+    let w_final = synapse_weight(&npu, src[0]);
+    assert!(
+        w_final >= 0.0 && w_final < 1.0,
+        "punishment must drive weight toward 0 even with max_weight set; got {}",
+        w_final
+    );
 }
