@@ -13,13 +13,70 @@ use feagi_structures::genomic::cortical_area::descriptors::{
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit, UnitTopology};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use tracing::{info, warn};
 
 const MOTOR_AREA_X_GAP_VOXELS: i32 = 10;
 const SEGMENTED_VISION_GROUP_X_GAP_VOXELS: i32 = 10;
+
+/// First tuple element of `JSONDecoderProperties::Percentage` as JSON: either a bare
+/// positive integer (legacy / hand-written payloads) or `NeuronDepth`'s serde shape
+/// `{"value": n}` from `serde_json::to_value`.
+fn percentage_tuple_first_depth_u32(depth_json: &Value) -> Option<u32> {
+    if let Some(u) = depth_json.as_u64() {
+        return u32::try_from(u).ok();
+    }
+    if let Some(i) = depth_json.as_i64() {
+        if i > 0 {
+            return u32::try_from(i).ok();
+        }
+        return None;
+    }
+    depth_json
+        .get("value")
+        .and_then(|v| v.as_u64().or_else(|| v.as_i64().map(|i| i as u64)))
+        .and_then(|u| u32::try_from(u).ok())
+}
+
+/// Per-channel (width, height, depth) for motor registration reconciliation.
+///
+/// For [`MotorCorticalUnit::CountOutput`], Z depth may be taken from the agent's
+/// `JSONDecoderProperties::Percentage` tuple (first element = [`NeuronDepth`]) so the
+/// connectome matches the embodiment decoder (e.g. Perception Inspector max count).
+/// Other motor units keep template `channel_dimensions_default` only.
+fn per_channel_motor_dimensions_for_registration(
+    motor_unit: MotorCorticalUnit,
+    unit_topology: &UnitTopology,
+    decoder_properties: Option<&Value>,
+) -> (usize, usize, usize) {
+    let default_w = unit_topology.channel_dimensions_default[0] as usize;
+    let default_h = unit_topology.channel_dimensions_default[1] as usize;
+    let default_d = unit_topology.channel_dimensions_default[2] as usize;
+    if motor_unit != MotorCorticalUnit::CountOutput {
+        return (default_w, default_h, default_d);
+    }
+    let z_min = unit_topology.channel_dimensions_min[2].max(1) as u32;
+    let z_max = unit_topology.channel_dimensions_max[2].max(1) as u32;
+    let Some(decode) = decoder_properties else {
+        return (default_w, default_h, default_d);
+    };
+    let Some(arr) = decode.get("Percentage").and_then(|v| v.as_array()) else {
+        return (default_w, default_h, default_d);
+    };
+    let Some(depth_json) = arr.first() else {
+        return (default_w, default_h, default_d);
+    };
+    let Some(d32) = percentage_tuple_first_depth_u32(depth_json) else {
+        return (default_w, default_h, default_d);
+    };
+    if d32 == 0 {
+        return (default_w, default_h, default_d);
+    }
+    let clamped = d32.clamp(z_min, z_max);
+    (default_w, default_h, clamped as usize)
+}
 
 fn build_friendly_unit_name(unit_label: &str, group: u8, sub_unit_index: usize) -> String {
     format!("{unit_label}-{}-{}", group, sub_unit_index)
@@ -323,6 +380,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                 let Some(unit_def) = pair.first() else {
                     continue;
                 };
+                let decoder_properties = pair.get(1);
                 let Some(group_u64) = unit_def.get("cortical_unit_index").and_then(|v| v.as_u64())
                 else {
                     continue;
@@ -386,9 +444,12 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     let Some(unit_topology) = topology.get(&sub_index) else {
                         continue;
                     };
-                    let per_channel_width = unit_topology.channel_dimensions_default[0] as usize;
-                    let per_channel_height = unit_topology.channel_dimensions_default[1] as usize;
-                    let per_channel_depth = unit_topology.channel_dimensions_default[2] as usize;
+                    let (per_channel_width, per_channel_height, per_channel_depth) =
+                        per_channel_motor_dimensions_for_registration(
+                            motor_unit,
+                            unit_topology,
+                            decoder_properties,
+                        );
                     let expected_dimensions = (
                         (per_channel_width * device_count).max(1),
                         per_channel_height,
@@ -557,13 +618,12 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     }
 
                     let friendly_name = resolved_name;
-                    // Use template-defined per-channel topology and scale by device_count.
-                    // This keeps sizing fully template-driven and consistent across all unit types.
-                    let (per_channel_width, per_channel_height, per_channel_depth) = (
-                        unit_topology.channel_dimensions_default[0] as usize,
-                        unit_topology.channel_dimensions_default[1] as usize,
-                        unit_topology.channel_dimensions_default[2] as usize,
-                    );
+                    let (per_channel_width, per_channel_height, per_channel_depth) =
+                        per_channel_motor_dimensions_for_registration(
+                            motor_unit,
+                            unit_topology,
+                            decoder_properties,
+                        );
                     let dimensions = expected_dimensions;
                     let per_device_dims =
                         (per_channel_width, per_channel_height, per_channel_depth);
@@ -1168,4 +1228,62 @@ pub fn derive_sensory_cortical_ids_from_device_registrations(
     }
 
     Ok(cortical_ids)
+}
+
+#[cfg(test)]
+mod count_output_registration_tests {
+    use super::per_channel_motor_dimensions_for_registration;
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
+    use feagi_structures::genomic::MotorCorticalUnit;
+    use serde_json::json;
+
+    #[test]
+    fn count_output_uses_percentage_tuple_depth_when_present() {
+        let motor = MotorCorticalUnit::CountOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"Percentage": [100u32, "Linear", false, "D1"]});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (1, 1, 100));
+    }
+
+    #[test]
+    fn count_output_reads_neuron_depth_serde_object_in_percentage_tuple() {
+        let motor = MotorCorticalUnit::CountOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        // Matches `serde_json::to_value(JSONDecoderProperties::Percentage(NeuronDepth::new(100)...))`.
+        let dec = json!({"Percentage": [{"value": 100u32}, "Linear", false, "D1"]});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (1, 1, 100));
+    }
+
+    #[test]
+    fn count_output_clamps_depth_to_template_max() {
+        let motor = MotorCorticalUnit::CountOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"Percentage": [5000u32, "Linear", false, "D1"]});
+        let (_w, _h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!(d, 1024);
+    }
+
+    #[test]
+    fn count_output_falls_back_to_defaults_when_decoder_missing() {
+        let motor = MotorCorticalUnit::CountOutput;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, None);
+        assert_eq!((w, h, d), (1, 1, 10));
+    }
+
+    #[test]
+    fn non_count_motor_ignores_decoder() {
+        let motor = MotorCorticalUnit::RotaryMotor;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"Percentage": [99u32, "Linear", false, "D1"]});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (1, 1, 10));
+    }
 }

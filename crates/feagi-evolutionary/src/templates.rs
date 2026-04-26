@@ -397,6 +397,7 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         "transpose_xz",
         "sweeper",
         "last_to_first",
+        "first_to_last",
         "bitmask_encoder_x",
         "bitmask_encoder_y",
         "bitmask_encoder_z",
@@ -502,6 +503,16 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
     // last_to_first - connect highest source voxel to destination origin
     registry.add_morphology(
         "last_to_first".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // first_to_last - connect source origin to highest destination voxel
+    registry.add_morphology(
+        "first_to_last".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},
@@ -872,6 +883,7 @@ mod tests {
         assert!(genome.morphologies.contains("transpose_xy"));
         assert!(genome.morphologies.contains("transpose_yz"));
         assert!(genome.morphologies.contains("transpose_xz"));
+        assert!(genome.morphologies.contains("first_to_last"));
         assert!(genome.morphologies.contains("lateral_+x"));
     }
 
@@ -887,6 +899,7 @@ mod tests {
         assert!(registry.contains("transpose_xy"));
         assert!(registry.contains("transpose_yz"));
         assert!(registry.contains("transpose_xz"));
+        assert!(registry.contains("first_to_last"));
         assert!(registry.contains("all_to_0-0-0"));
         assert!(registry.contains("lateral_+x"));
         assert!(registry.contains("lateral_-z"));
@@ -988,6 +1001,7 @@ mod tests {
         assert!(genome.morphologies.contains("transpose_xy"));
         assert!(genome.morphologies.contains("transpose_yz"));
         assert!(genome.morphologies.contains("transpose_xz"));
+        assert!(genome.morphologies.contains("first_to_last"));
         assert!(genome.morphologies.contains("episodic_memory"));
         assert!(genome.morphologies.contains("lateral_+x"));
     }

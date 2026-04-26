@@ -1338,6 +1338,11 @@
       "type": "functions",
       "class": "core"
     },
+    "first_to_last": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core"
+    },
     "bitmask_encoder_x": {
       "parameters": {},
       "type": "functions",

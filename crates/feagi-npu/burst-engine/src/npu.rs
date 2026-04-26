@@ -1501,6 +1501,44 @@ impl<
             .set_psp_uniform_distribution_flag(cortical_id, enabled);
     }
 
+    /// Set configured baseline PSP values for cortical areas.
+    ///
+    /// These values are used when restoring an area's outgoing synapses on reset.
+    pub fn set_postsynaptic_current_flags(&mut self, flags: AHashMap<CorticalID, f32>) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_postsynaptic_current_flags(flags);
+    }
+
+    /// Set configured baseline PSP for one cortical area.
+    pub fn set_postsynaptic_current_flag(&mut self, cortical_id: CorticalID, postsynaptic: f32) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_postsynaptic_current_flag(cortical_id, postsynaptic);
+    }
+
+    /// Set degeneration coefficients for cortical areas.
+    ///
+    /// Coefficients <= 0 are treated as disabled.
+    pub fn set_degeneration_flags(&mut self, flags: AHashMap<CorticalID, f32>) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_degeneration_flags(flags);
+    }
+
+    /// Set degeneration coefficient for a single cortical area (in-place).
+    ///
+    /// Coefficients <= 0 disable degeneration for that area.
+    pub fn set_degeneration_flag(&mut self, cortical_id: CorticalID, degeneration: f32) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_degeneration_flag(cortical_id, degeneration);
+    }
+
     // ===== SENSORY INJECTION API =====
 
     /// Inject sensory neurons into FCL (called from Rust sensory threads)
@@ -2169,8 +2207,8 @@ impl<
 
         // PSP from fires at `burst_count` arrives at `burst_count + delay_bursts` (see synaptic delay docs).
         {
-            let synapse_storage = self.synapse_storage.read().unwrap();
             let fired_ids = dynamics_result.fire_queue.get_all_neuron_ids();
+            let mut synapse_storage = self.synapse_storage.write().unwrap();
             let mut neuron_mps: ahash::AHashMap<NeuronId, f32> = ahash::AHashMap::new();
             for neurons in dynamics_result.fire_queue.neurons_by_area.values() {
                 for neuron in neurons {
@@ -2192,6 +2230,19 @@ impl<
                     &delayed.fcl_by_delay,
                     &delayed.memory_associative_by_delay,
                 );
+            let psp_degradation_updates = self.apply_psp_degeneration_from_fired_neurons(
+                &fired_ids,
+                &propagation_engine,
+                &mut *synapse_storage,
+            );
+            if psp_degradation_updates > 0 {
+                tracing::debug!(
+                    target: "feagi-npu",
+                    "Applied PSP degeneration updates to {} synapses after burst {}",
+                    psp_degradation_updates,
+                    burst_count
+                );
+            }
         }
 
         // Release neuron/synapse locks before plasticity updates to avoid lock contention.
@@ -3863,19 +3914,52 @@ impl<
                 .retain(|r| r.twin_area_idx != cortical_area);
         }
 
-        let mut neuron_storage_write = self.neuron_storage.write().unwrap();
-        let mut reset_count = 0usize;
-        for idx in 0..neuron_storage_write.count() {
-            if neuron_storage_write.valid_mask()[idx]
-                && neuron_storage_write.cortical_areas()[idx] == cortical_area
-            {
-                neuron_storage_write.membrane_potentials_mut()[idx] = T::zero();
-                neuron_storage_write.refractory_countdowns_mut()[idx] = 0;
-                neuron_storage_write.consecutive_fire_counts_mut()[idx] = 0;
-                reset_count += 1;
+        let reset_count = {
+            let mut neuron_storage_write = self.neuron_storage.write().unwrap();
+            let mut reset_count = 0usize;
+            for idx in 0..neuron_storage_write.count() {
+                if neuron_storage_write.valid_mask()[idx]
+                    && neuron_storage_write.cortical_areas()[idx] == cortical_area
+                {
+                    neuron_storage_write.membrane_potentials_mut()[idx] = T::zero();
+                    neuron_storage_write.refractory_countdowns_mut()[idx] = 0;
+                    neuron_storage_write.consecutive_fire_counts_mut()[idx] = 0;
+                    reset_count += 1;
+                }
             }
+            reset_count
+        };
+        let restored_synapses =
+            self.restore_cortical_area_postsynaptic_current_from_config(cortical_area);
+        if restored_synapses > 0 {
+            tracing::debug!(
+                target: "feagi-npu",
+                "Reset cortical area {} restored outgoing PSP on {} synapses",
+                cortical_area,
+                restored_synapses
+            );
         }
         reset_count
+    }
+
+    /// Restore all outgoing synapse PSP values for a cortical area from the configured baseline.
+    ///
+    /// Returns number of synapses updated, or 0 when no baseline is available.
+    fn restore_cortical_area_postsynaptic_current_from_config(&mut self, cortical_area: u32) -> usize {
+        let Some(cortical_name) = self.get_cortical_area_name(cortical_area) else {
+            return 0;
+        };
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&cortical_name) else {
+            return 0;
+        };
+        let postsynaptic = {
+            let prop = self.propagation_engine.read().unwrap();
+            let Some(psp) = prop.area_postsynaptic_current.get(&cortical_id) else {
+                return 0;
+            };
+            *psp
+        };
+        self.update_cortical_area_postsynaptic_current(cortical_area, postsynaptic)
     }
 
     /// Remove delayed PSP schedule entries and associative-memory buckets for the given neuron ids.
@@ -3942,6 +4026,15 @@ impl<
         cortical_area: u32,
         postsynaptic_potential: f32,
     ) -> usize {
+        if let Some(cortical_name) = self.get_cortical_area_name(cortical_area) {
+            if let Ok(cortical_id) = CorticalID::try_from_base_64(&cortical_name) {
+                self.propagation_engine
+                    .write()
+                    .unwrap()
+                    .set_postsynaptic_current_flag(cortical_id, postsynaptic_potential);
+            }
+        }
+
         // Phase 1: Gather source neuron IDs for this cortical area.
         // NeuronId == array index by design in this NPU (see process_single_neuron).
         let source_neuron_ids: Vec<u32> = {
@@ -4008,6 +4101,54 @@ impl<
                 updated += 1;
             }
         }
+        updated
+    }
+
+    /// Apply per-fire PSP degeneration to outgoing synapses of fired source neurons.
+    ///
+    /// Legacy parity: degradation happens after a source neuron fires, so that fire uses current PSP
+    /// and subsequent fires use the decremented PSP.
+    fn apply_psp_degeneration_from_fired_neurons(
+        &self,
+        fired_ids: &[NeuronId],
+        propagation_engine: &SynapticPropagationEngine,
+        synapse_storage: &mut R::SynapseStorage,
+    ) -> usize {
+        if fired_ids.is_empty() || propagation_engine.area_degeneration.is_empty() {
+            return 0;
+        }
+
+        let mut updated = 0usize;
+        for source in fired_ids {
+            let Some(source_area) = propagation_engine.neuron_to_area.get(source) else {
+                continue;
+            };
+            let Some(degeneration) = propagation_engine.area_degeneration.get(source_area) else {
+                continue;
+            };
+            if *degeneration <= 0.0 {
+                continue;
+            }
+
+            let Some(indices) = propagation_engine.synapse_index.get(source) else {
+                continue;
+            };
+
+            for &syn_idx in indices {
+                let is_valid = {
+                    let valid = synapse_storage.valid_mask();
+                    syn_idx < valid.len() && valid[syn_idx]
+                };
+                if !is_valid {
+                    continue;
+                }
+
+                let psps = synapse_storage.postsynaptic_potentials_mut();
+                psps[syn_idx] = (psps[syn_idx] - *degeneration).max(0.0);
+                updated += 1;
+            }
+        }
+
         updated
     }
 
@@ -6128,7 +6269,8 @@ mod tests {
             let mut fs = npu.fire_structures.lock().unwrap();
             fs.last_fcl_snapshot.push((n_id, 99.0));
         }
-        assert_eq!(npu.reset_cortical_area_runtime_state(5), 1);
+        let reset_count = npu.reset_cortical_area_runtime_state(5);
+        assert!(reset_count >= 1, "expected at least source neuron to be reset");
         assert!(
             !npu.get_last_fcl_snapshot()
                 .iter()
@@ -6163,7 +6305,8 @@ mod tests {
                 .or_default()
                 .add_candidate(n_id, 3.0);
         }
-        assert_eq!(npu.reset_cortical_area_runtime_state(5), 1);
+        let reset_count = npu.reset_cortical_area_runtime_state(5);
+        assert!(reset_count >= 1, "expected at least source neuron to be reset");
         let fs = npu.fire_structures.lock().unwrap();
         assert!(
             fs.synaptic_arrival_schedule
@@ -6171,6 +6314,62 @@ mod tests {
                 .values()
                 .all(|fcl| fcl.get(n_id).is_none()),
             "delayed FCL arrivals targeting reset neurons must be scrubbed"
+        );
+    }
+
+    #[test]
+    fn test_reset_cortical_area_runtime_state_restores_psp_after_degeneration() {
+        use feagi_npu_neural::{SynapseType, SynapticPsp, SynapticWeight};
+
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        let src_id = CoreCorticalType::Death.to_cortical_id();
+        let dst_id = CoreCorticalType::Power.to_cortical_id();
+        npu.register_cortical_area(5, src_id.as_base_64());
+        npu.register_cortical_area(6, dst_id.as_base_64());
+
+        let source = npu
+            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 5, 0, 0, 0)
+            .unwrap();
+        let target = npu
+            .add_neuron(0.8, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 6, 0, 0, 0)
+            .unwrap();
+
+        npu.add_synapse(
+            source,
+            target,
+            SynapticWeight(1.0),
+            SynapticPsp(1.0),
+            SynapseType::Excitatory,
+            0,
+            1,
+        )
+        .unwrap();
+        npu.rebuild_synapse_index();
+        npu.set_postsynaptic_current_flag(src_id, 1.0);
+        npu.set_degeneration_flag(src_id, 0.6);
+
+        // Fire once; target fires on next burst with PSP=1.0. Then PSP decays to 0.4.
+        npu.inject_sensory_with_potentials(&[(source, 2.0)]);
+        let burst1 = npu.process_burst().unwrap();
+        assert!(burst1.fired_neurons.contains(&source));
+        let burst2 = npu.process_burst().unwrap();
+        assert!(burst2.fired_neurons.contains(&target));
+
+        // Reset source area runtime state; this must revive outgoing PSP to configured baseline.
+        let reset_count = npu.reset_cortical_area_runtime_state(5);
+        assert!(reset_count >= 1, "expected at least source neuron to be reset");
+
+        // Fire again; target should fire again, proving PSP was restored to 1.0.
+        npu.inject_sensory_with_potentials(&[(source, 2.0)]);
+        let burst3 = npu.process_burst().unwrap();
+        assert!(burst3.fired_neurons.contains(&source));
+        let burst4 = npu.process_burst().unwrap();
+        assert!(
+            burst4.fired_neurons.contains(&target),
+            "reset must restore outgoing PSP for source area despite prior degeneration"
         );
     }
 
@@ -6270,6 +6469,61 @@ mod tests {
         assert!(
             result2.fired_neurons.contains(&neuron_dst),
             "Target neuron should fire when mp_driven_psp uses src firing-time MP"
+        );
+    }
+
+    #[test]
+    fn test_degeneration_reduces_source_psp_across_fires() {
+        use feagi_npu_neural::{SynapseType, SynapticPsp, SynapticWeight};
+
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        let src_id = CoreCorticalType::Death.to_cortical_id();
+        let dst_id = CoreCorticalType::Power.to_cortical_id();
+        npu.register_cortical_area(10, src_id.as_base_64());
+        npu.register_cortical_area(11, dst_id.as_base_64());
+
+        let source = npu
+            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 10, 0, 0, 0)
+            .unwrap();
+        let target = npu
+            .add_neuron(0.8, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 11, 0, 0, 0)
+            .unwrap();
+
+        npu.add_synapse(
+            source,
+            target,
+            SynapticWeight(1.0),
+            SynapticPsp(1.0),
+            SynapseType::Excitatory,
+            0,
+            1,
+        )
+        .unwrap();
+        npu.rebuild_synapse_index();
+        npu.set_degeneration_flag(src_id, 0.6);
+
+        // Fire #1 from source.
+        npu.inject_sensory_with_potentials(&[(source, 2.0)]);
+        let burst1 = npu.process_burst().unwrap();
+        assert!(burst1.fired_neurons.contains(&source));
+
+        // Burst 2 uses PSP=1.0 contribution (decay applies after fire), so target fires.
+        let burst2 = npu.process_burst().unwrap();
+        assert!(burst2.fired_neurons.contains(&target));
+
+        // Fire #2 from source.
+        npu.inject_sensory_with_potentials(&[(source, 2.0)]);
+        let burst3 = npu.process_burst().unwrap();
+        assert!(burst3.fired_neurons.contains(&source));
+
+        // Burst 4 uses decayed PSP=0.4 (1.0 - 0.6), below threshold 0.8.
+        let burst4 = npu.process_burst().unwrap();
+        assert!(
+            !burst4.fired_neurons.contains(&target),
+            "Target should not fire after source PSP decays below threshold"
         );
     }
 

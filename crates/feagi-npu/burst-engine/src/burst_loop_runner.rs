@@ -1858,6 +1858,11 @@ fn burst_loop(
                                             update.cortical_idx,
                                             psp_f32,
                                         );
+                                    if let Ok(cortical_id) = feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                        &update.cortical_id,
+                                    ) {
+                                        npu_lock.set_postsynaptic_current_flag(cortical_id, psp_f32);
+                                    }
                                     info!(
                                         target: "feagi-burst-engine",
                                         "Applied PSP update area={} psp={} synapses_updated={} stdp_mappings_updated={}",
@@ -1899,6 +1904,28 @@ fn burst_loop(
                                             1
                                         }
                                         Err(_) => 0,
+                                    }
+                                } else {
+                                    0
+                                }
+                            }
+                            "degeneration" | "neuron_degeneracy_coefficient" => {
+                                if let Some(degeneration) = update.value.as_f64() {
+                                    if degeneration < 0.0 {
+                                        0
+                                    } else {
+                                        match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                            &update.cortical_id,
+                                        ) {
+                                            Ok(cortical_id) => {
+                                                npu_lock.set_degeneration_flag(
+                                                    cortical_id,
+                                                    degeneration as f32,
+                                                );
+                                                1
+                                            }
+                                            Err(_) => 0,
+                                        }
                                     }
                                 } else {
                                     0

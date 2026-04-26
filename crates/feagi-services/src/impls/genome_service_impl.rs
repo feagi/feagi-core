@@ -576,6 +576,18 @@ impl GenomeService for GenomeServiceImpl {
             genome.metadata.genome_title = title;
         }
 
+        // Keep exported region metadata aligned with the live connectome state.
+        // Region edits (e.g. rename/reposition) are applied through ConnectomeManager
+        // and may not be reflected in the cached RuntimeGenome snapshot unless synced.
+        let runtime_brain_regions = {
+            let manager = self.connectome.read();
+            let hierarchy = manager.get_brain_region_hierarchy();
+            hierarchy.get_all_regions()
+        };
+        if !runtime_brain_regions.is_empty() {
+            genome.brain_regions = runtime_brain_regions;
+        }
+
         // Use the full RuntimeGenome saver (produces flat format v3.0)
         let json_str = feagi_evolutionary::save_genome_to_json(&genome)
             .map_err(|e| ServiceError::Internal(format!("Failed to save genome: {}", e)))?;

@@ -1176,6 +1176,24 @@ where
         )
     }
 
+    pub fn set_postsynaptic_current_flags(
+        &mut self,
+        flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, f32>,
+    ) {
+        dispatch_mut!(self, set_postsynaptic_current_flags(flags))
+    }
+
+    pub fn set_postsynaptic_current_flag(
+        &mut self,
+        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        postsynaptic: f32,
+    ) {
+        dispatch_mut!(
+            self,
+            set_postsynaptic_current_flag(cortical_id, postsynaptic)
+        )
+    }
+
     pub fn set_mp_driven_psp_flags(
         &mut self,
         flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, bool>,
@@ -1189,6 +1207,21 @@ where
         enabled: bool,
     ) {
         dispatch_mut!(self, set_mp_driven_psp_flag(cortical_id, enabled))
+    }
+
+    pub fn set_degeneration_flags(
+        &mut self,
+        flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, f32>,
+    ) {
+        dispatch_mut!(self, set_degeneration_flags(flags))
+    }
+
+    pub fn set_degeneration_flag(
+        &mut self,
+        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        degeneration: f32,
+    ) {
+        dispatch_mut!(self, set_degeneration_flag(cortical_id, degeneration))
     }
 }
 

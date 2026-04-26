@@ -21,7 +21,7 @@ feagi-npu-burst-engine = { version = "0.0.10", path = "../feagi-npu/burst-engine
 feagi-state-manager = { version = "0.0.10", path = "../feagi-state-manager", default-features = false, optional = true }
 feagi-structures = { workspace = true }
 feagi-serialization = { version = "0.0.10", path = "../feagi-serialization" }
-feagi-agent = { version = "0.0.10", path = "../feagi-agent", optional = true, default-features = false }
+feagi-agent = { version = "0.0.10", path = "../feagi-agent", optional = true, default-features = false, features = ["agent-client", "agent-client-asynchelper-tokio"] }
 feagi-config = { version = "0.0.10", path = "../feagi-config" }
 
 # HTTP/REST (optional - not needed for WASM)

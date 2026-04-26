@@ -371,6 +371,88 @@ fn test_pattern_morphology_origin_to_all() {
     println!("✅ Test 1c: Pattern morphology origin to all - PASSED");
 }
 
+#[test]
+fn test_first_to_last_morphology_maps_origin_to_destination_max() {
+    let mut manager = create_test_manager();
+
+    // Source and destination dimensions intentionally differ.
+    let (src_area, src_id) = create_test_area("srcf2l", 3, 3, 2, 0);
+    manager
+        .add_cortical_area(src_area)
+        .expect("Failed to add source area");
+
+    let (dst_area, dst_id) = create_test_area("dstf2l", 4, 2, 2, 1);
+    manager
+        .add_cortical_area(dst_area)
+        .expect("Failed to add destination area");
+
+    let src_neurons = create_grid_neurons(&mut manager, &src_id, 3, 3, 2);
+    create_grid_neurons(&mut manager, &dst_id, 4, 2, 2);
+
+    let rule = json!({
+        "morphology_id": "first_to_last",
+        "postSynapticCurrent_multiplier": 1.0,
+        "synapse_attractivity": 100
+    });
+
+    manager
+        .update_cortical_mapping(&src_id, &dst_id, vec![rule])
+        .expect("Failed to update cortical mapping");
+
+    let synapse_count = manager
+        .apply_cortical_mapping(&src_id)
+        .expect("Failed to apply cortical mapping");
+    assert_eq!(
+        synapse_count, 1,
+        "first_to_last should create exactly one synapse"
+    );
+
+    let Some(npu_arc) = manager.get_npu() else {
+        panic!("Test manager must have an attached NPU");
+    };
+    let mut npu_guard = npu_arc.lock().unwrap();
+    let expected_dst = (3u32, 1u32, 1u32);
+
+    match *npu_guard {
+        DynamicNPU::F32(ref mut npu) => {
+            let src_origin = src_neurons
+                .iter()
+                .map(|nid| *nid as u32)
+                .find(|nid| npu.get_neuron_coordinates(*nid) == Some((0, 0, 0)))
+                .expect("Source origin neuron must exist");
+            let outgoing = npu.get_outgoing_synapses(src_origin);
+            assert_eq!(
+                outgoing.len(),
+                1,
+                "Source origin should have exactly one outgoing synapse"
+            );
+            assert_eq!(
+                npu.get_neuron_coordinates(outgoing[0].0),
+                Some(expected_dst),
+                "Source origin should map to destination max voxel"
+            );
+        }
+        DynamicNPU::INT8(ref mut npu) => {
+            let src_origin = src_neurons
+                .iter()
+                .map(|nid| *nid as u32)
+                .find(|nid| npu.get_neuron_coordinates(*nid) == Some((0, 0, 0)))
+                .expect("Source origin neuron must exist");
+            let outgoing = npu.get_outgoing_synapses(src_origin);
+            assert_eq!(
+                outgoing.len(),
+                1,
+                "Source origin should have exactly one outgoing synapse"
+            );
+            assert_eq!(
+                npu.get_neuron_coordinates(outgoing[0].0),
+                Some(expected_dst),
+                "Source origin should map to destination max voxel"
+            );
+        }
+    }
+}
+
 // ============================================================================
 // TEST 2: Block-to-Block Morphology - Basic Functionality
 // ============================================================================

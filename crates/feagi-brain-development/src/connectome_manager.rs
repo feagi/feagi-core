@@ -3129,6 +3129,47 @@ impl ConnectomeManager {
                 }
                 Ok(count as usize)
             }
+            "first_to_last" => {
+                let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Source area not found: {}",
+                        src_area_id
+                    ))
+                })?;
+                let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Destination area not found: {}",
+                        dst_area_id
+                    ))
+                })?;
+                let src_dimensions = (
+                    src_area.dimensions.width as usize,
+                    src_area.dimensions.height as usize,
+                    src_area.dimensions.depth as usize,
+                );
+                let dst_dimensions = (
+                    dst_area.dimensions.width as usize,
+                    dst_area.dimensions.height as usize,
+                    dst_area.dimensions.depth as usize,
+                );
+
+                let count = crate::connectivity::core_morphologies::apply_first_to_last_morphology_with_dimensions(
+                    npu,
+                    src_idx,
+                    dst_idx,
+                    src_dimensions,
+                    dst_dimensions,
+                    weight,
+                    psp,
+                    synapse_attractivity,
+                    synapse_type,
+                    delay_bursts,
+                )?;
+                if count > 0 {
+                    npu.rebuild_synapse_index();
+                }
+                Ok(count as usize)
+            }
             "rotator_z" => {
                 let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
                     crate::types::BduError::InvalidArea(format!(
@@ -5247,6 +5288,8 @@ impl ConnectomeManager {
                 // Build psp_uniform_distribution flags map
                 let mut psp_uniform_flags = ahash::AHashMap::new();
                 let mut mp_driven_psp_flags = ahash::AHashMap::new();
+                let mut postsynaptic_current_flags = ahash::AHashMap::new();
+                let mut degeneration_flags = ahash::AHashMap::new();
 
                 for (cortical_id, area) in &self.cortical_areas {
                     // When the property is absent: Power and Memory cortical areas default to uniform
@@ -5266,11 +5309,29 @@ impl ConnectomeManager {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
                     mp_driven_psp_flags.insert(*cortical_id, mp_driven_psp);
+
+                    // Store configured baseline PSP for reset-time restoration.
+                    let postsynaptic_current = area
+                        .get_property("postsynaptic_current")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(1.0) as f32;
+                    postsynaptic_current_flags.insert(*cortical_id, postsynaptic_current);
+
+                    // Get degeneration coefficient (default 0.0 = disabled)
+                    let degeneration = area
+                        .get_property("degeneration")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0) as f32;
+                    if degeneration > 0.0 {
+                        degeneration_flags.insert(*cortical_id, degeneration);
+                    }
                 }
 
                 // Update NPU with flags
                 npu_lock.set_psp_uniform_distribution_flags(psp_uniform_flags);
                 npu_lock.set_mp_driven_psp_flags(mp_driven_psp_flags);
+                npu_lock.set_postsynaptic_current_flags(postsynaptic_current_flags);
+                npu_lock.set_degeneration_flags(degeneration_flags);
 
                 trace!(
                     target: "feagi-bdu",
