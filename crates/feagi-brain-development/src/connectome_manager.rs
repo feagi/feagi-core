@@ -2518,6 +2518,34 @@ impl ConnectomeManager {
             f32::INFINITY
         };
 
+        // Optional f32 learning-rate scale on the end-of-burst weight commit: w += eta * R * e.
+        // Omitted / null → 1.0. Must be finite, strictly positive, and not +inf.
+        let plasticity_eta_provided = rule_obj.get("plasticity_eta").is_some()
+            && !rule_obj
+                .get("plasticity_eta")
+                .map(|v| v.is_null())
+                .unwrap_or(true);
+        let plasticity_eta: f32 = if plasticity_eta_provided {
+            let raw = rule_obj
+                .get("plasticity_eta")
+                .and_then(|v| v.as_f64())
+                .ok_or_else(|| {
+                    BduError::Internal(format!(
+                        "plasticity_eta must be a number on mapping {} -> {}",
+                        src_area_id, dst_area_id
+                    ))
+                })?;
+            if raw.is_nan() || raw <= 0.0 || !raw.is_finite() {
+                return Err(BduError::Internal(format!(
+                    "plasticity_eta must be finite and strictly positive (got {}) on mapping {} -> {}",
+                    raw, src_area_id, dst_area_id
+                )));
+            }
+            raw as f32
+        } else {
+            1.0
+        };
+
         // Validate R-STDP fields are absent when not in RStdp mode (catches genome typos early).
         if !matches!(
             plasticity_mode,
@@ -2543,6 +2571,17 @@ impl ConnectomeManager {
         {
             return Err(BduError::Internal(format!(
                 "max_weight is only valid when plasticity_mode is 'stdp' or 'rstdp' (got off) on mapping {} -> {}",
+                src_area_id, dst_area_id
+            )));
+        }
+
+        if matches!(
+            plasticity_mode,
+            feagi_npu_burst_engine::npu::PlasticityMode::Off
+        ) && plasticity_eta_provided
+        {
+            return Err(BduError::Internal(format!(
+                "plasticity_eta is only valid when plasticity_mode is 'stdp' or 'rstdp' (got off) on mapping {} -> {}",
                 src_area_id, dst_area_id
             )));
         }
@@ -2596,6 +2635,7 @@ impl ConnectomeManager {
             reward_source_area,
             punishment_source_area,
             max_weight,
+            plasticity_eta,
         };
 
         npu_lock
@@ -8247,6 +8287,67 @@ mod tests {
         assert!(
             result.is_err(),
             "max_weight on off-mode rule must be rejected; got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_plasticity_eta_rejected_when_plasticity_off() {
+        let (mut mgr, src, dst, _reward, _pain) = build_max_weight_test_manager();
+
+        let result = write_and_regenerate_mapping(
+            &mut mgr,
+            &src,
+            &dst,
+            serde_json::json!({
+                "morphology_id": "block_to_block",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1,
+                "plasticity_flag": true,
+                "plasticity_constant": 0,
+                "ltp_multiplier": 0,
+                "ltd_multiplier": 0,
+                "plasticity_window": 0,
+                "synaptic_delay_bursts": 1,
+                "plasticity_mode": "off",
+                "plasticity_eta": 0.5,
+            }),
+        );
+        assert!(
+            result.is_err(),
+            "plasticity_eta on off-mode rule must be rejected; got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_plasticity_eta_non_positive_rejected() {
+        let (mut mgr, src, dst, reward, pain) = build_max_weight_test_manager();
+
+        let result = write_and_regenerate_mapping(
+            &mut mgr,
+            &src,
+            &dst,
+            serde_json::json!({
+                "morphology_id": "block_to_block",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1,
+                "plasticity_flag": true,
+                "plasticity_constant": 1,
+                "ltp_multiplier": 1,
+                "ltd_multiplier": 1,
+                "plasticity_window": 10,
+                "synaptic_delay_bursts": 1,
+                "plasticity_mode": "rstdp",
+                "eligibility_decay_bursts": 50,
+                "reward_source_area": reward.as_base_64(),
+                "punishment_source_area": pain.as_base_64(),
+                "plasticity_eta": 0.0,
+            }),
+        );
+        assert!(
+            result.is_err(),
+            "plasticity_eta=0 must be rejected; got {:?}",
             result
         );
     }

@@ -159,7 +159,10 @@ impl Default for PlasticityMode {
 ///
 /// For R-STDP, the burst engine maintains a per-synapse eligibility trace `e_ij` updated by
 /// the same LTP/LTD windowed-correlation rule, then commits weight as
-/// `w_ij += plasticity_constant_as_eta * R(t) * e_ij` at end-of-burst (timing option (a)).
+/// `w_ij += plasticity_eta * R(t) * e_ij` at end-of-burst (timing option (a)). `plasticity_eta`
+/// defaults to `1.0` and is a separate f32 from the integer LTP/LTD `delta_plus` / `delta_minus`
+/// (see `delta_plus_u8`); this gives sub-unit scaling of weight updates without changing trace
+/// accumulation, which is useful when the multipliers are stored as `i8`.
 /// The wireheading lint enforces that `reward_source_area` and `punishment_source_area`
 /// have `plasticity_mode = Off` on all incoming mappings, so the policy cannot drive the
 /// reward source itself.
@@ -204,6 +207,13 @@ pub struct StdpMappingParams {
     /// Negative (depressing) commits are NOT affected by this field; they are still floored at
     /// `0.0` as before, so LTD / punishment can always drive a synapse all the way to zero.
     pub max_weight: f32,
+    /// Scales the end-of-burst weight commit in the unified plasticity path:
+    /// `w_ij += plasticity_eta * R(t) * e_ij` (Stdp: R=1.0; RStdp: R=reward-pain density).
+    /// `1.0` preserves the historical magnitude; use `(0, 1]` to slow runaway R-STDP when
+    /// integer `ltp`/`ltd` cannot be fractional, complementary to `max_weight`.
+    /// Rejected in the BDU at parse time if not finite, `<= 0`, or non-finite/NaN. Omitted
+    /// from JSON is treated as `1.0`.
+    pub plasticity_eta: f32,
 }
 
 impl Default for StdpMappingParams {
@@ -221,6 +231,7 @@ impl Default for StdpMappingParams {
             reward_source_area: None,
             punishment_source_area: None,
             max_weight: f32::INFINITY,
+            plasticity_eta: 1.0,
         }
     }
 }
@@ -4926,7 +4937,7 @@ impl<
                     // `0.0` as before so LTD / punishment can still drive a synapse to zero
                     // regardless of `max_weight`.
                     if reward != 0.0 && e_ij != 0.0 {
-                        let delta_w = reward * e_ij;
+                        let delta_w = params.plasticity_eta * reward * e_ij;
                         let old = synapse_storage.weights()[syn_idx];
                         let new_w = if delta_w >= 0.0 {
                             (old + delta_w).min(params.max_weight)

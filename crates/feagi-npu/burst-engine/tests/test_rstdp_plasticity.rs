@@ -95,6 +95,7 @@ fn rstdp_params(
         reward_source_area,
         punishment_source_area,
         max_weight: f32::INFINITY,
+        plasticity_eta: 1.0,
     }
 }
 
@@ -216,6 +217,33 @@ fn test_rstdp_delayed_reward_commits_weight() {
         "expected weight delta near {}, got {}",
         expected_delta,
         observed_delta
+    );
+}
+
+/// `plasticity_eta` scales the weight commit `w += eta * R * e` without changing trace build-up.
+/// At `0.5`, the first reward commit should be half the `eta = 1.0` reference.
+#[test]
+fn test_rstdp_plasticity_eta_scales_weight_commit() {
+    let (mut npu, src, dst, reward, _pain) = create_rstdp_network();
+    wire_test_synapse(&mut npu, src[0], dst[0], 5.0);
+
+    let decay_bursts = 10u32;
+    let mut params = rstdp_params(PlasticityMode::RStdp, decay_bursts, Some(12), Some(13));
+    params.plasticity_eta = 0.5;
+    npu.register_stdp_mapping(10, 11, params).unwrap();
+
+    npu.inject_sensory_with_potentials(&[(src[0], 128.0), (dst[0], 128.0)]);
+    npu.process_burst().unwrap();
+    npu.inject_sensory_with_potentials(&[(reward, 128.0)]);
+    npu.process_burst().unwrap();
+
+    let w_eta = synapse_weight(&npu, src[0]) - 5.0;
+    let expected_full = 8.0_f32 * (-1.0_f32 / decay_bursts as f32).exp();
+    assert!(
+        (w_eta - 0.5 * expected_full).abs() < 0.1,
+        "eta=0.5 should halve the weight delta; got {}, expected ~{}",
+        w_eta,
+        0.5 * expected_full
     );
 }
 

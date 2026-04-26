@@ -241,6 +241,9 @@ pub async fn post_mapping_properties(
             let max_weight =
                 obj.get("max_weight")
                     .and_then(|v| if v.is_null() { None } else { v.as_f64() });
+            let plasticity_eta =
+                obj.get("plasticity_eta")
+                    .and_then(|v| if v.is_null() { None } else { v.as_f64() });
 
             let mut rule = serde_json::json!({
                 "morphology_id": morphology_id,
@@ -274,6 +277,9 @@ pub async fn post_mapping_properties(
             }
             if let Some(mw) = max_weight {
                 rule_obj.insert("max_weight".to_string(), serde_json::json!(mw));
+            }
+            if let Some(eta) = plasticity_eta {
+                rule_obj.insert("plasticity_eta".to_string(), serde_json::json!(eta));
             }
             formatted.push(rule);
         }

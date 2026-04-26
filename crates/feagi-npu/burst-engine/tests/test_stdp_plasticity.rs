@@ -76,6 +76,7 @@ fn stdp_params(
         reward_source_area: None,
         punishment_source_area: None,
         max_weight: f32::INFINITY,
+        plasticity_eta: 1.0,
     }
 }
 
