@@ -57,8 +57,8 @@ fn create_stdp_network() -> (
 fn stdp_params(
     plasticity_window: usize,
     plasticity_constant: i64,
-    ltp_multiplier: i64,
-    ltd_multiplier: i64,
+    ltp_multiplier: i8,
+    ltd_multiplier: i8,
     bidirectional_stdp: bool,
     synapse_psp: f32,
     synapse_type: SynapseType,

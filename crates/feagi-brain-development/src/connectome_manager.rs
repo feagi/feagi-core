@@ -2412,7 +2412,7 @@ impl ConnectomeManager {
                     src_area_id, dst_area_id
                 ))
             })?;
-        let ltp_multiplier = rule_obj
+        let ltp_i64 = rule_obj
             .get("ltp_multiplier")
             .and_then(Self::json_number_as_i64_for_stdp)
             .ok_or_else(|| {
@@ -2421,7 +2421,17 @@ impl ConnectomeManager {
                     src_area_id, dst_area_id
                 ))
             })?;
-        let ltd_multiplier = rule_obj
+        let ltp_multiplier = i8::try_from(ltp_i64).map_err(|_| {
+            BduError::Internal(format!(
+                "ltp_multiplier must fit in i8 range {}..={} (got {}) on mapping {} -> {}",
+                i8::MIN,
+                i8::MAX,
+                ltp_i64,
+                src_area_id,
+                dst_area_id
+            ))
+        })?;
+        let ltd_i64 = rule_obj
             .get("ltd_multiplier")
             .and_then(Self::json_number_as_i64_for_stdp)
             .ok_or_else(|| {
@@ -2430,6 +2440,16 @@ impl ConnectomeManager {
                     src_area_id, dst_area_id
                 ))
             })?;
+        let ltd_multiplier = i8::try_from(ltd_i64).map_err(|_| {
+            BduError::Internal(format!(
+                "ltd_multiplier must fit in i8 range {}..={} (got {}) on mapping {} -> {}",
+                i8::MIN,
+                i8::MAX,
+                ltd_i64,
+                src_area_id,
+                dst_area_id
+            ))
+        })?;
 
         // Resolve plasticity_mode with legacy fallback (auto-migrate strategy):
         //   - new genomes set `plasticity_mode: "off" | "stdp" | "rstdp"` directly;
@@ -7999,8 +8019,13 @@ mod tests {
     /// a plastic mapping `src -> dst` plus the two detector areas required for R-STDP rules.
     /// Returns the manager (so individual tests can drive `update_cortical_mapping` against
     /// it) along with the four cortical IDs in (src, dst, reward, pain) order.
-    fn build_max_weight_test_manager() -> (ConnectomeManager, CorticalID, CorticalID, CorticalID, CorticalID)
-    {
+    fn build_max_weight_test_manager() -> (
+        ConnectomeManager,
+        CorticalID,
+        CorticalID,
+        CorticalID,
+        CorticalID,
+    ) {
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::TracingMutex;
         use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
@@ -8157,6 +8182,38 @@ mod tests {
                 result
             );
         }
+    }
+
+    /// `ltp_multiplier` / `ltd_multiplier` are stored as `i8` in the NPU; values outside
+    /// `-128..=127` must fail at BDU parse time.
+    #[test]
+    fn test_ltp_ltd_multiplier_out_of_i8_range_rejected() {
+        let (mut mgr, src, dst, reward, pain) = build_max_weight_test_manager();
+        let result = write_and_regenerate_mapping(
+            &mut mgr,
+            &src,
+            &dst,
+            serde_json::json!({
+                "morphology_id": "block_to_block",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1,
+                "plasticity_flag": true,
+                "plasticity_constant": 1,
+                "ltp_multiplier": 200,
+                "ltd_multiplier": 1,
+                "plasticity_window": 10,
+                "synaptic_delay_bursts": 1,
+                "plasticity_mode": "rstdp",
+                "eligibility_decay_bursts": 50,
+                "reward_source_area": reward.as_base_64(),
+                "punishment_source_area": pain.as_base_64(),
+            }),
+        );
+        assert!(
+            result.is_err(),
+            "ltp_multiplier=200 must be rejected (i8 range); got {:?}",
+            result
+        );
     }
 
     /// Validation test: setting an explicit `max_weight` on an off-mode (non-plastic) rule

@@ -426,11 +426,7 @@ fn test_rstdp_max_weight_clamps_runaway_potentiation() {
     // trace is ≈ 8/(1-exp(-1/10)) ≈ 84 per burst; without a clamp the weight would grow into
     // the thousands. Clamp must hold the weight at exactly `cap` instead.
     for _ in 0..50 {
-        npu.inject_sensory_with_potentials(&[
-            (src[0], 128.0),
-            (dst[0], 128.0),
-            (reward, 128.0),
-        ]);
+        npu.inject_sensory_with_potentials(&[(src[0], 128.0), (dst[0], 128.0), (reward, 128.0)]);
         npu.process_burst().unwrap();
     }
 

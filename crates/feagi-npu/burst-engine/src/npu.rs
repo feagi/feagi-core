@@ -167,8 +167,13 @@ impl Default for PlasticityMode {
 pub struct StdpMappingParams {
     pub plasticity_window: usize,
     pub plasticity_constant: i64,
-    pub ltp_multiplier: i64,
-    pub ltd_multiplier: i64,
+    /// Per-event LTP scale factor, multiplied with `plasticity_constant` to form `delta_plus`
+    /// (clamped to `u8` for the trace update). Stored as `i8` to match the effective range
+    /// (product is always clamped to 255) while keeping the struct compact for RTOS/embedded
+    /// targets; JSON layers validate `-128..=127`.
+    pub ltp_multiplier: i8,
+    /// See `ltp_multiplier` (LTD / `delta_minus` path).
+    pub ltd_multiplier: i8,
     pub bidirectional_stdp: bool,
     pub synapse_psp: f32,
     pub synapse_type: SynapseType,
@@ -222,12 +227,16 @@ impl Default for StdpMappingParams {
 
 impl StdpMappingParams {
     pub fn delta_plus_u8(&self) -> u8 {
-        let delta = self.plasticity_constant.saturating_mul(self.ltp_multiplier);
+        let delta = self
+            .plasticity_constant
+            .saturating_mul(self.ltp_multiplier as i64);
         delta.clamp(0, u8::MAX as i64) as u8
     }
 
     pub fn delta_minus_u8(&self) -> u8 {
-        let delta = self.plasticity_constant.saturating_mul(self.ltd_multiplier);
+        let delta = self
+            .plasticity_constant
+            .saturating_mul(self.ltd_multiplier as i64);
         delta.clamp(0, u8::MAX as i64) as u8
     }
 

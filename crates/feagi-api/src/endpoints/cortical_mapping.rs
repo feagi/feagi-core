@@ -8,6 +8,25 @@ use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Query, State};
 use std::collections::HashMap;
 
+/// LTP/LTD multipliers are stored in the NPU as `i8` (aligns with effective range after
+/// `u8` clamping). Accept JSON integers or float-shaped whole numbers, then range-check.
+fn i8_ltd_ltp_from_json_value(v: &serde_json::Value, field: &str) -> Result<i8, ApiError> {
+    let n = v
+        .as_i64()
+        .or_else(|| v.as_f64().map(|f| f as i64))
+        .ok_or_else(|| {
+            ApiError::invalid_input(format!("{field} must be a number (integer-like)"))
+        })?;
+    i8::try_from(n).map_err(|_| {
+        ApiError::invalid_input(format!(
+            "{field} must be in i8 range {}..={} (got {})",
+            i8::MIN,
+            i8::MAX,
+            n
+        ))
+    })
+}
+
 /// POST /v1/cortical_mapping/afferents
 #[utoipa::path(
     post,
@@ -123,12 +142,8 @@ pub async fn post_mapping_properties(
             let plasticity_constant = arr[4]
                 .as_i64()
                 .ok_or_else(|| ApiError::invalid_input("plasticity_constant must be an integer"))?;
-            let ltp_multiplier = arr[5]
-                .as_i64()
-                .ok_or_else(|| ApiError::invalid_input("ltp_multiplier must be an integer"))?;
-            let ltd_multiplier = arr[6]
-                .as_i64()
-                .ok_or_else(|| ApiError::invalid_input("ltd_multiplier must be an integer"))?;
+            let ltp_multiplier = i8_ltd_ltp_from_json_value(&arr[5], "ltp_multiplier")?;
+            let ltd_multiplier = i8_ltd_ltp_from_json_value(&arr[6], "ltd_multiplier")?;
             let plasticity_window = arr[7]
                 .as_i64()
                 .ok_or_else(|| ApiError::invalid_input("plasticity_window must be an integer"))?;
@@ -182,14 +197,16 @@ pub async fn post_mapping_properties(
                 .get("plasticity_constant")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| ApiError::invalid_input("plasticity_constant must be an integer"))?;
-            let ltp_multiplier = obj
-                .get("ltp_multiplier")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| ApiError::invalid_input("ltp_multiplier must be an integer"))?;
-            let ltd_multiplier = obj
-                .get("ltd_multiplier")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| ApiError::invalid_input("ltd_multiplier must be an integer"))?;
+            let ltp_multiplier = i8_ltd_ltp_from_json_value(
+                obj.get("ltp_multiplier")
+                    .ok_or_else(|| ApiError::invalid_input("ltp_multiplier missing"))?,
+                "ltp_multiplier",
+            )?;
+            let ltd_multiplier = i8_ltd_ltp_from_json_value(
+                obj.get("ltd_multiplier")
+                    .ok_or_else(|| ApiError::invalid_input("ltd_multiplier missing"))?,
+                "ltd_multiplier",
+            )?;
             let plasticity_window = obj
                 .get("plasticity_window")
                 .and_then(|v| v.as_i64())
@@ -221,13 +238,9 @@ pub async fn post_mapping_properties(
                 .map(str::to_string);
             // Optional R-STDP / STDP weight ceiling. Validated downstream by the BDU; we only
             // shape it here so the rule round-trips cleanly through GET.
-            let max_weight = obj.get("max_weight").and_then(|v| {
-                if v.is_null() {
-                    None
-                } else {
-                    v.as_f64()
-                }
-            });
+            let max_weight =
+                obj.get("max_weight")
+                    .and_then(|v| if v.is_null() { None } else { v.as_f64() });
 
             let mut rule = serde_json::json!({
                 "morphology_id": morphology_id,
