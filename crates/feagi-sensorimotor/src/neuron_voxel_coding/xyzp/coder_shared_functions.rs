@@ -77,8 +77,16 @@ pub(crate) fn encode_unsigned_percentage_to_linear_neuron_z_index(
     z_length_as_float: f32,
     neuron_indexes_along_z: &mut Vec<u32>,
 ) {
+    // Linear inverted mapping: val=1.0 -> idx 0, val=0.0 -> idx z_len-1.
+    // The raw `floor((1 - val) * z_len)` yields `z_len` for val=0.0, which is
+    // one past the last valid neuron and would silently fail to fire any neuron
+    // in the live cortical area. Clamp to `z_len - 1` so the boundary case
+    // still produces a real spike. Discretization implies a residual error of
+    // up to `1 / z_len` on the val=0.0 boundary at decode time.
     neuron_indexes_along_z.clear();
-    neuron_indexes_along_z.push(((1.0 - val.get_as_0_1()) * z_length_as_float).floor() as u32);
+    let max_idx = (z_length_as_float as u32).saturating_sub(1);
+    let raw_idx = ((1.0 - val.get_as_0_1()) * z_length_as_float).floor() as u32;
+    neuron_indexes_along_z.push(raw_idx.min(max_idx));
 }
 
 #[inline]
@@ -110,14 +118,31 @@ pub(crate) fn encode_signed_percentage_to_linear_neuron_z_index(
     neuron_indexes_along_z_positive: &mut Vec<u32>,
     neuron_indexes_along_z_negative: &mut Vec<u32>,
 ) {
+    // Linear inverted mapping per lobe: |val|=1.0 -> idx 0, |val|->0+ -> idx z_len-1.
+    // Two distinct historical bugs are fixed here:
+    //   1) `floor((1 - |val|) * z_len)` yielded `z_len` for |val| -> 0+, one past
+    //      the last valid neuron, so the live cortical area silently failed to fire.
+    //      Clamp to `z_len - 1`.
+    //   2) The negative branch used `(-1.0 - (-val)) * z_len`, which collapses every
+    //      negative value to a (saturating-cast) `0` regardless of magnitude. The
+    //      correct mirrored formula is `(1.0 - (-val)) * z_len` so negative
+    //      magnitudes encode along the negative lobe symmetrically with the positive
+    //      lobe.
+    // For exact zero, fire the smallest position on both lobes so the linear decoder
+    // sums to zero (mirrors the fractional encoder's existing behavior at val=0).
     neuron_indexes_along_z_positive.clear();
     neuron_indexes_along_z_negative.clear();
-    if val.is_positive_or_zero() {
-        neuron_indexes_along_z_positive
-            .push(((1.0 - val.get_as_m1_1()) * z_length_as_float).floor() as u32);
+    let max_idx = (z_length_as_float as u32).saturating_sub(1);
+    let v = val.get_as_m1_1();
+    if v == 0.0 {
+        neuron_indexes_along_z_positive.push(max_idx);
+        neuron_indexes_along_z_negative.push(max_idx);
+    } else if v > 0.0 {
+        let raw_idx = ((1.0 - v) * z_length_as_float).floor() as u32;
+        neuron_indexes_along_z_positive.push(raw_idx.min(max_idx));
     } else {
-        neuron_indexes_along_z_negative
-            .push(((-1.0 - (-val.get_as_m1_1())) * z_length_as_float).floor() as u32);
+        let raw_idx = ((1.0 - (-v)) * z_length_as_float).floor() as u32;
+        neuron_indexes_along_z_negative.push(raw_idx.min(max_idx));
     }
 }
 
@@ -190,8 +215,9 @@ mod tests {
                 "Should encode to exactly one neuron"
             );
             assert_eq!(
-                neuron_indexes[0], 10,
-                "Value 0.0 should map to max z index (inverted)"
+                neuron_indexes[0],
+                z_max_depth - 1,
+                "Value 0.0 should clamp to last valid z index (z_len-1) so a real neuron fires"
             );
 
             decode_unsigned_percentage_from_linear_neurons(
@@ -199,9 +225,12 @@ mod tests {
                 z_max_depth,
                 &mut percentage,
             );
+            // Discretization residual at the val=0 boundary is bounded by 1/z_len.
+            let boundary_tolerance = (1.0 / z_max_depth_float) + tolerance;
             assert!(
-                (percentage.get_as_0_1() - 0.0).abs() < tolerance,
-                "Round trip should preserve 0.0"
+                (percentage.get_as_0_1() - 0.0).abs() <= boundary_tolerance,
+                "Round trip should preserve 0.0 within one bin (got {})",
+                percentage.get_as_0_1()
             );
         }
 
@@ -283,15 +312,28 @@ mod tests {
                 &mut neuron_indexes_pos,
                 &mut neuron_indexes_neg,
             );
+            // Zero now fires the smallest position on both lobes (mirrors the
+            // fractional encoder), so the linear decoder cancels the two
+            // contributions back to exactly zero.
             assert_eq!(
                 neuron_indexes_pos.len(),
                 1,
-                "Zero should have one positive neuron"
+                "Zero should have one positive neuron at the smallest position"
             );
             assert_eq!(
                 neuron_indexes_neg.len(),
-                0,
-                "Zero should have no negative neurons"
+                1,
+                "Zero should also have one negative neuron at the smallest position"
+            );
+            assert_eq!(
+                neuron_indexes_pos[0],
+                z_max_depth - 1,
+                "Zero positive lobe should land on the last valid z index"
+            );
+            assert_eq!(
+                neuron_indexes_neg[0],
+                z_max_depth - 1,
+                "Zero negative lobe should land on the last valid z index"
             );
 
             decode_signed_percentage_from_linear_neurons(
@@ -302,7 +344,8 @@ mod tests {
             );
             assert!(
                 (percentage.get_as_m1_1() - 0.0).abs() < tolerance,
-                "Round trip should preserve 0.0"
+                "Round trip should preserve 0.0 (got {})",
+                percentage.get_as_m1_1()
             );
         }
 
@@ -739,5 +782,168 @@ mod tests {
         //endregion
 
         println!("All coder shared function tests passed!");
+    }
+
+    /// Regression: the unsigned linear encoder must never produce a z index that
+    /// is past `z_len - 1`. The pre-fix implementation returned `z_len` for
+    /// val=0.0, which would silently fail to fire any neuron in the live
+    /// cortical area, yielding an asymmetric IPU (fires at val=1.0, silent at
+    /// val=0.0).
+    #[test]
+    fn unsigned_linear_encoder_never_exceeds_max_z_index() {
+        let z_len: u32 = 10;
+        let z_len_f = z_len as f32;
+        for hundredth in 0u32..=100 {
+            let v = hundredth as f32 / 100.0;
+            let percentage = Percentage::new_from_0_1_unchecked(v);
+            let mut indexes: Vec<u32> = Vec::new();
+            encode_unsigned_percentage_to_linear_neuron_z_index(&percentage, z_len_f, &mut indexes);
+            assert_eq!(indexes.len(), 1, "exactly one neuron per scalar sample");
+            assert!(
+                indexes[0] < z_len,
+                "z index {} must be < z_len {} for val={}",
+                indexes[0],
+                z_len,
+                v
+            );
+        }
+    }
+
+    /// Regression: the signed linear encoder's negative branch used
+    /// `(-1.0 - (-v)) * z_len` which produces a negative float that
+    /// saturating-casts to `0` for every negative magnitude. The fix should
+    /// give a faithful, monotonically increasing z index as |val| decreases
+    /// from 1.0 toward 0+.
+    #[test]
+    fn signed_linear_encoder_negative_branch_is_monotonic() {
+        let z_len: u32 = 10;
+        let z_len_f = z_len as f32;
+        let mut last_idx: Option<u32> = None;
+        // Sweep from |v|=1.0 down toward 0+; the active z index should be
+        // monotonically non-decreasing (closer-to-zero -> larger index).
+        for tenth in (1u32..=10).rev() {
+            let v = -(tenth as f32 / 10.0);
+            let percentage = SignedPercentage::new_from_m1_1_unchecked(v);
+            let mut pos: Vec<u32> = Vec::new();
+            let mut neg: Vec<u32> = Vec::new();
+            encode_signed_percentage_to_linear_neuron_z_index(
+                &percentage,
+                z_len_f,
+                &mut pos,
+                &mut neg,
+            );
+            assert!(
+                pos.is_empty(),
+                "negative magnitude must not write the positive lobe (v={})",
+                v
+            );
+            assert_eq!(
+                neg.len(),
+                1,
+                "negative magnitude must fire exactly one neuron (v={})",
+                v
+            );
+            let idx = neg[0];
+            assert!(
+                idx < z_len,
+                "z index {} must be < z_len {} for v={}",
+                idx,
+                z_len,
+                v
+            );
+            if let Some(prev) = last_idx {
+                assert!(
+                    idx >= prev,
+                    "z index must be monotonically non-decreasing as |v| -> 0; got {} after {} (v={})",
+                    idx, prev, v
+                );
+            }
+            last_idx = Some(idx);
+        }
+    }
+
+    /// Regression: positive and negative magnitudes of equal absolute value
+    /// must occupy mirrored z indices on their respective lobes. Pre-fix the
+    /// negative branch was broken so this property did not hold.
+    #[test]
+    fn signed_linear_encoder_is_lobe_symmetric() {
+        let z_len: u32 = 10;
+        let z_len_f = z_len as f32;
+        for tenth in 1u32..=10 {
+            let mag = tenth as f32 / 10.0;
+            let pos_val = SignedPercentage::new_from_m1_1_unchecked(mag);
+            let neg_val = SignedPercentage::new_from_m1_1_unchecked(-mag);
+
+            let mut pos_pos: Vec<u32> = Vec::new();
+            let mut pos_neg: Vec<u32> = Vec::new();
+            encode_signed_percentage_to_linear_neuron_z_index(
+                &pos_val,
+                z_len_f,
+                &mut pos_pos,
+                &mut pos_neg,
+            );
+
+            let mut neg_pos: Vec<u32> = Vec::new();
+            let mut neg_neg: Vec<u32> = Vec::new();
+            encode_signed_percentage_to_linear_neuron_z_index(
+                &neg_val,
+                z_len_f,
+                &mut neg_pos,
+                &mut neg_neg,
+            );
+
+            assert!(pos_neg.is_empty() && neg_pos.is_empty());
+            assert_eq!(
+                pos_pos, neg_neg,
+                "mirrored magnitudes must produce identical z indices on opposing lobes (mag={})",
+                mag
+            );
+        }
+    }
+
+    /// Regression: round-trip preserves the value within a single discretization
+    /// bin for both signed and unsigned linear encoders across the full range.
+    #[test]
+    fn linear_encoders_round_trip_within_one_bin() {
+        let z_len: u32 = 16;
+        let z_len_f = z_len as f32;
+        let bin_tolerance = 1.0 / z_len_f + 1e-4;
+
+        // Unsigned sweep
+        for sixteenth in 0u32..=16 {
+            let v = sixteenth as f32 / 16.0;
+            let mut percentage = Percentage::new_from_0_1_unchecked(v);
+            let mut indexes: Vec<u32> = Vec::new();
+            encode_unsigned_percentage_to_linear_neuron_z_index(&percentage, z_len_f, &mut indexes);
+            decode_unsigned_percentage_from_linear_neurons(&indexes, z_len, &mut percentage);
+            assert!(
+                (percentage.get_as_0_1() - v).abs() <= bin_tolerance,
+                "unsigned round-trip should be within one bin for v={} (got {})",
+                v,
+                percentage.get_as_0_1()
+            );
+        }
+
+        // Signed sweep covering both lobes (skip exactly +/-1 boundary which
+        // cannot fall outside a single bin anyway).
+        for sixteenth in -16i32..=16 {
+            let v = sixteenth as f32 / 16.0;
+            let mut percentage = SignedPercentage::new_from_m1_1_unchecked(v);
+            let mut pos: Vec<u32> = Vec::new();
+            let mut neg: Vec<u32> = Vec::new();
+            encode_signed_percentage_to_linear_neuron_z_index(
+                &percentage,
+                z_len_f,
+                &mut pos,
+                &mut neg,
+            );
+            decode_signed_percentage_from_linear_neurons(&pos, &neg, z_len, &mut percentage);
+            assert!(
+                (percentage.get_as_m1_1() - v).abs() <= bin_tolerance,
+                "signed round-trip should be within one bin for v={} (got {})",
+                v,
+                percentage.get_as_m1_1()
+            );
+        }
     }
 }
