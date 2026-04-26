@@ -130,9 +130,39 @@ fn should_emit_throttled_warning(last_emitted_ms: &AtomicU64, interval_ms: u64) 
     true
 }
 
-/// STDP parameters for a plastic cortical mapping A→B.
+/// Plasticity mode for a cortical mapping A→B.
+///
+/// Drives the burst-engine plasticity loop:
+/// - `Off`: no weight updates, no eligibility tracking.
+/// - `Stdp`: pure correlation-based STDP. Equivalent to the legacy plasticity_flag=true path.
+///   Internally implemented via the eligibility-trace machinery with full reset each burst
+///   and `R(t)=1`, which preserves legacy STDP numerics.
+/// - `RStdp`: reward-modulated STDP. Eligibility traces persist across bursts (decaying with
+///   `eligibility_decay_bursts`), and weight commits are gated by
+///   `R(t) = density(reward_source_area) - density(punishment_source_area)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlasticityMode {
+    Off,
+    Stdp,
+    RStdp,
+}
+
+impl Default for PlasticityMode {
+    fn default() -> Self {
+        Self::Off
+    }
+}
+
+/// STDP / R-STDP parameters for a plastic cortical mapping A→B.
 ///
 /// Note: New synapse weight from LTP uses `delta_plus_u8()` cast to `f32`; PSP is float-valued.
+///
+/// For R-STDP, the burst engine maintains a per-synapse eligibility trace `e_ij` updated by
+/// the same LTP/LTD windowed-correlation rule, then commits weight as
+/// `w_ij += plasticity_constant_as_eta * R(t) * e_ij` at end-of-burst (timing option (a)).
+/// The wireheading lint enforces that `reward_source_area` and `punishment_source_area`
+/// have `plasticity_mode = Off` on all incoming mappings, so the policy cannot drive the
+/// reward source itself.
 #[derive(Debug, Clone, Copy)]
 pub struct StdpMappingParams {
     pub plasticity_window: usize,
@@ -142,6 +172,37 @@ pub struct StdpMappingParams {
     pub bidirectional_stdp: bool,
     pub synapse_psp: f32,
     pub synapse_type: SynapseType,
+    /// Plasticity mode (Off / Stdp / RStdp). See `PlasticityMode`.
+    pub plasticity_mode: PlasticityMode,
+    /// Eligibility-trace decay constant in bursts. `0` means "no persistence" (STDP-equivalent
+    /// full reset each burst). For R-STDP, typical values are 5-50 bursts depending on the
+    /// task's reward latency. Ignored when `plasticity_mode == Off`.
+    pub eligibility_decay_bursts: u32,
+    /// Source cortical area whose firing density contributes positively to `R(t)`. `None`
+    /// means no positive reward channel. For R-STDP this is typically a fixed-wiring
+    /// "pleasure detector" sub-circuit.
+    pub reward_source_area: Option<u32>,
+    /// Source cortical area whose firing density contributes negatively to `R(t)` (punishment).
+    /// `None` means no negative reward channel.
+    pub punishment_source_area: Option<u32>,
+}
+
+impl Default for StdpMappingParams {
+    fn default() -> Self {
+        Self {
+            plasticity_window: 1,
+            plasticity_constant: 0,
+            ltp_multiplier: 0,
+            ltd_multiplier: 0,
+            bidirectional_stdp: false,
+            synapse_psp: 0.0,
+            synapse_type: SynapseType::Excitatory,
+            plasticity_mode: PlasticityMode::Off,
+            eligibility_decay_bursts: 0,
+            reward_source_area: None,
+            punishment_source_area: None,
+        }
+    }
 }
 
 impl StdpMappingParams {
@@ -153,6 +214,22 @@ impl StdpMappingParams {
     pub fn delta_minus_u8(&self) -> u8 {
         let delta = self.plasticity_constant.saturating_mul(self.ltd_multiplier);
         delta.clamp(0, u8::MAX as i64) as u8
+    }
+
+    /// Multiplicative trace-decay factor applied each burst BEFORE the new co-fire delta is
+    /// added. For `eligibility_decay_bursts == 0` the trace is fully reset (STDP semantics).
+    /// For `>0`, returns `exp(-1 / decay_bursts)`.
+    pub fn trace_decay_factor(&self) -> f32 {
+        if self.eligibility_decay_bursts == 0 {
+            0.0
+        } else {
+            (-1.0_f32 / self.eligibility_decay_bursts as f32).exp()
+        }
+    }
+
+    /// Whether plasticity is active for this mapping (either STDP or R-STDP).
+    pub fn is_plastic(&self) -> bool {
+        !matches!(self.plasticity_mode, PlasticityMode::Off)
     }
 }
 
@@ -4368,7 +4445,11 @@ impl<
         self.rebuild_stdp_mapping_index();
     }
 
-    /// Register or update STDP parameters for a plastic cortical mapping A→B.
+    /// Register or update STDP / R-STDP parameters for a plastic cortical mapping A→B.
+    ///
+    /// Rebuilds the per-mapping synapse index so any synapses already present between A and B
+    /// are immediately picked up by the plasticity loop. Without this rebuild, registering a
+    /// mapping after the synapses exist would silently no-op.
     pub fn register_stdp_mapping(
         &mut self,
         src_cortical_idx: u32,
@@ -4380,8 +4461,66 @@ impl<
                 "plasticity_window must be > 0".to_string(),
             ));
         }
+
+        // Wireheading lint. Reward/punishment source areas must never receive plastic input,
+        // otherwise the brain can learn to inject its own reward by stimulating the detector.
+        // Two checks are needed because mapping registration order is not guaranteed:
+        //   1. The new mapping itself terminates on a protected area declared by an existing
+        //      plastic mapping.
+        //   2. The new mapping declares a protected area that is already the destination of an
+        //      existing plastic mapping.
+        if params.is_plastic() {
+            let mappings = self.stdp_mappings.read().unwrap();
+            let new_protected: [Option<u32>; 2] =
+                [params.reward_source_area, params.punishment_source_area];
+
+            for (existing_key, existing_params) in mappings.iter() {
+                if !existing_params.is_plastic() {
+                    continue;
+                }
+                let existing_protected: [Option<u32>; 2] = [
+                    existing_params.reward_source_area,
+                    existing_params.punishment_source_area,
+                ];
+
+                // Check 1: new mapping terminates on a protected area of an existing mapping.
+                for protected in existing_protected.iter().flatten().copied() {
+                    if protected == dst_cortical_idx {
+                        return Err(FeagiError::RuntimeError(format!(
+                            "Wireheading violation: plastic mapping {} -> {} would write into \
+                             reward/punishment source area {} (protected by mapping {} -> {}). \
+                             Reward/punishment areas must be driven by hard-wired (plasticity_mode=Off) \
+                             input only.",
+                            src_cortical_idx,
+                            dst_cortical_idx,
+                            protected,
+                            existing_key.0,
+                            existing_key.1
+                        )));
+                    }
+                }
+
+                // Check 2: new mapping declares a protected area that already receives plastic input.
+                for protected in new_protected.iter().flatten().copied() {
+                    if protected == existing_key.1 {
+                        return Err(FeagiError::RuntimeError(format!(
+                            "Wireheading violation: declared reward/punishment source area {} on \
+                             mapping {} -> {} already receives plastic input via mapping {} -> {}. \
+                             Detector areas must have plasticity_mode=Off on all incoming mappings.",
+                            protected,
+                            src_cortical_idx,
+                            dst_cortical_idx,
+                            existing_key.0,
+                            existing_key.1
+                        )));
+                    }
+                }
+            }
+        }
+
         let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
         self.stdp_mappings.write().unwrap().insert(key, params);
+        self.rebuild_stdp_mapping_index();
         Ok(())
     }
 
@@ -4460,6 +4599,34 @@ impl<
                 .is_some_and(|idx| idx == dst_area);
         }
         false
+    }
+
+    /// Firing density of `cortical_area` at `burst_timestep`, in `[0.0, 1.0]`.
+    ///
+    /// Defined as `fired_neurons_in_burst / total_neurons_in_area`. Used by R-STDP to compute
+    /// the reward signal `R(t) = density(reward_source) - density(punishment_source)`.
+    /// Returns 0.0 if the area is untracked, has no neurons, or insufficient history.
+    fn activity_density(
+        &self,
+        cortical_area: u32,
+        burst_timestep: u64,
+        fire_ledger: &crate::fire_ledger::FireLedger,
+        neuron_storage: &R::NeuronStorage<T>,
+    ) -> f32 {
+        let total_neurons = neuron_storage.get_neuron_count(cortical_area);
+        if total_neurons == 0 {
+            return 0.0;
+        }
+        let window = match fire_ledger.get_dense_window_bitmaps(cortical_area, burst_timestep, 1) {
+            Ok(w) => w,
+            Err(_) => return 0.0,
+        };
+        let Some((_, bitmap)) = window.into_iter().next() else {
+            return 0.0;
+        };
+        // bitmap.cardinality() can exceed total_neurons if memory neurons are tracked, so clamp.
+        let fired = bitmap.iter().filter(|&id| id < MEMORY_NEURON_ID_START).count();
+        (fired as f32 / total_neurons as f32).clamp(0.0, 1.0)
     }
 
     fn apply_stdp_updates_for_burst(
@@ -4591,12 +4758,55 @@ impl<
             return Ok(());
         }
 
-        // Apply weight updates to existing synapses.
+        // Unified plasticity update: maintain per-synapse eligibility traces and commit weights
+        // modulated by R(t). This single code path handles both `PlasticityMode::Stdp` and
+        // `PlasticityMode::RStdp`:
+        //   - Stdp:  trace_decay = 0  → trace fully reset each burst (legacy semantics);
+        //            R(t) = 1         → weight commit equals the burst's STDP delta exactly.
+        //   - RStdp: trace_decay = exp(-1 / eligibility_decay_bursts) → trace persists;
+        //            R(t) = density(reward_source) - density(punishment_source).
+        //
+        // Step ordering per synapse (option (a) end-of-burst timing):
+        //   1. e_ij <- e_ij * decay
+        //   2. if co-fire across the plasticity window:                e_ij += delta_plus
+        //      else if uncorrelated firing across the window:          e_ij -= delta_minus
+        //   3. w_ij += R(t) * e_ij        (clamp at 0 on negative deltas)
         {
             let neuron_storage = self.neuron_storage.read().unwrap();
             let mut synapse_storage = self.synapse_storage.write().unwrap();
 
+            // Pre-compute R(t) per mapping. Stdp mappings always get R=1. R-STDP mappings sample
+            // current-burst firing density of their reward / punishment source areas. Mappings
+            // with `Off` plasticity_mode are filtered out at registration; defensively skip here.
+            let mut reward_signals: AHashMap<CorticalMappingKey, f32> =
+                AHashMap::with_capacity(mappings.len());
             for (key, params) in &mappings {
+                let r = match params.plasticity_mode {
+                    PlasticityMode::Off => continue,
+                    PlasticityMode::Stdp => 1.0_f32,
+                    PlasticityMode::RStdp => {
+                        let pleasure = params
+                            .reward_source_area
+                            .map(|area| {
+                                self.activity_density(area, burst_timestep, fire_ledger, &neuron_storage)
+                            })
+                            .unwrap_or(0.0);
+                        let pain = params
+                            .punishment_source_area
+                            .map(|area| {
+                                self.activity_density(area, burst_timestep, fire_ledger, &neuron_storage)
+                            })
+                            .unwrap_or(0.0);
+                        pleasure - pain
+                    }
+                };
+                reward_signals.insert(*key, r);
+            }
+
+            for (key, params) in &mappings {
+                if matches!(params.plasticity_mode, PlasticityMode::Off) {
+                    continue;
+                }
                 let Some(activity) = activity_sets.get(key) else {
                     continue;
                 };
@@ -4604,9 +4814,13 @@ impl<
                     continue;
                 };
 
-                let delta_plus = params.delta_plus_u8();
-                let delta_minus = params.delta_minus_u8();
-                if delta_plus == 0 && delta_minus == 0 {
+                let delta_plus = params.delta_plus_u8() as f32;
+                let delta_minus = params.delta_minus_u8() as f32;
+                let trace_decay = params.trace_decay_factor();
+                let reward = *reward_signals.get(key).unwrap_or(&0.0);
+
+                // No-op fast path: nothing to learn for this mapping this burst.
+                if delta_plus == 0.0 && delta_minus == 0.0 && reward == 0.0 {
                     continue;
                 }
 
@@ -4648,22 +4862,33 @@ impl<
                         }
                     }
 
+                    // Step 1: decay any persistent trace (factor 0 for STDP = full reset).
+                    let mut e_ij = synapse_storage.eligibility_traces()[syn_idx] * trace_decay;
+
+                    // Step 2: apply correlation-window stimulus.
                     let src_any_present = activity.src_any.contains(src_neuron);
                     let dst_any_present = activity.dst_any.contains(dst_neuron);
-                    if !src_any_present && !dst_any_present {
-                        continue;
+                    if src_any_present || dst_any_present {
+                        let src_all_present = activity.src_all.contains(src_neuron);
+                        let dst_all_present = activity.dst_all.contains(dst_neuron);
+                        if src_all_present && dst_all_present {
+                            e_ij += delta_plus;
+                        } else if delta_minus > 0.0 {
+                            e_ij -= delta_minus;
+                        }
                     }
 
-                    let src_all_present = activity.src_all.contains(src_neuron);
-                    let dst_all_present = activity.dst_all.contains(dst_neuron);
+                    synapse_storage.eligibility_traces_mut()[syn_idx] = e_ij;
 
-                    if src_all_present && dst_all_present {
+                    // Step 3: R(t)-modulated weight commit.
+                    if reward != 0.0 && e_ij != 0.0 {
+                        let delta_w = reward * e_ij;
                         let old = synapse_storage.weights()[syn_idx];
-                        let new_w = old + delta_plus as f32;
-                        synapse_storage.weights_mut()[syn_idx] = new_w;
-                    } else if delta_minus > 0 {
-                        let old = synapse_storage.weights()[syn_idx];
-                        let new_w = (old - delta_minus as f32).max(0.0);
+                        let new_w = if delta_w >= 0.0 {
+                            old + delta_w
+                        } else {
+                            (old + delta_w).max(0.0)
+                        };
                         synapse_storage.weights_mut()[syn_idx] = new_w;
                     }
                 }

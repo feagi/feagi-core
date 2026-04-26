@@ -329,6 +329,16 @@ pub trait SynapseStorage: Send + Sync {
     /// Valid synapse mask
     fn valid_mask(&self) -> &[bool];
 
+    /// Per-synapse R-STDP eligibility trace `e_ij` (`f32`).
+    ///
+    /// Updated by the burst engine each burst with the same windowed correlation rule used
+    /// for STDP (LTP on co-fire, LTD on uncorrelated firing), but committed to weights only
+    /// when modulated by `R(t)` (the reward/punishment density). For `PlasticityMode::Stdp`
+    /// the trace is fully reset each burst (`R(t)=1`), preserving legacy STDP numerics.
+    ///
+    /// Length must equal [`SynapseStorage::count`]; entries for invalid synapses are unused.
+    fn eligibility_traces(&self) -> &[f32];
+
     // === Synapse Properties (Mutable) ===
 
     /// Mutable weights slice
@@ -339,6 +349,9 @@ pub trait SynapseStorage: Send + Sync {
 
     /// Mutable valid mask
     fn valid_mask_mut(&mut self) -> &mut [bool];
+
+    /// Mutable eligibility traces slice (R-STDP). See [`SynapseStorage::eligibility_traces`].
+    fn eligibility_traces_mut(&mut self) -> &mut [f32];
 
     // === Metadata ===
 

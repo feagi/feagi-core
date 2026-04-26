@@ -48,6 +48,10 @@ pub struct SynapseArray {
     /// Valid synapse mask
     pub valid_mask: Vec<bool>,
 
+    /// Per-synapse R-STDP eligibility traces (`f32`). Initialized to 0.0 on synapse creation.
+    /// See `feagi_npu_runtime::SynapseStorage::eligibility_traces` for semantics.
+    pub eligibility_traces: Vec<f32>,
+
     /// Source index for fast lookup
     pub source_index: AHashMap<u32, Vec<usize>>,
 }
@@ -65,6 +69,7 @@ impl SynapseArray {
             edge_flags: Vec::with_capacity(capacity),
             delay_bursts: Vec::with_capacity(capacity),
             valid_mask: Vec::with_capacity(capacity),
+            eligibility_traces: Vec::with_capacity(capacity),
             source_index: AHashMap::new(),
         }
     }
@@ -160,6 +165,10 @@ impl SynapseStorage for SynapseArray {
         &self.valid_mask[..self.count]
     }
 
+    fn eligibility_traces(&self) -> &[f32] {
+        &self.eligibility_traces[..self.count]
+    }
+
     // Mutable property accessors
     fn weights_mut(&mut self) -> &mut [f32] {
         let count = self.count;
@@ -174,6 +183,11 @@ impl SynapseStorage for SynapseArray {
     fn valid_mask_mut(&mut self) -> &mut [bool] {
         let count = self.count;
         &mut self.valid_mask[..count]
+    }
+
+    fn eligibility_traces_mut(&mut self) -> &mut [f32] {
+        let count = self.count;
+        &mut self.eligibility_traces[..count]
     }
 
     // Metadata
@@ -211,6 +225,7 @@ impl SynapseStorage for SynapseArray {
         self.edge_flags.push(edge_flag);
         self.delay_bursts.push(delay_bursts);
         self.valid_mask.push(true);
+        self.eligibility_traces.push(0.0);
 
         // Update index
         self.source_index.entry(source).or_default().push(idx);

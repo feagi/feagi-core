@@ -873,6 +873,7 @@ mod tests {
             edge_flags: vec![0, 0, 0],
             delay_bursts: vec![1, 1, 1],
             valid_mask: vec![true, true, true],
+            eligibility_traces: vec![0.0, 0.0, 0.0],
             source_index: ahash::AHashMap::new(),
         };
 

@@ -201,7 +201,27 @@ pub async fn post_mapping_properties(
                 .unwrap_or(1)
                 .max(1);
 
-            formatted.push(serde_json::json!({
+            // R-STDP optional fields. plasticity_mode is the canonical successor of
+            // plasticity_flag; when absent, downstream defaults to Stdp / Off based on the flag.
+            // The other three fields are only meaningful when plasticity_mode == "rstdp" and are
+            // validated downstream by the BDU.
+            let plasticity_mode = obj
+                .get("plasticity_mode")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let eligibility_decay_bursts = obj
+                .get("eligibility_decay_bursts")
+                .and_then(|v| v.as_u64());
+            let reward_source_area = obj
+                .get("reward_source_area")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let punishment_source_area = obj
+                .get("punishment_source_area")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+
+            let mut rule = serde_json::json!({
                 "morphology_id": morphology_id,
                 "morphology_scalar": morphology_scalar,
                 "postSynapticCurrent_multiplier": psc_multiplier,
@@ -211,7 +231,27 @@ pub async fn post_mapping_properties(
                 "ltd_multiplier": ltd_multiplier,
                 "plasticity_window": plasticity_window,
                 "synaptic_delay_bursts": synaptic_delay_bursts,
-            }));
+            });
+            let rule_obj = rule.as_object_mut().unwrap();
+            if let Some(mode) = plasticity_mode {
+                rule_obj.insert("plasticity_mode".to_string(), serde_json::json!(mode));
+            }
+            if let Some(decay) = eligibility_decay_bursts {
+                rule_obj.insert(
+                    "eligibility_decay_bursts".to_string(),
+                    serde_json::json!(decay),
+                );
+            }
+            if let Some(area) = reward_source_area {
+                rule_obj.insert("reward_source_area".to_string(), serde_json::json!(area));
+            }
+            if let Some(area) = punishment_source_area {
+                rule_obj.insert(
+                    "punishment_source_area".to_string(),
+                    serde_json::json!(area),
+                );
+            }
+            formatted.push(rule);
         }
     }
 

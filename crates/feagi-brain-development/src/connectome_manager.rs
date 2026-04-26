@@ -2431,6 +2431,94 @@ impl ConnectomeManager {
                 ))
             })?;
 
+        // Resolve plasticity_mode with legacy fallback (auto-migrate strategy):
+        //   - new genomes set `plasticity_mode: "off" | "stdp" | "rstdp"` directly;
+        //   - legacy genomes only have `plasticity_flag: bool` -> Stdp / Off mapping.
+        let plasticity_mode = match rule_obj.get("plasticity_mode").and_then(|v| v.as_str()) {
+            Some(s) if s.eq_ignore_ascii_case("rstdp") || s.eq_ignore_ascii_case("r-stdp") => {
+                feagi_npu_burst_engine::npu::PlasticityMode::RStdp
+            }
+            Some(s) if s.eq_ignore_ascii_case("stdp") => {
+                feagi_npu_burst_engine::npu::PlasticityMode::Stdp
+            }
+            Some(s) if s.eq_ignore_ascii_case("off") => {
+                feagi_npu_burst_engine::npu::PlasticityMode::Off
+            }
+            Some(other) => {
+                return Err(BduError::Internal(format!(
+                    "Unknown plasticity_mode '{}' in mapping rule {} -> {}",
+                    other, src_area_id, dst_area_id
+                )));
+            }
+            None => feagi_npu_burst_engine::npu::PlasticityMode::Stdp,
+        };
+
+        // R-STDP-only fields. Strings name cortical areas by 6-char base-64 ID; resolve via NPU.
+        let eligibility_decay_bursts = rule_obj
+            .get("eligibility_decay_bursts")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as u32)
+            .unwrap_or(0);
+        let reward_source_area_id = rule_obj
+            .get("reward_source_area")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let punishment_source_area_id = rule_obj
+            .get("punishment_source_area")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+
+        // Validate R-STDP fields are absent when not in RStdp mode (catches genome typos early).
+        if !matches!(
+            plasticity_mode,
+            feagi_npu_burst_engine::npu::PlasticityMode::RStdp
+        ) && (reward_source_area_id.is_some()
+            || punishment_source_area_id.is_some()
+            || eligibility_decay_bursts != 0)
+        {
+            return Err(BduError::Internal(format!(
+                "R-STDP fields (reward_source_area / punishment_source_area / eligibility_decay_bursts) \
+                 only valid when plasticity_mode='rstdp' on mapping {} -> {}",
+                src_area_id, dst_area_id
+            )));
+        }
+
+        trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: attempting NPU lock");
+        let mut npu_lock = npu
+            .lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: acquired NPU lock");
+
+        // Resolve reward/punishment area names to cortical_idx (R-STDP only). The detector
+        // areas must already be registered with the NPU before this mapping is parsed; the
+        // genome ordering normally handles this because cortical areas are processed before
+        // their cross-area mapping rules.
+        let resolve_optional_area = |label: &str,
+                                     name_opt: &Option<String>|
+         -> BduResult<Option<u32>> {
+            let Some(name) = name_opt else {
+                return Ok(None);
+            };
+            match npu_lock.get_cortical_area_id(name.as_str()) {
+                Some(idx) => Ok(Some(idx)),
+                None => Err(BduError::Internal(format!(
+                    "Unknown {} cortical area '{}' on R-STDP mapping {} -> {}",
+                    label, name, src_area_id, dst_area_id
+                ))),
+            }
+        };
+        let reward_source_area = resolve_optional_area("reward_source_area", &reward_source_area_id)?;
+        let punishment_source_area =
+            resolve_optional_area("punishment_source_area", &punishment_source_area_id)?;
+
+        // Off-mode mappings are skipped (no NPU registration, no fire-ledger tracking).
+        if matches!(
+            plasticity_mode,
+            feagi_npu_burst_engine::npu::PlasticityMode::Off
+        ) {
+            return Ok(());
+        }
+
         let params = feagi_npu_burst_engine::npu::StdpMappingParams {
             plasticity_window,
             plasticity_constant,
@@ -2439,13 +2527,11 @@ impl ConnectomeManager {
             bidirectional_stdp,
             synapse_psp,
             synapse_type,
+            plasticity_mode,
+            eligibility_decay_bursts,
+            reward_source_area,
+            punishment_source_area,
         };
-
-        trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: attempting NPU lock");
-        let mut npu_lock = npu
-            .lock()
-            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
-        trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: acquired NPU lock");
 
         npu_lock
             .register_stdp_mapping(src_cortical_idx, dst_cortical_idx, params)
@@ -2456,15 +2542,28 @@ impl ConnectomeManager {
                 ))
             })?;
 
-        // FireLedger tracking for STDP (ensure A and B are tracked at least to plasticity_window)
+        // FireLedger tracking. Plain STDP needs depth=plasticity_window on src+dst. R-STDP
+        // additionally needs depth>=1 on reward/punishment source areas so `activity_density`
+        // can sample current-burst firing.
+        let mut areas_to_track: Vec<(u32, usize)> = vec![
+            (src_cortical_idx, plasticity_window),
+            (dst_cortical_idx, plasticity_window),
+        ];
+        if let Some(area) = reward_source_area {
+            areas_to_track.push((area, 1));
+        }
+        if let Some(area) = punishment_source_area {
+            areas_to_track.push((area, 1));
+        }
+
         let existing_configs = npu_lock.get_all_fire_ledger_configs();
-        for area_idx in [src_cortical_idx, dst_cortical_idx] {
+        for (area_idx, required_depth) in areas_to_track {
             let existing = existing_configs
                 .iter()
                 .find(|(idx, _)| *idx == area_idx)
                 .map(|(_, w)| *w)
                 .unwrap_or(0);
-            let resolved = existing.max(plasticity_window);
+            let resolved = existing.max(required_depth);
             if resolved != existing {
                 npu_lock
                     .configure_fire_ledger_window(area_idx, resolved)
