@@ -3,17 +3,17 @@ use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
-use feagi_structures::useful_structs::{IndexedDataTracker, RangeUintVector};
+use feagi_structures::useful_structs::{indexed_data_tracker, RangeUintVector};
 use crate::neuron::defaults::DimensionalNeuronDefaults;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::{DimensionalNeuronCorticalFlag, NeuronFlag};
-use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability, NPUQuantization};
+use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability, NPUDataQuantization};
 
 /// Get the cortical area properties by index. WARNING: AREA MAY EXIST BUT NOT BE VALID!
-pub(crate) fn get_cortical_area_ref<'a, Q: NPUQuantization>(cortical_area_index: &CorticalAreaIndex<Q::CorticalIndexQuant>
-                                                            , cortical_data: &'a IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndexQuant>>)
-    -> Result<&'a DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError>
+pub(crate) fn get_cortical_area_ref<'a, Q: NPUDataQuantization>(cortical_area_index: &CorticalAreaIndex<Q::CorticalIndexQuant>
+                                                                , cortical_data: &'a IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndexQuant>>)
+                                                                -> Result<&'a DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError>
 {
     Ok(cortical_data.get(*cortical_area_index)
         .ok_or_else(|| FeagiNPUNeuronError::InvalidCorticalIndex{
@@ -23,8 +23,8 @@ pub(crate) fn get_cortical_area_ref<'a, Q: NPUQuantization>(cortical_area_index:
 }
 
 /// Get the mutable cortical area properties by index. WARNING: AREA MAY EXIST BUT NOT BE VALID!
-pub(crate) fn get_cortical_area_ref_mut<'a, Q: NPUQuantization>(cortical_area_index: &CorticalAreaIndex<Q::CorticalIndexQuant>, cortical_data: &'a mut IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndexQuant>>)
-                                                                -> Result<&'a mut DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError>
+pub(crate) fn get_cortical_area_ref_mut<'a, Q: NPUDataQuantization>(cortical_area_index: &CorticalAreaIndex<Q::CorticalIndexQuant>, cortical_data: &'a mut IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndexQuant>>)
+                                                                    -> Result<&'a mut DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError>
 {
     Ok(cortical_data.get_mut(*cortical_area_index)
         .ok_or_else(|| FeagiNPUNeuronError::InvalidCorticalIndex{
@@ -36,7 +36,7 @@ pub(crate) fn get_cortical_area_ref_mut<'a, Q: NPUQuantization>(cortical_area_in
 
 /// Marks the neurons of a cortical area as invalid, as well as other cache work in this regard.
 /// Returns the range of neuron indexes invalidated.
-pub(crate) fn invalidate_cortical_area_and_return_invalidated_neuron_range<Q: NPUQuantization>(
+pub(crate) fn invalidate_cortical_area_and_return_invalidated_neuron_range<Q: NPUDataQuantization>(
     cortical_area_index: &CorticalAreaIndex<Q::CorticalIndexQuant>,
     cortical_data: &mut IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndexQuant>>,
     neuron_flags: &mut Vec<NeuronFlag>,
@@ -76,12 +76,12 @@ pub(crate) fn invalidate_cortical_area_and_return_invalidated_neuron_range<Q: NP
 /// otherwise appends to the end of the neuron arrays.
 ///
 /// Returns the assigned cortical area index and the range of neuron indexes it covers.
-pub(crate) fn default_create_cortical_area_with_uniform_neurons<Q: NPUQuantization, D: DimensionalNeuronDefaults<Q>>(
+pub(crate) fn default_create_cortical_area_with_uniform_neurons<Q: NPUDataQuantization, D: DimensionalNeuronDefaults<Q>>(
     // Dimensions / density
     cortical_area_dimensions: NeuronVoxelDimensions<Q::CoordQuantQuant>,
     neurons_per_voxel: NumberNeuronsPerVoxel,
     // Uniform per-neuron values
-    neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::BurstIndexQuant>,
+    neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::GlobalBurstIndexQuant>,
     neuron_membrane_potential: NPUNeuronMembranePotential<Q::ValueQuant>,
     neuron_fire_threshold: FireThreshold<Q::ValueQuant>,
     neuron_leak_coefficient: LeakCoefficient<Q::PercentageQuant>,
@@ -96,7 +96,7 @@ pub(crate) fn default_create_cortical_area_with_uniform_neurons<Q: NPUQuantizati
     cortical_is_mp_driven_psp_enabled: bool,
     // Per-neuron storage
     neuron_cortical_area_indexes: &mut Vec<CorticalAreaIndex<Q::CorticalIndexQuant>>,
-    neuron_global_burst_indexes_of_last_firing: &mut Vec<BurstGlobalIndex<Q::BurstIndexQuant>>,
+    neuron_global_burst_indexes_of_last_firing: &mut Vec<BurstGlobalIndex<Q::GlobalBurstIndexQuant>>,
     neuron_membrane_potentials: &mut Vec<NPUNeuronMembranePotential<Q::ValueQuant>>,
     neuron_fire_thresholds: &mut Vec<FireThreshold<Q::ValueQuant>>,
     neuron_leak_coefficients: &mut Vec<LeakCoefficient<Q::PercentageQuant>>,
@@ -188,13 +188,13 @@ pub(crate) fn default_create_cortical_area_with_uniform_neurons<Q: NPUQuantizati
 /// region if one is big enough, otherwise appends to the end of the neuron arrays.
 ///
 /// Returns the assigned cortical area index and the range of neuron indexes it covers and a bool for if it had to extend the arrays.
-pub(crate) fn create_cortical_area_with_individualized_neurons<Q: NPUQuantization, D: DimensionalNeuronDefaults<Q>>(
+pub(crate) fn create_cortical_area_with_individualized_neurons<Q: NPUDataQuantization, D: DimensionalNeuronDefaults<Q>>(
     cortical_area_dimensions: NeuronVoxelDimensions<Q::CoordQuantQuant>,
     neurons_per_voxel: NumberNeuronsPerVoxel,
     neuron_data: DimensionalNeuronDataFromCorticalArea<Q>,
     // Per-neuron storage
     neuron_cortical_area_indexes: &mut Vec<CorticalAreaIndex<Q::CorticalIndexQuant>>,
-    neuron_global_burst_indexes_of_last_firing: &mut Vec<BurstGlobalIndex<Q::BurstIndexQuant>>,
+    neuron_global_burst_indexes_of_last_firing: &mut Vec<BurstGlobalIndex<Q::GlobalBurstIndexQuant>>,
     neuron_membrane_potentials: &mut Vec<NPUNeuronMembranePotential<Q::ValueQuant>>,
     neuron_fire_thresholds: &mut Vec<FireThreshold<Q::ValueQuant>>,
     neuron_leak_coefficients: &mut Vec<LeakCoefficient<Q::PercentageQuant>>,

@@ -8,9 +8,9 @@ use core::ops::Range;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neurons::descriptors::NeuronCount;
 use crate::neuron::FeagiNPUNeuronError;
-use crate::quantizables::{NPUQuantization, NPUNeuronIndex};
+use crate::quantizables::{NPUDataQuantization, NPUNeuronIndex};
 
-pub trait BaseNeuronStaticStorageTrait<Q: NPUQuantization>
+pub trait BaseNeuronStaticStorageTrait<Q: NPUDataQuantization>
 {
     // NOTE: Due to varying internal implementations, memory fragmentation may occur in various
     // ways, ergo be cautious of calculating internal state. Instead, use the below helper functions.
@@ -41,7 +41,7 @@ pub trait BaseNeuronStaticStorageTrait<Q: NPUQuantization>
 }
 
 #[cfg(feature = "alloc")]
-pub trait BaseNeuronAllocStorageTrait<Q: NPUQuantization>:
+pub trait BaseNeuronAllocStorageTrait<Q: NPUDataQuantization>:
 BaseNeuronStaticStorageTrait<Q>
 {
     /// Frees unused neuron vector capacity and invalid neurons (assuming they were sorted to the back first!)

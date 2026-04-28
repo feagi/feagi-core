@@ -23,11 +23,11 @@ use crate::neuron::dimensional_neurons::sensory_neurons::SensoryNeuronAllocRAMSt
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
-use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount, NPUNeuronMembranePotential};
+use crate::quantizables::{NPUDataQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount, NPUNeuronMembranePotential};
 use crate::synapse::non_plastic_dimensional::NonplasticDimensionalSynapseAllocRAMStorage;
 use crate::synapse::non_plastic_dimensional::traits::{NonplasticSynapseAllocStorageTrait, NonplasticSynapseBaseStorageTrait};
 
-pub struct ConnectomeAllocRam<Q: NPUQuantization>
+pub struct ConnectomeAllocRam<Q: NPUDataQuantization>
 {
     fire_queue: FireQueueRam<Q::NeuronIndexQuant>,
     fire_candidate_list: FireCandidateListRam<Q::NeuronIndexQuant>,
@@ -45,7 +45,7 @@ pub struct ConnectomeAllocRam<Q: NPUQuantization>
 }
 
 
-impl<Q: NPUQuantization>
+impl<Q: NPUDataQuantization>
 ConnectomeAllocRam<Q>
 {
 
@@ -70,7 +70,7 @@ ConnectomeAllocRam<Q>
 
 }
 
-impl<Q: NPUQuantization>
+impl<Q: NPUDataQuantization>
 ConnectomeAllocTrait<Q> for
 ConnectomeAllocRam<Q>
 {
@@ -112,7 +112,7 @@ ConnectomeAllocRam<Q>
     fn create_interneuron_cortical_area_with_uniform_neurons(&mut self, // TODO change other instances of spanned to uniform
                                                              cortical_area_dimensions: NeuronVoxelDimensions<Q::CoordQuantQuant>,
                                                              neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                             neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::BurstIndexQuant>,
+                                                             neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::GlobalBurstIndexQuant>,
                                                              neuron_membrane_potential: NPUNeuronMembranePotential<Q::ValueQuant>,
                                                              neuron_fire_threshold: FireThreshold<Q::ValueQuant>,
                                                              neuron_leak_coefficient: LeakCoefficient<Q::PercentageQuant>,
@@ -303,11 +303,11 @@ ConnectomeAllocRam<Q>
     //endregion
 }
 
-impl<Q: NPUQuantization>
+impl<Q: NPUDataQuantization>
 ConnectomeBaseTrait<Q> for
 ConnectomeAllocRam<Q>
 {
-    fn process_burst(&mut self, current_burst_index: &BurstGlobalIndex<<Q as NPUQuantization>::BurstIndexQuant>) -> Result<(), FeagiNPUStructureError> {
+    fn process_burst(&mut self, current_burst_index: &BurstGlobalIndex<<Q as NPUDataQuantization>::GlobalBurstIndexQuant>) -> Result<(), FeagiNPUStructureError> {
 
         // Reset Fire Candidate List to prep for burst
         self.fire_candidate_list.clear();

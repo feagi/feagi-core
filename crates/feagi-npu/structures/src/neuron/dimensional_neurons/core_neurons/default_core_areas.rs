@@ -5,17 +5,17 @@ use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::NeuronCount;
 use crate::neuron::dimensional_neurons::shared_structs::DimensionalNeuronCorticalData;
 use crate::neuron::flags::{DimensionalNeuronCorticalFlag, NeuronFlag};
-use crate::quantizables::{BurstDelta, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUQuantization, NeuronExcitability};
+use crate::quantizables::{BurstDelta, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUDataQuantization, NeuronExcitability};
 
 // This file can be used to define the default values of Core cortical areas
 
 pub const NUMBER_SINGLE_NEURON_CORE_AREAS: usize  = 3;
 
-pub(crate) struct CoreNeuronPowerDefaults<Q: NPUQuantization> {
+pub(crate) struct CoreNeuronPowerDefaults<Q: NPUDataQuantization> {
     phantom_data: PhantomData<Q>
 }
 
-impl<Q: NPUQuantization> CoreNeuronPowerDefaults<Q> {
+impl<Q: NPUDataQuantization> CoreNeuronPowerDefaults<Q> {
     pub const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::ValueQuant> = FireThreshold::ZERO;
     pub const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::PercentageQuant> = LeakCoefficient::ZERO_PERCENT;
     pub const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDeltaQuant> = BurstDelta::ZERO;
@@ -43,11 +43,11 @@ impl<Q: NPUQuantization> CoreNeuronPowerDefaults<Q> {
     }
 }
 
-pub(crate) struct CoreNeuronDeathDefaults<Q: NPUQuantization> {
+pub(crate) struct CoreNeuronDeathDefaults<Q: NPUDataQuantization> {
     phantom_data: PhantomData<Q>
 }
 
-impl<Q: NPUQuantization> CoreNeuronDeathDefaults<Q> {
+impl<Q: NPUDataQuantization> CoreNeuronDeathDefaults<Q> {
     pub const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::ValueQuant> = FireThreshold::ZERO;
     pub const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::PercentageQuant> = LeakCoefficient::ZERO_PERCENT;
     pub const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDeltaQuant> = BurstDelta::ZERO;
@@ -76,11 +76,11 @@ impl<Q: NPUQuantization> CoreNeuronDeathDefaults<Q> {
 }
 
 
-pub(crate) struct CoreNeuronFatigueDefaults<Q: NPUQuantization> {
+pub(crate) struct CoreNeuronFatigueDefaults<Q: NPUDataQuantization> {
     phantom_data: PhantomData<Q>
 }
 
-impl<Q: NPUQuantization> CoreNeuronFatigueDefaults<Q> {
+impl<Q: NPUDataQuantization> CoreNeuronFatigueDefaults<Q> {
     pub const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::ValueQuant> = FireThreshold::ZERO;
     pub const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::PercentageQuant> = LeakCoefficient::ZERO_PERCENT;
     pub const DEFAULT_NEURON_REFRACTORY_COUNTDOWN: BurstDelta<Q::BurstDeltaQuant> = BurstDelta::ZERO;

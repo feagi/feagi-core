@@ -10,12 +10,12 @@ use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalM
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::FeagiNPUStructureError;
 use crate::neuron::dimensional_neurons::shared_structs::DimensionalNeuronDataFromCorticalArea;
-use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, NPUNeuronMembranePotential};
+use crate::quantizables::{NPUDataQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, NPUNeuronMembranePotential};
 
-pub trait ConnectomeBaseTrait<Q: NPUQuantization>
+pub trait ConnectomeBaseTrait<Q: NPUDataQuantization>
 {
 
-    fn process_burst(&mut self, burst_index: &BurstGlobalIndex<Q::BurstIndexQuant>) -> Result<(), FeagiNPUStructureError>;
+    fn process_burst(&mut self, burst_index: &BurstGlobalIndex<Q::GlobalBurstIndexQuant>) -> Result<(), FeagiNPUStructureError>;
 
 
     //region Set Neuron Properties
@@ -55,13 +55,13 @@ pub trait ConnectomeBaseTrait<Q: NPUQuantization>
 }
 
 /// Connectome functions ONLY for static implementations
-pub trait ConnectomeStaticTrait<Q: NPUQuantization> // TODO const sizes
+pub trait ConnectomeStaticTrait<Q: NPUDataQuantization> // TODO const sizes
 {
     // TODO
 }
 
 /// Connectome functions ONLY for alloc capable implementations
-pub trait ConnectomeAllocTrait<Q: NPUQuantization>
+pub trait ConnectomeAllocTrait<Q: NPUDataQuantization>
 {
     // NOTE: We will not store mapping definitions in the connectome since that takes space and is
     // the job of the genome. We do not want to replicate cached data and maintain it!
@@ -100,7 +100,7 @@ pub trait ConnectomeAllocTrait<Q: NPUQuantization>
     fn create_interneuron_cortical_area_with_uniform_neurons(&mut self, // TODO change other instances of spanned to uniform
                                                              cortical_area_dimensions: NeuronVoxelDimensions<Q::CoordQuantQuant>,
                                                              neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                             neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::BurstIndexQuant>,
+                                                             neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::GlobalBurstIndexQuant>,
                                                              neuron_membrane_potential: NPUNeuronMembranePotential<Q::ValueQuant>,
                                                              neuron_fire_threshold: FireThreshold<Q::ValueQuant>,
                                                              neuron_leak_coefficient: LeakCoefficient<Q::PercentageQuant>,

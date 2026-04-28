@@ -3,15 +3,10 @@ use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUInt
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndexQuantization;
 use feagi_structures::neurons::descriptors::NeuronCount;
 
-/// Defines the quantization for all most uses in this crate // TODO this may need to be moved up a level?
-pub trait NPUQuantization {
-    type NeuronIndexQuant: QuantizableUIntType + NPUNeuronIndexType;
-    type SynapseIndexQuant: QuantizableUIntType;
-    type SynapseBundleIndexQuant: QuantizableUIntType;
-    type CorticalIndexQuant: CorticalAreaIndexQuantization;
-    type CoordQuantQuant: QuantizableUIntType;
+/// Defines the quantization for the neuronal and synapse data within this crate (not indexing) // TODO this may need to be moved up a level?
+pub trait NPUDataQuantization {
     type BurstDeltaQuant: QuantizableUIntType;
-    type BurstIndexQuant: QuantizableUIntType;
+    type GlobalBurstIndexQuant: QuantizableUIntType;
     type ValueQuant: QuantizableValueType;
     type PercentageQuant: QuantizablePercentType;
 }
@@ -118,6 +113,11 @@ define_quantizable_value_type_family!(FireThreshold);
 
 //region Fire Threshold Limit
 define_quantizable_value_type_family!(FireThresholdLimit);
+
+//endregion
+
+//region Consecutive Fire Limit
+define_quantizable_value_type_family!(ConsecutiveFireLimit);
 
 //endregion
 

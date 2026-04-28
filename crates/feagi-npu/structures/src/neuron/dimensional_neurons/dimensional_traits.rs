@@ -7,17 +7,17 @@ use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NumberNeuronsPerVoxel};
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, DimensionalStaticStorageTrait};
-use crate::quantizables::{NPUQuantization, BurstDelta, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability, BurstGlobalIndex};
+use crate::quantizables::{NPUDataQuantization, BurstDelta, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability, BurstGlobalIndex};
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
 use crate::neuron::flags::NeuronFlag;
 
-pub trait DimensionalNeuronStaticStorageTrait<Q: NPUQuantization>:
+pub trait DimensionalNeuronStaticStorageTrait<Q: NPUDataQuantization>:
 BaseNeuronStaticStorageTrait<Q>
 {
     fn get_cortical_data(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError>;
-    fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[BurstGlobalIndex<Q::BurstIndexQuant>], FeagiNPUNeuronError>;
+    fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[BurstGlobalIndex<Q::GlobalBurstIndexQuant>], FeagiNPUNeuronError>;
 
     fn get_neuron_membrane_potential(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[NPUNeuronMembranePotential<Q::ValueQuant>], FeagiNPUNeuronError>;
 
@@ -51,7 +51,7 @@ BaseNeuronStaticStorageTrait<Q>
 
 
 #[cfg(feature = "alloc")]
-pub trait DimensionalNeuronAllocStorageTrait<Q: NPUQuantization>:
+pub trait DimensionalNeuronAllocStorageTrait<Q: NPUDataQuantization>:
 DimensionalAllocStorageTrait<Q> +
 DimensionalStaticStorageTrait<Q> +
 BaseNeuronAllocStorageTrait<Q> +
@@ -63,7 +63,7 @@ DimensionalNeuronStaticStorageTrait<Q>
     fn create_cortical_area_with_uniform_neurons(&mut self,
                                                  cortical_area_dimensions: NeuronVoxelDimensions<Q::CoordQuantQuant>,
                                                  neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                 neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::BurstIndexQuant>,
+                                                 neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::GlobalBurstIndexQuant>,
                                                  neuron_membrane_potential: NPUNeuronMembranePotential<Q::ValueQuant>,
                                                  neuron_fire_threshold: FireThreshold<Q::ValueQuant>,
                                                  neuron_leak_coefficient: LeakCoefficient<Q::PercentageQuant>,

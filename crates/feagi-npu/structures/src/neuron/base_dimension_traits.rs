@@ -5,9 +5,9 @@ use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
 use crate::neuron::FeagiNPUNeuronError;
-use crate::quantizables::{NPUQuantization, NPUNeuronIndex};
+use crate::quantizables::{NPUDataQuantization, NPUNeuronIndex};
 
-pub trait DimensionalStaticStorageTrait<Q: NPUQuantization>:
+pub trait DimensionalStaticStorageTrait<Q: NPUDataQuantization>:
 BaseNeuronStaticStorageTrait<Q>
 {
 
@@ -17,7 +17,7 @@ BaseNeuronStaticStorageTrait<Q>
 
 
 #[cfg(feature = "alloc")]
-pub trait DimensionalAllocStorageTrait<Q: NPUQuantization>:
+pub trait DimensionalAllocStorageTrait<Q: NPUDataQuantization>:
 BaseNeuronAllocStorageTrait<Q> +
 DimensionalStaticStorageTrait<Q>
 // % synaptic attractivity

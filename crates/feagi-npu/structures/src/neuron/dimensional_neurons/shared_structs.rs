@@ -10,9 +10,9 @@ use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
-use feagi_structures::useful_structs::IndexedDataTracker;
+use feagi_structures::useful_structs::indexed_data_tracker;
 use crate::neuron::defaults::DimensionalNeuronDefaults;
-use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
+use crate::quantizables::{NPUDataQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
 use crate::neuron::flags::{DimensionalNeuronCorticalFlag, NeuronFlag};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
@@ -32,7 +32,7 @@ pub struct DimensionalTypedCorticalIndex<T: QuantizableUIntType> {
 /// WARNING: Do not allow modification of this struct outside their implemented dimensional_neuron structs, as
 /// often values here are tied to other cache values and vice versa!
 #[derive(Debug, Clone)]
-pub struct DimensionalNeuronCorticalData<Q: NPUQuantization>
+pub struct DimensionalNeuronCorticalData<Q: NPUDataQuantization>
 {
     pub flags: DimensionalNeuronCorticalFlag, // NOTE: do not allow modifying this structure outside this
     pub neuron_range: Range<NPUNeuronIndex<Q::NeuronIndexQuant>>,
@@ -45,7 +45,7 @@ pub struct DimensionalNeuronCorticalData<Q: NPUQuantization>
     pub consecutive_fire_limit: BurstDelta<Q::BurstDeltaQuant>,
 }
 
-impl<Q: NPUQuantization> DimensionalNeuronCorticalData<Q>
+impl<Q: NPUDataQuantization> DimensionalNeuronCorticalData<Q>
 {
 
     pub const fn new_default_valid<D: DimensionalNeuronDefaults<Q>>(neuron_range: Range<NPUNeuronIndex<Q::NeuronIndexQuant>>,
@@ -69,10 +69,10 @@ impl<Q: NPUQuantization> DimensionalNeuronCorticalData<Q>
 // TODO I took a best guess at which fields should be mutable
 
 /// Used to pass around slices easily at low cost for all cortical areas
-pub struct DimensionalNeuronDataRefSliceAllCorticalAreas<'a, Q: NPUQuantization>
+pub struct DimensionalNeuronDataRefSliceAllCorticalAreas<'a, Q: NPUDataQuantization>
 {
     pub neuron_cortical_area_index: &'a [CorticalAreaIndex<Q::CorticalIndexQuant>],
-    pub neuron_global_burst_index_of_last_firing: &'a mut [BurstGlobalIndex<Q::BurstIndexQuant>],
+    pub neuron_global_burst_index_of_last_firing: &'a mut [BurstGlobalIndex<Q::GlobalBurstIndexQuant>],
     pub neuron_membrane_potential: &'a mut [NPUNeuronMembranePotential<Q::ValueQuant>],
     pub neuron_fire_threshold: &'a mut [FireThreshold<Q::ValueQuant>],
     pub neuron_leak_coefficient: &'a mut [LeakCoefficient<Q::PercentageQuant>],
@@ -85,10 +85,10 @@ pub struct DimensionalNeuronDataRefSliceAllCorticalAreas<'a, Q: NPUQuantization>
 
 
 /// Used to pass around slices easily at low cost for a single cortical area
-pub struct DimensionalNeuronDataRefSliceSingleCorticalArea<'a, Q: NPUQuantization>
+pub struct DimensionalNeuronDataRefSliceSingleCorticalArea<'a, Q: NPUDataQuantization>
 {
     pub neuron_cortical_area_index: &'a [CorticalAreaIndex<Q::CorticalIndexQuant>],
-    pub neuron_global_burst_index_of_last_firing: &'a mut [BurstGlobalIndex<Q::BurstIndexQuant>],
+    pub neuron_global_burst_index_of_last_firing: &'a mut [BurstGlobalIndex<Q::GlobalBurstIndexQuant>],
     pub neuron_membrane_potential: &'a mut [NPUNeuronMembranePotential<Q::ValueQuant>],
     pub neuron_fire_threshold: &'a mut [FireThreshold<Q::ValueQuant>],
     pub neuron_leak_coefficient: &'a mut [LeakCoefficient<Q::PercentageQuant>],
@@ -104,9 +104,9 @@ pub struct DimensionalNeuronDataRefSliceSingleCorticalArea<'a, Q: NPUQuantizatio
 
 /// Used to pass data of neurons to be added or moved for a cortical index
 #[cfg(feature = "alloc")]
-pub struct DimensionalNeuronDataFromCorticalArea<Q: NPUQuantization>
+pub struct DimensionalNeuronDataFromCorticalArea<Q: NPUDataQuantization>
 {
-    pub neuron_global_burst_index_of_last_firing: Vec<BurstGlobalIndex<Q::BurstIndexQuant>>,
+    pub neuron_global_burst_index_of_last_firing: Vec<BurstGlobalIndex<Q::GlobalBurstIndexQuant>>,
     pub neuron_membrane_potential: Vec<NPUNeuronMembranePotential<Q::ValueQuant>>,
     pub neuron_fire_threshold: Vec<FireThreshold<Q::ValueQuant>>,
     pub neuron_leak_coefficient: Vec<LeakCoefficient<Q::PercentageQuant>>,

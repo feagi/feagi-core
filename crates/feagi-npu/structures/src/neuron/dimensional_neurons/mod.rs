@@ -5,3 +5,6 @@ pub mod core_neurons;
 pub mod inter_neurons;
 pub mod motor_neurons;
 mod shared_funcs_ram;
+mod shared;
+mod dimensional_cortical_neurons_collection;
+mod dimensional_data_traits;

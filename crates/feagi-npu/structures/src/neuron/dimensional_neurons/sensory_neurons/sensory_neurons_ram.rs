@@ -3,7 +3,7 @@ use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueTy
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
-use feagi_structures::useful_structs::{IndexedDataTracker, RangeUintVector};
+use feagi_structures::useful_structs::{indexed_data_tracker, RangeUintVector};
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, DimensionalStaticStorageTrait};
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
@@ -18,16 +18,16 @@ use crate::neuron::dimensional_neurons::shared_funcs_ram::{
     get_cortical_area_ref,
     invalidate_cortical_area_and_return_invalidated_neuron_range,
 };
-use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
+use crate::quantizables::{NPUDataQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
 // In this implementation, we can do a lot by keeping neurons of a cortical area grouped together, albeit they may not be guaranteed to be in cortical index order
 
 
-pub struct SensoryNeuronAllocRAMStorage<Q: NPUQuantization>
+pub struct SensoryNeuronAllocRAMStorage<Q: NPUDataQuantization>
 {
     // Per Neuron (including invalids)
     sensory_neuron_cached_value: Vec<NPUNeuronMembranePotential<Q::ValueQuant>>,
     neuron_cortical_area_index: Vec<CorticalAreaIndex<Q::CorticalIndexQuant>>, // faster than potentially reverse looking up a large hashmap
-    neuron_global_burst_index_of_last_firing: Vec<BurstGlobalIndex<Q::BurstIndexQuant>>,
+    neuron_global_burst_index_of_last_firing: Vec<BurstGlobalIndex<Q::GlobalBurstIndexQuant>>,
     neuron_membrane_potential: Vec<NPUNeuronMembranePotential<Q::ValueQuant>>,
     neuron_fire_threshold: Vec<FireThreshold<Q::ValueQuant>>,
     neuron_leak_coefficient: Vec<LeakCoefficient<Q::PercentageQuant>>,
@@ -45,7 +45,7 @@ pub struct SensoryNeuronAllocRAMStorage<Q: NPUQuantization>
 }
 
 // NOTE: Only define the constructor here, as we will be going through traits / generics for all data transfer!
-impl<Q: NPUQuantization>
+impl<Q: NPUDataQuantization>
 SensoryNeuronAllocRAMStorage<Q>
 {
     pub fn new(number_neurons_to_preallocate_space_for: NeuronCount<Q::NeuronIndexQuant>, number_cortical_areas_to_preallocate_space_for: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Self {
@@ -74,7 +74,7 @@ SensoryNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUQuantization>
+impl<Q: NPUDataQuantization>
 DimensionalNeuronAllocStorageTrait<Q>
 for SensoryNeuronAllocRAMStorage<Q>
 {
@@ -85,7 +85,7 @@ for SensoryNeuronAllocRAMStorage<Q>
     fn create_cortical_area_with_uniform_neurons(&mut self,
                                                  cortical_area_dimensions: NeuronVoxelDimensions<Q::CoordQuantQuant>,
                                                  neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                 neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::BurstIndexQuant>,
+                                                 neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::GlobalBurstIndexQuant>,
                                                  neuron_membrane_potential: NPUNeuronMembranePotential<Q::ValueQuant>,
                                                  neuron_fire_threshold: FireThreshold<Q::ValueQuant>,
                                                  neuron_leak_coefficient: LeakCoefficient<Q::PercentageQuant>,
@@ -169,12 +169,12 @@ for SensoryNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUQuantization>
+impl<Q: NPUDataQuantization>
 DimensionalNeuronStaticStorageTrait<Q>
 for SensoryNeuronAllocRAMStorage<Q>
 {
 
-    fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[BurstGlobalIndex<Q::BurstIndexQuant>], FeagiNPUNeuronError> {
+    fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[BurstGlobalIndex<Q::GlobalBurstIndexQuant>], FeagiNPUNeuronError> {
         let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
         let range = NPUNeuronIndex::to_usize_range(range.clone());
         Ok(&self.neuron_global_burst_index_of_last_firing[range])
@@ -278,7 +278,7 @@ for SensoryNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUQuantization>
+impl<Q: NPUDataQuantization>
 DimensionalAllocStorageTrait<Q>
 for SensoryNeuronAllocRAMStorage<Q>
 {
@@ -336,7 +336,7 @@ for SensoryNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUQuantization>
+impl<Q: NPUDataQuantization>
 DimensionalStaticStorageTrait<Q>
 for SensoryNeuronAllocRAMStorage<Q>
 {
@@ -344,7 +344,7 @@ for SensoryNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUQuantization>
+impl<Q: NPUDataQuantization>
 BaseNeuronAllocStorageTrait<Q>
 for SensoryNeuronAllocRAMStorage<Q>
 {
@@ -379,7 +379,7 @@ for SensoryNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUQuantization>
+impl<Q: NPUDataQuantization>
 BaseNeuronStaticStorageTrait<Q>
 for SensoryNeuronAllocRAMStorage<Q>
 {

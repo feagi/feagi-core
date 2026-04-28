@@ -3,11 +3,11 @@ use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
-use feagi_structures::useful_structs::{indexed_data_tracker, RangeUintVector};
+use feagi_structures::useful_structs::{IndexedDataTracker, RangeUintVector};
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, DimensionalStaticStorageTrait};
 use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
-use crate::neuron::defaults::{MotorNeuronsDefaults};
+use crate::neuron::defaults::InterNeuronsDefaults;
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
@@ -18,16 +18,16 @@ use crate::neuron::dimensional_neurons::shared_funcs_ram::{
     get_cortical_area_ref,
     invalidate_cortical_area_and_return_invalidated_neuron_range,
 };
-use crate::quantizables::{NPUDataQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
+use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
 // In this implementation, we can do a lot by keeping neurons of a cortical area grouped together, albeit they may not be guaranteed to be in cortical index order
 
-// TODO motor traits
-// TODO just copying inter neurons for now, but we should have some sensiomotor / motor specific implementations
-pub struct MotorNeuronAllocRAMStorage<Q: NPUDataQuantization>
+// TODO interneuron traits
+
+pub struct InterNeuronAllocRAMStorage<Q: NPUQuantization>
 {
     // Per Neuron (including invalids)
-    neuron_cortical_area_index: Vec<CorticalAreaIndex<Q::CorticalIndexQuant>>, // faster than potentially reverse looking up a large hashmap
-    neuron_global_burst_index_of_last_firing: Vec<BurstGlobalIndex<Q::GlobalBurstIndexQuant>>,
+    neuron_cortical_area_index: Vec<CorticalAreaIndex<Q::CorticalIndexQuant>>, // faster than potentially reverse looking up a large hashmap // TODO lookup table?
+    neuron_global_burst_index_of_last_firing: Vec<BurstGlobalIndex<Q::BurstIndexQuant>>,
     neuron_membrane_potential: Vec<NPUNeuronMembranePotential<Q::ValueQuant>>,
     neuron_fire_threshold: Vec<FireThreshold<Q::ValueQuant>>,
     neuron_leak_coefficient: Vec<LeakCoefficient<Q::PercentageQuant>>,
@@ -45,8 +45,8 @@ pub struct MotorNeuronAllocRAMStorage<Q: NPUDataQuantization>
 }
 
 // NOTE: Only define the constructor here, as we will be going through traits / generics for all data transfer!
-impl<Q: NPUDataQuantization>
-MotorNeuronAllocRAMStorage<Q>
+impl<Q: NPUQuantization>
+InterNeuronAllocRAMStorage<Q>
 {
     pub fn new(number_neurons_to_preallocate_space_for: NeuronCount<Q::NeuronIndexQuant>, number_cortical_areas_to_preallocate_space_for: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Self {
         Self {
@@ -66,15 +66,16 @@ MotorNeuronAllocRAMStorage<Q>
             cache_invalid_neuron_index_blocks: RangeUintVector::new(),
         }
     }
-    
+
+
 
 
 }
 
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUQuantization>
 DimensionalNeuronAllocStorageTrait<Q>
-for MotorNeuronAllocRAMStorage<Q>
+for InterNeuronAllocRAMStorage<Q>
 {
 
     /// Creates a cortical area of given dimensions but using a set of neuron values copied across
@@ -83,7 +84,7 @@ for MotorNeuronAllocRAMStorage<Q>
     fn create_cortical_area_with_uniform_neurons(&mut self,
                                                  cortical_area_dimensions: NeuronVoxelDimensions<Q::CoordQuantQuant>,
                                                  neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                 neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::GlobalBurstIndexQuant>,
+                                                 neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::BurstIndexQuant>,
                                                  neuron_membrane_potential: NPUNeuronMembranePotential<Q::ValueQuant>,
                                                  neuron_fire_threshold: FireThreshold<Q::ValueQuant>,
                                                  neuron_leak_coefficient: LeakCoefficient<Q::PercentageQuant>,
@@ -96,7 +97,7 @@ for MotorNeuronAllocRAMStorage<Q>
                                                  cortical_is_mp_charge_accumulation_enabled: bool,
                                                  cortical_is_mp_driven_psp_enabled: bool)
                                                  -> Result<(CorticalAreaIndex<Q::CorticalIndexQuant>), FeagiNPUNeuronError> {
-        let (output_cortical_index, extending) = default_create_cortical_area_with_uniform_neurons::<Q, MotorNeuronsDefaults<Q>>(
+        let (output_cortical_index, extending) = default_create_cortical_area_with_uniform_neurons::<Q, InterNeuronsDefaults<Q>>(
             cortical_area_dimensions,
             neurons_per_voxel,
             neuron_global_burst_index_of_last_firing,
@@ -122,7 +123,7 @@ for MotorNeuronAllocRAMStorage<Q>
             &mut self.cortical_datas,
             &mut self.cache_invalid_neuron_index_blocks,
         )?;
-
+        
         Ok((output_cortical_index))
     }
 
@@ -134,7 +135,7 @@ for MotorNeuronAllocRAMStorage<Q>
                                                                 neurons_per_voxel: NumberNeuronsPerVoxel,
                                                                 neuron_data: DimensionalNeuronDataFromCorticalArea<Q>)
                                                                 -> Result<(CorticalAreaIndex<Q::CorticalIndexQuant>), FeagiNPUNeuronError> {
-        let (output_cortical_index, is_extending) = create_cortical_area_with_individualized_neurons::<Q, MotorNeuronsDefaults<Q>>(
+        let (output_cortical_index, is_extending) = create_cortical_area_with_individualized_neurons::<Q, InterNeuronsDefaults<Q>>(
             cortical_area_dimensions,
             neurons_per_voxel,
             neuron_data,
@@ -149,19 +150,18 @@ for MotorNeuronAllocRAMStorage<Q>
             &mut self.cortical_datas,
             &mut self.cache_invalid_neuron_index_blocks,
         )?;
-
+        
         Ok((output_cortical_index))
     }
 
 }
 
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUQuantization>
 DimensionalNeuronStaticStorageTrait<Q>
-for MotorNeuronAllocRAMStorage<Q>
+for InterNeuronAllocRAMStorage<Q>
 {
-
-    fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[BurstGlobalIndex<Q::GlobalBurstIndexQuant>], FeagiNPUNeuronError> {
+    fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[BurstGlobalIndex<Q::BurstIndexQuant>], FeagiNPUNeuronError> {
         let range = &get_cortical_area_ref(&cortical_area_index, &self.cortical_datas)?.neuron_range;
         let range = NPUNeuronIndex::to_usize_range(range.clone());
         Ok(&self.neuron_global_burst_index_of_last_firing[range])
@@ -263,9 +263,9 @@ for MotorNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUQuantization>
 DimensionalAllocStorageTrait<Q>
-for MotorNeuronAllocRAMStorage<Q>
+for InterNeuronAllocRAMStorage<Q>
 {
     /// Creates a cortical area of given dimensions and neuron density,
     /// and returns its cortical area index and range of neuron indexes it covers
@@ -277,19 +277,19 @@ for MotorNeuronAllocRAMStorage<Q>
         self.create_cortical_area_with_uniform_neurons(
             cortical_area_dimensions,
             neurons_per_voxel,
-            MotorNeuronsDefaults::<Q>::DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING,
-            MotorNeuronsDefaults::<Q>::DEFAULT_NEURON_MEMBRANE_POTENTIAL,
-            MotorNeuronsDefaults::<Q>::DEFAULT_NEURON_FIRE_THRESHOLD,
-            MotorNeuronsDefaults::<Q>::DEFAULT_NEURON_LEAK_COEFFICIENT,
-            MotorNeuronsDefaults::<Q>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
-            MotorNeuronsDefaults::<Q>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_MEMBRANE_POTENTIAL,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_FIRE_THRESHOLD,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_LEAK_COEFFICIENT,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_REFRACTORY_COUNTDOWN,
+            InterNeuronsDefaults::<Q>::DEFAULT_NEURON_CONSECUTIVE_FIRE_COUNT,
 
-            MotorNeuronsDefaults::<Q>::DEFAULT_CORTICAL_EXCITABILITY,
-            MotorNeuronsDefaults::<Q>::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
-            MotorNeuronsDefaults::<Q>::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
-            MotorNeuronsDefaults::<Q>::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
-            MotorNeuronsDefaults::<Q>::DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED,
-            MotorNeuronsDefaults::<Q>::DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_EXCITABILITY,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_REFRACTORY_PERIOD_LIMIT,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_FIRE_THRESHOLD_LIMIT,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_CONSECUTIVE_FIRE_LIMIT,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_IS_MP_CHARGE_ACCUMULATION_ENABLED,
+            InterNeuronsDefaults::<Q>::DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED,
         )
     }
 
@@ -305,7 +305,7 @@ for MotorNeuronAllocRAMStorage<Q>
                                                  neurons_per_voxel: NumberNeuronsPerVoxel,
                                                  cortical_index: CorticalAreaIndex<Q::CorticalIndexQuant>)
                                                  -> Result<(Range<NPUNeuronIndex<Q::NeuronIndexQuant>>), FeagiNPUNeuronError> {
-        
+
         // TODO broken!
         todo!()
 
@@ -316,23 +316,23 @@ for MotorNeuronAllocRAMStorage<Q>
         // TODO best to make an explicit system instead! We should be able to have a shared function here
         let new_indexes = self.create_cortical_area_with_default_neurons(cortical_area_dimensions, neurons_per_voxel)?;
         Ok((deleted_indexes, new_indexes.1))
-        
+
          */
     }
 }
 
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUQuantization>
 DimensionalStaticStorageTrait<Q>
-for MotorNeuronAllocRAMStorage<Q>
+for InterNeuronAllocRAMStorage<Q>
 {
 
 }
 
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUQuantization>
 BaseNeuronAllocStorageTrait<Q>
-for MotorNeuronAllocRAMStorage<Q>
+for InterNeuronAllocRAMStorage<Q>
 {
 
     /// Frees unused neuron vector capacity and invalid neurons (assuming they were sorted to the back first!)
@@ -364,9 +364,9 @@ for MotorNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUQuantization>
 BaseNeuronStaticStorageTrait<Q>
-for MotorNeuronAllocRAMStorage<Q>
+for InterNeuronAllocRAMStorage<Q>
 {
     const NUMBER_BYTES_PER_NEURON: usize = 0; // TODO
 

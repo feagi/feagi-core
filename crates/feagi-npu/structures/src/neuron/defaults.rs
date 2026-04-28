@@ -1,15 +1,15 @@
 use core::marker::PhantomData;
 use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
 use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
-use crate::quantizables::{NPUQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronMembranePotential, NeuronExcitability};
+use crate::quantizables::{NPUDataQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronMembranePotential, NeuronExcitability};
 
 //region Dimension Neurons
 
 // NOTE: Core has special handling!
 
-pub(crate) trait DimensionalNeuronDefaults<Q: NPUQuantization> {
+pub(crate) trait DimensionalNeuronDefaults<Q: NPUDataQuantization> {
     // Neuron Defaults
-    const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::BurstIndexQuant>;
+    const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::GlobalBurstIndexQuant>;
     const DEFAULT_NEURON_MEMBRANE_POTENTIAL: NPUNeuronMembranePotential<Q::ValueQuant>;
     const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::ValueQuant>;
     const DEFAULT_NEURON_LEAK_COEFFICIENT: LeakCoefficient<Q::PercentageQuant>;
@@ -26,17 +26,17 @@ pub(crate) trait DimensionalNeuronDefaults<Q: NPUQuantization> {
     const DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED: bool;
 }
 
-pub(crate) struct SensoryNeuronDefaults<Q: NPUQuantization>(PhantomData<Q>);
-pub(crate) struct MotorNeuronsDefaults<Q: NPUQuantization>(PhantomData<Q>);
-pub(crate) struct InterNeuronsDefaults<Q: NPUQuantization>(PhantomData<Q>);
+pub(crate) struct SensoryNeuronDefaults<Q: NPUDataQuantization>(PhantomData<Q>);
+pub(crate) struct MotorNeuronsDefaults<Q: NPUDataQuantization>(PhantomData<Q>);
+pub(crate) struct InterNeuronsDefaults<Q: NPUDataQuantization>(PhantomData<Q>);
 
 macro_rules! impl_dimensional_neuron_defaults {
     ($defaults_type:ident) => {
-        impl<Q: NPUQuantization> DimensionalNeuronDefaults<Q> for $defaults_type<Q> {
+        impl<Q: NPUDataQuantization> DimensionalNeuronDefaults<Q> for $defaults_type<Q> {
             // TODO are these defaults fine?
             // Neuron Defaults
-            const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::BurstIndexQuant> =
-                BurstGlobalIndex(Q::BurstIndexQuant::ZERO);
+            const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::GlobalBurstIndexQuant> =
+                BurstGlobalIndex(Q::GlobalBurstIndexQuant::ZERO);
             const DEFAULT_NEURON_MEMBRANE_POTENTIAL: NPUNeuronMembranePotential<Q::ValueQuant> =
                 NPUNeuronMembranePotential(Q::ValueQuant::ZERO);
             const DEFAULT_NEURON_FIRE_THRESHOLD: FireThreshold<Q::ValueQuant> =
@@ -62,8 +62,8 @@ macro_rules! impl_dimensional_neuron_defaults {
             const DEFAULT_CORTICAL_IS_MP_DRIVEN_PSP_ENABLED: bool = false;
         }
 
-        impl<Q: NPUQuantization> $defaults_type<Q> {
-            pub(crate) const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::BurstIndexQuant> =
+        impl<Q: NPUDataQuantization> $defaults_type<Q> {
+            pub(crate) const DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING: BurstGlobalIndex<Q::GlobalBurstIndexQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_NEURON_GLOBAL_BURST_INDEX_OF_LAST_FIRING;
             pub(crate) const DEFAULT_NEURON_MEMBRANE_POTENTIAL: NPUNeuronMembranePotential<Q::ValueQuant> =
                 <Self as DimensionalNeuronDefaults<Q>>::DEFAULT_NEURON_MEMBRANE_POTENTIAL;

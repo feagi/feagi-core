@@ -1,8 +1,8 @@
-use crate::quantizables::{NPUQuantization, SynapseIndex, SynapseCount};
+use crate::quantizables::{NPUDataQuantization, SynapseIndex, SynapseCount};
 
 // NOTE: we cannot add most properties to the base trait since synapse types vary wildly in implementation
 
-pub trait BaseSynapseStorageTrait<Q: NPUQuantization>
+pub trait BaseSynapseStorageTrait<Q: NPUDataQuantization>
 {
     const NUMBER_BYTES_PER_SYNAPSE: usize;
 
@@ -24,13 +24,13 @@ pub trait BaseSynapseStorageTrait<Q: NPUQuantization>
     // why not both?
 }
 
-pub trait BaseSynapseStaticStorageTrait<Q: NPUQuantization>:
+pub trait BaseSynapseStaticStorageTrait<Q: NPUDataQuantization>:
 BaseSynapseStorageTrait<Q>
 {
     
 }
 
-pub trait BaseSynapseAllocStorageTrait<Q: NPUQuantization>:
+pub trait BaseSynapseAllocStorageTrait<Q: NPUDataQuantization>:
 BaseSynapseStorageTrait<Q>
 {
     fn free_unused_synapse_capacity(&mut self, spare_capacity_to_maintain: SynapseCount<Q::SynapseIndexQuant>);
