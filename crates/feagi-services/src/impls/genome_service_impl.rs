@@ -1401,6 +1401,10 @@ impl GenomeServiceImpl {
                                 );
                             }
                         }
+                        "rate_modulated_leak" => {
+                            area.properties
+                                .insert("rate_modulated_leak".to_string(), value.clone());
+                        }
                         "visualization_voxel_granularity" => {
                             // Only store if != 1x1x1 (default), delete if set to 1x1x1
                             // Handle both integer and float JSON values
@@ -1444,6 +1448,32 @@ impl GenomeServiceImpl {
                 }
             }
             manager.refresh_cortical_area_hashes(true, false);
+        }
+
+        if changes.contains_key("rate_modulated_leak") {
+            let manager = self.connectome.write();
+            if let Some(npu_arc) = manager.get_npu().cloned() {
+                if let (Some(area), Ok(mut npu)) = (
+                    manager.get_cortical_area(&cortical_id_typed),
+                    npu_arc.lock(),
+                ) {
+                    if let Some(v) = area.properties.get("rate_modulated_leak") {
+                        let idxs: Vec<usize> = npu
+                            .get_neurons_in_cortical_area(cortical_idx)
+                            .into_iter()
+                            .map(|id| id as usize)
+                            .collect();
+                        npu.sync_rate_modulated_leak_from_cortical_property(
+                            cortical_idx,
+                            v,
+                            area.leak_coefficient(),
+                            idxs,
+                        );
+                    } else {
+                        npu.remove_rate_modulated_leak(cortical_idx);
+                    }
+                }
+            }
         }
 
         // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
@@ -1700,6 +1730,10 @@ impl GenomeServiceImpl {
                                     serde_json::json!(v),
                                 );
                             }
+                        }
+                        "rate_modulated_leak" => {
+                            area.properties
+                                .insert("rate_modulated_leak".to_string(), value.clone());
                         }
                         "visualization_voxel_granularity" => {
                             // Only store if != 1x1x1 (default), delete if set to 1x1x1

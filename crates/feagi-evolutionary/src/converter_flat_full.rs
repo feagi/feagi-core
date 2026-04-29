@@ -52,6 +52,7 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     // Also map _group to cortical_group for classification (needed by neuroembryogenesis)
     ("_group-t", "cortical_group"),
     ("dstmap-d", "cortical_mapping_dst"),
+    ("hmlk-d", "rate_modulated_leak"),
     ("de_gen-f", "degeneration"),
     ("pspuni-b", "psp_uniform_distribution"),
     ("mp_acc-b", "mp_charge_accumulation"),

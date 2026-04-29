@@ -281,6 +281,7 @@ use crate::{
         crate::endpoints::connectome::get_cortical_area_list_types,
         crate::endpoints::connectome::get_cortical_area_neurons,
         crate::endpoints::connectome::get_area_synapses,
+        crate::endpoints::connectome::get_area_synapses_incoming,
         crate::endpoints::connectome::get_cortical_info,
         crate::endpoints::connectome::get_stats_cortical_cumulative,
         crate::endpoints::connectome::get_neuron_properties_by_id,

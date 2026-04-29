@@ -170,6 +170,8 @@ impl CorticalChangeClassifier {
             "plasticity_constant",
             // Burst engine
             "burst_engine_active",
+            // Opt-in LIF homeostatic leak (JSON object; no synapse rebuild)
+            "rate_modulated_leak",
         ]
         .iter()
         .copied()

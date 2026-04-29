@@ -156,13 +156,16 @@ pub struct MotorSnapshotResponse {
 /// filtering, so debuggers can confirm OPU activity even when no embodiment is
 /// connected. The `agents` array shows what was actually published per agent.
 ///
-/// Optional query parameter `agent_id` filters the `agents` list to the named agent.
+/// Optional `agent_id` filters the `agents` list. Optional `cortical_id` keeps
+/// only the matching OPU in `areas` and recomputes `total_*` (same base64 as
+/// ``MotorTapArea.cortical_id`` in JSON responses).
 #[utoipa::path(
     get,
     path = "/v1/output/motor_snapshot/last",
     tag = "outputs",
     params(
-        ("agent_id" = Option<String>, Query, description = "Filter agents by id")
+        ("agent_id" = Option<String>, Query, description = "Filter agents by id"),
+        ("cortical_id" = Option<String>, Query, description = "Filter motor areas to one cortical id (base64)")
     ),
     responses(
         (status = 200, description = "Latest motor pipeline snapshot", body = MotorSnapshotResponse),
@@ -175,12 +178,9 @@ pub async fn get_motor_snapshot_last(
 ) -> ApiResult<Json<MotorSnapshotResponse>> {
     let snap = feagi_npu_burst_engine::BurstTaps::instance().motor_snapshot();
     let agent_filter = query.get("agent_id").cloned();
+    let area_filter = query.get("cortical_id").cloned();
 
-    let total_neurons: usize = snap.areas.iter().map(|a| a.neuron_count).sum();
-    let total_areas = snap.areas.len();
-    let has_data = total_areas > 0 && snap.burst_num > 0;
-
-    let areas: Vec<MotorTapArea> = snap
+    let mut areas: Vec<MotorTapArea> = snap
         .areas
         .into_iter()
         .map(|a| MotorTapArea {
@@ -199,6 +199,16 @@ pub async fn get_motor_snapshot_last(
                 .collect(),
         })
         .collect();
+
+    if let Some(ref cid) = area_filter {
+        if !cid.is_empty() {
+            areas.retain(|a| a.cortical_id == *cid);
+        }
+    }
+
+    let total_areas = areas.len();
+    let total_neurons: usize = areas.iter().map(|a| a.neuron_count).sum();
+    let has_data = total_areas > 0 && snap.burst_num > 0;
 
     let mut agents: Vec<MotorTapAgent> = snap
         .per_agent

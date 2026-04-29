@@ -4077,32 +4077,35 @@ impl ConnectomeManager {
 
         // Call NPU to create neurons
         // NOTE: Cortical area should already be registered in NPU during corticogenesis
-        let mut npu_lock = npu
-            .lock()
-            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
-
-        let neuron_count = npu_lock
-            .create_cortical_area_neurons(
-                *cortical_idx,
-                area.dimensions.width,
-                area.dimensions.height,
-                area.dimensions.depth,
-                per_voxel_cnt,
-                firing_threshold,
-                firing_threshold_increment_x,
-                firing_threshold_increment_y,
-                firing_threshold_increment_z,
-                firing_threshold_limit,
-                leak_coefficient,
-                0.0, // resting_potential (LIF default)
-                0,   // neuron_type (excitatory)
-                refractory_period,
-                excitability,
-                consecutive_fire_limit,
-                snooze_length,
-                mp_charge_accumulation,
-            )
-            .map_err(|e| BduError::Internal(format!("NPU neuron creation failed: {}", e)))?;
+        // Scope the lock so it is released before the rate_modulated_leak block below, which
+        // must take the same NPU mutex again (second lock while npu_lock lived = deadlock).
+        let neuron_count: u32 = {
+            let mut npu_lock = npu
+                .lock()
+                .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+            npu_lock
+                .create_cortical_area_neurons(
+                    *cortical_idx,
+                    area.dimensions.width,
+                    area.dimensions.height,
+                    area.dimensions.depth,
+                    per_voxel_cnt,
+                    firing_threshold,
+                    firing_threshold_increment_x,
+                    firing_threshold_increment_y,
+                    firing_threshold_increment_z,
+                    firing_threshold_limit,
+                    leak_coefficient,
+                    0.0, // resting_potential (LIF default)
+                    0,   // neuron_type (excitatory)
+                    refractory_period,
+                    excitability,
+                    consecutive_fire_limit,
+                    snooze_length,
+                    mp_charge_accumulation,
+                )
+                .map_err(|e| BduError::Internal(format!("NPU neuron creation failed: {}", e)))?
+        };
 
         trace!(
             target: "feagi-bdu",
@@ -4137,6 +4140,28 @@ impl ConnectomeManager {
         let core_state = state_manager.get_core_state();
         core_state.add_neuron_count(neuron_count);
         core_state.add_regular_neuron_count(neuron_count);
+
+        // Opt-in homeostatic leak: register on NPU (cold pass only when enabled; see `neural/docs/rate_modulated_leak.md`).
+        if let Some(npu) = &self.npu {
+            if let Ok(mut npl) = npu.lock() {
+                if let Some(v) = area.properties.get("rate_modulated_leak") {
+                    use crate::models::CorticalAreaExt;
+                    let idxs: Vec<usize> = npl
+                        .get_neurons_in_cortical_area(*cortical_idx)
+                        .into_iter()
+                        .map(|id| id as usize)
+                        .collect();
+                    npl.sync_rate_modulated_leak_from_cortical_property(
+                        *cortical_idx,
+                        v,
+                        area.leak_coefficient(),
+                        idxs,
+                    );
+                } else {
+                    npl.remove_rate_modulated_leak(*cortical_idx);
+                }
+            }
+        }
 
         // Trigger fatigue index recalculation after neuron creation
         // NOTE: Disabled during genome loading to prevent blocking

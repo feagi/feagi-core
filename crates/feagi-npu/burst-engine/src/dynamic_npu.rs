@@ -584,6 +584,30 @@ where
         dispatch_mut!(self, update_cortical_area_leak(cortical_area, leak))
     }
 
+    /// See [`crate::rate_modulated_leak`].
+    pub fn sync_rate_modulated_leak_from_cortical_property(
+        &mut self,
+        cortical_idx: u32,
+        value: &serde_json::Value,
+        base_leak: f32,
+        neuron_global_indices: Vec<usize>,
+    ) {
+        dispatch_mut!(
+            self,
+            sync_rate_modulated_leak_from_cortical_property(
+                cortical_idx,
+                value,
+                base_leak,
+                neuron_global_indices
+            )
+        );
+    }
+
+    /// Remove a cortical area from the homeostat registry.
+    pub fn remove_rate_modulated_leak(&mut self, cortical_idx: u32) {
+        dispatch_mut!(self, remove_rate_modulated_leak(cortical_idx));
+    }
+
     pub fn update_cortical_area_excitability(
         &mut self,
         cortical_area: u32,

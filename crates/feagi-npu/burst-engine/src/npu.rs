@@ -37,6 +37,7 @@ use crate::fire_structures::{
 };
 use crate::fq_sampler::{FQSampler, SamplingMode};
 use crate::neural_dynamics::*;
+use crate::rate_modulated_leak::RateModulatedLeakRegistry;
 use crate::sparse_memory_lif::{
     MemoryAssociativeLifParams, MemoryAssociativeLifParamsByArea, SparseMemoryAssociativeLifStates,
 };
@@ -381,6 +382,8 @@ pub struct RustNPU<
     /// Long-term memory predicate (wired by plasticity from memory neuron state). Reciprocal
     /// associative edges are not synthesized in STDP; register a second mapping for B→A if needed.
     memory_neuron_longterm_predicate: std::sync::RwLock<Option<MemoryNeuronPredicate>>,
+    /// @cursor:critical-path — only allocated when at least one cortical area enables rate-modulated leak.
+    rate_modulated_leak: std::sync::Mutex<RateModulatedLeakRegistry>,
 }
 
 const POWER_NEURON_UNSET: u32 = u32::MAX;
@@ -523,6 +526,7 @@ impl<
             power_neuron_id: std::sync::atomic::AtomicU32::new(POWER_NEURON_UNSET),
             memory_neuron_assoc_predicate: std::sync::RwLock::new(None),
             memory_neuron_longterm_predicate: std::sync::RwLock::new(None),
+            rate_modulated_leak: std::sync::Mutex::new(RateModulatedLeakRegistry::default()),
         })
     }
 }
@@ -2289,6 +2293,16 @@ impl<
                 &*neuron_storage,
             );
         }
+        // Option B refractory: one global countdown step per burst for all neurons (not FCL-scoped)
+        {
+            let fired_this_burst: AHashSet<u32> = dynamics_result
+                .fire_queue
+                .get_all_neuron_ids()
+                .iter()
+                .map(|n| n.0)
+                .collect();
+            finish_burst_refractory_period(&mut *neuron_storage, &fired_this_burst);
+        }
         let phase2_duration = phase2_start.elapsed();
 
         if let Some(area_idx) = trace_fcl_cortical_idx_for_logging() {
@@ -2382,6 +2396,22 @@ impl<
         // Phase 3.5: Synaptic Plasticity (STDP-like) updates
         // Uses FireLedger window ending at this burst and applies weight updates to affect burst t+1.
         self.apply_stdp_updates_for_burst(burst_count, &fire_structures.fire_ledger)?;
+
+        {
+            // Phase 3.6: opt-in homeostatic leak (cold path; no-op if registry is empty)
+            if let (Ok(mut rml), Ok(mut ns)) =
+                (self.rate_modulated_leak.lock(), self.neuron_storage.write())
+            {
+                if !rml.is_empty() {
+                    rml.apply_burstal(
+                        burst_count,
+                        &fire_structures.fire_ledger,
+                        ns.leak_coefficients_mut(),
+                    );
+                }
+            }
+        }
+
         let phase3_duration = phase3_start.elapsed();
 
         // Phase 4: Swap fire queues (current becomes previous for next burst)
@@ -3614,6 +3644,26 @@ impl<
         }
 
         updated_count
+    }
+
+    /// (Re)register or clear rate-modulated leak for a cortical area. See `neural/docs/rate_modulated_leak.md`.
+    pub fn sync_rate_modulated_leak_from_cortical_property(
+        &mut self,
+        cortical_idx: u32,
+        value: &serde_json::Value,
+        base_leak: f32,
+        neuron_global_indices: Vec<usize>,
+    ) {
+        if let Ok(mut g) = self.rate_modulated_leak.lock() {
+            g.sync_cortical(cortical_idx, value, base_leak, neuron_global_indices);
+        }
+    }
+
+    /// Remove a cortical area from the rate-modulated leak homeostat.
+    pub fn remove_rate_modulated_leak(&mut self, cortical_idx: u32) {
+        if let Ok(mut g) = self.rate_modulated_leak.lock() {
+            g.remove(cortical_idx);
+        }
     }
 
     /// Update consecutive fire limit for all neurons in a cortical area (bulk parameter change)
@@ -5240,6 +5290,11 @@ fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>>(
         if fired_previous.contains(&neuron_id.0) {
             continue;
         }
+        // Option B refractory: membrane is frozen for the whole burst; do not clear sub-threshold MP
+        // here or Phase 2 sees zeros while countdown > 0 (looks like cross-burst dilution).
+        if neuron_storage.refractory_countdowns()[idx] > 0 {
+            continue;
+        }
         if !neuron_storage.mp_charge_accumulation()[idx] {
             neuron_storage.membrane_potentials_mut()[idx] = T::zero();
         }
@@ -5771,9 +5826,8 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 1000, 10000, 20,
             );
-        // Use a non-core cortical_idx to avoid auto-creating core neurons (0=_death, 1=_power, 2=_fatigue)
-        // which would shift neuron IDs and counts in this test.
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        // Use area_id > 6 so register_cortical_area does not auto-create core neurons (0..=6).
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let id1 = npu
             .add_neuron(
@@ -5787,7 +5841,7 @@ mod tests {
                 u16::MAX,
                 0,
                 true,
-                3,
+                10,
                 0,
                 0,
                 0,
@@ -5805,7 +5859,7 @@ mod tests {
                 u16::MAX,
                 0,
                 true,
-                3,
+                10,
                 1,
                 0,
                 0,
@@ -5823,7 +5877,7 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         for i in 0..10 {
             let id = npu
@@ -5838,7 +5892,7 @@ mod tests {
                     u16::MAX,
                     0,
                     true,
-                    3,
+                    10,
                     i,
                     0,
                     0,
@@ -5906,7 +5960,7 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         // High threshold
         let _n1 = npu
@@ -5921,7 +5975,7 @@ mod tests {
                 u16::MAX,
                 0,
                 true,
-                3,
+                10,
                 0,
                 0,
                 0,
@@ -5930,17 +5984,17 @@ mod tests {
 
         // High leak
         let _n2 = npu
-            .add_neuron(1.0, 0.0, 0.9, 0.0, 0, 0, 1.0, 0, 0, true, 3, 1, 0, 0)
+            .add_neuron(1.0, 0.0, 0.9, 0.0, 0, 0, 1.0, 0, 0, true, 10, 1, 0, 0)
             .unwrap();
 
         // Long refractory period
         let _n3 = npu
-            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 100, 1.0, 0, 0, true, 3, 2, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 100, 1.0, 0, 0, true, 10, 2, 0, 0)
             .unwrap();
 
         // Low excitability
         let _n4 = npu
-            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 0.1, 0, 0, true, 3, 3, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 0.1, 0, 0, true, 10, 3, 0, 0)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 4);
@@ -5952,19 +6006,19 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        // Use non-core area IDs to avoid implicit core neuron creation (0..=2).
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
-        npu.register_cortical_area(4, CoreCorticalType::Death.to_cortical_id().as_base_64());
-        npu.register_cortical_area(5, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        // Use area_id > 6 to avoid implicit core neuron creation (0..=6).
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(11, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(12, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let _power = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 3, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 10, 0, 0, 0)
             .unwrap();
         let _area2 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 4, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 11, 0, 0, 0)
             .unwrap();
         let _area3 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 5, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 12, 0, 0, 0)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 3);
@@ -5976,13 +6030,74 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let _n1 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 3, 5, 10, 15)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 10, 5, 10, 15)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 1);
+    }
+
+    /// Option B: Phase 1 sparse MP clear (mp_charge_accumulation=false) must not wipe membrane while
+    /// refractory_countdown > 0 — otherwise sub-threshold state looks "diluted" across bursts.
+    #[test]
+    fn test_phase1_sparse_mp_reset_skips_neurons_in_refractory() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
+
+        let nid = npu
+            .add_neuron(
+                100.0,
+                f32::MAX,
+                0.0,
+                0.0,
+                0,
+                0,
+                1.0,
+                u16::MAX,
+                0,
+                false, // mp_charge_accumulation: Phase 1 normally clears carry-over next burst
+                10,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        npu.inject_sensory_with_potentials(&[(nid, 5.0)]);
+        npu.process_burst().unwrap();
+
+        let mp_after_b1 = {
+            let ns = npu.neuron_storage.read().unwrap();
+            ns.membrane_potentials()[nid.0 as usize].to_f32()
+        };
+        assert!(
+            (mp_after_b1 - 5.0).abs() < 0.02,
+            "sub-threshold MP should reflect injected candidate (~5), got {}",
+            mp_after_b1
+        );
+
+        {
+            let mut ns = npu.neuron_storage.write().unwrap();
+            ns.refractory_countdowns_mut()[nid.0 as usize] = 3;
+        }
+
+        npu.process_burst().unwrap();
+
+        let mp_after_b2 = {
+            let ns = npu.neuron_storage.read().unwrap();
+            ns.membrane_potentials()[nid.0 as usize].to_f32()
+        };
+        assert!(
+            (mp_after_b2 - mp_after_b1).abs() < 0.02,
+            "MP must not be cleared at Phase 1 while refractory (got {} vs {})",
+            mp_after_b2,
+            mp_after_b1
+        );
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -6485,14 +6600,14 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(5, CoreCorticalType::Death.to_cortical_id().as_base_64());
-        npu.register_cortical_area(6, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(11, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let n_area5 = npu
-            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 5, 0, 0, 0)
+            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 10, 0, 0, 0)
             .unwrap();
         let n_area6 = npu
-            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 6, 0, 0, 0)
+            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 11, 0, 0, 0)
             .unwrap();
 
         npu.inject_sensory_with_potentials(&[(n_area5, 5.0)]);
@@ -6506,7 +6621,7 @@ mod tests {
             );
         }
 
-        assert_eq!(npu.reset_membrane_potentials_for_cortical_area(5), 1);
+        assert_eq!(npu.reset_membrane_potentials_for_cortical_area(10), 1);
         {
             let ns = npu.neuron_storage.read().unwrap();
             assert_eq!(ns.membrane_potentials()[n_area5.0 as usize].to_f32(), 0.0);
@@ -6523,7 +6638,10 @@ mod tests {
             );
         }
 
-        assert_eq!(npu.update_cortical_area_mp_charge_accumulation(5, false), 1);
+        assert_eq!(
+            npu.update_cortical_area_mp_charge_accumulation(10, false),
+            1
+        );
         {
             let ns = npu.neuron_storage.read().unwrap();
             assert_eq!(ns.membrane_potentials()[n_area5.0 as usize].to_f32(), 0.0);
@@ -7219,8 +7337,8 @@ mod tests {
                 100, 1000, 10,
             );
 
-        // Use a non-core, non-power area to avoid implicit core neuron creation (0..=2).
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        // Use area_id > 6 to avoid implicit core neuron creation (0..=6).
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         // Add a neuron with a bounded threshold limit first (so the update actually changes it).
         let neuron_id = npu
@@ -7235,7 +7353,7 @@ mod tests {
                 u16::MAX,
                 0,
                 true,
-                3,
+                10,
                 0,
                 0,
                 0,
@@ -7243,7 +7361,7 @@ mod tests {
             .unwrap();
 
         // Live-update: 0.0 must be encoded as "no upper bound".
-        let updated = npu.update_cortical_area_threshold_limit(3, 0.0);
+        let updated = npu.update_cortical_area_threshold_limit(10, 0.0);
         assert_eq!(updated, 1);
 
         // Verify internal encoding.

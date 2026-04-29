@@ -371,24 +371,37 @@ fn convert_properties_to_flat(
 
     // Then handle special cases (these override or supplement the above)
     for (key, value) in properties {
-        if key == "cortical_mapping_dst" {
+        if key == "rate_modulated_leak" {
+            if !value.is_null() {
+                flat_blueprint.insert(format!("{}-cx-hmlk-d", prefix), value.clone());
+            }
+        } else if key == "cortical_mapping_dst" {
             // dstmap keys are already in base64 format (converted during genome load)
             if let Some(dstmap_obj) = value.as_object() {
                 flat_blueprint.insert(format!("{}-cx-dstmap-d", prefix), json!(dstmap_obj));
             }
-        } else if key == "2d_coordinate" {
-            // Handle 2D coordinates - split array into separate keys
-            if let Some(coords) = value.as_array() {
-                if coords.len() >= 2 {
-                    flat_blueprint.insert(format!("{}-cx-2dcorx-i", prefix), coords[0].clone());
-                    flat_blueprint.insert(format!("{}-cx-2dcory-i", prefix), coords[1].clone());
-                }
-            }
+        } else if key == "2d_coordinate" || key == "coordinate_2d" || key == "coordinates_2d" {
+            // Parsed genomes use `2d_coordinate`; HTTP metadata updates (e.g. circuit builder) use
+            // `coordinate_2d` / `coordinates_2d`. De-duplicated write after this loop.
+            continue;
         } else if key == "block_boundaries" || key == "relative_coordinate" {
             // Skip - already handled in convert_area_to_flat
         } else if key == "cortical_group" {
             // Map cortical_group to _group-t (overrides group_id default)
             flat_blueprint.insert(format!("{}-cx-_group-t", prefix), value.clone());
+        }
+    }
+
+    // Single write for 2D circuit-board layout. Prefer `coordinate_2d` (API / BV) over parsed-file
+    // `2d_coordinate` so saved genomes match live positions after moving nodes in Brain Visualizer.
+    let coord2d = properties
+        .get("coordinate_2d")
+        .or_else(|| properties.get("coordinates_2d"))
+        .or_else(|| properties.get("2d_coordinate"));
+    if let Some(coords) = coord2d.and_then(|v| v.as_array()) {
+        if coords.len() >= 2 {
+            flat_blueprint.insert(format!("{}-cx-2dcorx-i", prefix), coords[0].clone());
+            flat_blueprint.insert(format!("{}-cx-2dcory-i", prefix), coords[1].clone());
         }
     }
 
@@ -619,5 +632,58 @@ mod tests {
         let flat = convert_hierarchical_to_flat(&genome).unwrap();
         let key = "_____10c-Y7Gx8Xy7Fpo=-cx-twinrf-t";
         assert_eq!(flat["blueprint"][key], "Y2EyX19fX/U=");
+    }
+
+    /// `coordinate_2d` is what RuntimeGenome stores after PUT .../cortical_area (BV moves). Export must
+    /// still emit `2dcorx-i` / `2dcory-i` or reload loses circuit-builder positions.
+    #[test]
+    fn test_coordinate_2d_from_api_exports_to_flat_2dcor() {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+            IOCorticalAreaConfigurationFlag,
+        };
+        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "2d export".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+        };
+
+        let cid = CorticalID::try_from_base_64("Y7Gx8Xy7Fpo=").unwrap();
+        let mut area = CorticalArea::new(
+            cid,
+            0,
+            "movable".to_string(),
+            CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+            GenomeCoordinate3D::new(0, 0, 0),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+        )
+        .unwrap();
+        area.properties
+            .insert("coordinate_2d".to_string(), json!([400, 120]));
+        genome.cortical_areas.insert(cid, area);
+
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+        let blueprint = flat["blueprint"].as_object().unwrap();
+        let b64 = cid.as_base_64();
+        assert_eq!(blueprint[&format!("_____10c-{}-cx-2dcorx-i", b64)], 400);
+        assert_eq!(blueprint[&format!("_____10c-{}-cx-2dcory-i", b64)], 120);
     }
 }
