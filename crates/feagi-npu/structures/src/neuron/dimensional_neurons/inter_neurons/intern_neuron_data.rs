@@ -81,8 +81,25 @@ impl<Q: NPUDataQuantization, DNQ: NPUDimensionalNeuronQuantization> DimensionalC
     }
 }
 
-// TODO Array Implementation?
+impl<Q: NPUDataQuantization, DNQ: NPUDimensionalNeuronQuantization> Default for InterNeuronRamCorticalConfiguration<Q, DNQ> {
+    fn default() -> Self {
+        todo!()
+    }
+}
+
+impl<Q: NPUDataQuantization, DNQ: NPUDimensionalNeuronQuantization> InterNeuronRamCorticalConfiguration<Q, DNQ> {
+    pub fn new() -> Self {
+        todo!()
+    }
+}
+
+
+
+// TODO Array Fixed Implementation?
 
 pub(crate) struct InterNeuronRamData<Q: NPUDataQuantization, DNQ: NPUDimensionalNeuronQuantization, DimensionalCorticalConfigurationQuant: DimensionalCorticalConfigurationTrait<DNQ>> {
+    cortical_configuration:  InterNeuronRamCorticalConfiguration<Q, DNQ>,
 
 }
+
+impl
