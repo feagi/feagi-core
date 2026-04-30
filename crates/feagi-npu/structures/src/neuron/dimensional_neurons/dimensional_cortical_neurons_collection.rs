@@ -6,6 +6,18 @@ use crate::neuron::FeagiNPUNeuronError;
 // TODO Migrate away from the general IndexedDataTracker approach and instead use something
 // capable of reusing memory!
 
+
+
+
+
+
+
+
+
+
+
+
+
 pub struct DimensionalCorticalNeuronsCollection<CorticalIndexQuant, CorticalCountQuant, NeuronIndexQuant, NeuronCountQuant, NeuronDataContainer>
 where
     CorticalIndexQuant: QuantizableUIntType,

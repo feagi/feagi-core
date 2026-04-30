@@ -19,4 +19,6 @@ pub(crate) trait DimensionalCorticalConfigurationTrait<Q: NPUGlobalQuantization,
     define_ref_access_trait_methods!(refractory_period_limit, BurstDelta<DNQ::BurstDeltaQuant>);
     define_ref_access_trait_methods!(fire_threshold_limit, FireThresholdLimit<DNQ::ValueQuant>);
     define_ref_access_trait_methods!(consecutive_fire_limit, BurstDelta<DNQ::BurstDeltaQuant>);
+    
+    fn get_number_neurons(&self) -> NeuronCount<DNQ::NeuronCountQuant>;
 }

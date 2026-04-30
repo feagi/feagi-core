@@ -6,18 +6,20 @@ use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_storage_traits::{BaseNeuronCommonStorageTrait, BaseNeuronResizableStorageTrait};
 use crate::neuron::dimensional_neurons::dimensional_storage_traits::{DimensionalNeuronCommonStorageTrait, DimensionalNeuronResizableStorageTrait};
 use crate::neuron::dimensional_neurons::inter_neurons::inter_neuron_traits::{InterNeuronCommonStorageTrait, InterNeuronResizableStorageTrait};
+use crate::neuron::dimensional_neurons::neuron_collection::NeuronCollectionRam;
+use crate::neuron::dimensional_neurons::neuron_models::DimensionalNeuronModelDataResizableTrait;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUDimensionalNeuronQuantization, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
 use crate::quantizables::NPUGlobalQuantization;
 
-pub struct InterNeuronAllocRAMStorage<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModelData: >
+pub struct InterNeuronAllocRAMStorage<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>>
 {
-
+    neuron_collection: NeuronCollectionRam<Q, DNQ, NeuronModel>,
 }
 
-impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> BaseNeuronCommonStorageTrait<Q, DNQ> for InterNeuronAllocRAMStorage<Q, DNQ> {
+impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>> BaseNeuronCommonStorageTrait<Q, DNQ, NeuronModel> for InterNeuronAllocRAMStorage<Q, DNQ, NeuronModel> {
     fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<DNQ::NeuronIndexQuant> {
         todo!()
     }
@@ -35,7 +37,7 @@ impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> BaseNeuron
     }
 }
 
-impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> BaseNeuronResizableStorageTrait<Q, DNQ> for InterNeuronAllocRAMStorage<Q, DNQ> {
+impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>> BaseNeuronResizableStorageTrait<Q, DNQ> for InterNeuronAllocRAMStorage<Q, DNQ, NeuronModel> {
     fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronCount<DNQ::NeuronIndexQuant>) -> NeuronCount<DNQ::NeuronIndexQuant> {
         todo!()
     }
@@ -45,82 +47,20 @@ impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> BaseNeuron
     }
 }
 
-impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> DimensionalNeuronCommonStorageTrait<Q, DNQ> for InterNeuronAllocRAMStorage<Q, DNQ> {
-    fn get_cortical_data(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError> {
-        todo!()
-    }
-
-    fn get_cortical_data_mut(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&mut DimensionalNeuronCorticalData<DNQ>, FeagiNPUNeuronError> {
-        todo!()
-    }
-
-    fn get_global_burst_index_of_last_firing(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[BurstGlobalIndex<Q::GlobalBurstIndexQuant>], FeagiNPUNeuronError> {
-        todo!()
-    }
-
-    fn get_neuron_membrane_potential(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[NPUNeuronMembranePotential<DNQ::ValueQuant>], FeagiNPUNeuronError> {
-        todo!()
-    }
-
-    fn get_fire_threshold(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[FireThreshold<DNQ::ValueQuant>], FeagiNPUNeuronError> {
-        todo!()
-    }
-
-    fn get_leak_coefficient(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[LeakCoefficient<DNQ::PercentageQuant>], FeagiNPUNeuronError> {
-        todo!()
-    }
-
-    fn get_neuron_flags(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[NeuronFlag], FeagiNPUNeuronError> {
-        todo!()
-    }
-
-    fn get_refractory_countdown(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[BurstDelta<DNQ::BurstDeltaQuant>], FeagiNPUNeuronError> {
-        todo!()
-    }
-
-    fn get_consecutive_fire_count(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&[BurstDelta<DNQ::BurstDeltaQuant>], FeagiNPUNeuronError> {
-        todo!()
-    }
-
-    fn get_neuron_values_of_all_dimensional_neuron_cortical_areas_to_process(&mut self) -> DimensionalNeuronDataRefSliceAllCorticalAreas<'_, Q> {
-        todo!()
-    }
-
-    fn get_neuron_values_of_specific_dimensional_neuron_cortical_area_to_process(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<DimensionalNeuronDataRefSliceSingleCorticalArea<'_, Q>, FeagiNPUNeuronError> {
-        todo!()
-    }
-
-    fn set_neuron_fire_threshold(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>, executor: &impl NeuronFireThresholdExecutor<DNQ::ValueQuant, DNQ::CoordQuant>) -> Result<(), FeagiNPUNeuronError> {
-        todo!()
-    }
+impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>> DimensionalNeuronCommonStorageTrait<Q, DNQ> for InterNeuronAllocRAMStorage<Q, DNQ, NeuronModel> {
+    // TODO return bound data type
 }
 
-impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> DimensionalNeuronResizableStorageTrait<Q, DNQ> for InterNeuronAllocRAMStorage<Q, DNQ> {
-    fn create_cortical_area_with_uniform_neurons(&mut self, cortical_area_dimensions: NeuronVoxelDimensions<DNQ::CoordQuant>,
-                                                 neurons_per_voxel: NumberNeuronsPerVoxel,
-                                                 neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::GlobalBurstIndexQuant>,
-                                                 neuron_membrane_potential: NPUNeuronMembranePotential<DNQ::ValueQuant>,
-                                                 neuron_fire_threshold: FireThreshold<DNQ::ValueQuant>,
-                                                 neuron_leak_coefficient: LeakCoefficient<DNQ::PercentageQuant>,
-                                                 neuron_refractory_countdown: BurstDelta<DNQ::BurstDeltaQuant>,
-                                                 neuron_consecutive_fire_count: BurstDelta<DNQ::BurstDeltaQuant>,
-                                                 cortical_excitability: NeuronExcitability<DNQ::PercentageQuant>,
-                                                 cortical_refractory_period_limit: BurstDelta<DNQ::BurstDeltaQuant>,
-                                                 cortical_fire_threshold_limit: FireThresholdLimit<DNQ::ValueQuant>,
-                                                 cortical_consecutive_fire_limit: BurstDelta<DNQ::BurstDeltaQuant>,
-                                                 cortical_is_mp_charge_accumulation_enabled: bool,
-                                                 cortical_is_mp_driven_psp_enabled: bool)
-        -> Result<(CorticalAreaIndex<Q::CorticalIndexQuant>), FeagiNPUNeuronError> {
-        todo!()
-    }
+impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>> DimensionalNeuronResizableStorageTrait<Q, DNQ> for InterNeuronAllocRAMStorage<Q, DNQ, NeuronModel> {
+
 }
 
-impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> InterNeuronCommonStorageTrait<Q, DNQ> for InterNeuronAllocRAMStorage<Q, DNQ>
+impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>> InterNeuronCommonStorageTrait<Q, DNQ> for InterNeuronAllocRAMStorage<Q, DNQ, NeuronModel>
 {
-
+    // Custom Cortical Area Stuff
 }
 
-impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> InterNeuronResizableStorageTrait<Q, DNQ> for InterNeuronAllocRAMStorage<Q, DNQ>
+impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>> InterNeuronResizableStorageTrait<Q, DNQ> for InterNeuronAllocRAMStorage<Q, DNQ, NeuronModel>
 {
-
+    // TODO add cortical area (use spawners)
 }

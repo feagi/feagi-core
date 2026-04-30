@@ -1,10 +1,12 @@
 use core::marker::PhantomData;
+use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NeuronMembranePotential, NumberNeuronsPerVoxel};
 use crate::neuron::dimensional_neurons::neuron_models::dimensional_cortical_configuration_traits::DimensionalCorticalConfigurationTrait;
 use crate::neuron::dimensional_neurons::neuron_models::dimensional_neuron_data_traits::{DimensionalNeuronModelDataResizableTrait, DimensionalNeuronModelDataSharedTrait};
 use crate::neuron::dimensional_neurons::neuron_models::feagi_standard::cortical_configuration_traits::FeagiStandardCorticalConfigurationTrait;
 use crate::neuron::dimensional_neurons::neuron_models::feagi_standard::neuron_data_traits::{FeagiStandardNeuronModelDataResizableTrait, FeagiStandardNeuronModelDataSharedTrait};
+use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::{DimensionalNeuronCorticalFlag, NeuronFlag};
 use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUDimensionalNeuronQuantization, NPUGlobalQuantization, NeuronExcitability};
 
@@ -109,6 +111,14 @@ impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> Dimensiona
     #[inline]
     fn get_neuron_consecutive_fire_countdown_mut(&mut self) -> &mut [BurstDelta<DNQ::BurstDeltaQuant>] {
         &mut self.neuron_consecutive_fire_countdown
+    }
+
+    fn is_cortical_area_valid(&self) -> bool {
+        self.cortical_configuration.cortical_flags.is_valid()
+    }
+
+    fn set_cortical_area_validity(&mut self, set_valid: bool) {
+        self.cortical_configuration.cortical_flags.set_valid(set_valid);
     }
 }
 

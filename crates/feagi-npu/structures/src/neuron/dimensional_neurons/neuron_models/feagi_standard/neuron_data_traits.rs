@@ -22,5 +22,5 @@ pub(crate) trait FeagiStandardNeuronModelDataResizableTrait<Q: NPUGlobalQuantiza
 FeagiStandardNeuronModelDataSharedTrait<Q, DNQ> +
 DimensionalNeuronModelDataResizableTrait<Q, DNQ>
 {
-    
+
 }

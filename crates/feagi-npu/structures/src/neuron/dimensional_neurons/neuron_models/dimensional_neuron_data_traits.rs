@@ -3,13 +3,16 @@
 // NOTE: Data should be flat as it is optimal in certain common operations
 
 use feagi_structures::define_ref_access_trait_methods;
-use feagi_structures::neurons::descriptors::{NeuronMembranePotential};
+use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
+use feagi_structures::neurons::descriptors::{NeuronCount, NeuronMembranePotential};
+use crate::neuron::dimensional_neurons::neuron_models::DimensionalCorticalConfigurationTrait;
 use crate::neuron::flags::{NeuronFlag};
 use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, LeakCoefficient, NPUGlobalQuantization, NPUDimensionalNeuronQuantization};
 
 /// Defines the base data (both cortical settings and neuron data) shared by all dimensional cortical areas
 pub(crate) trait DimensionalNeuronModelDataSharedTrait<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization>
 {
+    define_ref_access_trait_methods!(cortical_data, [DimensionalCorticalConfigurationTrait<Q, DNQ>]);
     define_ref_access_trait_methods!(neuron_global_burst_index_of_last_firing, [BurstGlobalIndex<Q::GlobalBurstIndexQuant>]);
     define_ref_access_trait_methods!(neuron_membrane_potential, [NeuronMembranePotential<DNQ::ValueQuant>]);
     define_ref_access_trait_methods!(neuron_fire_threshold, [FireThreshold<DNQ::ValueQuant>]);
