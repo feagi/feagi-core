@@ -6,7 +6,7 @@ mod connectome {
     use feagi_npu_structures::neuron::dimensional_neurons::shared_structs::DimensionalNeuronCorticalData;
     use feagi_npu_structures::neuron::dimensional_neurons::shared_structs::DimensionalTypedNeuronIndex;
     use feagi_npu_structures::neuron::flags::NeuronFlag;
-    use feagi_npu_structures::quantizables::{BurstDelta, NPUDataQuantization, NPUNeuronIndex, PSPMultiplier, SynapseCount, SynapticWeight, BurstGlobalIndex};
+    use feagi_npu_structures::quantizables::{BurstDelta, NPUGlobalQuantization, NPUNeuronIndex, PSPMultiplier, SynapseCount, SynapticWeight, BurstGlobalIndex};
     use feagi_npu_structures::synapse::non_plastic_dimensional::{NonPlasticSynapseFull, NonplasticSynapseProperties};
     use feagi_npu_structures::synapse::SynapseFlag;
     use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
@@ -16,7 +16,7 @@ mod connectome {
     use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
 
     struct TestQuantization;
-    impl NPUDataQuantization for TestQuantization {
+    impl NPUGlobalQuantization for TestQuantization {
         type NeuronIndexQuant = u32;
         type SynapseIndexQuant = u32;
         type SynapseBundleIndexQuant = u32;
@@ -31,7 +31,7 @@ mod connectome {
     struct TestSynapseMapper {
         
     }
-    impl<Q: NPUDataQuantization> NonPlasticCorticalMappingDefinitionExecutor<Q> for TestSynapseMapper {
+    impl<Q: NPUGlobalQuantization> NonPlasticCorticalMappingDefinitionExecutor<Q> for TestSynapseMapper {
         fn non_plastic_synapse_iterator(&self, 
                                         source_area_type: DimensionCorticalAreaType, 
                                         _source_cortical_data: &DimensionalNeuronCorticalData<Q>, 
@@ -71,10 +71,10 @@ mod connectome {
     #[test]
     fn test_ram_npu<>() {
 
-        let dimensions_a = NeuronVoxelDimensions::<<TestQuantization as NPUDataQuantization>::CoordQuantQuant>::new(20, 20, 20).unwrap();
+        let dimensions_a = NeuronVoxelDimensions::<<TestQuantization as NPUGlobalQuantization>::CoordQuantQuant>::new(20, 20, 20).unwrap();
         let density_a: NumberNeuronsPerVoxel = 1;
         
-        let dimensions_b =  NeuronVoxelDimensions::<<TestQuantization as NPUDataQuantization>::CoordQuantQuant>::new(10, 10, 10).unwrap();
+        let dimensions_b =  NeuronVoxelDimensions::<<TestQuantization as NPUGlobalQuantization>::CoordQuantQuant>::new(10, 10, 10).unwrap();
         let density_b: NumberNeuronsPerVoxel = 2;
 
         let mut connectome: ConnectomeAllocRam<TestQuantization> = ConnectomeAllocRam::new();

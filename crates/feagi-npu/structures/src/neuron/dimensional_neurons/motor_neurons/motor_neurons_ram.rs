@@ -6,24 +6,24 @@ use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel}
 use feagi_structures::useful_structs::{indexed_data_tracker, RangeUintVector};
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, DimensionalStaticStorageTrait};
-use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
+use crate::neuron::base_storage_traits::{BaseNeuronResizableStorageTrait, BaseNeuronFixedStorageTrait};
 use crate::neuron::defaults::{MotorNeuronsDefaults};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
-use crate::neuron::dimensional_neurons::dimensional_traits::{DimensionalNeuronAllocStorageTrait, DimensionalNeuronStaticStorageTrait};
+use crate::neuron::dimensional_neurons::dimensional_storage_traits::{DimensionalNeuronResizableStorageTrait, DimensionalNeuronFixedStorageTrait};
 use crate::neuron::dimensional_neurons::shared_funcs_ram::{
     create_cortical_area_with_individualized_neurons,
     default_create_cortical_area_with_uniform_neurons,
     get_cortical_area_ref,
     invalidate_cortical_area_and_return_invalidated_neuron_range,
 };
-use crate::quantizables::{NPUDataQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
+use crate::quantizables::{NPUGlobalQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
 // In this implementation, we can do a lot by keeping neurons of a cortical area grouped together, albeit they may not be guaranteed to be in cortical index order
 
 // TODO motor traits
 // TODO just copying inter neurons for now, but we should have some sensiomotor / motor specific implementations
-pub struct MotorNeuronAllocRAMStorage<Q: NPUDataQuantization>
+pub struct MotorNeuronAllocRAMStorage<Q: NPUGlobalQuantization>
 {
     // Per Neuron (including invalids)
     neuron_cortical_area_index: Vec<CorticalAreaIndex<Q::CorticalIndexQuant>>, // faster than potentially reverse looking up a large hashmap
@@ -45,7 +45,7 @@ pub struct MotorNeuronAllocRAMStorage<Q: NPUDataQuantization>
 }
 
 // NOTE: Only define the constructor here, as we will be going through traits / generics for all data transfer!
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 MotorNeuronAllocRAMStorage<Q>
 {
     pub fn new(number_neurons_to_preallocate_space_for: NeuronCount<Q::NeuronIndexQuant>, number_cortical_areas_to_preallocate_space_for: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Self {
@@ -72,8 +72,8 @@ MotorNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUDataQuantization>
-DimensionalNeuronAllocStorageTrait<Q>
+impl<Q: NPUGlobalQuantization>
+DimensionalNeuronResizableStorageTrait<Q>
 for MotorNeuronAllocRAMStorage<Q>
 {
 
@@ -156,8 +156,8 @@ for MotorNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUDataQuantization>
-DimensionalNeuronStaticStorageTrait<Q>
+impl<Q: NPUGlobalQuantization>
+DimensionalNeuronFixedStorageTrait<Q>
 for MotorNeuronAllocRAMStorage<Q>
 {
 
@@ -263,7 +263,7 @@ for MotorNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 DimensionalAllocStorageTrait<Q>
 for MotorNeuronAllocRAMStorage<Q>
 {
@@ -322,7 +322,7 @@ for MotorNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 DimensionalStaticStorageTrait<Q>
 for MotorNeuronAllocRAMStorage<Q>
 {
@@ -330,8 +330,8 @@ for MotorNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUDataQuantization>
-BaseNeuronAllocStorageTrait<Q>
+impl<Q: NPUGlobalQuantization>
+BaseNeuronResizableStorageTrait<Q>
 for MotorNeuronAllocRAMStorage<Q>
 {
 
@@ -364,8 +364,8 @@ for MotorNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUDataQuantization>
-BaseNeuronStaticStorageTrait<Q>
+impl<Q: NPUGlobalQuantization>
+BaseNeuronFixedStorageTrait<Q>
 for MotorNeuronAllocRAMStorage<Q>
 {
     const NUMBER_BYTES_PER_NEURON: usize = 0; // TODO

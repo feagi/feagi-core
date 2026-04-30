@@ -1,4 +1,4 @@
-pub mod dimensional_traits;
+pub mod dimensional_storage_traits;
 pub mod shared_structs;
 pub mod sensory_neurons;
 pub mod core_neurons;
@@ -8,3 +8,4 @@ mod shared_funcs_ram;
 mod shared;
 mod dimensional_cortical_neurons_collection;
 mod dimensional_data_traits;
+mod neuron_models;

@@ -3,13 +3,39 @@ use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUInt
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndexQuantization;
 use feagi_structures::neurons::descriptors::NeuronCount;
 
-/// Defines the quantization for the neuronal and synapse data within this crate (not indexing) // TODO this may need to be moved up a level?
-pub trait NPUDataQuantization {
-    type BurstDeltaQuant: QuantizableUIntType;
+//region NPU Quantization Sets
+
+/// Defines the burst index and cortical indexing across the entire NPU, as it needs to be
+/// synced across structures
+pub trait NPUGlobalQuantization {
     type GlobalBurstIndexQuant: QuantizableUIntType;
+    type CorticalIndexQuant: CorticalAreaIndexQuantization;
+    type CorticalCountQuant: QuantizableUIntType;
+}
+
+/// Shared Quantization details that all neuron types implement in some manner
+pub trait NPUBaseNeuronQuantization {
+    type NeuronIndexQuant: NPUNeuronIndexType;
+    type NeuronCountQuant: QuantizableUIntType;
     type ValueQuant: QuantizableValueType;
     type PercentageQuant: QuantizablePercentType;
+    type BurstDeltaQuant: QuantizableUIntType;
 }
+
+/// Dimensional neurons quantization level for their voxel coordinates
+pub trait NPUDimensionalNeuronQuantization: NPUBaseNeuronQuantization {
+    type CoordQuant: QuantizableUIntType;
+}
+
+
+pub trait NPUSynapseQuantization {
+    type SynapseIndexQuant: QuantizableUIntType;
+    type SynapseCountQuant: QuantizableUIntType;
+    type SynapseBundleIndexQuant: QuantizableUIntType;
+    type SynapseBundleCountQuant: QuantizableUIntType;
+}
+
+//endregion
 
 //region UInt Quantizations
 
@@ -87,6 +113,11 @@ define_quantizable_uint_type_family!(SynapseCount);
 
 //region Synapse Bundle Index
 define_quantizable_uint_type_family!(SynapseBundleIndex);
+
+//endregion
+
+//region Synapse Bundle Count
+define_quantizable_uint_type_family!(SynapseBundleCount);
 
 //endregion
 
@@ -173,5 +204,4 @@ define_quantizable_percentage_type_family!(LeakCoefficient);
 
 
 //endregion
-
 

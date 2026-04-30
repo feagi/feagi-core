@@ -56,8 +56,8 @@ impl<CoordQuant: QuantizableUIntType> NeuronVoxelDimensions<CoordQuant> {
         NeuronVoxelCount::from_usize(self.get_max_allowed_index_exclusive())
     }
 
-    pub fn get_number_neurons<IndexQuant: QuantizableUIntType>(&self, density: NumberNeuronsPerVoxel) -> NeuronCount<IndexQuant> {
-        NeuronCount::from_usize(self.get_max_allowed_index_exclusive().to_usize() * (density as usize))
+    pub fn get_number_neurons<IndexQuant: QuantizableUIntType>(&self, density: NeuronCount<NumberNeuronsPerVoxel>) -> NeuronCount<IndexQuant> {
+        NeuronCount::from_usize(self.get_max_allowed_index_exclusive().to_usize() * (density.to_usize()))
     }
 
     /// Linear voxel index with **x varying fastest**: `index = x + y·dx + z·dx·dy`.

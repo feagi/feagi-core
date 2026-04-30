@@ -5,21 +5,21 @@ use feagi_structures::neurons::descriptors::{NeuronCount};
 use feagi_structures::useful_structs::{indexed_data_tracker, RangeUintVector};
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::neuron::base_dimension_traits::{DimensionalStaticStorageTrait};
-use crate::neuron::base_traits::{BaseNeuronStaticStorageTrait};
+use crate::neuron::base_storage_traits::{BaseNeuronFixedStorageTrait};
 use crate::neuron::dimensional_neurons::core_neurons::default_core_areas::{CoreNeuronDeathDefaults, CoreNeuronFatigueDefaults, CoreNeuronPowerDefaults, NUMBER_SINGLE_NEURON_CORE_AREAS};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataRefSliceAllCorticalAreas, DimensionalNeuronDataRefSliceSingleCorticalArea};
-use crate::neuron::dimensional_neurons::dimensional_traits::{DimensionalNeuronStaticStorageTrait};
+use crate::neuron::dimensional_neurons::dimensional_storage_traits::{DimensionalNeuronFixedStorageTrait};
 use crate::neuron::dimensional_neurons::shared_funcs_ram::{
     get_cortical_area_ref,
 };
-use crate::quantizables::{NPUDataQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential};
+use crate::quantizables::{NPUGlobalQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, LeakCoefficient, NPUNeuronIndex, NPUNeuronMembranePotential};
 
 
 // NOTE: As of now, core is statically sized and we shall treat it as such
 
-pub struct CoreNeuronAllocRAMStorage<Q: NPUDataQuantization>
+pub struct CoreNeuronAllocRAMStorage<Q: NPUGlobalQuantization>
 {
     // Per Neuron (including invalids)
     neuron_global_burst_index_of_last_firing: [BurstGlobalIndex<Q::GlobalBurstIndexQuant>; NUMBER_SINGLE_NEURON_CORE_AREAS],
@@ -37,7 +37,7 @@ pub struct CoreNeuronAllocRAMStorage<Q: NPUDataQuantization>
 }
 
 // NOTE: Only define the constructor here, as we will be going through traits / generics for all data transfer!
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 CoreNeuronAllocRAMStorage<Q>
 {
     pub fn new() -> Self {
@@ -95,8 +95,8 @@ CoreNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUDataQuantization>
-DimensionalNeuronStaticStorageTrait<Q>
+impl<Q: NPUGlobalQuantization>
+DimensionalNeuronFixedStorageTrait<Q>
 for CoreNeuronAllocRAMStorage<Q>
 {
     fn get_cortical_data(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexQuant>) -> Result<&DimensionalNeuronCorticalData<Q>, FeagiNPUNeuronError> {
@@ -204,7 +204,7 @@ for CoreNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 DimensionalStaticStorageTrait<Q>
 for CoreNeuronAllocRAMStorage<Q>
 {
@@ -212,8 +212,8 @@ for CoreNeuronAllocRAMStorage<Q>
 }
 
 
-impl<Q: NPUDataQuantization>
-BaseNeuronStaticStorageTrait<Q>
+impl<Q: NPUGlobalQuantization>
+BaseNeuronFixedStorageTrait<Q>
 for CoreNeuronAllocRAMStorage<Q>
 {
     const NUMBER_BYTES_PER_NEURON: usize = 0; // TODO

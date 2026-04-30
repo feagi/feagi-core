@@ -8,54 +8,54 @@ use core::ops::Range;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neurons::descriptors::NeuronCount;
 use crate::neuron::FeagiNPUNeuronError;
-use crate::quantizables::{NPUDataQuantization, NPUNeuronIndex};
+use crate::quantizables::{NPUBaseNeuronQuantization, NPUGlobalQuantization, NPUNeuronIndex};
 
-pub trait BaseNeuronStaticStorageTrait<Q: NPUDataQuantization>
-{
+pub trait BaseNeuronCommonStorageTrait<Q: NPUGlobalQuantization, BNQ: NPUBaseNeuronQuantization> {
     // NOTE: Due to varying internal implementations, memory fragmentation may occur in various
     // ways, ergo be cautious of calculating internal state. Instead, use the below helper functions.
 
-    const NUMBER_BYTES_PER_NEURON: usize;
-
     /// Gets the maximum possible neuron index achievable by current quantization (or in the case
     /// of static implementations, the size of the array).
-    fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<Q::NeuronIndexQuant>;
+    fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<BNQ::NeuronIndexQuant>;
 
     /// Returns the count of valid neurons in the structure. NOT THE SAME AS TOTAL NUMBER OF
     /// NEURONS STORED!
-    fn get_total_number_of_valid_neurons(&self) -> NeuronCount<Q::NeuronIndexQuant>;
+    fn get_total_number_of_valid_neurons(&self) -> NeuronCount<BNQ::NeuronIndexQuant>;
 
     /// Returns the count of invalid neurons in the structure. NOT THE SAME AS TOTAL FREE CAPACITY!
-    fn get_total_number_of_invalid_neurons(&self) -> NeuronCount<Q::NeuronIndexQuant>;
+    fn get_total_number_of_invalid_neurons(&self) -> NeuronCount<BNQ::NeuronIndexQuant>;
 
     /// Gets the maximum possible cortical area index achievable by current quantization (or in the
     /// case of static implementations, the size of the array).
     fn get_max_possible_cortical_area_index(&self) -> CorticalAreaIndex<Q::CorticalIndexQuant>;
 
-
-
     // /// Brings all invalid neurons to the back of the internal arrays and returns the number of
     // /// them. Note that depending on the implementation, neuron order may not be preserved
     //fn sort_invalid_neurons_to_the_back(&self) -> NeuronIndexQuant; // TODO we need to be more careful here, bind this with synapses
+}
 
+pub trait BaseNeuronFixedStorageTrait<Q: NPUGlobalQuantization, BNQ: NPUBaseNeuronQuantization>:
+BaseNeuronCommonStorageTrait<Q, BNQ>
+{
+    // TODO
 }
 
 #[cfg(feature = "alloc")]
-pub trait BaseNeuronAllocStorageTrait<Q: NPUDataQuantization>:
-BaseNeuronStaticStorageTrait<Q>
+pub trait BaseNeuronResizableStorageTrait<Q: NPUGlobalQuantization, BNQ: NPUBaseNeuronQuantization>:
+BaseNeuronCommonStorageTrait<Q, BNQ>
 {
     /// Frees unused neuron vector capacity and invalid neurons (assuming they were sorted to the back first!)
     /// albeit allowing a buffer of free space. Returns the number of neurons that were freed.
     /// Returns 0 if no neurons were freed (nothing to free or spare capacity is at or less than
     /// what was requested). Note that invalid neurons not sorted to the back will not be freed.
-    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronCount<Q::NeuronIndexQuant>) -> NeuronCount<Q::NeuronIndexQuant>;
+    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronCount<BNQ::NeuronIndexQuant>) -> NeuronCount<BNQ::NeuronIndexQuant>;
 
 
     /// Deletes a cortical area by invalidating all of its neurons. Returns the neuron indexes
     /// of the disabled neurons
     /// WARNING: BE SURE TO REMOVE ASSOCIATED SYNAPSE MAPPINGS!
     fn delete_cortical_area(&mut self, cortical_index: CorticalAreaIndex<Q::CorticalIndexQuant>)
-                            -> Result<Range<NPUNeuronIndex<Q::NeuronIndexQuant>>, FeagiNPUNeuronError>;
+                            -> Result<Range<NPUNeuronIndex<BNQ::NeuronIndexQuant>>, FeagiNPUNeuronError>;
     
     // TODO Duplicate Cortical Area
 

@@ -14,20 +14,20 @@ use crate::FeagiNPUStructureError;
 use crate::fire_candidate_list::{FireCandidateListRam, FireCandidateListTrait};
 use crate::fire_queue::{FireQueueRam, FireQueueTrait};
 use crate::neuron::base_dimension_traits::DimensionalAllocStorageTrait;
-use crate::neuron::base_traits::BaseNeuronAllocStorageTrait;
+use crate::neuron::base_storage_traits::BaseNeuronResizableStorageTrait;
 use crate::neuron::dimensional_neurons::core_neurons::CoreNeuronAllocRAMStorage;
-use crate::neuron::dimensional_neurons::dimensional_traits::{DimensionalNeuronAllocStorageTrait, DimensionalNeuronStaticStorageTrait};
-use crate::neuron::dimensional_neurons::inter_neurons::InterNeuronAllocRAMStorage;
+use crate::neuron::dimensional_neurons::dimensional_storage_traits::{DimensionalNeuronResizableStorageTrait, DimensionalNeuronFixedStorageTrait};
+use crate::neuron::dimensional_neurons::inter_neurons::FeagiStandardNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::motor_neurons::MotorNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::sensory_neurons::SensoryNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
-use crate::quantizables::{NPUDataQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount, NPUNeuronMembranePotential};
+use crate::quantizables::{NPUGlobalQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount, NPUNeuronMembranePotential};
 use crate::synapse::non_plastic_dimensional::NonplasticDimensionalSynapseAllocRAMStorage;
 use crate::synapse::non_plastic_dimensional::traits::{NonplasticSynapseAllocStorageTrait, NonplasticSynapseBaseStorageTrait};
 
-pub struct ConnectomeAllocRam<Q: NPUDataQuantization>
+pub struct ConnectomeAllocRam<Q: NPUGlobalQuantization>
 {
     fire_queue: FireQueueRam<Q::NeuronIndexQuant>,
     fire_candidate_list: FireCandidateListRam<Q::NeuronIndexQuant>,
@@ -37,7 +37,7 @@ pub struct ConnectomeAllocRam<Q: NPUDataQuantization>
     core_neurons: CoreNeuronAllocRAMStorage<Q>,
     sensory_neurons: SensoryNeuronAllocRAMStorage<Q>,
     motor_neurons: MotorNeuronAllocRAMStorage<Q>,
-    inter_neurons: InterNeuronAllocRAMStorage<Q>,
+    inter_neurons: FeagiStandardNeuronAllocRAMStorage<Q>,
     
     
     // Synapses
@@ -45,7 +45,7 @@ pub struct ConnectomeAllocRam<Q: NPUDataQuantization>
 }
 
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 ConnectomeAllocRam<Q>
 {
 
@@ -56,7 +56,7 @@ ConnectomeAllocRam<Q>
             core_neurons: CoreNeuronAllocRAMStorage::new(),
             sensory_neurons: SensoryNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
             motor_neurons: MotorNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
-            inter_neurons: InterNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
+            inter_neurons: FeagiStandardNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
             synapse_nonplastic: NonplasticDimensionalSynapseAllocRAMStorage::new(SynapseCount::ZERO),
         }
     }
@@ -70,7 +70,7 @@ ConnectomeAllocRam<Q>
 
 }
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 ConnectomeAllocTrait<Q> for
 ConnectomeAllocRam<Q>
 {
@@ -303,11 +303,11 @@ ConnectomeAllocRam<Q>
     //endregion
 }
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 ConnectomeBaseTrait<Q> for
 ConnectomeAllocRam<Q>
 {
-    fn process_burst(&mut self, current_burst_index: &BurstGlobalIndex<<Q as NPUDataQuantization>::GlobalBurstIndexQuant>) -> Result<(), FeagiNPUStructureError> {
+    fn process_burst(&mut self, current_burst_index: &BurstGlobalIndex<<Q as NPUGlobalQuantization>::GlobalBurstIndexQuant>) -> Result<(), FeagiNPUStructureError> {
 
         // Reset Fire Candidate List to prep for burst
         self.fire_candidate_list.clear();

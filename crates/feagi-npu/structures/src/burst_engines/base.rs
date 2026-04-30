@@ -1,5 +1,5 @@
-use crate::quantizables::NPUDataQuantization;
+use crate::quantizables::NPUGlobalQuantization;
 
-pub trait BaseBurstEngine<Q: NPUDataQuantization> {
+pub trait BaseBurstEngine<Q: NPUGlobalQuantization> {
     
 }

@@ -11,7 +11,7 @@ use feagi_structures::useful_structs::{IndexTracker, indexed_data_tracker, Range
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
 use crate::neuron::flags::NeuronFlag;
-use crate::quantizables::{NPUDataQuantization, NPUNeuronIndex, SynapseIndex, SynapseBundleIndex, SynapseCount};
+use crate::quantizables::{NPUGlobalQuantization, NPUNeuronIndex, SynapseIndex, SynapseBundleIndex, SynapseCount};
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStorageTrait};
 use crate::synapse::dimension_to_dimension_traits::{Dim2DimSynapseAllocStorageTrait, Dim2DimSynapseBaseStorageTrait};
 use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;
@@ -25,7 +25,7 @@ use crate::synapse::non_plastic_dimensional::traits::{NonplasticSynapseAllocStor
 
 // TODO we can optimize this by shoving the cortical types into the flags
 
-pub struct NonplasticDimensionalSynapseAllocRAMStorage<Q: NPUDataQuantization>
+pub struct NonplasticDimensionalSynapseAllocRAMStorage<Q: NPUGlobalQuantization>
 {
     // Data
     synapses_data: Vec<NonPlasticSynapseFull<Q::NeuronIndexQuant, Q::BurstDeltaQuant, Q::ValueQuant>>,
@@ -48,7 +48,7 @@ pub struct NonplasticDimensionalSynapseAllocRAMStorage<Q: NPUDataQuantization>
     _phantom: PhantomData<Q>,
 }
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {
     pub fn new(number_synapses_to_preallocate: SynapseCount<Q::SynapseIndexQuant>) -> Self {
@@ -198,7 +198,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
 
 }
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 NonplasticSynapseAllocStorageTrait<Q> for
 NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {
@@ -269,7 +269,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
     }
 }
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 NonplasticSynapseBaseStorageTrait<Q> for
 NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {
@@ -291,7 +291,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
 
 }
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 Dim2DimSynapseAllocStorageTrait<Q> for
 NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {
@@ -304,7 +304,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
     }
 }
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 Dim2DimSynapseBaseStorageTrait<Q> for
 NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {
@@ -349,7 +349,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
     //endregion
 }
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 BaseSynapseAllocStorageTrait<Q> for
 NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {
@@ -362,7 +362,7 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
     }
 }
 
-impl<Q: NPUDataQuantization>
+impl<Q: NPUGlobalQuantization>
 BaseSynapseStorageTrait<Q> for
 NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {

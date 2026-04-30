@@ -12,13 +12,13 @@ use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel}
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
 use crate::neuron::flags::NeuronFlag;
-use crate::quantizables::{NPUDataQuantization, NPUNeuronIndex, PSPMultiplier, SynapseBundleIndex, SynapticWeight};
+use crate::quantizables::{NPUGlobalQuantization, NPUNeuronIndex, PSPMultiplier, SynapseBundleIndex, SynapticWeight};
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStorageTrait};
 use crate::synapse::dimension_to_dimension_traits::Dim2DimSynapseStaticStorageTrait;
 use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;
 use crate::synapse::non_plastic_dimensional::NonPlasticSynapseFull;
 
-pub trait NonplasticSynapseBaseStorageTrait<Q: NPUDataQuantization> :
+pub trait NonplasticSynapseBaseStorageTrait<Q: NPUGlobalQuantization> :
 BaseSynapseStorageTrait<Q>
 {
     const DEFAULT_SYNAPSE_WEIGHT: SynapticWeight<Q::ValueQuant> = SynapticWeight::ONE;
@@ -39,7 +39,7 @@ BaseSynapseStorageTrait<Q>
 }
 
 
-pub trait NonplasticSynapseStaticStorageTrait<Q: NPUDataQuantization> :
+pub trait NonplasticSynapseStaticStorageTrait<Q: NPUGlobalQuantization> :
 Dim2DimSynapseStaticStorageTrait<Q>
 {
 
@@ -48,7 +48,7 @@ Dim2DimSynapseStaticStorageTrait<Q>
 
 }
 
-pub trait NonplasticSynapseAllocStorageTrait<Q: NPUDataQuantization> :
+pub trait NonplasticSynapseAllocStorageTrait<Q: NPUGlobalQuantization> :
 BaseSynapseAllocStorageTrait<Q>
 {
     fn add_synapses_mapping_between_cortical_areas(&mut self,

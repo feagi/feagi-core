@@ -13,7 +13,7 @@ where
 {
     potentials: Vec<NeuronMembranePotential<PotentialQuant>>,
     cortical_dimensions: NeuronVoxelDimensions<CoordQuant>,
-    cortical_density: NumberNeuronsPerVoxel,
+    number_neurons_per_voxel: NeuronCount<NumberNeuronsPerVoxel>,
     /// Holds the index quant type so `NeuronVoxelIndexQuant` is not an unused struct parameter.
     _index_quant: PhantomData<NeuronVoxelIndexQuant>,
 }
@@ -23,8 +23,8 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronDenseVector<Poten
     CoordQuant: QuantizableUIntType,
     NeuronVoxelIndexQuant: QuantizableUIntType
 {
-    pub fn new(dimensions: NeuronVoxelDimensions<CoordQuant>, density: NumberNeuronsPerVoxel) -> Result<Self, FeagiStructuresNeuronError> {
-        if density == 0 {
+    pub fn new(dimensions: NeuronVoxelDimensions<CoordQuant>, density: NeuronCount<NumberNeuronsPerVoxel>) -> Result<Self, FeagiStructuresNeuronError> {
+        if density == NeuronCount::ZERO {
             return Err(FeagiStructuresNeuronError::BadParameters {context: "Neuron density cannot be zero!"})
         }
 
@@ -32,7 +32,7 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronDenseVector<Poten
         Ok(Self {
             potentials: vec![NeuronMembranePotential::ZERO; number_neurons.to_usize()],
             cortical_dimensions: dimensions,
-            cortical_density: density,
+            number_neurons_per_voxel: density,
             _index_quant: PhantomData,
         })
     }
@@ -43,8 +43,9 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> SingleCorticalNeuronCol
     CoordQuant: QuantizableUIntType,
     NeuronVoxelIndexQuant: QuantizableUIntType
 {
-    fn get_neuron_voxel_density(&self) -> NumberNeuronsPerVoxel {
-        self.cortical_density
+    fn get_neuron_voxel_density(&self) -> NeuronCount<NumberNeuronsPerVoxel> {
+        
+        self.number_neurons_per_voxel
     }
 
     fn get_representing_cortical_area_dimensions(&self) -> &NeuronVoxelDimensions<CoordQuant> {
@@ -52,7 +53,7 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> SingleCorticalNeuronCol
     }
 
     fn neuron_index_max_limit(&self) -> NeuronIndex<NeuronVoxelIndexQuant> {
-        NeuronIndex::from_usize(self.cortical_dimensions.get_number_neurons::<NeuronVoxelIndexQuant>(self.cortical_density).to_usize())
+        NeuronIndex::from_usize(self.cortical_dimensions.get_number_neurons::<NeuronVoxelIndexQuant>(self.number_neurons_per_voxel).to_usize())
     }
 
     fn neuron_voxel_index_max_limit(&self) -> NeuronVoxelIndex<NeuronVoxelIndexQuant> {

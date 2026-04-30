@@ -6,12 +6,12 @@ use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
 use crate::neuron::dimensional_neurons::shared_structs::DimensionalNeuronCorticalData;
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
-use crate::quantizables::{NPUNeuronIndex, NPUDataQuantization, SynapseCount};
+use crate::quantizables::{NPUNeuronIndex, NPUGlobalQuantization, SynapseCount};
 use crate::synapse::non_plastic_dimensional::NonPlasticSynapseFull;
 // NOTE: We cannot enum this as then we cannot add types outside of this crate
 
 /// Allows custom mapping of synapses from source neurons to destination neurons
-pub trait NonPlasticCorticalMappingDefinitionExecutor<Q: NPUDataQuantization>
+pub trait NonPlasticCorticalMappingDefinitionExecutor<Q: NPUGlobalQuantization>
 {
     // NOTE: NPUNeuronIndex is global along all dimensional neurons, ergo you may see a range like
     // neurons 64-96, which contains 32 neurons within the given dimensions and density!

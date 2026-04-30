@@ -1,25 +1,25 @@
 use crate::neuron::base_dimension_traits::{DimensionalAllocStorageTrait, DimensionalStaticStorageTrait};
-use crate::neuron::base_traits::{BaseNeuronAllocStorageTrait, BaseNeuronStaticStorageTrait};
-use crate::neuron::dimensional_neurons::dimensional_traits::{DimensionalNeuronAllocStorageTrait, DimensionalNeuronStaticStorageTrait};
-use crate::quantizables::NPUDataQuantization;
+use crate::neuron::base_storage_traits::{BaseNeuronResizableStorageTrait, BaseNeuronFixedStorageTrait};
+use crate::neuron::dimensional_neurons::dimensional_storage_traits::{DimensionalNeuronResizableStorageTrait, DimensionalNeuronFixedStorageTrait};
+use crate::quantizables::NPUGlobalQuantization;
 
-pub trait SensoryNeuronBaseTrait<Q: NPUDataQuantization>:
+pub trait SensoryNeuronBaseTrait<Q: NPUGlobalQuantization>:
 {
     
 }
 
-pub trait SensoryNeuronStaticStorageTrait<Q: NPUDataQuantization>:
+pub trait SensoryNeuronStaticStorageTrait<Q: NPUGlobalQuantization>:
 SensoryNeuronBaseTrait<Q> +
-DimensionalNeuronStaticStorageTrait<Q>
+DimensionalNeuronFixedStorageTrait<Q>
 {
 
 }
 
 
 #[cfg(feature = "alloc")]
-pub trait SensoryNeuronAllocStorageTrait<Q: NPUDataQuantization>:
+pub trait SensoryNeuronAllocStorageTrait<Q: NPUGlobalQuantization>:
 SensoryNeuronBaseTrait<Q> +
-DimensionalNeuronAllocStorageTrait<Q>
+DimensionalNeuronResizableStorageTrait<Q>
 {
 
 }

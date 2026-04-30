@@ -5,13 +5,13 @@
 
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
-use crate::quantizables::{NPUDataQuantization, NPUNeuronIndex, SynapseIndex, SynapseCount};
+use crate::quantizables::{NPUGlobalQuantization, NPUNeuronIndex, SynapseIndex, SynapseCount};
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStaticStorageTrait, BaseSynapseStorageTrait};
 use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;
 
 // NOTE: We know the type of synapse that will be created will always be a dimension to a dimensional neuron
 
-pub trait Dim2DimSynapseBaseStorageTrait<Q: NPUDataQuantization>:
+pub trait Dim2DimSynapseBaseStorageTrait<Q: NPUGlobalQuantization>:
 BaseSynapseStorageTrait<Q>
 {
 
@@ -48,7 +48,7 @@ BaseSynapseStorageTrait<Q>
 }
 
 
-pub trait Dim2DimSynapseStaticStorageTrait<Q: NPUDataQuantization>:
+pub trait Dim2DimSynapseStaticStorageTrait<Q: NPUGlobalQuantization>:
 Dim2DimSynapseBaseStorageTrait<Q> +
 BaseSynapseStaticStorageTrait<Q>
 {
@@ -56,7 +56,7 @@ BaseSynapseStaticStorageTrait<Q>
 
 }
 
-pub trait Dim2DimSynapseAllocStorageTrait<Q: NPUDataQuantization>:
+pub trait Dim2DimSynapseAllocStorageTrait<Q: NPUGlobalQuantization>:
 Dim2DimSynapseBaseStorageTrait<Q> +
 BaseSynapseAllocStorageTrait<Q>
 {

@@ -47,3 +47,4 @@ impl DimensionalNeuronCorticalFlag {
         DimensionalNeuronCorticalFlag::from_raw(0x01)
     }
 }
+

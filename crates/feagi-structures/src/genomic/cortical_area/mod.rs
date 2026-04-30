@@ -6,7 +6,7 @@ mod dimensional_cortical_area_type;
 pub mod io_cortical_area_configuration_flag;
 
 pub mod descriptors;
-
+mod cortical_area_model_type;
 
 //pub use cortical_area::CorticalArea;
 pub use cortical_area_type::{
@@ -14,3 +14,4 @@ pub use cortical_area_type::{
 };
 pub use cortical_id::CorticalID;
 pub use dimensional_cortical_area_type::DimensionCorticalAreaType;
+pub use cortical_area_model_type::CorticalAreaModelType;

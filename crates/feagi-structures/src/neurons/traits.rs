@@ -1,13 +1,14 @@
+use serde_json::Number;
 use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxels::descriptors::{NeuronVoxelCount, NeuronVoxelDimensions, NeuronVoxelIndex};
-use crate::neurons::descriptors::{NeuronIndex, NeuronMembranePotential, NumberNeuronsPerVoxel};
+use crate::neurons::descriptors::{NeuronCount, NeuronIndex, NeuronMembranePotential, NumberNeuronsPerVoxel};
 
 pub trait SingleCorticalNeuronCollectionBase<PotentialQuant, CoordQuant, IndexQuant> where
     PotentialQuant: QuantizableValueType,
     CoordQuant: QuantizableUIntType,
     IndexQuant: QuantizableUIntType
 {
-    fn get_neuron_voxel_density(&self) -> NumberNeuronsPerVoxel;
+    fn get_neuron_voxel_density(&self) -> NeuronCount<NumberNeuronsPerVoxel>;
 
     fn get_representing_cortical_area_dimensions(&self) -> &NeuronVoxelDimensions<CoordQuant>;
 

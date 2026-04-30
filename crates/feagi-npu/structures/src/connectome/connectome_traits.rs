@@ -10,9 +10,9 @@ use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalM
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::FeagiNPUStructureError;
 use crate::neuron::dimensional_neurons::shared_structs::DimensionalNeuronDataFromCorticalArea;
-use crate::quantizables::{NPUDataQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, NPUNeuronMembranePotential};
+use crate::quantizables::{NPUGlobalQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, NPUNeuronMembranePotential};
 
-pub trait ConnectomeBaseTrait<Q: NPUDataQuantization>
+pub trait ConnectomeBaseTrait<Q: NPUGlobalQuantization>
 {
 
     fn process_burst(&mut self, burst_index: &BurstGlobalIndex<Q::GlobalBurstIndexQuant>) -> Result<(), FeagiNPUStructureError>;
@@ -55,13 +55,13 @@ pub trait ConnectomeBaseTrait<Q: NPUDataQuantization>
 }
 
 /// Connectome functions ONLY for static implementations
-pub trait ConnectomeStaticTrait<Q: NPUDataQuantization> // TODO const sizes
+pub trait ConnectomeStaticTrait<Q: NPUGlobalQuantization> // TODO const sizes
 {
     // TODO
 }
 
 /// Connectome functions ONLY for alloc capable implementations
-pub trait ConnectomeAllocTrait<Q: NPUDataQuantization>
+pub trait ConnectomeAllocTrait<Q: NPUGlobalQuantization>
 {
     // NOTE: We will not store mapping definitions in the connectome since that takes space and is
     // the job of the genome. We do not want to replicate cached data and maintain it!
