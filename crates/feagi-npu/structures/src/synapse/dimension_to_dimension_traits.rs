@@ -61,11 +61,11 @@ Dim2DimSynapseBaseStorageTrait<Q> +
 BaseSynapseAllocStorageTrait<Q>
 {
 
-    fn remove_all_synapses_mappings_to_and_from_cortical_area(&mut self, area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>)
+    fn remove_all_synapses_mappings_to_and_from_cortical_area(&mut self, area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>)
         -> Result<(), FeagiNPUSynapseError>;
 
-    fn remove_all_synaptic_mappings_between_cortical_areas(&mut self, source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>,
-                                                           destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>)
+    fn remove_all_synaptic_mappings_between_cortical_areas(&mut self, source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>,
+                                                           destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>)
                                                            -> Result<(), FeagiNPUSynapseError>;
 
     // TODO

@@ -20,7 +20,7 @@ mod connectome {
         type NeuronIndexQuant = u32;
         type SynapseIndexQuant = u32;
         type SynapseBundleIndexQuant = u32;
-        type CorticalIndexQuant = u16;
+        type CorticalIndexCountQuant = u16;
         type CoordQuantQuant = u32;
         type BurstDeltaQuant = u16;
         type GlobalBurstIndexQuant = u32;

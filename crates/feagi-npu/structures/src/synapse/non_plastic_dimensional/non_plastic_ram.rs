@@ -38,7 +38,7 @@ pub struct NonplasticDimensionalSynapseAllocRAMStorage<Q: NPUGlobalQuantization>
 
     /// Includes ranges of entire valid synapse blocks mapped to their cortical mapping. MAY INCLUDE individual dead synapses
     cache_valid_synapse_blocks: AHashMap<
-        (DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>, DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>),
+        (DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>, DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>),
         IndexedDataTracker<Range<SynapseIndex<Q::SynapseIndexQuant>>, SynapseBundleIndex<Q::SynapseBundleIndexQuant>>
     >,
 
@@ -67,8 +67,8 @@ NonplasticDimensionalSynapseAllocRAMStorage<Q>
 
     fn insert_valid_synapse_block_and_get_index(&mut self,
                                                 synapse_block: Range<SynapseIndex<Q::SynapseIndexQuant>>,
-                                                source_area: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>,
-                                                destination_area: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>)
+                                                source_area: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>,
+                                                destination_area: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>)
                                                 -> SynapseBundleIndex<Q::SynapseBundleIndexQuant>
     {
         let key = (source_area, destination_area);
@@ -203,10 +203,10 @@ NonplasticSynapseAllocStorageTrait<Q> for
 NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {
     fn add_synapses_mapping_between_cortical_areas(&mut self,
-                                                   source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>,
+                                                   source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>,
                                                    source_cortical_data: &DimensionalNeuronCorticalData<Q>,
                                                    source_neuron_flags: &[NeuronFlag],
-                                                   destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>,
+                                                   destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>,
                                                    destination_cortical_data: &DimensionalNeuronCorticalData<Q>,
                                                    destination_neuron_flags: &[NeuronFlag],
                                                    neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q>)
@@ -295,11 +295,11 @@ impl<Q: NPUGlobalQuantization>
 Dim2DimSynapseAllocStorageTrait<Q> for
 NonplasticDimensionalSynapseAllocRAMStorage<Q>
 {
-    fn remove_all_synapses_mappings_to_and_from_cortical_area(&mut self, area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>) -> Result<(), FeagiNPUSynapseError> {
+    fn remove_all_synapses_mappings_to_and_from_cortical_area(&mut self, area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>) -> Result<(), FeagiNPUSynapseError> {
         todo!()
     }
 
-    fn remove_all_synaptic_mappings_between_cortical_areas(&mut self, source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>, destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>) -> Result<(), FeagiNPUSynapseError> {
+    fn remove_all_synaptic_mappings_between_cortical_areas(&mut self, source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>, destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>) -> Result<(), FeagiNPUSynapseError> {
         todo!()
     }
 }

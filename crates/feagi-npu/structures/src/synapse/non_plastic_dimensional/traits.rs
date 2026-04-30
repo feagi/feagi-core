@@ -52,10 +52,10 @@ pub trait NonplasticSynapseAllocStorageTrait<Q: NPUGlobalQuantization> :
 BaseSynapseAllocStorageTrait<Q>
 {
     fn add_synapses_mapping_between_cortical_areas(&mut self,
-                                                   source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>,
+                                                   source_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>,
                                                    source_cortical_data: &DimensionalNeuronCorticalData<Q>,
                                                    source_neuron_flags: &[NeuronFlag],
-                                                   destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexQuant>,
+                                                   destination_area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>,
                                                    destination_cortical_data: &DimensionalNeuronCorticalData<Q>,
                                                    destination_neuron_flags: &[NeuronFlag],
                                                    neuron_mapping_executor: &impl NonPlasticCorticalMappingDefinitionExecutor<Q>)

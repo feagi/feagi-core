@@ -71,7 +71,7 @@ impl<Q: NPUGlobalQuantization> DimensionalNeuronCorticalData<Q>
 /// Used to pass around slices easily at low cost for all cortical areas
 pub struct DimensionalNeuronDataRefSliceAllCorticalAreas<'a, Q: NPUGlobalQuantization>
 {
-    pub neuron_cortical_area_index: &'a [CorticalAreaIndex<Q::CorticalIndexQuant>],
+    pub neuron_cortical_area_index: &'a [CorticalAreaIndex<Q::CorticalIndexCountQuant>],
     pub neuron_global_burst_index_of_last_firing: &'a mut [BurstGlobalIndex<Q::GlobalBurstIndexQuant>],
     pub neuron_membrane_potential: &'a mut [NPUNeuronMembranePotential<Q::ValueQuant>],
     pub neuron_fire_threshold: &'a mut [FireThreshold<Q::ValueQuant>],
@@ -80,14 +80,14 @@ pub struct DimensionalNeuronDataRefSliceAllCorticalAreas<'a, Q: NPUGlobalQuantiz
     pub neuron_refractory_countdown: &'a mut [BurstDelta<Q::BurstDeltaQuant>],
     pub neuron_consecutive_fire_count: &'a mut [BurstDelta<Q::BurstDeltaQuant>],
 
-    pub cortical_data: &'a IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndexQuant>>,
+    pub cortical_data: &'a IndexedDataTracker<DimensionalNeuronCorticalData<Q>, CorticalAreaIndex<Q::CorticalIndexCountQuant>>,
 }
 
 
 /// Used to pass around slices easily at low cost for a single cortical area
 pub struct DimensionalNeuronDataRefSliceSingleCorticalArea<'a, Q: NPUGlobalQuantization>
 {
-    pub neuron_cortical_area_index: &'a [CorticalAreaIndex<Q::CorticalIndexQuant>],
+    pub neuron_cortical_area_index: &'a [CorticalAreaIndex<Q::CorticalIndexCountQuant>],
     pub neuron_global_burst_index_of_last_firing: &'a mut [BurstGlobalIndex<Q::GlobalBurstIndexQuant>],
     pub neuron_membrane_potential: &'a mut [NPUNeuronMembranePotential<Q::ValueQuant>],
     pub neuron_fire_threshold: &'a mut [FireThreshold<Q::ValueQuant>],

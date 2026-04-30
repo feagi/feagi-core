@@ -9,8 +9,14 @@ pub use generated::CorticalChannelCoordinate;
 pub use generated::CorticalChannelDimensions;
 use crate::base_quantizable::QuantizableUIntType;
 
+
+crate::define_quantizable_uint_type_family!(CorticalAreaCount);
+
 // Used to denote the cortical area index within the NPU directly. May have various quantizations
 crate::define_quantizable_uint_type_family!(CorticalAreaIndex);
+
+
+
 
 /// Quantizations that support the  built-in core cortical area indexes.
 pub trait CorticalAreaIndexQuantization: QuantizableUIntType {

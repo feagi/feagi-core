@@ -2,13 +2,14 @@ use core::marker::PhantomData;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NeuronMembranePotential, NumberNeuronsPerVoxel};
+use crate::neuron::dimensional_neurons::neuron_models::dimensional_cortical_area_generator_traits::DimensionalCorticalAreaGeneratorTrait;
 use crate::neuron::dimensional_neurons::neuron_models::dimensional_cortical_configuration_traits::DimensionalCorticalConfigurationTrait;
 use crate::neuron::dimensional_neurons::neuron_models::dimensional_neuron_data_traits::{DimensionalNeuronModelDataResizableTrait, DimensionalNeuronModelDataSharedTrait};
-use crate::neuron::dimensional_neurons::neuron_models::feagi_standard::cortical_configuration_traits::FeagiStandardCorticalConfigurationTrait;
-use crate::neuron::dimensional_neurons::neuron_models::feagi_standard::neuron_data_traits::{FeagiStandardNeuronModelDataResizableTrait, FeagiStandardNeuronModelDataSharedTrait};
+use crate::neuron::dimensional_neurons::neuron_models::feagi_standard::feagi_standard_traits::{FeagiStandardNeuronModelDataResizableTrait, FeagiStandardNeuronModelDataSharedTrait};
+use crate::neuron::dimensional_neurons::neuron_models::feagi_standard::{FeagiStandardCorticalAreaGenerator, FeagiStandardCorticalConfigurationTrait};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::{DimensionalNeuronCorticalFlag, NeuronFlag};
-use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUDimensionalNeuronQuantization, NPUGlobalQuantization, NeuronExcitability};
+use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUDimensionalNeuronQuantization, NPUGlobalQuantization, NPUNeuronMembranePotential, NeuronExcitability};
 
 //region Neuron Data
 
@@ -131,7 +132,7 @@ pub(crate) struct FeagiStandardCorticalConfigurationRam<Q: NPUGlobalQuantization
     cortical_flags: DimensionalNeuronCorticalFlag,
     cortical_dimensions: NeuronVoxelDimensions<DNQ::CoordQuant>,
     number_neurons_per_voxel: NeuronCount<NumberNeuronsPerVoxel>,
-    number_neurons_invalid_from_degeneration: NeuronCount<DNQ::NeuronCountQuant>,
+    number_neurons_invalid_from_degeneration: NeuronCount<DNQ::NeuronIndexCountQuant>,
     excitability: NeuronExcitability<DNQ::PercentageQuant>,
     refractory_period_limit: BurstDelta<DNQ::BurstDeltaQuant>,
     fire_threshold_limit: FireThresholdLimit<DNQ::ValueQuant>,
@@ -176,12 +177,12 @@ impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> Dimensiona
     }
 
     #[inline]
-    fn get_number_neurons_invalid_from_degeneration(&self) -> &NeuronCount<DNQ::NeuronCountQuant> {
+    fn get_number_neurons_invalid_from_degeneration(&self) -> &NeuronCount<DNQ::NeuronIndexCountQuant> {
         &self.number_neurons_invalid_from_degeneration
     }
 
     #[inline]
-    fn get_number_neurons_invalid_from_degeneration_mut(&mut self) -> &mut NeuronCount<DNQ::NeuronCountQuant> {
+    fn get_number_neurons_invalid_from_degeneration_mut(&mut self) -> &mut NeuronCount<DNQ::NeuronIndexCountQuant> {
         &mut self.number_neurons_invalid_from_degeneration
     }
 
@@ -227,3 +228,55 @@ impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> Dimensiona
 }
 
 //endregion
+
+
+//region Cortical Area Generators
+
+//region Uniform Cortical Area Generator
+pub struct FeagiStandardCorticalAreaGeneratorRam<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> {
+    pub cortical_area_dimensions: NeuronVoxelDimensions<DNQ::CoordQuant>,
+    pub cortical_neurons_per_voxel: NeuronCount<NumberNeuronsPerVoxel>,
+    pub cortical_is_mp_charge_accumulation_enabled: bool,
+    pub cortical_is_mp_driven_psp_enabled: bool,
+    pub cortical_excitability: NeuronExcitability<DNQ::PercentageQuant>,
+    pub cortical_refractory_period_limit: BurstDelta<DNQ::BurstDeltaQuant>,
+    pub cortical_fire_threshold_limit: FireThresholdLimit<DNQ::ValueQuant>,
+    pub cortical_consecutive_fire_limit: BurstDelta<DNQ::BurstDeltaQuant>,
+    pub neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::GlobalBurstIndexQuant>,
+    pub neuron_membrane_potential: NPUNeuronMembranePotential<DNQ::ValueQuant>,
+    pub neuron_fire_threshold: FireThreshold<DNQ::ValueQuant>,
+    pub neuron_leak_coefficient: LeakCoefficient<DNQ::PercentageQuant>,
+    pub neuron_refractory_countdown: BurstDelta<DNQ::BurstDeltaQuant>,
+    pub neuron_consecutive_fire_count: BurstDelta<DNQ::BurstDeltaQuant>,
+}
+
+impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> DimensionalCorticalAreaGeneratorTrait<Q, DNQ> for FeagiStandardCorticalAreaGeneratorRam<Q, DNQ> {
+    type DimensionNeuronModelType = FeagiStandardNeuronDataRam<Q, DNQ>;
+
+    fn number_of_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+        self.cortical_area_dimensions.get_number_neurons(&self.cortical_neurons_per_voxel)
+    }
+
+    fn generate_new_cortical_area_data(&self) -> Self::DimensionNeuronModelType {
+        todo!()
+    }
+
+    fn overwrite_dead_cortical_area_data(&self, dead_area_overwriting: &mut Self::DimensionNeuronModelType) -> Result<(), FeagiNPUNeuronError> {
+        todo!()
+    }
+}
+
+impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> FeagiStandardCorticalAreaGenerator<Q, DNQ> for FeagiStandardCorticalAreaGeneratorRam<Q, DNQ> {
+
+}
+
+//endregion
+
+//endregion
+
+pub struct FeagiStandardFullNeuronLoader<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> {
+    cortical_area_dimensions: NeuronVoxelDimensions<DNQ::CoordQuant>,
+    neurons_per_voxel: NumberNeuronsPerVoxel,
+    neuron_global_burst_index_of_last_firing: BurstGlobalIndex<Q::GlobalBurstIndexQuant>, // delete me
+    // TODO vectors, verification function
+}
