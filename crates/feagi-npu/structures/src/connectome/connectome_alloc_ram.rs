@@ -17,7 +17,7 @@ use crate::neuron::base_dimension_traits::DimensionalAllocStorageTrait;
 use crate::neuron::base_storage_traits::BaseNeuronResizableStorageTrait;
 use crate::neuron::dimensional_neurons::core_neurons::CoreNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::dimensional_storage_traits::{DimensionalNeuronResizableStorageTrait, DimensionalNeuronFixedStorageTrait};
-use crate::neuron::dimensional_neurons::inter_neurons::FeagiStandardNeuronAllocRAMStorage;
+use crate::neuron::dimensional_neurons::inter_neurons::InterNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::motor_neurons::MotorNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::sensory_neurons::SensoryNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::shared_structs::{DimensionalNeuronCorticalData, DimensionalNeuronDataFromCorticalArea, DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
@@ -37,7 +37,7 @@ pub struct ConnectomeAllocRam<Q: NPUGlobalQuantization>
     core_neurons: CoreNeuronAllocRAMStorage<Q>,
     sensory_neurons: SensoryNeuronAllocRAMStorage<Q>,
     motor_neurons: MotorNeuronAllocRAMStorage<Q>,
-    inter_neurons: FeagiStandardNeuronAllocRAMStorage<Q>,
+    inter_neurons: InterNeuronAllocRAMStorage<Q>,
     
     
     // Synapses
@@ -56,7 +56,7 @@ ConnectomeAllocRam<Q>
             core_neurons: CoreNeuronAllocRAMStorage::new(),
             sensory_neurons: SensoryNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
             motor_neurons: MotorNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
-            inter_neurons: FeagiStandardNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
+            inter_neurons: InterNeuronAllocRAMStorage::new(NeuronCount::ZERO, CorticalAreaIndex::ZERO),
             synapse_nonplastic: NonplasticDimensionalSynapseAllocRAMStorage::new(SynapseCount::ZERO),
         }
     }

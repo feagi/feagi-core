@@ -2,7 +2,7 @@ use crate::burst_engines::base::BaseBurstEngine;
 use crate::fire_candidate_list::FireCandidateListRam;
 use crate::fire_queue::FireQueueRam;
 use crate::neuron::dimensional_neurons::core_neurons::CoreNeuronAllocRAMStorage;
-use crate::neuron::dimensional_neurons::inter_neurons::FeagiStandardNeuronAllocRAMStorage;
+use crate::neuron::dimensional_neurons::inter_neurons::InterNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::motor_neurons::MotorNeuronAllocRAMStorage;
 use crate::neuron::dimensional_neurons::sensory_neurons::SensoryNeuronAllocRAMStorage;
 use crate::quantizables::NPUGlobalQuantization;
@@ -16,7 +16,7 @@ pub trait RAMBurstEngine<Q: NPUGlobalQuantization>: BaseBurstEngine<Q>
                      core_neurons: &mut CoreNeuronAllocRAMStorage<Q>,
                      sensory_neurons: &mut SensoryNeuronAllocRAMStorage<Q>,
                      motor_neurons: &mut MotorNeuronAllocRAMStorage<Q>,
-                     inter_neurons: &mut FeagiStandardNeuronAllocRAMStorage<Q>,
+                     inter_neurons: &mut InterNeuronAllocRAMStorage<Q>,
                      synapse_dimensional_nonplastic: &mut NonplasticDimensionalSynapseAllocRAMStorage<Q>
     );
 }

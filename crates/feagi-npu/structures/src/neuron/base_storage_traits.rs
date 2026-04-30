@@ -28,10 +28,6 @@ pub trait BaseNeuronCommonStorageTrait<Q: NPUGlobalQuantization, BNQ: NPUBaseNeu
     /// Gets the maximum possible cortical area index achievable by current quantization (or in the
     /// case of static implementations, the size of the array).
     fn get_max_possible_cortical_area_index(&self) -> CorticalAreaIndex<Q::CorticalIndexQuant>;
-
-    // /// Brings all invalid neurons to the back of the internal arrays and returns the number of
-    // /// them. Note that depending on the implementation, neuron order may not be preserved
-    //fn sort_invalid_neurons_to_the_back(&self) -> NeuronIndexQuant; // TODO we need to be more careful here, bind this with synapses
 }
 
 pub trait BaseNeuronFixedStorageTrait<Q: NPUGlobalQuantization, BNQ: NPUBaseNeuronQuantization>:
