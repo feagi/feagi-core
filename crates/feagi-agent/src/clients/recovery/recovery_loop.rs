@@ -6,6 +6,7 @@
 //! is the HTTP fetch, which already has a blocking variant), so the same
 //! tick logic is usable from a Tokio loop or from a plain thread.
 
+#[cfg(feature = "agent-client-asynchelper-tokio")]
 use crate::clients::recovery::health_fetch::HealthFetchConfig;
 use crate::clients::recovery::health_watcher::{HealthEvent, HealthWatcher};
 use crate::clients::recovery::reconnect_policy::{
