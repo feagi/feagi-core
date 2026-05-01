@@ -595,8 +595,10 @@ mod tests {
     #[test]
     fn test_property_map_completeness() {
         let map = build_property_map();
-        let unique_flat_keys: HashSet<&str> =
-            PROPERTY_MAPPINGS.iter().map(|(flat_key, _)| *flat_key).collect();
+        let unique_flat_keys: HashSet<&str> = PROPERTY_MAPPINGS
+            .iter()
+            .map(|(flat_key, _)| *flat_key)
+            .collect();
         assert_eq!(
             map.len(),
             unique_flat_keys.len(),
