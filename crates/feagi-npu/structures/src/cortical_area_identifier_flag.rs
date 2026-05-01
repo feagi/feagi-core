@@ -9,7 +9,7 @@ use feagi_structures::genomic::cortical_area::CorticalAreaModelType;
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum NPUCorticalAreaIdentifierFlag {
     CoreFeagiStandard(QuantizationLevel),
-    SensorFeagiStandard(QuantizationLevel),
+    SensoryFeagiStandard(QuantizationLevel),
     MotorFeagiStandard(QuantizationLevel),
     InterNeuronFeagiStandard(QuantizationLevel),
     InterNeuronLIF(QuantizationLevel),
@@ -40,7 +40,7 @@ impl NPUCorticalAreaIdentifierFlag {
     pub fn is_interneuron(&self) -> bool {
         match &self {
             NPUCorticalAreaIdentifierFlag::CoreFeagiStandard(_) => {false}
-            NPUCorticalAreaIdentifierFlag::SensorFeagiStandard(_) => {false}
+            NPUCorticalAreaIdentifierFlag::SensoryFeagiStandard(_) => {false}
             NPUCorticalAreaIdentifierFlag::MotorFeagiStandard(_) => {false}
             NPUCorticalAreaIdentifierFlag::Memory(_) => {false}
             _ => true

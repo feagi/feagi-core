@@ -15,7 +15,7 @@ pub trait NPUGlobalQuantization {
 /// Shared Quantization details that all neuron types implement in some manner
 pub trait NPUBaseNeuronQuantization {
     const GENERAL_DATA_QUANTIZATION_LEVEL: QuantizationLevel;
-    type NeuronIndexCountQuant: NPUNeuronIndexType;
+    type NeuronIndexCountQuant: QuantizableUIntType;
     type ValueQuant: QuantizableValueType;
     type PercentageQuant: QuantizablePercentType;
     type BurstDeltaQuant: QuantizableUIntType;
@@ -56,41 +56,6 @@ impl<T: QuantizableUIntType> NPUNeuronIndex<T> {
         (range.end - range.start).0.into()
     }
 }
-
-/// Defines some default neuron indexes. Since we don't really work with NPU neuron indexes outside
-/// the NPU, this should not be exposed.
-pub(crate) trait NPUNeuronIndexType: QuantizableUIntType {
-    const DEFAULT_CORE_POWER: Self;
-    const DEFAULT_CORE_DEATH: Self;
-    const DEFAULT_CORE_FATIGUE: Self;
-}
-
-impl NPUNeuronIndexType for u8 {
-    const DEFAULT_CORE_POWER: Self = 0;
-    const DEFAULT_CORE_DEATH: Self = 1;
-    const DEFAULT_CORE_FATIGUE: Self = 2;
-}
-
-impl NPUNeuronIndexType for u16 {
-    const DEFAULT_CORE_POWER: Self = 0;
-    const DEFAULT_CORE_DEATH: Self = 1;
-    const DEFAULT_CORE_FATIGUE: Self = 2;
-}
-
-impl NPUNeuronIndexType for u32 {
-    const DEFAULT_CORE_POWER: Self = 0;
-    const DEFAULT_CORE_DEATH: Self = 1;
-    const DEFAULT_CORE_FATIGUE: Self = 2;
-}
-
-impl<T: NPUNeuronIndexType> NPUNeuronIndex<T> {
-    pub const DEFAULT_CORE_POWER: Self = Self(T::DEFAULT_CORE_POWER);
-    pub const DEFAULT_CORE_DEATH: Self = Self(T::DEFAULT_CORE_DEATH);
-    pub const DEFAULT_CORE_FATIGUE: Self = Self(T::DEFAULT_CORE_FATIGUE);
-}
-
-
-
 
 
 //endregion

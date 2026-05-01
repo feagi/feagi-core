@@ -1,25 +1,19 @@
 // Core neurons are a bit unique as they are included in all genomes and are rather static
 
-use crate::neuron::npu_storage::dimensional_neurons::dimensional_storage_traits::{DimensionalNeuronResizableStorageTrait, DimensionalNeuronFixedStorageTrait};
-use crate::quantizables::NPUGlobalQuantization;
+use crate::neuron::npu_storage::dimensional_neurons::dimensional_storage_traits::{DimensionalNeuronCommonStorageTrait, DimensionalNeuronFixedStorageTrait, DimensionalNeuronResizableStorageTrait};
+use crate::quantizables::{NPUDimensionalNeuronQuantization, NPUGlobalQuantization};
 
-pub trait CoreNeuronBaseTrait<Q: NPUGlobalQuantization>:
+pub trait CoreNeuronCommonStorageTrait<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization>:
+DimensionalNeuronCommonStorageTrait<Q, DNQ>
 {
 
 }
 
-pub trait CoreNeuronStaticStorageTrait<Q: NPUGlobalQuantization>:
-CoreNeuronBaseTrait<Q> + 
-DimensionalNeuronFixedStorageTrait<Q>
+
+pub trait CoreNeuronFixedStorageTrait<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization>:
+DimensionalNeuronFixedStorageTrait<Q, DNQ> +
+CoreNeuronCommonStorageTrait<Q, DNQ>
 {
 
 }
 
-#[cfg(feature = "alloc")]
-pub trait CoreNeuronAllocStorageTrait<Q: NPUGlobalQuantization>:
-CoreNeuronBaseTrait<Q>
-// NOTE: We specifically do not import the other alloc traits as we do not support adding/removing
-// cortical areas of this type! 
-{
-
-}

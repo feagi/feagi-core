@@ -1,2 +1,4 @@
 mod motor_neurons_ram;
-pub use motor_neurons_ram::MotorNeuronAllocRAMStorage;
+mod motor_neuron_traits;
+
+pub use motor_neurons_ram::MotorNeuronStorageResizableRam;

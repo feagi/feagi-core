@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use feagi_structures::base_quantizable::QuantizableUIntType;
+use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
 use feagi_structures::genomic::cortical_area::CorticalAreaModelType;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NeuronMembranePotential, NumberNeuronsPerVoxel};
@@ -43,6 +43,7 @@ FeagiStandardNeuronModelDataSharedTrait<Q, DNQ> for FeagiStandardNeuronDataRam<Q
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization>
 DimensionalNeuronModelDataResizableTrait<Q, DNQ> for FeagiStandardNeuronDataRam<Q, DNQ> {
 
+    // TODO maybe an unsafe variant that rapidly scales the size of the cortical area?
     fn resize_neuron_data_vectors_for_new_dimensions(&mut self, new_dimensions: NeuronVoxelDimensions<DNQ::CoordQuant>, neurons_per_voxel: NeuronCount<NumberNeuronsPerVoxel>) {
         if new_dimensions == self.cortical_configuration.cortical_dimensions &&
             neurons_per_voxel == self.cortical_configuration.number_neurons_per_voxel {
@@ -56,13 +57,15 @@ DimensionalNeuronModelDataResizableTrait<Q, DNQ> for FeagiStandardNeuronDataRam<
             // We need to increase allocation
             let extend_by = (new_neuron_count - self.get_total_number_neurons()).to_usize();
 
-            self.neuron_global_burst_index_of_last_firing.extend(extend_by.to_iter());
-            self.neuron_membrane_potential.extend(extend_by.to_iter());
-            self.neuron_fire_threshold.extend(extend_by.to_iter());
-            self.neuron_leak_coefficient.extend(extend_by.to_iter());
-            self.neuron_flags.extend(extend_by.to_iter());
-            self.neuron_refractory_countdown.extend(extend_by.to_iter());
-            self.neuron_consecutive_fire_countdown.extend(extend_by.to_iter());
+            // TODO if large amount maybe use rayon?
+
+            self.neuron_global_burst_index_of_last_firing.extend(core::iter::repeat_n(BurstGlobalIndex::ZERO, extend_by));
+            self.neuron_membrane_potential.extend(core::iter::repeat_n(NeuronMembranePotential::ZERO, extend_by));
+            self.neuron_fire_threshold.extend(core::iter::repeat_n(FireThreshold::ZERO, extend_by));
+            self.neuron_leak_coefficient.extend(core::iter::repeat_n(LeakCoefficient::ZERO_PERCENT, extend_by));
+            self.neuron_flags.extend(core::iter::repeat_n(NeuronFlag::ALL_ZEROS, extend_by));
+            self.neuron_refractory_countdown.extend(core::iter::repeat_n(BurstDelta::ZERO, extend_by));
+            self.neuron_consecutive_fire_countdown.extend(core::iter::repeat_n(BurstDelta::ZERO, extend_by));
 
         } else {
             let new_length = new_neuron_count.to_usize();

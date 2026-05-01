@@ -65,7 +65,7 @@ BaseNeuronResizableStorageTrait<Q, DNQ> for InterNeuronStorageResizableRam<Q, DN
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>>
 DimensionalNeuronCommonStorageTrait<Q, DNQ> for InterNeuronStorageResizableRam<Q, DNQ, NeuronModel>
 {
-    type DimensionalNeuronModelDataType = FeagiStandardNeuronDataRam<Q, DNQ>;
+    type DimensionalNeuronModelDataType = NeuronModel;
 
     fn get_cortical_area_data(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexCountQuant>) -> Result<&Self::DimensionalNeuronModelDataType, FeagiNPUNeuronError> {
         self.neuron_collection.get_cortical_area(cortical_area_index)
