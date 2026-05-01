@@ -57,8 +57,8 @@ fn per_channel_motor_dimensions_for_registration(
     if motor_unit != MotorCorticalUnit::CountOutput {
         return (default_w, default_h, default_d);
     }
-    let z_min = unit_topology.channel_dimensions_min[2].max(1) as u32;
-    let z_max = unit_topology.channel_dimensions_max[2].max(1) as u32;
+    let z_min = unit_topology.channel_dimensions_min[2].max(1);
+    let z_max = unit_topology.channel_dimensions_max[2].max(1);
     let Some(decode) = decoder_properties else {
         return (default_w, default_h, default_d);
     };

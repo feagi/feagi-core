@@ -141,17 +141,12 @@ fn should_emit_throttled_warning(last_emitted_ms: &AtomicU64, interval_ms: u64) 
 /// - `RStdp`: reward-modulated STDP. Eligibility traces persist across bursts (decaying with
 ///   `eligibility_decay_bursts`), and weight commits are gated by
 ///   `R(t) = density(reward_source_area) - density(punishment_source_area)`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PlasticityMode {
+    #[default]
     Off,
     Stdp,
     RStdp,
-}
-
-impl Default for PlasticityMode {
-    fn default() -> Self {
-        Self::Off
-    }
 }
 
 /// STDP / R-STDP parameters for a plastic cortical mapping A→B.

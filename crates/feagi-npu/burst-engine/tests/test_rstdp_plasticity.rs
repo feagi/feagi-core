@@ -25,16 +25,18 @@ use feagi_npu_neural::SynapseType;
 use feagi_npu_runtime::StdRuntime;
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
-/// Build a network with src(10), dst(11), reward(12), punishment(13) areas.
-///
-/// Returns (npu, src_neurons, dst_neurons, reward_neuron, pain_neuron).
-fn create_rstdp_network() -> (
+type RstdpTestNetwork = (
     RustNPU<StdRuntime, f32, CPUBackend>,
     Vec<NeuronId>,
     Vec<NeuronId>,
     NeuronId,
     NeuronId,
-) {
+);
+
+/// Build a network with src(10), dst(11), reward(12), punishment(13) areas.
+///
+/// Returns (npu, src_neurons, dst_neurons, reward_neuron, pain_neuron).
+fn create_rstdp_network() -> RstdpTestNetwork {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 100, 1000, 10).unwrap();
@@ -532,7 +534,7 @@ fn test_rstdp_max_weight_does_not_block_punishment_to_zero() {
 
     let w_final = synapse_weight(&npu, src[0]);
     assert!(
-        w_final >= 0.0 && w_final < 1.0,
+        (0.0..1.0).contains(&w_final),
         "punishment must drive weight toward 0 even with max_weight set; got {}",
         w_final
     );

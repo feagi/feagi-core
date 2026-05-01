@@ -551,7 +551,7 @@ pub async fn get_area_synapses_incoming(
     let mut all_synapses = Vec::new();
     for neuron_info in &neurons {
         let neuron_id = neuron_info.id as u32;
-        let incoming = npu_lock.get_incoming_synapses(neuron_id as u32);
+        let incoming = npu_lock.get_incoming_synapses(neuron_id);
 
         for (source_id, weight, psp, synapse_type) in incoming {
             let mut synapse_obj = HashMap::new();
