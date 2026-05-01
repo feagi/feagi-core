@@ -1,45 +1,42 @@
 use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
 use crate::CorticalTypedNeuronIndex;
-use crate::quantizables::{BurstDelta, PSPMultiplier, SynapticWeight};
-use crate::synapse::synapse_flags::SynapseFlag;
+use crate::quantizables::{BurstDelta, NPUGlobalQuantization, NPUSynapseQuantization, PSPMultiplier, SynapticWeight};
+use crate::synapse::SynapseFlag;
 
-
-// TODO we can optimize this by shoving the cortical types into the flags
 #[derive(Debug, Copy, Clone)]
-pub struct NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>
-where
-    NeuronIndexQuant: QuantizableUIntType,
-    BurstDeltaQuant: QuantizableUIntType,
-    ValueQuant: QuantizableValueType,
+pub struct NonPlasticSynapseFull<Q: NPUGlobalQuantization, S: NPUSynapseQuantization>
 {
+    pub synapse_flag: SynapseFlag,
+    pub synapse_weight: SynapticWeight<S::SynapseIndexCountQuant>,
+    pub postsynaptic_potential_multiplier: PSPMultiplier<ValueQuant>,
+    pub synaptic_delay: BurstDelta<BurstDeltaQuant>
     pub source_neuron_index: CorticalTypedNeuronIndex<NeuronIndexQuant>,
     pub destination_neuron_index: CorticalTypedNeuronIndex<NeuronIndexQuant>,
-    pub synapse_properties: NonplasticSynapseProperties<ValueQuant, BurstDeltaQuant>,
 }
 
-impl<NeuronIndexQuant, BurstDeltaQuant, ValueQuant> NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>
+impl<NeuronIndexQuant, BurstDeltaQuant, ValueQuant> crate::synapse::non_plastic_dimensional::NonPlasticSynapseFull<NeuronIndexQuant, BurstDeltaQuant, ValueQuant>
 where
     NeuronIndexQuant: QuantizableUIntType,
     BurstDeltaQuant: QuantizableUIntType,
     ValueQuant: QuantizableValueType,
 {
-    pub const NUMBER_OF_BYTES: usize = 
-        NeuronIndexQuant::NUMBER_OF_BYTES + 
+    pub const NUMBER_OF_BYTES: usize =
         NeuronIndexQuant::NUMBER_OF_BYTES +
-            NonplasticSynapseProperties::<ValueQuant, BurstDeltaQuant>::NUMBER_OF_BYTES;
+            NeuronIndexQuant::NUMBER_OF_BYTES +
+            crate::synapse::non_plastic_dimensional::NonplasticSynapseProperties::<ValueQuant, BurstDeltaQuant>::NUMBER_OF_BYTES;
 
-    
+
     pub fn is_valid(&self) -> bool {
         self.synapse_properties.is_valid()
     }
-    
-    
+
+
 }
 
 
 /// Defines the properties of a nonplastic synapse
 #[derive(Debug, Copy, Clone)]
-pub struct NonplasticSynapseProperties<ValueQuant, BurstDeltaQuant> 
+pub struct NonplasticSynapseProperties<ValueQuant, BurstDeltaQuant>
 where
     BurstDeltaQuant: QuantizableUIntType,
     ValueQuant: QuantizableValueType
@@ -50,13 +47,13 @@ where
     pub synaptic_delay: BurstDelta<BurstDeltaQuant>
 }
 
-impl<ValueQuant, BurstDeltaQuant> NonplasticSynapseProperties<ValueQuant, BurstDeltaQuant>
+impl<ValueQuant, BurstDeltaQuant> crate::synapse::non_plastic_dimensional::NonplasticSynapseProperties<ValueQuant, BurstDeltaQuant>
 where
     BurstDeltaQuant: QuantizableUIntType,
     ValueQuant: QuantizableValueType
 {
     pub const NUMBER_OF_BYTES: usize = 1 + ValueQuant::NUMBER_OF_BYTES + ValueQuant::NUMBER_OF_BYTES + BurstDeltaQuant::NUMBER_OF_BYTES;
-    
+
     #[inline(always)]
     pub fn is_valid(&self) -> bool {
         self.synapse_flag.is_valid()

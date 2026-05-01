@@ -28,6 +28,7 @@ pub trait NPUDimensionalNeuronQuantization: NPUBaseNeuronQuantization {
 
 
 pub trait NPUSynapseQuantization {
+    type SynapseValueType: QuantizableValueType;
     type SynapseIndexCountQuant: QuantizableUIntType;
     type SynapseBundleIndexCountQuant: QuantizableUIntType;
 }

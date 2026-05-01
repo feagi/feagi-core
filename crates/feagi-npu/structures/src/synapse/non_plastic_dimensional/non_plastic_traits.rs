@@ -9,29 +9,27 @@ use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
+use crate::CorticalTypedNeuronIndex;
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
-use crate::neuron::npu_storage::::shared_structs::{DimensionalNeuronCorticalData, DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
+use crate::neuron::npu_storage::::shared_structs::{DimensionalNeuronCorticalData, DimensionalTypedCorticalIndex, CorticalTypedNeuronIndex};
 use crate::neuron::flags::NeuronFlag;
-use crate::quantizables::{NPUGlobalQuantization, NPUNeuronIndex, PSPMultiplier, SynapseBundleIndex, SynapticWeight};
+use crate::quantizables::{NPUGlobalQuantization, NPUNeuronIndex, NPUSynapseQuantization, PSPMultiplier, SynapseBundleIndex, SynapticWeight};
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStorageTrait};
-use crate::synapse::dimension_to_dimension_traits::Dim2DimSynapseStaticStorageTrait;
+use crate::synapse::dimension_to_dimension_traits::{Dim2DimSynapseBaseStorageTrait, Dim2DimSynapseStaticStorageTrait};
 use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;
 use crate::synapse::non_plastic_dimensional::NonPlasticSynapseFull;
 
-pub trait NonplasticSynapseBaseStorageTrait<Q: NPUGlobalQuantization> :
-BaseSynapseStorageTrait<Q>
+pub trait NonplasticSynapseBaseStorageTrait<Q: NPUGlobalQuantization, S: NPUSynapseQuantization>:
+Dim2DimSynapseBaseStorageTrait<Q, S>
 {
-    const DEFAULT_SYNAPSE_WEIGHT: SynapticWeight<Q::ValueQuant> = SynapticWeight::ONE;
-    const DEFAULT_SYNAPSE_PSP: PSPMultiplier<Q::ValueQuant> = PSPMultiplier::ONE;
 
     //region Get Connections
+    
+    fn get_nonplastic_synapse_data_from_source_neuron_index(&self, source_neuron_index: CorticalTypedNeuronIndex<Q::NeuronIndexCountQuant>)
+                                                            -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndexCountQuant, Q::BurstDeltaQuant, Q::ValueQuant>>, NeuronCount<Q::NeuronIndexCountQuant>), FeagiNPUSynapseError>;
 
-
-    fn get_nonplastic_synapse_data_from_source_neuron_index(&self, source_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndexQuant>, )
-                                                            -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndexQuant, Q::BurstDeltaQuant, Q::ValueQuant>>, NeuronCount<Q::NeuronIndexQuant>), FeagiNPUSynapseError>;
-
-    fn get_nonplastic_synapse_data_from_destination_neuron_index(&self, destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndexQuant>)
-        -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndexQuant, Q::BurstDeltaQuant, Q::ValueQuant>>, NeuronCount<Q::NeuronIndexQuant>), FeagiNPUSynapseError>;
+    fn get_nonplastic_synapse_data_from_destination_neuron_index(&self, destination_neuron_index: CorticalTypedNeuronIndex<Q::NeuronIndexCountQuant>)
+        -> Result<(impl Iterator<Item=&NonPlasticSynapseFull<Q::NeuronIndexCountQuant, Q::BurstDeltaQuant, Q::ValueQuant>>, NeuronCount<Q::NeuronIndexCountQuant>), FeagiNPUSynapseError>;
 
 
     //endregion
@@ -43,9 +41,7 @@ pub trait NonplasticSynapseStaticStorageTrait<Q: NPUGlobalQuantization> :
 Dim2DimSynapseStaticStorageTrait<Q>
 {
 
-
-
-
+    
 }
 
 pub trait NonplasticSynapseAllocStorageTrait<Q: NPUGlobalQuantization> :

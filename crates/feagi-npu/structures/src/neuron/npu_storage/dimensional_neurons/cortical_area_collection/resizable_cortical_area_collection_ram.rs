@@ -1,3 +1,4 @@
+use core::marker::PhantomData;
 use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalAreaCount, CorticalAreaIndex};
 use feagi_structures::neurons::descriptors::NeuronCount;
@@ -15,6 +16,7 @@ pub(crate) struct ResizableCorticalAreaCollectionRam<Q: NPUGlobalQuantization, D
     number_live_cortical_areas: CorticalAreaCount<Q::CorticalIndexCountQuant>,
     total_number_live_neurons: NeuronCount<Q::NeuronIndexCountQuant>,
     total_number_skipped_neurons: NeuronCount<Q::NeuronIndexCountQuant>,
+    _phantom_data: PhantomData<DNQ>,
 }
 
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>>
@@ -28,6 +30,7 @@ ResizableCorticalAreaCollectionRam<Q, DNQ, NeuronModel>
             number_live_cortical_areas: CorticalAreaCount::ZERO,
             total_number_live_neurons: NeuronCount::ZERO,
             total_number_skipped_neurons: NeuronCount::ZERO,
+            _phantom_data: PhantomData,
         }
     }
 
