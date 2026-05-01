@@ -3,8 +3,8 @@
 mod connectome {
     use feagi_npu_structures::connectome::{ConnectomeAllocRam, ConnectomeAllocTrait, ConnectomeBaseTrait};
     use feagi_npu_structures::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
-    use feagi_npu_structures::neuron::dimensional_neurons::shared_structs::DimensionalNeuronCorticalData;
-    use feagi_npu_structures::neuron::dimensional_neurons::shared_structs::DimensionalTypedNeuronIndex;
+    use feagi_npu_structures::neuron::npu_storage::::shared_structs::DimensionalNeuronCorticalData;
+    use feagi_npu_structures::neuron::npu_storage::::shared_structs::DimensionalTypedNeuronIndex;
     use feagi_npu_structures::neuron::flags::NeuronFlag;
     use feagi_npu_structures::quantizables::{BurstDelta, NPUGlobalQuantization, NPUNeuronIndex, PSPMultiplier, SynapseCount, SynapticWeight, BurstGlobalIndex};
     use feagi_npu_structures::synapse::non_plastic_dimensional::{NonPlasticSynapseFull, NonplasticSynapseProperties};

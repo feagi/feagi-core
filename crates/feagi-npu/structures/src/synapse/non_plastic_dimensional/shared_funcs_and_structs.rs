@@ -1,5 +1,5 @@
 use feagi_structures::base_quantizable::{QuantizableUIntType, QuantizableValueType};
-use crate::neuron::dimensional_neurons::shared_structs::DimensionalTypedNeuronIndex;
+use crate::neuron::npu_storage::::shared_structs::DimensionalTypedNeuronIndex;
 use crate::quantizables::{BurstDelta, NPUNeuronIndex, PSPMultiplier, SynapticWeight};
 use crate::synapse::synapse_flags::SynapseFlag;
 

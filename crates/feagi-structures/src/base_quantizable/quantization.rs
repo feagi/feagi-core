@@ -1,6 +1,7 @@
 
-#[derive(Debug)]
+
 #[repr(u8)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum QuantizationLevel
 {
     Bit8,

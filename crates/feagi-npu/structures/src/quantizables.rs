@@ -1,5 +1,5 @@
 use feagi_structures::{define_quantizable_percentage_type_family, define_quantizable_uint_type_family, define_quantizable_value_type_family};
-use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
+use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType, QuantizationLevel};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndexQuantization;
 use feagi_structures::neurons::descriptors::NeuronCount;
 
@@ -14,6 +14,7 @@ pub trait NPUGlobalQuantization {
 
 /// Shared Quantization details that all neuron types implement in some manner
 pub trait NPUBaseNeuronQuantization {
+    const DATA_QUANTIZATION_LEVEL: QuantizationLevel;
     type NeuronIndexCountQuant: NPUNeuronIndexType;
     type ValueQuant: QuantizableValueType;
     type PercentageQuant: QuantizablePercentType;

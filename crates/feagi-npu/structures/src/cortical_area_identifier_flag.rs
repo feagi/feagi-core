@@ -7,7 +7,8 @@ use feagi_structures::base_quantizable::QuantizationLevel;
 /// Optimally allows categorizing different types of cortical areas and their quantization levels
 /// in the space of a single byte
 #[repr(u8)]
-pub(crate) enum NPUCorticalAreaIdentifierFlag {
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub enum NPUCorticalAreaIdentifierFlag {
     Core(QuantizationLevel),
     Sensor(QuantizationLevel),
     Motor(QuantizationLevel),

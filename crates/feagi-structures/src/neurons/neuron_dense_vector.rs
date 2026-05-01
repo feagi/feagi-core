@@ -28,7 +28,7 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronDenseVector<Poten
             return Err(FeagiStructuresNeuronError::BadParameters {context: "Neuron density cannot be zero!"})
         }
 
-        let number_neurons: NeuronCount<NeuronVoxelIndexQuant> = dimensions.get_number_neurons(density);
+        let number_neurons: NeuronCount<NeuronVoxelIndexQuant> = dimensions.get_number_neurons(&density);
         Ok(Self {
             potentials: vec![NeuronMembranePotential::ZERO; number_neurons.to_usize()],
             cortical_dimensions: dimensions,
@@ -53,7 +53,7 @@ impl <PotentialQuant, CoordQuant, NeuronVoxelIndexQuant> SingleCorticalNeuronCol
     }
 
     fn neuron_index_max_limit(&self) -> NeuronIndex<NeuronVoxelIndexQuant> {
-        NeuronIndex::from_usize(self.cortical_dimensions.get_number_neurons::<NeuronVoxelIndexQuant>(self.number_neurons_per_voxel).to_usize())
+        NeuronIndex::from_usize(self.cortical_dimensions.get_number_neurons::<NeuronVoxelIndexQuant>(&self.number_neurons_per_voxel).to_usize())
     }
 
     fn neuron_voxel_index_max_limit(&self) -> NeuronVoxelIndex<NeuronVoxelIndexQuant> {
