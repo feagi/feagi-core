@@ -417,6 +417,11 @@ pub async fn get_cortical_area_neurons(
 }
 
 /// GET /v1/connectome/{cortical_area_id}/synapses
+///
+/// **Outgoing synapses only**: edges whose **source** is a neuron in
+/// `cortical_area_id`. To list **IPU→OPU** afferent synapses, use
+/// [`get_area_synapses_incoming`] instead; destination motor areas are usually
+/// dominated by the latter.
 #[utoipa::path(
     get,
     path = "/v1/connectome/{cortical_area_id}/synapses",
@@ -491,6 +496,80 @@ pub async fn get_area_synapses(
     }
 
     debug!(target: "feagi-api", "Found {} synapses from area {}", all_synapses.len(), area_id);
+    Ok(Json(all_synapses))
+}
+
+/// GET /v1/connectome/{cortical_area_id}/synapses/incoming
+///
+/// Lists **afferent** synapses whose **post-synaptic** targets are neurons in
+/// `cortical_area_id`. Complements [`get_area_synapses`], which returns only
+/// **efferent** (outgoing) edges from this area. OPUs and other destinations
+/// are primarily driven by incoming IPU→OPU plastic synapses, so the outgoing
+/// endpoint can legitimately be empty at 200 with count 0.
+#[utoipa::path(
+    get,
+    path = "/v1/connectome/{cortical_area_id}/synapses/incoming",
+    tag = "connectome"
+)]
+pub async fn get_area_synapses_incoming(
+    State(state): State<ApiState>,
+    Path(area_id): Path<String>,
+) -> ApiResult<Json<Vec<HashMap<String, serde_json::Value>>>> {
+    use tracing::debug;
+
+    let connectome_service = state.connectome_service.as_ref();
+    let neuron_service = state.neuron_service.as_ref();
+
+    let _area_info = connectome_service
+        .get_cortical_area(&area_id)
+        .await
+        .map_err(|_| ApiError::not_found("CorticalArea", &area_id))?;
+
+    let neurons = neuron_service
+        .list_neurons_in_area(&area_id, None)
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to get neurons: {}", e)))?;
+
+    debug!(
+        target: "feagi-api",
+        "Getting incoming synapses for area {}: {} neurons",
+        area_id,
+        neurons.len()
+    );
+
+    warn!(
+        "[API] /v1/connectome/cortical_area/{}/synapses/incoming - acquiring NPU lock",
+        area_id
+    );
+    let manager = feagi_brain_development::ConnectomeManager::instance();
+    let manager_lock = manager.read();
+    let npu_arc = manager_lock
+        .get_npu()
+        .ok_or_else(|| ApiError::internal("NPU not initialized"))?;
+    let npu_lock = npu_arc.lock().unwrap();
+
+    let mut all_synapses = Vec::new();
+    for neuron_info in &neurons {
+        let neuron_id = neuron_info.id as u32;
+        let incoming = npu_lock.get_incoming_synapses(neuron_id);
+
+        for (source_id, weight, psp, synapse_type) in incoming {
+            let mut synapse_obj = HashMap::new();
+            synapse_obj.insert("source_neuron_id".to_string(), serde_json::json!(source_id));
+            synapse_obj.insert("target_neuron_id".to_string(), serde_json::json!(neuron_id));
+            synapse_obj.insert("weight".to_string(), serde_json::json!(weight));
+            synapse_obj.insert("postsynaptic_potential".to_string(), serde_json::json!(psp));
+            synapse_obj.insert("synapse_type".to_string(), serde_json::json!(synapse_type));
+            all_synapses.push(synapse_obj);
+        }
+    }
+
+    debug!(
+        target: "feagi-api",
+        "Found {} incoming synapses to area {}",
+        all_synapses.len(),
+        area_id
+    );
     Ok(Json(all_synapses))
 }
 

@@ -307,9 +307,33 @@ impl GenomeService for GenomeServiceImpl {
     async fn load_genome(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
         info!(target: "feagi-services", "Loading genome from JSON");
 
-        // Parse genome using feagi-evo (this is CPU-bound, but relatively fast)
-        let mut genome = feagi_evolutionary::load_genome_from_json(&params.json_str)
-            .map_err(|e| ServiceError::InvalidInput(format!("Failed to parse genome: {}", e)))?;
+        // Parse genome using feagi-evo (this is CPU-bound, but relatively fast).
+        //
+        // We use `load_genome_with_report` so the chain report is
+        // available to write into `genome_validity` on core state.
+        // The library does NOT convert validator errors into `Err`
+        // per the "validator is reporter" policy, so a `false` validity
+        // is reported via the `/health` endpoint while this load still
+        // succeeds. Consumers (desktop, composer) react to the flag.
+        let (mut genome, chain_report) =
+            feagi_evolutionary::load_genome_with_report(&params.json_str).map_err(|e| {
+                ServiceError::InvalidInput(format!("Failed to parse genome: {}", e))
+            })?;
+        {
+            let instance = feagi_state_manager::StateManager::instance();
+            let manager = instance.read();
+            manager
+                .get_core_state()
+                .set_genome_validity(Some(chain_report.is_blocking_clean()));
+        }
+        if !chain_report.is_blocking_clean() {
+            warn!(
+                target: "feagi-services",
+                "Loaded genome has {} blocking validator error(s); running in degraded mode (genome_validity=false). First: {}",
+                chain_report.blocking_errors.len(),
+                chain_report.blocking_errors.first().map(String::as_str).unwrap_or("")
+            );
+        }
         let (_areas_added, morphs_added) = feagi_evolutionary::ensure_core_components(&mut genome);
         if morphs_added > 0 {
             info!(
@@ -550,6 +574,18 @@ impl GenomeService for GenomeServiceImpl {
         }
         if let Some(title) = params.genome_title {
             genome.metadata.genome_title = title;
+        }
+
+        // Keep exported region metadata aligned with the live connectome state.
+        // Region edits (e.g. rename/reposition) are applied through ConnectomeManager
+        // and may not be reflected in the cached RuntimeGenome snapshot unless synced.
+        let runtime_brain_regions = {
+            let manager = self.connectome.read();
+            let hierarchy = manager.get_brain_region_hierarchy();
+            hierarchy.get_all_regions()
+        };
+        if !runtime_brain_regions.is_empty() {
+            genome.brain_regions = runtime_brain_regions;
         }
 
         // Use the full RuntimeGenome saver (produces flat format v3.0)
@@ -1365,6 +1401,10 @@ impl GenomeServiceImpl {
                                 );
                             }
                         }
+                        "rate_modulated_leak" => {
+                            area.properties
+                                .insert("rate_modulated_leak".to_string(), value.clone());
+                        }
                         "visualization_voxel_granularity" => {
                             // Only store if != 1x1x1 (default), delete if set to 1x1x1
                             // Handle both integer and float JSON values
@@ -1408,6 +1448,32 @@ impl GenomeServiceImpl {
                 }
             }
             manager.refresh_cortical_area_hashes(true, false);
+        }
+
+        if changes.contains_key("rate_modulated_leak") {
+            let manager = self.connectome.write();
+            if let Some(npu_arc) = manager.get_npu().cloned() {
+                if let (Some(area), Ok(mut npu)) = (
+                    manager.get_cortical_area(&cortical_id_typed),
+                    npu_arc.lock(),
+                ) {
+                    if let Some(v) = area.properties.get("rate_modulated_leak") {
+                        let idxs: Vec<usize> = npu
+                            .get_neurons_in_cortical_area(cortical_idx)
+                            .into_iter()
+                            .map(|id| id as usize)
+                            .collect();
+                        npu.sync_rate_modulated_leak_from_cortical_property(
+                            cortical_idx,
+                            v,
+                            area.leak_coefficient(),
+                            idxs,
+                        );
+                    } else {
+                        npu.remove_rate_modulated_leak(cortical_idx);
+                    }
+                }
+            }
         }
 
         // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
@@ -1664,6 +1730,10 @@ impl GenomeServiceImpl {
                                     serde_json::json!(v),
                                 );
                             }
+                        }
+                        "rate_modulated_leak" => {
+                            area.properties
+                                .insert("rate_modulated_leak".to_string(), value.clone());
                         }
                         "visualization_voxel_granularity" => {
                             // Only store if != 1x1x1 (default), delete if set to 1x1x1

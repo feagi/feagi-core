@@ -198,6 +198,12 @@ pub struct SynapticPropagationEngine {
     /// When false: PSP is divided among all outgoing synapses
     /// When true: Full PSP value is applied to each synapse
     pub area_psp_uniform_distribution: AHashMap<CorticalID, bool>,
+    /// Cortical Area -> configured baseline PSP for that source area.
+    /// Used to restore per-synapse PSP on cortical runtime reset.
+    pub area_postsynaptic_current: AHashMap<CorticalID, f32>,
+    /// Cortical Area -> degeneration coefficient (PSP decrement per source fire)
+    /// Values <= 0 are treated as disabled and removed from the map.
+    pub area_degeneration: AHashMap<CorticalID, f32>,
     /// Performance stats
     total_propagations: u64,
     total_synapses_processed: u64,
@@ -230,6 +236,8 @@ impl SynapticPropagationEngine {
             neuron_to_area: AHashMap::new(),
             area_mp_driven_psp: AHashMap::new(),
             area_psp_uniform_distribution: AHashMap::new(),
+            area_postsynaptic_current: AHashMap::new(),
+            area_degeneration: AHashMap::new(),
             total_propagations: 0,
             total_synapses_processed: 0,
             last_profile: None,
@@ -289,6 +297,38 @@ impl SynapticPropagationEngine {
     pub fn set_psp_uniform_distribution_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
         self.area_psp_uniform_distribution
             .insert(cortical_id, enabled);
+    }
+
+    /// Set configured baseline PSP values for cortical areas.
+    ///
+    /// Values <= 0 are retained as-is to preserve explicit user intent.
+    pub fn set_postsynaptic_current_flags(&mut self, flags: AHashMap<CorticalID, f32>) {
+        self.area_postsynaptic_current = flags;
+    }
+
+    /// Set configured baseline PSP for one cortical area.
+    pub fn set_postsynaptic_current_flag(&mut self, cortical_id: CorticalID, postsynaptic: f32) {
+        self.area_postsynaptic_current
+            .insert(cortical_id, postsynaptic);
+    }
+
+    /// Set degeneration coefficients for cortical areas.
+    ///
+    /// Coefficients <= 0 disable degeneration for that area and are omitted.
+    pub fn set_degeneration_flags(&mut self, mut flags: AHashMap<CorticalID, f32>) {
+        flags.retain(|_, v| *v > 0.0);
+        self.area_degeneration = flags;
+    }
+
+    /// Set degeneration coefficient for a single cortical area (in-place).
+    ///
+    /// Coefficients <= 0 disable degeneration for that area.
+    pub fn set_degeneration_flag(&mut self, cortical_id: CorticalID, degeneration: f32) {
+        if degeneration > 0.0 {
+            self.area_degeneration.insert(cortical_id, degeneration);
+        } else {
+            self.area_degeneration.remove(&cortical_id);
+        }
     }
 
     /// Compute synaptic propagation for a set of fired neurons
@@ -833,6 +873,7 @@ mod tests {
             edge_flags: vec![0, 0, 0],
             delay_bursts: vec![1, 1, 1],
             valid_mask: vec![true, true, true],
+            eligibility_traces: vec![0.0, 0.0, 0.0],
             source_index: ahash::AHashMap::new(),
         };
 

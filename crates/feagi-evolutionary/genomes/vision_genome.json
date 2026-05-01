@@ -1384,6 +1384,12 @@
       "class": "core",
       "dimension_sensitive": true
     },
+    "first_to_last": {
+      "parameters": {},
+      "type": "functions",
+      "class": "core",
+      "dimension_sensitive": true
+    },
     "bitmask_encoder_x": {
       "parameters": {},
       "type": "functions",

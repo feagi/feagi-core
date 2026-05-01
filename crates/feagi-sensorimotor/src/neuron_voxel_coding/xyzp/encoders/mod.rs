@@ -3,6 +3,7 @@ mod boolean;
 mod cartesian_plane;
 mod misc_data;
 mod percentage_encoder;
+mod raw_imu;
 mod segmented_image_frame;
 
 #[allow(unused_imports)]
@@ -11,6 +12,8 @@ pub(crate) use boolean::BooleanNeuronVoxelXYZPEncoder;
 pub(crate) use cartesian_plane::CartesianPlaneNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
+pub(crate) use raw_imu::RawIMUNeuronVoxelXYZPEncoder;
 #[allow(unused_imports)]
 pub(crate) use segmented_image_frame::SegmentedImageFrameNeuronVoxelXYZPEncoder;
 

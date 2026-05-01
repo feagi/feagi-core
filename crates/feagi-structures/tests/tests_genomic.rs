@@ -304,10 +304,18 @@ mod test_cortical_area {
                 let death_type = CoreCorticalType::Death;
                 let power_type = CoreCorticalType::Power;
                 let fatigue_type = CoreCorticalType::Fatigue;
+                let pain_type = CoreCorticalType::Pain;
+                let pleasure_type = CoreCorticalType::Pleasure;
+                let fear_type = CoreCorticalType::Fear;
+                let hope_type = CoreCorticalType::Hope;
 
                 assert_eq!(format!("{}", death_type), "CoreCorticalType(Death)");
                 assert_eq!(format!("{}", power_type), "CoreCorticalType(Power)");
                 assert_eq!(format!("{}", fatigue_type), "CoreCorticalType(Fatigue)");
+                assert_eq!(format!("{}", pain_type), "CoreCorticalType(Pain)");
+                assert_eq!(format!("{}", pleasure_type), "CoreCorticalType(Pleasure)");
+                assert_eq!(format!("{}", fear_type), "CoreCorticalType(Fear)");
+                assert_eq!(format!("{}", hope_type), "CoreCorticalType(Hope)");
             }
 
             #[test]
@@ -323,6 +331,10 @@ mod test_cortical_area {
                     CoreCorticalType::Death,
                     CoreCorticalType::Power,
                     CoreCorticalType::Fatigue,
+                    CoreCorticalType::Pain,
+                    CoreCorticalType::Pleasure,
+                    CoreCorticalType::Fear,
+                    CoreCorticalType::Hope,
                 ] {
                     let cortical_id = core_type.to_cortical_id();
                     let recovered = cortical_id.as_cortical_type().unwrap();
@@ -1866,6 +1878,139 @@ mod test_sensory_cortical_unit {
                     }
                 }
             }
+        }
+    }
+
+    /// Tests for the IMU redesign: standalone Accelerometer / quaternion
+    /// Gyroscope are replaced by `RawIMU` (3 sub-areas) and `SmartIMU` (1 sub-area).
+    mod test_imu_units {
+        use super::*;
+
+        /// `RawIMU` MUST own exactly three sub-cortical-areas in the canonical
+        /// order accelerometer (0), gyroscope (1), magnetometer (2). Any change
+        /// here is an API break for connectors and BV alike.
+        #[test]
+        fn test_raw_imu_has_three_subunits_in_canonical_order() {
+            assert_eq!(SensoryCorticalUnit::RawIMU.get_number_cortical_areas(), 3);
+
+            let frame_handling = FrameChangeHandling::Absolute;
+            let positioning = PercentageNeuronPositioning::Linear;
+            let group = CorticalUnitIndex::from(0u8);
+
+            let ids = SensoryCorticalUnit::get_cortical_ids_array_for_raw_i_m_u_with_parameters(
+                frame_handling,
+                positioning,
+                group,
+            );
+            assert_eq!(ids.len(), 3);
+
+            for id in ids.iter() {
+                let bytes = id.as_bytes();
+                assert_eq!(bytes[0], b'i', "RawIMU sub-area must be IPU (prefix 'i')");
+                assert_eq!(
+                    &bytes[1..4],
+                    b"rim",
+                    "RawIMU sub-area must carry subtype 'rim'"
+                );
+            }
+            assert_eq!(ids[0].as_bytes()[6], 0, "Sub-area 0 must be accelerometer");
+            assert_eq!(ids[1].as_bytes()[6], 1, "Sub-area 1 must be gyroscope");
+            assert_eq!(ids[2].as_bytes()[6], 2, "Sub-area 2 must be magnetometer");
+        }
+
+        /// Each `RawIMU` sub-area is a 3x1x10 signed-percentage volume (3 axes,
+        /// height 1, default depth 10). The connector and BV both consume this
+        /// shape; deviations break sensory ingestion silently.
+        #[test]
+        fn test_raw_imu_subunit_dimensions_are_3x1x10() {
+            let topology = SensoryCorticalUnit::RawIMU.get_unit_default_topology();
+            assert_eq!(topology.len(), 3);
+            for sub_idx in 0..3u8 {
+                let unit = topology
+                    .get(&sub_idx.into())
+                    .unwrap_or_else(|| panic!("Missing topology for RawIMU sub-area {}", sub_idx));
+                assert_eq!(
+                    unit.channel_dimensions_default,
+                    [3, 1, 10],
+                    "RawIMU sub-area {} must have default dims [3,1,10]",
+                    sub_idx
+                );
+                assert_eq!(unit.channel_dimensions_min, [3, 1, 1]);
+                assert_eq!(unit.channel_dimensions_max, [3, 1, 1024]);
+            }
+        }
+
+        /// The three `RawIMU` sub-areas must occupy distinct positions so they
+        /// are visualizable as separate cortical areas in BV.
+        #[test]
+        fn test_raw_imu_subunits_have_distinct_positions() {
+            let topology = SensoryCorticalUnit::RawIMU.get_unit_default_topology();
+            let mut positions: Vec<[i32; 3]> = (0..3u8)
+                .map(|i| {
+                    topology
+                        .get(&i.into())
+                        .expect("Missing RawIMU sub-area")
+                        .relative_position
+                })
+                .collect();
+            positions.sort();
+            positions.dedup();
+            assert_eq!(positions.len(), 3, "RawIMU sub-area positions must differ");
+        }
+
+        /// `SmartIMU` is a single-area unit holding a quaternion (4-axis signed
+        /// percentage) for orientation; default volume 4x1x10.
+        #[test]
+        fn test_smart_imu_is_single_quaternion_subunit() {
+            assert_eq!(SensoryCorticalUnit::SmartIMU.get_number_cortical_areas(), 1);
+
+            let frame_handling = FrameChangeHandling::Absolute;
+            let positioning = PercentageNeuronPositioning::Linear;
+            let group = CorticalUnitIndex::from(0u8);
+
+            let ids = SensoryCorticalUnit::get_cortical_ids_array_for_smart_i_m_u_with_parameters(
+                frame_handling,
+                positioning,
+                group,
+            );
+            assert_eq!(ids.len(), 1);
+            let bytes = ids[0].as_bytes();
+            assert_eq!(&bytes[1..4], b"sim", "SmartIMU subtype must be 'sim'");
+
+            let topology = SensoryCorticalUnit::SmartIMU.get_unit_default_topology();
+            let unit = topology
+                .get(&0.into())
+                .expect("Missing SmartIMU sub-area topology");
+            assert_eq!(unit.channel_dimensions_default, [4, 1, 10]);
+        }
+
+        /// Snake-case names must be stable; SDK auto-generation and genome
+        /// migration rely on them.
+        #[test]
+        fn test_imu_snake_case_names() {
+            assert_eq!(
+                SensoryCorticalUnit::RawIMU.get_snake_case_name(),
+                "raw_i_m_u"
+            );
+            assert_eq!(
+                SensoryCorticalUnit::SmartIMU.get_snake_case_name(),
+                "smart_i_m_u"
+            );
+        }
+
+        /// Legacy single-area `acc` / `gyq` cortical IDs must NOT resolve to a
+        /// supported sensory unit anymore; the migrator relies on this to
+        /// trigger the silent-drop policy for deprecated IPUs.
+        #[test]
+        fn test_legacy_acc_and_gyq_subtypes_are_not_resolvable() {
+            assert!(
+                SensoryCorticalUnit::try_from_legacy_subtype("acc").is_none(),
+                "Legacy 'acc' must no longer resolve to a SensoryCorticalUnit"
+            );
+            assert!(
+                SensoryCorticalUnit::try_from_legacy_subtype("gyq").is_none(),
+                "Legacy 'gyq' must no longer resolve to a SensoryCorticalUnit"
+            );
         }
     }
 }

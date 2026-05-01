@@ -104,7 +104,7 @@ macro_rules! define_sensory_cortical_units_enum {
             /// Parse a sensory cortical unit from its snake_case name
             ///
             /// # Arguments
-            /// * `name` - The snake_case name (e.g., "simple_vision", "accelerometer")
+            /// * `name` - The snake_case name (e.g., "simple_vision", "raw_i_m_u")
             ///
             /// # Returns
             /// * `Some(SensoryCorticalUnit)` - If name matches a known type
@@ -327,12 +327,14 @@ impl SensoryCorticalUnit {
                 Self::get_cortical_ids_array_for_segmented_vision_with_parameters(fh, group_index)
                     [0]
             }
-            SensoryCorticalUnit::Accelerometer => {
-                Self::get_cortical_ids_array_for_accelerometer_with_parameters(fh, pos, group_index)
-                    [0]
+            SensoryCorticalUnit::RawIMU => {
+                // Default group index returns the accelerometer (sub-area 0) as
+                // the canonical "primary" cortical id of a Raw IMU unit.
+                Self::get_cortical_ids_array_for_raw_i_m_u_with_parameters(fh, pos, group_index)[0]
             }
-            SensoryCorticalUnit::Gyroscope => {
-                Self::get_cortical_ids_array_for_gyroscope_with_parameters(fh, pos, group_index)[0]
+            SensoryCorticalUnit::SmartIMU => {
+                Self::get_cortical_ids_array_for_smart_i_m_u_with_parameters(fh, pos, group_index)
+                    [0]
             }
         }
     }

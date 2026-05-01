@@ -133,6 +133,9 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
             .map(|n| n.0)
             .collect();
 
+        let fired_set: AHashSet<u32> = fired_neurons.iter().copied().collect();
+        neural_dynamics::finish_burst_refractory_period(neuron_storage, &fired_set);
+
         Ok((
             fired_neurons,
             result.neurons_processed,

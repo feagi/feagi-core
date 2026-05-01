@@ -49,17 +49,29 @@ fn parse_i32_env(name: &str) -> Result<Option<i32>, FeagiNetworkError> {
     Ok(Some(parsed))
 }
 
+/// Default linger period (in milliseconds) applied to client sockets when the
+/// `FEAGI_ZMQ_LINGER_MS` environment variable is not set.
+///
+/// ZMQ's library-level default is `-1` (block forever on close until queued
+/// outbound messages drain). For client sockets that may outlive their peer
+/// (e.g. a sensory PUSH whose FEAGI PULL endpoint went away during a genome
+/// reload), that default causes `zmq_close` to hang indefinitely when the
+/// socket is dropped. `0` means "discard any unsent queued messages on close
+/// and return immediately", which is the standard recommendation for ZMQ
+/// client sockets. Operators who genuinely want shutdown-time drainage can
+/// still opt back in by exporting `FEAGI_ZMQ_LINGER_MS=<value>`.
+const DEFAULT_CLIENT_LINGER_MS: i32 = 0;
+
 fn apply_common_client_zmq_tuning(socket: &Socket) -> Result<(), FeagiNetworkError> {
     if let Some(sndhwm) = parse_i32_env("FEAGI_ZMQ_SNDHWM")? {
         socket
             .set_sndhwm(sndhwm)
             .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
     }
-    if let Some(linger_ms) = parse_i32_env("FEAGI_ZMQ_LINGER_MS")? {
-        socket
-            .set_linger(linger_ms)
-            .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
-    }
+    let linger_ms = parse_i32_env("FEAGI_ZMQ_LINGER_MS")?.unwrap_or(DEFAULT_CLIENT_LINGER_MS);
+    socket
+        .set_linger(linger_ms)
+        .map_err(|e| FeagiNetworkError::InvalidSocketProperties(e.to_string()))?;
     if let Some(immediate) = parse_bool_env("FEAGI_ZMQ_IMMEDIATE")? {
         socket
             .set_immediate(immediate)

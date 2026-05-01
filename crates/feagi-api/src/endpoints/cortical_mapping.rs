@@ -8,6 +8,25 @@ use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Query, State};
 use std::collections::HashMap;
 
+/// LTP/LTD multipliers are stored in the NPU as `i8` (aligns with effective range after
+/// `u8` clamping). Accept JSON integers or float-shaped whole numbers, then range-check.
+fn i8_ltd_ltp_from_json_value(v: &serde_json::Value, field: &str) -> Result<i8, ApiError> {
+    let n = v
+        .as_i64()
+        .or_else(|| v.as_f64().map(|f| f as i64))
+        .ok_or_else(|| {
+            ApiError::invalid_input(format!("{field} must be a number (integer-like)"))
+        })?;
+    i8::try_from(n).map_err(|_| {
+        ApiError::invalid_input(format!(
+            "{field} must be in i8 range {}..={} (got {})",
+            i8::MIN,
+            i8::MAX,
+            n
+        ))
+    })
+}
+
 /// POST /v1/cortical_mapping/afferents
 #[utoipa::path(
     post,
@@ -123,12 +142,8 @@ pub async fn post_mapping_properties(
             let plasticity_constant = arr[4]
                 .as_i64()
                 .ok_or_else(|| ApiError::invalid_input("plasticity_constant must be an integer"))?;
-            let ltp_multiplier = arr[5]
-                .as_i64()
-                .ok_or_else(|| ApiError::invalid_input("ltp_multiplier must be an integer"))?;
-            let ltd_multiplier = arr[6]
-                .as_i64()
-                .ok_or_else(|| ApiError::invalid_input("ltd_multiplier must be an integer"))?;
+            let ltp_multiplier = i8_ltd_ltp_from_json_value(&arr[5], "ltp_multiplier")?;
+            let ltd_multiplier = i8_ltd_ltp_from_json_value(&arr[6], "ltd_multiplier")?;
             let plasticity_window = arr[7]
                 .as_i64()
                 .ok_or_else(|| ApiError::invalid_input("plasticity_window must be an integer"))?;
@@ -182,14 +197,16 @@ pub async fn post_mapping_properties(
                 .get("plasticity_constant")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| ApiError::invalid_input("plasticity_constant must be an integer"))?;
-            let ltp_multiplier = obj
-                .get("ltp_multiplier")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| ApiError::invalid_input("ltp_multiplier must be an integer"))?;
-            let ltd_multiplier = obj
-                .get("ltd_multiplier")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| ApiError::invalid_input("ltd_multiplier must be an integer"))?;
+            let ltp_multiplier = i8_ltd_ltp_from_json_value(
+                obj.get("ltp_multiplier")
+                    .ok_or_else(|| ApiError::invalid_input("ltp_multiplier missing"))?,
+                "ltp_multiplier",
+            )?;
+            let ltd_multiplier = i8_ltd_ltp_from_json_value(
+                obj.get("ltd_multiplier")
+                    .ok_or_else(|| ApiError::invalid_input("ltd_multiplier missing"))?,
+                "ltd_multiplier",
+            )?;
             let plasticity_window = obj
                 .get("plasticity_window")
                 .and_then(|v| v.as_i64())
@@ -201,7 +218,34 @@ pub async fn post_mapping_properties(
                 .unwrap_or(1)
                 .max(1);
 
-            formatted.push(serde_json::json!({
+            // R-STDP optional fields. plasticity_mode is the canonical successor of
+            // plasticity_flag; when absent, downstream defaults to Stdp / Off based on the flag.
+            // The other three fields are only meaningful when plasticity_mode == "rstdp" and are
+            // validated downstream by the BDU.
+            let plasticity_mode = obj
+                .get("plasticity_mode")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let eligibility_decay_bursts =
+                obj.get("eligibility_decay_bursts").and_then(|v| v.as_u64());
+            let reward_source_area = obj
+                .get("reward_source_area")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            let punishment_source_area = obj
+                .get("punishment_source_area")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+            // Optional R-STDP / STDP weight ceiling. Validated downstream by the BDU; we only
+            // shape it here so the rule round-trips cleanly through GET.
+            let max_weight =
+                obj.get("max_weight")
+                    .and_then(|v| if v.is_null() { None } else { v.as_f64() });
+            let plasticity_eta =
+                obj.get("plasticity_eta")
+                    .and_then(|v| if v.is_null() { None } else { v.as_f64() });
+
+            let mut rule = serde_json::json!({
                 "morphology_id": morphology_id,
                 "morphology_scalar": morphology_scalar,
                 "postSynapticCurrent_multiplier": psc_multiplier,
@@ -211,7 +255,33 @@ pub async fn post_mapping_properties(
                 "ltd_multiplier": ltd_multiplier,
                 "plasticity_window": plasticity_window,
                 "synaptic_delay_bursts": synaptic_delay_bursts,
-            }));
+            });
+            let rule_obj = rule.as_object_mut().unwrap();
+            if let Some(mode) = plasticity_mode {
+                rule_obj.insert("plasticity_mode".to_string(), serde_json::json!(mode));
+            }
+            if let Some(decay) = eligibility_decay_bursts {
+                rule_obj.insert(
+                    "eligibility_decay_bursts".to_string(),
+                    serde_json::json!(decay),
+                );
+            }
+            if let Some(area) = reward_source_area {
+                rule_obj.insert("reward_source_area".to_string(), serde_json::json!(area));
+            }
+            if let Some(area) = punishment_source_area {
+                rule_obj.insert(
+                    "punishment_source_area".to_string(),
+                    serde_json::json!(area),
+                );
+            }
+            if let Some(mw) = max_weight {
+                rule_obj.insert("max_weight".to_string(), serde_json::json!(mw));
+            }
+            if let Some(eta) = plasticity_eta {
+                rule_obj.insert("plasticity_eta".to_string(), serde_json::json!(eta));
+            }
+            formatted.push(rule);
         }
     }
 
@@ -398,24 +468,93 @@ pub async fn get_mapping_list(State(state): State<ApiState>) -> ApiResult<Json<V
 }
 
 /// DELETE /v1/cortical_mapping/mapping
-/// Delete a cortical mapping
+///
+/// Delete the cortical mapping between two areas. This clears the rule data on the source
+/// area, prunes all synapses from `src_cortical_area` to `dst_cortical_area`, and persists
+/// the change to the RuntimeGenome. Equivalent to `PUT /v1/cortical_mapping/mapping_properties`
+/// with `mapping_string=[]`, but exposes a clean DELETE semantic for clients that need to
+/// drop a mapping (and reset its learned synapse weights) without enumerating an empty
+/// rules array.
+///
+/// Source/target IDs are accepted as query string parameters to match the existing
+/// `GET /v1/cortical_mapping/mapping` route and avoid HTTP 415 surprises on bodyless DELETEs.
 #[utoipa::path(
     delete,
     path = "/v1/cortical_mapping/mapping",
     tag = "cortical_mapping",
+    params(
+        ("src_cortical_area" = String, Query, description = "Source cortical area ID"),
+        ("dst_cortical_area" = String, Query, description = "Destination cortical area ID")
+    ),
     responses(
-        (status = 200, description = "Mapping deleted", body = HashMap<String, String>)
+        (status = 200, description = "Mapping deleted", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Missing src_cortical_area or dst_cortical_area"),
+        (status = 404, description = "Cortical area not found"),
+        (status = 500, description = "Internal server error")
     )
 )]
 pub async fn delete_mapping(
-    State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, String>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Implement mapping deletion
-    Ok(Json(HashMap::from([(
+    State(state): State<ApiState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    use tracing::info;
+
+    let src_area = params
+        .get("src_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("src_cortical_area required"))?
+        .to_string();
+    let dst_area = params
+        .get("dst_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("dst_cortical_area required"))?
+        .to_string();
+
+    info!(
+        target: "feagi-api",
+        "DELETE cortical mapping: {} -> {}",
+        src_area,
+        dst_area
+    );
+
+    let connectome_service = state.connectome_service.as_ref();
+
+    // Reuse the canonical update path with empty rules. `update_cortical_mapping` is the
+    // single source of truth for: clearing the rule data, pruning synapses via the BDU
+    // `regenerate_synapses_for_mapping` codepath, refreshing the burst runner cache, and
+    // persisting to RuntimeGenome / region IO registry. Returning anything else here would
+    // diverge from the PUT-with-empty-rules behaviour and risk drift.
+    let synapse_count = connectome_service
+        .update_cortical_mapping(src_area.clone(), dst_area.clone(), Vec::new())
+        .await
+        .map_err(|e| match e {
+            feagi_services::types::ServiceError::InvalidInput(msg) => ApiError::invalid_input(msg),
+            feagi_services::types::ServiceError::Conflict(msg) => ApiError::conflict(msg),
+            _ => ApiError::internal(format!("Failed to delete cortical mapping: {}", e)),
+        })?;
+
+    info!(
+        target: "feagi-api",
+        "Cortical mapping deleted: {} -> {} ({} synapses remaining)",
+        src_area,
+        dst_area,
+        synapse_count
+    );
+
+    let mut response = HashMap::new();
+    response.insert(
         "message".to_string(),
-        "Mapping deletion not yet implemented".to_string(),
-    )])))
+        serde_json::json!(format!(
+            "Cortical mapping deleted from {} to {}",
+            src_area, dst_area
+        )),
+    );
+    response.insert("src_cortical_area".to_string(), serde_json::json!(src_area));
+    response.insert("dst_cortical_area".to_string(), serde_json::json!(dst_area));
+    response.insert(
+        "synapse_count".to_string(),
+        serde_json::json!(synapse_count),
+    );
+
+    Ok(Json(response))
 }
 
 /// POST /v1/cortical_mapping/batch_update

@@ -345,7 +345,7 @@ impl TokioEmbodimentAgent {
             if now.saturating_duration_since(last_sent) < min_interval {
                 self.capped_sensory_frame_count = self.capped_sensory_frame_count.saturating_add(1);
                 if self.capped_sensory_frame_count <= 10
-                    || self.capped_sensory_frame_count % 100 == 0
+                    || self.capped_sensory_frame_count.is_multiple_of(100)
                 {
                     tracing::warn!(
                         "[feagi-agent] Sensory send capped at {:.2}Hz (skipped_total={})",
@@ -758,13 +758,12 @@ impl TokioEmbodimentAgent {
             .send()
             .await;
         if let Err(err) = update_result {
-            return self.apply_negotiated_rate_policy(&config, current_rate_hz).and_then(|_| {
+            return self.apply_negotiated_rate_policy(&config, current_rate_hz).map(|_| {
                 tracing::warn!(
                     "[feagi-agent] FEAGI rate update request failed, keeping effective rate {:.2}Hz: {}",
                     current_rate_hz,
                     err
                 );
-                Ok(())
             });
         }
 
@@ -823,7 +822,7 @@ impl TokioEmbodimentAgent {
             .map_err(|e| {
                 FeagiAgentError::ConnectionFailed(format!("HTTP client init failed: {e}"))
             })?;
-        let health_url = Self::health_check_url(&config);
+        let health_url = Self::health_check_url(config);
         let health_response = client.get(&health_url).send().map_err(|e| {
             FeagiAgentError::ConnectionFailed(format!("health_check request failed: {e}"))
         })?;
@@ -837,7 +836,7 @@ impl TokioEmbodimentAgent {
             return Ok(current_rate_hz);
         }
 
-        let update_url = Self::simulation_timestep_url(&config);
+        let update_url = Self::simulation_timestep_url(config);
         let timestep = 1.0 / config.requested_sensory_rate_hz;
         let update_result = client
             .post(&update_url)

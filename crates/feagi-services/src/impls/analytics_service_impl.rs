@@ -62,9 +62,19 @@ impl AnalyticsService for AnalyticsServiceImpl {
         // This prevents the Brain Visualizer from exiting loading screen prematurely
         let brain_readiness = cortical_area_count > 0 && burst_engine_active;
 
+        // Genome validity is written by the loader (`GenomeServiceImpl`)
+        // from the chain report; read it lock-free from core state. See
+        // `feagi-state-manager::MemoryMappedState::genome_validity`.
+        let genome_validity = {
+            let instance = StateManager::instance();
+            let manager = instance.read();
+            manager.get_core_state().get_genome_validity()
+        };
+
         Ok(SystemHealth {
             burst_engine_active,
             brain_readiness,
+            genome_validity,
             neuron_count,
             neuron_capacity,
             synapse_capacity,

@@ -455,6 +455,7 @@ fn create_v1_router() -> Router<ApiState> {
         )
         .route("/system/processes", get(system::get_processes))
         .route("/system/unique_logs", get(system::get_unique_logs))
+        .route("/system/log_tail", get(system::get_log_tail))
         .route("/system/logs", axum::routing::post(system::post_logs))
         .route(
             "/system/beacon/subscribers",
@@ -814,6 +815,10 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_cortical_area_neurons),
         )
         .route(
+            "/connectome/:cortical_area_id/synapses/incoming",
+            get(connectome::get_area_synapses_incoming),
+        )
+        .route(
             "/connectome/:cortical_area_id/synapses",
             get(connectome::get_area_synapses),
         )
@@ -1112,8 +1117,16 @@ fn create_v1_router() -> Router<ApiState> {
             "/input/configure",
             axum::routing::post(input::post_configure),
         )
+        .route(
+            "/input/sensor_snapshot/last",
+            get(input::get_sensor_snapshot_last),
+        )
         // ===== OUTPUTS MODULE (2 endpoints) - Python uses /v1/output (singular)
         .route("/output/targets", get(outputs::get_targets))
+        .route(
+            "/output/motor_snapshot/last",
+            get(outputs::get_motor_snapshot_last),
+        )
         .route(
             "/output/configure",
             axum::routing::post(outputs::post_configure),

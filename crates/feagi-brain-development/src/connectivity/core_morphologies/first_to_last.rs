@@ -1,0 +1,98 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/*!
+First-to-last morphology implementation.
+
+Connects only source voxel (0, 0, 0)
+to the highest destination voxel (max x, max y, max z).
+*/
+
+use crate::types::BduResult;
+use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
+use feagi_npu_neural::SynapseType;
+
+#[allow(clippy::too_many_arguments)]
+pub fn apply_first_to_last_morphology_with_dimensions(
+    npu: &mut feagi_npu_burst_engine::DynamicNPU,
+    src_area_id: u32,
+    dst_area_id: u32,
+    src_dimensions: (usize, usize, usize),
+    dst_dimensions: (usize, usize, usize),
+    weight: f32,
+    psp: f32,
+    synapse_attractivity: u8,
+    synapse_type: SynapseType,
+    delay_bursts: u8,
+) -> BduResult<u32> {
+    use crate::rng::get_rng;
+    use rand::Rng;
+
+    let mut rng = get_rng();
+
+    if src_dimensions.0 == 0
+        || src_dimensions.1 == 0
+        || src_dimensions.2 == 0
+        || dst_dimensions.0 == 0
+        || dst_dimensions.1 == 0
+        || dst_dimensions.2 == 0
+    {
+        return Ok(0);
+    }
+
+    let src_first = (0u32, 0u32, 0u32);
+    let dst_last = (
+        (dst_dimensions.0 - 1) as u32,
+        (dst_dimensions.1 - 1) as u32,
+        (dst_dimensions.2 - 1) as u32,
+    );
+
+    let mut dst_last_nid: Option<u32> = None;
+    for dst_nid in npu.get_neurons_in_cortical_area(dst_area_id) {
+        if npu.get_neuron_coordinates(dst_nid) == Some(dst_last) {
+            dst_last_nid = Some(dst_nid);
+            break;
+        }
+    }
+    let Some(dst_nid) = dst_last_nid else {
+        return Ok(0);
+    };
+
+    let mut synapse_count = 0u32;
+    for src_nid in npu.get_neurons_in_cortical_area(src_area_id) {
+        if npu.get_neuron_coordinates(src_nid) != Some(src_first) {
+            continue;
+        }
+        if rng.gen_range(0..100) < synapse_attractivity
+            && npu
+                .add_synapse(
+                    NeuronId(src_nid),
+                    NeuronId(dst_nid),
+                    SynapticWeight(weight),
+                    SynapticPsp(psp),
+                    synapse_type,
+                    0,
+                    delay_bursts,
+                )
+                .is_ok()
+        {
+            synapse_count += 1;
+        }
+    }
+
+    Ok(synapse_count)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_last_voxel_is_max_index() {
+        let dst_dimensions = (5usize, 4usize, 3usize);
+        let dst_last = (
+            (dst_dimensions.0 - 1) as u32,
+            (dst_dimensions.1 - 1) as u32,
+            (dst_dimensions.2 - 1) as u32,
+        );
+        assert_eq!(dst_last, (4, 3, 2));
+    }
+}

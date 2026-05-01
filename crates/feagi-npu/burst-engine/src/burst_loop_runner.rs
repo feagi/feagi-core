@@ -1593,6 +1593,43 @@ fn burst_loop(
             );
         }
 
+        // Update the sensor input tap with the most recent decoded sensory frames so external
+        // tooling (FEAGI MCP, Brain Visualizer, debuggers) can observe what the burst loop
+        // actually consumed this tick. Bounded work: one Vec build per area; single RwLock
+        // write at the end. Only runs when at least one batch decoded successfully so we
+        // never overwrite a fresh snapshot with an empty one when no sensory traffic arrived.
+        if !sensory_xyzp_batches.is_empty() {
+            let mut tap_areas: Vec<crate::runtime_taps::AreaActivity> = Vec::new();
+            for batch in &sensory_xyzp_batches {
+                for (cortical_id, xyzp) in batch {
+                    if xyzp.is_empty() {
+                        continue;
+                    }
+                    let samples: Vec<crate::runtime_taps::TapSample> = xyzp
+                        .iter()
+                        .map(|(x, y, z, p)| crate::runtime_taps::TapSample {
+                            x: *x,
+                            y: *y,
+                            z: *z,
+                            potential: *p,
+                        })
+                        .collect();
+                    tap_areas.push(crate::runtime_taps::AreaActivity {
+                        cortical_id: cortical_id.as_base_64(),
+                        cortical_idx: 0,
+                        neuron_count: samples.len(),
+                        samples,
+                    });
+                }
+            }
+            if !tap_areas.is_empty() {
+                let mut tap = crate::runtime_taps::BurstTaps::instance().sensor.write();
+                tap.burst_num = burst_num;
+                tap.timestamp_ms = crate::runtime_taps::now_unix_ms();
+                tap.areas = tap_areas;
+            }
+        }
+
         // Track time since last lock release to detect if something held it
         static LAST_LOCK_RELEASE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
         #[allow(dead_code)]
@@ -1858,6 +1895,11 @@ fn burst_loop(
                                             update.cortical_idx,
                                             psp_f32,
                                         );
+                                    if let Ok(cortical_id) = feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                        &update.cortical_id,
+                                    ) {
+                                        npu_lock.set_postsynaptic_current_flag(cortical_id, psp_f32);
+                                    }
                                     info!(
                                         target: "feagi-burst-engine",
                                         "Applied PSP update area={} psp={} synapses_updated={} stdp_mappings_updated={}",
@@ -1899,6 +1941,28 @@ fn burst_loop(
                                             1
                                         }
                                         Err(_) => 0,
+                                    }
+                                } else {
+                                    0
+                                }
+                            }
+                            "degeneration" | "neuron_degeneracy_coefficient" => {
+                                if let Some(degeneration) = update.value.as_f64() {
+                                    if degeneration < 0.0 {
+                                        0
+                                    } else {
+                                        match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                            &update.cortical_id,
+                                        ) {
+                                            Ok(cortical_id) => {
+                                                npu_lock.set_degeneration_flag(
+                                                    cortical_id,
+                                                    degeneration as f32,
+                                                );
+                                                1
+                                            }
+                                            Err(_) => 0,
+                                        }
                                     }
                                 } else {
                                     0
@@ -2409,7 +2473,7 @@ fn burst_loop(
                     }
 
                     // Get cortical_id from cached mappings (no NPU lock needed!)
-                    // CRITICAL: For reserved areas (0=_death, 1=_power, 2=_fatigue), use CoreCorticalType
+                    // CRITICAL: For reserved areas (0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure, 5=_fear, 6=_hope), use CoreCorticalType
                     // even if cache is empty, so BV can identify them correctly
                     // For other areas, skip if not in cache (cache should be populated from ConnectomeManager)
                     let cortical_id = match cortical_id_mappings_clone.get(area_id) {
@@ -2421,6 +2485,10 @@ fn burst_loop(
                                 0 => CoreCorticalType::Death.to_cortical_id().as_base_64(),
                                 1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
                                 2 => CoreCorticalType::Fatigue.to_cortical_id().as_base_64(),
+                                3 => CoreCorticalType::Pain.to_cortical_id().as_base_64(),
+                                4 => CoreCorticalType::Pleasure.to_cortical_id().as_base_64(),
+                                5 => CoreCorticalType::Fear.to_cortical_id().as_base_64(),
+                                6 => CoreCorticalType::Hope.to_cortical_id().as_base_64(),
                                 _ => {
                                     // Self-heal cache drift: resolve missing mapping directly from NPU area registry.
                                     // This keeps behavior deterministic while avoiding a full cache rebuild in the hot path.
@@ -2721,7 +2789,7 @@ fn burst_loop(
                     }
 
                     // Get cortical_id from cached mappings (no NPU lock needed!)
-                    // CRITICAL: For reserved areas (0=_death, 1=_power, 2=_fatigue), use CoreCorticalType
+                    // CRITICAL: For reserved areas (0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure, 5=_fear, 6=_hope), use CoreCorticalType
                     // even if cache is empty, so BV can identify them correctly
                     // For other areas, skip if not in cache (cache should be populated from ConnectomeManager)
                     let cortical_id = match cortical_id_mappings_motor.get(area_id) {
@@ -2733,6 +2801,10 @@ fn burst_loop(
                                 0 => CoreCorticalType::Death.to_cortical_id().as_base_64(),
                                 1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
                                 2 => CoreCorticalType::Fatigue.to_cortical_id().as_base_64(),
+                                3 => CoreCorticalType::Pain.to_cortical_id().as_base_64(),
+                                4 => CoreCorticalType::Pleasure.to_cortical_id().as_base_64(),
+                                5 => CoreCorticalType::Fear.to_cortical_id().as_base_64(),
+                                6 => CoreCorticalType::Hope.to_cortical_id().as_base_64(),
                                 _ => {
                                     // Self-heal cache drift: resolve missing mapping directly from NPU area registry.
                                     // This keeps behavior deterministic while avoiding a full cache rebuild in the hot path.
@@ -2816,6 +2888,37 @@ fn burst_loop(
                     );
                 }
 
+                // Snapshot the unfiltered motor pipeline view for the runtime tap. We build
+                // this regardless of whether any agents are subscribed so debuggers can
+                // verify the OPU activity even when no embodiment is connected.
+                let mut tap_areas: Vec<crate::runtime_taps::AreaActivity> =
+                    Vec::with_capacity(motor_snapshot.len());
+                for data in motor_snapshot.values() {
+                    let samples: Vec<crate::runtime_taps::TapSample> = data
+                        .coords_x
+                        .iter()
+                        .zip(data.coords_y.iter())
+                        .zip(data.coords_z.iter())
+                        .zip(data.potentials.iter())
+                        .map(|(((x, y), z), p)| crate::runtime_taps::TapSample {
+                            x: *x,
+                            y: *y,
+                            z: *z,
+                            potential: *p,
+                        })
+                        .collect();
+                    tap_areas.push(crate::runtime_taps::AreaActivity {
+                        cortical_id: data.cortical_id.clone(),
+                        cortical_idx: data.cortical_area_idx,
+                        neuron_count: data.neuron_ids.len(),
+                        samples,
+                    });
+                }
+                let mut tap_per_agent: ahash::AHashMap<
+                    String,
+                    crate::runtime_taps::AgentPublishStats,
+                > = ahash::AHashMap::default();
+
                 if subscriptions.is_empty() {
                     static FIRST_EMPTY_LOG: std::sync::atomic::AtomicBool =
                         std::sync::atomic::AtomicBool::new(false);
@@ -2875,6 +2978,13 @@ fn burst_loop(
                         // Filter by cortical_id strings (e.g., {"omot00"})
                         let cortical_id_filter = Some(subscribed_cortical_ids);
 
+                        // Track per-agent tap stats for the runtime motor tap. We commit once
+                        // after the publish path completes (success or failure) so the tap
+                        // reflects exactly what was attempted for this agent in this burst.
+                        let mut tap_byte_count: usize = 0;
+                        let mut tap_published: bool = false;
+                        let mut tap_last_error: String = String::new();
+
                         let encode_start = Instant::now();
                         // Clone for each agent (minimal overhead, and allows zero-copy within encode function)
                         match encode_fire_data_to_xyzp(motor_snapshot.clone(), cortical_id_filter) {
@@ -2890,6 +3000,7 @@ fn burst_loop(
                                     continue;
                                 }
 
+                                tap_byte_count = motor_bytes.len();
                                 let encode_duration = encode_start.elapsed();
 
                                 static FIRST_ENCODE_LOG: std::sync::atomic::AtomicBool =
@@ -2917,6 +3028,7 @@ fn burst_loop(
                                             published = true;
                                         }
                                         Err(e) => {
+                                            tap_last_error = e.to_string();
                                             if is_missing_agent_publish_error(&e) {
                                                 if !missing_motor_agent_logged.contains(agent_id) {
                                                     warn!(
@@ -2942,6 +3054,7 @@ fn burst_loop(
                                 if let Some(writer) = motor_shm_writer.lock().unwrap().as_mut() {
                                     if let Err(e) = writer.write_payload(&motor_bytes) {
                                         error!("[BURST-LOOP] ❌ Failed to write motor SHM: {}", e);
+                                        tap_last_error = format!("SHM write failed: {}", e);
                                     } else {
                                         published = true;
                                     }
@@ -2953,16 +3066,52 @@ fn burst_loop(
                                         .write()
                                         .insert(agent_id.clone(), now);
                                 }
+
+                                tap_published = published;
                             }
                             Err(e) => {
                                 error!(
                                     "[BURST-LOOP] ❌ Failed to encode motor output for '{}': {}",
                                     agent_id, e
                                 );
+                                tap_last_error = format!("encode failed: {}", e);
                             }
                         }
+
+                        // Commit per-agent stats to the runtime motor tap. We do this even on
+                        // failure so external tooling can see the byte count, error message,
+                        // and timestamp of the last attempt.
+                        tap_per_agent.insert(
+                            agent_id.clone(),
+                            crate::runtime_taps::AgentPublishStats {
+                                burst_num,
+                                timestamp_ms: crate::runtime_taps::now_unix_ms(),
+                                byte_count: tap_byte_count,
+                                published: tap_published,
+                                last_error: tap_last_error,
+                                subscribed_cortical_ids: subscribed_cortical_ids
+                                    .iter()
+                                    .cloned()
+                                    .collect(),
+                            },
+                        );
                     }
                     drop(subscriptions);
+                }
+
+                // Commit motor tap once per burst, regardless of whether agents were
+                // subscribed. Even with no subscribers we want to expose the unfiltered
+                // `tap_areas` snapshot so debuggers can confirm OPU activity. Per-agent
+                // entries from previous bursts are merged so consumers can see "last
+                // known publish" for each agent even if they were silent this tick.
+                {
+                    let mut tap = crate::runtime_taps::BurstTaps::instance().motor.write();
+                    tap.burst_num = burst_num;
+                    tap.timestamp_ms = crate::runtime_taps::now_unix_ms();
+                    tap.areas = tap_areas;
+                    for (agent_id, stats) in tap_per_agent {
+                        tap.per_agent.insert(agent_id, stats);
+                    }
                 }
             } else {
                 // No fire data available

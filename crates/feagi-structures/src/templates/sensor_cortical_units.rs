@@ -64,9 +64,9 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
-                #[doc = "Servo position sensor for monitoring actuator position."]
+                #[doc = "Servo encoder feedback for monitoring actuator position."]
                 Servo => {
-                    friendly_name: "Servo Sensor",
+                    friendly_name: "Servo Encoder",
                     accepted_wrapped_io_data_type: Percentage,
                     cortical_id_unit_reference: *b"svm",
                     number_cortical_areas: 1,
@@ -75,7 +75,7 @@ macro_rules! sensor_cortical_units {
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [25, 0, -10], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1])
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [25, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -195,35 +195,38 @@ macro_rules! sensor_cortical_units {
                 },
 
 
-                #[doc = "Accelerometer, allows for relative tracking of position and motion"]
-                Accelerometer => {
-                    friendly_name: "Accelerometer",
-                    accepted_wrapped_io_data_type: Percentage_3D,
-                    cortical_id_unit_reference: *b"acc",
-                    number_cortical_areas: 1,
+                #[doc = "Raw IMU: composite linear-vector sensor with three sub-cortical-areas (accelerometer + gyroscope + magnetometer), each a 3-axis signed percentage."]
+                RawIMU => {
+                    friendly_name: "Raw IMU",
+                    accepted_wrapped_io_data_type: RawIMU,
+                    cortical_id_unit_reference: *b"rim",
+                    number_cortical_areas: 3,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [70, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024])
+                        // Sub-area order is contractual: 0 = accelerometer, 1 = gyroscope, 2 = magnetometer.
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [70, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024]), // Accelerometer
+                        1 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [80, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024]), // Gyroscope
+                        2 => (IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [90, 0, -10], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024])  // Magnetometer
                     }
                 },
 
 
 
-                #[doc = "Gyroscope (Quaternion), Allows for tracking rotation without gimbal lock"]
-                Gyroscope => {
-                    friendly_name: "Gyroscope",
+                #[doc = "Smart IMU: orientation as a unit quaternion (w/x/y/z) in a single 4-axis signed-percentage sub-area."]
+                SmartIMU => {
+                    friendly_name: "Smart IMU",
                     accepted_wrapped_io_data_type: SignedPercentage_4D,
-                    cortical_id_unit_reference: *b"gyq",
+                    cortical_id_unit_reference: *b"sim",
                     number_cortical_areas: 1,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), relative_position: [80, 0, -10], channel_dimensions_default: [4, 1, 10], channel_dimensions_min: [4, 1, 1], channel_dimensions_max: [4, 1, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), relative_position: [100, 0, -10], channel_dimensions_default: [4, 1, 10], channel_dimensions_min: [4, 1, 1], channel_dimensions_max: [4, 1, 1024])
                     }
                 },
 

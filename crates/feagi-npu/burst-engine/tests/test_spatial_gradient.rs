@@ -23,8 +23,8 @@ fn test_firing_threshold_spatial_gradient_3d() {
     // X increment = 1.0 (threshold increases by 1.0 for each X position)
     // Y increment = 2.0 (threshold increases by 2.0 for each Y position)
     // Z increment = 5.0 (threshold increases by 5.0 for each Z position)
-    // Use a non-core cortical_idx to avoid implicit core neuron creation (0..=2).
-    let cortical_idx = 3;
+    // Use area_id > 6 so register_cortical_area does not auto-create core neurons (0..=6).
+    let cortical_idx = 10;
     let width = 3;
     let height = 3;
     let depth = 2;
@@ -117,11 +117,11 @@ fn test_firing_threshold_no_gradient() {
     let mut npu =
         RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1)
             .unwrap();
-    npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
     let neuron_count = npu
         .create_cortical_area_neurons(
-            3, // cortical_idx
+            10, // cortical_idx
             2,
             2,
             2,    // 2x2x2 = 8 neurons
@@ -164,11 +164,11 @@ fn test_firing_threshold_single_axis_gradient() {
     let mut npu =
         RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1)
             .unwrap();
-    npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
     let neuron_count = npu
         .create_cortical_area_neurons(
-            3,
+            10,
             5,
             1,
             1, // 5x1x1 = 5 neurons in a line along X
@@ -213,11 +213,11 @@ fn test_firing_threshold_multiple_neurons_per_voxel() {
     let mut npu =
         RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1)
             .unwrap();
-    npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
     let neuron_count = npu
         .create_cortical_area_neurons(
-            3,
+            10,
             2,
             1,
             1,    // 2x1x1 = 2 voxels
@@ -263,11 +263,11 @@ fn test_firing_threshold_negative_gradient() {
     let mut npu =
         RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1)
             .unwrap();
-    npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
     let neuron_count = npu
         .create_cortical_area_neurons(
-            3,
+            10,
             3,
             1,
             1, // 3 neurons along X

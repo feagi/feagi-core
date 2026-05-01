@@ -46,6 +46,10 @@ pub struct SynapseArray<const N: usize> {
 
     /// Valid synapse mask
     pub valid_mask: [bool; N],
+
+    /// Per-synapse R-STDP eligibility traces (`f32`). Initialized to 0.0; reset on synapse
+    /// creation. See `feagi_npu_runtime::SynapseStorage::eligibility_traces` for semantics.
+    pub eligibility_traces: [f32; N],
 }
 
 impl<const N: usize> SynapseArray<N> {
@@ -61,6 +65,7 @@ impl<const N: usize> SynapseArray<N> {
             edge_flags: [0; N],
             delay_bursts: [1; N],
             valid_mask: [false; N],
+            eligibility_traces: [0.0; N],
         }
     }
 }
@@ -175,6 +180,10 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         &self.valid_mask[..self.count]
     }
 
+    fn eligibility_traces(&self) -> &[f32] {
+        &self.eligibility_traces[..self.count]
+    }
+
     fn weights_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.weights[..count]
@@ -188,6 +197,11 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
     fn valid_mask_mut(&mut self) -> &mut [bool] {
         let count = self.count;
         &mut self.valid_mask[..count]
+    }
+
+    fn eligibility_traces_mut(&mut self) -> &mut [f32] {
+        let count = self.count;
+        &mut self.eligibility_traces[..count]
     }
 
     fn count(&self) -> usize {
@@ -237,6 +251,7 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         self.edge_flags[idx] = edge_flag;
         self.delay_bursts[idx] = delay_bursts;
         self.valid_mask[idx] = true;
+        self.eligibility_traces[idx] = 0.0;
 
         self.count += 1;
         Ok(idx)

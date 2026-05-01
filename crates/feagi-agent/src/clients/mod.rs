@@ -8,6 +8,7 @@
 
 pub mod async_helpers;
 mod blocking;
+pub mod recovery;
 mod session_state_machine;
 
 pub use blocking::command_control_agent::{AgentRegistrationStatus, CommandControlAgent};

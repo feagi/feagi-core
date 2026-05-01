@@ -331,7 +331,15 @@ mod tests {
 
     #[test]
     fn test_u64_with_various_core_types() {
-        let core_types = [CoreCorticalType::Power, CoreCorticalType::Death];
+        let core_types = [
+            CoreCorticalType::Power,
+            CoreCorticalType::Death,
+            CoreCorticalType::Fatigue,
+            CoreCorticalType::Pain,
+            CoreCorticalType::Pleasure,
+            CoreCorticalType::Fear,
+            CoreCorticalType::Hope,
+        ];
 
         for core_type in &core_types {
             let id = core_type.to_cortical_id();

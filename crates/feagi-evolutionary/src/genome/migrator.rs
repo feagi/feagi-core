@@ -488,6 +488,23 @@ fn apply_legacy_io_shorthand_migration(
 
         let is_input = old_id.starts_with('i');
 
+        // Deprecated IPU subtypes that must be silently dropped per project
+        // policy (see IMU redesign: standalone Accelerometer 'acc' and quaternion
+        // Gyroscope 'gyq' were superseded by RawIMU 'rim' and SmartIMU 'sim',
+        // which carry sub-area structure that legacy single-area IDs cannot
+        // represent). We refuse to auto-migrate to a custom or any other area;
+        // the migrated genome will contain no cortical area for these IDs.
+        if let Some(subtype) = extract_legacy_io_subtype(old_id) {
+            if is_input && (subtype == "acc" || subtype == "gyq") {
+                result.warnings.push(format!(
+                    "Dropping deprecated IPU '{}' (subtype '{}'): no automatic mapping; \
+                     reconfigure as RawIMU (rim) or SmartIMU (sim) sub-areas.",
+                    old_id, subtype
+                ));
+                continue;
+            }
+        }
+
         // First: check if subtype matches a supported IPU/OPU type in feagi-structures
         let supported_match = extract_legacy_io_subtype(old_id).and_then(|subtype| {
             if is_input {

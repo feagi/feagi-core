@@ -186,7 +186,10 @@ pub async fn get_health_check(
     let influxdb_availability = false; // TODO: Get from monitoring service
     let latest_changes_saved_externally = false; // TODO: Get from state manager
     let genome_availability = health.cortical_area_count > 0;
-    let genome_validity = Some(health.brain_readiness);
+    // Real genome validity comes from the chain report, written by the
+    // loader into core state. Falls back to `None` until a genome has
+    // been loaded in this process. See `SystemHealth::genome_validity`.
+    let genome_validity = health.genome_validity;
 
     // Get FEAGI session timestamp (unique identifier for this FEAGI instance)
     let feagi_session = Some(state.feagi_session_timestamp);
@@ -742,6 +745,105 @@ pub async fn get_unique_logs(
     response.insert("logs".to_string(), Vec::new());
 
     Ok(Json(response))
+}
+
+// ============================================================================
+// LOG TAIL (in-process tracing ring buffer)
+// ============================================================================
+
+/// Single log record returned from the ring buffer.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct LogTailRecord {
+    pub timestamp_ms: i64,
+    pub level: String,
+    pub target: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub file: String,
+    pub line: u32,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fields: Option<serde_json::Value>,
+}
+
+/// Response payload for `GET /v1/system/log_tail`.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct LogTailResponse {
+    /// True when the in-process log ring buffer is enabled. False indicates the
+    /// `FEAGI_LOG_RING_BUFFER_CAPACITY` environment variable is set to 0 or the
+    /// initialiser has not yet run.
+    pub enabled: bool,
+    /// Configured ring buffer capacity (records).
+    pub capacity: usize,
+    /// Records that matched the supplied filters, oldest first.
+    pub records: Vec<LogTailRecord>,
+    /// Number of records returned (matches `records.len()`).
+    pub returned: usize,
+}
+
+/// Get a tail of recent log messages from FEAGI's in-process tracing ring buffer.
+///
+/// Filters (all optional, AND'd together):
+/// * `since_ts_ms` - only records with `timestamp_ms >= since_ts_ms`
+/// * `level`       - minimum severity (`TRACE` < `DEBUG` < `INFO` < `WARN` < `ERROR`)
+/// * `target_prefix` - only records whose tracing target starts with this prefix
+/// * `limit`       - cap on returned record count (most recent records win)
+///
+/// The buffer is bounded; old records are dropped when capacity is exceeded.
+/// Capacity is controlled by `FEAGI_LOG_RING_BUFFER_CAPACITY` (default 2000,
+/// set to 0 to disable).
+#[utoipa::path(
+    get,
+    path = "/v1/system/log_tail",
+    tag = "system",
+    params(
+        ("since_ts_ms" = Option<i64>, Query, description = "Only return records emitted at or after this Unix timestamp (ms)"),
+        ("level" = Option<String>, Query, description = "Minimum severity (TRACE/DEBUG/INFO/WARN/ERROR)"),
+        ("target_prefix" = Option<String>, Query, description = "Restrict to tracing targets starting with this prefix"),
+        ("limit" = Option<usize>, Query, description = "Maximum number of records to return")
+    ),
+    responses(
+        (status = 200, description = "Recent log records", body = LogTailResponse)
+    )
+)]
+pub async fn get_log_tail(
+    State(_state): State<ApiState>,
+    axum::extract::Query(query): axum::extract::Query<HashMap<String, String>>,
+) -> ApiResult<Json<LogTailResponse>> {
+    let since_ts_ms = query.get("since_ts_ms").and_then(|v| v.parse::<i64>().ok());
+    let level = query.get("level").map(|v| v.as_str());
+    let target_prefix = query.get("target_prefix").map(|v| v.as_str());
+    let limit = query.get("limit").and_then(|v| v.parse::<usize>().ok());
+
+    let Some(ring) = feagi_observability::global_ring() else {
+        return Ok(Json(LogTailResponse {
+            enabled: false,
+            capacity: 0,
+            records: Vec::new(),
+            returned: 0,
+        }));
+    };
+
+    let snap = ring.snapshot(since_ts_ms, level, target_prefix, limit);
+    let records: Vec<LogTailRecord> = snap
+        .into_iter()
+        .map(|r| LogTailRecord {
+            timestamp_ms: r.timestamp_ms,
+            level: r.level,
+            target: r.target,
+            file: r.file,
+            line: r.line,
+            message: r.message,
+            fields: r.fields,
+        })
+        .collect();
+    let returned = records.len();
+
+    Ok(Json(LogTailResponse {
+        enabled: true,
+        capacity: ring.capacity(),
+        records,
+        returned,
+    }))
 }
 
 /// Configure logging settings including log level and output destinations.
