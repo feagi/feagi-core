@@ -1,5 +1,7 @@
 use feagi_structures::define_bit_packed_u8_flags;
 
+// TODO these may need to be moved
+
 /// Stores various neuron boolean flags under a single byte
 define_bit_packed_u8_flags! {
     pub struct NeuronFlag(

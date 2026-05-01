@@ -32,7 +32,7 @@ pub(crate) trait DimensionalNeuronModelDataSharedTrait<Q: NPUGlobalQuantization,
 
     /// Returns the total number of neurons in the Dimensional cortical area.
     /// Includes both live and dead neurons
-   fn get_total_number_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+   fn get_total_number_neurons(&self) -> NeuronCount<Q::NeuronIndexCountQuant> {
        self.get_cortical_data().get_total_number_neurons()
    }
 }

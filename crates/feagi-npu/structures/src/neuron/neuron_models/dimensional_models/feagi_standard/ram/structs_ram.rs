@@ -182,7 +182,7 @@ pub(crate) struct FeagiStandardCorticalConfigurationRam<Q: NPUGlobalQuantization
     cortical_flags: DimensionalNeuronCorticalFlag,
     cortical_dimensions: NeuronVoxelDimensions<DNQ::CoordQuant>,
     number_neurons_per_voxel: NeuronCount<NumberNeuronsPerVoxel>,
-    number_neurons_invalid_from_degeneration: NeuronCount<DNQ::NeuronIndexCountQuant>,
+    number_neurons_invalid_from_degeneration: NeuronCount<Q::NeuronIndexCountQuant>,
     excitability: NeuronExcitability<DNQ::PercentageQuant>,
     refractory_period_limit: BurstDelta<DNQ::BurstDeltaQuant>,
     fire_threshold_limit: FireThresholdLimit<DNQ::ValueQuant>,
@@ -227,12 +227,12 @@ impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> Dimensiona
     }
 
     #[inline]
-    fn get_number_neurons_invalid_from_degeneration(&self) -> &NeuronCount<DNQ::NeuronIndexCountQuant> {
+    fn get_number_neurons_invalid_from_degeneration(&self) -> &NeuronCount<Q::NeuronIndexCountQuant> {
         &self.number_neurons_invalid_from_degeneration
     }
 
     #[inline]
-    fn get_number_neurons_invalid_from_degeneration_mut(&mut self) -> &mut NeuronCount<DNQ::NeuronIndexCountQuant> {
+    fn get_number_neurons_invalid_from_degeneration_mut(&mut self) -> &mut NeuronCount<Q::NeuronIndexCountQuant> {
         &mut self.number_neurons_invalid_from_degeneration
     }
 

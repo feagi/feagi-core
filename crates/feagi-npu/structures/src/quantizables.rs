@@ -10,12 +10,12 @@ use feagi_structures::neurons::descriptors::NeuronCount;
 pub trait NPUGlobalQuantization {
     type GlobalBurstIndexQuant: QuantizableUIntType;
     type CorticalIndexCountQuant: CorticalAreaIndexQuantization; // We want this to be global since synapses will go between cortical indexes
+    type NeuronIndexCountQuant: QuantizableUIntType;
 }
 
 /// Shared Quantization details that all neuron types implement in some manner
 pub trait NPUBaseNeuronQuantization {
     const GENERAL_DATA_QUANTIZATION_LEVEL: QuantizationLevel;
-    type NeuronIndexCountQuant: QuantizableUIntType;
     type ValueQuant: QuantizableValueType;
     type PercentageQuant: QuantizablePercentType;
     type BurstDeltaQuant: QuantizableUIntType;

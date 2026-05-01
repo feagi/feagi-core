@@ -17,23 +17,23 @@ use crate::quantizables::{NPUGlobalQuantization, BurstDelta, BurstGlobalIndex, F
 pub struct SensoryNeuronStorageResizableRam<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization>
 {
     neuron_collection: ResizableCorticalAreaCollectionRam<Q, DNQ, FeagiStandardNeuronDataRam<Q, DNQ>>,
-    total_number_live_neurons: NeuronCount<DNQ::NeuronIndexCountQuant>,
-    total_number_dead_neurons: NeuronCount<DNQ::NeuronIndexCountQuant>,
+    total_number_live_neurons: NeuronCount<Q::NeuronIndexCountQuant>,
+    total_number_dead_neurons: NeuronCount<Q::NeuronIndexCountQuant>,
 }
 
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> BaseNeuronCommonStorageTrait<Q, DNQ> for SensoryNeuronStorageResizableRam<Q, DNQ> {
     const TYPE_CORTICAL_AREA: NPUCorticalAreaIdentifierFlag =
         NPUCorticalAreaIdentifierFlag::SensoryFeagiStandard(DNQ::GENERAL_DATA_QUANTIZATION_LEVEL);
 
-    fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<DNQ::NeuronIndexCountQuant> {
+    fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<Q::NeuronIndexCountQuant> {
         NPUNeuronIndex::MAX_VALUE
     }
 
-    fn get_total_number_of_live_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+    fn get_total_number_of_live_neurons(&self) -> NeuronCount<Q::NeuronIndexCountQuant> {
         self.total_number_live_neurons
     }
 
-    fn get_total_number_of_dead_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+    fn get_total_number_of_dead_neurons(&self) -> NeuronCount<Q::NeuronIndexCountQuant> {
         self.total_number_dead_neurons
     }
 
@@ -49,7 +49,7 @@ impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> BaseNeuron
 }
 
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> BaseNeuronResizableStorageTrait<Q, DNQ> for SensoryNeuronStorageResizableRam<Q, DNQ> {
-    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronCount<DNQ::NeuronIndexCountQuant>) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronCount<Q::NeuronIndexCountQuant>) -> NeuronCount<Q::NeuronIndexCountQuant> {
         todo!()
     }
 

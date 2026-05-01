@@ -3,20 +3,18 @@
 
 // TODO some things should be moved to a higher level trait as we understand other synapse types more
 
-use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
-use crate::neuron::npu_storage::::shared_structs::{DimensionalTypedCorticalIndex, DimensionalTypedNeuronIndex};
-use crate::quantizables::{NPUGlobalQuantization, NPUNeuronIndex, SynapseIndex, SynapseCount};
+use crate::quantizables::{NPUGlobalQuantization, NPUSynapseQuantization, SynapseCount};
 use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStaticStorageTrait, BaseSynapseStorageTrait};
 use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;
 
 // NOTE: We know the type of synapse that will be created will always be a dimension to a dimensional neuron
 
-pub trait Dim2DimSynapseBaseStorageTrait<Q: NPUGlobalQuantization>:
-BaseSynapseStorageTrait<Q>
+pub trait Dim2DimSynapseBaseStorageTrait<Q: NPUGlobalQuantization, S: NPUSynapseQuantization>:
+BaseSynapseStorageTrait<Q, S>
 {
 
     //region Get Connections
-    fn get_destination_neuron_indexes_from_source_neuron_index(&self, source_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndexQuant>) -> Result<&[DimensionalTypedNeuronIndex<Q::NeuronIndexQuant>], FeagiNPUSynapseError>;
+    fn get_destination_neuron_indexes_from_source_neuron_index(&self, source_neuron_index: DimensionalTypedNeuronIndex<Q::>) -> Result<&[DimensionalTypedNeuronIndex<Q::NeuronIndexQuant>], FeagiNPUSynapseError>;
 
     fn get_source_neuron_indexes_from_destination_neuron_index(&self, destination_neuron_index: DimensionalTypedNeuronIndex<Q::NeuronIndexQuant>) -> Result<&[DimensionalTypedNeuronIndex<Q::NeuronIndexQuant>], FeagiNPUSynapseError>;
 
@@ -48,17 +46,17 @@ BaseSynapseStorageTrait<Q>
 }
 
 
-pub trait Dim2DimSynapseStaticStorageTrait<Q: NPUGlobalQuantization>:
-Dim2DimSynapseBaseStorageTrait<Q> +
-BaseSynapseStaticStorageTrait<Q>
+pub trait Dim2DimSynapseStaticStorageTrait<Q: NPUGlobalQuantization, S: NPUSynapseQuantization>:
+Dim2DimSynapseBaseStorageTrait<Q, S> +
+BaseSynapseStaticStorageTrait<Q, S>
 {
 
 
 }
 
-pub trait Dim2DimSynapseAllocStorageTrait<Q: NPUGlobalQuantization>:
-Dim2DimSynapseBaseStorageTrait<Q> +
-BaseSynapseAllocStorageTrait<Q>
+pub trait Dim2DimSynapseAllocStorageTrait<Q: NPUGlobalQuantization, S: NPUSynapseQuantization>:
+Dim2DimSynapseBaseStorageTrait<Q, S> +
+BaseSynapseAllocStorageTrait<Q, S>
 {
 
     fn remove_all_synapses_mappings_to_and_from_cortical_area(&mut self, area_index: DimensionalTypedCorticalIndex<Q::CorticalIndexCountQuant>)

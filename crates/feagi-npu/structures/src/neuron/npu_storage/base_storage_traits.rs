@@ -23,7 +23,7 @@ pub trait BaseNeuronCommonStorageTrait<Q: NPUGlobalQuantization, BNQ: NPUBaseNeu
         }
     }
 
-    fn get_cortical_typed_neuron_index(neuron_index: NPUNeuronIndex<BNQ::NeuronIndexCountQuant>) -> CorticalTypedNeuronIndex<BNQ::NeuronIndexCountQuant> {
+    fn get_cortical_typed_neuron_index(neuron_index: NPUNeuronIndex<Q::NeuronIndexCountQuant>) -> CorticalTypedNeuronIndex<Q::NeuronIndexCountQuant> {
         CorticalTypedNeuronIndex {
             index: neuron_index,
             cortical_type: Self::TYPE_CORTICAL_AREA,
@@ -32,15 +32,15 @@ pub trait BaseNeuronCommonStorageTrait<Q: NPUGlobalQuantization, BNQ: NPUBaseNeu
 
     /// Gets the maximum possible neuron index achievable by current quantization (or in the case
     /// of static implementations, the size of the array).
-    fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<BNQ::NeuronIndexCountQuant>;
+    fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<Q::NeuronIndexCountQuant>;
 
-    
+
     /// Returns the count of valid neurons in the structure. NOT THE SAME AS TOTAL NUMBER OF
     /// NEURONS STORED!
-    fn get_total_number_of_live_neurons(&self) -> NeuronCount<BNQ::NeuronIndexCountQuant>;
+    fn get_total_number_of_live_neurons(&self) -> NeuronCount<Q::NeuronIndexCountQuant>;
 
     /// Returns the count of invalid neurons in the structure. NOT THE SAME AS TOTAL FREE CAPACITY!
-    fn get_total_number_of_dead_neurons(&self) -> NeuronCount<BNQ::NeuronIndexCountQuant>;
+    fn get_total_number_of_dead_neurons(&self) -> NeuronCount<Q::NeuronIndexCountQuant>;
 
     fn get_number_live_cortical_areas(&self) -> CorticalAreaCount<Q::CorticalIndexCountQuant>;
 
@@ -62,7 +62,7 @@ BaseNeuronCommonStorageTrait<Q, BNQ>
     /// albeit allowing a buffer of free space. Returns the number of neurons that were freed.
     /// Returns 0 if no neurons were freed (nothing to free or spare capacity is at or less than
     /// what was requested). Note that invalid neurons not sorted to the back will not be freed.
-    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronCount<BNQ::NeuronIndexCountQuant>) -> NeuronCount<BNQ::NeuronIndexCountQuant>;
+    fn free_unused_neuron_capacity(&mut self, spare_capacity_to_maintain: NeuronCount<Q::NeuronIndexCountQuant>) -> NeuronCount<Q::NeuronIndexCountQuant>;
 
 
     /// Deletes a cortical area by invalidating all of its neurons. Returns the neuron indexes

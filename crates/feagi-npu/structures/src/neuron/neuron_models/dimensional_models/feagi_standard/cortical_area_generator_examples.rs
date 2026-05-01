@@ -35,7 +35,7 @@ pub struct FeagiStandardCorticalAreaGeneratorRam<Q: NPUGlobalQuantization, DNQ: 
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> DimensionalCorticalAreaGeneratorTrait<Q, DNQ> for FeagiStandardCorticalAreaGeneratorRam<Q, DNQ> {
     type DimensionNeuronModelType = FeagiStandardNeuronDataRam<Q, DNQ>;
 
-    fn number_of_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+    fn number_of_neurons(&self) -> NeuronCount<Q::NeuronIndexCountQuant> {
         self.cortical_area_dimensions.get_number_neurons(&self.cortical_neurons_per_voxel)
     }
 

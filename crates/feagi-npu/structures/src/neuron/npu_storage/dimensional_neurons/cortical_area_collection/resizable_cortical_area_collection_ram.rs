@@ -11,13 +11,13 @@ use crate::quantizables::{NPUDimensionalNeuronQuantization, NPUGlobalQuantizatio
 
 pub(crate) struct ResizableCorticalAreaCollectionRam<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>> {
     cortical_area_data: Vec<NeuronModel>,
-    sorted_skipped_dead_areas: Vec<(CorticalAreaIndex<Q::CorticalIndexCountQuant>, NeuronCount<DNQ::NeuronIndexCountQuant>)>, // Sorted by neuron count, with the smallest at the end
+    sorted_skipped_dead_areas: Vec<(CorticalAreaIndex<Q::CorticalIndexCountQuant>, NeuronCount<Q::NeuronIndexCountQuant>)>, // Sorted by neuron count, with the smallest at the end
     number_live_cortical_areas: CorticalAreaCount<Q::CorticalIndexCountQuant>,
-    total_number_live_neurons: NeuronCount<DNQ::NeuronIndexCountQuant>,
-    total_number_skipped_neurons: NeuronCount<DNQ::NeuronIndexCountQuant>,
+    total_number_live_neurons: NeuronCount<Q::NeuronIndexCountQuant>,
+    total_number_skipped_neurons: NeuronCount<Q::NeuronIndexCountQuant>,
 }
 
-impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>> 
+impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>>
 ResizableCorticalAreaCollectionRam<Q, DNQ, NeuronModel>
 {
     /// Creates a new empty cortical area collection for ram
@@ -81,18 +81,18 @@ ResizableCorticalAreaCollectionRam<Q, DNQ, NeuronModel>
 
     /// Gets the number of neurons contained in the live cortical areas. Note that individual areas
     /// may have dead neurons as part of degeneracy, which isnt counted here
-    pub fn get_total_number_neurons_in_live_cortical_areas(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+    pub fn get_total_number_neurons_in_live_cortical_areas(&self) -> NeuronCount<Q::NeuronIndexCountQuant> {
         self.total_number_live_neurons
     }
 
     /// Gets the number of neurons contained in the dead cortical areas. Note that individual areas
     /// may have dead neurons as part of degeneracy, which isnt counted here
-    pub fn get_total_number_neurons_in_dead_cortical_areas(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+    pub fn get_total_number_neurons_in_dead_cortical_areas(&self) -> NeuronCount<Q::NeuronIndexCountQuant> {
         self.total_number_skipped_neurons
     }
-    
+
     /// Adds a cortical area using a cortical area generator
-    pub fn add_cortical_area(&mut self, cortical_area_generator: &impl DimensionalCorticalAreaGeneratorTrait<Q, DNQ>) 
+    pub fn add_cortical_area(&mut self, cortical_area_generator: &impl DimensionalCorticalAreaGeneratorTrait<Q, DNQ>)
         -> Result<CorticalAreaIndex<Q::CorticalIndexCountQuant>, FeagiNPUNeuronError> {
 
         let number_neurons = cortical_area_generator.number_of_neurons();

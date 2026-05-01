@@ -16,23 +16,23 @@ use crate::quantizables::{NPUGlobalQuantization, NPUNeuronIndex, NPUDimensionalN
 pub struct CoreNeuronStorageResizableRam<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization>
 {
     neuron_collection: ResizableCorticalAreaCollectionRam<Q, DNQ, FeagiStandardNeuronDataRam<Q, DNQ>>, // TODO we dont need something resizable as we will never add cortical areas
-    total_number_live_neurons: NeuronCount<DNQ::NeuronIndexCountQuant>,
-    total_number_dead_neurons: NeuronCount<DNQ::NeuronIndexCountQuant>,
+    total_number_live_neurons: NeuronCount<Q::NeuronIndexCountQuant>,
+    total_number_dead_neurons: NeuronCount<Q::NeuronIndexCountQuant>,
 }
 
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> BaseNeuronCommonStorageTrait<Q, DNQ> for CoreNeuronStorageResizableRam<Q, DNQ> {
     const TYPE_CORTICAL_AREA: NPUCorticalAreaIdentifierFlag =
         NPUCorticalAreaIdentifierFlag::CoreFeagiStandard(DNQ::GENERAL_DATA_QUANTIZATION_LEVEL);
 
-    fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<DNQ::NeuronIndexCountQuant> {
+    fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<Q::NeuronIndexCountQuant> {
         NPUNeuronIndex::MAX_VALUE
     }
 
-    fn get_total_number_of_live_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+    fn get_total_number_of_live_neurons(&self) -> NeuronCount<Q::NeuronIndexCountQuant> {
         self.total_number_live_neurons
     }
 
-    fn get_total_number_of_dead_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+    fn get_total_number_of_dead_neurons(&self) -> NeuronCount<Q::NeuronIndexCountQuant> {
         self.total_number_dead_neurons
     }
 

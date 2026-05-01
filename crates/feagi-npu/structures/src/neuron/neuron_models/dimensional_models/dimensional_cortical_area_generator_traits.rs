@@ -11,7 +11,7 @@ pub trait DimensionalCorticalAreaGeneratorTrait<Q: NPUGlobalQuantization, DNQ: N
     type DimensionNeuronModelType: DimensionalNeuronModelDataSharedTrait<Q, DNQ>;
 
     /// Returns the number of neurons that the generated cortical area will have
-    fn number_of_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant>;
+    fn number_of_neurons(&self) -> NeuronCount<Q::NeuronIndexCountQuant>;
 
     /// Generates (Allocates) a new neuron/cortical data set representing a cortical area for RAM
     /// NPU deployments
