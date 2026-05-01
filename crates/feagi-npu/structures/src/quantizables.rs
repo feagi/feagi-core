@@ -14,7 +14,7 @@ pub trait NPUGlobalQuantization {
 
 /// Shared Quantization details that all neuron types implement in some manner
 pub trait NPUBaseNeuronQuantization {
-    const DATA_QUANTIZATION_LEVEL: QuantizationLevel;
+    const GENERAL_DATA_QUANTIZATION_LEVEL: QuantizationLevel;
     type NeuronIndexCountQuant: NPUNeuronIndexType;
     type ValueQuant: QuantizableValueType;
     type PercentageQuant: QuantizablePercentType;

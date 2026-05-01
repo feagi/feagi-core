@@ -1,6 +1,5 @@
 use feagi_structures::base_quantizable::QuantizationLevel;
-
-
+use feagi_structures::genomic::cortical_area::CorticalAreaModelType;
 // NOTE: Due to quantization level taking 2 bits automatically, we have 6 bits for the cortical,
 // meaning within a u8 we can identify 64 different types of cortical areas
 
@@ -9,17 +8,28 @@ use feagi_structures::base_quantizable::QuantizationLevel;
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum NPUCorticalAreaIdentifierFlag {
-    Core(QuantizationLevel),
-    Sensor(QuantizationLevel),
-    Motor(QuantizationLevel),
-    FeagiStandard(QuantizationLevel),
-    LIF(QuantizationLevel),
-    Izhikevich(QuantizationLevel),
-    HodgkinHuxley(QuantizationLevel),
+    CoreFeagiStandard(QuantizationLevel),
+    SensorFeagiStandard(QuantizationLevel),
+    MotorFeagiStandard(QuantizationLevel),
+    InterNeuronFeagiStandard(QuantizationLevel),
+    InterNeuronLIF(QuantizationLevel),
+    InterNeuronIzhikevich(QuantizationLevel),
+    InterNeuronHodgkinHuxley(QuantizationLevel),
     Memory(QuantizationLevel),
 }
 
 impl NPUCorticalAreaIdentifierFlag {
+    
+    /// For interneurons, allows creation from a model type and quantization level
+    pub(crate) const fn from_quantization_and_model(quantization_level: QuantizationLevel, model_type: CorticalAreaModelType) -> Self {
+        match model_type {
+            CorticalAreaModelType::FeagiStandard => {NPUCorticalAreaIdentifierFlag::InterNeuronFeagiStandard(quantization_level)}
+            CorticalAreaModelType::LIF => {NPUCorticalAreaIdentifierFlag::InterNeuronLIF(quantization_level)}
+            CorticalAreaModelType::Izhikevich => {NPUCorticalAreaIdentifierFlag::InterNeuronIzhikevich(quantization_level)}
+            CorticalAreaModelType::HodgkinHuxley => {NPUCorticalAreaIdentifierFlag::InterNeuronHodgkinHuxley(quantization_level)}
+        }
+    }
+    
     pub fn is_dimensional(&self) -> bool {
         match &self {
             NPUCorticalAreaIdentifierFlag::Memory(_) => {false}
@@ -29,9 +39,9 @@ impl NPUCorticalAreaIdentifierFlag {
 
     pub fn is_interneuron(&self) -> bool {
         match &self {
-            NPUCorticalAreaIdentifierFlag::Core(_) => {false}
-            NPUCorticalAreaIdentifierFlag::Sensor(_) => {false}
-            NPUCorticalAreaIdentifierFlag::Motor(_) => {false}
+            NPUCorticalAreaIdentifierFlag::CoreFeagiStandard(_) => {false}
+            NPUCorticalAreaIdentifierFlag::SensorFeagiStandard(_) => {false}
+            NPUCorticalAreaIdentifierFlag::MotorFeagiStandard(_) => {false}
             NPUCorticalAreaIdentifierFlag::Memory(_) => {false}
             _ => true
         }

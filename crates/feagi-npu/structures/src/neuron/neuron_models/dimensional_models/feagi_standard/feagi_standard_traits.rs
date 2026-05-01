@@ -1,5 +1,6 @@
 use crate::neuron::neuron_models::dimensional_models::dimensional_neuron_data_traits::{DimensionalNeuronModelDataFixedTrait, DimensionalNeuronModelDataResizableTrait, DimensionalNeuronModelDataSharedTrait};
-use crate::neuron::neuron_models::{DimensionalCorticalAreaGeneratorTrait, DimensionalCorticalConfigurationTrait};
+use crate::neuron::neuron_models::dimensional_models::dimensional_cortical_area_generator_traits::DimensionalCorticalAreaGeneratorTrait;
+use crate::neuron::neuron_models::dimensional_models::dimensional_cortical_configuration_traits::DimensionalCorticalConfigurationTrait;
 use crate::quantizables::{NPUDimensionalNeuronQuantization, NPUGlobalQuantization};
 
 //region Neuron Model Trait
@@ -18,6 +19,7 @@ DimensionalNeuronModelDataFixedTrait<Q, DNQ>
 
 }
 
+#[cfg(feature = "alloc")]
 pub(crate) trait FeagiStandardNeuronModelDataResizableTrait<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization>:
 FeagiStandardNeuronModelDataSharedTrait<Q, DNQ> +
 DimensionalNeuronModelDataResizableTrait<Q, DNQ>
@@ -36,7 +38,8 @@ DimensionalCorticalConfigurationTrait<Q, DNQ>
 
 //region Cortical Area Generator
 
-pub(crate) trait FeagiStandardCorticalAreaGenerator<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization>:
+#[cfg(feature = "alloc")]
+pub trait FeagiStandardCorticalAreaGenerator<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization>:
 DimensionalCorticalAreaGeneratorTrait<Q, DNQ>
 {
     

@@ -1,8 +1,10 @@
 use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalAreaCount, CorticalAreaIndex};
 use feagi_structures::neurons::descriptors::NeuronCount;
-use crate::neuron::neuron_models::{DimensionalCorticalConfigurationTrait, DimensionalCorticalAreaGeneratorTrait, DimensionalNeuronModelDataResizableTrait};
 use crate::neuron::FeagiNPUNeuronError;
+use crate::neuron::neuron_models::dimensional_models::dimensional_cortical_area_generator_traits::DimensionalCorticalAreaGeneratorTrait;
+use crate::neuron::neuron_models::dimensional_models::dimensional_cortical_configuration_traits::DimensionalCorticalConfigurationTrait;
+use crate::neuron::neuron_models::dimensional_models::dimensional_neuron_data_traits::DimensionalNeuronModelDataResizableTrait;
 use crate::quantizables::{NPUDimensionalNeuronQuantization, NPUGlobalQuantization};
 
 // TODO we can end up with a lot of fragmentation, we should think of ways to handle this
@@ -15,7 +17,8 @@ pub(crate) struct ResizableCorticalAreaCollectionRam<Q: NPUGlobalQuantization, D
     total_number_skipped_neurons: NeuronCount<DNQ::NeuronIndexCountQuant>,
 }
 
-impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>> ResizableCorticalAreaCollectionRam<Q, DNQ, NeuronModel>
+impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>> 
+ResizableCorticalAreaCollectionRam<Q, DNQ, NeuronModel>
 {
     /// Creates a new empty cortical area collection for ram
     pub fn new() -> Self {
@@ -87,8 +90,10 @@ impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronMode
     pub fn get_total_number_neurons_in_dead_cortical_areas(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
         self.total_number_skipped_neurons
     }
-
-    pub fn add_cortical_area_with_uniform_neurons(&mut self, cortical_area_generator: &impl DimensionalCorticalAreaGeneratorTrait<Q, DNQ>) -> Result<CorticalAreaIndex<Q::CorticalIndexCountQuant>, FeagiNPUNeuronError> {
+    
+    /// Adds a cortical area using a cortical area generator
+    pub fn add_cortical_area(&mut self, cortical_area_generator: &impl DimensionalCorticalAreaGeneratorTrait<Q, DNQ>) 
+        -> Result<CorticalAreaIndex<Q::CorticalIndexCountQuant>, FeagiNPUNeuronError> {
 
         let number_neurons = cortical_area_generator.number_of_neurons();
 
@@ -99,7 +104,7 @@ impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronMode
             // We found space, fill in without reallocating
             let (reviving_index, _) = self.sorted_skipped_dead_areas.get(free_space_index).unwrap();
             let dead_area = self.cortical_area_data.get_mut(reviving_index.to_usize()).unwrap();
-            cortical_area_generator.overwrite_dead_cortical_area_data(dead_area)?;
+            cortical_area_generator.overwrite_dead_cortical_area_data_ram(dead_area)?;
 
             // Area added, update caching values and return the success
             self.sorted_skipped_dead_areas.remove(free_space_index);
@@ -109,7 +114,7 @@ impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronMode
             return Ok(reviving_index)
         }
         // No available space, allocate more
-        self.cortical_area_data.push(cortical_area_generator.generate_new_cortical_area_data());
+        self.cortical_area_data.push(cortical_area_generator.generate_new_cortical_area_data_ram());
 
         // Area added, update caching values and return the success
         self.number_live_cortical_areas != CorticalAreaCount::ONE;

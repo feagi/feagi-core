@@ -1,44 +1,52 @@
-use core::ops::Range;
-use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
-use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
-use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
-use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
+use feagi_structures::base_quantizable::QuantizableUIntType;
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalAreaCount, CorticalAreaIndex};
+use feagi_structures::neurons::descriptors::{NeuronCount};
 use crate::neuron::npu_storage::base_storage_traits::{BaseNeuronCommonStorageTrait, BaseNeuronResizableStorageTrait};
 use crate::neuron::npu_storage::dimensional_neurons::dimensional_storage_traits::{DimensionalNeuronCommonStorageTrait, DimensionalNeuronResizableStorageTrait};
 use crate::neuron::npu_storage::dimensional_neurons::inter_neurons::inter_neuron_traits::{InterNeuronCommonStorageTrait, InterNeuronResizableStorageTrait};
 use crate::neuron::npu_storage::dimensional_neurons::cortical_area_collection::ResizableCorticalAreaCollectionRam;
-use crate::neuron::neuron_models::DimensionalNeuronModelDataResizableTrait;
 use crate::neuron::FeagiNPUNeuronError;
-use crate::neuron::flags::NeuronFlag;
+use crate::neuron::neuron_models::dimensional_models::dimensional_cortical_area_generator_traits::DimensionalCorticalAreaGeneratorTrait;
+use crate::neuron::neuron_models::dimensional_models::dimensional_neuron_data_traits::DimensionalNeuronModelDataResizableTrait;
+use crate::neuron::neuron_models::dimensional_models::feagi_standard::ram::structs_ram::FeagiStandardNeuronDataRam;
 use crate::NPUCorticalAreaIdentifierFlag;
-use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUDimensionalNeuronQuantization, NPUNeuronIndex, NPUNeuronMembranePotential, NeuronExcitability};
-use crate::quantizables::NPUGlobalQuantization;
-use crate::typed_indexing::{CorticalTypedCorticalIndex, CorticalTypedNeuronIndex};
+use crate::quantizables::{NPUDimensionalNeuronQuantization, NPUGlobalQuantization, NPUNeuronIndex};
 
 pub struct InterNeuronStorageResizableRam<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>>
 {
     neuron_collection: ResizableCorticalAreaCollectionRam<Q, DNQ, NeuronModel>,
+    total_number_live_neurons: NeuronCount<DNQ::NeuronIndexCountQuant>,
+    total_number_dead_neurons: NeuronCount<DNQ::NeuronIndexCountQuant>,
 }
 
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>>
 BaseNeuronCommonStorageTrait<Q, DNQ> for InterNeuronStorageResizableRam<Q, DNQ, NeuronModel>
 {
-    const TYPE_CORTICAL_AREA: NPUCorticalAreaIdentifierFlag = NeuronModel::NEURON_MODEL_TYPE;
-    
+    const TYPE_CORTICAL_AREA: NPUCorticalAreaIdentifierFlag =
+        NPUCorticalAreaIdentifierFlag::from_quantization_and_model(
+            DNQ::GENERAL_DATA_QUANTIZATION_LEVEL,
+            NeuronModel::CORTICAL_AREA_MODEL_TYPE);
+
     fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<DNQ::NeuronIndexCountQuant> {
-        todo!()
+        NPUNeuronIndex::MAX_VALUE
     }
 
-    fn get_total_number_of_valid_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
-        todo!()
+    fn get_total_number_of_live_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+        self.total_number_live_neurons
     }
 
-    fn get_total_number_of_invalid_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
-        todo!()
+    fn get_total_number_of_dead_neurons(&self) -> NeuronCount<DNQ::NeuronIndexCountQuant> {
+        self.total_number_dead_neurons
     }
 
-    fn get_number_cortical_areas(&self) -> CorticalAreaIndex<Q::CorticalIndexCountQuant> {
-        todo!()
+    fn get_number_live_cortical_areas(&self) -> CorticalAreaCount<Q::CorticalIndexCountQuant>
+    {
+        self.neuron_collection.get_number_live_cortical_areas()
+    }
+
+    fn get_number_dead_cortical_areas(&self) -> CorticalAreaCount<Q::CorticalIndexCountQuant>
+    {
+        self.neuron_collection.get_number_dead_cortical_areas()
     }
 }
 
@@ -49,8 +57,8 @@ BaseNeuronResizableStorageTrait<Q, DNQ> for InterNeuronStorageResizableRam<Q, DN
         todo!()
     }
 
-    fn delete_cortical_area(&mut self, cortical_index: CorticalAreaIndex<Q::CorticalIndexCountQuant>) -> Result<Range<NPUNeuronIndex<DNQ::NeuronIndexCountQuant>>, FeagiNPUNeuronError> {
-        todo!()
+    fn delete_cortical_area(&mut self, cortical_index: CorticalAreaIndex<Q::CorticalIndexCountQuant>) -> Result<(), FeagiNPUNeuronError> {
+        self.neuron_collection.mark_cortical_area_as_dead(cortical_index)
     }
 }
 
@@ -60,29 +68,43 @@ DimensionalNeuronCommonStorageTrait<Q, DNQ> for InterNeuronStorageResizableRam<Q
     type DimensionalNeuronModelDataType = FeagiStandardNeuronDataRam<Q, DNQ>;
 
     fn get_cortical_area_data(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexCountQuant>) -> Result<&Self::DimensionalNeuronModelDataType, FeagiNPUNeuronError> {
-        todo!()
+        self.neuron_collection.get_cortical_area(cortical_area_index)
     }
 
-    fn get_cortical_area_data_mut(&self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexCountQuant>) -> Result<&mut Self::DimensionalNeuronModelDataType, FeagiNPUNeuronError> {
-        todo!()
+    fn get_cortical_area_data_mut(&mut self, cortical_area_index: CorticalAreaIndex<Q::CorticalIndexCountQuant>) -> Result<&mut Self::DimensionalNeuronModelDataType, FeagiNPUNeuronError> {
+        self.neuron_collection.get_cortical_area_mut(cortical_area_index)
     }
-    // TODO return bound data type
 }
 
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>>
 DimensionalNeuronResizableStorageTrait<Q, DNQ> for InterNeuronStorageResizableRam<Q, DNQ, NeuronModel>
 {
-    // TODO resize using some sort of trait resizer struct that takes a neuron model type
+
 }
 
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>>
 InterNeuronCommonStorageTrait<Q, DNQ> for InterNeuronStorageResizableRam<Q, DNQ, NeuronModel>
 {
-    // Custom Cortical Area Stuff
+    type NeuronModelType = NeuronModel;
 }
 
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>>
 InterNeuronResizableStorageTrait<Q, DNQ> for InterNeuronStorageResizableRam<Q, DNQ, NeuronModel>
 {
-    // TODO add cortical area (use spawners)
+    fn add_interneuron_cortical_area(&mut self, cortical_area_generator: &impl DimensionalCorticalAreaGeneratorTrait<Q, DNQ>)
+        -> Result<CorticalAreaIndex<Q::CorticalIndexCountQuant>, FeagiNPUNeuronError> {
+        self.neuron_collection.add_cortical_area(cortical_area_generator)
+    }
+}
+
+impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>>
+InterNeuronStorageResizableRam<Q, DNQ, NeuronModel>
+{
+    pub fn new() -> Self {
+        Self {
+            neuron_collection: ResizableCorticalAreaCollectionRam::new(),
+            total_number_live_neurons: NeuronCount::ZERO,
+            total_number_dead_neurons: NeuronCount::ZERO,
+        }
+    }
 }

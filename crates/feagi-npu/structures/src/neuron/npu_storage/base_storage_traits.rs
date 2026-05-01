@@ -5,7 +5,7 @@
 // how data may be retrieved
 
 use core::ops::Range;
-use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalAreaCount, CorticalAreaIndex};
 use feagi_structures::neurons::descriptors::{NeuronCount};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::{CorticalTypedCorticalIndex, CorticalTypedNeuronIndex, NPUCorticalAreaIdentifierFlag};
@@ -15,7 +15,7 @@ pub trait BaseNeuronCommonStorageTrait<Q: NPUGlobalQuantization, BNQ: NPUBaseNeu
 
     const TYPE_CORTICAL_AREA: NPUCorticalAreaIdentifierFlag;
 
-    fn get_cortical_typed_cortical_area_index(cortical_area_index: CorticalAreaIndex<Q::CorticalIndexCountQuant>) 
+    fn get_cortical_typed_cortical_area_index(cortical_area_index: CorticalAreaIndex<Q::CorticalIndexCountQuant>)
         -> CorticalTypedCorticalIndex<Q::CorticalIndexCountQuant> {
         CorticalTypedCorticalIndex {
             index: cortical_area_index,
@@ -34,17 +34,18 @@ pub trait BaseNeuronCommonStorageTrait<Q: NPUGlobalQuantization, BNQ: NPUBaseNeu
     /// of static implementations, the size of the array).
     fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<BNQ::NeuronIndexCountQuant>;
 
-
-
+    
     /// Returns the count of valid neurons in the structure. NOT THE SAME AS TOTAL NUMBER OF
     /// NEURONS STORED!
-    fn get_total_number_of_valid_neurons(&self) -> NeuronCount<BNQ::NeuronIndexCountQuant>;
+    fn get_total_number_of_live_neurons(&self) -> NeuronCount<BNQ::NeuronIndexCountQuant>;
 
     /// Returns the count of invalid neurons in the structure. NOT THE SAME AS TOTAL FREE CAPACITY!
-    fn get_total_number_of_invalid_neurons(&self) -> NeuronCount<BNQ::NeuronIndexCountQuant>;
+    fn get_total_number_of_dead_neurons(&self) -> NeuronCount<BNQ::NeuronIndexCountQuant>;
 
-    fn get_number_cortical_areas(&self) -> CorticalAreaIndex<Q::CorticalIndexCountQuant>;
-    
+    fn get_number_live_cortical_areas(&self) -> CorticalAreaCount<Q::CorticalIndexCountQuant>;
+
+    fn get_number_dead_cortical_areas(&self) -> CorticalAreaCount<Q::CorticalIndexCountQuant>;
+
 }
 
 pub trait BaseNeuronFixedStorageTrait<Q: NPUGlobalQuantization, BNQ: NPUBaseNeuronQuantization>:
@@ -68,7 +69,7 @@ BaseNeuronCommonStorageTrait<Q, BNQ>
     /// of the disabled neurons
     /// WARNING: BE SURE TO REMOVE ASSOCIATED SYNAPSE MAPPINGS!
     fn delete_cortical_area(&mut self, cortical_index: CorticalAreaIndex<Q::CorticalIndexCountQuant>)
-                            -> Result<Range<NPUNeuronIndex<BNQ::NeuronIndexCountQuant>>, FeagiNPUNeuronError>;
+                            -> Result<(), FeagiNPUNeuronError>;
     
     // TODO Duplicate Cortical Areas? With and without mappings?
 

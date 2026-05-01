@@ -1,1 +1,1 @@
-pub mod structs_ram;
+pub(crate) mod structs_ram;
