@@ -21,7 +21,7 @@ on:
       indexing_delay_seconds:
         description: 'Seconds to wait after each publish for crates.io indexing'
         required: false
-        default: '90'
+        default: '40'
       verify_timeout_seconds:
         description: 'Max seconds to wait for crates.io verification'
         required: false
