@@ -144,11 +144,19 @@ pub struct CorticalAreaInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoding_format: Option<String>,
 
-    /// Unit ID (0, 1, 2, ...) - only for IPU/OPU
+    /// Cortical unit index (`CorticalUnitIndex`): byte 7 of the 8-byte cortical ID —
+    /// which instance of this I/O cortical unit type (aligns with motor/sensory grouping
+    /// on the wire and with Brain Visualizer `unit_id`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unit_id: Option<u8>,
 
-    /// Group ID (0, 1, 2, ...) - only for IPU/OPU
+    /// Cortical sub-unit index (`CorticalSubUnitIndex`): byte 6 — which cortical area
+    /// inside a multi-area unit (e.g. vision segments). Matches Brain Visualizer `subunit_id`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subunit_id: Option<u8>,
+
+    /// Same as [`Self::unit_id`] (CorticalUnitIndex, byte 7). Kept for clients that
+    /// already read `group_id` from older API responses.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_id: Option<u8>,
 

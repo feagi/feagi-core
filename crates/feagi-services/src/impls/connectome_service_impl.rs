@@ -1036,8 +1036,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
         } else {
             None
         };
-        let unit_id = if is_io_area {
+        // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see feagi-structures
+        // genomic cortical ID layout). BV and motor decoders use byte 7 for device group.
+        let subunit_id = if is_io_area {
             Some(cortical_bytes[6])
+        } else {
+            None
+        };
+        let cortical_unit_index = if is_io_area {
+            Some(cortical_bytes[7])
         } else {
             None
         };
@@ -1189,8 +1196,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
             cortical_subtype,
             encoding_type: coding_behavior.clone(),
             encoding_format: coding_type.clone(),
-            unit_id,
-            group_id: None,
+            unit_id: cortical_unit_index,
+            subunit_id,
+            group_id: cortical_unit_index,
             coding_signage,
             coding_behavior,
             coding_type,

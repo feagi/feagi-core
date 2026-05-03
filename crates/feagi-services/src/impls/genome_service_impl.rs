@@ -3753,12 +3753,13 @@ impl GenomeServiceImpl {
             } else {
                 None
             };
-            let unit_id = if is_io_area {
+            // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see connectome_service_impl).
+            let subunit_id = if is_io_area {
                 Some(cortical_bytes[6])
             } else {
                 None
             };
-            let group_id = if is_io_area {
+            let cortical_unit_index = if is_io_area {
                 Some(cortical_bytes[7])
             } else {
                 None
@@ -3852,8 +3853,9 @@ impl GenomeServiceImpl {
                 cortical_subtype,
                 encoding_type,
                 encoding_format,
-                unit_id,
-                group_id,
+                unit_id: cortical_unit_index,
+                subunit_id,
+                group_id: cortical_unit_index,
                 coding_signage,
                 coding_behavior,
                 coding_type,
@@ -3943,12 +3945,13 @@ impl GenomeServiceImpl {
         } else {
             None
         };
-        let unit_id = if is_io_area {
+        // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see connectome_service_impl).
+        let subunit_id = if is_io_area {
             Some(cortical_bytes[6])
         } else {
             None
         };
-        let group_id = if is_io_area {
+        let cortical_unit_index = if is_io_area {
             Some(cortical_bytes[7])
         } else {
             None
@@ -4042,8 +4045,9 @@ impl GenomeServiceImpl {
             cortical_subtype,
             encoding_type,
             encoding_format,
-            unit_id,
-            group_id,
+            unit_id: cortical_unit_index,
+            subunit_id,
+            group_id: cortical_unit_index,
             coding_signage,
             coding_behavior,
             coding_type,
@@ -4134,12 +4138,13 @@ impl GenomeServiceImpl {
         } else {
             None
         };
-        let unit_id = if is_io_area {
+        // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see connectome_service_impl).
+        let subunit_id = if is_io_area {
             Some(cortical_bytes[6])
         } else {
             None
         };
-        let group_id = if is_io_area {
+        let cortical_unit_index = if is_io_area {
             Some(cortical_bytes[7])
         } else {
             None
@@ -4233,8 +4238,9 @@ impl GenomeServiceImpl {
             cortical_subtype,
             encoding_type,
             encoding_format,
-            unit_id,
-            group_id,
+            unit_id: cortical_unit_index,
+            subunit_id,
+            group_id: cortical_unit_index,
             coding_signage,
             coding_behavior,
             coding_type,
