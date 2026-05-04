@@ -52,6 +52,12 @@ pub struct FeagiAgentHandler {
     all_registered_agents: HashMap<AgentID, (AgentDescriptor, Vec<AgentCapabilities>)>,
     agent_mapping_to_command_control_server_index: HashMap<AgentID, CommandServerIndex>,
     last_activity_by_agent: HashMap<AgentID, Instant>,
+    /// Last inbound command/control activity from the agent (heartbeats,
+    /// device registration payloads, etc.). **Not** updated when FEAGI pushes
+    /// motor/visualization/sensor traffic, so it does not spuriously reset the
+    /// duplicate-registration guard while a zombie motor session still receives
+    /// outbound motor ticks.
+    last_command_control_activity_by_agent: HashMap<AgentID, Instant>,
     sensors: HashMap<AgentID, SensorTranslator>,
     motors: HashMap<AgentID, MotorTranslator>,
     visualizations: HashMap<AgentID, VisualizationTranslator>,
@@ -86,9 +92,17 @@ impl FeagiAgentHandler {
     /// This suppresses immediate descriptor-replacement churn caused by duplicate
     /// registration packets that arrive within a very short window for the same
     /// live agent session.
+    ///
+    /// Uses [`Self::last_command_control_activity_by_agent`] (not
+    /// [`Self::last_activity_by_agent`]) so outbound motor/visualization traffic
+    /// from FEAGI does not keep a dead client's descriptor session stuck inside
+    /// the duplicate guard forever.
     #[allow(dead_code)]
     fn should_replace_existing_descriptor_session(&self, existing_agent_id: AgentID) -> bool {
-        let Some(last_seen) = self.last_activity_by_agent.get(&existing_agent_id) else {
+        let Some(last_seen) = self
+            .last_command_control_activity_by_agent
+            .get(&existing_agent_id)
+        else {
             // Missing liveness state is treated as stale and replaceable.
             return true;
         };
@@ -125,6 +139,7 @@ impl FeagiAgentHandler {
             all_registered_agents: HashMap::new(),
             agent_mapping_to_command_control_server_index: HashMap::new(),
             last_activity_by_agent: HashMap::new(),
+            last_command_control_activity_by_agent: HashMap::new(),
             sensors: Default::default(),
             motors: Default::default(),
             visualizations: Default::default(),
@@ -170,7 +185,10 @@ impl FeagiAgentHandler {
     ) {
         self.all_registered_agents
             .insert(agent_id, (descriptor, capabilities));
-        self.last_activity_by_agent.insert(agent_id, Instant::now());
+        let now = Instant::now();
+        self.last_activity_by_agent.insert(agent_id, now);
+        self.last_command_control_activity_by_agent
+            .insert(agent_id, now);
     }
 
     /// Forcefully deregister all currently connected agents.
@@ -753,6 +771,7 @@ impl FeagiAgentHandler {
         message: FeagiMessage,
     ) -> Result<Option<(AgentID, FeagiMessage)>, FeagiAgentError> {
         self.refresh_agent_activity(agent_id);
+        self.refresh_command_control_activity(agent_id);
         match &message {
             FeagiMessage::AgentRegistration(register_message) => {
                 match register_message {
@@ -936,7 +955,10 @@ impl FeagiAgentHandler {
             .insert(agent_id, (descriptor, agent_capabilities));
         self.agent_mapping_to_command_control_server_index
             .insert(agent_id, command_server_index);
-        self.last_activity_by_agent.insert(agent_id, Instant::now());
+        let now = Instant::now();
+        self.last_activity_by_agent.insert(agent_id, now);
+        self.last_command_control_activity_by_agent
+            .insert(agent_id, now);
 
         Ok(endpoint_mappings)
     }
@@ -947,6 +969,13 @@ impl FeagiAgentHandler {
     /// (not just explicit heartbeat packets).
     fn refresh_agent_activity(&mut self, agent_id: AgentID) {
         self.last_activity_by_agent.insert(agent_id, Instant::now());
+    }
+
+    /// Record inbound command/control traffic from a registered agent (exclusive
+    /// of server-driven motor/sensor/visualization pushes).
+    fn refresh_command_control_activity(&mut self, agent_id: AgentID) {
+        self.last_command_control_activity_by_agent
+            .insert(agent_id, Instant::now());
     }
 
     /// Find currently connected agent by descriptor value.
@@ -996,6 +1025,8 @@ impl FeagiAgentHandler {
     /// deregistration.
     fn deregister_agent_internal(&mut self, agent_id: AgentID, reason: &str) {
         self.last_activity_by_agent.remove(&agent_id);
+        self.last_command_control_activity_by_agent
+            .remove(&agent_id);
         self.agent_mapping_to_command_control_server_index
             .remove(&agent_id);
         let descriptor = self

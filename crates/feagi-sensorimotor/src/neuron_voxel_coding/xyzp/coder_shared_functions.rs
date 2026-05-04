@@ -529,11 +529,7 @@ mod tests {
         {
             let mut p = SignedPercentage::new_from_m1_1(1.0).unwrap();
             let mut zs: Vec<u32> = Vec::new();
-            encode_signed_percentage_to_linear_neuron_z_index_along_z(
-                &p,
-                z_along_z_float,
-                &mut zs,
-            );
+            encode_signed_percentage_to_linear_neuron_z_index_along_z(&p, z_along_z_float, &mut zs);
             assert_eq!(zs, vec![0]);
             decode_signed_percentage_from_linear_neurons_along_z(&zs, z_along_z, &mut p);
             assert!((p.get_as_m1_1() - 1.0).abs() < tolerance, "round-trip +1.0");
@@ -541,11 +537,7 @@ mod tests {
         {
             let mut p = SignedPercentage::new_from_m1_1(-1.0).unwrap();
             let mut zs: Vec<u32> = Vec::new();
-            encode_signed_percentage_to_linear_neuron_z_index_along_z(
-                &p,
-                z_along_z_float,
-                &mut zs,
-            );
+            encode_signed_percentage_to_linear_neuron_z_index_along_z(&p, z_along_z_float, &mut zs);
             assert_eq!(zs, vec![8]);
             decode_signed_percentage_from_linear_neurons_along_z(&zs, z_along_z, &mut p);
             assert!(
