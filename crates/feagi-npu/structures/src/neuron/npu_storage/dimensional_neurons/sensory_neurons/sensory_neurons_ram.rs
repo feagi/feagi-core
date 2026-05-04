@@ -23,7 +23,7 @@ pub struct SensoryNeuronStorageResizableRam<Q: NPUGlobalQuantization, DNQ: NPUDi
 
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> BaseNeuronCommonStorageTrait<Q, DNQ> for SensoryNeuronStorageResizableRam<Q, DNQ> {
     const TYPE_CORTICAL_AREA: NPUCorticalAreaIdentifierFlag =
-        NPUCorticalAreaIdentifierFlag::SensoryFeagiStandard(DNQ::GENERAL_DATA_QUANTIZATION_LEVEL);
+        NPUCorticalAreaIdentifierFlag::SensoryFeagiStandard(DNQ::GENERAL_CORTICAL_AREA_QUANTIZATION_LEVEL);
 
     fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<Q::NeuronIndexCountQuant> {
         NPUNeuronIndex::MAX_VALUE

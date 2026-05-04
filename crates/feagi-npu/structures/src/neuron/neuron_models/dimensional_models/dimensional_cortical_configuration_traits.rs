@@ -20,4 +20,9 @@ pub(crate) trait DimensionalCorticalConfigurationTrait<Q: NPUGlobalQuantization,
     fn get_total_number_neurons(&self) -> NeuronCount<Q::NeuronIndexCountQuant> {
         self.get_cortical_dimensions().get_number_neurons(self.get_number_neurons_per_voxel())
     }
+    
+    #[inline]
+    fn get_cortical_dimensions_usize(&self) -> NeuronVoxelDimensions<usize> {
+        self.get_cortical_dimensions().to_usize()
+    }
 }

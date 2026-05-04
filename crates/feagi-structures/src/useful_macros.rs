@@ -1,4 +1,6 @@
 
+// TODO some sort of const function to create a const to set multiple flags rapdily
+
 #[macro_export]
 macro_rules! define_bit_packed_u8_flags {
     (

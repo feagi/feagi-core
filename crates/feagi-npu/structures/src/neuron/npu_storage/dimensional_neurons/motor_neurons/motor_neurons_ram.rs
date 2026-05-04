@@ -23,7 +23,7 @@ pub struct MotorNeuronStorageResizableRam<Q: NPUGlobalQuantization, DNQ: NPUDime
 
 impl<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization> BaseNeuronCommonStorageTrait<Q, DNQ> for MotorNeuronStorageResizableRam<Q, DNQ> {
     const TYPE_CORTICAL_AREA: NPUCorticalAreaIdentifierFlag =
-        NPUCorticalAreaIdentifierFlag::MotorFeagiStandard(DNQ::GENERAL_DATA_QUANTIZATION_LEVEL);
+        NPUCorticalAreaIdentifierFlag::MotorFeagiStandard(DNQ::GENERAL_CORTICAL_AREA_QUANTIZATION_LEVEL);
 
     fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<Q::NeuronIndexCountQuant> {
         NPUNeuronIndex::MAX_VALUE

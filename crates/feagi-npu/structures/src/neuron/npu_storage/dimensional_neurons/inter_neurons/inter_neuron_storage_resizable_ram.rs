@@ -2,15 +2,15 @@
 use feagi_structures::base_quantizable::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalAreaCount, CorticalAreaIndex};
 use feagi_structures::neurons::descriptors::{NeuronCount};
+use crate::NPUCorticalAreaIdentifierFlag;
+use crate::neuron::FeagiNPUNeuronError;
+use crate::quantizables::{NPUDimensionalNeuronQuantization, NPUGlobalQuantization, NPUNeuronIndex};
 use crate::neuron::npu_storage::base_storage_traits::{BaseNeuronCommonStorageTrait, BaseNeuronResizableStorageTrait};
 use crate::neuron::npu_storage::dimensional_neurons::dimensional_storage_traits::{DimensionalNeuronCommonStorageTrait, DimensionalNeuronResizableStorageTrait};
 use crate::neuron::npu_storage::dimensional_neurons::inter_neurons::inter_neuron_traits::{InterNeuronCommonStorageTrait, InterNeuronResizableStorageTrait};
 use crate::neuron::npu_storage::dimensional_neurons::cortical_area_collection::ResizableCorticalAreaCollectionRam;
-use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::neuron_models::dimensional_models::dimensional_cortical_area_generator_traits::DimensionalCorticalAreaGeneratorTrait;
 use crate::neuron::neuron_models::dimensional_models::dimensional_neuron_data_traits::DimensionalNeuronModelDataResizableTrait;
-use crate::NPUCorticalAreaIdentifierFlag;
-use crate::quantizables::{NPUDimensionalNeuronQuantization, NPUGlobalQuantization, NPUNeuronIndex};
 
 pub struct InterNeuronStorageResizableRam<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization, NeuronModel: DimensionalNeuronModelDataResizableTrait<Q, DNQ>>
 {
@@ -24,7 +24,7 @@ BaseNeuronCommonStorageTrait<Q, DNQ> for InterNeuronStorageResizableRam<Q, DNQ, 
 {
     const TYPE_CORTICAL_AREA: NPUCorticalAreaIdentifierFlag =
         NPUCorticalAreaIdentifierFlag::from_quantization_and_model(
-            DNQ::GENERAL_DATA_QUANTIZATION_LEVEL,
+            DNQ::GENERAL_CORTICAL_AREA_QUANTIZATION_LEVEL,
             NeuronModel::CORTICAL_AREA_MODEL_TYPE);
 
     fn get_max_possible_neuron_index(&self) -> NPUNeuronIndex<Q::NeuronIndexCountQuant> {
