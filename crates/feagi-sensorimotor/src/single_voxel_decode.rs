@@ -7,6 +7,7 @@ use crate::data_types::{Percentage, SignedPercentage};
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
     decode_signed_percentage_from_fractional_exponential_neurons,
     decode_signed_percentage_from_linear_neurons,
+    decode_signed_percentage_from_linear_neurons_along_z,
     decode_unsigned_percentage_from_fractional_exponential_neurons,
     decode_unsigned_percentage_from_linear_neurons,
 };
@@ -368,6 +369,9 @@ fn decode_percentage_signed(
         .unwrap_or_else(|_| SignedPercentage::new_from_m1_1_unchecked(0.0));
 
     match positioning {
+        PercentageNeuronPositioning::Linear if ndim == 1 && ch_dim_x == 1 => {
+            decode_signed_percentage_from_linear_neurons_along_z(&z_vec, ch_dim_z, &mut signed);
+        }
         PercentageNeuronPositioning::Linear => {
             decode_signed_percentage_from_linear_neurons(&z_pos, &z_neg, ch_dim_z, &mut signed);
         }

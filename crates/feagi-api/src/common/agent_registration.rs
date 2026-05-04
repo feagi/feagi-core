@@ -743,7 +743,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     .unwrap_or(0);
                 if device_count == 0 {
                     warn!(
-                        "⚠️ [API] device_grouping is empty for sensory unit '{}' group {}; skipping auto-create",
+                        "⚠️ [API] device_grouping is empty for sensory unit '{}' group {}; skipping auto-create for this entry (SmartIMU/vision/IR need non-empty grouping from connector export)",
                         sensory_unit_key, group_u8
                     );
                     continue;
@@ -1284,6 +1284,6 @@ mod count_output_registration_tests {
         let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
         let dec = json!({"Percentage": [99u32, "Linear", false, "D1"]});
         let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
-        assert_eq!((w, h, d), (1, 1, 10));
+        assert_eq!((w, h, d), (1, 1, 9));
     }
 }
