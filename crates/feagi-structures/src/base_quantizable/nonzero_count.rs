@@ -1,4 +1,4 @@
-use crate::base_quantizable::QuantizableUIntType;
+use crate::base_quantizable::{FeagiBaseQuantizationType, QuantizableUIntType};
 
 /// Defines a transparent non-zero count wrapper type and forwarding impls.
 #[macro_export]
@@ -17,7 +17,7 @@ macro_rules! define_nonzero_count_family {
             pub const MIN_VALUE: Self = Self(T::MIN_VALUE);
 
             #[inline(always)]
-            pub const fn from_const(value: T) -> Self {
+            pub(crate) const fn from_const(value: T) -> Self {
                 Self(value)
             }
 
@@ -76,6 +76,15 @@ macro_rules! define_nonzero_count_family {
             }
         }
 
+        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Sub for $base_name<T> {
+            type Output = Self;
+
+            #[inline(always)]
+            fn sub(self, rhs: Self) -> Self::Output {
+                Self(self.0.floor_sub(rhs.0))
+            }
+        }
+
         impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
 
@@ -98,6 +107,13 @@ macro_rules! define_nonzero_count_family {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
+            }
+        }
+
+        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::SubAssign for $base_name<T> {
+            #[inline(always)]
+            fn sub_assign(&mut self, rhs: Self) {
+                self.0 = self.0.floor_sub(rhs.0);
             }
         }
 
@@ -125,13 +141,8 @@ macro_rules! define_nonzero_count_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $crate::base_quantizable::QuantizableNonzeroUIntType
-            for $base_name<T>
-        {
+        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $crate::base_quantizable::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
-            const ONE: Self = Self(T::ONE);
-            const MAX_VALUE: Self = Self(T::MAX_VALUE);
-            const MIN_VALUE: Self = Self(T::MIN_VALUE);
 
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {
@@ -144,13 +155,13 @@ macro_rules! define_nonzero_count_family {
             }
 
             #[inline(always)]
-            fn checked_sub(self, other: Self) -> Option<Self> {
-                self.0.checked_sub(other.0).map(Self)
+            fn saturating_sub(self, other: Self) -> Self {
+                Self(self.0.floor_sub(other.0))
             }
 
             #[inline(always)]
-            fn floor_sub(self, other: Self) -> Self {
-                Self(self.0.floor_sub(other.0))
+            fn checked_sub(self, other: Self) -> Option<Self> {
+                self.0.checked_sub(other.0).filter(|value| *value >= T::ONE).map(Self)
             }
 
             #[inline(always)]
@@ -165,7 +176,20 @@ macro_rules! define_nonzero_count_family {
 
             #[inline(always)]
             fn checked_div(self, other: Self) -> Option<Self> {
-                self.0.checked_div(other.0).map(Self)
+                self.0.checked_div(other.0).filter(|value| *value >= T::ONE).map(Self)
+            }
+        }
+
+        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $crate::base_quantizable::QuantizableNonzeroUIntType
+            for $base_name<T>
+        {
+            const ONE: Self = Self(T::ONE);
+            const MAX_VALUE: Self = Self(T::MAX_VALUE);
+            const MIN_VALUE: Self = Self(T::MIN_VALUE);
+
+            #[inline(always)]
+            fn floor_sub(self, other: Self) -> Self {
+                Self(self.0.floor_sub(other.0))
             }
 
             #[inline(always)]
@@ -181,124 +205,28 @@ macro_rules! define_nonzero_count_family {
     };
 }
 
-#[cfg(not(feature = "alloc"))]
-pub trait QuantizableNonzeroUIntType:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + core::cmp::Eq
-    + core::hash::Hash
-    + core::cmp::PartialOrd
-    + core::ops::Add<Output = Self>
-    // Do not support native sub as we floor at 1
-    + core::ops::Mul<Output = Self>
-    + core::ops::Div<Output = Self>
-    + core::ops::AddAssign
-    + core::ops::MulAssign
-    + core::ops::DivAssign
-    + 'static
-{
-    const NUMBER_OF_BYTES: usize;
+pub trait QuantizableNonzeroUIntType: FeagiBaseQuantizationType
++ core::cmp::PartialOrd {
+
+    // Skipping FeagiBaseSingleElementQuantizationType since we cannot define 0!
     const ONE: Self;
     const MAX_VALUE: Self;
     const MIN_VALUE: Self;
 
-    fn saturating_add(self, other: Self) -> Self;
-    fn checked_add(self, other: Self) -> Option<Self>;
-
-    /// Checked only, as we want to avoid making 0 possible
-    fn checked_sub(self, other: Self) -> Option<Self>;
-
     /// Subtraction with a minimum value of 1.
     fn floor_sub(self, other: Self) -> Self;
-    fn saturating_mul(self, other: Self) -> Self;
-    fn checked_mul(self, other: Self) -> Option<Self>;
-    fn checked_div(self, other: Self) -> Option<Self>;
-    fn to_usize(self) -> usize;
-    fn from_usize(value: usize) -> Option<Self>;
-}
-
-#[cfg(feature = "alloc")]
-pub trait QuantizableNonzeroUIntType:
-    Copy
-    + Clone
-    + Send
-    + Sync
-    + core::fmt::Debug
-    + core::fmt::Display
-    + Default
-    + core::cmp::Eq
-    + core::hash::Hash
-    + core::cmp::PartialOrd
-    + core::ops::Add<Output = Self>
-    // Do not support native sub as we floor at 1
-    + core::ops::Mul<Output = Self>
-    + core::ops::Div<Output = Self>
-    + core::ops::AddAssign
-    + core::ops::MulAssign
-    + core::ops::DivAssign
-    + 'static
-{
-    const NUMBER_OF_BYTES: usize;
-    const ONE: Self;
-    const MAX_VALUE: Self;
-    const MIN_VALUE: Self;
-
-    fn saturating_add(self, other: Self) -> Self;
-    fn checked_add(self, other: Self) -> Option<Self>;
-
-    /// Checked only, as we want to avoid making 0 possible
-    fn checked_sub(self, other: Self) -> Option<Self>;
-
-    /// Subtraction with a minimum value of 1.
-    fn floor_sub(self, other: Self) -> Self;
-    fn saturating_mul(self, other: Self) -> Self;
-    fn checked_mul(self, other: Self) -> Option<Self>;
-    fn checked_div(self, other: Self) -> Option<Self>;
     fn to_usize(self) -> usize;
     fn from_usize(value: usize) -> Option<Self>;
 }
 
 impl<T: QuantizableUIntType> QuantizableNonzeroUIntType for T {
-    const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
     const ONE: Self = T::ONE;
     const MAX_VALUE: Self = T::MAX_VALUE;
     const MIN_VALUE: Self = T::ONE;
 
     #[inline(always)]
-    fn saturating_add(self, other: Self) -> Self {
-        QuantizableUIntType::saturating_add(self, other)
-    }
-
-    #[inline(always)]
-    fn checked_add(self, other: Self) -> Option<Self> {
-        QuantizableUIntType::checked_add(self, other)
-    }
-
-    #[inline(always)]
-    fn checked_sub(self, other: Self) -> Option<Self> {
-        QuantizableUIntType::checked_sub(self, other).filter(|value| *value >= T::ONE)
-    }
-
-    #[inline(always)]
     fn floor_sub(self, other: Self) -> Self {
-        self.checked_sub(other).unwrap_or(T::ONE)
-    }
-
-    #[inline(always)]
-    fn saturating_mul(self, other: Self) -> Self {
-        QuantizableUIntType::saturating_mul(self, other)
-    }
-
-    #[inline(always)]
-    fn checked_mul(self, other: Self) -> Option<Self> {
-        QuantizableUIntType::checked_mul(self, other).filter(|value| *value >= T::ONE)
-    }
-
-    #[inline(always)]
-    fn checked_div(self, other: Self) -> Option<Self> {
-        QuantizableUIntType::checked_div(self, other).filter(|value| *value >= T::ONE)
+        self.checked_sub(other).filter(|value| *value >= T::ONE).unwrap_or(T::ONE)
     }
 
     #[inline(always)]

@@ -1,4 +1,4 @@
-use crate::base_quantizable::{NonzeroCount, QuantizableUIntType};
+use crate::base_quantizable::{QuantizableUIntType};
 use crate::base_quantizable::QuantizableValueType;
 use crate::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
 
@@ -40,24 +40,13 @@ crate::define_unsigned_coordinate_3d_type_family!(NeuronVoxelCoordinate);
 crate::define_dimension_3d_type_family!(NeuronVoxelDimensions, NeuronVoxelCoordinate);
 
 impl<CoordQuant: QuantizableUIntType> NeuronVoxelDimensions<CoordQuant> {
-    pub const fn default_1_1_1_cube() -> Self {
-        NeuronVoxelDimensions {
-            x: NonzeroCount::ONE,
-            y: NonzeroCount::ONE,
-            z: NonzeroCount::ONE,
-        }
-    }
-
-    pub fn get_max_allowed_index_exclusive(&self) -> usize {
-        (self.x * self.y * self.z).to_usize()
-    }
 
     pub fn get_number_voxels<IndexQuant: QuantizableUIntType>(&self) -> NeuronVoxelCount<IndexQuant> {
-        NeuronVoxelCount::from_usize(self.get_max_allowed_index_exclusive())
+        NeuronVoxelCount::from_usize(self.number_elements())
     }
 
     pub fn get_number_neurons<IndexQuant: QuantizableUIntType>(&self, density: &NeuronCount<NumberNeuronsPerVoxel>) -> NeuronCount<IndexQuant> {
-        NeuronCount::from_usize(self.get_max_allowed_index_exclusive().to_usize() * (density.to_usize()))
+        NeuronCount::from_usize(self.number_elements() * (density.to_usize()))
     }
 
     /// Linear voxel index with **x varying fastest**: `index = x + y·dx + z·dx·dy`.
@@ -95,6 +84,8 @@ impl<CoordQuant: QuantizableUIntType> NeuronVoxelDimensions<CoordQuant> {
         let i = x + y * dx + z * dx * dy;
         IndexQuant::from_usize(i)
     }
+
+    // TODO iterators
 }
 
 //endregion

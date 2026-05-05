@@ -13,9 +13,6 @@ pub trait NPUGlobalQuantization {
 
 
 
-
-
-
 /// Allows for communication of quantization levels at runtime
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
