@@ -1,3 +1,0 @@
-use crate::define_quantizable_value_type_family;
-
-define_quantizable_value_type_family!(QuantizablePercentage);

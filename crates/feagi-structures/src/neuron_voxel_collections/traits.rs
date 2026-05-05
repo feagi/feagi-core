@@ -1,20 +1,24 @@
-
-
 use crate::genomic::cortical_area::CorticalID;
-use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
+use crate::neuron_voxel_collections::data_values::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
 use crate::base_feagi_types::quantizable_types::{QuantizableUIntType, QuantizableValueType};
-use crate::neuron_voxels::FeagiStructuresNeuronVoxelError;
+use crate::neuron_voxel_collections::FeagiStructuresNeuronVoxelError;
 
 #[cfg(feature = "alloc")]
 use ahash::AHashMap;
 
 
+/// Defines quantization level for a Neuron Collection (NOT a voxel neuron collection!)
+pub trait NeuronVoxelCollectionQuantizationLevelType {
+    type VoxelIndexCountQuant: QuantizableUIntType;
+    type VoxelCoordQuant: QuantizableUIntType;
+    type VoxelPotentialQuant: QuantizableValueType;
+}
+
 //region NeuronVoxel
-/// Represents the potential of a single voxel (which may contain one or more neurons)
-pub trait NeuronVoxel<VoxelPotentialQuant> where
-    VoxelPotentialQuant: QuantizableValueType
+/// Represents the potential of a single voxel (which may contain one or more neuron_collections)
+pub trait NeuronVoxel<VoxelPotentialQuant: QuantizableValueType>
 {
-    const NUMBER_OF_BYTES: usize;
+    const NUMBER_OF_BYTES: usize = VoxelPotentialQuant::NUMBER_OF_BYTES;
 
     fn get_voxel_potential(&self) -> NeuronVoxelPotential<VoxelPotentialQuant>;
 
@@ -30,7 +34,7 @@ pub trait NeuronVoxel<VoxelPotentialQuant> where
 
 //region SingleCACollection
 
-/// Defines any collection of neurons sparsely from a single cortical area
+/// Defines any collection of neuron_collections sparsely from a single cortical area
 pub trait SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
     VoxelPotentialQuant: QuantizableValueType,
     CoordQuant: QuantizableUIntType,
@@ -56,21 +60,21 @@ pub trait SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuan
 
     fn try_get_neuron_voxel_coordinate(&mut self, coordinate: &NeuronVoxelDimensions<CoordQuant>) -> Option<&NeuronVoxelDimensions<CoordQuant>>;
 
-    fn write_neuron_voxel_index(&mut self, voxel: NeuronVoxelIP<NeuronVoxelPotential<VoxelPotentialQuant>, NeuronVoxelIndexQuant>) -> Result<(), crate::neuron_voxels::FeagiNeuronVoxelError>;
+    fn write_neuron_voxel_index(&mut self, voxel: NeuronVoxelIP<NeuronVoxelPotential<VoxelPotentialQuant>, NeuronVoxelIndexQuant>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
 
-    fn write_neuron_voxel_coordinate(&mut self, voxel: NeuronVoxelXYZP<NeuronVoxelPotential<VoxelPotentialQuant>, CoordQuant>) -> Result<(), crate::neuron_voxels::FeagiNeuronVoxelError>;
+    fn write_neuron_voxel_coordinate(&mut self, voxel: NeuronVoxelXYZP<NeuronVoxelPotential<VoxelPotentialQuant>, CoordQuant>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
 
-    fn write_neuron_voxel_index_raw(&mut self, index: &NeuronVoxelIndexQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxels::FeagiNeuronVoxelError>;
+    fn write_neuron_voxel_index_raw(&mut self, index: &NeuronVoxelIndexQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
 
-    fn write_neuron_voxel_coordinate_raw(&mut self, x: CoordQuant, y: CoordQuant, z: CoordQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxels::FeagiNeuronVoxelError>;
+    fn write_neuron_voxel_coordinate_raw(&mut self, x: CoordQuant, y: CoordQuant, z: CoordQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
 
-    fn write_neuron_voxel_index_unchecked(&mut self, voxel: NeuronVoxelIP<NeuronVoxelPotential<VoxelPotentialQuant>, NeuronVoxelIndexQuant>) -> Result<(), crate::neuron_voxels::FeagiNeuronVoxelError>;
+    fn write_neuron_voxel_index_unchecked(&mut self, voxel: NeuronVoxelIP<NeuronVoxelPotential<VoxelPotentialQuant>, NeuronVoxelIndexQuant>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
 
-    fn write_neuron_voxel_coordinate_unchecked(&mut self, voxel: NeuronVoxelXYZP<NeuronVoxelPotential<VoxelPotentialQuant>, CoordQuant>) -> Result<(), crate::neuron_voxels::FeagiNeuronVoxelError>;
+    fn write_neuron_voxel_coordinate_unchecked(&mut self, voxel: NeuronVoxelXYZP<NeuronVoxelPotential<VoxelPotentialQuant>, CoordQuant>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
 
-    fn write_neuron_voxel_index_raw_unchecked(&mut self, index: &NeuronVoxelIndexQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxels::FeagiNeuronVoxelError>;
+    fn write_neuron_voxel_index_raw_unchecked(&mut self, index: &NeuronVoxelIndexQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
 
-    fn write_neuron_voxel_coordinate_raw_unchecked(&mut self, x: CoordQuant, y: CoordQuant, z: CoordQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxels::FeagiNeuronVoxelError>;
+    fn write_neuron_voxel_coordinate_raw_unchecked(&mut self, x: CoordQuant, y: CoordQuant, z: CoordQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
 
      */
     //endregion
@@ -79,7 +83,7 @@ pub trait SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuan
 
 
 // TODO should we have a function to count the number of nonzero potentials specifically?
-/// Defines a collection of neurons of a single cortical area backed by dynamic data structures
+/// Defines a collection of neuron_collections of a single cortical area backed by dynamic data structures
 /// (Vector)
 #[cfg(feature = "alloc")]
 pub trait SingleCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>:
@@ -96,7 +100,7 @@ SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronV
 
     fn reserve(&mut self, number_of_neuron_voxels_to_reserve_for: NeuronVoxelIndexQuant);
 
-    /// Clears / zeros all stored neurons (without deallocating) and changes cortical area size
+    /// Clears / zeros all stored neuron_collections (without deallocating) and changes cortical area size
     fn empty_and_change_cortical_area_dimensions(&mut self, new_dimensions: NeuronVoxelDimensions<CoordQuant>);
 
     fn shrink_to_fit(&mut self);
@@ -112,7 +116,7 @@ SingleCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, Neuron
     CoordQuant: QuantizableUIntType,
     NeuronVoxelIndexQuant: QuantizableUIntType
 {
-    /// Clears all stored neurons (without deallocating)
+    /// Clears all stored neuron_collections (without deallocating)
     fn clear_all_neurons(&mut self);
 
     fn iter_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)>;

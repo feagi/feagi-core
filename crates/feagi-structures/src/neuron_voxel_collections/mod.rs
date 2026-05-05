@@ -3,7 +3,7 @@
 mod feagi_neuron_voxel_error;
 
 
-pub mod descriptors;
+pub mod data_values;
 
 /// voxel holding structured optimized for representing large sparse voxel spaces
 pub mod coord_potential;

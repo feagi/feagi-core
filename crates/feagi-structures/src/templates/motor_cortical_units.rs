@@ -82,7 +82,7 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
-                #[doc = "Count output - unsigned percentage encoding (linear, absolute)."]
+                #[doc = "Count output - unsigned percentages encoding (linear, absolute)."]
                 CountOutput => {
                     friendly_name: "Count Output",
                     accepted_wrapped_io_data_type: Percentage,

@@ -1,26 +1,27 @@
-use crate::base_feagi_types::percentage::shared::FeagiBasePercentageType;
+use crate::base_feagi_types::percentages::shared::FeagiBasePercentageType;
 
 #[macro_export]
-macro_rules! define_unsigned_percentage_type_family {
+macro_rules! define_signed_percentage_type_family {
     ($base_name:ident) => {
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
         #[cfg_attr(feature = "alloc", serde(transparent))]
-        pub struct $base_name(u8);
+        pub struct $base_name(i8);
 
         impl $base_name {
-            pub const RAW_ZERO_PERCENT: u8 = u8::MIN;
-            pub const RAW_HUNDRED_PERCENT: u8 = u8::MAX;
-            pub const MAX_AS_F32: f32 = u8::MAX as f32;
+            pub const RAW_NEG_HUNDRED_PERCENT: i8 = -i8::MAX;
+            pub const RAW_ZERO_PERCENT: i8 = 0;
+            pub const RAW_HUNDRED_PERCENT: i8 = i8::MAX;
+            pub const MAX_ABS_AS_F32: f32 = i8::MAX as f32;
 
             #[inline(always)]
-            pub const fn from_raw(raw: u8) -> Self {
+            pub const fn from_raw(raw: i8) -> Self {
                 Self(raw)
             }
 
             #[inline(always)]
-            pub const fn to_raw(self) -> u8 {
+            pub const fn to_raw(self) -> i8 {
                 self.0
             }
 
@@ -28,18 +29,18 @@ macro_rules! define_unsigned_percentage_type_family {
             pub fn from_f32_saturating(float: f32) -> Self {
                 if float.is_nan() {
                     Self(Self::RAW_ZERO_PERCENT)
-                } else if float.is_sign_negative() {
-                    Self(Self::RAW_ZERO_PERCENT)
+                } else if float <= -1.0 {
+                    Self(Self::RAW_NEG_HUNDRED_PERCENT)
                 } else if float >= 1.0 {
                     Self(Self::RAW_HUNDRED_PERCENT)
                 } else {
-                    Self((float * Self::MAX_AS_F32).round() as u8)
+                    Self((float * Self::MAX_ABS_AS_F32).round() as i8)
                 }
             }
 
             #[inline(always)]
             pub fn from_f32(float: f32) -> Option<Self> {
-                if float.is_finite() && (0.0..=1.0).contains(&float) {
+                if float.is_finite() && (-1.0..=1.0).contains(&float) {
                     Some(Self::from_f32_saturating(float))
                 } else {
                     None
@@ -48,7 +49,7 @@ macro_rules! define_unsigned_percentage_type_family {
 
             #[inline(always)]
             pub fn to_f32(self) -> f32 {
-                self.0 as f32 / Self::MAX_AS_F32
+                (self.0 as f32 / Self::MAX_ABS_AS_F32).clamp(-1.0, 1.0)
             }
         }
 
@@ -57,7 +58,7 @@ macro_rules! define_unsigned_percentage_type_family {
 
             #[inline(always)]
             fn add(self, rhs: Self) -> Self::Output {
-                <Self as $crate::base_feagi_types::percentage::shared::FeagiBasePercentageType>::saturating_add(self, rhs)
+                <Self as $crate::base_feagi_types::percentages::shared::FeagiBasePercentageType>::saturating_add(self, rhs)
             }
         }
 
@@ -66,7 +67,7 @@ macro_rules! define_unsigned_percentage_type_family {
 
             #[inline(always)]
             fn sub(self, rhs: Self) -> Self::Output {
-                <Self as $crate::base_feagi_types::percentage::shared::FeagiBasePercentageType>::saturating_sub(self, rhs)
+                <Self as $crate::base_feagi_types::percentages::shared::FeagiBasePercentageType>::saturating_sub(self, rhs)
             }
         }
 
@@ -75,7 +76,7 @@ macro_rules! define_unsigned_percentage_type_family {
 
             #[inline(always)]
             fn mul(self, rhs: Self) -> Self::Output {
-                <Self as $crate::base_feagi_types::percentage::shared::FeagiBasePercentageType>::saturating_mul(self, rhs)
+                <Self as $crate::base_feagi_types::percentages::shared::FeagiBasePercentageType>::saturating_mul(self, rhs)
             }
         }
 
@@ -132,29 +133,29 @@ macro_rules! define_unsigned_percentage_type_family {
             }
         }
 
-        impl $crate::base_feagi_types::percentage::shared::FeagiBasePercentageType for $base_name {
+        impl $crate::base_feagi_types::percentages::shared::FeagiBasePercentageType for $base_name {
             const ZERO_PERCENT: Self = Self(Self::RAW_ZERO_PERCENT);
             const HUNDRED_PERCENT: Self = Self(Self::RAW_HUNDRED_PERCENT);
-            const MAX_AS_F32: f32 = Self::MAX_AS_F32;
+            const MAX_AS_F32: f32 = Self::MAX_ABS_AS_F32;
 
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {
-                Self(self.0.saturating_add(other.0))
+                Self::from_f32_saturating(self.to_f32() + other.to_f32())
             }
 
             #[inline(always)]
             fn checked_add(self, other: Self) -> Option<Self> {
-                self.0.checked_add(other.0).map(Self)
+                Self::from_f32(self.to_f32() + other.to_f32())
             }
 
             #[inline(always)]
             fn saturating_sub(self, other: Self) -> Self {
-                Self(self.0.saturating_sub(other.0))
+                Self::from_f32_saturating(self.to_f32() - other.to_f32())
             }
 
             #[inline(always)]
             fn checked_sub(self, other: Self) -> Option<Self> {
-                self.0.checked_sub(other.0).map(Self)
+                Self::from_f32(self.to_f32() - other.to_f32())
             }
 
             #[inline(always)]
@@ -183,10 +184,12 @@ macro_rules! define_unsigned_percentage_type_family {
             }
         }
 
-        impl $crate::base_feagi_types::percentage::UnsignedPercentageType for $base_name {}
+        impl $crate::base_feagi_types::percentages::SignedPercentageType for $base_name {
+            const NEG_HUNDRED_PERCENT: Self = Self(Self::RAW_NEG_HUNDRED_PERCENT);
+        }
     };
 }
 
-pub trait UnsignedPercentageType: FeagiBasePercentageType {
-    
+pub trait SignedPercentageType: FeagiBasePercentageType {
+    const NEG_HUNDRED_PERCENT: Self;
 }

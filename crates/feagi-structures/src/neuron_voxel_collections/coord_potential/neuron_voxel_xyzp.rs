@@ -1,6 +1,6 @@
 use crate::base_feagi_types::quantizable_types::{QuantizableUIntType, QuantizableValueType};
-use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelPotential};
-use crate::neuron_voxels::traits::NeuronVoxel;
+use crate::neuron_voxel_collections::data_values::{NeuronVoxelCoordinate, NeuronVoxelPotential};
+use crate::neuron_voxel_collections::traits::NeuronVoxel;
 
 /// A single neuron voxel storing spatial coordinates and activation potential in XYZP format.
 ///

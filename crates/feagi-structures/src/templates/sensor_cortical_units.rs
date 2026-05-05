@@ -136,7 +136,7 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
-                #[doc = "Count input - unsigned percentage encoding (linear, absolute)."]
+                #[doc = "Count input - unsigned percentages encoding (linear, absolute)."]
                 CountInput => {
                     friendly_name: "Count Input",
                     accepted_wrapped_io_data_type: Percentage,

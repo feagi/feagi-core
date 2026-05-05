@@ -1,5 +1,5 @@
 /// Dense neuron voxel collections are not sparse at all, but rather store a potential for every
-/// voxel in a cortical area. Since they don't change size with more neurons, they are the only
+/// voxel in a cortical area. Since they don't change size with more neuron_collections, they are the only
 /// option for embedded contexts and are very performant. They are also more space efficient
 /// than other collection types with a cortical area is mostly lit anyways.
 

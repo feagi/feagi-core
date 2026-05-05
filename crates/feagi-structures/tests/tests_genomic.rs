@@ -4,7 +4,7 @@ use feagi_structures::genomic::cortical_area::descriptors::*;
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::*;
 use feagi_structures::genomic::cortical_area::*;
 use feagi_structures::genomic::{FeagiStructuresGenomicError, GenomeCoordinate3DI32, SensoryCorticalUnit};
-use feagi_structures::neuron_voxels::descriptors::NeuronVoxelCoordinate;
+use feagi_structures::neuron_voxel_collections::data_values::NeuronVoxelCoordinate;
 use feagi_structures::FeagiStructuresError;
 
 // TODO: CorticalArea lives in cortical_area.rs but is not wired into `genomic::cortical_area` module exports yet; restore integration tests when `CorticalArea` is public again.

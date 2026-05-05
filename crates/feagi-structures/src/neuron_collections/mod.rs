@@ -2,7 +2,7 @@
 mod neuron_dense_vector;
 mod feagi_neuron_error;
 
-pub mod descriptors;
+pub mod data_values;
 pub mod traits;
 
 pub use feagi_neuron_error::FeagiStructuresNeuronError;

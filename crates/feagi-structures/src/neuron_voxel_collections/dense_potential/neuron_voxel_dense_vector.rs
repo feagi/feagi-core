@@ -1,8 +1,8 @@
 use core::marker::PhantomData;
 use crate::base_feagi_types::quantizable_types::{FeagiBaseSingleElementQuantizationType, QuantizableUIntType};
 use crate::base_feagi_types::quantizable_types::QuantizableValueType;
-use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
-use crate::neuron_voxels::traits::{SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionDense, SingleCorticalNeuronVoxelCollectionSparse};
+use crate::neuron_voxel_collections::data_values::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
+use crate::neuron_voxel_collections::traits::{SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionDense, SingleCorticalNeuronVoxelCollectionSparse};
 
 pub struct NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
     VoxelPotentialQuant: QuantizableValueType,

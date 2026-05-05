@@ -1,4 +1,5 @@
-use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, QuantizableUIntType};
+use crate::base_feagi_types::quantizable_types::{QuantizableUIntType};
+use crate::base_feagi_types::quantizable_types::shared::FeagiBaseQuantizationType;
 
 /// Defines a transparent non-zero count wrapper type and forwarding impls.
 #[macro_export]
@@ -198,7 +199,7 @@ macro_rules! define_nonzero_count_family {
             }
 
             #[inline(always)]
-            fn from_usize(value: usize) -> Option<Self> {
+            fn try_from_usize(value: usize) -> Option<Self> {
                 T::from_usize(value).map(Self)
             }
         }
@@ -216,7 +217,7 @@ pub trait QuantizableNonzeroUIntType: FeagiBaseQuantizationType
     /// Subtraction with a minimum value of 1.
     fn floor_sub(self, other: Self) -> Self;
     fn to_usize(self) -> usize;
-    fn from_usize(value: usize) -> Option<Self>;
+    fn try_from_usize(value: usize) -> Option<Self>;
 }
 
 impl<T: QuantizableUIntType> QuantizableNonzeroUIntType for T {
@@ -235,7 +236,7 @@ impl<T: QuantizableUIntType> QuantizableNonzeroUIntType for T {
     }
 
     #[inline(always)]
-    fn from_usize(value: usize) -> Option<Self> {
+    fn try_from_usize(value: usize) -> Option<Self> {
         let value = T::from_usize(value);
         if value < T::ONE {
             None

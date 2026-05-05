@@ -1,4 +1,4 @@
-use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType};
+use crate::base_feagi_types::quantizable_types::shared::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType};
 
 /// Defines a transparent wrapper type and all `QuantizableInt` / operator / conversion impls.
 #[macro_export]

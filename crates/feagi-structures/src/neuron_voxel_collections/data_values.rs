@@ -1,8 +1,14 @@
 use crate::base_feagi_types::quantizable_types::{QuantizableUIntType};
 use crate::base_feagi_types::quantizable_types::QuantizableValueType;
-use crate::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
+use crate::neuron_collections::data_values::{NeuronCount, NeuronDensityPerVoxel};
 
-/// Denotes how neurons are being stored
+
+pub trait NeuronCollectionQuantizationLevelType {
+    type VoxelIndexCountCoordQuant: QuantizableUIntType;
+    type VoxelPotentialQuant: QuantizableValueType;
+}
+
+/// Denotes how neuron_collections are being stored
 pub enum SingleCorticalNeuronVoxelCollectionType {
     DenseArray,
     DenseVector,
@@ -15,7 +21,7 @@ pub enum SingleCorticalNeuronVoxelCollectionType {
 
 crate::define_quantizable_uint_type_family!(NeuronVoxelIndex);
 
-impl<IndexQuant: QuantizableUIntType> NeuronVoxelIndex<IndexQuant> {
+impl<VoxelIndexCountCoordQuant: QuantizableUIntType> NeuronVoxelIndex<VoxelIndexCountCoordQuant> {
 
 }
 //endregion
@@ -24,7 +30,7 @@ impl<IndexQuant: QuantizableUIntType> NeuronVoxelIndex<IndexQuant> {
 
 crate::define_quantizable_uint_type_family!(NeuronVoxelCount);
 
-impl<IndexQuant: QuantizableUIntType> NeuronVoxelCount<IndexQuant> {
+impl<VoxelIndexCountCoordQuant: QuantizableUIntType> NeuronVoxelCount<VoxelIndexCountCoordQuant> {
 
 }
 //endregion
@@ -39,22 +45,22 @@ crate::define_unsigned_coordinate_3d_type_family!(NeuronVoxelCoordinate);
 
 crate::define_dimension_3d_type_family!(NeuronVoxelDimensions, NeuronVoxelCoordinate);
 
-impl<CoordQuant: QuantizableUIntType> NeuronVoxelDimensions<CoordQuant> {
+impl<VoxelIndexCountCoordQuant: QuantizableUIntType> NeuronVoxelDimensions<VoxelIndexCountCoordQuant> {
 
-    pub fn get_number_voxels<IndexQuant: QuantizableUIntType>(&self) -> NeuronVoxelCount<IndexQuant> {
+    pub fn get_number_voxels(&self) -> NeuronVoxelCount<VoxelIndexCountCoordQuant> {
         NeuronVoxelCount::from_usize(self.number_elements())
     }
 
-    pub fn get_number_neurons<IndexQuant: QuantizableUIntType>(&self, density: &NeuronCount<NumberNeuronsPerVoxel>) -> NeuronCount<IndexQuant> {
+    pub fn get_number_neurons(&self, density: &NeuronDensityPerVoxel) -> NeuronCount<VoxelIndexCountCoordQuant> {
         NeuronCount::from_usize(self.number_elements() * (density.to_usize()))
     }
 
     /// Linear voxel index with **x varying fastest**: `index = x + y·dx + z·dx·dy`.
     #[inline(always)]
-    pub fn linear_index_to_coordinate<IndexQuant: QuantizableUIntType>(
+    pub fn linear_index_to_coordinate(
         &self,
-        index: IndexQuant,
-    ) -> NeuronVoxelCoordinate<CoordQuant> {
+        index: VoxelIndexCountCoordQuant,
+    ) -> NeuronVoxelCoordinate<VoxelIndexCountCoordQuant> {
         let i = index.to_usize();
         let dx = self.x.get().to_usize();
         let dy = self.y.get().to_usize();
@@ -64,25 +70,25 @@ impl<CoordQuant: QuantizableUIntType> NeuronVoxelDimensions<CoordQuant> {
         let y = rem / dx;
         let x = rem % dx;
         NeuronVoxelCoordinate::new(
-            CoordQuant::from_usize(x),
-            CoordQuant::from_usize(y),
-            CoordQuant::from_usize(z),
+            VoxelIndexCountCoordQuant::from_usize(x),
+            VoxelIndexCountCoordQuant::from_usize(y),
+            VoxelIndexCountCoordQuant::from_usize(z),
         )
     }
 
     /// Inverse of [`Self::linear_index_to_coordinate`].
     #[inline(always)]
-    pub fn coordinate_to_linear_index<IndexQuant: QuantizableUIntType>(
+    pub fn coordinate_to_linear_index(
         &self,
-        coordinate: NeuronVoxelCoordinate<CoordQuant>,
-    ) -> IndexQuant {
+        coordinate: NeuronVoxelCoordinate<VoxelIndexCountCoordQuant>,
+    ) -> VoxelIndexCountCoordQuant {
         let dx = self.x.get().to_usize();
         let dy = self.y.get().to_usize();
         let x = coordinate.x.to_usize();
         let y = coordinate.y.to_usize();
         let z = coordinate.z.to_usize();
         let i = x + y * dx + z * dx * dy;
-        IndexQuant::from_usize(i)
+        VoxelIndexCountCoordQuant::from_usize(i)
     }
 
     // TODO iterators
@@ -94,7 +100,7 @@ impl<CoordQuant: QuantizableUIntType> NeuronVoxelDimensions<CoordQuant> {
 
 crate::define_quantizable_value_type_family!(NeuronVoxelPotential);
 
-impl<Potential: QuantizableValueType> NeuronVoxelPotential<Potential> {
+impl<VoxelPotentialQuant: QuantizableValueType> NeuronVoxelPotential<VoxelPotentialQuant> {
 
 }
 

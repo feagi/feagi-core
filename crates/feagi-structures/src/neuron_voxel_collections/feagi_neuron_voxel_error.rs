@@ -1,5 +1,5 @@
 use crate::genomic::cortical_area::CorticalID;
-use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions};
+use crate::neuron_voxel_collections::data_values::{NeuronVoxelCoordinate, NeuronVoxelDimensions};
 
 #[derive(Debug)]
 pub enum FeagiStructuresNeuronVoxelError {

@@ -113,7 +113,7 @@ mod generated {
 
 
     define_nonzero_count_family!(CorticalChannelNeuronDepthType);
-    /// The number of neurons deep of a sensor / motor channel. Generally used to define resolution
+    /// The number of neuron_collections deep of a sensor / motor channel. Generally used to define resolution
     pub type CorticalChannelNeuronDepth = CorticalChannelNeuronDepthType<u32>;
 
     define_unsigned_coordinate_3d_type_family!(CorticalChannelCoordinateType);

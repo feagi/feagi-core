@@ -1,6 +1,6 @@
 use crate::base_feagi_types::quantizable_types::{QuantizableUIntType, QuantizableValueType};
-use crate::neuron_voxels::descriptors::NeuronVoxelPotential;
-use crate::neuron_voxels::traits::NeuronVoxel;
+use crate::neuron_voxel_collections::data_values::NeuronVoxelPotential;
+use crate::neuron_voxel_collections::traits::NeuronVoxel;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NeuronVoxelIP<VoxelPotentialQuant, NeuronVoxelIndexQuant> where

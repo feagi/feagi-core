@@ -74,7 +74,7 @@ Properties shared across all cortical area types:
 /// Common properties shared across all cortical area types
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CommonAreaProperties {
-    /// Number of neurons per voxel
+    /// Number of neuron_collections per voxel
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub neurons_per_voxel: Option<u32>,
     

@@ -3,25 +3,20 @@
 
 //#![cfg_attr(not(feature = "std"), no_std)] // Switch to no_std mode if the std feature is disabled
 
+
+
+pub mod base_feagi_types;
+pub mod genomic;
+pub mod neuron_voxel_collections;
+pub mod feagi_log;
+pub mod neuron_collections;
+pub mod useful_structs;
+
+pub use feagi_structures_error::FeagiStructuresError;
+
 mod feagi_json;
 mod templates;
 mod feagi_structures_error;
-
-
-pub mod genomic; // TODO for now do not expose genomic properties
-pub mod neuron_voxels;
-pub mod feagi_log;
-pub mod descriptors;
-pub mod neurons;
-pub mod useful_structs;
 mod useful_macros;
-mod base_feagi_types;
-mod quantization;
-
-pub use feagi_structures_error::FeagiStructuresError;
-pub use feagi_json::FeagiJSON;
-pub use genomic::FeagiStructuresGenomicError;
 
 
-// Re-export async macros for convenience
-// Note: Macros are exported at crate root via #[macro_export], so we don't need to re-export them here
