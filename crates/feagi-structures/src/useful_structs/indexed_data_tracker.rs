@@ -1,7 +1,7 @@
 use core::iter::Iterator;
 use core::ops::{Index, IndexMut};
 use ahash::AHashMap;
-use crate::quantization::QuantizableUIntType;
+use crate::base_feagi_types::quantizable_types::QuantizableUIntType;
 use crate::FeagiStructuresError;
 
 #[derive(Debug, Clone)]

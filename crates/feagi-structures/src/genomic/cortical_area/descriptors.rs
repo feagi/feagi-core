@@ -7,7 +7,7 @@ pub use generated::CorticalChannelCount;
 pub use generated::CorticalChannelNeuronDepth;
 pub use generated::CorticalChannelCoordinate;
 pub use generated::CorticalChannelDimensions;
-use crate::quantization::QuantizableUIntType;
+use crate::base_feagi_types::quantizable_types::QuantizableUIntType;
 
 
 crate::define_quantizable_uint_type_family!(CorticalAreaCount);

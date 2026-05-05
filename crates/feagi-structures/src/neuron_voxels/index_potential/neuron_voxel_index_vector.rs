@@ -1,5 +1,5 @@
-use crate::quantization::QuantizableUIntType;
-use crate::quantization::QuantizableValueType;
+use crate::base_feagi_types::quantizable_types::QuantizableUIntType;
+use crate::base_feagi_types::quantizable_types::QuantizableValueType;
 use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
 use crate::neuron_voxels::traits::{SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionSparse};
 

@@ -1,4 +1,4 @@
-use crate::percentage::shared::FeagiBasePercentageType;
+use crate::base_feagi_types::percentage::shared::FeagiBasePercentageType;
 
 #[macro_export]
 macro_rules! define_signed_percentage_type_family {
@@ -58,7 +58,7 @@ macro_rules! define_signed_percentage_type_family {
 
             #[inline(always)]
             fn add(self, rhs: Self) -> Self::Output {
-                <Self as $crate::percentage::shared::FeagiBasePercentageType>::saturating_add(self, rhs)
+                <Self as $crate::base_feagi_types::percentage::shared::FeagiBasePercentageType>::saturating_add(self, rhs)
             }
         }
 
@@ -67,7 +67,7 @@ macro_rules! define_signed_percentage_type_family {
 
             #[inline(always)]
             fn sub(self, rhs: Self) -> Self::Output {
-                <Self as $crate::percentage::shared::FeagiBasePercentageType>::saturating_sub(self, rhs)
+                <Self as $crate::base_feagi_types::percentage::shared::FeagiBasePercentageType>::saturating_sub(self, rhs)
             }
         }
 
@@ -76,7 +76,7 @@ macro_rules! define_signed_percentage_type_family {
 
             #[inline(always)]
             fn mul(self, rhs: Self) -> Self::Output {
-                <Self as $crate::percentage::shared::FeagiBasePercentageType>::saturating_mul(self, rhs)
+                <Self as $crate::base_feagi_types::percentage::shared::FeagiBasePercentageType>::saturating_mul(self, rhs)
             }
         }
 
@@ -133,7 +133,7 @@ macro_rules! define_signed_percentage_type_family {
             }
         }
 
-        impl $crate::percentage::shared::FeagiBasePercentageType for $base_name {
+        impl $crate::base_feagi_types::percentage::shared::FeagiBasePercentageType for $base_name {
             const ZERO_PERCENT: Self = Self(Self::RAW_ZERO_PERCENT);
             const HUNDRED_PERCENT: Self = Self(Self::RAW_HUNDRED_PERCENT);
             const MAX_AS_F32: f32 = Self::MAX_ABS_AS_F32;
@@ -184,7 +184,7 @@ macro_rules! define_signed_percentage_type_family {
             }
         }
 
-        impl $crate::percentage::SignedPercentageType for $base_name {
+        impl $crate::base_feagi_types::percentage::SignedPercentageType for $base_name {
             const NEG_HUNDRED_PERCENT: Self = Self(Self::RAW_NEG_HUNDRED_PERCENT);
         }
     };

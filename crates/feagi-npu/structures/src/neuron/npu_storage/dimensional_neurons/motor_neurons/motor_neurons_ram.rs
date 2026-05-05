@@ -1,4 +1,4 @@
-use feagi_structures::quantization::QuantizableUIntType;
+use feagi_structures::base_feagi_types::::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalAreaCount, CorticalAreaIndex};
 use feagi_structures::neurons::descriptors::{NeuronCount};
 use crate::neuron::npu_storage::base_storage_traits::{BaseNeuronResizableStorageTrait, BaseNeuronCommonStorageTrait};

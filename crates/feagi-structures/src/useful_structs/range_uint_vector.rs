@@ -1,6 +1,6 @@
 use core::ops::Range;
 use core::marker::PhantomData;
-use crate::quantization::QuantizableUIntType;
+use crate::base_feagi_types::quantizable_types::QuantizableUIntType;
 
 #[derive(Debug, Clone)]
 pub struct RangeUintVector<RangeIndex, RangeCount> {

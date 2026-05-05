@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use feagi_structures::quantization::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
+use feagi_structures::base_feagi_types::::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
 use feagi_structures::genomic::cortical_area::CorticalAreaModelType;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NeuronMembranePotential, NumberNeuronsPerVoxel};

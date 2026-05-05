@@ -1,4 +1,4 @@
-use feagi_structures::quantization::{QuantizableUIntType, QuantizableValueType};
+use feagi_structures::base_feagi_types::::{QuantizableUIntType, QuantizableValueType};
 use feagi_structures::FeagiStructuresError;
 use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;

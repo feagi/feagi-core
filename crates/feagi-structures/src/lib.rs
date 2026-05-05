@@ -10,13 +10,13 @@ mod feagi_structures_error;
 
 pub mod genomic; // TODO for now do not expose genomic properties
 pub mod neuron_voxels;
-pub mod quantization;
 pub mod feagi_log;
 pub mod descriptors;
 pub mod neurons;
 pub mod useful_structs;
 mod useful_macros;
-mod percentage;
+mod base_feagi_types;
+mod quantization;
 
 pub use feagi_structures_error::FeagiStructuresError;
 pub use feagi_json::FeagiJSON;

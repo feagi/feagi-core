@@ -1,4 +1,4 @@
-use feagi_structures::quantization::QuantizationLevel;
+use feagi_structures::base_feagi_types::::QuantizationLevel;
 use feagi_structures::genomic::cortical_area::CorticalAreaModelType;
 // NOTE: Due to quantization level taking 2 bits automatically, we have 6 bits for the cortical,
 // meaning within a u8 we can identify 64 different types of cortical areas

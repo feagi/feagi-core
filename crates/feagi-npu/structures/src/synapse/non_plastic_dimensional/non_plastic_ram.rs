@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use core::ops::Range;
 use ahash::AHashMap;
-use feagi_structures::quantization::QuantizableUIntType;
+use feagi_structures::base_feagi_types::::QuantizableUIntType;
 use feagi_structures::FeagiStructuresError;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;

@@ -1,4 +1,4 @@
-use feagi_structures::quantization::QuantizableUIntType;
+use feagi_structures::base_feagi_types::::QuantizableUIntType;
 use crate::quantizables::NPUNeuronIndex;
 
 pub trait FireQueueTrait<NeuronIndexQuant> where

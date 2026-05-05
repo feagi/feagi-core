@@ -1,5 +1,5 @@
-use crate::quantization::{QuantizableUIntType};
-use crate::quantization::QuantizableValueType;
+use crate::base_feagi_types::quantizable_types::{QuantizableUIntType};
+use crate::base_feagi_types::quantizable_types::QuantizableValueType;
 use crate::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
 
 /// Denotes how neurons are being stored

@@ -2,7 +2,7 @@
 
 use crate::genomic::cortical_area::CorticalID;
 use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
-use crate::quantization::{QuantizableUIntType, QuantizableValueType};
+use crate::base_feagi_types::quantizable_types::{QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxels::FeagiStructuresNeuronVoxelError;
 
 #[cfg(feature = "alloc")]

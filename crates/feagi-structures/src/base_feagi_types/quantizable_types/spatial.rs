@@ -1,4 +1,4 @@
-use crate::quantization::FeagiBaseMultiElementQuantizationType;
+use crate::base_feagi_types::quantizable_types::FeagiBaseMultiElementQuantizationType;
 use crate::define_nonzero_count_family;
 
 define_nonzero_count_family!(SpatialDimensionAxis);
@@ -13,7 +13,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
     ($base_name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::quantization::QuantizableUIntType> {
+        pub struct $base_name<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> {
             pub x: T,
             pub y: T,
         }
@@ -241,7 +241,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
     ($base_name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::quantization::QuantizableIntType> {
+        pub struct $base_name<T: $crate::base_feagi_types::quantizable_types::QuantizableIntType> {
             pub x: T,
             pub y: T,
         }
@@ -468,7 +468,7 @@ macro_rules! define_dimension_2d_type_family {
     ($base_name:ident, $coordinate_type:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::quantization::QuantizableNonzeroUIntType> {
+        pub struct $base_name<T: $crate::base_feagi_types::quantizable_types::QuantizableNonzeroUIntType> {
             pub x: $crate::quantization::spatial::SpatialDimensionAxis<T>,
             pub y: $crate::quantization::spatial::SpatialDimensionAxis<T>,
         }
@@ -721,7 +721,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
     ($base_name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::quantization::QuantizableUIntType> {
+        pub struct $base_name<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> {
             pub x: T,
             pub y: T,
             pub z: T,
@@ -970,7 +970,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
     ($base_name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::quantization::QuantizableIntType> {
+        pub struct $base_name<T: $crate::base_feagi_types::quantizable_types::QuantizableIntType> {
             pub x: T,
             pub y: T,
             pub z: T,
@@ -1219,7 +1219,7 @@ macro_rules! define_dimension_3d_type_family {
     ($base_name:ident, $coordinate_type:ident) =>  {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::quantization::QuantizableNonzeroUIntType> {
+        pub struct $base_name<T: $crate::base_feagi_types::quantizable_types::QuantizableNonzeroUIntType> {
             pub x: $crate::quantization::spatial::SpatialDimensionAxis<T>,
             pub y: $crate::quantization::spatial::SpatialDimensionAxis<T>,
             pub z: $crate::quantization::spatial::SpatialDimensionAxis<T>,

@@ -1,5 +1,5 @@
 use feagi_structures::{define_quantizable_percentage_type_family, define_quantizable_uint_type_family, define_quantizable_value_type_family};
-use feagi_structures::quantization::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType, QuantizationLevel};
+use feagi_structures::base_feagi_types::::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType, QuantizationLevel};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndexQuantization;
 use feagi_structures::neurons::descriptors::NeuronCount;
 

@@ -1,5 +1,5 @@
 use half::f16;
-use crate::quantization::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType};
+use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType};
 
 
 /// Defines a transparent value wrapper type and all `QuantizableValue` / operator / conversion impls.
