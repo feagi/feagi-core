@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
-use crate::base_quantizable::QuantizableUIntType;
-use crate::base_quantizable::QuantizableValueType;
+use crate::quantization::{FeagiBaseSingleElementQuantizationType, QuantizableUIntType};
+use crate::quantization::QuantizableValueType;
 use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
 use crate::neuron_voxels::traits::{SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionDense, SingleCorticalNeuronVoxelCollectionSparse};
 

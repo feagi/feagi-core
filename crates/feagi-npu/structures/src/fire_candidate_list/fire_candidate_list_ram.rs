@@ -4,7 +4,7 @@
 // This can also be addressed with a hashset, but thats not all compatible with embedded and can be
 // a bit heavy. We should think about this.
 
-use feagi_structures::base_quantizable::QuantizableUIntType;
+use feagi_structures::quantization::QuantizableUIntType;
 use crate::fire_candidate_list::FireCandidateListTrait;
 use crate::quantizables::{NPUNeuronIndex, NPUNeuronIndexType};
 

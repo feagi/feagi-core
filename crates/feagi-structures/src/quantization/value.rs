@@ -1,4 +1,5 @@
 use half::f16;
+use crate::quantization::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType};
 
 
 /// Defines a transparent value wrapper type and all `QuantizableValue` / operator / conversion impls.
@@ -9,9 +10,9 @@ macro_rules! define_quantizable_value_type_family {
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
         #[cfg_attr(feature = "alloc", serde(transparent))]
-        pub struct $base_name<T: $crate::base_quantizable::QuantizableValueType>(pub T);
+        pub struct $base_name<T: $crate::quantization::QuantizableValueType>(pub T);
 
-        impl<T: $crate::base_quantizable::QuantizableValueType> From<T> for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableValueType> From<T> for $base_name<T> {
             #[inline(always)]
             fn from(value: T) -> Self {
                 Self(value)
@@ -19,21 +20,21 @@ macro_rules! define_quantizable_value_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableValueType> Default for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableValueType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self(T::default())
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableValueType> From<$base_name<T>> for f32 {
+        impl<T: $crate::quantization::QuantizableValueType> From<$base_name<T>> for f32 {
             #[inline(always)]
             fn from(value: $base_name<T>) -> Self {
                 value.0.to_f32()
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableValueType> core::ops::Add for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn add(self, rhs: Self) -> Self::Output {
@@ -41,7 +42,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableValueType> core::ops::Sub for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn sub(self, rhs: Self) -> Self::Output {
@@ -49,7 +50,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableValueType> core::ops::Mul for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn mul(self, rhs: Self) -> Self::Output {
@@ -57,7 +58,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableValueType> core::ops::Div for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn div(self, rhs: Self) -> Self::Output {
@@ -65,28 +66,28 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableValueType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableValueType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 -= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableValueType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableValueType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableValueType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.0 /= rhs.0;
@@ -94,7 +95,7 @@ macro_rules! define_quantizable_value_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableValueType + core::fmt::Display> core::fmt::Display
+        impl<T: $crate::quantization::QuantizableValueType + core::fmt::Display> core::fmt::Display
             for $base_name<T>
         {
             #[inline(always)]
@@ -103,12 +104,8 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableValueType> $crate::base_quantizable::QuantizableValueType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableValueType> $crate::quantization::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
-            const ZERO: Self = Self(T::ZERO);
-            const ONE: Self = Self(T::ONE);
-            const MAX_VALUE: Self = Self(T::MAX_VALUE);
-            const MIN_VALUE: Self = Self(T::MIN_VALUE);
 
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {
@@ -144,7 +141,18 @@ macro_rules! define_quantizable_value_type_family {
             fn checked_div(self, other: Self) -> Option<Self> {
                 self.0.checked_div(other.0).map(Self)
             }
+        }
 
+        impl<T: $crate::quantization::QuantizableValueType> $crate::quantization::FeagiBaseSingleElementQuantizationType
+            for $base_name<T>
+        {
+            const ZERO: Self = Self(T::ZERO);
+            const ONE: Self = Self(T::ONE);
+            const MAX_VALUE: Self = Self(T::MAX_VALUE);
+            const MIN_VALUE: Self = Self(T::MIN_VALUE);
+        }
+
+        impl<T: $crate::quantization::QuantizableValueType> $crate::quantization::QuantizableValueType for $base_name<T> {
             #[inline(always)]
             fn to_f32(self) -> f32 {
                 self.0.to_f32()
@@ -159,83 +167,13 @@ macro_rules! define_quantizable_value_type_family {
 }
 
 
-#[cfg(not(feature = "alloc"))]
-pub trait QuantizableValueType:
-    Copy
-    + core::clone::Clone
-    + Send
-    + Sync
-    + core::convert::Into<f32>
-    + core::cmp::PartialOrd
-    + core::ops::Add<Output = Self>
-    + core::ops::Sub<Output = Self>
-    + core::ops::Mul<Output = Self>
-    + core::ops::Div<Output = Self>
-    + core::ops::AddAssign
-    + core::ops::SubAssign
-    + core::ops::MulAssign
-    + core::ops::DivAssign
-    + 'static
-{
-    const NUMBER_OF_BYTES: usize;
-    const ZERO: Self;
-    const ONE: Self;
-    const MAX_VALUE: Self;
-    const MIN_VALUE: Self;
-    fn saturating_add(self, other: Self) -> Self;
-    fn checked_add(self, other: Self) -> Option<Self>;
-    fn saturating_sub(self, other: Self) -> Self;
-    fn checked_sub(self, other: Self) -> Option<Self>;
-    fn saturating_mul(self, other: Self) -> Self;
-    fn checked_mul(self, other: Self) -> Option<Self>;
-    fn checked_div(self, other: Self) -> Option<Self>;
+pub trait QuantizableValueType: FeagiBaseSingleElementQuantizationType + core::convert::Into<f32> {
     fn to_f32(self) -> f32;
     fn from_f32(value: f32) -> Self;
 }
 
-#[cfg(feature = "alloc")]
-pub trait QuantizableValueType:
-    Copy
-    + core::clone::Clone
-    + Send
-    + Sync
-    + core::fmt::Debug
-    + core::fmt::Display
-    + core::default::Default
-    + core::convert::Into<f32>
-    + core::cmp::PartialOrd
-    + core::ops::Add<Output = Self>
-    + core::ops::Sub<Output = Self>
-    + core::ops::Mul<Output = Self>
-    + core::ops::Div<Output = Self>
-    + core::ops::AddAssign
-    + core::ops::SubAssign
-    + core::ops::MulAssign
-    + core::ops::DivAssign
-    + 'static
-{
-    const NUMBER_OF_BYTES: usize;
-    const ZERO: Self;
-    const ONE: Self;
-    const MAX_VALUE: Self;
-    const MIN_VALUE: Self;
-    fn saturating_add(self, other: Self) -> Self;
-    fn checked_add(self, other: Self) -> Option<Self>;
-    fn saturating_sub(self, other: Self) -> Self;
-    fn checked_sub(self, other: Self) -> Option<Self>;
-    fn saturating_mul(self, other: Self) -> Self;
-    fn checked_mul(self, other: Self) -> Option<Self>;
-    fn checked_div(self, other: Self) -> Option<Self>;
-    fn to_f32(self) -> f32;
-    fn from_f32(value: f32) -> Self;
-}
-
-impl QuantizableValueType for f32 {
+impl FeagiBaseQuantizationType for f32 {
     const NUMBER_OF_BYTES: usize = size_of::<f32>();
-    const ZERO: Self = 0.0;
-    const ONE: Self = 1.0;
-    const MAX_VALUE: Self = f32::MAX;
-    const MIN_VALUE: Self = f32::MIN;
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -296,7 +234,16 @@ impl QuantizableValueType for f32 {
         let value = self / other;
         if value.is_finite() { Some(value) } else { None }
     }
+}
 
+impl FeagiBaseSingleElementQuantizationType for f32 {
+    const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    const MAX_VALUE: Self = f32::MAX;
+    const MIN_VALUE: Self = f32::MIN;
+}
+
+impl QuantizableValueType for f32 {
     #[inline(always)]
     fn to_f32(self) -> f32 {
         self
@@ -314,12 +261,8 @@ impl QuantizableValueType for f32 {
     }
 }
 
-impl QuantizableValueType for f16 {
+impl FeagiBaseQuantizationType for f16 {
     const NUMBER_OF_BYTES: usize = size_of::<f16>();
-    const ZERO: Self = f16::ZERO;
-    const ONE: Self = f16::ONE;
-    const MAX_VALUE: Self = f16::MAX;
-    const MIN_VALUE: Self = f16::MIN;
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -375,7 +318,16 @@ impl QuantizableValueType for f16 {
             None
         }
     }
+}
 
+impl FeagiBaseSingleElementQuantizationType for f16 {
+    const ZERO: Self = f16::ZERO;
+    const ONE: Self = f16::ONE;
+    const MAX_VALUE: Self = f16::MAX;
+    const MIN_VALUE: Self = f16::MIN;
+}
+
+impl QuantizableValueType for f16 {
     #[inline(always)]
     fn to_f32(self) -> f32 {
         self.to_f32()
@@ -396,47 +348,6 @@ impl QuantizableValueType for f16 {
 }
 
 impl QuantizableValueType for u8 {
-    const NUMBER_OF_BYTES: usize = size_of::<u8>();
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX_VALUE: Self = u8::MAX;
-    const MIN_VALUE: Self = u8::MIN;
-
-    #[inline(always)]
-    fn saturating_add(self, other: Self) -> Self {
-        self.saturating_add(other)
-    }
-
-    #[inline(always)]
-    fn checked_add(self, other: Self) -> Option<Self> {
-        self.checked_add(other)
-    }
-
-    #[inline(always)]
-    fn saturating_sub(self, other: Self) -> Self {
-        self.saturating_sub(other)
-    }
-
-    #[inline(always)]
-    fn checked_sub(self, other: Self) -> Option<Self> {
-        self.checked_sub(other)
-    }
-
-    #[inline(always)]
-    fn saturating_mul(self, other: Self) -> Self {
-        self.saturating_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_mul(self, other: Self) -> Option<Self> {
-        self.checked_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_div(self, other: Self) -> Option<Self> {
-        self.checked_div(other)
-    }
-
     #[inline(always)]
     fn to_f32(self) -> f32 {
         self as f32

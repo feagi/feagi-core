@@ -1,4 +1,4 @@
-use crate::base_quantizable::FeagiBaseMultiElementQuantizationType;
+use crate::quantization::FeagiBaseMultiElementQuantizationType;
 use crate::define_nonzero_count_family;
 
 define_nonzero_count_family!(SpatialDimensionAxis);
@@ -13,12 +13,12 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
     ($base_name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::base_quantizable::QuantizableUIntType> {
+        pub struct $base_name<T: $crate::quantization::QuantizableUIntType> {
             pub x: T,
             pub y: T,
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> $base_name<T> {
             #[inline(always)]
             pub const fn new(x: T, y: T) -> Self {
                 Self { x, y }
@@ -30,21 +30,21 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> From<(T, T)> for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> From<(T, T)> for $base_name<T> {
             #[inline(always)]
             fn from(value: (T, T)) -> Self {
                 Self::new(value.0, value.1)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> From<$base_name<T>> for (T, T) {
+        impl<T: $crate::quantization::QuantizableUIntType> From<$base_name<T>> for (T, T) {
             #[inline(always)]
             fn from(value: $base_name<T>) -> Self {
                 (value.x, value.y)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -53,7 +53,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -62,7 +62,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -71,7 +71,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -80,7 +80,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.x += rhs.x;
@@ -88,7 +88,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.x -= rhs.x;
@@ -96,7 +96,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.x *= rhs.x;
@@ -104,7 +104,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.x /= rhs.x;
@@ -113,7 +113,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableUIntType> Default for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self::new(T::ZERO, T::ZERO)
@@ -121,14 +121,14 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(f, concat!(stringify!($base_name), "<{}, {}>"), self.x, self.y)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> $crate::base_quantizable::FeagiBaseQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> $crate::quantization::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
 
             #[inline(always)]
@@ -188,7 +188,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> $crate::base_quantizable::FeagiBaseMultiElementQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> $crate::quantization::FeagiBaseMultiElementQuantizationType for $base_name<T> {
             const NUMBER_ELEMENTS: usize = 2;
             const ALL_ZEROS: Self = Self::new(T::ZERO, T::ZERO);
             const ALL_ONES: Self = Self::new(T::ONE, T::ONE);
@@ -196,7 +196,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
             type ElementType = T;
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> $crate::base_quantizable::spatial::QuantizableUInt2DCoordinateType
+        impl<T: $crate::quantization::QuantizableUIntType> $crate::quantization::spatial::QuantizableUInt2DCoordinateType
             for $base_name<T>
         {
             #[inline(always)]
@@ -241,12 +241,12 @@ macro_rules! define_signed_coordinate_2d_type_family {
     ($base_name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::base_quantizable::QuantizableIntType> {
+        pub struct $base_name<T: $crate::quantization::QuantizableIntType> {
             pub x: T,
             pub y: T,
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> $base_name<T> {
             #[inline(always)]
             pub const fn new(x: T, y: T) -> Self {
                 Self { x, y }
@@ -258,21 +258,21 @@ macro_rules! define_signed_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> From<(T, T)> for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> From<(T, T)> for $base_name<T> {
             #[inline(always)]
             fn from(value: (T, T)) -> Self {
                 Self::new(value.0, value.1)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> From<$base_name<T>> for (T, T) {
+        impl<T: $crate::quantization::QuantizableIntType> From<$base_name<T>> for (T, T) {
             #[inline(always)]
             fn from(value: $base_name<T>) -> Self {
                 (value.x, value.y)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -281,7 +281,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -290,7 +290,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -299,7 +299,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -308,7 +308,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.x += rhs.x;
@@ -316,7 +316,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.x -= rhs.x;
@@ -324,7 +324,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.x *= rhs.x;
@@ -332,7 +332,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.x /= rhs.x;
@@ -341,7 +341,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableIntType> Default for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self::new(T::ZERO, T::ZERO)
@@ -349,14 +349,14 @@ macro_rules! define_signed_coordinate_2d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(f, concat!(stringify!($base_name), "<{}, {}>"), self.x, self.y)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> $crate::base_quantizable::FeagiBaseQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> $crate::quantization::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
 
             #[inline(always)]
@@ -416,7 +416,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> $crate::base_quantizable::FeagiBaseMultiElementQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> $crate::quantization::FeagiBaseMultiElementQuantizationType for $base_name<T> {
             const NUMBER_ELEMENTS: usize = 2;
             const ALL_ZEROS: Self = Self::new(T::ZERO, T::ZERO);
             const ALL_ONES: Self = Self::new(T::ONE, T::ONE);
@@ -424,7 +424,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
             type ElementType = T;
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> $crate::base_quantizable::spatial::QuantizableInt2DCoordinateType
+        impl<T: $crate::quantization::QuantizableIntType> $crate::quantization::spatial::QuantizableInt2DCoordinateType
             for $base_name<T>
         {
             #[inline(always)]
@@ -468,29 +468,29 @@ macro_rules! define_dimension_2d_type_family {
     ($base_name:ident, $coordinate_type:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::base_quantizable::QuantizableNonzeroUIntType> {
-            pub x: $crate::base_quantizable::spatial::SpatialDimensionAxis<T>,
-            pub y: $crate::base_quantizable::spatial::SpatialDimensionAxis<T>,
+        pub struct $base_name<T: $crate::quantization::QuantizableNonzeroUIntType> {
+            pub x: $crate::quantization::spatial::SpatialDimensionAxis<T>,
+            pub y: $crate::quantization::spatial::SpatialDimensionAxis<T>,
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> $base_name<T> {
             #[inline(always)]
             pub(crate) const fn new_unchecked(x: T, y: T) -> Self {
-                let x = $crate::base_quantizable::spatial::SpatialDimensionAxis::new_unchecked(x);
-                let y = $crate::base_quantizable::spatial::SpatialDimensionAxis::new_unchecked(y);
+                let x = $crate::quantization::spatial::SpatialDimensionAxis::new_unchecked(x);
+                let y = $crate::quantization::spatial::SpatialDimensionAxis::new_unchecked(y);
                 Self { x, y }
             }
 
             #[inline(always)]
             pub fn new(x: T, y: T) -> Result<Self, $crate::FeagiStructuresError> {
-                let x = $crate::base_quantizable::spatial::SpatialDimensionAxis::new(x)?;
-                let y = $crate::base_quantizable::spatial::SpatialDimensionAxis::new(y)?;
+                let x = $crate::quantization::spatial::SpatialDimensionAxis::new(x)?;
+                let y = $crate::quantization::spatial::SpatialDimensionAxis::new(y)?;
                 Ok(Self { x, y })
             }
 
             #[inline(always)]
             pub fn new_square(n: T) -> Result<Self, $crate::FeagiStructuresError> {
-                let x = $crate::base_quantizable::spatial::SpatialDimensionAxis::new(n)?;
+                let x = $crate::quantization::spatial::SpatialDimensionAxis::new(n)?;
                 let y = x;
                 Ok(Self { x, y })
             }
@@ -511,7 +511,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -523,7 +523,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -535,7 +535,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -547,7 +547,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -559,7 +559,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.x += rhs.x;
@@ -567,7 +567,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.x -= rhs.x;
@@ -575,7 +575,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.x *= rhs.x;
@@ -583,7 +583,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.x /= rhs.x;
@@ -592,7 +592,7 @@ macro_rules! define_dimension_2d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> Default for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self::new_unchecked(T::ONE, T::ONE)
@@ -600,14 +600,14 @@ macro_rules! define_dimension_2d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(f, concat!(stringify!($base_name), "<{}, {}>"), self.x, self.y)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $crate::base_quantizable::FeagiBaseQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> $crate::quantization::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
 
             #[inline(always)]
@@ -667,7 +667,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $crate::base_quantizable::FeagiBaseMultiElementQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> $crate::quantization::FeagiBaseMultiElementQuantizationType for $base_name<T> {
             const NUMBER_ELEMENTS: usize = 2;
             const ALL_ZEROS: Self = Self::new_unchecked(T::ONE, T::ONE);
             const ALL_ONES: Self = Self::new_unchecked(T::ONE, T::ONE);
@@ -675,7 +675,7 @@ macro_rules! define_dimension_2d_type_family {
             type ElementType = T;
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $crate::base_quantizable::spatial::QuantizableUInt2DDimensionType
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> $crate::quantization::spatial::QuantizableUInt2DDimensionType
             for $base_name<T>
         {
             type CoordinateType = $coordinate_type<T>;
@@ -721,13 +721,13 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
     ($base_name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::base_quantizable::QuantizableUIntType> {
+        pub struct $base_name<T: $crate::quantization::QuantizableUIntType> {
             pub x: T,
             pub y: T,
             pub z: T,
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> $base_name<T> {
             #[inline(always)]
             pub const fn new(x: T, y: T, z: T) -> Self {
                 Self { x, y, z }
@@ -739,21 +739,21 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> From<(T, T, T)> for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> From<(T, T, T)> for $base_name<T> {
             #[inline(always)]
             fn from(value: (T, T, T)) -> Self {
                 Self::new(value.0, value.1, value.2)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> From<$base_name<T>> for (T, T, T) {
+        impl<T: $crate::quantization::QuantizableUIntType> From<$base_name<T>> for (T, T, T) {
             #[inline(always)]
             fn from(value: $base_name<T>) -> Self {
                 (value.x, value.y, value.z)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -762,7 +762,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -771,7 +771,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -780,7 +780,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -789,7 +789,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.x += rhs.x;
@@ -798,7 +798,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.x -= rhs.x;
@@ -807,7 +807,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.x *= rhs.x;
@@ -816,7 +816,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.x /= rhs.x;
@@ -826,7 +826,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableUIntType> Default for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self::new(T::ZERO, T::ZERO, T::ZERO)
@@ -834,7 +834,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(
@@ -847,7 +847,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> $crate::base_quantizable::FeagiBaseQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> $crate::quantization::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
 
             #[inline(always)]
@@ -914,7 +914,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> $crate::base_quantizable::FeagiBaseMultiElementQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> $crate::quantization::FeagiBaseMultiElementQuantizationType for $base_name<T> {
             const NUMBER_ELEMENTS: usize = 3;
             const ALL_ZEROS: Self = Self::new(T::ZERO, T::ZERO, T::ZERO);
             const ALL_ONES: Self = Self::new(T::ONE, T::ONE, T::ONE);
@@ -922,7 +922,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
             type ElementType = T;
         }
 
-        impl<T: $crate::base_quantizable::QuantizableUIntType> $crate::base_quantizable::spatial::QuantizableUInt3DCoordinateType
+        impl<T: $crate::quantization::QuantizableUIntType> $crate::quantization::spatial::QuantizableUInt3DCoordinateType
             for $base_name<T>
         {
             #[inline(always)]
@@ -970,13 +970,13 @@ macro_rules! define_signed_coordinate_3d_type_family {
     ($base_name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::base_quantizable::QuantizableIntType> {
+        pub struct $base_name<T: $crate::quantization::QuantizableIntType> {
             pub x: T,
             pub y: T,
             pub z: T,
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> $base_name<T> {
             #[inline(always)]
             pub const fn new(x: T, y: T, z: T) -> Self {
                 Self { x, y, z }
@@ -988,21 +988,21 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> From<(T, T, T)> for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> From<(T, T, T)> for $base_name<T> {
             #[inline(always)]
             fn from(value: (T, T, T)) -> Self {
                 Self::new(value.0, value.1, value.2)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> From<$base_name<T>> for (T, T, T) {
+        impl<T: $crate::quantization::QuantizableIntType> From<$base_name<T>> for (T, T, T) {
             #[inline(always)]
             fn from(value: $base_name<T>) -> Self {
                 (value.x, value.y, value.z)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1011,7 +1011,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1020,7 +1020,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1029,7 +1029,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1038,7 +1038,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.x += rhs.x;
@@ -1047,7 +1047,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.x -= rhs.x;
@@ -1056,7 +1056,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.x *= rhs.x;
@@ -1065,7 +1065,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.x /= rhs.x;
@@ -1075,7 +1075,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableIntType> Default for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self::new(T::ZERO, T::ZERO, T::ZERO)
@@ -1083,7 +1083,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(
@@ -1096,7 +1096,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> $crate::base_quantizable::FeagiBaseQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> $crate::quantization::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
 
             #[inline(always)]
@@ -1163,7 +1163,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> $crate::base_quantizable::FeagiBaseMultiElementQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableIntType> $crate::quantization::FeagiBaseMultiElementQuantizationType for $base_name<T> {
             const NUMBER_ELEMENTS: usize = 3;
             const ALL_ZEROS: Self = Self::new(T::ZERO, T::ZERO, T::ZERO);
             const ALL_ONES: Self = Self::new(T::ONE, T::ONE, T::ONE);
@@ -1171,7 +1171,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
             type ElementType = T;
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> $crate::base_quantizable::spatial::QuantizableInt3DCoordinateType
+        impl<T: $crate::quantization::QuantizableIntType> $crate::quantization::spatial::QuantizableInt3DCoordinateType
             for $base_name<T>
         {
             #[inline(always)]
@@ -1219,32 +1219,32 @@ macro_rules! define_dimension_3d_type_family {
     ($base_name:ident, $coordinate_type:ident) =>  {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::base_quantizable::QuantizableNonzeroUIntType> {
-            pub x: $crate::base_quantizable::spatial::SpatialDimensionAxis<T>,
-            pub y: $crate::base_quantizable::spatial::SpatialDimensionAxis<T>,
-            pub z: $crate::base_quantizable::spatial::SpatialDimensionAxis<T>,
+        pub struct $base_name<T: $crate::quantization::QuantizableNonzeroUIntType> {
+            pub x: $crate::quantization::spatial::SpatialDimensionAxis<T>,
+            pub y: $crate::quantization::spatial::SpatialDimensionAxis<T>,
+            pub z: $crate::quantization::spatial::SpatialDimensionAxis<T>,
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> $base_name<T> {
             #[inline(always)]
             pub(crate) const fn new_unchecked(x: T, y: T, z: T) -> Self {
-                let x = $crate::base_quantizable::spatial::SpatialDimensionAxis::new_unchecked(x);
-                let y = $crate::base_quantizable::spatial::SpatialDimensionAxis::new_unchecked(y);
-                let z = $crate::base_quantizable::spatial::SpatialDimensionAxis::new_unchecked(z);
+                let x = $crate::quantization::spatial::SpatialDimensionAxis::new_unchecked(x);
+                let y = $crate::quantization::spatial::SpatialDimensionAxis::new_unchecked(y);
+                let z = $crate::quantization::spatial::SpatialDimensionAxis::new_unchecked(z);
                 Self { x, y, z }
             }
 
             #[inline(always)]
             pub fn new(x: T, y: T, z: T) -> Result<Self, $crate::FeagiStructuresError> {
-                let x = $crate::base_quantizable::spatial::SpatialDimensionAxis::new(x)?;
-                let y = $crate::base_quantizable::spatial::SpatialDimensionAxis::new(y)?;
-                let z = $crate::base_quantizable::spatial::SpatialDimensionAxis::new(z)?;
+                let x = $crate::quantization::spatial::SpatialDimensionAxis::new(x)?;
+                let y = $crate::quantization::spatial::SpatialDimensionAxis::new(y)?;
+                let z = $crate::quantization::spatial::SpatialDimensionAxis::new(z)?;
                 Ok(Self { x, y, z })
             }
 
             #[inline(always)]
             pub fn new_cube(n: T) -> Result<Self, $crate::FeagiStructuresError> {
-                let x = $crate::base_quantizable::spatial::SpatialDimensionAxis::new(n)?;
+                let x = $crate::quantization::spatial::SpatialDimensionAxis::new(n)?;
                 let y = x;
                 let z = x;
                 Ok(Self { x, y, z })
@@ -1281,7 +1281,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1294,7 +1294,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1307,7 +1307,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1320,7 +1320,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1333,7 +1333,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.x += rhs.x;
@@ -1342,7 +1342,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.x -= rhs.x;
@@ -1351,7 +1351,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.x *= rhs.x;
@@ -1360,7 +1360,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.x /= rhs.x;
@@ -1370,7 +1370,7 @@ macro_rules! define_dimension_3d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> Default for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self::new_unchecked(T::ONE, T::ONE, T::ONE)
@@ -1378,7 +1378,7 @@ macro_rules! define_dimension_3d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(
@@ -1391,7 +1391,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $crate::base_quantizable::FeagiBaseQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> $crate::quantization::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
 
             #[inline(always)]
@@ -1458,7 +1458,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $crate::base_quantizable::FeagiBaseMultiElementQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> $crate::quantization::FeagiBaseMultiElementQuantizationType for $base_name<T> {
             const NUMBER_ELEMENTS: usize = 3;
             const ALL_ZEROS: Self = Self::new_unchecked(T::ONE, T::ONE, T::ONE);
             const ALL_ONES: Self = Self::new_unchecked(T::ONE, T::ONE, T::ONE);
@@ -1466,7 +1466,7 @@ macro_rules! define_dimension_3d_type_family {
             type ElementType = T;
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $crate::base_quantizable::spatial::QuantizableUInt3DDimensionType
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> $crate::quantization::spatial::QuantizableUInt3DDimensionType
             for $base_name<T>
         {
             type CoordinateType = $coordinate_type<T>;

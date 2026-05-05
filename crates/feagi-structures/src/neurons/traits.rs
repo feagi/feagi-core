@@ -1,5 +1,5 @@
 use serde_json::Number;
-use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
+use crate::quantization::{QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxels::descriptors::{NeuronVoxelCount, NeuronVoxelDimensions, NeuronVoxelIndex};
 use crate::neurons::descriptors::{NeuronCount, NeuronIndex, NeuronMembranePotential, NumberNeuronsPerVoxel};
 

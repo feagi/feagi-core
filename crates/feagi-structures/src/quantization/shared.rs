@@ -7,8 +7,6 @@ Copy
 + Clone
 + Send
 + Sync
-+ core::cmp::Eq
-+ core::hash::Hash
 + core::ops::Add<Output = Self>
 + core::ops::Sub<Output = Self>
 + core::ops::Mul<Output = Self>
@@ -40,8 +38,6 @@ Copy
 + core::fmt::Debug
 + core::fmt::Display
 + Default
-+ core::cmp::Eq
-+ core::hash::Hash
 + core::ops::Add<Output = Self>
 + core::ops::Sub<Output = Self>
 + core::ops::Mul<Output = Self>

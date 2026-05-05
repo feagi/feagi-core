@@ -1,16 +1,22 @@
-use crate::base_quantizable::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType};
+use crate::quantization::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType};
 
-/// Defines a transparent wrapper type and all `QuantizableInt` / operator / conversion impls.
+/// Defines a transparent wrapper type and all `QuantizableUInt` / operator / conversion impls.
 #[macro_export]
-macro_rules! define_quantizable_int_type_family {
+macro_rules! define_quantizable_uint_type_family {
     ($base_name:ident) => {
         #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
         #[cfg_attr(feature = "alloc", serde(transparent))]
-        pub struct $base_name<T: $crate::base_quantizable::QuantizableIntType>(pub T);
+        pub struct $base_name<T: $crate::quantization::QuantizableUIntType>(pub T);
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> From<T> for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> $base_name<T> {
+            pub const fn from_const(value: T) -> Self {
+                Self(value)
+            }
+        }
+
+        impl<T: $crate::quantization::QuantizableUIntType> From<T> for $base_name<T> {
             #[inline(always)]
             fn from(value: T) -> Self {
                 Self(value)
@@ -18,21 +24,21 @@ macro_rules! define_quantizable_int_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableIntType> Default for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self(T::default())
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> From<$base_name<T>> for isize {
+        impl<T: $crate::quantization::QuantizableUIntType> From<$base_name<T>> for usize {
             #[inline(always)]
             fn from(value: $base_name<T>) -> Self {
-                value.0.to_isize()
+                value.0.to_usize()
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn add(self, rhs: Self) -> Self::Output {
@@ -40,7 +46,7 @@ macro_rules! define_quantizable_int_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn sub(self, rhs: Self) -> Self::Output {
@@ -48,7 +54,7 @@ macro_rules! define_quantizable_int_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn mul(self, rhs: Self) -> Self::Output {
@@ -56,7 +62,7 @@ macro_rules! define_quantizable_int_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn div(self, rhs: Self) -> Self::Output {
@@ -64,28 +70,28 @@ macro_rules! define_quantizable_int_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 -= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.0 /= rhs.0;
@@ -93,7 +99,7 @@ macro_rules! define_quantizable_int_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableIntType + core::fmt::Display> core::fmt::Display
+        impl<T: $crate::quantization::QuantizableUIntType + core::fmt::Display> core::fmt::Display
             for $base_name<T>
         {
             #[inline(always)]
@@ -102,7 +108,7 @@ macro_rules! define_quantizable_int_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> $crate::base_quantizable::FeagiBaseQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> $crate::quantization::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
 
             #[inline(always)]
@@ -141,7 +147,7 @@ macro_rules! define_quantizable_int_type_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> $crate::base_quantizable::FeagiBaseSingleElementQuantizationType
+        impl<T: $crate::quantization::QuantizableUIntType> $crate::quantization::FeagiBaseSingleElementQuantizationType
             for $base_name<T>
         {
             const ZERO: Self = Self(T::ZERO);
@@ -150,28 +156,35 @@ macro_rules! define_quantizable_int_type_family {
             const MIN_VALUE: Self = Self(T::MIN_VALUE);
         }
 
-        impl<T: $crate::base_quantizable::QuantizableIntType> $crate::base_quantizable::QuantizableIntType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableUIntType> $crate::quantization::QuantizableUIntType for $base_name<T> {
             #[inline(always)]
-            fn to_isize(self) -> isize {
-                self.0.to_isize()
+            fn to_usize(self) -> usize {
+                self.0.to_usize()
             }
 
             #[inline(always)]
-            fn from_isize(value: isize) -> Self {
-                Self(T::from_isize(value))
+            fn from_usize(value: usize) -> Self {
+                Self(T::from_usize(value))
+            }
+
+            #[inline(always)]
+            fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+                range.start.0.to_usize()..range.end.0.to_usize()
             }
         }
     };
 }
 
 
-pub trait QuantizableIntType: FeagiBaseSingleElementQuantizationType {
-    fn to_isize(self) -> isize;
-    fn from_isize(value: isize) -> Self;
+pub trait QuantizableUIntType: FeagiBaseSingleElementQuantizationType {
+    fn to_usize(self) -> usize;
+    fn from_usize(value: usize) -> Self;
+
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize>;
 }
 
-impl FeagiBaseQuantizationType for isize {
-    const NUMBER_OF_BYTES: usize = size_of::<isize>();
+impl FeagiBaseQuantizationType for usize {
+    const NUMBER_OF_BYTES: usize = size_of::<usize>();
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -209,29 +222,34 @@ impl FeagiBaseQuantizationType for isize {
     }
 }
 
-impl FeagiBaseSingleElementQuantizationType for isize {
+impl FeagiBaseSingleElementQuantizationType for usize {
     const ZERO: Self = 0;
     const ONE: Self = 1;
-    const MAX_VALUE: Self = isize::MAX;
-    const MIN_VALUE: Self = isize::MIN;
+    const MAX_VALUE: Self = usize::MAX;
+    const MIN_VALUE: Self = usize::MIN;
 }
 
-impl QuantizableIntType for isize {
+impl QuantizableUIntType for usize {
     #[inline(always)]
-    fn to_isize(self) -> isize {
+    fn to_usize(self) -> usize {
         self
     }
 
     #[inline(always)]
-    fn from_isize(value: isize) -> Self {
+    fn from_usize(value: usize) -> Self {
         value
     }
+
+    #[inline(always)]
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+        range.start.to_usize()..range.end.to_usize()
+    }
 }
 
 
 
-impl FeagiBaseQuantizationType for i8 {
-    const NUMBER_OF_BYTES: usize = size_of::<i8>();
+impl FeagiBaseQuantizationType for u8 {
+    const NUMBER_OF_BYTES: usize = size_of::<u8>();
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -269,38 +287,37 @@ impl FeagiBaseQuantizationType for i8 {
     }
 }
 
-impl FeagiBaseSingleElementQuantizationType for i8 {
+impl FeagiBaseSingleElementQuantizationType for u8 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
-    const MAX_VALUE: Self = i8::MAX;
-    const MIN_VALUE: Self = i8::MIN;
+    const MAX_VALUE: Self = u8::MAX;
+    const MIN_VALUE: Self = u8::MIN;
 }
 
-impl QuantizableIntType for i8 {
+impl QuantizableUIntType for u8 {
     #[inline(always)]
-    fn to_isize(self) -> isize {
-        self as isize
+    fn to_usize(self) -> usize {
+        self as usize
     }
 
     #[inline(always)]
-    fn from_isize(value: isize) -> Self {
-        match i8::try_from(value) {
+    fn from_usize(value: usize) -> Self {
+        match u8::try_from(value) {
             Ok(v) => v,
-            Err(_) => {
-                if value.is_negative() {
-                    i8::MIN
-                } else {
-                    i8::MAX
-                }
-            }
+            Err(_) => u8::MAX,
         }
     }
+
+    #[inline(always)]
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+        range.start.to_usize()..range.end.to_usize()
+    }
 }
 
 
 
-impl FeagiBaseQuantizationType for i16 {
-    const NUMBER_OF_BYTES: usize = size_of::<i16>();
+impl FeagiBaseQuantizationType for u16 {
+    const NUMBER_OF_BYTES: usize = size_of::<u16>();
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -338,38 +355,37 @@ impl FeagiBaseQuantizationType for i16 {
     }
 }
 
-impl FeagiBaseSingleElementQuantizationType for i16 {
+impl FeagiBaseSingleElementQuantizationType for u16 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
-    const MAX_VALUE: Self = i16::MAX;
-    const MIN_VALUE: Self = i16::MIN;
+    const MAX_VALUE: Self = u16::MAX;
+    const MIN_VALUE: Self = u16::MIN;
 }
 
-impl QuantizableIntType for i16 {
+impl QuantizableUIntType for u16 {
     #[inline(always)]
-    fn to_isize(self) -> isize {
-        self as isize
+    fn to_usize(self) -> usize {
+        self as usize
     }
 
     #[inline(always)]
-    fn from_isize(value: isize) -> Self {
-        match i16::try_from(value) {
+    fn from_usize(value: usize) -> Self {
+        match u16::try_from(value) {
             Ok(v) => v,
-            Err(_) => {
-                if value.is_negative() {
-                    i16::MIN
-                } else {
-                    i16::MAX
-                }
-            }
+            Err(_) => u16::MAX,
         }
     }
+
+    #[inline(always)]
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+        range.start.to_usize()..range.end.to_usize()
+    }
 }
 
 
 
-impl FeagiBaseQuantizationType for i32 {
-    const NUMBER_OF_BYTES: usize = size_of::<i32>();
+impl FeagiBaseQuantizationType for u32 {
+    const NUMBER_OF_BYTES: usize = size_of::<u32>();
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -407,39 +423,38 @@ impl FeagiBaseQuantizationType for i32 {
     }
 }
 
-impl FeagiBaseSingleElementQuantizationType for i32 {
+impl FeagiBaseSingleElementQuantizationType for u32 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
-    const MAX_VALUE: Self = i32::MAX;
-    const MIN_VALUE: Self = i32::MIN;
+    const MAX_VALUE: Self = u32::MAX;
+    const MIN_VALUE: Self = u32::MIN;
 }
 
-impl QuantizableIntType for i32 {
+impl QuantizableUIntType for u32 {
     #[inline(always)]
-    fn to_isize(self) -> isize {
-        self as isize
+    fn to_usize(self) -> usize {
+        self as usize
     }
 
     #[inline(always)]
-    fn from_isize(value: isize) -> Self {
-        match i32::try_from(value) {
+    fn from_usize(value: usize) -> Self {
+        match u32::try_from(value) {
             Ok(v) => v,
-            Err(_) => {
-                if value.is_negative() {
-                    i32::MIN
-                } else {
-                    i32::MAX
-                }
-            }
+            Err(_) => u32::MAX,
         }
+    }
+
+    #[inline(always)]
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+        range.start.to_usize()..range.end.to_usize()
     }
 }
 
 
 
 #[cfg(feature = "support_64bit_indexing")]
-impl FeagiBaseQuantizationType for i64 {
-    const NUMBER_OF_BYTES: usize = size_of::<i64>();
+impl FeagiBaseQuantizationType for u64 {
+    const NUMBER_OF_BYTES: usize = size_of::<u64>();
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -478,23 +493,31 @@ impl FeagiBaseQuantizationType for i64 {
 }
 
 #[cfg(feature = "support_64bit_indexing")]
-impl FeagiBaseSingleElementQuantizationType for i64 {
+impl FeagiBaseSingleElementQuantizationType for u64 {
     const ZERO: Self = 0;
     const ONE: Self = 1;
-    const MAX_VALUE: Self = i64::MAX;
-    const MIN_VALUE: Self = i64::MIN;
+    const MAX_VALUE: Self = u64::MAX;
+    const MIN_VALUE: Self = u64::MIN;
 }
 
 #[cfg(feature = "support_64bit_indexing")]
-impl QuantizableIntType for i64 {
+impl QuantizableUIntType for u64 {
     #[inline(always)]
-    fn to_isize(self) -> isize {
-        self as isize
+    fn to_usize(self) -> usize {
+        match usize::try_from(self) {
+            Ok(v) => v,
+            Err(_) => usize::MAX,
+        }
     }
 
     #[inline(always)]
-    fn from_isize(value: isize) -> Self {
-        value as i64
+    fn from_usize(value: usize) -> Self {
+        value as u64
+    }
+
+    #[inline(always)]
+    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+        range.start.to_usize()..range.end.to_usize()
     }
 }
 

@@ -1,6 +1,6 @@
 
 
-use feagi_structures::base_quantizable::QuantizableUIntType;
+use feagi_structures::quantization::QuantizableUIntType;
 use crate::fire_queue::traits::FireQueueTrait;
 use crate::quantizables::NPUNeuronIndex;
 

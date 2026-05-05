@@ -1,4 +1,4 @@
-use feagi_structures::base_quantizable::QuantizableUIntType;
+use feagi_structures::quantization::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use crate::cortical_area_identifier_flag::NPUCorticalAreaIdentifierFlag;
 use crate::quantizables::NPUNeuronIndex;

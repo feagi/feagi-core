@@ -1,4 +1,4 @@
-use feagi_structures::base_quantizable::QuantizableUIntType;
+use feagi_structures::quantization::QuantizableUIntType;
 use crate::quantizables::NPUNeuronIndex;
 
 pub trait FireCandidateListTrait<NeuronIndexQuant> where

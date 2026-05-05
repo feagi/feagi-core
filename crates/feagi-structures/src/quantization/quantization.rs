@@ -1,4 +1,4 @@
-use crate::base_quantizable::QuantizableUIntType;
+use crate::quantization::QuantizableUIntType;
 use crate::genomic::cortical_area::descriptors::CorticalAreaIndexQuantization;
 
 

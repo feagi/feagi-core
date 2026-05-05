@@ -1,4 +1,4 @@
-use feagi_structures::base_quantizable::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
+use feagi_structures::quantization::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
 use crate::FeagiNPUStructureError;

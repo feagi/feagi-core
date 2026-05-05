@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use feagi_structures::base_quantizable::QuantizableUIntType;
+use feagi_structures::quantization::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalAreaCount, CorticalAreaIndex};
 use feagi_structures::neurons::descriptors::NeuronCount;
 use crate::neuron::FeagiNPUNeuronError;

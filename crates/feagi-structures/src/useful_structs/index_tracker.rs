@@ -1,5 +1,5 @@
 use ahash::AHashMap;
-use crate::base_quantizable::QuantizableUIntType;
+use crate::quantization::QuantizableUIntType;
 use crate::FeagiStructuresError;
 // TODO move some checks to work only under debug
 

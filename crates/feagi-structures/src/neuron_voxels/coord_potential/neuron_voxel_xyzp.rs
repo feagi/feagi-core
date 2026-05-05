@@ -1,4 +1,4 @@
-use crate::base_quantizable::{QuantizableUIntType, QuantizableValueType};
+use crate::quantization::{QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxels::descriptors::{NeuronVoxelCoordinate, NeuronVoxelPotential};
 use crate::neuron_voxels::traits::NeuronVoxel;
 

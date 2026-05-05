@@ -3,7 +3,7 @@
 
 // TODO some things should be moved to a higher level trait as we understand other synapse types more
 
-use feagi_structures::base_quantizable::QuantizableValueType;
+use feagi_structures::quantization::QuantizableValueType;
 use feagi_structures::FeagiStructuresError;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;

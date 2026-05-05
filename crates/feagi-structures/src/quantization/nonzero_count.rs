@@ -1,4 +1,4 @@
-use crate::base_quantizable::{FeagiBaseQuantizationType, QuantizableUIntType};
+use crate::quantization::{FeagiBaseQuantizationType, QuantizableUIntType};
 
 /// Defines a transparent non-zero count wrapper type and forwarding impls.
 #[macro_export]
@@ -8,9 +8,9 @@ macro_rules! define_nonzero_count_family {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
         #[cfg_attr(feature = "alloc", serde(transparent))]
-        pub struct $base_name<T: $crate::base_quantizable::QuantizableNonzeroUIntType>(pub T);
+        pub struct $base_name<T: $crate::quantization::QuantizableNonzeroUIntType>(pub T);
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> $base_name<T> {
             pub const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
             pub const ONE: Self = Self(T::ONE);
             pub const MAX_VALUE: Self = Self(T::MAX_VALUE);
@@ -53,21 +53,21 @@ macro_rules! define_nonzero_count_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> Default for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self(T::ONE)
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> From<$base_name<T>> for usize {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> From<$base_name<T>> for usize {
             #[inline(always)]
             fn from(value: $base_name<T>) -> Self {
                 value.0.to_usize()
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -76,7 +76,7 @@ macro_rules! define_nonzero_count_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -85,7 +85,7 @@ macro_rules! define_nonzero_count_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -94,7 +94,7 @@ macro_rules! define_nonzero_count_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -103,28 +103,28 @@ macro_rules! define_nonzero_count_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 = self.0.floor_sub(rhs.0);
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.0 = self.0.checked_div(rhs.0).unwrap_or(T::ONE);
@@ -132,7 +132,7 @@ macro_rules! define_nonzero_count_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType + core::fmt::Display> core::fmt::Display
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType + core::fmt::Display> core::fmt::Display
             for $base_name<T>
         {
             #[inline(always)]
@@ -141,7 +141,7 @@ macro_rules! define_nonzero_count_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $crate::base_quantizable::FeagiBaseQuantizationType for $base_name<T> {
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> $crate::quantization::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
 
             #[inline(always)]
@@ -180,7 +180,7 @@ macro_rules! define_nonzero_count_family {
             }
         }
 
-        impl<T: $crate::base_quantizable::QuantizableNonzeroUIntType> $crate::base_quantizable::QuantizableNonzeroUIntType
+        impl<T: $crate::quantization::QuantizableNonzeroUIntType> $crate::quantization::QuantizableNonzeroUIntType
             for $base_name<T>
         {
             const ONE: Self = Self(T::ONE);
