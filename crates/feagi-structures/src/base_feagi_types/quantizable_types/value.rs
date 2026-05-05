@@ -10,9 +10,9 @@ macro_rules! define_quantizable_value_type_family {
         #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
         #[cfg_attr(feature = "alloc", serde(transparent))]
-        pub struct $base_name<T: $crate::quantization_level::QuantizableValueType>(pub T);
+        pub struct $base_name<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType>(pub T);
 
-        impl<T: $crate::quantization_level::QuantizableValueType> From<T> for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> From<T> for $base_name<T> {
             #[inline(always)]
             fn from(value: T) -> Self {
                 Self(value)
@@ -20,21 +20,21 @@ macro_rules! define_quantizable_value_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::quantization_level::QuantizableValueType> Default for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self(T::default())
             }
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> From<$base_name<T>> for f32 {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> From<$base_name<T>> for f32 {
             #[inline(always)]
             fn from(value: $base_name<T>) -> Self {
                 value.0.to_f32()
             }
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> core::ops::Add for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn add(self, rhs: Self) -> Self::Output {
@@ -42,7 +42,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> core::ops::Sub for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn sub(self, rhs: Self) -> Self::Output {
@@ -50,7 +50,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> core::ops::Mul for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn mul(self, rhs: Self) -> Self::Output {
@@ -58,7 +58,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> core::ops::Div for $base_name<T> {
             type Output = Self;
             #[inline(always)]
             fn div(self, rhs: Self) -> Self::Output {
@@ -66,28 +66,28 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.0 += rhs.0;
             }
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.0 -= rhs.0;
             }
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.0 *= rhs.0;
             }
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.0 /= rhs.0;
@@ -95,7 +95,7 @@ macro_rules! define_quantizable_value_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::quantization_level::QuantizableValueType + core::fmt::Display> core::fmt::Display
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType + core::fmt::Display> core::fmt::Display
             for $base_name<T>
         {
             #[inline(always)]
@@ -104,7 +104,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> $crate::quantization_level::FeagiBaseQuantizationType for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
 
             #[inline(always)]
@@ -143,7 +143,7 @@ macro_rules! define_quantizable_value_type_family {
             }
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> $crate::quantization_level::FeagiBaseSingleElementQuantizationType
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> $crate::base_feagi_types::quantizable_types::FeagiBaseSingleElementQuantizationType
             for $base_name<T>
         {
             const ZERO: Self = Self(T::ZERO);
@@ -152,7 +152,7 @@ macro_rules! define_quantizable_value_type_family {
             const MIN_VALUE: Self = Self(T::MIN_VALUE);
         }
 
-        impl<T: $crate::quantization_level::QuantizableValueType> $crate::quantization_level::QuantizableValueType for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> $crate::base_feagi_types::quantizable_types::QuantizableValueType for $base_name<T> {
             #[inline(always)]
             fn to_f32(self) -> f32 {
                 self.0.to_f32()

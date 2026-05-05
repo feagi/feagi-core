@@ -60,14 +60,6 @@ Copy
     fn checked_mul(self, other: Self) -> Option<Self>;
     // No need for saturating div
     fn checked_div(self, other: Self) -> Option<Self>;
-
-    fn average(elements_to_average: &impl Iterator<Item=&Self>) -> Option<Self> {
-        if elements_to_average.is_empty() {
-            return None;
-        }
-        let divider = elements_to_average.len() as Self; // TODO overflow risk?
-        Some(elements_to_average.sum() / divider)
-    }
 }
 
 /// Defines a single Quantizable element (a single number)

@@ -1,5 +1,5 @@
 use crate::base_feagi_types::quantizable_types::{QuantizableUIntType};
-use crate::base_feagi_types::quantizable_types::shared::FeagiBaseQuantizationType;
+use crate::base_feagi_types::quantizable_types::shared::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType};
 
 /// Defines a transparent non-zero count wrapper type and forwarding impls.
 #[macro_export]
@@ -40,16 +40,6 @@ macro_rules! define_nonzero_count_family {
             #[inline(always)]
             pub const fn get(self) -> T {
                 self.0
-            }
-
-            #[inline(always)]
-            pub fn to_usize(self) -> usize {
-                self.0.to_usize()
-            }
-
-            #[inline(always)]
-            pub fn from_usize(value: usize) -> Option<Self> {
-                T::from_usize(value).map(Self)
             }
         }
 
@@ -200,7 +190,12 @@ macro_rules! define_nonzero_count_family {
 
             #[inline(always)]
             fn try_from_usize(value: usize) -> Option<Self> {
-                T::from_usize(value).map(Self)
+                T::try_from_usize(value).map(Self)
+            }
+
+            #[inline(always)]
+            fn from_usize_unchecked(value: usize) -> Self {
+                Self(T::from_usize_unchecked(value))
             }
         }
     };
@@ -218,6 +213,8 @@ pub trait QuantizableNonzeroUIntType: FeagiBaseQuantizationType
     fn floor_sub(self, other: Self) -> Self;
     fn to_usize(self) -> usize;
     fn try_from_usize(value: usize) -> Option<Self>;
+
+    fn from_usize_unchecked(value: usize) -> Self;
 }
 
 impl<T: QuantizableUIntType> QuantizableNonzeroUIntType for T {
@@ -243,5 +240,10 @@ impl<T: QuantizableUIntType> QuantizableNonzeroUIntType for T {
         } else {
             Some(value)
         }
+    }
+
+    #[inline(always)]
+    fn from_usize_unchecked(value: usize) -> Self {
+        T::from_usize(value)
     }
 }

@@ -1254,9 +1254,9 @@ macro_rules! define_dimension_3d_type_family {
             #[inline(always)]
             pub(crate) fn from_usize(usize_dims: $base_name<usize>) -> Self {
                 $base_name::new_unchecked(
-                    T::from_usize(usize_dims.x.to_usize()),
-                    T::from_usize(usize_dims.y.to_usize()),
-                    T::from_usize(usize_dims.z.to_usize()),
+                    T::from_usize_unchecked(usize_dims.x.to_usize()),
+                    T::from_usize_unchecked(usize_dims.y.to_usize()),
+                    T::from_usize_unchecked(usize_dims.z.to_usize()),
                 )
             }
 
@@ -1467,7 +1467,7 @@ macro_rules! define_dimension_3d_type_family {
             type ElementType = T;
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableNonzeroUIntType> $crate::base_feagi_types::quantizable_types::spatial::QuantizableUInt3DDimensionType
+        impl<T: $crate::base_feagi_types::quantizable_types::spatial::QuantizableUInt3DCoordinateType> $crate::base_feagi_types::quantizable_types::spatial::QuantizableUInt3DDimensionType
             for $base_name<T>
         {
             type CoordinateType = $coordinate_type<T>;

@@ -1,4 +1,4 @@
-use crate::base_feagi_types::quantizable_types::{QuantizableUIntType};
+use crate::base_feagi_types::quantizable_types::{QuantizableNonzeroUIntType, QuantizableUIntType};
 use crate::base_feagi_types::quantizable_types::QuantizableValueType;
 use crate::neuron_collections::data_values::{NeuronCount, NeuronDensityPerVoxel};
 
@@ -52,7 +52,7 @@ impl<VoxelIndexCountCoordQuant: QuantizableUIntType> NeuronVoxelDimensions<Voxel
     }
 
     pub fn get_number_neurons(&self, density: &NeuronDensityPerVoxel) -> NeuronCount<VoxelIndexCountCoordQuant> {
-        NeuronCount::from_usize(self.number_elements() * (density.to_usize()))
+        NeuronVoxelDimensions::get_number_neurons(self, density)
     }
 
     /// Linear voxel index with **x varying fastest**: `index = x + y·dx + z·dx·dy`.
