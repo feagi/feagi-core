@@ -1,76 +1,55 @@
 use core::marker::PhantomData;
-use crate::base_feagi_types::quantizable_types::{FeagiBaseSingleElementQuantizationType, QuantizableNonzeroUIntType, QuantizableUIntType};
-use crate::neuron_voxel_collections::data_values::{NeuronVoxelCount, NeuronVoxelDimensions, NeuronVoxelIndex};
-use crate::neuron_collections::data_values::{NeuronCount, NeuronDensityPerVoxel, NeuronIndex, NeuronMembranePotential};
+use crate::base_feagi_types::quantizable_types::{FeagiBaseSingleElementQuantizationType, QuantizableUIntType};
+use crate::neuron_voxel_collections::data_values::{NeuronVoxelDimensions, NeuronVoxelIndexCount};
+use crate::neuron_collections::data_values::{NeuronDensityPerVoxel, NeuronMembranePotential, NeuronIndexCount};
 use crate::neuron_collections::FeagiStructuresNeuronError;
 use crate::neuron_collections::traits::{
     NeuronCollectionQuantizationLevelType, SingleCorticalNeuronCollectionBase,
     SingleCorticalNeuronCollectionDense,
 };
 
-pub struct NeuronDenseVector<NCQL>
-where
-    NCQL: NeuronCollectionQuantizationLevelType,
+pub struct NeuronDenseVector<NCQL: NeuronCollectionQuantizationLevelType>
 {
     potentials: Vec<NeuronMembranePotential<NCQL::NeuronPotentialQuant>>,
     cortical_dimensions: NeuronVoxelDimensions<NCQL::VoxelCoordQuant>,
-    number_neurons_per_voxel: NeuronDensityPerVoxel,
-    _quantization_level: PhantomData<NCQL>,
+    neuron_density_per_voxel: NeuronDensityPerVoxel,
 }
 
-impl<NCQL> NeuronDenseVector<NCQL>
-where
-    NCQL: NeuronCollectionQuantizationLevelType,
+impl<NCQL: NeuronCollectionQuantizationLevelType> NeuronDenseVector<NCQL>
 {
     pub fn new(
         dimensions: NeuronVoxelDimensions<NCQL::VoxelCoordQuant>,
-        density: NeuronDensityPerVoxel,
+        neuron_density_per_voxel: NeuronDensityPerVoxel,
     ) -> Result<Self, FeagiStructuresNeuronError> {
 
-        let number_neurons: NeuronCount<NCQL::NeuronIndexCountQuant> =
-            dimensions.get_number_neurons(&density);
+        let number_neurons: NeuronIndexCount<NCQL::NeuronIndexCountQuant> =
+            dimensions.get_number_neurons(&neuron_density_per_voxel);
         Ok(Self {
             potentials: vec![NeuronMembranePotential::ZERO; number_neurons.to_usize()],
             cortical_dimensions: dimensions,
-            number_neurons_per_voxel: density,
-            _quantization_level: PhantomData,
+            neuron_density_per_voxel,
         })
     }
 }
 
-impl<NCQL> SingleCorticalNeuronCollectionBase<NCQL> for NeuronDenseVector<NCQL>
-where
-    NCQL: NeuronCollectionQuantizationLevelType,
+impl<NCQL: NeuronCollectionQuantizationLevelType> SingleCorticalNeuronCollectionBase<NCQL>
+for NeuronDenseVector<NCQL>
 {
     fn get_neuron_voxel_density(&self) -> NeuronDensityPerVoxel {
         
-        self.number_neurons_per_voxel
+        self.neuron_density_per_voxel
     }
 
     fn get_representing_cortical_area_dimensions(&self) -> &NeuronVoxelDimensions<NCQL::VoxelCoordQuant> {
         &self.cortical_dimensions
     }
 
-    fn neuron_index_max_limit(&self) -> NeuronIndex<NCQL::NeuronIndexCountQuant> {
-        NeuronIndex::from_usize(
-            self.cortical_dimensions
-                .get_number_neurons::<NCQL::NeuronIndexCountQuant>(&self.number_neurons_per_voxel)
-                .to_usize(),
-        )
+    fn number_neurons(&self) -> NeuronIndexCount<NCQL::NeuronIndexCountQuant> {
+        self.cortical_dimensions.get_number_neurons::<NCQL::NeuronIndexCountQuant>(&self.neuron_density_per_voxel)
     }
 
-    fn neuron_voxel_index_max_limit(&self) -> NeuronVoxelIndex<NCQL::NeuronIndexCountQuant> {
-        NeuronVoxelIndex::from_usize(
-            self.cortical_dimensions
-                .get_number_voxels::<NCQL::NeuronIndexCountQuant>()
-                .to_usize(),
-        )
-    }
-
-    fn number_of_voxels(&self) -> NeuronVoxelCount<NCQL::NeuronIndexCountQuant> {
-        let number: NeuronVoxelCount<NCQL::NeuronIndexCountQuant> =
-            self.cortical_dimensions.get_number_voxels();
-        number
+    fn number_voxels(&self) -> NeuronVoxelIndexCount<NCQL::VoxelCoordQuant> {
+        self.cortical_dimensions.get_number_voxels()
     }
 }
 

@@ -4,19 +4,13 @@
 /// Neuron Potential of neuron_collections (not voxels!)
 //region Neuron Membrane Potential
 
-crate::define_quantizable_uint_type_family!(NeuronMembranePotential);
+crate::define_quantizable_value_type_family!(NeuronMembranePotential);
 
 //endregion
 
-//region Neuron Count
+//region Neuron Index and Count
 
-crate::define_quantizable_uint_type_family!(NeuronIndex);
-
-//endregion
-
-//region Neuron Count
-
-crate::define_quantizable_uint_type_family!(NeuronCount);
+crate::define_quantizable_uint_type_family!(NeuronIndexCount);
 
 //endregion
 

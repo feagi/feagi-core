@@ -1,7 +1,7 @@
 use serde_json::Number;
 use crate::base_feagi_types::quantizable_types::{QuantizableUIntType, QuantizableValueType};
-use crate::neuron_voxel_collections::data_values::{NeuronVoxelCount, NeuronVoxelDimensions, NeuronVoxelIndex};
-use crate::neuron_collections::data_values::{NeuronDensityPerVoxel, NeuronIndex, NeuronMembranePotential};
+use crate::neuron_voxel_collections::data_values::{NeuronVoxelDimensions, NeuronVoxelIndexCount};
+use crate::neuron_collections::data_values::{NeuronDensityPerVoxel, NeuronIndexCount, NeuronMembranePotential};
 
 /// Defines quantization level for a Neuron Collection (NOT a voxel neuron collection!)
 pub trait NeuronCollectionQuantizationLevelType {
@@ -16,11 +16,9 @@ pub trait SingleCorticalNeuronCollectionBase<NCQL: NeuronCollectionQuantizationL
 
     fn get_representing_cortical_area_dimensions(&self) -> &NeuronVoxelDimensions<NCQL::VoxelCoordQuant>;
 
-    fn neuron_index_max_limit(&self) -> NeuronIndex<NCQL::NeuronIndexCountQuant>;
+    fn number_neurons(&self) -> NeuronIndexCount<NCQL::NeuronIndexCountQuant>;
 
-    fn neuron_voxel_index_max_limit(&self) -> NeuronVoxelIndex<NCQL::NeuronIndexCountQuant>;
-
-    fn number_of_voxels(&self) -> NeuronVoxelCount<NCQL::NeuronIndexCountQuant>;
+    fn number_voxels(&self) -> NeuronVoxelIndexCount<NCQL::VoxelCoordQuant>;
 }
 
 pub trait SingleCorticalNeuronCollectionDense<NCQL: NeuronCollectionQuantizationLevelType>:
