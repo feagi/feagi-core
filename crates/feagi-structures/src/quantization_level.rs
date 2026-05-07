@@ -13,31 +13,24 @@ pub enum QuantizationLevel
 }
 
 // TODO keep this here?
-
 /// Defines the burst index and cortical indexing across an entire NPU / Burst engine, as it needs 
 /// to be synced across neural structures
 pub trait NPUGlobalQuantization {
     /// Defines the quantization of the NPU global burst index
     type GlobalBurstIndexQuant: QuantizableUIntType;
     type CorticalIndexCountQuant: CorticalAreaIndexQuantization; // We want this to be global since synapses will go between cortical indexes
-    type NeuronIndexCountQuant: QuantizableUIntType; // Ditto for neuron indexes
+
+    /// Defines the per neuron and per neuron voxel index. Will have to match the one in the NPU
+    type NeuronIndexVoxelCountQuant: QuantizableUIntType; // Ditto for neuron indexes
 }
 
-pub trait NeuronVoxelIndexingQuantization {
-    type NeuronIndexCountQuant: QuantizableUIntType;
-    type VoxelCoordQuant: QuantizableUIntType;
-}
+pub trait CorticalAreaNeuronQuantization {
 
-pub trait NeuronIndexingQuantization {
-    type NeuronIndexCountQuant: QuantizableUIntType;
-    type VoxelCoordQuant: QuantizableUIntType;
-}
+    /// Defines the per neuron and per neuron voxel index. Will have to match the one in the NPU.
+    /// This will have to be constant for all neurons within an NPU
+    type NeuronIndexVoxelCountQuant: QuantizableUIntType;
 
-
-
-
-pub trait CorticalAreaValueQuantization {
+    /// Defines the quantization of all neuron data values (namely membrane potential). This is
+    /// the most likely to vary between cortical areas within a single NPU
     type NeuronValueQuant: QuantizableValueType;
 }
-
-

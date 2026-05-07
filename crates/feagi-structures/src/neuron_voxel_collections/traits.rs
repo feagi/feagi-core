@@ -1,32 +1,25 @@
 use crate::genomic::cortical_area::CorticalID;
-use crate::neuron_voxel_collections::data_values::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
-use crate::base_feagi_types::quantizable_types::{QuantizableUIntType, QuantizableValueType};
+use crate::neuron_voxel_collections::voxel_structs::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelIndexCount, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
+use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, QuantizableUIntType, QuantizableValueType};
 use crate::neuron_voxel_collections::FeagiStructuresNeuronVoxelError;
 
 #[cfg(feature = "alloc")]
 use ahash::AHashMap;
-
-
-/// Defines quantization level for a Neuron Collection (NOT a voxel neuron collection!)
-pub trait NeuronVoxelCollectionQuantizationLevelType {
-    type VoxelIndexCountQuant: QuantizableUIntType;
-    type VoxelCoordQuant: QuantizableUIntType;
-    type VoxelPotentialQuant: QuantizableValueType;
-}
+use crate::quantization_level::CorticalAreaNeuronQuantization;
 
 //region NeuronVoxel
 /// Represents the potential of a single voxel (which may contain one or more neuron_collections)
-pub trait NeuronVoxel<VoxelPotentialQuant: QuantizableValueType>
+pub trait NeuronVoxel<CANQ: CorticalAreaNeuronQuantization>
 {
-    const NUMBER_OF_BYTES: usize = VoxelPotentialQuant::NUMBER_OF_BYTES;
+    const NUMBER_OF_BYTES: usize = CANQ::NeuronValueQuant::NUMBER_OF_BYTES;
 
-    fn get_voxel_potential(&self) -> NeuronVoxelPotential<VoxelPotentialQuant>;
+    fn get_voxel_potential(&self) -> NeuronVoxelPotential<CANQ::NeuronValueQuant>;
 
-    fn get_voxel_potential_ref(&self) -> &NeuronVoxelPotential<VoxelPotentialQuant>;
+    fn get_voxel_potential_ref(&self) -> &NeuronVoxelPotential<CANQ::NeuronValueQuant>;
 
-    fn set_voxel_potential_ref_mut(&mut self) -> &mut NeuronVoxelPotential<VoxelPotentialQuant>;
+    fn set_voxel_potential_ref_mut(&mut self) -> &mut NeuronVoxelPotential<CANQ::NeuronValueQuant>;
 
-    fn set_voxel_potential(&mut self, potential: NeuronVoxelPotential<VoxelPotentialQuant>);
+    fn set_voxel_potential(&mut self, potential: NeuronVoxelPotential<CANQ::NeuronValueQuant>);
 
 }
 
@@ -35,10 +28,7 @@ pub trait NeuronVoxel<VoxelPotentialQuant: QuantizableValueType>
 //region SingleCACollection
 
 /// Defines any collection of neuron_collections sparsely from a single cortical area
-pub trait SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+pub trait SingleCorticalNeuronVoxelCollectionBase<CANQ: CorticalAreaNeuronQuantization>
 {
     // NOTE since neuron collections may be stored in different ways, I see no good way to
     // expose a common interface for getting out potential data efficiently
@@ -46,12 +36,20 @@ pub trait SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuan
     const COLLECTION_TYPE: SingleCorticalNeuronVoxelCollectionType;
 
     /// Returns the dimensions of the cortical area this collection is storing neuron voxel data for
-    fn get_representing_cortical_area_dimensions(&self) -> &NeuronVoxelDimensions<CoordQuant>;
+    fn get_representing_cortical_area_dimensions(&self) -> &NeuronVoxelDimensions<CANQ::NeuronIndexVoxelCountQuant>;
 
     /// What is the upper bound (exclusive) neuron voxel index allowed?
-    fn neuron_index_max_limit(&self) -> NeuronVoxelIndexQuant;
-    
+    fn get_neuron_voxel_max_index(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
 
+    fn iter_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)>;
+
+    #[cfg(feature = "rayon")]
+    fn iter_index_par(&self) -> impl Iterator<Item=(NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)>;
+
+    /// Iterate over non-zero potential values by neuron index
+    fn iter_nonzero_potential_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)>;
+
+    // TODO par iterators for nonzero potentials?
 }
 
 
@@ -59,22 +57,19 @@ pub trait SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuan
 /// Defines a collection of neuron_collections of a single cortical area backed by dynamic data structures
 /// (Vector)
 #[cfg(feature = "alloc")]
-pub trait SingleCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>:
-SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+pub trait SingleCorticalNeuronVoxelCollectionAlloc<CANQ: CorticalAreaNeuronQuantization>:
+SingleCorticalNeuronVoxelCollectionBase<CANQ>
 {
 
     /// Returns the number of neuron voxels stored in the structure
-    fn get_number_neuron_voxel_contained_count(&self) -> NeuronVoxelIndexQuant;
+    fn get_number_neuron_voxel_contained_count(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
 
-    fn get_neuron_voxel_count_allocated_capacity(&self) -> NeuronVoxelIndexQuant;
+    fn get_neuron_voxel_count_allocated_capacity(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
 
-    fn reserve(&mut self, number_of_neuron_voxels_to_reserve_for: NeuronVoxelIndexQuant);
+    fn reserve(&mut self, number_of_additional_voxels_to_reserve_for: NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>);
 
-    /// Clears / zeros all stored neuron_collections (without deallocating) and changes cortical area size
-    fn empty_and_change_cortical_area_dimensions(&mut self, new_dimensions: NeuronVoxelDimensions<CoordQuant>);
+    /// Clears / zeros all stored neuron voxels (without deallocating) and changes cortical area size
+    fn empty_and_change_cortical_area_dimensions(&mut self, new_dimensions: NeuronVoxelDimensions<CANQ::NeuronIndexVoxelCountQuant>);
 
     fn shrink_to_fit(&mut self);
 }
@@ -82,63 +77,42 @@ SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronV
 // NOTE: Dont need a "static" trait variant since only 1 struct is static
 
 #[cfg(feature = "alloc")]
-pub trait SingleCorticalNeuronVoxelCollectionSparse<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>:
-SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> +
-SingleCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+pub trait SingleCorticalNeuronVoxelCollectionSparse<CANQ: CorticalAreaNeuronQuantization>:
+SingleCorticalNeuronVoxelCollectionBase<CANQ> +
+SingleCorticalNeuronVoxelCollectionAlloc<CANQ>
 {
+    /// Returns true if the array is sorted by increasing index / xyz coordinate
+    fn is_sorted(&self) -> bool;
+    
     /// Clears all stored neuron_collections (without deallocating)
     fn clear_all_neurons(&mut self);
-
-    fn iter_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)>;
-
-    fn iter_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)>;
+    
 
     /// Sort by increasing index / xyz coordinate
     fn sort(&mut self);
-
-    #[cfg(feature = "rayon")]
-    fn iter_index_par(&self) -> impl Iterator<Item=(NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)>;
-
-    #[cfg(feature = "rayon")]
-    fn iter_coordinate_par(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)>;
 }
 
-pub trait SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>:
-SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+pub trait SingleCorticalNeuronVoxelCollectionDense<CANQ: CorticalAreaNeuronQuantization>:
+SingleCorticalNeuronVoxelCollectionBase<CANQ>
 {
-    fn get_all_neuron_voxel_potentials(&self) -> &[NeuronVoxelPotential<VoxelPotentialQuant>];
+    /// Returns all neuron voxel potentials as a slice
+    fn get_all_neuron_voxel_potentials(&self) -> &[NeuronVoxelPotential<CANQ::NeuronValueQuant>];
 
-    fn get_all_neuron_voxel_potentials_mut(&mut self) -> &mut [NeuronVoxelPotential<VoxelPotentialQuant>];
+    /// Returns all neuron voxel potentials as a mutable slice
+    fn get_all_neuron_voxel_potentials_mut(&mut self) -> &mut [NeuronVoxelPotential<CANQ::NeuronValueQuant>];
 
-    /// Iterate over non-zero potential values by neuron index
-    fn iter_nonzero_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)>;
-
-    /// Iterate over non-zero potential values by neuron coordinate
-    fn iter_nonzero_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)>;
-
-    // TODO par iterators for nonzero potentials?
-
+    
     fn zero_all_neuron_voxel_potentials(&mut self);
 
     #[cfg(feature = "alloc")]
-    fn inplace_overwrite_data_from_sparse(&mut self, sparse_neurons: &impl SingleCorticalNeuronVoxelCollectionSparse<NeuronVoxelPotential<VoxelPotentialQuant>, CoordQuant, NeuronVoxelIndexQuant>);
+    fn inplace_overwrite_data_from_sparse(&mut self, sparse_neurons: &impl SingleCorticalNeuronVoxelCollectionSparse<CANQ>, zero_out_first: bool);
 }
 
 
 //endregion
 
 //region MultiCACollection
-pub trait MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType,
-    CorticalAreaIndexQuant: QuantizableUIntType
+pub trait MultiCorticalNeuronVoxelCollectionBase<CANQ: CorticalAreaNeuronQuantization>
 {
     fn get_contained_cortical_collection_type(&self, cortical_id: &CorticalID) -> Result<&SingleCorticalNeuronVoxelCollectionType, FeagiStructuresNeuronVoxelError>;
 
@@ -147,32 +121,24 @@ pub trait MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant
     /// Only gets the base implementation, you probably should NOT use this as it doesn't allow
     /// access to more specialized performant functions
     fn get_base_collection_implementation(&self, cortical_id: &CorticalID) ->
-                                                                           Result<&impl SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiStructuresNeuronVoxelError>;
+                                                                           Result<&impl SingleCorticalNeuronVoxelCollectionBase<CANQ>, FeagiStructuresNeuronVoxelError>;
 
     fn get_base_collection_implementation_mut(&mut self, cortical_id: &CorticalID) ->
-                                                                               Result<&mut impl SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiStructuresNeuronVoxelError>;
+                                                                               Result<&mut impl SingleCorticalNeuronVoxelCollectionBase<CANQ>, FeagiStructuresNeuronVoxelError>;
 
 }
 
-pub trait MultiCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>:
-MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType,
-    CorticalAreaIndexQuant: QuantizableUIntType
+pub trait MultiCorticalNeuronVoxelCollectionDense<CANQ: CorticalAreaNeuronQuantization>:
+MultiCorticalNeuronVoxelCollectionBase<CANQ>
 {
-    fn get_dense_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiStructuresNeuronVoxelError>;
+    fn get_dense_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl SingleCorticalNeuronVoxelCollectionDense<CANQ>, FeagiStructuresNeuronVoxelError>;
 
-    fn get_dense_collection_implementation_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut impl SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiStructuresNeuronVoxelError>;
+    fn get_dense_collection_implementation_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut impl SingleCorticalNeuronVoxelCollectionDense<CANQ>, FeagiStructuresNeuronVoxelError>;
 }
 
 #[cfg(feature = "alloc")]
-pub trait MultiCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>:
-MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType,
-    CorticalAreaIndexQuant: QuantizableUIntType
+pub trait MultiCorticalNeuronVoxelCollectionAlloc<CANQ: CorticalAreaNeuronQuantization>:
+MultiCorticalNeuronVoxelCollectionBase<CANQ>
 {
     // NOTE: Not practical to do any sort of data retrieval functions here, but we can do housekeeping
 
@@ -185,5 +151,7 @@ MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVo
 }
 
 //endregion
+
+
 // NOTE: The mixed type is also alone so it doesn't need a trait either
 

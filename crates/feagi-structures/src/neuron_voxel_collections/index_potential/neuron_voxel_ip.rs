@@ -1,5 +1,5 @@
 use crate::base_feagi_types::quantizable_types::{QuantizableUIntType, QuantizableValueType};
-use crate::neuron_voxel_collections::data_values::NeuronVoxelPotential;
+use crate::neuron_voxel_collections::voxel_structs::NeuronVoxelPotential;
 use crate::neuron_voxel_collections::traits::NeuronVoxel;
 
 #[derive(Clone, Debug, PartialEq)]

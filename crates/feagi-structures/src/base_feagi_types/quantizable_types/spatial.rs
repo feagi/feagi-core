@@ -131,6 +131,7 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
 
         impl<T: crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
+            const QUANTIZATION_LEVEL: crate::quantization_level::QuantizationLevel = T::QUANTIZATION_LEVEL;
 
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {
@@ -359,6 +360,7 @@ macro_rules! define_signed_coordinate_2d_type_family {
 
         impl<T: $crate::base_feagi_types::quantizable_types::QuantizableIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
+            const QUANTIZATION_LEVEL: crate::quantization_level::QuantizationLevel = T::QUANTIZATION_LEVEL;
 
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {
@@ -610,6 +612,7 @@ macro_rules! define_dimension_2d_type_family {
 
         impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
+            const QUANTIZATION_LEVEL: crate::quantization_level::QuantizationLevel = T::QUANTIZATION_LEVEL;
 
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {
@@ -850,6 +853,7 @@ macro_rules! define_unsigned_coordinate_3d_type_family {
 
         impl<T: crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
+            const QUANTIZATION_LEVEL: crate::quantization_level::QuantizationLevel = T::QUANTIZATION_LEVEL;
 
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {
@@ -1099,6 +1103,7 @@ macro_rules! define_signed_coordinate_3d_type_family {
 
         impl<T: $crate::base_feagi_types::quantizable_types::QuantizableIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
+            const QUANTIZATION_LEVEL: crate::quantization_level::QuantizationLevel = T::QUANTIZATION_LEVEL;
 
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {
@@ -1394,6 +1399,7 @@ macro_rules! define_dimension_3d_type_family {
 
         impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
+            const QUANTIZATION_LEVEL: crate::quantization_level::QuantizationLevel = T::QUANTIZATION_LEVEL;
 
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {

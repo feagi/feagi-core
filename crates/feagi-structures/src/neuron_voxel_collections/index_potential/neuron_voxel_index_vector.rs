@@ -1,6 +1,6 @@
 use crate::base_feagi_types::quantizable_types::QuantizableUIntType;
 use crate::base_feagi_types::quantizable_types::QuantizableValueType;
-use crate::neuron_voxel_collections::data_values::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
+use crate::neuron_voxel_collections::voxel_structs::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
 use crate::neuron_voxel_collections::traits::{SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionSparse};
 
 pub struct NeuronVoxelIndexVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
@@ -43,7 +43,7 @@ where
         &self.cortical_dimensions
     }
 
-    fn neuron_index_max_limit(&self) -> NeuronVoxelIndexQuant {
+    fn get_neuron_voxel_max_index(&self) -> NeuronVoxelIndexQuant {
         NeuronVoxelIndexQuant::from_usize(self.cortical_dimensions.get_max_allowed_index_exclusive())
     }
 }
