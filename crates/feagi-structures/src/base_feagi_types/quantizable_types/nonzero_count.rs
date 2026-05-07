@@ -134,7 +134,7 @@ macro_rules! define_nonzero_count_family {
 
         impl<T: $crate::base_feagi_types::quantizable_types::QuantizableNonzeroUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES;
-
+            const QUANTIZATION_LEVEL: crate::quantization_level::QuantizationLevel = T::QUANTIZATION_LEVEL;
             #[inline(always)]
             fn saturating_add(self, other: Self) -> Self {
                 Self(self.0.saturating_add(other.0))

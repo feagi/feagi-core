@@ -1,4 +1,5 @@
 use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType};
+use crate::quantization_level::QuantizationLevel;
 
 /// Defines a transparent wrapper type and all `QuantizableUInt` / operator / conversion impls.
 #[macro_export]
@@ -183,51 +184,6 @@ pub trait QuantizableUIntType: FeagiBaseSingleElementQuantizationType {
     fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize>;
 }
 
-impl FeagiBaseQuantizationType for usize {
-    const NUMBER_OF_BYTES: usize = size_of::<usize>();
-
-    #[inline(always)]
-    fn saturating_add(self, other: Self) -> Self {
-        self.saturating_add(other)
-    }
-
-    #[inline(always)]
-    fn checked_add(self, other: Self) -> Option<Self> {
-        self.checked_add(other)
-    }
-
-    #[inline(always)]
-    fn saturating_sub(self, other: Self) -> Self {
-        self.saturating_sub(other)
-    }
-
-    #[inline(always)]
-    fn checked_sub(self, other: Self) -> Option<Self> {
-        self.checked_sub(other)
-    }
-
-    #[inline(always)]
-    fn saturating_mul(self, other: Self) -> Self {
-        self.saturating_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_mul(self, other: Self) -> Option<Self> {
-        self.checked_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_div(self, other: Self) -> Option<Self> {
-        self.checked_div(other)
-    }
-}
-
-impl FeagiBaseSingleElementQuantizationType for usize {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX_VALUE: Self = usize::MAX;
-    const MIN_VALUE: Self = usize::MIN;
-}
 
 impl QuantizableUIntType for usize {
     #[inline(always)]
@@ -246,53 +202,6 @@ impl QuantizableUIntType for usize {
     }
 }
 
-
-
-impl FeagiBaseQuantizationType for u8 {
-    const NUMBER_OF_BYTES: usize = size_of::<u8>();
-
-    #[inline(always)]
-    fn saturating_add(self, other: Self) -> Self {
-        self.saturating_add(other)
-    }
-
-    #[inline(always)]
-    fn checked_add(self, other: Self) -> Option<Self> {
-        self.checked_add(other)
-    }
-
-    #[inline(always)]
-    fn saturating_sub(self, other: Self) -> Self {
-        self.saturating_sub(other)
-    }
-
-    #[inline(always)]
-    fn checked_sub(self, other: Self) -> Option<Self> {
-        self.checked_sub(other)
-    }
-
-    #[inline(always)]
-    fn saturating_mul(self, other: Self) -> Self {
-        self.saturating_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_mul(self, other: Self) -> Option<Self> {
-        self.checked_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_div(self, other: Self) -> Option<Self> {
-        self.checked_div(other)
-    }
-}
-
-impl FeagiBaseSingleElementQuantizationType for u8 {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX_VALUE: Self = u8::MAX;
-    const MIN_VALUE: Self = u8::MIN;
-}
 
 impl QuantizableUIntType for u8 {
     #[inline(always)]
@@ -315,53 +224,6 @@ impl QuantizableUIntType for u8 {
 }
 
 
-
-impl FeagiBaseQuantizationType for u16 {
-    const NUMBER_OF_BYTES: usize = size_of::<u16>();
-
-    #[inline(always)]
-    fn saturating_add(self, other: Self) -> Self {
-        self.saturating_add(other)
-    }
-
-    #[inline(always)]
-    fn checked_add(self, other: Self) -> Option<Self> {
-        self.checked_add(other)
-    }
-
-    #[inline(always)]
-    fn saturating_sub(self, other: Self) -> Self {
-        self.saturating_sub(other)
-    }
-
-    #[inline(always)]
-    fn checked_sub(self, other: Self) -> Option<Self> {
-        self.checked_sub(other)
-    }
-
-    #[inline(always)]
-    fn saturating_mul(self, other: Self) -> Self {
-        self.saturating_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_mul(self, other: Self) -> Option<Self> {
-        self.checked_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_div(self, other: Self) -> Option<Self> {
-        self.checked_div(other)
-    }
-}
-
-impl FeagiBaseSingleElementQuantizationType for u16 {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX_VALUE: Self = u16::MAX;
-    const MIN_VALUE: Self = u16::MIN;
-}
-
 impl QuantizableUIntType for u16 {
     #[inline(always)]
     fn to_usize(self) -> usize {
@@ -383,53 +245,6 @@ impl QuantizableUIntType for u16 {
 }
 
 
-
-impl FeagiBaseQuantizationType for u32 {
-    const NUMBER_OF_BYTES: usize = size_of::<u32>();
-
-    #[inline(always)]
-    fn saturating_add(self, other: Self) -> Self {
-        self.saturating_add(other)
-    }
-
-    #[inline(always)]
-    fn checked_add(self, other: Self) -> Option<Self> {
-        self.checked_add(other)
-    }
-
-    #[inline(always)]
-    fn saturating_sub(self, other: Self) -> Self {
-        self.saturating_sub(other)
-    }
-
-    #[inline(always)]
-    fn checked_sub(self, other: Self) -> Option<Self> {
-        self.checked_sub(other)
-    }
-
-    #[inline(always)]
-    fn saturating_mul(self, other: Self) -> Self {
-        self.saturating_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_mul(self, other: Self) -> Option<Self> {
-        self.checked_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_div(self, other: Self) -> Option<Self> {
-        self.checked_div(other)
-    }
-}
-
-impl FeagiBaseSingleElementQuantizationType for u32 {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX_VALUE: Self = u32::MAX;
-    const MIN_VALUE: Self = u32::MIN;
-}
-
 impl QuantizableUIntType for u32 {
     #[inline(always)]
     fn to_usize(self) -> usize {
@@ -450,55 +265,6 @@ impl QuantizableUIntType for u32 {
     }
 }
 
-
-
-#[cfg(feature = "support_64bit_indexing")]
-impl FeagiBaseQuantizationType for u64 {
-    const NUMBER_OF_BYTES: usize = size_of::<u64>();
-
-    #[inline(always)]
-    fn saturating_add(self, other: Self) -> Self {
-        self.saturating_add(other)
-    }
-
-    #[inline(always)]
-    fn checked_add(self, other: Self) -> Option<Self> {
-        self.checked_add(other)
-    }
-
-    #[inline(always)]
-    fn saturating_sub(self, other: Self) -> Self {
-        self.saturating_sub(other)
-    }
-
-    #[inline(always)]
-    fn checked_sub(self, other: Self) -> Option<Self> {
-        self.checked_sub(other)
-    }
-
-    #[inline(always)]
-    fn saturating_mul(self, other: Self) -> Self {
-        self.saturating_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_mul(self, other: Self) -> Option<Self> {
-        self.checked_mul(other)
-    }
-
-    #[inline(always)]
-    fn checked_div(self, other: Self) -> Option<Self> {
-        self.checked_div(other)
-    }
-}
-
-#[cfg(feature = "support_64bit_indexing")]
-impl FeagiBaseSingleElementQuantizationType for u64 {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
-    const MAX_VALUE: Self = u64::MAX;
-    const MIN_VALUE: Self = u64::MIN;
-}
 
 #[cfg(feature = "support_64bit_indexing")]
 impl QuantizableUIntType for u64 {

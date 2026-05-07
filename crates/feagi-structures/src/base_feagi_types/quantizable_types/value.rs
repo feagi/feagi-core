@@ -1,6 +1,6 @@
 use half::f16;
 use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType};
-
+use crate::quantization_level::QuantizationLevel;
 
 /// Defines a transparent value wrapper type and all `QuantizableValue` / operator / conversion impls.
 #[macro_export]
@@ -172,159 +172,25 @@ pub trait QuantizableValueType: FeagiBaseSingleElementQuantizationType + core::c
     fn from_f32(value: f32) -> Self;
 }
 
-impl FeagiBaseQuantizationType for f32 {
-    const NUMBER_OF_BYTES: usize = size_of::<f32>();
 
-    #[inline(always)]
-    fn saturating_add(self, other: Self) -> Self {
-        let value = self + other;
-        if value.is_infinite() {
-            if value.is_sign_negative() { f32::MIN } else { f32::MAX }
-        } else if value.is_nan() {
-            0.0
-        } else {
-            value
-        }
-    }
-
-    #[inline(always)]
-    fn checked_add(self, other: Self) -> Option<Self> {
-        let value = self + other;
-        if value.is_finite() { Some(value) } else { None }
-    }
-
-    #[inline(always)]
-    fn saturating_sub(self, other: Self) -> Self {
-        let value = self - other;
-        if value.is_infinite() {
-            if value.is_sign_negative() { f32::MIN } else { f32::MAX }
-        } else if value.is_nan() {
-            0.0
-        } else {
-            value
-        }
-    }
-
-    #[inline(always)]
-    fn checked_sub(self, other: Self) -> Option<Self> {
-        let value = self - other;
-        if value.is_finite() { Some(value) } else { None }
-    }
-
-    #[inline(always)]
-    fn saturating_mul(self, other: Self) -> Self {
-        let value = self * other;
-        if value.is_infinite() {
-            if value.is_sign_negative() { f32::MIN } else { f32::MAX }
-        } else if value.is_nan() {
-            0.0
-        } else {
-            value
-        }
-    }
-
-    #[inline(always)]
-    fn checked_mul(self, other: Self) -> Option<Self> {
-        let value = self * other;
-        if value.is_finite() { Some(value) } else { None }
-    }
-
-    #[inline(always)]
-    fn checked_div(self, other: Self) -> Option<Self> {
-        let value = self / other;
-        if value.is_finite() { Some(value) } else { None }
-    }
-}
-
-impl FeagiBaseSingleElementQuantizationType for f32 {
-    const ZERO: Self = 0.0;
-    const ONE: Self = 1.0;
-    const MAX_VALUE: Self = f32::MAX;
-    const MIN_VALUE: Self = f32::MIN;
-}
-
-impl QuantizableValueType for f32 {
+impl QuantizableValueType for u8 {
     #[inline(always)]
     fn to_f32(self) -> f32 {
-        self
+        self as f32
     }
 
     #[inline(always)]
     fn from_f32(value: f32) -> Self {
-        if value.is_infinite() {
-            if value.is_sign_negative() { f32::MIN } else { f32::MAX }
-        } else if value.is_nan() {
-            0.0
+        if value.is_nan() {
+            0
+        } else if value.is_sign_negative() {
+            0
+        } else if value > u8::MAX as f32 {
+            u8::MAX
         } else {
-            value
+            value as u8
         }
     }
-}
-
-impl FeagiBaseQuantizationType for f16 {
-    const NUMBER_OF_BYTES: usize = size_of::<f16>();
-
-    #[inline(always)]
-    fn saturating_add(self, other: Self) -> Self {
-        Self::from_f32(self.to_f32() + other.to_f32())
-    }
-
-    #[inline(always)]
-    fn checked_add(self, other: Self) -> Option<Self> {
-        let value = self.to_f32() + other.to_f32();
-        if value.is_finite() && value <= f16::MAX.to_f32() && value >= f16::MIN.to_f32() {
-            Some(f16::from_f32(value))
-        } else {
-            None
-        }
-    }
-
-    #[inline(always)]
-    fn saturating_sub(self, other: Self) -> Self {
-        Self::from_f32(self.to_f32() - other.to_f32())
-    }
-
-    #[inline(always)]
-    fn checked_sub(self, other: Self) -> Option<Self> {
-        let value = self.to_f32() - other.to_f32();
-        if value.is_finite() && value <= f16::MAX.to_f32() && value >= f16::MIN.to_f32() {
-            Some(f16::from_f32(value))
-        } else {
-            None
-        }
-    }
-
-    #[inline(always)]
-    fn saturating_mul(self, other: Self) -> Self {
-        Self::from_f32(self.to_f32() * other.to_f32())
-    }
-
-    #[inline(always)]
-    fn checked_mul(self, other: Self) -> Option<Self> {
-        let value = self.to_f32() * other.to_f32();
-        if value.is_finite() && value <= f16::MAX.to_f32() && value >= f16::MIN.to_f32() {
-            Some(f16::from_f32(value))
-        } else {
-            None
-        }
-    }
-
-    #[inline(always)]
-    fn checked_div(self, other: Self) -> Option<Self> {
-        let value = self.to_f32() / other.to_f32();
-        if value.is_finite() && value <= f16::MAX.to_f32() && value >= f16::MIN.to_f32() {
-            Some(f16::from_f32(value))
-        } else {
-            None
-        }
-    }
-}
-
-impl FeagiBaseSingleElementQuantizationType for f16 {
-    const ZERO: Self = f16::ZERO;
-    const ONE: Self = f16::ONE;
-    const MAX_VALUE: Self = f16::MAX;
-    const MIN_VALUE: Self = f16::MIN;
 }
 
 impl QuantizableValueType for f16 {
@@ -347,22 +213,23 @@ impl QuantizableValueType for f16 {
     }
 }
 
-impl QuantizableValueType for u8 {
+impl QuantizableValueType for f32 {
     #[inline(always)]
     fn to_f32(self) -> f32 {
-        self as f32
+        self
     }
 
     #[inline(always)]
     fn from_f32(value: f32) -> Self {
-        if value.is_nan() {
-            0
-        } else if value.is_sign_negative() {
-            0
-        } else if value > u8::MAX as f32 {
-            u8::MAX
+        if value.is_infinite() {
+            if value.is_sign_negative() { f32::MIN } else { f32::MAX }
+        } else if value.is_nan() {
+            0.0
         } else {
-            value as u8
+            value
         }
     }
 }
+
+// TODO f64
+

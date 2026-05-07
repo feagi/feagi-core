@@ -1,4 +1,4 @@
-use crate::base_feagi_types::quantizable_types::QuantizableUIntType;
+use crate::base_feagi_types::quantizable_types::{QuantizableUIntType, QuantizableValueType};
 use crate::genomic::cortical_area::descriptors::CorticalAreaIndexQuantization;
 
 /// Allows for communication of quantization levels at runtime
@@ -12,8 +12,10 @@ pub enum QuantizationLevel
     Bit64, // NOTE: Always include this regardless of 64 bit feature flag, so we can have better error handling
 }
 
+// TODO keep this here?
+
 /// Defines the burst index and cortical indexing across an entire NPU / Burst engine, as it needs 
-/// to be synced across structures
+/// to be synced across neural structures
 pub trait NPUGlobalQuantization {
     /// Defines the quantization of the NPU global burst index
     type GlobalBurstIndexQuant: QuantizableUIntType;
@@ -21,6 +23,21 @@ pub trait NPUGlobalQuantization {
     type NeuronIndexCountQuant: QuantizableUIntType; // Ditto for neuron indexes
 }
 
+pub trait NeuronVoxelIndexingQuantization {
+    type NeuronIndexCountQuant: QuantizableUIntType;
+    type VoxelCoordQuant: QuantizableUIntType;
+}
 
+pub trait NeuronIndexingQuantization {
+    type NeuronIndexCountQuant: QuantizableUIntType;
+    type VoxelCoordQuant: QuantizableUIntType;
+}
+
+
+
+
+pub trait CorticalAreaValueQuantization {
+    type NeuronValueQuant: QuantizableValueType;
+}
 
 

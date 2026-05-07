@@ -18,5 +18,6 @@ mod feagi_json;
 mod templates;
 mod feagi_structures_error;
 mod useful_macros;
+mod quantization_level;
 
 

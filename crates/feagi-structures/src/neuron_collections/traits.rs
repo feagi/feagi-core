@@ -3,12 +3,7 @@ use crate::base_feagi_types::quantizable_types::{QuantizableUIntType, Quantizabl
 use crate::neuron_voxel_collections::data_values::{NeuronVoxelDimensions, NeuronVoxelIndexCount};
 use crate::neuron_collections::data_values::{NeuronDensityPerVoxel, NeuronIndexCount, NeuronMembranePotential};
 
-/// Defines quantization level for a Neuron Collection (NOT a voxel neuron collection!)
-pub trait NeuronCollectionQuantizationLevelType {
-    type NeuronIndexCountQuant: QuantizableUIntType;
-    type VoxelCoordQuant: QuantizableUIntType;
-    type NeuronPotentialQuant: QuantizableValueType;
-}
+
 
 pub trait SingleCorticalNeuronCollectionBase<NCQL: NeuronCollectionQuantizationLevelType>
 {

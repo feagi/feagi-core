@@ -50,34 +50,7 @@ pub trait SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuan
 
     /// What is the upper bound (exclusive) neuron voxel index allowed?
     fn neuron_index_max_limit(&self) -> NeuronVoxelIndexQuant;
-
-
-    //region Neurons
-
-    // TODO these functions
-    /*
-    fn try_get_neuron_voxel_index(&mut self, index: &NeuronVoxelIndexQuant) -> Option<NeuronVoxelPotential<VoxelPotentialQuant>>;
-
-    fn try_get_neuron_voxel_coordinate(&mut self, coordinate: &NeuronVoxelDimensions<CoordQuant>) -> Option<&NeuronVoxelDimensions<CoordQuant>>;
-
-    fn write_neuron_voxel_index(&mut self, voxel: NeuronVoxelIP<NeuronVoxelPotential<VoxelPotentialQuant>, NeuronVoxelIndexQuant>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
-
-    fn write_neuron_voxel_coordinate(&mut self, voxel: NeuronVoxelXYZP<NeuronVoxelPotential<VoxelPotentialQuant>, CoordQuant>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
-
-    fn write_neuron_voxel_index_raw(&mut self, index: &NeuronVoxelIndexQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
-
-    fn write_neuron_voxel_coordinate_raw(&mut self, x: CoordQuant, y: CoordQuant, z: CoordQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
-
-    fn write_neuron_voxel_index_unchecked(&mut self, voxel: NeuronVoxelIP<NeuronVoxelPotential<VoxelPotentialQuant>, NeuronVoxelIndexQuant>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
-
-    fn write_neuron_voxel_coordinate_unchecked(&mut self, voxel: NeuronVoxelXYZP<NeuronVoxelPotential<VoxelPotentialQuant>, CoordQuant>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
-
-    fn write_neuron_voxel_index_raw_unchecked(&mut self, index: &NeuronVoxelIndexQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
-
-    fn write_neuron_voxel_coordinate_raw_unchecked(&mut self, x: CoordQuant, y: CoordQuant, z: CoordQuant, voxel_potential: NeuronVoxelPotential<Potential>) -> Result<(), crate::neuron_voxel_collections::FeagiNeuronVoxelError>;
-
-     */
-    //endregion
+    
 
 }
 
