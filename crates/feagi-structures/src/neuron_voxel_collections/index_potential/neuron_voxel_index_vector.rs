@@ -1,77 +1,114 @@
-use crate::base_feagi_types::quantizable_types::QuantizableUIntType;
-use crate::base_feagi_types::quantizable_types::QuantizableValueType;
+use crate::base_feagi_types::quantizable_types::{FeagiBaseSingleElementQuantizationType, QuantizableUIntType};
 use crate::neuron_voxel_collections::voxel_structs::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
 use crate::neuron_voxel_collections::traits::{SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionSparse};
+use crate::neuron_voxel_collections::voxel_structs::NeuronVoxelIndexCount;
+use crate::quantization_level::CorticalAreaNeuronQuantization;
 
-pub struct NeuronVoxelIndexVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+pub struct NeuronVoxelIndexVector<CANQ: CorticalAreaNeuronQuantization>
 {
-    cortical_dimensions: NeuronVoxelDimensions<CoordQuant>,
-    indexes: Vec<NeuronVoxelIndexQuant>,
-    potentials: Vec<VoxelPotentialQuant>,
+    cortical_dimensions: NeuronVoxelDimensions<CANQ::NeuronIndexVoxelCountQuant>,
+    indexes: Vec<NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>>,
+    potentials: Vec<NeuronVoxelPotential<CANQ::NeuronValueQuant>>,
 }
 
-impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> NeuronVoxelIndexVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+impl<CANQ: CorticalAreaNeuronQuantization> NeuronVoxelIndexVector<CANQ>
 {
-
-    pub fn new(cortical_dimensions: NeuronVoxelDimensions<CoordQuant>, number_neurons_preallocated: NeuronVoxelIndexQuant) -> Self {
+    pub fn new(
+        cortical_dimensions: NeuronVoxelDimensions<CANQ::NeuronIndexVoxelCountQuant>,
+        number_neurons_preallocated: NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
+    ) -> Self {
         Self {
             cortical_dimensions,
             indexes: Vec::with_capacity(number_neurons_preallocated.to_usize()),
             potentials: Vec::with_capacity(number_neurons_preallocated.to_usize()),
         }
     }
+
+    pub fn iter_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)> + '_ {
+        let dims = &self.cortical_dimensions;
+        self.iter_index()
+            .map(move |(idx, p)| (dims.linear_index_to_standard_voxel_coordinate(idx), p))
+    }
+
+    #[cfg(feature = "rayon")]
+    pub fn iter_coordinate_par(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)> + '_ {
+        self.iter_coordinate()
+    }
 }
 
-
-impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
-SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
-for NeuronVoxelIndexVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
-where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+impl<CANQ: CorticalAreaNeuronQuantization> SingleCorticalNeuronVoxelCollectionBase<CANQ>
+for NeuronVoxelIndexVector<CANQ>
 {
     const COLLECTION_TYPE: SingleCorticalNeuronVoxelCollectionType = SingleCorticalNeuronVoxelCollectionType::IndexVector;
 
-    fn get_representing_cortical_area_dimensions(&self) -> &NeuronVoxelDimensions<CoordQuant> {
+    fn get_representing_cortical_area_dimensions(&self) -> &NeuronVoxelDimensions<CANQ::NeuronIndexVoxelCountQuant> {
         &self.cortical_dimensions
     }
 
-    fn get_neuron_voxel_max_index(&self) -> NeuronVoxelIndexQuant {
-        NeuronVoxelIndexQuant::from_usize(self.cortical_dimensions.get_max_allowed_index_exclusive())
+    fn get_neuron_voxel_max_index(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
+        NeuronVoxelIndexCount::from_usize(self.cortical_dimensions.get_max_allowed_index_exclusive())
+    }
+
+    fn iter_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)> {
+        self.indexes
+            .iter()
+            .copied()
+            .zip(self.potentials.iter().copied())
+    }
+
+    #[cfg(feature = "rayon")]
+    fn iter_index_par(&self) -> impl Iterator<Item=(NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)> {
+        self.iter_index()
+    }
+
+    fn iter_nonzero_potential_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)> {
+        self.iter_index()
+            .filter(|(_, potential)| *potential != NeuronVoxelPotential::ZERO)
+    }
+
+    #[cfg(feature = "rayon")]
+    fn iter_nonzero_potential_index_par(&self) -> impl Iterator<Item=(NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)> {
+        self.iter_nonzero_potential_index()
+    }
+
+    fn iter_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)> {
+        NeuronVoxelIndexVector::iter_coordinate(self)
+    }
+
+    #[cfg(feature = "rayon")]
+    fn iter_coordinate_par(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)> {
+        self.iter_coordinate()
+    }
+
+    fn iter_nonzero_potential_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)> {
+        let dims = &self.cortical_dimensions;
+        self.iter_nonzero_potential_index()
+            .map(move |(idx, p)| (dims.linear_index_to_standard_voxel_coordinate(idx), p))
+    }
+
+    #[cfg(feature = "rayon")]
+    fn iter_nonzero_potential_coordinate_par(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)> {
+        self.iter_nonzero_potential_coordinate()
     }
 }
 
-
-impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
-SingleCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
-for NeuronVoxelIndexVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
-where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+impl<CANQ: CorticalAreaNeuronQuantization> SingleCorticalNeuronVoxelCollectionAlloc<CANQ>
+for NeuronVoxelIndexVector<CANQ>
 {
-    fn get_number_neuron_voxel_contained_count(&self) -> NeuronVoxelIndexQuant {
-        NeuronVoxelIndexQuant::from_usize(self.potentials.len())
+    fn get_number_neuron_voxel_contained_count(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
+        NeuronVoxelIndexCount::from_usize(self.potentials.len())
     }
 
-    fn get_neuron_voxel_count_allocated_capacity(&self) -> NeuronVoxelIndexQuant {
-        NeuronVoxelIndexQuant::from_usize(self.potentials.capacity())
-
+    fn get_neuron_voxel_count_allocated_capacity(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
+        NeuronVoxelIndexCount::from_usize(self.potentials.capacity())
     }
 
-    fn reserve(&mut self, number_of_neuron_voxels_to_reserve_for: NeuronVoxelIndexQuant) {
+    fn reserve(&mut self, number_of_neuron_voxels_to_reserve_for: NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>) {
         self.potentials.reserve(number_of_neuron_voxels_to_reserve_for.to_usize());
         self.indexes.reserve(number_of_neuron_voxels_to_reserve_for.to_usize());
     }
 
-    fn empty_and_change_cortical_area_dimensions(&mut self, new_dimensions: NeuronVoxelDimensions<CoordQuant>) {
+    fn empty_and_change_cortical_area_dimensions(&mut self, new_dimensions: NeuronVoxelDimensions<CANQ::NeuronIndexVoxelCountQuant>) {
         self.clear_all_neurons();
         self.cortical_dimensions = new_dimensions;
     }
@@ -82,30 +119,16 @@ where
     }
 }
 
-impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
-SingleCorticalNeuronVoxelCollectionSparse<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
-for NeuronVoxelIndexVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>
-where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+impl<CANQ: CorticalAreaNeuronQuantization> SingleCorticalNeuronVoxelCollectionSparse<CANQ>
+for NeuronVoxelIndexVector<CANQ>
 {
+    fn is_sorted(&self) -> bool {
+        self.indexes.windows(2).all(|pair| pair[0] <= pair[1])
+    }
+
     fn clear_all_neurons(&mut self) {
         self.potentials.clear();
         self.indexes.clear();
-    }
-
-    fn iter_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)> {
-        self.indexes
-            .iter()
-            .copied()
-            .zip(self.potentials.iter().copied().map(NeuronVoxelPotential))
-    }
-
-    fn iter_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)> {
-        let dims = &self.cortical_dimensions;
-        self.iter_index()
-            .map(move |(idx, p)| (dims.linear_index_to_coordinate(idx), p))
     }
 
     fn sort(&mut self) {
@@ -119,15 +142,5 @@ where
         let potentials = core::mem::take(&mut self.potentials);
         self.indexes = order.iter().map(|&i| indexes[i]).collect();
         self.potentials = order.iter().map(|&i| potentials[i]).collect();
-    }
-
-    #[cfg(feature = "rayon")]
-    fn iter_index_par(&self) -> impl Iterator<Item=(NeuronVoxelIndexQuant, NeuronVoxelPotential<VoxelPotentialQuant>)> {
-        self.iter_index()
-    }
-
-    #[cfg(feature = "rayon")]
-    fn iter_coordinate_par(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CoordQuant>, NeuronVoxelPotential<VoxelPotentialQuant>)> {
-        self.iter_coordinate()
     }
 }

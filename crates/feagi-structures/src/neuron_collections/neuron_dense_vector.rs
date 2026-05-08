@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use crate::base_feagi_types::quantizable_types::{FeagiBaseSingleElementQuantizationType, QuantizableUIntType};
 use crate::neuron_voxel_collections::voxel_structs::{NeuronVoxelDimensions, NeuronVoxelIndexCount};
-use crate::neuron_collections::data_values::{NeuronDensityPerVoxel, NeuronMembranePotential, NeuronIndexCount};
+use crate::neuron_collections::neuron_structs::{NeuronDensityPerVoxel, NeuronMembranePotential, NeuronIndexCount};
 use crate::neuron_collections::FeagiStructuresNeuronError;
 use crate::neuron_collections::traits::{
     NeuronCollectionQuantizationLevelType, SingleCorticalNeuronCollectionBase,

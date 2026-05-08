@@ -1,56 +1,50 @@
-use crate::base_feagi_types::quantizable_types::{QuantizableUIntType, QuantizableValueType};
-use crate::neuron_voxel_collections::voxel_structs::NeuronVoxelPotential;
+use crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType;
 use crate::neuron_voxel_collections::traits::NeuronVoxel;
+use crate::neuron_voxel_collections::voxel_structs::{NeuronVoxelIndexCount, NeuronVoxelPotential};
+use crate::quantization_level::CorticalAreaNeuronQuantization;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NeuronVoxelIP<VoxelPotentialQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+pub struct NeuronVoxelIP<CANQ: CorticalAreaNeuronQuantization>
 {
-    pub index: NeuronVoxelIndexQuant,
+    pub index: NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
     /// potential (voltage) of the voxel
-    pub potential: NeuronVoxelPotential<VoxelPotentialQuant>,
+    pub potential: NeuronVoxelPotential<CANQ::NeuronValueQuant>,
 }
 
-impl<VoxelPotentialQuant, NeuronVoxelIndexQuant>  NeuronVoxelIP<VoxelPotentialQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+impl<CANQ: CorticalAreaNeuronQuantization> NeuronVoxelIP<CANQ>
 {
-    pub fn new(i: NeuronVoxelIndexQuant, potential: NeuronVoxelPotential<VoxelPotentialQuant>) -> Self {
+    pub fn new(
+        index: NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
+        potential: NeuronVoxelPotential<CANQ::NeuronValueQuant>,
+    ) -> Self {
         Self {
-            index: i,
+            index,
             potential,
         }
     }
 }
 
-impl<VoxelPotentialQuant, NeuronVoxelIndexQuant> NeuronVoxel<VoxelPotentialQuant> for NeuronVoxelIP<VoxelPotentialQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+impl<CANQ: CorticalAreaNeuronQuantization> NeuronVoxel<CANQ> for NeuronVoxelIP<CANQ>
 {
-    const NUMBER_OF_BYTES: usize = NeuronVoxelIndexQuant::NUMBER_OF_BYTES + VoxelPotentialQuant::NUMBER_OF_BYTES;
-
-    fn get_voxel_potential(&self) -> NeuronVoxelPotential<VoxelPotentialQuant> {
+    fn get_voxel_potential(&self) -> NeuronVoxelPotential<CANQ::NeuronValueQuant> {
         self.potential
     }
 
-    fn get_voxel_potential_ref(&self) -> &NeuronVoxelPotential<VoxelPotentialQuant> {
+    fn get_voxel_potential_ref(&self) -> &NeuronVoxelPotential<CANQ::NeuronValueQuant> {
         &self.potential
     }
 
-    fn set_voxel_potential_ref_mut(&mut self) -> &mut NeuronVoxelPotential<VoxelPotentialQuant> {
+    fn set_voxel_potential_ref_mut(&mut self) -> &mut NeuronVoxelPotential<CANQ::NeuronValueQuant> {
         &mut self.potential
     }
 
-    fn set_voxel_potential(&mut self, potential: NeuronVoxelPotential<VoxelPotentialQuant>) {
+    fn set_voxel_potential(&mut self, potential: NeuronVoxelPotential<CANQ::NeuronValueQuant>) {
         self.potential = potential;
     }
 }
 
 #[cfg(feature = "alloc")]
-impl<VoxelPotentialQuant, NeuronVoxelIndexQuant> std::fmt::Display for NeuronVoxelIP<VoxelPotentialQuant, NeuronVoxelIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    NeuronVoxelIndexQuant: QuantizableUIntType
+impl<CANQ: CorticalAreaNeuronQuantization> std::fmt::Display for NeuronVoxelIP<CANQ>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s = format!(

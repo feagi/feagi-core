@@ -6,14 +6,17 @@
 // NOTE: No need for a neuron struct here as the literal only value would be the voxel potential itself
 
 mod neuron_voxel_dense_array;
+
 #[cfg(feature = "alloc")]
 mod neuron_voxel_dense_vector;
 
-//#[cfg(feature = "alloc")]
-//mod multi_neuron_voxel_dense_vector;
+#[cfg(feature = "alloc")]
+mod multi_neuron_voxel_dense_vector;
 
 pub use neuron_voxel_dense_array::NeuronVoxelDenseArray;
+
 #[cfg(feature = "alloc")]
 pub use neuron_voxel_dense_vector::NeuronVoxelDenseVector;
-//#[cfg(feature = "alloc")]
-//pub use multi_neuron_voxel_dense_vector::MultiNeuronVoxelDenseVector;
+
+#[cfg(feature = "alloc")]
+pub use multi_neuron_voxel_dense_vector::MultiNeuronVoxelDenseVector;

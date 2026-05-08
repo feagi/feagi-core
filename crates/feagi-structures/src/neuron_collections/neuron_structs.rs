@@ -1,6 +1,13 @@
 //! Quantizxable data values for indexing and describing neuron data (Not Neuron Voxels!)
 
 
+pub enum SingleCorticalNeuronCollectionType {
+    DenseArray,
+    DenseVector,
+    IndexVector,
+}
+
+
 /// Neuron Potential of neuron_collections (not voxels!)
 //region Neuron Membrane Potential
 

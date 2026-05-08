@@ -1,122 +1,113 @@
 use ahash::AHashMap;
-use crate::base_quantizable::QuantizableUIntType;
-use crate::base_quantizable::QuantizableValueType;
 use crate::genomic::cortical_area::CorticalID;
-use crate::neuron_voxels::dense_potential::neuron_voxel_dense_vector::NeuronVoxelDenseVector;
-use crate::neuron_voxels::descriptors::SingleCorticalNeuronVoxelCollectionType;
-use crate::neuron_voxels::FeagiNeuronVoxelError;
-use crate::neuron_voxels::traits::{MultiCorticalNeuronVoxelCollectionAlloc, MultiCorticalNeuronVoxelCollectionBase, MultiCorticalNeuronVoxelCollectionDense, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionDense};
+use crate::neuron_voxel_collections::FeagiStructuresNeuronVoxelError;
+use crate::neuron_voxel_collections::traits::{
+    MultiCorticalNeuronVoxelCollectionAlloc, MultiCorticalNeuronVoxelCollectionBase,
+    MultiCorticalNeuronVoxelCollectionDense, SingleCorticalNeuronVoxelCollectionBase,
+    SingleCorticalNeuronVoxelCollectionDense,
+};
+use crate::neuron_voxel_collections::voxel_structs::SingleCorticalNeuronVoxelCollectionType;
+use crate::quantization_level::CorticalAreaNeuronQuantization;
+use super::neuron_voxel_dense_vector::NeuronVoxelDenseVector;
 
-pub struct MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType,
-    CorticalAreaIndexQuant: QuantizableUIntType
+pub struct MultiNeuronVoxelDenseVector<CANQ: CorticalAreaNeuronQuantization>
 {
-    dense_vectors: AHashMap<CorticalID, NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>>,
+    dense_vectors: AHashMap<CorticalID, NeuronVoxelDenseVector<CANQ>>,
     cache_included_types: AHashMap<CorticalID, SingleCorticalNeuronVoxelCollectionType>,
+    cortical_ids: Vec<CorticalID>,
 }
 
-impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType,
-    CorticalAreaIndexQuant: QuantizableUIntType
+impl<CANQ: CorticalAreaNeuronQuantization> MultiNeuronVoxelDenseVector<CANQ>
 {
     pub fn new() -> Self {
         Self {
             dense_vectors: AHashMap::new(),
             cache_included_types: AHashMap::new(),
+            cortical_ids: Vec::new(),
         }
     }
 
-    pub fn insert(&mut self, id: CorticalID, dense_neuron_vector: NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>) -> Result<(), FeagiNeuronVoxelError> {
+    pub fn insert(&mut self, id: CorticalID, dense_neuron_vector: NeuronVoxelDenseVector<CANQ>) -> Result<(), FeagiStructuresNeuronVoxelError> {
+        if !self.dense_vectors.contains_key(&id) {
+            self.cortical_ids.push(id);
+        }
         self.dense_vectors.insert(id, dense_neuron_vector);
         self.cache_included_types.insert(id, SingleCorticalNeuronVoxelCollectionType::DenseVector);
         Ok(())
     }
 
-    pub fn get_neuron_voxel_dense_vector(&self, cortical_id: &CorticalID) -> Result<&NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError> {
-        self.dense_vectors.get(cortical_id).ok_or_else(
-            Err(FeagiNeuronVoxelError::NoCorticalIDInNeuronCollection{ context: "Given Cortical ID was not found in the dense vector neuron voxel collection!", cortical_id: cortical_id.clone() })
-        )
+    pub fn get_neuron_voxel_dense_vector(&self, cortical_id: &CorticalID) -> Result<&NeuronVoxelDenseVector<CANQ>, FeagiStructuresNeuronVoxelError> {
+        self.dense_vectors.get(cortical_id).ok_or_else(|| {
+            FeagiStructuresNeuronVoxelError::NoCorticalIDInNeuronCollection {
+                context: "Given Cortical ID was not found in the dense vector neuron voxel collection!",
+                cortical_id: *cortical_id,
+            }
+        })
     }
 
-    pub fn get_neuron_voxel_dense_vector_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut NeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError> {
-        self.dense_vectors.get_mut(cortical_id).ok_or_else(
-            Err(FeagiNeuronVoxelError::NoCorticalIDInNeuronCollection{ context: "Given Cortical ID was not found in the dense vector neuron voxel collection!", cortical_id: cortical_id.clone() })
-        )
+    pub fn get_neuron_voxel_dense_vector_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut NeuronVoxelDenseVector<CANQ>, FeagiStructuresNeuronVoxelError> {
+        self.dense_vectors.get_mut(cortical_id).ok_or_else(|| {
+            FeagiStructuresNeuronVoxelError::NoCorticalIDInNeuronCollection {
+                context: "Given Cortical ID was not found in the dense vector neuron voxel collection!",
+                cortical_id: *cortical_id,
+            }
+        })
     }
 }
 
-impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
-MultiCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
-for MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType,
-    CorticalAreaIndexQuant: QuantizableUIntType
+impl<CANQ: CorticalAreaNeuronQuantization> MultiCorticalNeuronVoxelCollectionBase<CANQ>
+for MultiNeuronVoxelDenseVector<CANQ>
 {
-    fn get_contained_cortical_collection_type(&self, cortical_id: &CorticalID) -> Result<&SingleCorticalNeuronVoxelCollectionType, FeagiNeuronVoxelError> {
-        self.cache_included_types.get(cortical_id).ok_or_else(
-            || FeagiNeuronVoxelError::NoCorticalIDInNeuronCollection{ context: "Given Cortical ID was not found in the dense vector neuron voxel collection!", cortical_id: cortical_id.clone() }
-        )
+    fn get_contained_cortical_collection_type(&self, cortical_id: &CorticalID) -> Result<&SingleCorticalNeuronVoxelCollectionType, FeagiStructuresNeuronVoxelError> {
+        self.cache_included_types.get(cortical_id).ok_or_else(|| {
+            FeagiStructuresNeuronVoxelError::NoCorticalIDInNeuronCollection {
+                context: "Given Cortical ID was not found in the dense vector neuron voxel collection!",
+                cortical_id: *cortical_id,
+            }
+        })
     }
 
     fn get_contained_cortical_area_ids(&self) -> &[CorticalID] {
-        let mut cortical_ids: Vec<CorticalID> = Vec::new();
-        for pair in self.cache_included_types {
-            cortical_ids.push(pair.0)
-        };
-        cortical_ids.as_slice()
+        self.cortical_ids.as_slice()
     }
 
-    fn get_base_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError> {
+    fn get_base_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl SingleCorticalNeuronVoxelCollectionBase<CANQ>, FeagiStructuresNeuronVoxelError> {
         let implementation = self.get_neuron_voxel_dense_vector(cortical_id)?;
-        Ok(&implementation)
+        Ok(implementation)
     }
 
-    fn get_base_collection_implementation_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut impl SingleCorticalNeuronVoxelCollectionBase<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError> {
+    fn get_base_collection_implementation_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut impl SingleCorticalNeuronVoxelCollectionBase<CANQ>, FeagiStructuresNeuronVoxelError> {
         let implementation = self.get_neuron_voxel_dense_vector_mut(cortical_id)?;
         Ok(implementation)
     }
 }
 
-impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
-MultiCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
-for MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType,
-    CorticalAreaIndexQuant: QuantizableUIntType
+impl<CANQ: CorticalAreaNeuronQuantization> MultiCorticalNeuronVoxelCollectionDense<CANQ>
+for MultiNeuronVoxelDenseVector<CANQ>
 {
-    fn get_dense_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError> {
+    fn get_dense_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl SingleCorticalNeuronVoxelCollectionDense<CANQ>, FeagiStructuresNeuronVoxelError> {
         let implementation = self.get_neuron_voxel_dense_vector(cortical_id)?;
-        Ok(&implementation)
+        Ok(implementation)
     }
 
-    fn get_dense_collection_implementation_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut impl SingleCorticalNeuronVoxelCollectionDense<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant>, FeagiNeuronVoxelError> {
+    fn get_dense_collection_implementation_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut impl SingleCorticalNeuronVoxelCollectionDense<CANQ>, FeagiStructuresNeuronVoxelError> {
         let implementation = self.get_neuron_voxel_dense_vector_mut(cortical_id)?;
         Ok(implementation)
     }
 }
 
-impl<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
-MultiCorticalNeuronVoxelCollectionAlloc<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant>
-for MultiNeuronVoxelDenseVector<VoxelPotentialQuant, CoordQuant, NeuronVoxelIndexQuant, CorticalAreaIndexQuant> where
-    VoxelPotentialQuant: QuantizableValueType,
-    CoordQuant: QuantizableUIntType,
-    NeuronVoxelIndexQuant: QuantizableUIntType,
-    CorticalAreaIndexQuant: QuantizableUIntType
+impl<CANQ: CorticalAreaNeuronQuantization> MultiCorticalNeuronVoxelCollectionAlloc<CANQ>
+for MultiNeuronVoxelDenseVector<CANQ>
 {
     fn get_contained_cortical_collection_types(&self) -> &AHashMap<CorticalID, SingleCorticalNeuronVoxelCollectionType> {
         &self.cache_included_types
     }
 
-    fn remove_by_cortical_id(&mut self, cortical_id: &CorticalID) -> Result<(), FeagiNeuronVoxelError> {
+    fn remove_by_cortical_id(&mut self, cortical_id: &CorticalID) -> Result<(), FeagiStructuresNeuronVoxelError> {
         _ = self.get_neuron_voxel_dense_vector(cortical_id)?;
         self.dense_vectors.remove(cortical_id);
         self.cache_included_types.remove(cortical_id);
+        self.cortical_ids.retain(|id| id != cortical_id);
         Ok(())
     }
 }

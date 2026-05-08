@@ -1,6 +1,6 @@
 use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType, QuantizableNonzeroUIntType, QuantizableUIntType};
 use crate::base_feagi_types::quantizable_types::QuantizableValueType;
-use crate::neuron_collections::data_values::{NeuronDensityPerVoxel, NeuronIndexCount, NeuronMembranePotential};
+use crate::neuron_collections::neuron_structs::{NeuronDensityPerVoxel, NeuronIndexCount, NeuronMembranePotential};
 
 
 /// Denotes how neuron_collections are being stored

@@ -11,8 +11,6 @@ use crate::quantization_level::CorticalAreaNeuronQuantization;
 /// Represents the potential of a single voxel (which may contain one or more neuron_collections)
 pub trait NeuronVoxel<CANQ: CorticalAreaNeuronQuantization>
 {
-    const NUMBER_OF_BYTES: usize = CANQ::NeuronValueQuant::NUMBER_OF_BYTES;
-
     fn get_voxel_potential(&self) -> NeuronVoxelPotential<CANQ::NeuronValueQuant>;
 
     fn get_voxel_potential_ref(&self) -> &NeuronVoxelPotential<CANQ::NeuronValueQuant>;
@@ -30,9 +28,6 @@ pub trait NeuronVoxel<CANQ: CorticalAreaNeuronQuantization>
 /// Defines any collection of neuron_collections sparsely from a single cortical area
 pub trait SingleCorticalNeuronVoxelCollectionBase<CANQ: CorticalAreaNeuronQuantization>
 {
-    // NOTE since neuron collections may be stored in different ways, I see no good way to
-    // expose a common interface for getting out potential data efficiently
-
     const COLLECTION_TYPE: SingleCorticalNeuronVoxelCollectionType;
 
     /// Returns the dimensions of the cortical area this collection is storing neuron voxel data for
@@ -40,6 +35,8 @@ pub trait SingleCorticalNeuronVoxelCollectionBase<CANQ: CorticalAreaNeuronQuanti
 
     /// What is the upper bound (exclusive) neuron voxel index allowed?
     fn get_neuron_voxel_max_index(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
+
+    fn number_voxels(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
 
     fn iter_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)>;
 
@@ -49,7 +46,21 @@ pub trait SingleCorticalNeuronVoxelCollectionBase<CANQ: CorticalAreaNeuronQuanti
     /// Iterate over non-zero potential values by neuron index
     fn iter_nonzero_potential_index(&self) -> impl Iterator<Item=(NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)>;
 
-    // TODO par iterators for nonzero potentials?
+    #[cfg(feature = "rayon")]
+    fn iter_nonzero_potential_index_par(&self) -> impl Iterator<Item=(NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)>;
+
+
+    fn iter_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)>;
+
+    #[cfg(feature = "rayon")]
+    fn iter_coordinate_par(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)>;
+
+    /// Iterate over non-zero potential values by neuron index
+    fn iter_nonzero_potential_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)>;
+
+    #[cfg(feature = "rayon")]
+    fn iter_nonzero_potential_coordinate_par(&self) -> impl Iterator<Item=(NeuronVoxelCoordinate<CANQ::NeuronIndexVoxelCountQuant>, NeuronVoxelPotential<CANQ::NeuronValueQuant>)>;
+
 }
 
 
@@ -83,10 +94,10 @@ SingleCorticalNeuronVoxelCollectionAlloc<CANQ>
 {
     /// Returns true if the array is sorted by increasing index / xyz coordinate
     fn is_sorted(&self) -> bool;
-    
+
     /// Clears all stored neuron_collections (without deallocating)
     fn clear_all_neurons(&mut self);
-    
+
 
     /// Sort by increasing index / xyz coordinate
     fn sort(&mut self);
@@ -101,7 +112,7 @@ SingleCorticalNeuronVoxelCollectionBase<CANQ>
     /// Returns all neuron voxel potentials as a mutable slice
     fn get_all_neuron_voxel_potentials_mut(&mut self) -> &mut [NeuronVoxelPotential<CANQ::NeuronValueQuant>];
 
-    
+
     fn zero_all_neuron_voxel_potentials(&mut self);
 
     #[cfg(feature = "alloc")]
