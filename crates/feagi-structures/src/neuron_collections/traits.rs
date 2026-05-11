@@ -14,9 +14,11 @@ pub trait SingleCorticalNeuronCollectionBase<CANQ: CorticalAreaNeuronQuantizatio
 
     /// What is the upper bound (exclusive) neuron  index allowed?
     fn get_neuron_max_index(&self) -> NeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
-    fn number_neurons(&self) -> NeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
+    
+    /// In sparse implementations, then number of neurons contained will be less than the max possible index
+    fn get_number_contained_neurons(&self) -> NeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
 
-    fn number_voxels(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
+    fn get_number_contained_voxels(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
 
     fn iter_index(&self) -> impl Iterator<Item=(NeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>, NeuronMembranePotential<CANQ::NeuronValueQuant>)>;
 
@@ -55,3 +57,9 @@ SingleCorticalNeuronCollectionBase<CANQ>
     #[cfg(feature = "rayon")]
     fn iter_voxel_neuron_slice_par(&self) -> impl Iterator<Item=(&[NeuronMembranePotential<CANQ::NeuronValueQuant>])>;
 }
+
+// TODO Sparse
+
+// TODO Resizable (Vector?)
+
+// TODO Fixed (Array)

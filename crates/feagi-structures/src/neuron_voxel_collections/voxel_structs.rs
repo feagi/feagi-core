@@ -29,7 +29,7 @@ crate::define_dimension_3d_type_family!(NeuronVoxelDimensions, NeuronVoxelCoordi
 
 impl<VoxelIndexCountCoordQuant: QuantizableUIntType> NeuronVoxelDimensions<VoxelIndexCountCoordQuant> {
 
-    pub fn get_number_voxels(&self) -> NeuronVoxelIndexCount<u32> {
+    pub fn get_number_voxels(&self) -> NeuronVoxelIndexCount<VoxelIndexCountCoordQuant> {
         NeuronVoxelIndexCount::from_usize(self.number_elements())
     }
 
@@ -43,7 +43,7 @@ impl<VoxelIndexCountCoordQuant: QuantizableUIntType> NeuronVoxelDimensions<Voxel
         &self,
         index: NeuronVoxelIndexCount<VoxelIndexCountCoordQuant>,
     ) -> NeuronVoxelCoordinate<VoxelIndexCountCoordQuant> {
-        let i = index.to_usize();
+        let i = QuantizableUIntType::to_usize(index);
         let dx = self.x.get().to_usize();
         let dy = self.y.get().to_usize();
         let plane = dx * dy;
