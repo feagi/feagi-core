@@ -1,12 +1,12 @@
 use ahash::AHashMap;
 use crate::genomic::cortical_area::CorticalID;
-use crate::neuron_voxel_collections::FeagiStructuresNeuronVoxelError;
-use crate::neuron_voxel_collections::traits::{
+use crate::neuron_collections::neuron_voxel_collections::FeagiStructuresNeuronVoxelError;
+use crate::neuron_collections::neuron_voxel_collections::traits::{
     MultiCorticalNeuronVoxelCollectionAlloc, MultiCorticalNeuronVoxelCollectionBase,
-    MultiCorticalNeuronVoxelCollectionDense, SingleCorticalNeuronVoxelCollectionBase,
+    MultiCorticalNeuronVoxelCollectionDense, NeuronVoxelCollectionBase,
     SingleCorticalNeuronVoxelCollectionDense,
 };
-use crate::neuron_voxel_collections::voxel_structs::SingleCorticalNeuronVoxelCollectionType;
+use crate::neuron_collections::neuron_voxel_collections::voxel_structs::SingleCorticalNeuronVoxelCollectionType;
 use crate::quantization_level::CorticalAreaNeuronQuantization;
 use super::neuron_voxel_dense_vector::NeuronVoxelDenseVector;
 
@@ -71,12 +71,12 @@ for MultiNeuronVoxelDenseVector<CANQ>
         self.cortical_ids.as_slice()
     }
 
-    fn get_base_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl SingleCorticalNeuronVoxelCollectionBase<CANQ>, FeagiStructuresNeuronVoxelError> {
+    fn get_base_collection_implementation(&self, cortical_id: &CorticalID) -> Result<&impl NeuronVoxelCollectionBase<CANQ>, FeagiStructuresNeuronVoxelError> {
         let implementation = self.get_neuron_voxel_dense_vector(cortical_id)?;
         Ok(implementation)
     }
 
-    fn get_base_collection_implementation_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut impl SingleCorticalNeuronVoxelCollectionBase<CANQ>, FeagiStructuresNeuronVoxelError> {
+    fn get_base_collection_implementation_mut(&mut self, cortical_id: &CorticalID) -> Result<&mut impl NeuronVoxelCollectionBase<CANQ>, FeagiStructuresNeuronVoxelError> {
         let implementation = self.get_neuron_voxel_dense_vector_mut(cortical_id)?;
         Ok(implementation)
     }

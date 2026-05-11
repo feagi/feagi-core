@@ -1,6 +1,6 @@
 use crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType;
-use crate::neuron_voxel_collections::traits::NeuronVoxel;
-use crate::neuron_voxel_collections::voxel_structs::{NeuronVoxelIndexCount, NeuronVoxelPotential};
+use crate::neuron_collections::neuron_voxel_collections::traits::NeuronVoxel;
+use crate::neuron_collections::neuron_voxel_collections::voxel_structs::{NeuronVoxelIndexCount, NeuronVoxelPotential};
 use crate::quantization_level::CorticalAreaNeuronQuantization;
 
 #[derive(Clone, Debug, PartialEq)]

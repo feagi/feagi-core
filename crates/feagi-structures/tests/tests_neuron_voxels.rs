@@ -1,7 +1,7 @@
 //! Tests for neuron voxel primitives.
 
-use feagi_structures::neuron_voxel_collections::coord_potential::NeuronVoxelXYZP;
-use feagi_structures::neuron_voxel_collections::voxel_structs::NeuronVoxelPotential;
+use feagi_structures::neuron_collections::::coord_potential::NeuronVoxelXYZP;
+use feagi_structures::neuron_collections::::voxel_structs::NeuronVoxelPotential;
 
 #[cfg(test)]
 mod xyzp_tests {

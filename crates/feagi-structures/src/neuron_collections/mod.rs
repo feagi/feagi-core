@@ -1,9 +1,4 @@
-
-mod neuron_dense_vector;
-mod feagi_neuron_error;
-
-pub mod neuron_structs;
-pub mod traits;
-
-pub use feagi_neuron_error::FeagiStructuresNeuronError;
-pub use neuron_dense_vector::NeuronDenseVector;
+pub mod individual_neuron_collections;
+pub mod neuron_voxel_collections;
+mod common_neuron_structs;
+mod base_neuron_collection_traits;

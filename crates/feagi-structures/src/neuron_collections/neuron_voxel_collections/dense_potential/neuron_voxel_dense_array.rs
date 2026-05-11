@@ -1,11 +1,11 @@
 use crate::base_feagi_types::quantizable_types::{FeagiBaseSingleElementQuantizationType, QuantizableUIntType};
-use crate::neuron_voxel_collections::voxel_structs::{
+use crate::neuron_collections::neuron_voxel_collections::voxel_structs::{
     NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelIndexCount, NeuronVoxelPotential,
     SingleCorticalNeuronVoxelCollectionType,
 };
-use crate::neuron_voxel_collections::traits::{
-    SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionDense,
-    SingleCorticalNeuronVoxelCollectionSparse,
+use crate::neuron_collections::neuron_voxel_collections::traits::{
+    NeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionDense,
+    NeuronVoxelCollectionSparse,
 };
 use crate::quantization_level::CorticalAreaNeuronQuantization;
 
@@ -30,7 +30,7 @@ impl<CANQ: CorticalAreaNeuronQuantization, const NUMBER_NEURON_VOXELS: usize>
 }
 
 impl<CANQ: CorticalAreaNeuronQuantization, const NUMBER_NEURON_VOXELS: usize>
-    SingleCorticalNeuronVoxelCollectionBase<CANQ>
+    NeuronVoxelCollectionBase<CANQ>
     for NeuronVoxelDenseArray<CANQ, NUMBER_NEURON_VOXELS>
 {
     const COLLECTION_TYPE: SingleCorticalNeuronVoxelCollectionType =
@@ -106,7 +106,7 @@ impl<CANQ: CorticalAreaNeuronQuantization, const NUMBER_NEURON_VOXELS: usize>
     }
 
     #[cfg(feature = "alloc")]
-    fn inplace_overwrite_data_from_sparse(&mut self, sparse_neurons: &impl SingleCorticalNeuronVoxelCollectionSparse<CANQ>, zero_out_first: bool) {
+    fn inplace_overwrite_data_from_sparse(&mut self, sparse_neurons: &impl NeuronVoxelCollectionSparse<CANQ>, zero_out_first: bool) {
         if zero_out_first {
             self.zero_all_neuron_voxel_potentials();
         }

@@ -1,6 +1,6 @@
 use crate::base_feagi_types::quantizable_types::{FeagiBaseSingleElementQuantizationType, QuantizableUIntType};
-use crate::neuron_voxel_collections::voxel_structs::{NeuronVoxelCoordinate, NeuronVoxelIndexCount, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
-use crate::neuron_voxel_collections::traits::{SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionDense, SingleCorticalNeuronVoxelCollectionSparse};
+use crate::neuron_collections::neuron_voxel_collections::voxel_structs::{NeuronVoxelCoordinate, NeuronVoxelIndexCount, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
+use crate::neuron_collections::neuron_voxel_collections::traits::{NeuronVoxelCollectionResizable, NeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionDense, NeuronVoxelCollectionSparse};
 use crate::quantization_level::CorticalAreaNeuronQuantization;
 
 pub struct NeuronVoxelDenseVector<CANQ: CorticalAreaNeuronQuantization>
@@ -20,7 +20,7 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronVoxelDenseVector<CANQ>
     }
 }
 
-impl<CANQ: CorticalAreaNeuronQuantization> SingleCorticalNeuronVoxelCollectionBase<CANQ>
+impl<CANQ: CorticalAreaNeuronQuantization> NeuronVoxelCollectionBase<CANQ>
 for NeuronVoxelDenseVector<CANQ>
 {
     const COLLECTION_TYPE: SingleCorticalNeuronVoxelCollectionType = SingleCorticalNeuronVoxelCollectionType::DenseVector;
@@ -78,7 +78,7 @@ for NeuronVoxelDenseVector<CANQ>
     }
 }
 
-impl<CANQ: CorticalAreaNeuronQuantization> SingleCorticalNeuronVoxelCollectionAlloc<CANQ>
+impl<CANQ: CorticalAreaNeuronQuantization> NeuronVoxelCollectionResizable<CANQ>
 for NeuronVoxelDenseVector<CANQ>
 {
     fn get_number_neuron_voxel_contained_count(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
@@ -120,7 +120,7 @@ for NeuronVoxelDenseVector<CANQ>
         self.potentials.fill(NeuronVoxelPotential::ZERO);
     }
 
-    fn inplace_overwrite_data_from_sparse(&mut self, sparse_neurons: &impl SingleCorticalNeuronVoxelCollectionSparse<CANQ>, zero_out_first: bool) {
+    fn inplace_overwrite_data_from_sparse(&mut self, sparse_neurons: &impl NeuronVoxelCollectionSparse<CANQ>, zero_out_first: bool) {
         if zero_out_first {
             self.zero_all_neuron_voxel_potentials();
         }

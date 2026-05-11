@@ -1,7 +1,7 @@
 use crate::base_feagi_types::quantizable_types::{FeagiBaseSingleElementQuantizationType, QuantizableUIntType};
-use crate::neuron_voxel_collections::voxel_structs::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
-use crate::neuron_voxel_collections::traits::{SingleCorticalNeuronVoxelCollectionAlloc, SingleCorticalNeuronVoxelCollectionBase, SingleCorticalNeuronVoxelCollectionSparse};
-use crate::neuron_voxel_collections::voxel_structs::NeuronVoxelIndexCount;
+use crate::neuron_collections::neuron_voxel_collections::voxel_structs::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
+use crate::neuron_collections::neuron_voxel_collections::traits::{NeuronVoxelCollectionResizable, NeuronVoxelCollectionBase, NeuronVoxelCollectionSparse};
+use crate::neuron_collections::neuron_voxel_collections::voxel_structs::NeuronVoxelIndexCount;
 use crate::quantization_level::CorticalAreaNeuronQuantization;
 
 pub struct NeuronVoxelIndexVector<CANQ: CorticalAreaNeuronQuantization>
@@ -36,7 +36,7 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronVoxelIndexVector<CANQ>
     }
 }
 
-impl<CANQ: CorticalAreaNeuronQuantization> SingleCorticalNeuronVoxelCollectionBase<CANQ>
+impl<CANQ: CorticalAreaNeuronQuantization> NeuronVoxelCollectionBase<CANQ>
 for NeuronVoxelIndexVector<CANQ>
 {
     const COLLECTION_TYPE: SingleCorticalNeuronVoxelCollectionType = SingleCorticalNeuronVoxelCollectionType::IndexVector;
@@ -92,7 +92,7 @@ for NeuronVoxelIndexVector<CANQ>
     }
 }
 
-impl<CANQ: CorticalAreaNeuronQuantization> SingleCorticalNeuronVoxelCollectionAlloc<CANQ>
+impl<CANQ: CorticalAreaNeuronQuantization> NeuronVoxelCollectionResizable<CANQ>
 for NeuronVoxelIndexVector<CANQ>
 {
     fn get_number_neuron_voxel_contained_count(&self) -> NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
@@ -119,7 +119,7 @@ for NeuronVoxelIndexVector<CANQ>
     }
 }
 
-impl<CANQ: CorticalAreaNeuronQuantization> SingleCorticalNeuronVoxelCollectionSparse<CANQ>
+impl<CANQ: CorticalAreaNeuronQuantization> NeuronVoxelCollectionSparse<CANQ>
 for NeuronVoxelIndexVector<CANQ>
 {
     fn is_sorted(&self) -> bool {

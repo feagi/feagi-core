@@ -1,15 +1,59 @@
-use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType, QuantizableNonzeroUIntType, QuantizableUIntType};
-use crate::base_feagi_types::quantizable_types::QuantizableValueType;
-use crate::neuron_collections::neuron_structs::{NeuronDensityPerVoxel, NeuronIndexCount, NeuronMembranePotential};
+/// Common Neuron related structs used in various collection types and in other areas
 
-
-/// Denotes how neuron_collections are being stored
-pub enum SingleCorticalNeuronVoxelCollectionType {
+/// Describes how a neuron collection is storing its data
+pub enum NeuronCollectionType {
     DenseArray,
     DenseVector,
     IndexVector,
 }
 
+/// Describes what method a collection is using to store potential data. Mainly matters when neuron
+/// density != 1
+pub enum NeuronPotentialType {
+    /// Potential is stored per individual neuron, particularly relevant for NPU
+    IndividualNeuron,
+    /// Potential is stored for a given voxel of neuron(s)
+    Voxel
+}
+
+/// Describes what method a voxel's potential is calculated if it has multiple neurons
+pub enum NeuronVoxelMultiPotentialCalculationMethod {
+    Sum,
+    Average,
+    Max
+}
+
+/// Neuron Potential of neuron_collections (not voxels!)
+//region Individual Neuron Membrane Potential
+
+crate::define_quantizable_value_type_family!(IndividualNeuronMembranePotential);
+
+//endregion
+
+//region Neuron Index and Count
+
+crate::define_quantizable_uint_type_family!(IndividualNeuronIndexCount);
+
+//endregion
+
+//region Neuron Density Per Voxel
+
+pub use all_neuron_densities::NeuronDensityPerVoxel;
+use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType, QuantizableNonzeroUIntType, QuantizableUIntType, QuantizableValueType};
+
+// We do this since we only want to expose the u8 level
+mod all_neuron_densities {
+
+    /// The number of neuron_collections that a single voxel represents. In most contexts this will be 1,
+    /// but sometimes may be more, though never high, hence being locked to a u8. Cannot be 0
+    pub type NeuronDensityPerVoxel = NeuronDensityPerVoxelAll<u8>;
+
+    /// This defines multiple quantizations, which we dont care for
+    crate::define_nonzero_count_family!(NeuronDensityPerVoxelAll);
+
+}
+
+//endregion
 
 //region Neuron Voxel Index and Count
 
@@ -33,8 +77,8 @@ impl<VoxelIndexCountCoordQuant: QuantizableUIntType> NeuronVoxelDimensions<Voxel
         NeuronVoxelIndexCount::from_usize(self.number_elements())
     }
 
-    pub fn get_number_neurons(&self, density: &NeuronDensityPerVoxel) -> NeuronIndexCount<VoxelIndexCountCoordQuant> {
-        NeuronIndexCount::from_usize(self.number_elements() * density.to_usize())
+    pub fn get_number_neurons(&self, density: &NeuronDensityPerVoxel) -> IndividualNeuronIndexCount<VoxelIndexCountCoordQuant> {
+        IndividualNeuronIndexCount::from_usize(self.number_elements() * density.to_usize())
     }
 
     /// Linear voxel index with **x varying fastest**: `index = x + y·dx + z·dx·dy`.
@@ -85,8 +129,8 @@ crate::define_quantizable_value_type_family!(NeuronVoxelPotential);
 impl<PotentialQuant: QuantizableValueType> NeuronVoxelPotential<PotentialQuant> {
 
     pub fn voxel_potential_from_sum_neurons(&mut self,
-                                                  neurons: &[NeuronMembranePotential<PotentialQuant>])
-                                                  -> NeuronVoxelPotential<PotentialQuant>
+                                            neurons: &[IndividualNeuronMembranePotential<PotentialQuant>])
+                                            -> NeuronVoxelPotential<PotentialQuant>
     {
         neurons.iter().fold(NeuronVoxelPotential::ZERO, |acc, neuron| {
             acc.saturating_add(NeuronVoxelPotential(neuron.0))
@@ -95,7 +139,7 @@ impl<PotentialQuant: QuantizableValueType> NeuronVoxelPotential<PotentialQuant> 
 
 
     pub fn voxel_potential_from_sum_neurons_in_place(&mut self,
-                                                           neurons: &[NeuronMembranePotential<PotentialQuant>])
+                                                     neurons: &[IndividualNeuronMembranePotential<PotentialQuant>])
     {
         *self = NeuronVoxelPotential::ZERO;
         neurons.iter().for_each(|neuron| {

@@ -7,9 +7,7 @@
 
 pub mod base_feagi_types;
 pub mod genomic;
-pub mod neuron_voxel_collections;
 pub mod feagi_log;
-pub mod neuron_collections;
 pub mod useful_structs;
 
 pub use feagi_structures_error::FeagiStructuresError;
@@ -19,5 +17,7 @@ mod templates;
 mod feagi_structures_error;
 mod useful_macros;
 mod quantization_level;
+mod neuron_collections;
+mod cortical_area__neuron_data_collections;
 
 
