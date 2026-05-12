@@ -23,6 +23,37 @@ pub enum NeuronVoxelMultiPotentialCalculationMethod {
     Max
 }
 
+impl NeuronVoxelMultiPotentialCalculationMethod {
+    /// From a slice of multiple individual neurons in a voxel and their potential, to the
+    /// potential of the voxel using the given enums method.
+    /// Assumes Slice is not empty and that given slice length is correct!
+    pub fn get_independent_neuron_potentials_as_voxel_potential<CANQ: CorticalAreaNeuronQuantization>(&self, neuron_slice: &[IndividualNeuronMembranePotential<CANQ::NeuronValueQuant>], slice_length_as_float: f32) -> NeuronVoxelPotential<CANQ::NeuronValueQuant> {
+        match self {
+            NeuronVoxelMultiPotentialCalculationMethod::Sum => {
+                neuron_slice
+                    .iter()
+                    .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
+                        acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
+                    })
+            }
+            NeuronVoxelMultiPotentialCalculationMethod::Average => {
+                // TODO is this the best way to handle this for different quantizations?
+                let sum = neuron_slice.iter().fold(
+                    NeuronVoxelPotential::ZERO,
+                    |acc, &neuron_pot| {
+                        acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
+                    },
+                );
+                sum / NeuronVoxelPotential::from_f32(slice_length_as_float)
+            }
+            NeuronVoxelMultiPotentialCalculationMethod::Max => {
+                neuron_slice.iter().max().unwrap().0
+            }
+
+        }
+    }
+}
+
 /// Neuron Potential of neuron_collections (not voxels!)
 //region Individual Neuron Membrane Potential
 
@@ -40,6 +71,7 @@ crate::define_quantizable_uint_type_family!(IndividualNeuronIndexCount);
 
 pub use all_neuron_densities::NeuronDensityPerVoxel;
 use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType, QuantizableNonzeroUIntType, QuantizableUIntType, QuantizableValueType};
+use crate::quantization_level::CorticalAreaNeuronQuantization;
 
 // We do this since we only want to expose the u8 level
 mod all_neuron_densities {
