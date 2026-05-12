@@ -15,6 +15,9 @@ use crate::quantizables::{BurstDelta, BurstGlobalIndex, FireThreshold, LeakCoeff
 
 // TODO Multiple data models for Memory as well? I so we need a super trait
 
+// Each model needs its own cortical flag struct, their own neuron flag struct.
+// the only commonality between all neuron models is the existence of a neuron potential, fire threshold, neuron flags (of type)
+
 /// Defines the base data (both cortical settings and neuron data) shared by all dimensional cortical areas
 pub(crate) trait DimensionalNeuronModelDataSharedTrait<Q: NPUGlobalQuantization, DNQ: NPUDimensionalNeuronQuantization>
 {
