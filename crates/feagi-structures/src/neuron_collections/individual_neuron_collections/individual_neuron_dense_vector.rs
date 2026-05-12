@@ -1,4 +1,7 @@
-use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType, QuantizableNonzeroUIntType, QuantizableUIntType};
+use crate::base_feagi_types::quantizable_types::{
+    FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType, QuantizableNonzeroUIntType,
+    QuantizableUIntType,
+};
 use crate::neuron_collections::base_neuron_collection_traits::NeuronCollectionBase;
 use crate::neuron_collections::common_neuron_structs::{
     IndividualNeuronIndexCount, IndividualNeuronMembranePotential, NeuronCollectionType,
@@ -32,11 +35,6 @@ impl<CANQ: CorticalAreaNeuronQuantization> IndividualNeuronDenseVector<CANQ> {
             neuron_density_per_voxel,
         })
     }
-
-
-
-
-
 }
 
 impl<CANQ: CorticalAreaNeuronQuantization> NeuronCollectionBase<CANQ>
@@ -94,19 +92,24 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronCollectionBase<CANQ>
             NeuronVoxelPotential<CANQ::NeuronValueQuant>,
         ),
     > {
-
         if self.is_single_neuron_per_voxel() {
-            return self.potentials.iter()
+            return self
+                .potentials
+                .iter()
+                .enumerate()
+                .map(|(i, &potential)| (NeuronVoxelIndexCount::from_usize(i), NeuronVoxelPotential(potential.0)));
         }
 
         let density = self.neuron_density_per_voxel.to_usize() as f32;
-        let number_voxels = QuantizableUIntType::to_usize(self.cortical_dimensions.get_number_voxels());
 
         let slice_iterator = self.iter_voxel_neuron_slice();
-        let voxel_iterator = slice_iterator
-            .enumerate()
-            .map(|(i, v)|
-                (NeuronVoxelIndexCount::from_usize(i), voxel_potential_method.get_independent_neuron_potentials_as_voxel_potential(v, density)));
+        let voxel_iterator = slice_iterator.enumerate().map(|(i, v)| {
+            (
+                NeuronVoxelIndexCount::<CANQ::NeuronIndexVoxelCountQuant>::from_usize(i),
+                voxel_potential_method
+                    .get_independent_neuron_potentials_as_voxel_potential::<CANQ>(v, density),
+            )
+        });
         voxel_iterator
     }
 
