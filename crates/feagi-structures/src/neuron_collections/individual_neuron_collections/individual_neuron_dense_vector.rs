@@ -92,6 +92,7 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronCollectionBase<CANQ>
             NeuronVoxelPotential<CANQ::NeuronValueQuant>,
         ),
     > {
+        /*
         if self.is_single_neuron_per_voxel() {
             return self
                 .potentials
@@ -100,18 +101,20 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronCollectionBase<CANQ>
                 .map(|(i, &potential)| (NeuronVoxelIndexCount::from_usize(i), NeuronVoxelPotential(potential.0)));
         }
 
+         */
+
         let density = self.neuron_density_per_voxel.to_usize() as f32;
 
-        let slice_iterator = self.iter_voxel_neuron_slice();
-        let voxel_iterator = slice_iterator.enumerate().map(|(i, v)| {
+        self.iter_voxel_neuron_slice().enumerate().map(move |(i, v)| {
             (
                 NeuronVoxelIndexCount::<CANQ::NeuronIndexVoxelCountQuant>::from_usize(i),
                 voxel_potential_method
                     .get_independent_neuron_potentials_as_voxel_potential::<CANQ>(v, density),
             )
-        });
-        voxel_iterator
+        })
     }
+
+
 
     fn iter_voxel_index_par(
         &self,
