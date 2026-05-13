@@ -1,18 +1,7 @@
 use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType, QuantizableValueType};
 use crate::neuron::individual_neuron_structs::IndividualNeuronMembranePotential;
-use crate::neuron::dimensional::dimensional_structs::NeuronVoxelPotential;
+use crate::neuron::neuron_model::dimensional::dimensional_structs::NeuronVoxelPotential;
 use crate::quantization_level::CorticalAreaNeuronQuantization;
-
-/// Common Neuron related structs used in various collection types and in other areas
-
-/// Describes what method a collection is using to store potential data. Mainly matters when neuron
-/// density != 1
-pub enum DimensionalNeuronCollectionElementType {
-    /// Potential is stored per individual neuron, particularly relevant for NPU
-    IndividualNeuron,
-    /// Potential is stored for a given voxel of neuron(s)
-    Voxel
-}
 
 /// Describes what method a voxel's potential is calculated if it has multiple neurons
 pub enum NeuronVoxelMultiPotentialCalculationMethod {
@@ -28,9 +17,9 @@ impl NeuronVoxelMultiPotentialCalculationMethod {
     pub fn get_independent_neuron_potentials_as_voxel_potential<CANQ: CorticalAreaNeuronQuantization>(
         &self, neuron_slice: &[IndividualNeuronMembranePotential<CANQ::NeuronValueQuant>], slice_length_as_float: f32)
         -> NeuronVoxelPotential<CANQ::NeuronValueQuant> {
-        
+
         // TODO debug check of slice length
-        
+
         match self {
             NeuronVoxelMultiPotentialCalculationMethod::Sum => {
                 neuron_slice
@@ -55,6 +44,6 @@ impl NeuronVoxelMultiPotentialCalculationMethod {
 
         }
     }
-    
+
     // TODO version of above but for entire structs
 }

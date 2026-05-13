@@ -7,7 +7,6 @@ use crate::quantization_level::CorticalAreaNeuronQuantization;
 
 // We do this since we only want to expose the u8 level
 pub use all_neuron_densities::NeuronDensityPerVoxel;
-use crate::neuron::dimensional::neuron_models::neuron_model_traits::{DimensionalNeuronModelBaseTrait, DimensionalNeuronModelModelBaseTrait};
 
 mod all_neuron_densities {
 
@@ -117,17 +116,6 @@ impl<PotentialQuant: QuantizableValueType> NeuronVoxelPotential<PotentialQuant> 
     }
 
 
-}
-
-//endregion
-
-//region Neuron Voxel Iterator
-
-/// Allows enumerated iteration over voxels by their
-pub struct EnumeratedDimensionalNeuronVoxelIndexIterator<CANQ: CorticalAreaNeuronQuantization,
-    NeuronModelNeuron: DimensionalNeuronModelModelBaseTrait<CANQ>> {
-    index: NeuronVoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
-    neuron: NeuronModelNeuron,
 }
 
 //endregion

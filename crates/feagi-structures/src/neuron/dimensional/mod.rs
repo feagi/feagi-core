@@ -1,5 +1,0 @@
-mod neuron_models;
-mod dimensional_neuron_data_container_base_traits;
-mod dimensional_structs;
-mod dimensional_enums;
-mod dimensional_voxel_iterating;
