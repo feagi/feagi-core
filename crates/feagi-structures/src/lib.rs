@@ -19,5 +19,6 @@ mod useful_macros;
 mod quantization_level;
 mod neuron_collections;
 mod cortical_area__neuron_data_collections;
+mod neuron;
 
 

@@ -8,7 +8,7 @@ use crate::neuron_collections::neuron_voxel_collections::traits::{
 };
 use crate::neuron_collections::neuron_voxel_collections::voxel_structs::SingleCorticalNeuronVoxelCollectionType;
 use crate::quantization_level::CorticalAreaNeuronQuantization;
-use super::neuron_voxel_dense_vector::NeuronVoxelDenseVector;
+use crate::neuron_collections::neuron_voxel_collections::dense_potential::NeuronVoxelDenseVector;
 
 pub struct MultiNeuronVoxelDenseVector<CANQ: CorticalAreaNeuronQuantization>
 {

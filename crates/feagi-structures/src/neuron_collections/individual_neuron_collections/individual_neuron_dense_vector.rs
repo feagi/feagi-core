@@ -125,50 +125,33 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronCollectionBase<CANQ>
             NeuronVoxelPotential<CANQ::NeuronValueQuant>,
         ),
     > {
-        let density = self.neuron_density_per_voxel.get().to_usize();
-        let number_voxels = self.cortical_dimensions.get_number_voxels().to_usize();
+        /*
+        if self.is_single_neuron_per_voxel() {
+            return self
+                .potentials
+                .par_iter()
+                .enumerate()
+                .map(|(i, &potential)| (NeuronVoxelIndexCount::from_usize(i), NeuronVoxelPotential(potential.0)));
+        }
 
-        (0..number_voxels).into_par_iter().map(move |voxel_index| {
-            let voxel_index_count = NeuronVoxelIndexCount::from_usize(voxel_index);
-            let start = voxel_index * density;
-            let end = start + density;
-            let neuron_slice = &self.potentials[start..end];
+         */
 
-            let potential = match voxel_potential_method {
-                NeuronVoxelMultiPotentialCalculationMethod::Sum => neuron_slice
-                    .iter()
-                    .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                        acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                    }),
-                NeuronVoxelMultiPotentialCalculationMethod::Average => {
-                    if neuron_slice.is_empty() {
-                        NeuronVoxelPotential::ZERO
-                    } else {
-                        let sum = neuron_slice.iter().fold(
-                            NeuronVoxelPotential::ZERO,
-                            |acc, &neuron_pot| {
-                                acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                            },
-                        );
-                        let count = neuron_slice.len() as f64;
-                        NeuronVoxelPotential(sum.0 / count as u16)
-                    }
-                }
-                NeuronVoxelMultiPotentialCalculationMethod::Max => {
-                    neuron_slice
-                        .iter()
-                        .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                            if neuron_pot.0 > acc.0 {
-                                NeuronVoxelPotential(neuron_pot.0)
-                            } else {
-                                acc
-                            }
-                        })
-                }
-            };
+        let density = self.neuron_density_per_voxel.to_usize();
+        let density_as_float = density as f32;
 
-            (voxel_index_count, potential)
-        })
+        self.potentials
+            .par_chunks(density)
+            .enumerate()
+            .map(move |(i, v)| {
+                (
+                    NeuronVoxelIndexCount::<CANQ::NeuronIndexVoxelCountQuant>::from_usize(i),
+                    voxel_potential_method
+                        .get_independent_neuron_potentials_as_voxel_potential::<CANQ>(
+                            v,
+                            density_as_float,
+                        ),
+                )
+            })
     }
 
     fn iter_voxel_index_nonzero_potential(
@@ -180,49 +163,28 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronCollectionBase<CANQ>
             NeuronVoxelPotential<CANQ::NeuronValueQuant>,
         ),
     > {
-        let density = self.neuron_density_per_voxel.get().to_usize();
-        let number_voxels = self.cortical_dimensions.get_number_voxels().to_usize();
+        /*
+        if self.is_single_neuron_per_voxel() {
+            return self
+                .potentials
+                .iter()
+                .enumerate()
+                .filter(|(_, &potential)| potential != IndividualNeuronMembranePotential::ZERO)
+                .map(|(i, &potential)| (NeuronVoxelIndexCount::from_usize(i), NeuronVoxelPotential(potential.0)));
+        }
 
-        (0..number_voxels)
-            .map(move |voxel_index| {
-                let voxel_index_count = NeuronVoxelIndexCount::from_usize(voxel_index);
-                let start = voxel_index * density;
-                let end = start + density;
-                let neuron_slice = &self.potentials[start..end];
+         */
 
-                let potential =
-                    match voxel_potential_method {
-                        NeuronVoxelMultiPotentialCalculationMethod::Sum => neuron_slice
-                            .iter()
-                            .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                                acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                            }),
-                        NeuronVoxelMultiPotentialCalculationMethod::Average => {
-                            if neuron_slice.is_empty() {
-                                NeuronVoxelPotential::ZERO
-                            } else {
-                                let sum = neuron_slice.iter().fold(
-                                    NeuronVoxelPotential::ZERO,
-                                    |acc, &neuron_pot| {
-                                        acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                                    },
-                                );
-                                let count = neuron_slice.len() as f64;
-                                NeuronVoxelPotential(sum.0 / count as u16)
-                            }
-                        }
-                        NeuronVoxelMultiPotentialCalculationMethod::Max => neuron_slice
-                            .iter()
-                            .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                                if neuron_pot.0 > acc.0 {
-                                    NeuronVoxelPotential(neuron_pot.0)
-                                } else {
-                                    acc
-                                }
-                            }),
-                    };
+        let density = self.neuron_density_per_voxel.to_usize() as f32;
 
-                (voxel_index_count, potential)
+        self.iter_voxel_neuron_slice()
+            .enumerate()
+            .map(move |(i, v)| {
+                (
+                    NeuronVoxelIndexCount::<CANQ::NeuronIndexVoxelCountQuant>::from_usize(i),
+                    voxel_potential_method
+                        .get_independent_neuron_potentials_as_voxel_potential::<CANQ>(v, density),
+                )
             })
             .filter(|(_, potential)| *potential != NeuronVoxelPotential::ZERO)
     }
@@ -236,50 +198,33 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronCollectionBase<CANQ>
             NeuronVoxelPotential<CANQ::NeuronValueQuant>,
         ),
     > {
-        let density = self.neuron_density_per_voxel.get().to_usize();
-        let number_voxels = self.cortical_dimensions.get_number_voxels().to_usize();
+        /*
+        if self.is_single_neuron_per_voxel() {
+            return self
+                .potentials
+                .par_iter()
+                .enumerate()
+                .filter(|(_, &potential)| potential != IndividualNeuronMembranePotential::ZERO)
+                .map(|(i, &potential)| (NeuronVoxelIndexCount::from_usize(i), NeuronVoxelPotential(potential.0)));
+        }
 
-        (0..number_voxels)
-            .into_par_iter()
-            .map(move |voxel_index| {
-                let voxel_index_count = NeuronVoxelIndexCount::from_usize(voxel_index);
-                let start = voxel_index * density;
-                let end = start + density;
-                let neuron_slice = &self.potentials[start..end];
+         */
 
-                let potential =
-                    match voxel_potential_method {
-                        NeuronVoxelMultiPotentialCalculationMethod::Sum => neuron_slice
-                            .iter()
-                            .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                                acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                            }),
-                        NeuronVoxelMultiPotentialCalculationMethod::Average => {
-                            if neuron_slice.is_empty() {
-                                NeuronVoxelPotential::ZERO
-                            } else {
-                                let sum = neuron_slice.iter().fold(
-                                    NeuronVoxelPotential::ZERO,
-                                    |acc, &neuron_pot| {
-                                        acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                                    },
-                                );
-                                let count = neuron_slice.len() as f64;
-                                NeuronVoxelPotential(sum.0 / count as u16)
-                            }
-                        }
-                        NeuronVoxelMultiPotentialCalculationMethod::Max => neuron_slice
-                            .iter()
-                            .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                                if neuron_pot.0 > acc.0 {
-                                    NeuronVoxelPotential(neuron_pot.0)
-                                } else {
-                                    acc
-                                }
-                            }),
-                    };
+        let density = self.neuron_density_per_voxel.to_usize();
+        let density_as_float = density as f32;
 
-                (voxel_index_count, potential)
+        self.potentials
+            .par_chunks(density)
+            .enumerate()
+            .map(move |(i, v)| {
+                (
+                    NeuronVoxelIndexCount::<CANQ::NeuronIndexVoxelCountQuant>::from_usize(i),
+                    voxel_potential_method
+                        .get_independent_neuron_potentials_as_voxel_potential::<CANQ>(
+                            v,
+                            density_as_float,
+                        ),
+                )
             })
             .filter(|(_, potential)| *potential != NeuronVoxelPotential::ZERO)
     }
@@ -293,52 +238,25 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronCollectionBase<CANQ>
             NeuronVoxelPotential<CANQ::NeuronValueQuant>,
         ),
     > {
-        let density = self.neuron_density_per_voxel.get().to_usize();
-        let number_voxels = self.cortical_dimensions.get_number_voxels().to_usize();
+        /*
+        if self.is_single_neuron_per_voxel() {
+            return self
+                .potentials
+                .iter()
+                .enumerate()
+                .map(|(i, &potential)| (NeuronVoxelIndexCount::from_usize(i), NeuronVoxelPotential(potential.0)));
+        }
 
-        (0..number_voxels).map(move |voxel_index| {
-            let voxel_index_count = NeuronVoxelIndexCount::from_usize(voxel_index);
-            let start = voxel_index * density;
-            let end = start + density;
-            let neuron_slice = &self.potentials[start..end];
+         */
 
-            let potential = match voxel_potential_method {
-                NeuronVoxelMultiPotentialCalculationMethod::Sum => neuron_slice
-                    .iter()
-                    .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                        acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                    }),
-                NeuronVoxelMultiPotentialCalculationMethod::Average => {
-                    if neuron_slice.is_empty() {
-                        NeuronVoxelPotential::ZERO
-                    } else {
-                        let sum = neuron_slice.iter().fold(
-                            NeuronVoxelPotential::ZERO,
-                            |acc, &neuron_pot| {
-                                acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                            },
-                        );
-                        let count = neuron_slice.len() as f64;
-                        NeuronVoxelPotential(sum.0 / count as u16)
-                    }
-                }
-                NeuronVoxelMultiPotentialCalculationMethod::Max => {
-                    neuron_slice
-                        .iter()
-                        .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                            if neuron_pot.0 > acc.0 {
-                                NeuronVoxelPotential(neuron_pot.0)
-                            } else {
-                                acc
-                            }
-                        })
-                }
-            };
+        let density = self.neuron_density_per_voxel.to_usize() as f32;
 
-            let coordinate = self
-                .cortical_dimensions
-                .linear_index_to_standard_voxel_coordinate(voxel_index_count);
-            (voxel_index_count, potential)
+        self.iter_voxel_neuron_slice().enumerate().map(move |(i, v)| {
+            (
+                NeuronVoxelIndexCount::<CANQ::NeuronIndexVoxelCountQuant>::from_usize(i),
+                voxel_potential_method
+                    .get_independent_neuron_potentials_as_voxel_potential::<CANQ>(v, density),
+            )
         })
     }
 
@@ -351,53 +269,33 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronCollectionBase<CANQ>
             NeuronVoxelPotential<CANQ::NeuronValueQuant>,
         ),
     > {
-        let density = self.neuron_density_per_voxel.get().to_usize();
-        let number_voxels = self.cortical_dimensions.get_number_voxels().to_usize();
+        /*
+        if self.is_single_neuron_per_voxel() {
+            return self
+                .potentials
+                .par_iter()
+                .enumerate()
+                .map(|(i, &potential)| (NeuronVoxelIndexCount::from_usize(i), NeuronVoxelPotential(potential.0)));
+        }
 
-        (0..number_voxels).into_par_iter().map(move |voxel_index| {
-            let voxel_index_count = NeuronVoxelIndexCount::from_usize(voxel_index);
-            let start = voxel_index * density;
-            let end = start + density;
-            let neuron_slice = &self.potentials[start..end];
+         */
 
-            let potential = match voxel_potential_method {
-                NeuronVoxelMultiPotentialCalculationMethod::Sum => neuron_slice
-                    .iter()
-                    .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                        acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                    }),
-                NeuronVoxelMultiPotentialCalculationMethod::Average => {
-                    if neuron_slice.is_empty() {
-                        NeuronVoxelPotential::ZERO
-                    } else {
-                        let sum = neuron_slice.iter().fold(
-                            NeuronVoxelPotential::ZERO,
-                            |acc, &neuron_pot| {
-                                acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                            },
-                        );
-                        let count = neuron_slice.len() as f64;
-                        NeuronVoxelPotential(sum.0 / count as u16)
-                    }
-                }
-                NeuronVoxelMultiPotentialCalculationMethod::Max => {
-                    neuron_slice
-                        .iter()
-                        .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                            if neuron_pot.0 > acc.0 {
-                                NeuronVoxelPotential(neuron_pot.0)
-                            } else {
-                                acc
-                            }
-                        })
-                }
-            };
+        let density = self.neuron_density_per_voxel.to_usize();
+        let density_as_float = density as f32;
 
-            let coordinate = self
-                .cortical_dimensions
-                .linear_index_to_standard_voxel_coordinate(voxel_index_count);
-            (voxel_index_count, potential)
-        })
+        self.potentials
+            .par_chunks(density)
+            .enumerate()
+            .map(move |(i, v)| {
+                (
+                    NeuronVoxelIndexCount::<CANQ::NeuronIndexVoxelCountQuant>::from_usize(i),
+                    voxel_potential_method
+                        .get_independent_neuron_potentials_as_voxel_potential::<CANQ>(
+                            v,
+                            density_as_float,
+                        ),
+                )
+            })
     }
 
     fn iter_voxel_coordinate_nonzero_potential(
@@ -409,52 +307,28 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronCollectionBase<CANQ>
             NeuronVoxelPotential<CANQ::NeuronValueQuant>,
         ),
     > {
-        let density = self.neuron_density_per_voxel.get().to_usize();
-        let number_voxels = self.cortical_dimensions.get_number_voxels().to_usize();
+        /*
+        if self.is_single_neuron_per_voxel() {
+            return self
+                .potentials
+                .iter()
+                .enumerate()
+                .filter(|(_, &potential)| potential != IndividualNeuronMembranePotential::ZERO)
+                .map(|(i, &potential)| (NeuronVoxelIndexCount::from_usize(i), NeuronVoxelPotential(potential.0)));
+        }
 
-        (0..number_voxels)
-            .map(move |voxel_index| {
-                let voxel_index_count = NeuronVoxelIndexCount::from_usize(voxel_index);
-                let start = voxel_index * density;
-                let end = start + density;
-                let neuron_slice = &self.potentials[start..end];
+         */
 
-                let potential =
-                    match voxel_potential_method {
-                        NeuronVoxelMultiPotentialCalculationMethod::Sum => neuron_slice
-                            .iter()
-                            .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                                acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                            }),
-                        NeuronVoxelMultiPotentialCalculationMethod::Average => {
-                            if neuron_slice.is_empty() {
-                                NeuronVoxelPotential::ZERO
-                            } else {
-                                let sum = neuron_slice.iter().fold(
-                                    NeuronVoxelPotential::ZERO,
-                                    |acc, &neuron_pot| {
-                                        acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                                    },
-                                );
-                                let count = neuron_slice.len() as f64;
-                                NeuronVoxelPotential(sum.0 / count as u16)
-                            }
-                        }
-                        NeuronVoxelMultiPotentialCalculationMethod::Max => neuron_slice
-                            .iter()
-                            .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                                if neuron_pot.0 > acc.0 {
-                                    NeuronVoxelPotential(neuron_pot.0)
-                                } else {
-                                    acc
-                                }
-                            }),
-                    };
+        let density = self.neuron_density_per_voxel.to_usize() as f32;
 
-                let coordinate = self
-                    .cortical_dimensions
-                    .linear_index_to_standard_voxel_coordinate(voxel_index_count);
-                (voxel_index_count, potential)
+        self.iter_voxel_neuron_slice()
+            .enumerate()
+            .map(move |(i, v)| {
+                (
+                    NeuronVoxelIndexCount::<CANQ::NeuronIndexVoxelCountQuant>::from_usize(i),
+                    voxel_potential_method
+                        .get_independent_neuron_potentials_as_voxel_potential::<CANQ>(v, density),
+                )
             })
             .filter(|(_, potential)| *potential != NeuronVoxelPotential::ZERO)
     }
@@ -468,53 +342,33 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronCollectionBase<CANQ>
             NeuronVoxelPotential<CANQ::NeuronValueQuant>,
         ),
     > {
-        let density = self.neuron_density_per_voxel.get().to_usize();
-        let number_voxels = self.cortical_dimensions.get_number_voxels().to_usize();
+        /*
+        if self.is_single_neuron_per_voxel() {
+            return self
+                .potentials
+                .par_iter()
+                .enumerate()
+                .filter(|(_, &potential)| potential != IndividualNeuronMembranePotential::ZERO)
+                .map(|(i, &potential)| (NeuronVoxelIndexCount::from_usize(i), NeuronVoxelPotential(potential.0)));
+        }
 
-        (0..number_voxels)
-            .into_par_iter()
-            .map(move |voxel_index| {
-                let voxel_index_count = NeuronVoxelIndexCount::from_usize(voxel_index);
-                let start = voxel_index * density;
-                let end = start + density;
-                let neuron_slice = &self.potentials[start..end];
+         */
 
-                let potential =
-                    match voxel_potential_method {
-                        NeuronVoxelMultiPotentialCalculationMethod::Sum => neuron_slice
-                            .iter()
-                            .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                                acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                            }),
-                        NeuronVoxelMultiPotentialCalculationMethod::Average => {
-                            if neuron_slice.is_empty() {
-                                NeuronVoxelPotential::ZERO
-                            } else {
-                                let sum = neuron_slice.iter().fold(
-                                    NeuronVoxelPotential::ZERO,
-                                    |acc, &neuron_pot| {
-                                        acc.saturating_add(NeuronVoxelPotential(neuron_pot.0))
-                                    },
-                                );
-                                let count = neuron_slice.len() as f64;
-                                NeuronVoxelPotential(sum.0 / count as u16)
-                            }
-                        }
-                        NeuronVoxelMultiPotentialCalculationMethod::Max => neuron_slice
-                            .iter()
-                            .fold(NeuronVoxelPotential::ZERO, |acc, &neuron_pot| {
-                                if neuron_pot.0 > acc.0 {
-                                    NeuronVoxelPotential(neuron_pot.0)
-                                } else {
-                                    acc
-                                }
-                            }),
-                    };
+        let density = self.neuron_density_per_voxel.to_usize();
+        let density_as_float = density as f32;
 
-                let coordinate = self
-                    .cortical_dimensions
-                    .linear_index_to_standard_voxel_coordinate(voxel_index_count);
-                (voxel_index_count, potential)
+        self.potentials
+            .par_chunks(density)
+            .enumerate()
+            .map(move |(i, v)| {
+                (
+                    NeuronVoxelIndexCount::<CANQ::NeuronIndexVoxelCountQuant>::from_usize(i),
+                    voxel_potential_method
+                        .get_independent_neuron_potentials_as_voxel_potential::<CANQ>(
+                            v,
+                            density_as_float,
+                        ),
+                )
             })
             .filter(|(_, potential)| *potential != NeuronVoxelPotential::ZERO)
     }
@@ -540,7 +394,7 @@ impl<CANQ: CorticalAreaNeuronQuantization> IndividualNeuronCollectionBase<CANQ>
     #[cfg(feature = "rayon")]
     fn iter_individual_neuron_index_par(
         &self,
-    ) -> impl rayon::iter::ParallelIterator<
+    ) -> impl ParallelIterator<
         Item = (
             IndividualNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
             IndividualNeuronMembranePotential<CANQ::NeuronValueQuant>,
@@ -570,7 +424,7 @@ impl<CANQ: CorticalAreaNeuronQuantization> IndividualNeuronCollectionBase<CANQ>
     #[cfg(feature = "rayon")]
     fn iter_nonzero_potential_neuron_index_par(
         &self,
-    ) -> impl rayon::iter::ParallelIterator<
+    ) -> impl ParallelIterator<
         Item = (
             IndividualNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
             IndividualNeuronMembranePotential<CANQ::NeuronValueQuant>,
@@ -602,16 +456,16 @@ impl<CANQ: CorticalAreaNeuronQuantization> IndividualNeuronCollectionDense<CANQ>
     fn iter_voxel_neuron_slice(
         &self,
     ) -> impl Iterator<Item = (&[IndividualNeuronMembranePotential<CANQ::NeuronValueQuant>])> {
-        let density = self.neuron_density_per_voxel.get().to_usize();
+        let density = QuantizableNonzeroUIntType::to_usize(self.neuron_density_per_voxel.get());
         self.potentials.chunks(density).map(|chunk| chunk)
     }
 
     fn iter_voxel_neuron_slice_par(
         &self,
-    ) -> impl rayon::iter::ParallelIterator<
+    ) -> impl ParallelIterator<
         Item = (&[IndividualNeuronMembranePotential<CANQ::NeuronValueQuant>]),
     > {
-        let density = self.neuron_density_per_voxel.get().to_usize();
+        let density = QuantizableNonzeroUIntType::to_usize(self.neuron_density_per_voxel.get());
         self.potentials.par_chunks(density).map(|chunk| chunk)
     }
 

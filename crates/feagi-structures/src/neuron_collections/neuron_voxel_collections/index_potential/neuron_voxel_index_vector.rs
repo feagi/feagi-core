@@ -1,7 +1,6 @@
 use crate::base_feagi_types::quantizable_types::{FeagiBaseSingleElementQuantizationType, QuantizableUIntType};
-use crate::neuron_collections::neuron_voxel_collections::voxel_structs::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelPotential, SingleCorticalNeuronVoxelCollectionType};
+use crate::neuron_collections::common_neuron_structs::{NeuronVoxelCoordinate, NeuronVoxelDimensions, NeuronVoxelIndexCount, NeuronVoxelPotential};
 use crate::neuron_collections::neuron_voxel_collections::traits::{NeuronVoxelCollectionResizable, NeuronVoxelCollectionBase, NeuronVoxelCollectionSparse};
-use crate::neuron_collections::neuron_voxel_collections::voxel_structs::NeuronVoxelIndexCount;
 use crate::quantization_level::CorticalAreaNeuronQuantization;
 
 pub struct NeuronVoxelIndexVector<CANQ: CorticalAreaNeuronQuantization>

@@ -10,13 +10,10 @@ mod neuron_voxel_dense_array;
 #[cfg(feature = "alloc")]
 mod neuron_voxel_dense_vector;
 
-#[cfg(feature = "alloc")]
-mod multi_neuron_voxel_dense_vector;
-
 pub use neuron_voxel_dense_array::NeuronVoxelDenseArray;
 
 #[cfg(feature = "alloc")]
 pub use neuron_voxel_dense_vector::NeuronVoxelDenseVector;
 
 #[cfg(feature = "alloc")]
-pub use multi_neuron_voxel_dense_vector::MultiNeuronVoxelDenseVector;
+pub use crate::cortical_area__neuron_data_collections::multi_neuron_voxel_dense_vector::MultiNeuronVoxelDenseVector;

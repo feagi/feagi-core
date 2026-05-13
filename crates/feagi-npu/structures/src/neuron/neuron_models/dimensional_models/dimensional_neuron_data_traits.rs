@@ -25,7 +25,7 @@ pub(crate) trait DimensionalNeuronModelDataSharedTrait<Q: NPUGlobalQuantization,
     const CORTICAL_AREA_MODEL_TYPE: CorticalAreaModelType;
     type DimensionalCorticalConfigurationType: DimensionalCorticalConfigurationTrait<Q, DNQ>;
     define_ref_access_trait_methods!(cortical_data, Self::DimensionalCorticalConfigurationType);
-    define_ref_access_trait_methods!(neuron_global_burst_index_of_last_firing, [BurstGlobalIndex<Q::GlobalBurstIndexQuant>]);
+    define_ref_access_trait_methods!(neuron_global_burst_index_of_last_firing, [BurstGlobalIndex<Q::GlobalBurstIndexQuant>]); // Cache // delete me?
     define_ref_access_trait_methods!(neuron_membrane_potential, [NeuronMembranePotential<DNQ::ValueQuant>]);
     define_ref_access_trait_methods!(neuron_fire_threshold, [FireThreshold<DNQ::ValueQuant>]);
     define_ref_access_trait_methods!(neuron_leak_coefficient, [LeakCoefficient<DNQ::PercentageQuant>]);
