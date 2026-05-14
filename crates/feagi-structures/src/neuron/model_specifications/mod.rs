@@ -1,0 +1,8 @@
+mod base_specifications;
+mod base_neuron_traits;
+mod mortal_specifications;
+mod base_dimensional_specifications;
+mod voxel_specifications;
+mod neuron_dynamics_sprcifications;
+mod multi_neuron_dimensional_specifications;
+mod single_neuron_dimensional_specifications;

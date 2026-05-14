@@ -14,15 +14,7 @@ pub trait IndividualNeuronModelBaseTrait<CANQ: CorticalAreaNeuronQuantization> {
     // TODO enumerated iterators?
 }
 
-/// All neuron flag structs share the validity flag, and this trait unifies that
-pub trait NeuronFlagAliveTrait {
-    /// Returns true if a neuron is alive
-    fn is_neuron_alive(&self) -> bool;
-    /// Allows setting alive state of a neuron
-    fn set_neuron_alive(&mut self, set_alive: bool);
-    /// Toggles if a neuron is alive, slightly faster then setting it
-    fn toggle_neuron_alive(&mut self);
-}
+
 
 //endregion
 
@@ -62,14 +54,6 @@ pub trait NeuronModelCorticalAreaDataBaseTrait<CANQ: CorticalAreaNeuronQuantizat
 }
 
 
-/// All cortical area flag structs share the validity flag, and this trait unifies that
-pub trait CorticalFlagAliveTrait {
-    /// Returns true if a neuron is alive
-    fn is_neuron_alive(&self) -> bool;
-    /// Allows setting alive state of a neuron
-    fn set_neuron_alive(&mut self, set_alive: bool);
-    /// Toggles if a neuron is alive, slightly faster then setting it
-    fn toggle_neuron_alive(&mut self);
-}
+
 
 //endregion

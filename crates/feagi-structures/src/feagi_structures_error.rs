@@ -1,8 +1,8 @@
 // Top level error enum for this crate, holds errors from individual models
 
 use crate::genomic::FeagiStructuresGenomicError;
-use crate::neuron_collections::neuron_voxel_collections::FeagiStructuresNeuronVoxelError;
-use crate::neuron_collections::individual_neuron_collections::FeagiIndividualNeuronCollectionError;
+use crate::neuron::neuron_collections::neuron_voxel_collections::FeagiStructuresNeuronVoxelError;
+use crate::neuron::neuron_collections::individual_neuron_collections::FeagiIndividualNeuronCollectionError;
 
 #[derive(Debug)]
 pub enum FeagiStructuresError {
