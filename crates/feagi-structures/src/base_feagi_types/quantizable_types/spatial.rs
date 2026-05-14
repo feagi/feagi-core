@@ -710,6 +710,8 @@ FeagiBaseMultiElementQuantizationType
     fn from_tuple(tuple: (Self::ElementType, Self::ElementType)) -> Self;
     fn to_tuple(self) -> (Self::ElementType, Self::ElementType);
     fn fits_coordinate(&self, coordinate: &Self::CoordinateType) -> bool;
+    fn linear_index_to_coordinate(&self, linear: Self::ElementType) -> Self::CoordinateType;
+    fn coordinate_to_linear_index(&self, coordinate: Self::CoordinateType) -> Self::ElementType;
 }
 
 //endregion
@@ -1492,6 +1494,13 @@ macro_rules! define_dimension_3d_type_family {
             fn fits_coordinate(&self, coordinate: &Self::CoordinateType) -> bool {
                 self.does_fit(coordinate)
             }
+
+            #[inline(always)]
+            fn linear_index_to_coordinate(&self, linear: Self::ElementType) -> Self::CoordinateType {
+                let plane = self.x * self.y;
+                let z = linear / plane;
+                let r = i % plane;
+            }
         }
     };
 }
@@ -1504,6 +1513,10 @@ FeagiBaseMultiElementQuantizationType
     fn from_tuple(tuple: (Self::ElementType, Self::ElementType, Self::ElementType)) -> Self;
     fn to_tuple(self) -> (Self::ElementType, Self::ElementType, Self::ElementType);
     fn fits_coordinate(&self, coordinate: &Self::CoordinateType) -> bool;
+
+    fn linear_index_to_coordinate(&self, linear: Self::ElementType) -> Self::CoordinateType;
+
+    fn coordinate_to_linear_index(&self, coordinate: Self::CoordinateType) -> Self::ElementType;
 }
 
 //endregion

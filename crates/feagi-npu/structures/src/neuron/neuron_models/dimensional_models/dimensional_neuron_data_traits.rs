@@ -2,7 +2,7 @@
 
 // NOTE: Data should be flat as it is optimal in certain common operations
 
-use feagi_structures::define_ref_access_trait_methods;
+use feagi_structures::define_ref_immut_mut_access_trait_methods;
 use feagi_structures::genomic::cortical_area::CorticalAreaModelType;
 use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NeuronMembranePotential, NumberNeuronsPerVoxel};
@@ -24,14 +24,14 @@ pub(crate) trait DimensionalNeuronModelDataSharedTrait<Q: NPUGlobalQuantization,
     /// Gets the model type as an enum
     const CORTICAL_AREA_MODEL_TYPE: CorticalAreaModelType;
     type DimensionalCorticalConfigurationType: DimensionalCorticalConfigurationTrait<Q, DNQ>;
-    define_ref_access_trait_methods!(cortical_data, Self::DimensionalCorticalConfigurationType);
-    define_ref_access_trait_methods!(neuron_global_burst_index_of_last_firing, [BurstGlobalIndex<Q::GlobalBurstIndexQuant>]); // Cache // delete me?
-    define_ref_access_trait_methods!(neuron_membrane_potential, [NeuronMembranePotential<DNQ::ValueQuant>]);
-    define_ref_access_trait_methods!(neuron_fire_threshold, [FireThreshold<DNQ::ValueQuant>]);
-    define_ref_access_trait_methods!(neuron_leak_coefficient, [LeakCoefficient<DNQ::PercentageQuant>]);
-    define_ref_access_trait_methods!(neuron_flags, [NeuronFlag]);
-    define_ref_access_trait_methods!(neuron_refractory_countdown, [BurstDelta<DNQ::BurstDeltaQuant>]);
-    define_ref_access_trait_methods!(neuron_consecutive_fire_countdown, [BurstDelta<DNQ::BurstDeltaQuant>]);
+    define_ref_immut_mut_access_trait_methods!(cortical_data, Self::DimensionalCorticalConfigurationType);
+    define_ref_immut_mut_access_trait_methods!(neuron_global_burst_index_of_last_firing, [BurstGlobalIndex<Q::GlobalBurstIndexQuant>]); // Cache // delete me?
+    define_ref_immut_mut_access_trait_methods!(neuron_membrane_potential, [NeuronMembranePotential<DNQ::ValueQuant>]);
+    define_ref_immut_mut_access_trait_methods!(neuron_fire_threshold, [FireThreshold<DNQ::ValueQuant>]);
+    define_ref_immut_mut_access_trait_methods!(neuron_leak_coefficient, [LeakCoefficient<DNQ::PercentageQuant>]);
+    define_ref_immut_mut_access_trait_methods!(neuron_flags, [NeuronFlag]);
+    define_ref_immut_mut_access_trait_methods!(neuron_refractory_countdown, [BurstDelta<DNQ::BurstDeltaQuant>]);
+    define_ref_immut_mut_access_trait_methods!(neuron_consecutive_fire_countdown, [BurstDelta<DNQ::BurstDeltaQuant>]);
 
     /// Returns the total number of neurons in the Dimensional cortical area.
     /// Includes both live and dead neurons

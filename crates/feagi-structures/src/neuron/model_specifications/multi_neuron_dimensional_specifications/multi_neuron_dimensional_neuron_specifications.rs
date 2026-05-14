@@ -1,4 +1,4 @@
-use crate::define_ref_access_trait_methods;
+use crate::define_ref_immut_mut_access_trait_methods;
 use crate::neuron::FeagiNeuronError;
 use crate::neuron::model_specifications::base_specifications::{BaseNeuronCollectionSharedTrait, LinearNeuronIndexCount};
 use crate::neuron::model_specifications::base_dimensional_specifications::dimensional_neuron_common_structs::{NeuronDensityPerVoxel, VoxelCoordinate, VoxelDimensions, VoxelIndexCount};

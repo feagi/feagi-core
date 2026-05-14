@@ -1,5 +1,5 @@
 use core::ops::Range;
-use crate::define_ref_access_trait_methods;
+use crate::define_ref_immut_mut_access_trait_methods;
 use crate::neuron::FeagiNeuronError;
 use crate::neuron::model_specifications::base_specifications::base_iteration::{EnumeratedBaseNeuronReference, EnumeratedBaseNeuronReferenceMut};
 use crate::quantization_level::CorticalAreaNeuronQuantization;
@@ -9,8 +9,16 @@ use super::base_neuron_common_structs::{LinearNeuronIndexCount, NeuronCollection
 /// Base Neuron Model Collection (a collection of neurons of a single cortical area), and the
 /// required implementations by all computer memory models
 pub trait BaseNeuronCollectionSharedTrait<CANQ: CorticalAreaNeuronQuantization> {
+    
+    /// Define the data structure holding the actual neural data
     const NEURON_COLLECTION_TYPE: NeuronCollectionType;
 
+    
+    
+    
+    
+    
+    
     type SingleNeuronReference: BaseNeuronModelDataRefTrait<'static, CANQ>;
     type SingleNeuronReferenceMut: BaseNeuronModelDataMutRefTrait<'static, CANQ>;
 
@@ -34,6 +42,8 @@ pub trait BaseNeuronCollectionSharedTrait<CANQ: CorticalAreaNeuronQuantization> 
 pub trait BaseNeuronModelCollectionSparseTrait<CANQ: CorticalAreaNeuronQuantization>:
 BaseNeuronCollectionSharedTrait<CANQ>
 {
+    const NEURON_COLLECTION_TYPE: NeuronCollectionType = NeuronCollectionType::IndexedResizableVector;
+    
     fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item = EnumeratedBaseNeuronReference<CANQ,Self::SingleNeuronReference>> {
         todo!()
     }
@@ -48,10 +58,13 @@ BaseNeuronCollectionSharedTrait<CANQ>
 pub trait BaseNeuronModelCollectionDenseTrait<CANQ: CorticalAreaNeuronQuantization>:
 BaseNeuronCollectionSharedTrait<CANQ>
 {
+    // This should be extended with neuron properties for the given model. Membrane Potential here
+    // (required) as an example
+
+    define_ref_immut_mut_access_trait_methods!(membrane_potentials, [NeuronMembranePotential<CANQ::NeuronValueQuant>]);
+
     type NeuronSliceReference: BaseNeuronModelDataSliceRefTrait<'static, CANQ>;
     type NeuronSliceReferenceMut: BaseNeuronModelDataSliceMutRefTrait<'static, CANQ>;
-
-    define_ref_access_trait_methods!(membrane_potentials, [NeuronMembranePotential<CANQ::NeuronValueQuant>]);
 
     fn try_get_neuron_data_slice_ref(&self, index_range: Range<LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>>) -> Result<Self::NeuronSliceReference, FeagiNeuronError>;
 
@@ -80,16 +93,22 @@ BaseNeuronCollectionSharedTrait<CANQ>
 
 /// Represents a single neuron, as a reference data reference
 pub trait BaseNeuronModelDataRefTrait<'a, CANQ: CorticalAreaNeuronQuantization> {
+    // This should be extended with neuron properties for the given model. Membrane Potential here
+    // (required) as an example
+
     type NeuronModelCollectionType: BaseNeuronCollectionSharedTrait<CANQ>;
 
-    // Model implements neuron potential, and other model specific properties
+
 }
 
 /// Represents several neurons, as a reference data slice
 pub trait BaseNeuronModelDataSliceRefTrait<'a, CANQ: CorticalAreaNeuronQuantization> {
+    // This should be extended with neuron properties for the given model. Membrane Potential here
+    // (required) as an example
+
     type NeuronModelCollectionType: BaseNeuronCollectionSharedTrait<CANQ>;
 
-    // Model implements neuron potential, and other model specific properties as slices
+
 }
 
 

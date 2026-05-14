@@ -1,4 +1,4 @@
-use crate::define_ref_access_trait_methods;
+use crate::define_ref_immut_mut_access_trait_methods;
 use crate::neuron::model_specifications::base_specifications::{BaseNeuronCollectionSharedTrait, BaseNeuronModelDataRefTrait};
 use crate::quantization_level::CorticalAreaNeuronQuantization;
 

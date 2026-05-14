@@ -6,3 +6,5 @@ mod voxel_specifications;
 mod dimensional_propagating_neuron_specifications;
 mod multi_neuron_dimensional_specifications;
 mod single_neuron_dimensional_specifications;
+mod base_neuron_fields;
+mod internal;

@@ -20,5 +20,6 @@ mod quantization_level;
 mod cortical_area__neuron_data_collections;
 mod neuron;
 mod feagi_models;
+mod neuron_dynamics;
 
 
