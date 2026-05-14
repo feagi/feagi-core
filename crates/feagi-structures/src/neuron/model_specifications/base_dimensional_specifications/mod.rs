@@ -1,5 +1,5 @@
-mod base_dimensional_neuron_specifications;
-mod dimensional_neuron_common_structs;
 
 mod voxel_potential_calculation_method;
-mod dimensional_iteration;
+pub mod dimensional_neuron_common_structs;
+pub mod base_dimensional_neuron_specifications;
+mod multi_neuron_containers;

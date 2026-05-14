@@ -183,6 +183,10 @@ pub trait QuantizableUIntType: FeagiBaseSingleElementQuantizationType {
     fn from_usize(value: usize) -> Self;
 
     fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize>;
+    
+    fn through_usize_to_quant<Q: QuantizableUIntType>(self) -> Q {
+        Q::from_usize(self.to_usize())
+    }
 }
 
 

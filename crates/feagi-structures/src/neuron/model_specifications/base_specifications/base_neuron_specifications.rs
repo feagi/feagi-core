@@ -34,9 +34,6 @@ pub trait BaseNeuronCollectionSharedTrait<CANQ: CorticalAreaNeuronQuantization> 
 pub trait BaseNeuronModelCollectionSparseTrait<CANQ: CorticalAreaNeuronQuantization>:
 BaseNeuronCollectionSharedTrait<CANQ>
 {
-    
-    
-    
     fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item = EnumeratedBaseNeuronReference<CANQ,Self::SingleNeuronReference>> {
         todo!()
     }
@@ -60,9 +57,8 @@ BaseNeuronCollectionSharedTrait<CANQ>
 
     fn try_get_neuron_data_slice_ref_mut(&mut self, index_range: Range<LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>>) -> Result<Self::NeuronSliceReferenceMut, FeagiNeuronError>;
 
-    
-    
-    
+
+
     fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item = EnumeratedBaseNeuronReference<CANQ,Self::SingleNeuronReference>> {
         todo!()
     }

@@ -1,3 +1,4 @@
+use core::ops::Range;
 use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType, QuantizableNonzeroUIntType, QuantizableUIntType, QuantizableValueType};
 use crate::neuron::model_specifications::base_specifications::{LinearNeuronIndexCount, NeuronMembranePotential};
 
@@ -23,6 +24,17 @@ mod all_neuron_densities {
 //region Neuron Voxel Index and Count
 
 crate::define_quantizable_uint_type_family!(VoxelIndexCount);
+
+impl<VoxelIndexCountCoordQuant: QuantizableUIntType> VoxelIndexCount<VoxelIndexCountCoordQuant> {
+    pub fn calculate_linear_index_range(&self,
+                                        density: LinearNeuronIndexCount<NeuronDensityPerVoxel>)
+        -> Range<LinearNeuronIndexCount<VoxelIndexCountCoordQuant>>
+    {
+        let density = density.through_usize_to_quant::<VoxelIndexCountCoordQuant>();
+        let start = self.0 / density;
+        LinearNeuronIndexCount(start)..LinearNeuronIndexCount(start + density)
+    }
+}
 
 //endregion
 

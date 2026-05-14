@@ -7,12 +7,6 @@ use crate::quantization_level::CorticalAreaNeuronQuantization;
 
 pub trait MultiNeuronDimensionalNeuronModelCollectionSharedTrait<CANQ: CorticalAreaNeuronQuantization>:
 BaseNeuronCollectionSharedTrait<CANQ> {
-    fn get_number_neurons_per_voxel(&self) -> LinearNeuronIndexCount<NeuronDensityPerVoxel>;
-
-    fn try_get_voxel_data_ref(&self, index: VoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<, FeagiNeuronError>;
-
-    fn try_get_voxel_data_ref_mut(&mut self, index: VoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<, FeagiNeuronError>;
-    
     fn get_number_contained_voxels(&self) -> VoxelIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
 
     /// What is the upper bound (exclusive) neuron voxel index allowed?
@@ -51,9 +45,7 @@ MultiNeuronDimensionalNeuronModelCollectionSharedTrait<CANQ>
 }
 
 
-pub struct MultiNeuronVoxelDataRefContainer<'a, CANQ: CorticalAreaNeuronQuantization, BNMC: MultiNeuronDimensionalNeuronModelCollectionSharedTrait<CANQ>> {
-    data_neurons_of_voxel: &'a [BNMC::SingleNeuronReference]
-}
+
 
 
 

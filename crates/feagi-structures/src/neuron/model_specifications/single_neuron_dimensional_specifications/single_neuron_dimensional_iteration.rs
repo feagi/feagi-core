@@ -1,3 +1,4 @@
+use crate::neuron::model_specifications::base_dimensional_specifications::dimensional_neuron_common_structs::{VoxelCoordinate, VoxelIndexCount};
 use crate::neuron::model_specifications::single_neuron_dimensional_specifications::single_neuron_dimensional_neuron_specifications::SingleNeuronDimensionalNeuronCollectionSharedTrait;
 use crate::quantization_level::CorticalAreaNeuronQuantization;
 
