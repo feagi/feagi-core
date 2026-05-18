@@ -1,4 +1,4 @@
-use crate::define_ref_access_concrete_methods;
+use crate::define_ref_immut_mut_access_concrete_methods;
 use crate::quantization_level::CorticalAreaNeuronQuantization;
 
 //region Neuron
@@ -7,7 +7,7 @@ pub struct PseudoVoxelModelNeuron<CANQ: CorticalAreaNeuronQuantization> {
 }
 
 impl<CANQ: CorticalAreaNeuronQuantization> IndividualNeuronModelBaseTrait<CANQ> for PseudoVoxelModelNeuron<CANQ> {
-    define_ref_access_concrete_methods!(membrane_potential, IndividualNeuronMembranePotential<CANQ::NeuronValueQuant>, membrane_potential);
+    define_ref_immut_mut_access_concrete_methods!(membrane_potential, IndividualNeuronMembranePotential<CANQ::NeuronValueQuant>, membrane_potential);
 }
 //endregion
 
@@ -19,7 +19,7 @@ pub struct PseudoVoxelModelNeuronCollection<CANQ: CorticalAreaNeuronQuantization
 
 impl<CANQ: CorticalAreaNeuronQuantization> NeuronModelContainerBaseTrait<CANQ> for PseudoVoxelModelNeuronCollection<CANQ> {
     type IndividualNeuronModelType = PseudoVoxelModelNeuron<CANQ>;
-    
+
     fn get_neuron_value_max_index(&self) -> IndividualNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
         todo!()
     }
@@ -31,7 +31,7 @@ impl<CANQ: CorticalAreaNeuronQuantization> NeuronModelContainerBaseTrait<CANQ> f
 
 
 impl<CANQ: CorticalAreaNeuronQuantization> NeuronModelDenseCollectionBaseTrait<CANQ> for PseudoVoxelModelNeuronCollection<CANQ> {
-    define_ref_access_concrete_methods!(membrane_potentials, [IndividualNeuronMembranePotential<CANQ::NeuronValueQuant>], membrane_potentials);
+    define_ref_immut_mut_access_concrete_methods!(membrane_potentials, [IndividualNeuronMembranePotential<CANQ::NeuronValueQuant>], membrane_potentials);
 }
 
 //endregion

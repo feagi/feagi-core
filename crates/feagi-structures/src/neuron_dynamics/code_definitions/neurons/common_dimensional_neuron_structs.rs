@@ -1,13 +1,11 @@
 use core::ops::Range;
-use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType, QuantizableNonzeroUIntType, QuantizableUIntType, QuantizableValueType};
-use crate::neuron::model_specifications::base_specifications::{LinearNeuronIndexCount, NeuronMembranePotential};
-
+use crate::base_feagi_types::quantizable_types::{QuantizableNonzeroUIntType, QuantizableUIntType, QuantizableValueType};
+use crate::neuron_dynamics::code_definitions::neurons::common_linear_neuron_structs::LinearNeuronIndexCount;
 
 //region Neuron Density Per Voxel
 
 // We do this since we only want to expose the u8 level
 pub use all_neuron_densities::NeuronDensityPerVoxel;
-
 mod all_neuron_densities {
 
     /// The number of neuron_collections that a single voxel represents. In most contexts this will be 1,
@@ -28,7 +26,7 @@ crate::define_quantizable_uint_type_family!(VoxelIndexCount);
 impl<VoxelIndexCountCoordQuant: QuantizableUIntType> VoxelIndexCount<VoxelIndexCountCoordQuant> {
     pub fn calculate_linear_index_range(&self,
                                         density: LinearNeuronIndexCount<NeuronDensityPerVoxel>)
-        -> Range<LinearNeuronIndexCount<VoxelIndexCountCoordQuant>>
+                                        -> Range<LinearNeuronIndexCount<VoxelIndexCountCoordQuant>>
     {
         let density = density.through_usize_to_quant::<VoxelIndexCountCoordQuant>();
         let start = self.0 / density;
@@ -100,6 +98,10 @@ impl<VoxelIndexCountCoordQuant: QuantizableUIntType> VoxelDimensions<VoxelIndexC
 
 //endregion
 
+
+
+
+/*
 //region Neuron Voxel Potential
 
 crate::define_quantizable_value_type_family!(VoxelPotential);
@@ -130,3 +132,5 @@ impl<PotentialQuant: QuantizableValueType> VoxelPotential<PotentialQuant> {
 }
 
 //endregion
+
+ */

@@ -8,14 +8,13 @@
 pub mod base_feagi_types;
 pub mod genomic;
 pub mod feagi_log;
-pub mod useful_structs;
+pub mod useful_structs_traits_macros;
 
 pub use feagi_structures_error::FeagiStructuresError;
 
 mod feagi_json;
 mod templates;
 mod feagi_structures_error;
-mod useful_macros;
 mod quantization_level;
 mod cortical_area__neuron_data_collections;
 mod neuron;
