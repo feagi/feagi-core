@@ -1,2 +1,2 @@
-mod code_definitions;
+pub(crate) mod code_definitions;
 mod models;

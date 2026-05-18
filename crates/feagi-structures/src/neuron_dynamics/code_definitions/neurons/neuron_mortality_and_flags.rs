@@ -1,5 +1,5 @@
 use crate::{define_ref_immut_access_trait_methods, define_ref_immut_mut_access_trait_methods};
-use crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::{NeuronModelNeuron, NeuronModelNeuronMutRef, NeuronModelNeuronMutSliceRef, NeuronModelNeuronRef, NeuronModelNeuronSliceRef};
+use crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::{NeuronModelNeuronTrait, NeuronModelNeuronMutRefTrait, NeuronModelNeuronMutSliceRef, NeuronModelNeuronRefTrait, NeuronModelNeuronSliceRef};
 use crate::quantization_level::CorticalAreaNeuronQuantization;
 // TODO any way to speeden this with const functions? low priority
 
@@ -41,7 +41,7 @@ pub trait MortalNeuronFlag: NeuronFlag
 
 //region Individual Neurons
 
-pub trait MortalNeuronModelNeuron<CANQ: CorticalAreaNeuronQuantization, MNF: MortalNeuronFlag>: NeuronModelNeuron<CANQ> {
+pub trait MortalNeuronModelNeuron<CANQ: CorticalAreaNeuronQuantization, MNF: MortalNeuronFlag>: NeuronModelNeuronTrait<CANQ> {
     define_ref_immut_mut_access_trait_methods!(flags_with_mortality, MNF);
 
     /// Returns true if a neuron is alive
@@ -58,7 +58,7 @@ pub trait MortalNeuronModelNeuron<CANQ: CorticalAreaNeuronQuantization, MNF: Mor
     }
 }
 
-pub trait MortalNeuronModelNeuronRef<'a, CANQ: CorticalAreaNeuronQuantization, MNF: MortalNeuronFlag>: NeuronModelNeuronRef<'a, CANQ> {
+pub trait MortalNeuronModelNeuronRef<'a, CANQ: CorticalAreaNeuronQuantization, MNF: MortalNeuronFlag>: NeuronModelNeuronRefTrait<'a, CANQ> {
     define_ref_immut_access_trait_methods!(flags_with_mortality, &'a MNF);
 
     /// Returns true if a neuron is alive
@@ -67,7 +67,7 @@ pub trait MortalNeuronModelNeuronRef<'a, CANQ: CorticalAreaNeuronQuantization, M
     }
 }
 
-pub trait MortalNeuronModelNeuronMutRef<'a, CANQ: CorticalAreaNeuronQuantization, MNF: MortalNeuronFlag>: NeuronModelNeuronMutRef<'a, CANQ> {
+pub trait MortalNeuronModelNeuronMutRef<'a, CANQ: CorticalAreaNeuronQuantization, MNF: MortalNeuronFlag>: NeuronModelNeuronMutRefTrait<'a, CANQ> {
     define_ref_immut_mut_access_trait_methods!(flags_with_mortality, &'a mut MNF);
 
     /// Returns true if a neuron is alive
