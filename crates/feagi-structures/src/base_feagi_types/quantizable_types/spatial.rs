@@ -193,8 +193,6 @@ macro_rules! define_unsigned_coordinate_2d_type_family {
 
         impl<T: crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseMultiElementQuantizationType for $base_name<T> {
             const NUMBER_ELEMENTS: usize = 2;
-            const ALL_ZEROS: Self = Self::new(T::ZERO, T::ZERO);
-            const ALL_ONES: Self = Self::new(T::ONE, T::ONE);
 
             type ElementType = T;
         }
@@ -422,8 +420,6 @@ macro_rules! define_signed_coordinate_2d_type_family {
 
         impl<T: $crate::base_feagi_types::quantizable_types::QuantizableIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseMultiElementQuantizationType for $base_name<T> {
             const NUMBER_ELEMENTS: usize = 2;
-            const ALL_ZEROS: Self = Self::new(T::ZERO, T::ZERO);
-            const ALL_ONES: Self = Self::new(T::ONE, T::ONE);
 
             type ElementType = T;
         }
@@ -472,12 +468,12 @@ macro_rules! define_dimension_2d_type_family {
     ($base_name:ident, $coordinate_type:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> {
+        pub struct $base_name<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> {
             pub x: $crate::base_feagi_types::quantizable_types::spatial::SpatialDimensionAxis<T>,
             pub y: $crate::base_feagi_types::quantizable_types::spatial::SpatialDimensionAxis<T>,
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> $base_name<T> {
             #[inline(always)]
             pub(crate) const fn new_unchecked(x: T, y: T) -> Self {
                 let x = $crate::base_feagi_types::quantizable_types::spatial::SpatialDimensionAxis::new_unchecked(x);
@@ -515,7 +511,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -527,7 +523,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -539,7 +535,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -551,7 +547,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -563,7 +559,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.x += rhs.x;
@@ -571,7 +567,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.x -= rhs.x;
@@ -579,7 +575,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.x *= rhs.x;
@@ -587,7 +583,7 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.x /= rhs.x;
@@ -596,7 +592,7 @@ macro_rules! define_dimension_2d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> Default for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self::new_unchecked(T::ONE, T::ONE)
@@ -604,14 +600,14 @@ macro_rules! define_dimension_2d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(f, concat!(stringify!($base_name), "<{}, {}>"), self.x, self.y)
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 2;
             const QUANTIZATION_LEVEL: crate::quantization_level::QuantizationLevel = T::QUANTIZATION_LEVEL;
 
@@ -672,13 +668,13 @@ macro_rules! define_dimension_2d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseMultiElementQuantizationType for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseMultiElementQuantizationType for $base_name<T> {
             const NUMBER_ELEMENTS: usize = 2;
 
             type ElementType = T;
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> $crate::base_feagi_types::quantizable_types::spatial::QuantizableUInt2DDimensionType
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::spatial::QuantizableUInt2DDimensionType
             for $base_name<T>
         {
             type CoordinateType = $coordinate_type<T>;
@@ -1222,13 +1218,13 @@ macro_rules! define_dimension_3d_type_family {
     ($base_name:ident, $coordinate_type:ident) =>  {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         #[cfg_attr(feature = "alloc", derive(serde::Serialize, serde::Deserialize))]
-        pub struct $base_name<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> {
+        pub struct $base_name<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> {
             pub x: $crate::base_feagi_types::quantizable_types::spatial::SpatialDimensionAxis<T>,
             pub y: $crate::base_feagi_types::quantizable_types::spatial::SpatialDimensionAxis<T>,
             pub z: $crate::base_feagi_types::quantizable_types::spatial::SpatialDimensionAxis<T>,
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> $base_name<T> {
             #[inline(always)]
             pub(crate) const fn new_unchecked(x: T, y: T, z: T) -> Self {
                 let x = $crate::base_feagi_types::quantizable_types::spatial::SpatialDimensionAxis::new_unchecked(x);
@@ -1284,7 +1280,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::Add for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::Add for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1297,7 +1293,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::Sub for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::Sub for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1310,7 +1306,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::Mul for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::Mul for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1323,7 +1319,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::Div for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::Div for $base_name<T> {
             type Output = Self;
 
             #[inline(always)]
@@ -1336,7 +1332,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::AddAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::AddAssign for $base_name<T> {
             #[inline(always)]
             fn add_assign(&mut self, rhs: Self) {
                 self.x += rhs.x;
@@ -1345,7 +1341,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::SubAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::SubAssign for $base_name<T> {
             #[inline(always)]
             fn sub_assign(&mut self, rhs: Self) {
                 self.x -= rhs.x;
@@ -1354,7 +1350,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::MulAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::MulAssign for $base_name<T> {
             #[inline(always)]
             fn mul_assign(&mut self, rhs: Self) {
                 self.x *= rhs.x;
@@ -1363,7 +1359,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> core::ops::DivAssign for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> core::ops::DivAssign for $base_name<T> {
             #[inline(always)]
             fn div_assign(&mut self, rhs: Self) {
                 self.x /= rhs.x;
@@ -1373,7 +1369,7 @@ macro_rules! define_dimension_3d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> Default for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> Default for $base_name<T> {
             #[inline(always)]
             fn default() -> Self {
                 Self::new_unchecked(T::ONE, T::ONE, T::ONE)
@@ -1381,7 +1377,7 @@ macro_rules! define_dimension_3d_type_family {
         }
 
         #[cfg(feature = "alloc")]
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType + core::fmt::Display> core::fmt::Display for $base_name<T> {
             #[inline(always)]
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(
@@ -1394,7 +1390,7 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseQuantizationType for $base_name<T> {
             const NUMBER_OF_BYTES: usize = T::NUMBER_OF_BYTES * 3;
             const QUANTIZATION_LEVEL: crate::quantization_level::QuantizationLevel = T::QUANTIZATION_LEVEL;
 
@@ -1462,12 +1458,12 @@ macro_rules! define_dimension_3d_type_family {
             }
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseMultiElementQuantizationType for $base_name<T> {
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseMultiElementQuantizationType for $base_name<T> {
             const NUMBER_ELEMENTS: usize = 3;
             type ElementType = T;
         }
 
-        impl<T: $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType> $crate::base_feagi_types::quantizable_types::spatial::QuantizableUInt3DDimensionType
+        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::spatial::QuantizableUInt3DDimensionType
             for $base_name<T>
         {
             type CoordinateType = $coordinate_type<T>;

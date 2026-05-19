@@ -1,5 +1,5 @@
 use core::ops::Range;
-use crate::base_feagi_types::quantizable_types::{QuantizableNonzeroUIntType, QuantizableUIntType};
+use crate::base_feagi_types::quantizable_types::{QuantizableUIntType};
 use crate::neuron::feagi_neuron_error::FeagiNeuronError;
 use crate::neuron::neuron_density::NeuronDensityTrait;
 
@@ -25,6 +25,10 @@ impl NeuronVoxelDensity {
         }
         Ok(NeuronVoxelDensity(value))
     }
+    
+    pub fn as_usize(&self) -> usize {
+        self.0 as usize
+    }
 }
 
 impl NeuronDensityTrait for NeuronVoxelDensity {
@@ -47,9 +51,8 @@ impl<VoxelIndexCountCoordQuant: QuantizableUIntType> VoxelIndexCount<VoxelIndexC
                                         density: NeuronVoxelDensity)
                                         -> Range<LinearNeuronIndexCount<VoxelIndexCountCoordQuant>>
     {
-        let density = density.0;
-        let start = self.0 / density;
-        LinearNeuronIndexCount(start)..LinearNeuronIndexCount(start + density)
+        let start = self.to_usize() / density.as_usize();
+        LinearNeuronIndexCount::from_usize(start)..LinearNeuronIndexCount::from_usize(start + density.as_usize())
     }
 }
 //endregion
@@ -74,7 +77,7 @@ impl<VoxelIndexCountCoordQuant: QuantizableUIntType> VoxelDimensions<VoxelIndexC
     }
 
     pub fn get_number_neurons(&self, density: &NeuronVoxelDensity) -> LinearNeuronIndexCount<VoxelIndexCountCoordQuant> {
-        LinearNeuronIndexCount::from_usize(self.number_elements() * density.to_usize())
+        LinearNeuronIndexCount::from_usize(self.number_elements() * density.as_usize())
     }
 
     // TODO remove to_usize conversions

@@ -21,4 +21,3 @@ pub use unsigned_integer::QuantizableUIntType;
 pub use signed_integer::QuantizableIntType;
 pub use value::QuantizableValueType;
 pub use shared::{FeagiBaseMultiElementQuantizationType, FeagiBaseSingleElementQuantizationType, FeagiBaseQuantizationType};
-pub use nonzero_count::NonZeroQuantizableUIntType;

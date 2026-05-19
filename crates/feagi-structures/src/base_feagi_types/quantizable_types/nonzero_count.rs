@@ -62,18 +62,5 @@ macro_rules! add_non_zero_constructors_to_quant_uint{
                 Ok(())
             }
         }
-
-        impl<T: $crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::NonZeroQuantizableUIntType for $struct_name<T> {
-            // nothing lol. Enjoy your trait!
-        }
-
     };
-}
-
-/// Trait added to QuantizableUIntType Structs (not the quantization itself) that
-/// is added to signify that a value should not be zero. No actual enforcement
-pub trait NonZeroQuantizableUIntType:
-QuantizableUIntType
-{
-    // The trait doesnt actually do anything. its just a glorified tag
 }

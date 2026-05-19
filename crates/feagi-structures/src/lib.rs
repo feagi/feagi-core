@@ -10,10 +10,6 @@ mod templates;
 mod feagi_structures_error;
 mod quantization_level;
 mod cortical_area__neuron_data_collections;
-mod neuron_old;
-mod feagi_models;
-mod neuron_dynamics;
-
 pub mod base_feagi_types;
 pub mod genomic;
 pub mod feagi_log;
