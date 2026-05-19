@@ -1,7 +1,6 @@
-use feagi_structures::{define_quantizable_percentage_type_family, define_quantizable_uint_type_family, define_quantizable_value_type_family};
-use feagi_structures::base_feagi_types::::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType, QuantizationLevel};
+use feagi_structures::{define_quantizable_uint_type_family, define_quantizable_value_type_family, QuantizationLevel};
+use feagi_structures::base_feagi_types::quantizable_types::{QuantizableUIntType, QuantizableValueType};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndexQuantization;
-use feagi_structures::neurons::descriptors::NeuronCount;
 
 //region NPU Quantization Sets
 
@@ -18,7 +17,6 @@ pub trait NPUGlobalQuantization {
 pub trait NPUBaseNeuronQuantization {
     const GENERAL_CORTICAL_AREA_QUANTIZATION_LEVEL: QuantizationLevel;
     type ValueQuant: QuantizableValueType;
-    type PercentageQuant: QuantizablePercentType;
     type BurstDeltaQuant: QuantizableUIntType;
 }
 
