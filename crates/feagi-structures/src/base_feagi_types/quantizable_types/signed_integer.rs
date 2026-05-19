@@ -169,6 +169,12 @@ macro_rules! define_quantizable_int_type_family {
 pub trait QuantizableIntType: FeagiBaseSingleElementQuantizationType {
     fn to_isize(self) -> isize;
     fn from_isize(value: isize) -> Self;
+
+    // isize range? I dont think we need this
+
+    fn through_isize_to_quant<Q: QuantizableIntType>(self) -> Q {
+        Q::from_isize(self.to_isize())
+    }
 }
 
 

@@ -11,14 +11,14 @@
 //! space savings are worth the increased complexity
 mod unsigned_integer;
 mod signed_integer;
-mod nonzero_count;
 mod value;
 mod shared;
+mod nonzero_count;
 pub mod spatial;
 
 
 pub use unsigned_integer::QuantizableUIntType;
 pub use signed_integer::QuantizableIntType;
-pub use nonzero_count::QuantizableNonzeroUIntType;
 pub use value::QuantizableValueType;
 pub use shared::{FeagiBaseMultiElementQuantizationType, FeagiBaseSingleElementQuantizationType, FeagiBaseQuantizationType};
+pub use nonzero_count::NonZeroQuantizableUIntType;

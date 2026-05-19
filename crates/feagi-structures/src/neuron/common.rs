@@ -64,7 +64,7 @@ crate::define_unsigned_coordinate_3d_type_family!(VoxelCoordinate);
 
 //region Neuron Voxel Dimensions
 
-/*
+
 crate::define_dimension_3d_type_family!(VoxelDimensions, VoxelCoordinate);
 
 impl<VoxelIndexCountCoordQuant: QuantizableUIntType> VoxelDimensions<VoxelIndexCountCoordQuant> {
@@ -117,7 +117,5 @@ impl<VoxelIndexCountCoordQuant: QuantizableUIntType> VoxelDimensions<VoxelIndexC
     // TODO iterators
 }
 
-
- */
 //endregion
 

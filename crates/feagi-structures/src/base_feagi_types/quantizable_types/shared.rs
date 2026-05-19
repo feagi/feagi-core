@@ -1,7 +1,6 @@
 //! Defines common base traits shared among many quantization traits
 
 use half::f16;
-use crate::base_feagi_types::quantizable_types::QuantizableNonzeroUIntType;
 use crate::quantization_level::QuantizationLevel;
 
 /// Common base for all quantizable types (Alloc methods disabled)
@@ -19,6 +18,7 @@ Copy
 + core::ops::SubAssign
 + core::ops::MulAssign
 + core::ops::DivAssign
++ core::cmp::PartialOrd
 + 'static
 {
     const NUMBER_OF_BYTES: usize;
@@ -50,6 +50,7 @@ Copy
 + core::ops::SubAssign
 + core::ops::MulAssign
 + core::ops::DivAssign
++ core::cmp::PartialOrd
 + 'static
 {
     const NUMBER_OF_BYTES: usize;
@@ -597,11 +598,73 @@ impl FeagiBaseQuantizationType for f32 {
     }
 }
 
-// TODO f64
+#[cfg(feature = "support_64bit_values")]
+impl FeagiBaseQuantizationType for f64 {
+    const NUMBER_OF_BYTES: usize = size_of::<f64>();
+    const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit64;
 
+    #[inline(always)]
+    fn saturating_add(self, other: Self) -> Self {
+        let value = self + other;
+        if value.is_infinite() {
+            if value.is_sign_negative() { f64::MIN } else { f64::MAX }
+        } else if value.is_nan() {
+            0.0
+        } else {
+            value
+        }
+    }
+
+    #[inline(always)]
+    fn checked_add(self, other: Self) -> Option<Self> {
+        let value = self + other;
+        if value.is_finite() { Some(value) } else { None }
+    }
+
+    #[inline(always)]
+    fn saturating_sub(self, other: Self) -> Self {
+        let value = self - other;
+        if value.is_infinite() {
+            if value.is_sign_negative() { f64::MIN } else { f64::MAX }
+        } else if value.is_nan() {
+            0.0
+        } else {
+            value
+        }
+    }
+
+    #[inline(always)]
+    fn checked_sub(self, other: Self) -> Option<Self> {
+        let value = self - other;
+        if value.is_finite() { Some(value) } else { None }
+    }
+
+    #[inline(always)]
+    fn saturating_mul(self, other: Self) -> Self {
+        let value = self * other;
+        if value.is_infinite() {
+            if value.is_sign_negative() { f64::MIN } else { f64::MAX }
+        } else if value.is_nan() {
+            0.0
+        } else {
+            value
+        }
+    }
+
+    #[inline(always)]
+    fn checked_mul(self, other: Self) -> Option<Self> {
+        let value = self * other;
+        if value.is_finite() { Some(value) } else { None }
+    }
+
+    #[inline(always)]
+    fn checked_div(self, other: Self) -> Option<Self> {
+        let value = self / other;
+        if value.is_finite() { Some(value) } else { None }
+    }
+}
 /// Defines a single Quantizable element (a single number)
 pub trait FeagiBaseSingleElementQuantizationType: FeagiBaseQuantizationType
-+ core::cmp::PartialOrd
 {
     const ZERO: Self;
     const ONE: Self;
@@ -644,8 +707,6 @@ impl FeagiBaseSingleElementQuantizationType for u64 {
 }
 
 
-
-
 impl FeagiBaseSingleElementQuantizationType for f16 {
     const ZERO: Self = f16::ZERO;
     const ONE: Self = f16::ONE;
@@ -660,8 +721,13 @@ impl FeagiBaseSingleElementQuantizationType for f32 {
     const MIN_VALUE: Self = f32::MIN;
 }
 
-// TODO f64
-
+#[cfg(feature = "support_64bit_values")]
+impl FeagiBaseSingleElementQuantizationType for f64 {
+    const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    const MAX_VALUE: Self = f64::MAX;
+    const MIN_VALUE: Self = f64::MIN;
+}
 
 
 impl FeagiBaseSingleElementQuantizationType for isize {
@@ -707,7 +773,5 @@ pub trait FeagiBaseMultiElementQuantizationType: FeagiBaseQuantizationType
 {
     const NUMBER_ELEMENTS: usize;
     const NUMBER_OF_BYTES: usize = Self::NUMBER_ELEMENTS * Self::ElementType::NUMBER_OF_BYTES;
-    const ALL_ZEROS: Self;
-    const ALL_ONES: Self;
     type ElementType: FeagiBaseSingleElementQuantizationType;
 }

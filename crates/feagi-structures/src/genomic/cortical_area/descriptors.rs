@@ -51,9 +51,9 @@ impl<T: CorticalAreaIndexQuantization> CorticalAreaIndex<T> {
 
 
 
-// NOTE: Since these macros generate generic public types, generate them in this module, and expose  only the quantizations we want above
+// NOTE: Since these macros generate generic public types, generate them in this module, and expose  only the quantization we want above
 mod generated {
-    use crate::{define_dimension_3d_type_family, define_nonzero_count_family, define_quantizable_uint_type_family, define_unsigned_coordinate_3d_type_family};
+    use crate::{add_non_zero_constructors_to_quant_uint, define_dimension_3d_type_family, define_quantizable_uint_type_family, define_unsigned_coordinate_3d_type_family};
 
 
     //region Cortical Indexing
@@ -107,12 +107,14 @@ mod generated {
 
     //region Channels
 
-    define_nonzero_count_family!(CorticalChannelCountType);
+    define_quantizable_uint_type_family!(CorticalChannelCountType);
+    add_non_zero_constructors_to_quant_uint!(CorticalChannelCountType);
     /// The number of cortical channels
     pub type CorticalChannelCount = CorticalChannelCountType<u32>;
 
 
-    define_nonzero_count_family!(CorticalChannelNeuronDepthType);
+    define_quantizable_uint_type_family!(CorticalChannelNeuronDepthType);
+    add_non_zero_constructors_to_quant_uint!(CorticalChannelNeuronDepthType);
     /// The number of neuron_collections deep of a sensor / motor channel. Generally used to define resolution
     pub type CorticalChannelNeuronDepth = CorticalChannelNeuronDepthType<u32>;
 

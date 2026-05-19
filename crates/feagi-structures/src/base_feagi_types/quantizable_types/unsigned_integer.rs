@@ -15,6 +15,8 @@ macro_rules! define_quantizable_uint_type_family {
             pub const fn from_const(value: T) -> Self {
                 Self(value)
             }
+
+            // NOTE: Keep implementations here to a minimum in case we want to have unique checked constructors
         }
 
         impl<T: crate::base_feagi_types::quantizable_types::QuantizableUIntType> From<T> for $base_name<T> {
@@ -170,7 +172,7 @@ macro_rules! define_quantizable_uint_type_family {
             }
 
             #[inline(always)]
-            fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+            fn convert_to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
                 range.start.0.to_usize()..range.end.0.to_usize()
             }
         }
@@ -182,7 +184,7 @@ pub trait QuantizableUIntType: FeagiBaseSingleElementQuantizationType {
     fn to_usize(self) -> usize;
     fn from_usize(value: usize) -> Self;
 
-    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize>;
+    fn convert_to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize>;
     
     fn through_usize_to_quant<Q: QuantizableUIntType>(self) -> Q {
         Q::from_usize(self.to_usize())
@@ -202,7 +204,7 @@ impl QuantizableUIntType for usize {
     }
 
     #[inline(always)]
-    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+    fn convert_to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
         range.start.to_usize()..range.end.to_usize()
     }
 }
@@ -216,14 +218,11 @@ impl QuantizableUIntType for u8 {
 
     #[inline(always)]
     fn from_usize(value: usize) -> Self {
-        match u8::try_from(value) {
-            Ok(v) => v,
-            Err(_) => u8::MAX,
-        }
+        u8::try_from(value).unwrap_or_else(|_| u8::MAX)
     }
 
     #[inline(always)]
-    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+    fn convert_to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
         range.start.to_usize()..range.end.to_usize()
     }
 }
@@ -244,7 +243,7 @@ impl QuantizableUIntType for u16 {
     }
 
     #[inline(always)]
-    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+    fn convert_to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
         range.start.to_usize()..range.end.to_usize()
     }
 }
@@ -265,7 +264,7 @@ impl QuantizableUIntType for u32 {
     }
 
     #[inline(always)]
-    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+    fn convert_to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
         range.start.to_usize()..range.end.to_usize()
     }
 }
@@ -287,7 +286,7 @@ impl QuantizableUIntType for u64 {
     }
 
     #[inline(always)]
-    fn to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
+    fn convert_to_usize_range(range: core::ops::Range<Self>) -> core::ops::Range<usize> {
         range.start.to_usize()..range.end.to_usize()
     }
 }
