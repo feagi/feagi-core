@@ -1,6 +1,6 @@
 use feagi_structures::CorticalAreaNeuronQuantization;
 use feagi_structures::neuron::{FeagiNeuronError, LinearNeuronIndexCount, NeuronMembranePotential};
-use crate::dynamics::neuron::linear::neurons::{NeuronData, NeuronDataRef, NeuronDataRefMut, NeuronModelParametersTrait};
+use crate::dynamics::neuron::shared::neurons::{NeuronData, NeuronDataRef, NeuronDataRefMut, NeuronModelParametersTrait};
 
 //region Shared Enums
 
@@ -26,7 +26,6 @@ pub enum NeuronCollectionType {
 
 //endregion
 
-//region Universally Shared (Linear Base)
 
 /// Base trait shared by all neuron model collections, which establishes a fallback universal way
 /// to reference, modify, and iterate through any neuron collection structure
@@ -61,21 +60,21 @@ pub trait NeuronModelCollectionBaseLinearTrait<CANQ: CorticalAreaNeuronQuantizat
 
     fn try_get_neuron_model_data_ref_mut(&mut self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<&mut NMP, FeagiNeuronError>;
 
-    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item = EnumeratedNeuronLinearReference<CANQ, NeuronDataRef<CANQ, NMP>>>;
+    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item = EnumeratedLinearNeuron<CANQ, NeuronDataRef<CANQ, NMP>>>;
 
-    fn enumerated_linear_neuron_iter_mut(&self) -> impl Iterator<Item = EnumeratedNeuronLinearReferenceMut<CANQ, NeuronDataRefMut<CANQ, NMP>>>;
+    fn enumerated_linear_neuron_iter_mut(&self) -> impl Iterator<Item = EnumeratedLinearNeuronMut<CANQ, NeuronDataRefMut<CANQ, NMP>>>;
 
     // TODO RAYON iterators
 }
 
 //region Iterators
-pub struct EnumeratedNeuronLinearReference<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> {
+pub struct EnumeratedLinearNeuron<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> {
     linear_neuron_index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
     potential: &'a NeuronMembranePotential<CANQ::NeuronValueQuant>,
     model_parameters: &'a NMP,
 }
 
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> EnumeratedNeuronLinearReference<'a, CANQ, NMP> {
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> EnumeratedLinearNeuron<'a, CANQ, NMP> {
     pub fn get_linear_index(&self) -> &LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
         &self.linear_neuron_index
     }
@@ -85,13 +84,13 @@ impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<C
     }
 }
 
-pub struct EnumeratedNeuronLinearReferenceMut<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> {
+pub struct EnumeratedLinearNeuronMut<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> {
     linear_neuron_index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
     potential: &'a mut NeuronMembranePotential<CANQ::NeuronValueQuant>,
     model_parameters: &'a mut NMP,
 }
 
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> EnumeratedNeuronLinearReferenceMut<'a, CANQ, NMP> {
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> EnumeratedLinearNeuronMut<'a, CANQ, NMP> {
     pub fn get_linear_index(&self) -> &LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
         &self.linear_neuron_index
     }
@@ -106,7 +105,6 @@ impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<C
 }
 //endregion
 
-//endregion
 
 //region Shared Packed
 

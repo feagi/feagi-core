@@ -4,8 +4,8 @@
 use feagi_structures::CorticalAreaNeuronQuantization;
 use feagi_structures::neuron::{FeagiNeuronError, LinearNeuronIndexCount};
 use crate::dynamics::neuron::linear::collections::NeuronModelCollectionBaseLinearTrait;
-use crate::dynamics::neuron::linear::neuron_firing::NeuronFiringResultTrait;
-use crate::dynamics::neuron::linear::neurons::{NeuronModelParametersTrait};
+use crate::dynamics::neuron::shared::neuron_firing::NeuronFiringResultTrait;
+use crate::dynamics::neuron::shared::neurons::{NeuronModelParametersTrait};
 
 // TODO macros to make flags
 

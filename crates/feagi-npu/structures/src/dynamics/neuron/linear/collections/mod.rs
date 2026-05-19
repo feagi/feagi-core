@@ -1,7 +1,4 @@
 pub mod structs;
+mod linear_resize;
 
-mod shared;
-pub mod single_neuron_density;
-pub mod multi_neuron_density;
-
-pub use shared::*;
+pub use crate::dynamics::neuron::shared::collections::shared::*;

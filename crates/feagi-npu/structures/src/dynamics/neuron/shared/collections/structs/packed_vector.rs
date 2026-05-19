@@ -1,8 +1,8 @@
 use feagi_structures::base_feagi_types::quantizable_types::{QuantizableNonzeroUIntType, QuantizableUIntType};
 use feagi_structures::CorticalAreaNeuronQuantization;
 use feagi_structures::neuron::{FeagiNeuronError, LinearNeuronIndexCount, NeuronMembranePotential};
-use crate::dynamics::neuron::linear::collections::{EnumeratedNeuronLinearReference, EnumeratedNeuronLinearReferenceMut, NeuronCollectionType, NeuronGroupingType, NeuronModelCollectionBaseLinearTrait, NeuronModelCollectionPackedLinearTrait, PackedLinearIteration, PackedLinearIterationMut};
-use crate::dynamics::neuron::linear::neurons::{NeuronData, NeuronDataRef, NeuronDataRefMut, NeuronModelParametersTrait};
+use crate::dynamics::neuron::linear::collections::{EnumeratedLinearNeuron, EnumeratedLinearNeuronMut, NeuronCollectionType, NeuronGroupingType, NeuronModelCollectionBaseLinearTrait, NeuronModelCollectionPackedLinearTrait, PackedLinearIteration, PackedLinearIterationMut};
+use crate::dynamics::neuron::shared::neurons::{NeuronData, NeuronDataRef, NeuronDataRefMut, NeuronModelParametersTrait};
 
 pub struct NeuronCollectionLinearPackedVector<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>
 {
@@ -75,11 +75,11 @@ impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>
         &mut self.model_parameters[index.to_usize()]
     }
 
-    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item=EnumeratedNeuronLinearReference<CANQ, NeuronDataRef<CANQ, NMP>>> {
+    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item=EnumeratedLinearNeuron<CANQ, NeuronDataRef<CANQ, NMP>>> {
         todo!()
     }
 
-    fn enumerated_linear_neuron_iter_mut(&self) -> impl Iterator<Item=EnumeratedNeuronLinearReferenceMut<CANQ, NeuronDataRefMut<CANQ, NMP>>> {
+    fn enumerated_linear_neuron_iter_mut(&self) -> impl Iterator<Item=EnumeratedLinearNeuronMut<CANQ, NeuronDataRefMut<CANQ, NMP>>> {
         todo!()
     }
 }

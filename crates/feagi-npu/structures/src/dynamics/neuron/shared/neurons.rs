@@ -1,4 +1,4 @@
-//! Traits for all base (linear) neurons, neuron refs, and neuron mutable refs
+//! Traits for all base neurons, neuron refs, and neuron mutable refs
 
 use feagi_structures::CorticalAreaNeuronQuantization;
 use feagi_structures::neuron::NeuronMembranePotential;
