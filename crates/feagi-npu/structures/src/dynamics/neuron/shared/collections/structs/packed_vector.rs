@@ -1,7 +1,8 @@
 use feagi_structures::base_feagi_types::quantizable_types::{QuantizableNonzeroUIntType, QuantizableUIntType};
 use feagi_structures::CorticalAreaNeuronQuantization;
 use feagi_structures::neuron::{FeagiNeuronError, LinearNeuronIndexCount, NeuronMembranePotential};
-use crate::dynamics::neuron::linear::collections::{EnumeratedLinearNeuron, EnumeratedLinearNeuronMut, NeuronCollectionType, NeuronGroupingType, NeuronModelCollectionBaseLinearTrait, NeuronModelCollectionPackedLinearTrait, PackedLinearIteration, PackedLinearIterationMut};
+use crate::dynamics::neuron::linear::collections::{NeuronCollectionType, NeuronModelCollectionBaseLinearTrait, NeuronModelCollectionPackedLinearTrait};
+use crate::dynamics::neuron::shared::iteration::{EnumeratedLinearNeuron, EnumeratedLinearNeuronMut, PackedLinearIteration, PackedLinearIterationMut};
 use crate::dynamics::neuron::shared::neurons::{NeuronData, NeuronDataRef, NeuronDataRefMut, NeuronModelParametersTrait};
 
 pub struct NeuronCollectionLinearPackedVector<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>
@@ -12,7 +13,6 @@ pub struct NeuronCollectionLinearPackedVector<CANQ: CorticalAreaNeuronQuantizati
 
 impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> NeuronModelCollectionBaseLinearTrait<CANQ, NMP> for NeuronCollectionLinearPackedVector<CANQ, NMP>
 {
-    const NEURON_GROUPING_TYPE: NeuronGroupingType = NeuronGroupingType::Single;
     const NEURON_COLLECTION_TYPE: NeuronCollectionType = NeuronCollectionType::PackedResizableVector;
 
     fn is_sorted_in_increasing_index_order(&self) -> bool {

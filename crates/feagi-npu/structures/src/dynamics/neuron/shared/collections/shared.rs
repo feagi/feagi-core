@@ -1,15 +1,11 @@
 use feagi_structures::CorticalAreaNeuronQuantization;
 use feagi_structures::neuron::{FeagiNeuronError, LinearNeuronIndexCount, NeuronMembranePotential};
+use crate::dynamics::neuron::shared::iteration::{EnumeratedLinearNeuron, EnumeratedLinearNeuronMut, PackedLinearIterationMut};
+use crate::dynamics::neuron::shared::neuron_slices::{NeuronModelMutSlice, NeuronModelSlice};
 use crate::dynamics::neuron::shared::neurons::{NeuronData, NeuronDataRef, NeuronDataRefMut, NeuronModelParametersTrait};
 
 //region Shared Enums
 
-/// Defines if neurons are expected to be grouped together or not
-#[derive(Clone, PartialEq)]
-pub enum NeuronGroupingType {
-    Single,
-    Multiple,
-}
 
 
 /// Enum for defining what kind of collection a neuron collection is
@@ -31,7 +27,6 @@ pub enum NeuronCollectionType {
 /// to reference, modify, and iterate through any neuron collection structure
 pub trait NeuronModelCollectionBaseLinearTrait<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>
 {
-    const NEURON_GROUPING_TYPE: NeuronGroupingType;
     const NEURON_COLLECTION_TYPE: NeuronCollectionType;
 
     fn is_sorted_in_increasing_index_order(&self) -> bool;
@@ -67,45 +62,6 @@ pub trait NeuronModelCollectionBaseLinearTrait<CANQ: CorticalAreaNeuronQuantizat
     // TODO RAYON iterators
 }
 
-//region Iterators
-pub struct EnumeratedLinearNeuron<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> {
-    linear_neuron_index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
-    potential: &'a NeuronMembranePotential<CANQ::NeuronValueQuant>,
-    model_parameters: &'a NMP,
-}
-
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> EnumeratedLinearNeuron<'a, CANQ, NMP> {
-    pub fn get_linear_index(&self) -> &LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
-        &self.linear_neuron_index
-    }
-
-    pub fn neuron_ref(&self) -> NeuronDataRef<'a, CANQ, NMP> {
-        NeuronDataRef::new(self.potential, self.model_parameters)
-    }
-}
-
-pub struct EnumeratedLinearNeuronMut<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> {
-    linear_neuron_index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
-    potential: &'a mut NeuronMembranePotential<CANQ::NeuronValueQuant>,
-    model_parameters: &'a mut NMP,
-}
-
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> EnumeratedLinearNeuronMut<'a, CANQ, NMP> {
-    pub fn get_linear_index(&self) -> &LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
-        &self.linear_neuron_index
-    }
-
-    pub fn neuron_ref(&self) -> NeuronDataRef<'a, CANQ, NMP> {
-        NeuronDataRef::new(self.potential, self.model_parameters)
-    }
-
-    pub fn neuron_ref_mut(&self) -> NeuronDataRefMut<'a, CANQ, NMP> {
-        NeuronDataRefMut::new(self.potential, self.model_parameters)
-    }
-}
-//endregion
-
-
 //region Shared Packed
 
 /// Trait for structs that are densely packed (not sparse)
@@ -135,65 +91,6 @@ PackedLinearIterationMut<'static, CANQ, NMP>
         true // All packed instances are always sorted
     }
 }
-
-//region Packed Slices
-
-/// Defines all the fields for a slice of all neurons as an immutable reference
-pub struct NeuronModelSlice<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>
-{
-    /// Potential of neuron
-    pub neuron_potentials: &'a [NeuronMembranePotential<CANQ::NeuronValueQuant>],
-
-    /// All other parameters of neurons
-    pub get_model_parameters: &'a [NMP]
-}
-
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIteration<'a, CANQ, NMP> for NeuronModelSlice<'a, CANQ, NMP> {
-    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'a, CANQ, NMP>> {
-        todo!()
-    }
-}
-
-/// Defines all the fields for a slice of all neurons as a mutable reference
-pub struct NeuronModelMutSlice<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>
-{
-    /// Potential of neuron
-    pub neuron_potentials: &'a mut [NeuronMembranePotential<CANQ::NeuronValueQuant>],
-
-    /// All other parameters of neurons
-    pub get_model_parameters: &'a mut [NMP]
-}
-
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIteration<'a, CANQ, NMP> for NeuronModelMutSlice<'a, CANQ, NMP> {
-    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'a, CANQ, NMP>> {
-        todo!()
-    }
-}
-
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIterationMut<'a, CANQ, NMP> for NeuronModelMutSlice<'a, CANQ, NMP> {
-
-    fn linear_neuron_iter_mut(&mut self) -> impl Iterator<Item=NeuronDataRefMut<'a, CANQ, NMP>> {
-        todo!()
-    }
-}
-
-
-
-//endregion
-
-
-//region Packed Iteration
-pub trait PackedLinearIteration<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> {
-    fn linear_neuron_iter(&self) -> impl Iterator<Item = NeuronDataRef<'a, CANQ, NMP>>;
-}
-
-pub trait PackedLinearIterationMut<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>:
-PackedLinearIteration<'a, CANQ, NMP>
-{
-    fn linear_neuron_iter_mut(&mut self) -> impl Iterator<Item = NeuronDataRefMut<'a, CANQ, NMP>>;
-}
-
-//endregion
 
 //endregion
 
