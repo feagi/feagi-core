@@ -2,7 +2,7 @@
 //! model should use.
 use core::ops::Range;
 use crate::define_ref_immut_mut_access_trait_methods;
-use crate::neuron::FeagiNeuronError;
+use crate::neuron_old::FeagiNeuronError;
 use crate::quantization_level::CorticalAreaNeuronQuantization;
 use crate::neuron_dynamics::code_definitions::neurons::common_linear_neuron_structs::{LinearNeuronIndexCount, NeuronMembranePotential};
 use crate::neuron_dynamics::code_definitions::neurons::iterators::{EnumeratedNeuronLinearReference, EnumeratedNeuronLinearReferenceMut};
@@ -56,6 +56,8 @@ macro_rules! __internal_neuron_generate_base_collection_struct_hash_and_base_tra
 
 //region Individual Neurons
 
+// TODO macro should add clonable
+
 /// Impliments
 #[macro_export]
 macro_rules! __internal_neuron_generate_base_neuron_structs_and_traits{
@@ -92,7 +94,7 @@ macro_rules! __internal_neuron_generate_base_neuron_structs_and_traits{
 
 
             pub trait [<$model_neuron_name NeuronTrait>]<CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization>:
-            $crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::NeuronModelNeuron<CANQ>
+            $crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::NeuronModelNeuronTrait<CANQ>
             {
                 $(
                     fn [<get_ $field>](&self) -> &$ty;
@@ -109,10 +111,11 @@ macro_rules! __internal_neuron_generate_base_neuron_structs_and_traits{
             }
 
             pub trait [<$model_neuron_name NeuronMutRefTrait>]<'a, CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization>:
+            [<$model_neuron_name NeuronRefTrait>]<'a, CANQ> +
             $crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::NeuronModelNeuronMutRefTrait<'a, CANQ>
             {
                 $(
-                    fn [<get_ $field _mut>](&mut self) -> &'a mut $ty;
+                    fn [<get_ $field _mut>](&mut self) -> &mut $ty;
                 )*
             }
 
@@ -134,7 +137,7 @@ macro_rules! __internal_neuron_generate_base_neuron_structs_and_traits{
                 }
             }
 
-            impl<CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> $crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::NeuronModelNeuron<CANQ> for [<$model_neuron_name Neuron>]<CANQ> {
+            impl<CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> $crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::NeuronModelNeuronTrait<CANQ> for [<$model_neuron_name Neuron>]<CANQ> {
                 $crate::define_ref_immut_mut_access_concrete_methods!(
                     membrane_potential,
                     $crate::neuron_dynamics::code_definitions::neurons::common_linear_neuron_structs::NeuronMembranePotential<CANQ::NeuronValueQuant>,
@@ -142,25 +145,66 @@ macro_rules! __internal_neuron_generate_base_neuron_structs_and_traits{
                 );
             }
 
-            impl<'a, CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> $crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::NeuronModelNeuronRef<'a, CANQ> for [<$model_neuron_name NeuronRef>]<'a, CANQ> {
+            impl<CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> [<$model_neuron_name NeuronTrait>]<CANQ> for [<$model_neuron_name Neuron>]<CANQ> {
+                $(
+                    #[inline(always)]
+                    fn [<get_ $field>](&self) -> &$ty {
+                        &self.$field
+                    }
+
+                    #[inline(always)]
+                    fn [<get_ $field _mut>](&mut self) -> &mut $ty {
+                        &mut self.$field
+                    }
+                )*
+            }
+
+            impl<'a, CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> $crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::NeuronModelNeuronRefTrait<'a, CANQ> for [<$model_neuron_name NeuronRef>]<'a, CANQ> {
                 #[inline(always)]
                 fn get_membrane_potential(&self) -> &'a $crate::neuron_dynamics::code_definitions::neurons::common_linear_neuron_structs::NeuronMembranePotential<CANQ::NeuronValueQuant> {
                     self.membrane_potential
                 }
             }
 
-            impl<'a, CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> $crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::NeuronModelNeuronRef<'a, CANQ> for [<$model_neuron_name NeuronRefMut>]<'a, CANQ> {
+            impl<'a, CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> $crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::NeuronModelNeuronRefTrait<'a, CANQ> for [<$model_neuron_name NeuronRefMut>]<'a, CANQ> {
                 #[inline(always)]
                 fn get_membrane_potential(&self) -> &'a $crate::neuron_dynamics::code_definitions::neurons::common_linear_neuron_structs::NeuronMembranePotential<CANQ::NeuronValueQuant> {
-                    self.membrane_potential
+                    &*self.membrane_potential
                 }
             }
 
-            impl<'a, CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> $crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::NeuronModelNeuronMutRef<'a, CANQ> for [<$model_neuron_name NeuronRefMut>]<'a, CANQ> {
+            impl<'a, CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> $crate::neuron_dynamics::code_definitions::neurons::base_neuron_model_fields::NeuronModelNeuronMutRefTrait<'a, CANQ> for [<$model_neuron_name NeuronRefMut>]<'a, CANQ> {
                 #[inline(always)]
                 fn get_membrane_potential_mut(&mut self) -> &mut $crate::neuron_dynamics::code_definitions::neurons::common_linear_neuron_structs::NeuronMembranePotential<CANQ::NeuronValueQuant> {
                     self.membrane_potential
                 }
+            }
+
+            impl<'a, CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> [<$model_neuron_name NeuronRefTrait>]<'a, CANQ> for [<$model_neuron_name NeuronRef>]<'a, CANQ> {
+                $(
+                    #[inline(always)]
+                    fn [<get_ $field>](&self) -> &'a $ty {
+                        self.$field
+                    }
+                )*
+            }
+
+            impl<'a, CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> [<$model_neuron_name NeuronRefTrait>]<'a, CANQ> for [<$model_neuron_name NeuronRefMut>]<'a, CANQ> {
+                $(
+                    #[inline(always)]
+                    fn [<get_ $field>](&self) -> &'a $ty {
+                        &*self.$field
+                    }
+                )*
+            }
+
+            impl<'a, CANQ: $crate::quantization_level::CorticalAreaNeuronQuantization> [<$model_neuron_name NeuronMutRefTrait>]<'a, CANQ> for [<$model_neuron_name NeuronRefMut>]<'a, CANQ> {
+                $(
+                    #[inline(always)]
+                    fn [<get_ $field _mut>](&mut self) -> &mut $ty {
+                        self.$field
+                    }
+                )*
             }
         }
     };
@@ -209,6 +253,8 @@ pub trait NeuronModelNeuronRefClonableTrait<CANQ: CorticalAreaNeuronQuantization
 
 //region Neuron Slices
 
+// NOTE: this only applies for any neuron type that supports linear packed storage!
+
 #[macro_export]
 macro_rules! __internal_neuron_generate_base_neuron_slices_traits{
     (
@@ -252,15 +298,19 @@ NeuronModelNeuronSliceRef<'a, CANQ>
 
 //region Neuron Collections
 
+
+
 /// Enum for defining what kind of collection a neuron collection is
 #[derive(Clone, PartialEq)]
 pub enum NeuronCollectionType {
     DenseFixedArray,
     DenseResizableVector,
-    // TODO Indexed Fixed Array?
-    IndexedResizableVector,
-    // TODO indexed fixed hashmap?
-    IndexedResizableHashmap
+    IndexedSingleNeuronResizableVector,
+    IndexedSingleNeuronResizableHashmap,
+    IndexedMultiNeuronResizableVector,
+    IndexedMultiNeuronResizableHashmap,
+    
+    // TODO Array, fixed Hashmaps?
     // TODO others? Device support specifics?
 }
 

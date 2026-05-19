@@ -16,7 +16,7 @@ mod burst_engines;
 mod cortical_area_identifier_flag;
 mod typed_indexing;
 mod feagi_npu_structure_error;
-
+mod dynamics;
 
 pub use feagi_npu_structure_error::FeagiNPUStructureError;
 pub use cortical_area_identifier_flag::NPUCorticalAreaIdentifierFlag;

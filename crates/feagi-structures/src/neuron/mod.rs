@@ -1,7 +1,7 @@
-//mod neuron_model;
-//pub mod neuron_collections;
-mod model_specifications;
-mod neuron_field_collection;
+mod neuron_density;
+mod common;
+mod feagi_neuron_error;
 
-pub use crate::neuron_dynamics::code_definitions::neurons::feagi_neuron_error::FeagiNeuronError;
-
+pub use neuron_density::NeuronDensity;
+pub use feagi_neuron_error::FeagiNeuronError;
+pub use common::*;
