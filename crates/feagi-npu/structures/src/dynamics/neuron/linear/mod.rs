@@ -1,3 +1,4 @@
 mod neurons;
 pub mod collections;
-mod mortality;
+pub mod extensions;
+mod neuron_firing;

@@ -4,7 +4,8 @@
 use feagi_structures::CorticalAreaNeuronQuantization;
 use feagi_structures::neuron::{FeagiNeuronError, LinearNeuronIndexCount};
 use crate::dynamics::neuron::linear::collections::NeuronModelCollectionBaseLinearTrait;
-use crate::dynamics::neuron::linear::neurons::NeuronModelNeuronTrait;
+use crate::dynamics::neuron::linear::neuron_firing::NeuronFiringResultTrait;
+use crate::dynamics::neuron::linear::neurons::{NeuronModelParametersTrait};
 
 // TODO macros to make flags
 
@@ -29,7 +30,7 @@ pub trait MortalNeuronFlag: NeuronFlag
     /// Returns true if a neuron is alive
     fn is_neuron_alive(&self) -> bool;
     /// Allows setting alive state of a neuron
-    fn set_neuron_alive(&mut self, set_alive: bool);
+    fn set_neuron_life(&mut self, set_alive: bool);
     /// Toggles if a neuron is alive, slightly faster when setting it when used with flags
     fn toggle_neuron_alive(&mut self);
 }
@@ -39,24 +40,23 @@ pub trait MortalNeuronFlag: NeuronFlag
 //region Neuron
 
 pub trait MortalNeuron<CANQ: CorticalAreaNeuronQuantization>:
-NeuronModelNeuronTrait<CANQ>
+NeuronModelParametersTrait<CANQ>
 {
     /// Returns true if a neuron is alive
     fn is_neuron_alive(&self) -> bool;
-}
-
-pub trait MortalNeuronMut<CANQ: CorticalAreaNeuronQuantization>:
-MortalNeuron<CANQ>
-{
     /// Allows setting alive state of a neuron
-    fn set_neuron_alive(&mut self, set_alive: bool);
+    fn set_neuron_life(&mut self, set_alive: bool);
     /// Toggles if a neuron is alive, slightly faster when setting it when used with flags
     fn toggle_neuron_alive(&mut self);
+
 }
 
-pub trait CountableDeadNeuronCollection<CANQ: CorticalAreaNeuronQuantization>:
-NeuronModelCollectionBaseLinearTrait<CANQ>
+pub trait CountableDeadNeuronCollection<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>:
+NeuronModelCollectionBaseLinearTrait<CANQ, NMP>
 {
+    /// Returns true if a neuron is alive
+    fn get_if_neuron_alive(&self, neuron: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<bool, FeagiNeuronError>;
+
     fn get_number_dead_neurons(&self) -> LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
 
     fn get_number_live_neurons(&self) -> LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
@@ -64,12 +64,27 @@ NeuronModelCollectionBaseLinearTrait<CANQ>
     }
 }
 
-pub trait CountableDeadNeuronCollectionMut<CANQ: CorticalAreaNeuronQuantization>:
-CountableDeadNeuronCollection<CANQ>
+pub trait CountableDeadNeuronCollectionMut<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>:
+CountableDeadNeuronCollection<CANQ, NMP>
 {
-    fn mark_neuron_as_dead(&mut self, dead_neuron: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<(), FeagiNeuronError>;
+    /// Allows setting alive state of a neuron
+    fn set_neuron_life(&mut self, neuron: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>, set_alive: bool) -> Result<(), FeagiNeuronError>;
+
+    /// Toggles if a neuron is alive, slightly faster than setting it
+    fn toggle_neuron_life(&mut self, neuron: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<(), FeagiNeuronError>;
 }
 
 // TODO Vector / Array / Hashset reference to dead neurons!
+
+//endregion
+
+//region Neuron Firing
+
+pub trait NeuronFiringResultMortalityTrait<CANQ: CorticalAreaNeuronQuantization>:
+NeuronFiringResultTrait<CANQ>
+{
+    /// If this neuron is set to die
+    fn is_going_to_die(&self) -> bool;
+}
 
 //endregion

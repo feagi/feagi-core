@@ -1,7 +1,6 @@
 use feagi_structures::CorticalAreaNeuronQuantization;
 use feagi_structures::neuron::{FeagiNeuronError, LinearNeuronIndexCount, NeuronMembranePotential};
-use crate::dynamics::neuron::linear::neurons::{NeuronModelNeuronMutRefTrait, NeuronModelNeuronRefTrait, NeuronModelNeuronTrait};
-
+use crate::dynamics::neuron::linear::neurons::{NeuronData, NeuronDataRef, NeuronDataRefMut, NeuronModelParametersTrait};
 
 //region Shared Enums
 
@@ -12,11 +11,6 @@ pub enum NeuronGroupingType {
     Multiple,
 }
 
-#[derive(Clone, PartialEq)]
-pub enum NeuronPackingType {
-    Serial,
-    Parallel
-}
 
 /// Enum for defining what kind of collection a neuron collection is
 #[derive(Clone, PartialEq)]
@@ -36,13 +30,10 @@ pub enum NeuronCollectionType {
 
 /// Base trait shared by all neuron model collections, which establishes a fallback universal way
 /// to reference, modify, and iterate through any neuron collection structure
-pub trait NeuronModelCollectionBaseLinearTrait<CANQ: CorticalAreaNeuronQuantization>
+pub trait NeuronModelCollectionBaseLinearTrait<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>
 {
+    const NEURON_GROUPING_TYPE: NeuronGroupingType;
     const NEURON_COLLECTION_TYPE: NeuronCollectionType;
-
-    type SingleNeuron: NeuronModelNeuronTrait<CANQ>;
-    type SingleNeuronRef: NeuronModelNeuronRefTrait<'static, CANQ>;
-    type SingleNeuronMutRef: NeuronModelNeuronMutRefTrait<'static,CANQ>;
 
     fn is_sorted_in_increasing_index_order(&self) -> bool;
 
@@ -52,50 +43,65 @@ pub trait NeuronModelCollectionBaseLinearTrait<CANQ: CorticalAreaNeuronQuantizat
     /// In sparse implementations, then number of neurons contained may be less than the max possible index
     fn get_number_contained_neurons(&self) -> LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>;
 
-    fn try_get_neuron_data_ref(&self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<Self::SingleNeuronRef, FeagiNeuronError>;
+    fn try_get_neuron_data(&self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<NeuronData<CANQ, NMP>, FeagiNeuronError>;
 
-    fn try_get_neuron_data_ref_mut(&mut self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<&Self::SingleNeuronMutRef, FeagiNeuronError>;
+    fn try_get_neuron_data_ref(&self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<NeuronDataRef<CANQ, NMP>, FeagiNeuronError>;
 
-    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item = EnumeratedNeuronLinearReference<CANQ,Self::SingleNeuronRef>>;
+    fn try_get_neuron_data_ref_mut(&mut self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<NeuronDataRefMut<CANQ, NMP>, FeagiNeuronError>;
 
-    fn enumerated_linear_neuron_iter_mut(&self) -> impl Iterator<Item = EnumeratedNeuronLinearReferenceMut<CANQ,Self::SingleNeuronMutRef>>;
+    fn try_get_membrane_potential_data(&self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<NeuronMembranePotential<CANQ::NeuronValueQuant>, FeagiNeuronError>;
+
+    fn try_get_membrane_potential_data_ref(&self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<&NeuronMembranePotential<CANQ::NeuronValueQuant>, FeagiNeuronError>;
+
+    fn try_get_membrane_potential_data_ref_mut(&mut self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<&mut NeuronMembranePotential<CANQ::NeuronValueQuant>, FeagiNeuronError>;
+
+    fn try_get_neuron_model_data(&self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<NMP, FeagiNeuronError>;
+
+    fn try_get_neuron_model_data_ref(&self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<&NMP, FeagiNeuronError>;
+
+    fn try_get_neuron_model_data_ref_mut(&mut self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<&mut NMP, FeagiNeuronError>;
+
+    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item = EnumeratedNeuronLinearReference<CANQ, NeuronDataRef<CANQ, NMP>>>;
+
+    fn enumerated_linear_neuron_iter_mut(&self) -> impl Iterator<Item = EnumeratedNeuronLinearReferenceMut<CANQ, NeuronDataRefMut<CANQ, NMP>>>;
 
     // TODO RAYON iterators
-
 }
 
 //region Iterators
-pub struct EnumeratedNeuronLinearReference<'a, CANQ: CorticalAreaNeuronQuantization, NMF: NeuronModelNeuronRefTrait<'a, CANQ>> {
+pub struct EnumeratedNeuronLinearReference<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> {
     linear_neuron_index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
-    neuron_collection_ref: &'a NMF
+    potential: &'a NeuronMembranePotential<CANQ::NeuronValueQuant>,
+    model_parameters: &'a NMP,
 }
 
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMF: NeuronModelNeuronRefTrait<'a, CANQ>> EnumeratedNeuronLinearReference<'a, CANQ, NMF> {
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> EnumeratedNeuronLinearReference<'a, CANQ, NMP> {
     pub fn get_linear_index(&self) -> &LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
         &self.linear_neuron_index
     }
 
-    pub fn neuron_ref(&self) -> &'a NMF {
-        self.neuron_collection_ref
+    pub fn neuron_ref(&self) -> NeuronDataRef<'a, CANQ, NMP> {
+        NeuronDataRef::new(self.potential, self.model_parameters)
     }
 }
 
-pub struct EnumeratedNeuronLinearReferenceMut<'a, CANQ: CorticalAreaNeuronQuantization, NMF: NeuronModelNeuronRefTrait<'a, CANQ>> {
+pub struct EnumeratedNeuronLinearReferenceMut<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> {
     linear_neuron_index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>,
-    neuron_collection_ref: &'a mut NMF
+    potential: &'a mut NeuronMembranePotential<CANQ::NeuronValueQuant>,
+    model_parameters: &'a mut NMP,
 }
 
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMF: NeuronModelNeuronRefTrait<'a, CANQ>> EnumeratedNeuronLinearReferenceMut<'a, CANQ, NMF> {
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> EnumeratedNeuronLinearReferenceMut<'a, CANQ, NMP> {
     pub fn get_linear_index(&self) -> &LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant> {
         &self.linear_neuron_index
     }
 
-    pub fn neuron_ref(&self) -> &'a NMF {
-        self.neuron_collection_ref
+    pub fn neuron_ref(&self) -> NeuronDataRef<'a, CANQ, NMP> {
+        NeuronDataRef::new(self.potential, self.model_parameters)
     }
 
-    pub fn neuron_ref_mut(&mut self) -> &'a mut NMF {
-        self.neuron_collection_ref
+    pub fn neuron_ref_mut(&self) -> NeuronDataRefMut<'a, CANQ, NMP> {
+        NeuronDataRefMut::new(self.potential, self.model_parameters)
     }
 }
 //endregion
@@ -104,18 +110,28 @@ impl<'a, CANQ: CorticalAreaNeuronQuantization, NMF: NeuronModelNeuronRefTrait<'a
 
 //region Shared Packed
 
-//region Shared Parallel Packed
-
 /// Trait for structs that are densely packed (not sparse)
-pub trait NeuronModelCollectionParallelPackedLinearTrait<CANQ: CorticalAreaNeuronQuantization>:
-NeuronModelCollectionBaseLinearTrait<CANQ> +
-PackedLinearIterationMut<'static, CANQ>
+pub trait NeuronModelCollectionPackedLinearTrait<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>:
+NeuronModelCollectionBaseLinearTrait<CANQ, NMP> +
+PackedLinearIterationMut<'static, CANQ, NMP>
 {
-    type ParallelSlice: NeuronModelNeuronParallelPackedCollectionSliceTrait<'static, CANQ>;
-    type ParallelSliceMut: NeuronModelNeuronPackedParallelCollectionSliceMutTrait<'static, CANQ>;
+    fn get_membrane_potentials_as_slice(&self) -> &[NeuronMembranePotential<CANQ::NeuronValueQuant>];
+    fn get_membrane_potentials_as_slice_mut(&mut self) -> &mut [NeuronMembranePotential<CANQ::NeuronValueQuant>];
+    fn get_neuron_model_data_as_slice(&self) -> &[NMP];
+    fn get_neuron_model_data_as_slice_mut(&mut self) -> &mut [NMP];
 
-    fn get_neurons_as_parallel_slice(&self) -> &Self::ParallelSlice;
-    fn get_neurons_as_parallel_slice_mut(&mut self) -> &mut Self::ParallelSliceMut;
+    fn get_neuron_data_as_slice(&self) -> NeuronModelSlice<'static, CANQ, NMP> {
+        NeuronModelSlice {
+            neuron_potentials: self.get_membrane_potentials_as_slice(),
+            get_model_parameters: self.get_neuron_model_data_as_slice(),
+        }
+    }
+    fn get_neuron_data_as_slice_mut(&mut self) -> NeuronModelMutSlice<'static, CANQ, NMP> {
+        NeuronModelMutSlice {
+            neuron_potentials: self.get_membrane_potentials_as_slice_mut(),
+            get_model_parameters: self.get_neuron_model_data_as_slice_mut(),
+        }
+    }
 
     fn is_sorted_in_increasing_index_order(&self) -> bool {
         true // All packed instances are always sorted
@@ -124,64 +140,59 @@ PackedLinearIterationMut<'static, CANQ>
 
 //region Packed Slices
 
-/// Defines all the fields for a slice of all neurons as an immutable reference. Required for all model
-/// implementations. Used to generate Individual Neuron Ref Slice Struct
-pub trait NeuronModelNeuronParallelPackedCollectionSliceTrait<'a, CANQ: CorticalAreaNeuronQuantization>:
-PackedLinearIteration<'a, CANQ>
+/// Defines all the fields for a slice of all neurons as an immutable reference
+pub struct NeuronModelSlice<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>
 {
-    /// Membrane potential is required for all neuron models
-    fn get_membrane_potential(&self) -> &'a [NeuronMembranePotential<CANQ::NeuronValueQuant>];
+    /// Potential of neuron
+    pub neuron_potentials: &'a [NeuronMembranePotential<CANQ::NeuronValueQuant>],
 
-    // Define other fields here. Make sure all implementations use inline
+    /// All other parameters of neurons
+    pub get_model_parameters: &'a [NMP]
 }
 
-/// Defines all the fields for a slice of all neurons as a mutable reference. Required for all model
-/// implementations. Used to generate Individual Neuron Mut Ref Slice Struct
-pub trait NeuronModelNeuronPackedParallelCollectionSliceMutTrait<'a, CANQ: CorticalAreaNeuronQuantization>:
-NeuronModelNeuronParallelPackedCollectionSliceTrait<'a, CANQ> +
-PackedLinearIterationMut<'a, CANQ>
-{
-    /// Membrane potential is required for all neuron models
-    fn get_membrane_potential_mut(&mut self) -> &mut [NeuronMembranePotential<CANQ::NeuronValueQuant>];
-
-    // Define other fields here. Make sure all implementations use inline
-}
-
-//endregion
-
-//endregion
-
-//region Shared Serial Packed
-
-/// Trait for structs that are sparse
-pub trait NeuronModelCollectionSerialPackedLinearTrait<CANQ: CorticalAreaNeuronQuantization>:
-NeuronModelCollectionBaseLinearTrait<CANQ> +
-PackedLinearIterationMut<'static, CANQ>
-{
-    fn get_neurons_as_serial_slice(&self) -> &[Self::SingleNeuron];
-    fn get_neurons_as_serial_slice_mut(&mut self) -> &mut [Self::SingleNeuron];
-
-    fn is_sorted_in_increasing_index_order(&self) -> bool {
-        true // All packed instances are always sorted
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIteration<'a, CANQ, NMP> for NeuronModelSlice<'a, CANQ, NMP> {
+    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'a, CANQ, NMP>> {
+        todo!()
     }
 }
 
-//endregion
+/// Defines all the fields for a slice of all neurons as a mutable reference
+pub struct NeuronModelMutSlice<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>
+{
+    /// Potential of neuron
+    pub neuron_potentials: &'a mut [NeuronMembranePotential<CANQ::NeuronValueQuant>],
 
-//region Packed Iteration
-pub trait PackedLinearIteration<'a, CANQ: CorticalAreaNeuronQuantization> {
-
-    type SinglePackedNeuronRef: NeuronModelNeuronRefTrait<'static, CANQ>;
-
-    fn linear_neuron_iter(&self) -> impl Iterator<Item = &'a Self::SinglePackedNeuronRef>;
+    /// All other parameters of neurons
+    pub get_model_parameters: &'a mut [NMP]
 }
 
-pub trait PackedLinearIterationMut<'a, CANQ: CorticalAreaNeuronQuantization>:
-PackedLinearIteration<'a, CANQ>
-{
-    type SinglePackedNeuronRefMut: NeuronModelNeuronMutRefTrait<'static,CANQ>;
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIteration<'a, CANQ, NMP> for NeuronModelMutSlice<'a, CANQ, NMP> {
+    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'a, CANQ, NMP>> {
+        todo!()
+    }
+}
 
-    fn linear_neuron_iter_mut(&mut self) -> impl Iterator<Item = &'a Self::SinglePackedNeuronRefMut>;
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIterationMut<'a, CANQ, NMP> for NeuronModelMutSlice<'a, CANQ, NMP> {
+
+    fn linear_neuron_iter_mut(&mut self) -> impl Iterator<Item=NeuronDataRefMut<'a, CANQ, NMP>> {
+        todo!()
+    }
+}
+
+
+
+//endregion
+
+
+//region Packed Iteration
+pub trait PackedLinearIteration<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> {
+    fn linear_neuron_iter(&self) -> impl Iterator<Item = NeuronDataRef<'a, CANQ, NMP>>;
+}
+
+pub trait PackedLinearIterationMut<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>:
+PackedLinearIteration<'a, CANQ, NMP>
+{
+    fn linear_neuron_iter_mut(&mut self) -> impl Iterator<Item = NeuronDataRefMut<'a, CANQ, NMP>>;
 }
 
 //endregion
@@ -191,10 +202,10 @@ PackedLinearIteration<'a, CANQ>
 //region Shared Sparse
 
 /// Trait for structs that are sparse
-pub trait NeuronModelCollectionSparseLinearTrait<CANQ: CorticalAreaNeuronQuantization>:
-NeuronModelCollectionBaseLinearTrait<CANQ>
+pub trait NeuronModelCollectionSparseLinearTrait<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>:
+NeuronModelCollectionBaseLinearTrait<CANQ, NMP>
 {
-
+    // idk?
 }
 
 

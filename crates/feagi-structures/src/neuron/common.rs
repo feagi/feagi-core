@@ -1,7 +1,7 @@
 use core::ops::Range;
 use crate::base_feagi_types::quantizable_types::{QuantizableNonzeroUIntType, QuantizableUIntType};
 use crate::neuron::feagi_neuron_error::FeagiNeuronError;
-use crate::neuron::neuron_density::NeuronDensity;
+use crate::neuron::neuron_density::NeuronDensityTrait;
 
 
 /// Linear indexing and counting of neurons
@@ -27,7 +27,7 @@ impl NeuronVoxelDensity {
     }
 }
 
-impl NeuronDensity for NeuronVoxelDensity {
+impl NeuronDensityTrait for NeuronVoxelDensity {
     fn number_of_neurons_per_unit(&self) -> u8 {
         self.0
     }

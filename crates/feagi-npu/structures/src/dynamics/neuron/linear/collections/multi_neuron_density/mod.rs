@@ -1,1 +1,1 @@
-mod multi_neuron_density;
+pub mod shared;
