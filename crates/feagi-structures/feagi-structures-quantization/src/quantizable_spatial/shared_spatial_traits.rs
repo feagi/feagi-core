@@ -1,7 +1,6 @@
 use crate::quantizable_base::index_count::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};
 
 /// Common base for all coordinate / dimension spatial data
-#[cfg(not(feature = "alloc"))]
 pub trait SpatialBaseXDTrait<QuantIndex: QuantizedIndexCountTrait>:
 Copy
 + Clone
@@ -19,7 +18,6 @@ Copy
 }
 
 /// Common base for all unsigned coordinate / dimension spatial data
-#[cfg(feature = "alloc")]
 pub trait SpatialUnsignedBaseXDTrait<QuantIndex: QuantizedIndexCountTrait>:
 Copy
 + Clone

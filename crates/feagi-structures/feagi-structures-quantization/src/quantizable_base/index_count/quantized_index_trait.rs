@@ -40,6 +40,10 @@ pub trait QuantizedIndexCountTrait: QuantizedBaseTrait
     fn should_clamp(self, value: usize) -> bool {
         value > Self::MAX_AS_USIZE
     }
+    
+    fn is_zero(self) -> bool {
+        self == Self::QUANT_ZERO
+    }
 }
 
 impl QuantizedIndexCountTrait for u8 {

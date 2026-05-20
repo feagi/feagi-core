@@ -1,6 +1,6 @@
 use crate::feagi_quantized_hardware_error::FeagiQuantizedHardwareError;
 use crate::quantizable_base::index_count::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};
-use crate::quantizable_spatial::shared_spatial_traits::SpatialUnsignedBaseXDTrait;
+use crate::quantizable_spatial::SpatialUnsignedBaseXDTrait;
 
 //region 3D
 pub trait SpatialUnsignedBase3DTrait<QuantIndex: QuantizedIndexCountTrait>:
@@ -27,7 +27,7 @@ SpatialUnsignedBaseXDTrait<QuantIndex>
 pub trait SpatialUnsignedCoordinate3DTrait<QuantIndex: QuantizedIndexCountTrait>:
 SpatialUnsignedBase3DTrait<QuantIndex>
 {
-    
+
 }
 
 pub trait SpatialDimension3DTrait<QuantIndex: QuantizedIndexCountTrait>:

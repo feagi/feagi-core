@@ -17,6 +17,7 @@ pub mod useful_structs_traits_macros;
 pub mod neuron;
 pub mod neuron_voxels;
 
+pub use feagi_structures_quantization as quantization;
 pub use feagi_structures_error::FeagiStructuresError;
 
 pub use quantization_level::{QuantizationLevel, CorticalAreaNeuronQuantization};

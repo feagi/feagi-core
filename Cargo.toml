@@ -93,6 +93,7 @@ feagi-evolutionary = { version = "=0.0.10", path = "crates/feagi-evolutionary" }
 feagi-npu-neural = { version = "=0.0.10", path = "crates/feagi-npu/neural" }
 serde_json = "1.0"
 feagi-structures = { version = "=0.0.10", path = "crates/feagi-structures" }
+feagi-structures-quantization = { version = "=0.0.10", path = "crates/feagi-structures/feagi-structures-quantization" }
 feagi-serialization = { version = "=0.0.10", path = "crates/feagi-serialization" }
 ndarray = { workspace = true }
 
@@ -142,9 +143,9 @@ resolver = "2"
 members = [
     # === Foundation Layer ===
     "crates/feagi-structures",    # Core data structures
+    "crates/feagi-structures/feagi-structures-quantization", # Quantizable data types, values / indexes / etc for various hw
     "crates/feagi-config",             # Configuration loader (TOML + overrides)
-    "crates/feagi-structures/feagi-quantized-hardware", # Quantizable data types, values / indexes / etc for various hw
-    
+
     # === NPU Subsystem (Neural Processing Unit) ===
     "crates/feagi-npu/neural",         # Neural computation: types + algorithms + models (no_std)
     "crates/feagi-npu/structures",     # Data structures for storing neuron / synapse data and traits to interface with them

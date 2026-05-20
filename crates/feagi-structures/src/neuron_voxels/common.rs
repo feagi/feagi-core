@@ -1,36 +1,10 @@
 use core::ops::Range;
+use feagi_structures_quantization::{define_quantized_index_count_wrapper_cpu, define_quantized_decimal_wrapper_cpu, define_unsigned_spatial_3d_cpu_wrappers};
+use feagi_structures_quantization::quantizable_base::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};
+use crate::neuron::{LinearNeuronIndexCount, NeuronDensityTrait, NeuronMembranePotential};
 use crate::neuron_voxels::FeagiNeuronVoxelError;
 
 
-//region Neuron Voxel Density
-
-/// Defines the number of neurons within a voxel
-pub struct NeuronVoxelDensity(u8);
-
-impl NeuronVoxelDensity {
-    pub fn new(value: u8) -> Result<NeuronVoxelDensity, FeagiNeuronVoxelError> {
-        if value == 0 {
-            return Err(FeagiNeuronVoxelError::InvalidVoxelDensity {
-                context: "Neuron Density cannot be zero!"
-            })
-        }
-        Ok(NeuronVoxelDensity(value))
-    }
-    
-    pub fn as_usize(&self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl NeuronDensityTrait for NeuronVoxelDensity {
-    fn number_of_neurons_per_unit(&self) -> u8 {
-        self.0
-    }
-}
-
-//endregion
-
-//region Neuron Voxel Membrane Potential
 
 /// Describes what method a voxel's potential is calculated if it has multiple inner neurons
 pub enum NeuronVoxelMultiPotentialCalculationMethod {
@@ -39,114 +13,79 @@ pub enum NeuronVoxelMultiPotentialCalculationMethod {
     Max
 }
 
+
 /// Neuron Voxel Membrane potential -> The potential across a neuron voxel
-crate::define_quantizable_value_type_family!(NeuronVoxelMembranePotential);
+define_quantized_decimal_wrapper_cpu!(pub struct NeuronVoxelMembranePotential);
 
-impl<Q: QuantizableValueType> NeuronVoxelMembranePotential<Q>
-{
-    pub fn new_from_potential_slice_sum(slice: &[NeuronMembranePotential<Q>]) -> NeuronVoxelMembranePotential<Q> {
+impl<QuantDeci: QuantizedIndexCountTrait> NeuronVoxelMembranePotential<QuantDeci> {
+    pub fn new_from_potential_slice_sum(slice: &[NeuronMembranePotential<QuantDeci>]) -> NeuronVoxelMembranePotential<QuantDeci> {
         slice.iter()
             .fold(
-                NeuronVoxelMembranePotential::ZERO,
+                QuantDeci::QUANT_ZERO,
                 |v, &n|
-                    v.saturating_add(NeuronVoxelMembranePotential(n.0))
+                    v.0.add(n)
             )
     }
 
-    pub fn new_from_potential_slice_average(slice: &[NeuronMembranePotential<Q>]) -> NeuronVoxelMembranePotential<Q> {
+    pub fn new_from_potential_slice_average(slice: &[NeuronMembranePotential<QuantDeci>]) -> NeuronVoxelMembranePotential<QuantDeci> {
         slice.iter()
             .fold(
-                NeuronVoxelMembranePotential::ZERO,
+                QuantDeci::QUANT_ZERO,
                 |v, &n|
-                    v.saturating_add(NeuronVoxelMembranePotential(n.0))
+                    v.0.add(n)
             )
+        // TODO make better average, maybe built in?
     }
-    
-
-
-
 }
 
 
 
-//region Neuron Voxel Index and Count
-crate::define_quantizable_uint_type_family!(VoxelIndexCount);
+define_quantized_index_count_wrapper_cpu!(pub struct NeuronVoxelDensity);
 
-//endregion
-
-
-//region Neuron Voxel Coordinate
-
-crate::define_unsigned_coordinate_3d_type_family!(VoxelCoordinate);
-
-//endregion
+impl<QuantLinear: QuantizedIndexCountTrait> NeuronDensityTrait<QuantLinear> for NeuronVoxelDensity<QuantLinear> {
+    fn number_of_neurons_per_unit(&self) -> QuantLinear {
+        self.0
+    }
+}
 
 
-//region Neuron Voxel Dimensions
+define_quantized_index_count_wrapper_cpu!(pub struct VoxelIndexCount);
+define_quantized_index_count_wrapper_cpu!(pub struct VoxelAxisIndex);
 
-
-crate::define_dimension_3d_type_family!(VoxelDimensions, VoxelCoordinate);
-
-//endregion
-
-
-
-impl<VoxelIndexCountCoordQuant: QuantizableUIntType> VoxelIndexCount<VoxelIndexCountCoordQuant> {
+impl<QuantLinear: QuantizedIndexCountTrait> VoxelIndexCount<QuantLinear> {
     pub fn calculate_linear_index_range(&self,
-                                        density: NeuronVoxelDensity)
-                                        -> Range<LinearNeuronIndexCount<VoxelIndexCountCoordQuant>>
+                                        density: NeuronVoxelDensity<QuantLinear>)
+                                        -> Range<LinearNeuronIndexCount<QuantLinear>>
     {
-        let start = self.to_usize() / density.as_usize();
-        LinearNeuronIndexCount::from_usize(start)..LinearNeuronIndexCount::from_usize(start + density.as_usize())
+        let start = self / density;
+        start..(start + density)
     }
 }
 
-impl<VoxelIndexCountCoordQuant: QuantizableUIntType> VoxelDimensions<VoxelIndexCountCoordQuant> {
 
-    pub fn get_number_voxels(&self) -> VoxelIndexCount<VoxelIndexCountCoordQuant> {
-        VoxelIndexCount::from_usize(self.number_elements())
+define_unsigned_spatial_3d_cpu_wrappers!(
+    pub struct VoxelCoordinate,
+    pub struct VoxelDimensions,
+    VoxelIndexCount<QuantIndex>,
+    VoxelAxisIndex<QuantIndex>,
+    VoxelAxisIndex<QuantIndex>,
+    VoxelAxisIndex<QuantIndex>
+);
+
+
+
+impl<QuantLinear: QuantizedIndexCountTrait> VoxelDimensions<QuantLinear, VoxelCoordinate<QuantLinear>> {
+
+    pub fn get_number_voxels(&self) -> VoxelIndexCount<QuantLinear> {
+        VoxelIndexCount::wrap_quant(QuantLinear::from_usize(self.number_elements()))
     }
 
-    pub fn get_number_neurons(&self, density: &NeuronVoxelDensity) -> LinearNeuronIndexCount<VoxelIndexCountCoordQuant> {
-        LinearNeuronIndexCount::from_usize(self.number_elements() * density.as_usize())
+    pub fn get_number_neurons(&self, density: &NeuronVoxelDensity<QuantLinear>) -> LinearNeuronIndexCount<QuantLinear> {
+        self.get_number_voxels().0 * density.0
     }
 
-    // TODO remove to_usize conversions
-    /// Linear voxel index with **x varying fastest**: `index = x + y·dx + z·dx·dy`.
-    #[inline(always)]
-    pub fn voxel_index_to_voxel_coordinate(
-        &self,
-        voxel_index: VoxelIndexCount<VoxelIndexCountCoordQuant>,
-    ) -> VoxelCoordinate<VoxelIndexCountCoordQuant> {
-        let i = QuantizableUIntType::to_usize(voxel_index);
-        let dx = self.x.get().to_usize();
-        let dy = self.y.get().to_usize();
-        let plane = dx * dy;
-        let z = i / plane;
-        let rem = i % plane;
-        let y = rem / dx;
-        let x = rem % dx;
-        VoxelCoordinate::new(
-            VoxelIndexCountCoordQuant::from_usize(x),
-            VoxelIndexCountCoordQuant::from_usize(y),
-            VoxelIndexCountCoordQuant::from_usize(z),
-        )
-    }
+    // TODO neuron coord <-> index conversion
 
-    /// Inverse of [`Self::linear_index_to_coordinate`].
-    #[inline(always)]
-    pub fn voxel_coordinate_to_voxel_index(
-        &self,
-        coordinate: VoxelCoordinate<VoxelIndexCountCoordQuant>,
-    ) -> VoxelIndexCount<VoxelIndexCountCoordQuant> {
-        let dx = self.x.get().to_usize();
-        let dy = self.y.get().to_usize();
-        let x = coordinate.x.to_usize();
-        let y = coordinate.y.to_usize();
-        let z = coordinate.z.to_usize();
-        let i = x + y * dx + z * dx * dy;
-        VoxelIndexCount::from_usize(i)
-    }
-
-    // TODO iterators
 }
+
+// TODO Dense Voxel 

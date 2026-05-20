@@ -1862,6 +1862,7 @@ dependencies = [
  "feagi-services",
  "feagi-state-manager",
  "feagi-structures",
+ "feagi-structures-quantization",
  "ndarray",
  "parking_lot",
  "serde_json",
@@ -2119,14 +2120,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-quantized-hardware"
-version = "0.0.10"
-dependencies = [
- "half",
- "paste",
-]
-
-[[package]]
 name = "feagi-sensorimotor"
 version = "0.0.10"
 dependencies = [
@@ -2207,6 +2200,7 @@ dependencies = [
  "ahash",
  "base64 0.22.1",
  "defmt",
+ "feagi-structures-quantization",
  "half",
  "ndarray",
  "paste",
@@ -2215,6 +2209,14 @@ dependencies = [
  "serde_json",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "feagi-structures-quantization"
+version = "0.0.10"
+dependencies = [
+ "half",
+ "paste",
 ]
 
 [[package]]

@@ -1,7 +1,9 @@
+use feagi_structures_quantization::{define_quantized_index_count_wrapper_cpu, define_quantized_decimal_wrapper_cpu};
+
 
 /// Linear indexing and counting of neurons
-crate::define_quantizable_uint_type_family!(LinearNeuronIndexCount);
+define_quantized_index_count_wrapper_cpu!(pub struct LinearNeuronIndexCount);
 
 /// Neuron Membrane potential
-crate::define_quantizable_value_type_family!(NeuronMembranePotential);
+define_quantized_decimal_wrapper_cpu!(pub struct NeuronMembranePotential);
 

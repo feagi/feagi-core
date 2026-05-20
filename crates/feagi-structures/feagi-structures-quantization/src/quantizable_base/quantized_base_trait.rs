@@ -51,27 +51,32 @@ Copy
 {
     const NUMBER_OF_BYTES: u8;
     const QUANTIZATION_LEVEL: QuantizationLevel;
+    const QUANT_ZERO: Self;
 }
 
 impl QuantizedBaseTrait for u8 {
     const NUMBER_OF_BYTES: u8 = 1;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit8;
+    const QUANT_ZERO: Self = 0;
 }
 
 impl QuantizedBaseTrait for u16 {
     const NUMBER_OF_BYTES: u8 = 2;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit16;
+    const QUANT_ZERO: Self = 0;
 }
 
 impl QuantizedBaseTrait for u32 {
     const NUMBER_OF_BYTES: u8 = 4;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit32;
+    const QUANT_ZERO: Self = 0;
 }
 
 #[cfg(feature = "support_64bit_indexing")]
 impl QuantizedBaseTrait for u64 {
     const NUMBER_OF_BYTES: u8 = 8;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit64;
+    const QUANT_ZERO: Self = 0;
 }
 
 // Lol no we are not doing u128 or i128
@@ -79,43 +84,51 @@ impl QuantizedBaseTrait for u64 {
 impl QuantizedBaseTrait for i8 {
     const NUMBER_OF_BYTES: u8 = 1;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit8;
+    const QUANT_ZERO: Self = 0;
 }
 
 impl QuantizedBaseTrait for i16 {
     const NUMBER_OF_BYTES: u8 = 2;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit16;
+    const QUANT_ZERO: Self = 0;
 }
 
 impl QuantizedBaseTrait for i32 {
     const NUMBER_OF_BYTES: u8 = 4;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit32;
+    const QUANT_ZERO: Self = 0;
 }
 
 #[cfg(feature = "support_64bit_indexing")]
 impl QuantizedBaseTrait for i64 {
     const NUMBER_OF_BYTES: u8 = 8;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit64;
+    const QUANT_ZERO: Self = 0;
 }
 
 // A bad choice for computation
 impl QuantizedBaseTrait for StorageF8 {
     const NUMBER_OF_BYTES: u8 = 1;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit8;
+    const QUANT_ZERO: Self = StorageF8::ZERO;
 }
 
 impl QuantizedBaseTrait for f16 {
     const NUMBER_OF_BYTES: u8 = 2;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit16;
+    const QUANT_ZERO: Self = f16::ZERO;
 }
 
 impl QuantizedBaseTrait for f32 {
     const NUMBER_OF_BYTES: u8 = 4;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit32;
+    const QUANT_ZERO: Self = 0.0;
 }
 
 #[cfg(feature = "support_64bit_values")]
 impl QuantizedBaseTrait for f64 {
     const NUMBER_OF_BYTES: u8 = 8;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit64;
+    const QUANT_ZERO: Self = f64::ZERO;
 }
 

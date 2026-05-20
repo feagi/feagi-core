@@ -56,17 +56,18 @@ std = ["alloc",
 alloc = [ # allows use of alloc (through core, not strictly std) and structures here that need it
     "dep:serde",
     "dep:serde_json",
+    "feagi-structures-quantization/alloc",
     "half/serde",
     "ahash/serde",
 ]
 defmt = ["dep:defmt"]
 ndarray = ["dep:ndarray"]
 rayon = ["dep:rayon", "std"]
-support_64bit_indexing = [] # Allow 64 bit indexing. This is pretty rare. Not compatible with WASM or Embedded
-support_64bit_values = [] # Allow 64 bit values (IE: Membrane potentials). Extremely rare! Not compatible with WASM or Embedded
+support_64bit_indexing = ["feagi-structures-quantization/support_64bit_indexing"] # Allow 64 bit indexing. This is pretty rare. Not compatible with WASM or Embedded
+support_64bit_values = ["feagi-structures-quantization/support_64bit_values"] # Allow 64 bit values (IE: Membrane potentials). Extremely rare! Not compatible with WASM or Embedded
 
 [dependencies]
-feagi_structures_quantization = {path = "feagi-structures-quantization"}
+feagi-structures-quantization = { path = "feagi-structures-quantization" }
 serde = { workspace = true, optional = true, default-features = false, features = ["alloc", "derive"] }
 serde_json = { workspace = true, optional = true}
 half = { workspace = true, default-features = false, features = [] } # STD enables autoarch detection, which we may not want
