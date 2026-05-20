@@ -1,7 +1,7 @@
 use feagi_structures::neuron::NeuronMembranePotential;
 use feagi_structures::quantization::CorticalAreaNeuronQuantization;
 use crate::neuron_collections::neuron_wrapper::neuron_wrapper_trait::{NeuronDataMutRefTrait, NeuronDataRefTrait};
-use crate::neuron_models::neuron_models::NeuronModelParametersTrait;
+use crate::external_models_make_me_my_own_crate::shared_traits_and_structs::NeuronModelParametersTrait;
 
 
 //region Independent Neuron Struct
@@ -44,7 +44,6 @@ impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>
     }
 }
 //endregion
-
 
 //region Immutable Neuron Reference
 pub struct NeuronDataCPURef<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>

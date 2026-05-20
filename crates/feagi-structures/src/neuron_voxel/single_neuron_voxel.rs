@@ -5,7 +5,7 @@ use feagi_structures_quantization::define_unsigned_spatial_3d_cpu_wrappers;
 use feagi_structures_quantization::quantizable_base::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};
 use feagi_structures_quantization::quantizable_spatial::unsigned_spatial_3d::SpatialDimension3DTrait;
 use crate::neuron::LinearNeuronIndexCount;
-use crate::neuron_voxel::common::{VoxelAxisIndex, VoxelIndexCount};
+use crate::neuron_voxel::neuron_voxel_common::{VoxelAxisIndex, VoxelIndexCount};
 
 define_unsigned_spatial_3d_cpu_wrappers!(
     pub struct SingleNeuronVoxelCoordinate,
