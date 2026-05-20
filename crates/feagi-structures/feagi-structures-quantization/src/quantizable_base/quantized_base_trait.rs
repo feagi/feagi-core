@@ -1,5 +1,5 @@
 use half::f16;
-use crate::quantization_shared::QuantizationLevel;
+use crate::quantization_levels::QuantizationLevel;
 use crate::storage_f8::StorageF8;
 
 /// Common base for all quantizable types (Alloc methods enabled)

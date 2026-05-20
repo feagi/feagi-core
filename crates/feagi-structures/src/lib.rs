@@ -8,18 +8,13 @@
 mod feagi_json;
 mod templates;
 mod feagi_structures_error;
-mod quantization_level;
 mod cortical_area__neuron_data_collections;
-pub mod base_feagi_types;
 pub mod genomic;
 pub mod feagi_log;
 pub mod useful_structs_traits_macros;
 pub mod neuron;
 pub mod neuron_voxel;
 pub mod neuron_voxel_collections;
-pub mod common_collection_templates;
 
 pub use feagi_structures_quantization as quantization;
 pub use feagi_structures_error::FeagiStructuresError;
-
-pub use quantization_level::{QuantizationLevel, CorticalAreaNeuronQuantization};

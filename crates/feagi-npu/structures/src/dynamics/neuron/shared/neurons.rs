@@ -60,9 +60,5 @@ impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<C
 }
 
 
-/// Defines any parameters you want per neuron for a given neuron model.
-/// This is what models shall expand on!
-pub trait NeuronModelParametersTrait<CANQ: CorticalAreaNeuronQuantization>:
-Clone
-{}
+
 

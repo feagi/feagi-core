@@ -8,7 +8,7 @@ mod flags; // only contains macros, no need to export
 
 mod storage_f8; // TODO move to own subcrate?
 mod feagi_quantized_hardware_error;
-mod quantization_shared;
+mod quantization_levels;
 
 pub mod quantizable_base;
 pub mod quantizable_spatial;
@@ -17,5 +17,5 @@ pub mod quantizable_collections;
 
 pub use paste;
 pub use feagi_quantized_hardware_error::FeagiQuantizedHardwareError;
-pub use quantization_shared::QuantizationLevel;
+pub use quantization_levels::{QuantizationLevel, NPUGlobalQuantization, CorticalAreaNeuronQuantization};
 pub use storage_f8::StorageF8;

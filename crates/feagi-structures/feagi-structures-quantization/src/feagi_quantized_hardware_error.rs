@@ -1,5 +1,5 @@
 use crate::quantizable_base::QuantizedIndexCountTrait;
-use crate::quantization_shared::QuantizationLevel;
+use crate::quantization_levels::QuantizationLevel;
 
 #[derive(Debug)]
 pub enum FeagiQuantizedHardwareError {

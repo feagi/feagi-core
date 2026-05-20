@@ -1,4 +1,4 @@
-use crate::quantization_shared::QuantizationLevel;
+use crate::quantization_levels::QuantizationLevel;
 use crate::quantizable_base::quantized_base_trait::QuantizedBaseTrait;
 
 /// Trait designed to hold index and count values in a quantized form

@@ -1,0 +1,3 @@
+mod neuron_model_base_traits;
+
+pub use neuron_model_base_traits::NeuronModelParametersTrait;
