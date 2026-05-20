@@ -30,6 +30,7 @@ SpatialUnsignedBase3DTrait<QuantIndex>
 
 }
 
+
 pub trait SpatialDimension3DTrait<QuantIndex: QuantizedIndexCountTrait>:
 SpatialUnsignedBase3DTrait<QuantIndex>
 {
@@ -70,6 +71,7 @@ SpatialUnsignedBase3DTrait<QuantIndex>
         )
     }
 }
+
 
 pub fn verify_linear_index_within_unsigned_3d_bounds<QuantIndex: QuantizedIndexCountTrait>(x: QuantIndex, y: QuantIndex, z: QuantIndex) -> Result<(), FeagiQuantizedHardwareError> {
     let xy = x.to_usize() * y.to_usize();
