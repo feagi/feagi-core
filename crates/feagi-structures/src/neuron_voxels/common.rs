@@ -1,7 +1,4 @@
 use core::ops::Range;
-use crate::base_feagi_types::quantizable_types::{FeagiBaseQuantizationType, FeagiBaseSingleElementQuantizationType, QuantizableUIntType, QuantizableValueType};
-use crate::base_feagi_types::quantizable_types::spatial::QuantizableUInt3DDimensionType;
-use crate::neuron::{LinearNeuronIndexCount, NeuronDensityTrait, NeuronMembranePotential};
 use crate::neuron_voxels::FeagiNeuronVoxelError;
 
 

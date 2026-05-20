@@ -1,5 +1,3 @@
-
-
 #[cfg(not(feature = "alloc"))]
 pub trait FeagiBasePercentageType:
 Copy
@@ -71,3 +69,5 @@ Copy
     fn try_from_f32(float: f32) -> Option<Self>;
     fn to_f32(self) -> f32;
 }
+
+// TODO remove option implementations for hardware

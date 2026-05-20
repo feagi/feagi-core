@@ -1,4 +1,4 @@
-use crate::base_feagi_types::percentages::shared::FeagiBasePercentageType;
+use crate::percentages::FeagiBasePercentageType;
 
 #[macro_export]
 macro_rules! define_unsigned_percentage_type_family {

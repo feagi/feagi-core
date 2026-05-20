@@ -1,5 +1,3 @@
-use crate::base_feagi_types::quantizable_types::QuantizableUIntType;
-
 
 /// Linear indexing and counting of neurons
 crate::define_quantizable_uint_type_family!(LinearNeuronIndexCount);

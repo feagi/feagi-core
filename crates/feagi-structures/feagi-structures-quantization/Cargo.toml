@@ -1,5 +1,5 @@
 [package]
-name = "feagi-quantized-hardware"
+name = "feagi-structures-quantized-hardware"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

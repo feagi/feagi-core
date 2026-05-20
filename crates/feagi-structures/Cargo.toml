@@ -66,6 +66,7 @@ support_64bit_indexing = [] # Allow 64 bit indexing. This is pretty rare. Not co
 support_64bit_values = [] # Allow 64 bit values (IE: Membrane potentials). Extremely rare! Not compatible with WASM or Embedded
 
 [dependencies]
+feagi_structures_quantization = {path = "feagi-structures-quantization"}
 serde = { workspace = true, optional = true, default-features = false, features = ["alloc", "derive"] }
 serde_json = { workspace = true, optional = true}
 half = { workspace = true, default-features = false, features = [] } # STD enables autoarch detection, which we may not want
@@ -76,5 +77,6 @@ rayon = { workspace = true, optional = true}
 defmt = {workspace = true, optional = true}
 tracing = {workspace = true, optional = true}
 paste = { workspace = true } # Despite only using the paste macro, it seems that the crate cannot be in dev dependencies
+
 
 base64 = { version = "0.22.1" } # TODO special notes about alloc, discuss later!
