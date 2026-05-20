@@ -143,6 +143,7 @@ members = [
     # === Foundation Layer ===
     "crates/feagi-structures",    # Core data structures
     "crates/feagi-config",             # Configuration loader (TOML + overrides)
+    "crates/feagi-structures/feagi-quantized-hardware", # Quantizable data types, values / indexes / etc for various hw
     
     # === NPU Subsystem (Neural Processing Unit) ===
     "crates/feagi-npu/neural",         # Neural computation: types + algorithms + models (no_std)

@@ -1508,7 +1508,7 @@ macro_rules! define_dimension_3d_type_family {
 pub trait QuantizableUInt3DDimensionType:
 FeagiBaseMultiElementQuantizationType
 {
-    type CoordinateType: QuantizableUInt3DCoordinateType;
+    type CoordinateType: QuantizableUInt3DCoordinateType;;
 
     fn from_tuple(tuple: (Self::ElementType, Self::ElementType, Self::ElementType)) -> Self;
     fn to_tuple(self) -> (Self::ElementType, Self::ElementType, Self::ElementType);

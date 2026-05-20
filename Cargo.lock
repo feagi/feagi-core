@@ -2119,6 +2119,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-quantized-hardware"
+version = "0.0.10"
+dependencies = [
+ "half",
+ "paste",
+]
+
+[[package]]
 name = "feagi-sensorimotor"
 version = "0.0.10"
 dependencies = [
