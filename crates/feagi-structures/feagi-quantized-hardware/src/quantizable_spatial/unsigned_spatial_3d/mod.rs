@@ -6,4 +6,3 @@ pub use spatial_unsigned_3d::{
     SpatialUnsignedBase3DTrait,
     SpatialUnsignedCoordinate3DTrait,
 };
-pub use wrapper_cpu::{SpatialUnsignedCoordinate3D, SpatialUnsignedDimension3D};

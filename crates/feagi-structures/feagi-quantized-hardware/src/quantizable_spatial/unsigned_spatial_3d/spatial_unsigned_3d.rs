@@ -27,9 +27,8 @@ SpatialUnsignedBaseXDTrait<QuantIndex>
 pub trait SpatialUnsignedCoordinate3DTrait<QuantIndex: QuantizedIndexCountTrait>:
 SpatialUnsignedBase3DTrait<QuantIndex>
 {
-
+    
 }
-
 
 pub trait SpatialDimension3DTrait<QuantIndex: QuantizedIndexCountTrait>:
 SpatialUnsignedBase3DTrait<QuantIndex>

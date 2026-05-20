@@ -6,5 +6,3 @@ pub use spatial_unsigned_4d::{
     SpatialUnsignedBase4DTrait,
     SpatialUnsignedCoordinate4DTrait,
 };
-
-pub use wrapper_cpu::{SpatialUnsignedCoordinate4D, SpatialUnsignedDimension4D};

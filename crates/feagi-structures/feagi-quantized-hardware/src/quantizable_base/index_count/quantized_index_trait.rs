@@ -2,7 +2,7 @@ use crate::quantization_shared::QuantizationLevel;
 use crate::quantizable_base::quantized_base_trait::QuantizedBaseTrait;
 
 pub trait QuantizedIndexCountTrait: QuantizedBaseTrait
-+ core::ops::Rem
++ core::ops::Rem<Output = Self>
 + core::ops::RemAssign
 {
     const MAX_VALUE: Self;
