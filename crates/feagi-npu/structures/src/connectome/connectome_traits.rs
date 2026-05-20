@@ -4,7 +4,7 @@
 use std::ops::Range;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
-use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
+use feagi_structures::neuron_voxel::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NumberNeuronsPerVoxel};
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;

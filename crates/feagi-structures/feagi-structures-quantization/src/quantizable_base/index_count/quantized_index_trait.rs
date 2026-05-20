@@ -1,12 +1,14 @@
 use crate::quantization_shared::QuantizationLevel;
 use crate::quantizable_base::quantized_base_trait::QuantizedBaseTrait;
 
+/// Trait designed to hold index and count values in a quantized form
 pub trait QuantizedIndexCountTrait: QuantizedBaseTrait
 + core::ops::Rem<Output = Self>
 + core::ops::RemAssign
 {
     const MAX_VALUE: Self;
     const MAX_AS_USIZE: usize;
+    const QUANT_ONE: Self;
 
     /// Converts to usize
     fn to_usize(self) -> usize;
@@ -49,6 +51,7 @@ pub trait QuantizedIndexCountTrait: QuantizedBaseTrait
 impl QuantizedIndexCountTrait for u8 {
     const MAX_VALUE: Self = u8::MAX;
     const MAX_AS_USIZE: usize = u8::MAX as usize;
+    const QUANT_ONE: Self = 1;
 
     fn to_usize(self) -> usize {
         self as usize
@@ -78,6 +81,7 @@ impl QuantizedIndexCountTrait for u8 {
 impl QuantizedIndexCountTrait for u16 {
     const MAX_VALUE: Self = u16::MAX;
     const MAX_AS_USIZE: usize = u16::MAX as usize;
+    const QUANT_ONE: Self = 1;
 
     fn to_usize(self) -> usize {
         self as usize
@@ -108,6 +112,7 @@ impl QuantizedIndexCountTrait for u16 {
 impl QuantizedIndexCountTrait for u32 {
     const MAX_VALUE: Self = u32::MAX;
     const MAX_AS_USIZE: usize = u32::MAX as usize;
+    const QUANT_ONE: Self = 1;
 
     fn to_usize(self) -> usize {
         self as usize
@@ -134,6 +139,7 @@ impl QuantizedIndexCountTrait for u32 {
 impl QuantizedIndexCountTrait for u64 {
     const MAX_VALUE: Self = u64::MAX;
     const MAX_AS_USIZE: usize = u64::MAX as usize;
+    const QUANT_ONE: Self = 1;
 
     fn to_usize(self) -> usize {
         self as usize

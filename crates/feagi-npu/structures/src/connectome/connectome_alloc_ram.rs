@@ -5,7 +5,7 @@ use std::ops::Range;
 use feagi_structures::base_feagi_types::::QuantizableUIntType;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
-use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
+use feagi_structures::neuron_voxel::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
 use crate::connectome::{ConnectomeAllocTrait, ConnectomeBaseTrait};
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;

@@ -5,7 +5,7 @@ use feagi_structures::base_feagi_types::::QuantizableUIntType;
 use feagi_structures::FeagiStructuresError;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
-use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
+use feagi_structures::neuron_voxel::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
 use feagi_structures::useful_structs_traits_macros::{IndexTracker, indexed_data_tracker, RangeUintVector};
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;

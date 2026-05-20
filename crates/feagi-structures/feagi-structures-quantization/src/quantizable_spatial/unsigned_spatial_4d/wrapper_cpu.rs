@@ -34,7 +34,7 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
         #[derive(Copy, Clone)]
         $dimension_vis struct $dimension_struct_name<
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
-            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>,
+            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>,
         >
         where
             $linear_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
@@ -82,7 +82,7 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
             }
         }
 
-        impl<QuantIndex> $crate::quantizable_spatial::shared_spatial_traits::SpatialUnsignedBaseXDTrait<QuantIndex>
+        impl<QuantIndex> $crate::quantizable_spatial::shared_spatial_traits::SpatialUnsignedBaseXDTrait<QuantIndex, $linear_wrapper_type>
             for $coordinate_struct_name<QuantIndex>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
@@ -92,10 +92,9 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
             $z_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $t_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
         {
-            type LinearIndexWrapperType = $linear_wrapper_type;
         }
 
-        impl<QuantIndex> $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedBase4DTrait<QuantIndex>
+        impl<QuantIndex> $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedBase4DTrait<QuantIndex, $linear_wrapper_type>
             for $coordinate_struct_name<QuantIndex>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
@@ -182,7 +181,7 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
             }
         }
 
-        impl<QuantIndex> $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>
+        impl<QuantIndex> $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>
             for $coordinate_struct_name<QuantIndex>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
@@ -322,7 +321,7 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
         impl<QuantIndex, CoordinateType> $dimension_struct_name<QuantIndex, CoordinateType>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
-            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>,
+            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>,
             $linear_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $x_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $y_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
@@ -352,25 +351,24 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
             }
         }
 
-        impl<QuantIndex, CoordinateType> $crate::quantizable_spatial::shared_spatial_traits::SpatialUnsignedBaseXDTrait<QuantIndex>
+        impl<QuantIndex, CoordinateType> $crate::quantizable_spatial::shared_spatial_traits::SpatialUnsignedBaseXDTrait<QuantIndex, $linear_wrapper_type>
             for $dimension_struct_name<QuantIndex, CoordinateType>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
-            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>,
+            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>,
             $linear_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $x_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $y_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $z_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $t_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
         {
-            type LinearIndexWrapperType = $linear_wrapper_type;
         }
 
-        impl<QuantIndex, CoordinateType> $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedBase4DTrait<QuantIndex>
+        impl<QuantIndex, CoordinateType> $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedBase4DTrait<QuantIndex, $linear_wrapper_type>
             for $dimension_struct_name<QuantIndex, CoordinateType>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
-            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>,
+            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>,
             $linear_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $x_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $y_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
@@ -454,24 +452,23 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
             }
         }
 
-        impl<QuantIndex, CoordinateType> $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialDimension4DTrait<QuantIndex>
+        impl<QuantIndex, CoordinateType> $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialDimension4DTrait<QuantIndex, $linear_wrapper_type, CoordinateType>
             for $dimension_struct_name<QuantIndex, CoordinateType>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
-            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>,
+            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>,
             $linear_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $x_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $y_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $z_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $t_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
         {
-            type CoordinateType = CoordinateType;
         }
 
         impl<QuantIndex, CoordinateType> core::ops::Add for $dimension_struct_name<QuantIndex, CoordinateType>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
-            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>,
+            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>,
             $linear_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $x_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $y_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
@@ -495,7 +492,7 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
         impl<QuantIndex, CoordinateType> core::ops::Sub for $dimension_struct_name<QuantIndex, CoordinateType>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
-            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>,
+            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>,
             $linear_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $x_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $y_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
@@ -519,7 +516,7 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
         impl<QuantIndex, CoordinateType> core::ops::AddAssign for $dimension_struct_name<QuantIndex, CoordinateType>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
-            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>,
+            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>,
             $linear_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $x_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $y_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
@@ -538,7 +535,7 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
         impl<QuantIndex, CoordinateType> core::ops::SubAssign for $dimension_struct_name<QuantIndex, CoordinateType>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
-            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>,
+            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>,
             $linear_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $x_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $y_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
@@ -558,7 +555,7 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
         impl<QuantIndex, CoordinateType> core::fmt::Debug for $dimension_struct_name<QuantIndex, CoordinateType>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
-            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>,
+            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>,
             $linear_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $x_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $y_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
@@ -580,7 +577,7 @@ macro_rules! define_unsigned_spatial_4d_cpu_wrappers {
         impl<QuantIndex, CoordinateType> core::fmt::Display for $dimension_struct_name<QuantIndex, CoordinateType>
         where
             QuantIndex: $crate::quantizable_base::index_count::QuantizedIndexCountTrait,
-            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex>,
+            CoordinateType: $crate::quantizable_spatial::unsigned_spatial_4d::spatial_unsigned_4d::SpatialUnsignedCoordinate4DTrait<QuantIndex, $linear_wrapper_type>,
             $linear_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $x_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,
             $y_axis_wrapper_type: $crate::quantizable_base::index_count::QuantizedIndexCountWrapperTrait<QuantIndex>,

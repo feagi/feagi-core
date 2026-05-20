@@ -14,7 +14,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
 };
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
@@ -275,7 +275,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
 mod tests {
     use super::*;
     use feagi_structures::genomic::cortical_area::CoreCorticalType;
-    use feagi_structures::neuron_voxels::coord_potential::{
+    use feagi_structures::neuron_voxel::coord_potential::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
     };
 

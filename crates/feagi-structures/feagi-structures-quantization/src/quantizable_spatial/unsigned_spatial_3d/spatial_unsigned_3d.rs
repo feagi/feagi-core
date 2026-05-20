@@ -1,10 +1,13 @@
 use crate::feagi_quantized_hardware_error::FeagiQuantizedHardwareError;
-use crate::quantizable_base::index_count::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};
+use crate::quantizable_base::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};
 use crate::quantizable_spatial::SpatialUnsignedBaseXDTrait;
 
 //region 3D
-pub trait SpatialUnsignedBase3DTrait<QuantIndex: QuantizedIndexCountTrait>:
-SpatialUnsignedBaseXDTrait<QuantIndex>
+pub trait SpatialUnsignedBase3DTrait<
+    QuantIndex: QuantizedIndexCountTrait,
+    LinearIndexWrapperType: QuantizedIndexCountWrapperTrait<QuantIndex>,
+>:
+SpatialUnsignedBaseXDTrait<QuantIndex, LinearIndexWrapperType>
 {
     // NOTE: We assume that once the struct is created, that the size of it is valid for
     // the current quantization. Be cautious when modifying it!
@@ -24,39 +27,44 @@ SpatialUnsignedBaseXDTrait<QuantIndex>
     fn new_unchecked(x: QuantIndex, y: QuantIndex, z: QuantIndex) -> Self; // NOTE: Cant wrap this due to odd interconnects between this and Dimensions
 }
 
-pub trait SpatialUnsignedCoordinate3DTrait<QuantIndex: QuantizedIndexCountTrait>:
-SpatialUnsignedBase3DTrait<QuantIndex>
+pub trait SpatialUnsignedCoordinate3DTrait<
+    QuantIndex: QuantizedIndexCountTrait,
+    LinearIndexWrapperType: QuantizedIndexCountWrapperTrait<QuantIndex>,
+>:
+SpatialUnsignedBase3DTrait<QuantIndex, LinearIndexWrapperType>
 {
 
 }
 
-pub trait SpatialDimension3DTrait<QuantIndex: QuantizedIndexCountTrait>:
-SpatialUnsignedBase3DTrait<QuantIndex>
+pub trait SpatialDimension3DTrait<
+    QuantIndex: QuantizedIndexCountTrait,
+    LinearIndexWrapperType: QuantizedIndexCountWrapperTrait<QuantIndex>,
+    CoordinateType: SpatialUnsignedCoordinate3DTrait<QuantIndex, LinearIndexWrapperType>,
+>:
+SpatialUnsignedBase3DTrait<QuantIndex, LinearIndexWrapperType>
 {
-    type CoordinateType: SpatialUnsignedCoordinate3DTrait<QuantIndex>;
-
     /// Is given coordinate within these dimensions
-    fn contains_coordinate(&self, coordinate: &Self::CoordinateType) -> bool {
+    fn contains_coordinate(&self, coordinate: &CoordinateType) -> bool {
         coordinate.get_x().quant_ref() < self.get_x().quant_ref()
             && coordinate.get_y().quant_ref() < self.get_y().quant_ref()
             && coordinate.get_z().quant_ref() < self.get_z().quant_ref()
     }
 
-    fn coordinate_to_linear_index(&self, coordinate: &Self::CoordinateType) -> Self::LinearIndexWrapperType {
-        Self::LinearIndexWrapperType::wrap_quant(
+    fn coordinate_to_linear_index(&self, coordinate: &CoordinateType) -> LinearIndexWrapperType {
+        LinearIndexWrapperType::wrap_quant(
             *coordinate.get_x().quant_ref()
                 + (*coordinate.get_y() .quant_ref()* *self.get_x().quant_ref())
                 + (*coordinate.get_z().quant_ref() * *self.get_x().quant_ref() * *self.get_y().quant_ref())
         )
     }
 
-    fn linear_index_to_coordinate(&self, linear_index: &Self::LinearIndexWrapperType) -> Self::CoordinateType {
+    fn linear_index_to_coordinate(&self, linear_index: &LinearIndexWrapperType) -> CoordinateType {
         let plane = *self.get_x().quant_ref() * *self.get_y().quant_ref();
         let z = *linear_index.quant_ref() / plane;
         let rem = *linear_index.quant_ref() - z * plane;
         let y = rem / *self.get_x().quant_ref();
         let x = rem - y * *self.get_x().quant_ref();
-        Self::CoordinateType::new_unchecked(
+        CoordinateType::new_unchecked(
             x,
             y,
             z,
@@ -64,8 +72,8 @@ SpatialUnsignedBase3DTrait<QuantIndex>
     }
 
     /// Get the max linear index (exclusive)
-    fn get_max_linear_index(&self) -> Self::LinearIndexWrapperType {
-        Self::LinearIndexWrapperType::wrap_quant(
+    fn get_max_linear_index(&self) -> LinearIndexWrapperType {
+        LinearIndexWrapperType::wrap_quant(
             *self.get_x().quant_ref() * *self.get_y().quant_ref() * *self.get_z().quant_ref()
         )
     }

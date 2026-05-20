@@ -15,7 +15,7 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
 };
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::MotorCorticalUnit;
-use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
 use serde_json::json;
 use std::collections::HashMap;

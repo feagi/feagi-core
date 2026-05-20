@@ -63,7 +63,7 @@ fn should_emit_throttled_warning(last_emitted_ms: &AtomicU64, interval_ms: u64) 
 use tracing::{debug, error, info, trace, warn};
 
 use std::thread;
-use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
 
 /// Trait for visualization publishing (abstraction to avoid circular dependency with feagi-io)
 /// Any component that can publish visualization data implements this trait.
@@ -1035,7 +1035,7 @@ fn encode_fire_data_to_xyzp(
     cortical_id_filter: Option<&ahash::AHashSet<String>>,
 ) -> Result<Vec<u8>, String> {
     use feagi_structures::genomic::cortical_area::CorticalID;
-    use feagi_structures::neuron_voxels::coord_potential::{
+    use feagi_structures::neuron_voxel::coord_potential::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
     };
 
@@ -1180,7 +1180,7 @@ fn get_timestamp() -> String {
 /// Decode sensory bytes (FeagiByteContainer) into cortical XYZP list.
 /// Transport-agnostic; same format whether source is ZMQ, WebSocket, or SHM.
 fn decode_sensory_bytes(bytes: &[u8]) -> Result<SensoryXyzpDecoded, String> {
-    use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
+    use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
 
     let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
     let mut data_vec = bytes.to_vec();

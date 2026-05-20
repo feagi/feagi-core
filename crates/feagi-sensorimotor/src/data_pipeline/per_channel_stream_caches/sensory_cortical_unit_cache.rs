@@ -11,7 +11,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
 };
 use feagi_structures::genomic::SensoryCorticalUnit;
-use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 

@@ -1,4 +1,4 @@
-use crate::quantizable_base::index_count::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};
+use crate::quantizable_base::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};
 
 /// Common base for all coordinate / dimension spatial data
 pub trait SpatialBaseXDTrait<QuantIndex: QuantizedIndexCountTrait>:
@@ -18,7 +18,10 @@ Copy
 }
 
 /// Common base for all unsigned coordinate / dimension spatial data
-pub trait SpatialUnsignedBaseXDTrait<QuantIndex: QuantizedIndexCountTrait>:
+pub trait SpatialUnsignedBaseXDTrait<
+    QuantIndex: QuantizedIndexCountTrait,
+    LinearIndexWrapperType: QuantizedIndexCountWrapperTrait<QuantIndex>,
+>:
 Copy
 + Clone
 + Send
@@ -32,5 +35,4 @@ Copy
 + core::fmt::Display
 + 'static
 {
-    type LinearIndexWrapperType: QuantizedIndexCountWrapperTrait<QuantIndex>;
 }

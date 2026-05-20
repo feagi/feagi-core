@@ -390,7 +390,7 @@ fn agent_polling_loop(
                 };
 
             // Downcast to CorticalMappedXYZPNeuronData
-            use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
+            use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
             let cortical_mapped = match boxed_struct
                 .as_any()
                 .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()

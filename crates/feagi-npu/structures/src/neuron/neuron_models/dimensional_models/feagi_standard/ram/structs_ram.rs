@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use feagi_structures::base_feagi_types::::{QuantizablePercentType, QuantizableUIntType, QuantizableValueType};
 use feagi_structures::genomic::cortical_area::CorticalAreaModelType;
-use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
+use feagi_structures::neuron_voxel::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NeuronMembranePotential, NumberNeuronsPerVoxel};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::neuron_models::dimensional_models::dimensional_cortical_configuration_traits::DimensionalCorticalConfigurationTrait;

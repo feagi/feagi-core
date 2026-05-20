@@ -13,6 +13,7 @@ mod quantization_shared;
 pub mod quantizable_base;
 pub mod quantizable_spatial;
 pub mod percentages;
+pub mod quantizable_collections;
 
 pub use paste;
 pub use feagi_quantized_hardware_error::FeagiQuantizedHardwareError;

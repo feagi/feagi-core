@@ -4,7 +4,7 @@
 // TODO: Update tests to use new serialization API
 use feagi_serialization::{FeagiByteContainer, FeagiByteStructureType};
 use feagi_structures::genomic::cortical_area::CoreCorticalType;
-use feagi_structures::neuron_voxels::coord_potential::{
+use feagi_structures::neuron_voxel::coord_potential::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPSparseVectors,
 };
 use feagi_structures::FeagiJSON;

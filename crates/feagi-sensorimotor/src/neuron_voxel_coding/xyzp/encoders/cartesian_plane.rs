@@ -10,7 +10,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex,
 };
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxels::coord_potential::{
+use feagi_structures::neuron_voxel::coord_potential::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
 };
 use feagi_structures::FeagiDataError;

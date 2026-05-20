@@ -1,5 +1,5 @@
 use crate::FeagiSerializable;
-use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use feagi_structures::FeagiJSON;
 use std::fmt::{Display, Formatter};

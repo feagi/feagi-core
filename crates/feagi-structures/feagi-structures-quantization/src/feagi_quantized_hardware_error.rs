@@ -1,4 +1,4 @@
-use crate::quantizable_base::index_count::QuantizedIndexCountTrait;
+use crate::quantizable_base::QuantizedIndexCountTrait;
 use crate::quantization_shared::QuantizationLevel;
 
 #[derive(Debug)]
@@ -7,6 +7,10 @@ pub enum FeagiQuantizedHardwareError {
         context: &'static str,
         limiting_quantization: QuantizationLevel,
         required_quantization: QuantizationLevel,
+    },
+    CollectionInvalidIndexError{
+        context: &'static str,
+        invalid_index: u32,
     },
     QuantizationEtcError{context: &'static str},
 }

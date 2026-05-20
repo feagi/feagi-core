@@ -1,10 +1,13 @@
 use crate::feagi_quantized_hardware_error::FeagiQuantizedHardwareError;
-use crate::quantizable_base::index_count::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};
+use crate::quantizable_base::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};
 use crate::quantizable_spatial::shared_spatial_traits::SpatialUnsignedBaseXDTrait;
 
 //region 4D
-pub trait SpatialUnsignedBase4DTrait<QuantIndex: QuantizedIndexCountTrait>:
-SpatialUnsignedBaseXDTrait<QuantIndex>
+pub trait SpatialUnsignedBase4DTrait<
+    QuantIndex: QuantizedIndexCountTrait,
+    LinearIndexWrapperType: QuantizedIndexCountWrapperTrait<QuantIndex>,
+>:
+SpatialUnsignedBaseXDTrait<QuantIndex, LinearIndexWrapperType>
 {
     // NOTE: We assume that once the struct is created, that the size of it is valid for
     // the current quantization. Be cautious when modifying it!
@@ -28,30 +31,35 @@ SpatialUnsignedBaseXDTrait<QuantIndex>
     fn new_unchecked(x: QuantIndex, y: QuantIndex, z: QuantIndex, t: QuantIndex) -> Self; // NOTE: Cant wrap this due to odd interconnects between this and Dimensions
 }
 
-pub trait SpatialUnsignedCoordinate4DTrait<QuantIndex: QuantizedIndexCountTrait>:
-SpatialUnsignedBase4DTrait<QuantIndex>
+pub trait SpatialUnsignedCoordinate4DTrait<
+    QuantIndex: QuantizedIndexCountTrait,
+    LinearIndexWrapperType: QuantizedIndexCountWrapperTrait<QuantIndex>,
+>:
+SpatialUnsignedBase4DTrait<QuantIndex, LinearIndexWrapperType>
 {
 
 }
 
-pub trait SpatialDimension4DTrait<QuantIndex: QuantizedIndexCountTrait>:
-SpatialUnsignedBase4DTrait<QuantIndex>
+pub trait SpatialDimension4DTrait<
+    QuantIndex: QuantizedIndexCountTrait,
+    LinearIndexWrapperType: QuantizedIndexCountWrapperTrait<QuantIndex>,
+    CoordinateType: SpatialUnsignedCoordinate4DTrait<QuantIndex, LinearIndexWrapperType>,
+>:
+SpatialUnsignedBase4DTrait<QuantIndex, LinearIndexWrapperType>
 {
-    type CoordinateType: SpatialUnsignedCoordinate4DTrait<QuantIndex>;
-
     /// Is given coordinate within these dimensions
-    fn contains_coordinate(&self, coordinate: &Self::CoordinateType) -> bool {
+    fn contains_coordinate(&self, coordinate: &CoordinateType) -> bool {
         coordinate.get_x().quant_ref() < self.get_x().quant_ref()
             && coordinate.get_y().quant_ref() < self.get_y().quant_ref()
             && coordinate.get_z().quant_ref() < self.get_z().quant_ref()
             && coordinate.get_t().quant_ref() < self.get_t().quant_ref()
     }
 
-    fn coordinate_to_linear_index(&self, coordinate: &Self::CoordinateType) -> Self::LinearIndexWrapperType {
+    fn coordinate_to_linear_index(&self, coordinate: &CoordinateType) -> LinearIndexWrapperType {
         let xy_plane = *self.get_x().quant_ref() * *self.get_y().quant_ref();
         let xyz_volume = xy_plane * *self.get_z().quant_ref();
 
-        Self::LinearIndexWrapperType::wrap_quant(
+        LinearIndexWrapperType::wrap_quant(
             *coordinate.get_x().quant_ref()
                 + (*coordinate.get_y() .quant_ref()* *self.get_x().quant_ref())
                 + (*coordinate.get_z().quant_ref() * xy_plane)
@@ -59,7 +67,7 @@ SpatialUnsignedBase4DTrait<QuantIndex>
         )
     }
 
-    fn linear_index_to_coordinate(&self, linear_index: &Self::LinearIndexWrapperType) -> Self::CoordinateType {
+    fn linear_index_to_coordinate(&self, linear_index: &LinearIndexWrapperType) -> CoordinateType {
         let xy_plane = *self.get_x().quant_ref() * *self.get_y().quant_ref();
         let xyz_volume = xy_plane * *self.get_z().quant_ref();
         let t = *linear_index.quant_ref() / xyz_volume;
@@ -69,7 +77,7 @@ SpatialUnsignedBase4DTrait<QuantIndex>
         let y = rem_after_z / *self.get_x().quant_ref();
         let x = rem_after_z - y * *self.get_x().quant_ref();
 
-        Self::CoordinateType::new_unchecked(
+        CoordinateType::new_unchecked(
             x,
             y,
             z,
@@ -78,8 +86,8 @@ SpatialUnsignedBase4DTrait<QuantIndex>
     }
 
     /// Get the max linear index (exclusive)
-    fn get_max_linear_index(&self) -> Self::LinearIndexWrapperType {
-        Self::LinearIndexWrapperType::wrap_quant(
+    fn get_max_linear_index(&self) -> LinearIndexWrapperType {
+        LinearIndexWrapperType::wrap_quant(
             *self.get_x().quant_ref() * *self.get_y().quant_ref() * *self.get_z().quant_ref() * *self.get_t().quant_ref()
         )
     }

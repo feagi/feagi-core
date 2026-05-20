@@ -12,7 +12,7 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
 };
 use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
 use feagi_structures::genomic::SensoryCorticalUnit;
-use feagi_structures::neuron_voxels::coord_potential::{
+use feagi_structures::neuron_voxel::coord_potential::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
 };
 

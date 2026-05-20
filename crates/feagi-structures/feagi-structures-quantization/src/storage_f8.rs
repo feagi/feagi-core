@@ -1,8 +1,11 @@
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
 
-/// A crappy f8 implementation. This is not performant since it passes through
-/// f32 for doing anything in most systems. Probably only good for storage. Thank GPT
+/// A Crappy f8 implementation written by some LLM. Uses 1 sign bit, 4 exponent bits, and 3
+/// mantissa bits, meaning it has an effective range of -7 to 8, with the smallest positive number
+/// supported being ~0.001953. The intent of this struct is storage, it will
+/// convert to a f32 and back for any computations, meaning it is not performant in essentially
+/// any situation
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct StorageF8(u8);
@@ -11,10 +14,11 @@ pub struct StorageF8(u8);
 
 impl StorageF8 {
     const SIGN_MASK: u8 = 0b1000_0000;
-    const EXPONENT_MASK: u8 = 0b0110_0000;
-    const MANTISSA_MASK: u8 = 0b0001_1111;
-    const EXPONENT_SHIFT: u8 = 5;
-    const MANTISSA_SCALE: f32 = 32.0;
+    const EXPONENT_MASK: u8 = 0b0111_1000;
+    const MANTISSA_MASK: u8 = 0b0000_0111;
+    const EXPONENT_SHIFT: u8 = 3;
+    const EXPONENT_BIAS: i32 = 7;
+    const MANTISSA_SCALE: f32 = 8.0;
     const MAX_FINITE_BITS: u8 = 0b0111_1111;
 
     pub const ZERO: Self = Self(0);
@@ -101,13 +105,35 @@ impl StorageF8 {
     #[inline(always)]
     fn positive_bits_to_f32(bits: u8) -> f32 {
         let value = Self(bits);
+        let exponent = value.exponent();
         let mantissa = value.mantissa() as f32 / Self::MANTISSA_SCALE;
 
-        match value.exponent() {
-            0 => mantissa,
-            1 => 1.0 + mantissa,
-            2 => (1.0 + mantissa) * 2.0,
-            _ => (1.0 + mantissa) * 4.0,
+        if exponent == 0 {
+            mantissa * Self::power_of_two(1 - Self::EXPONENT_BIAS)
+        } else {
+            (1.0 + mantissa) * Self::power_of_two(exponent as i32 - Self::EXPONENT_BIAS)
+        }
+    }
+
+    #[inline(always)]
+    fn power_of_two(exponent: i32) -> f32 {
+        match exponent {
+            -6 => 0.015625,
+            -5 => 0.03125,
+            -4 => 0.0625,
+            -3 => 0.125,
+            -2 => 0.25,
+            -1 => 0.5,
+            0 => 1.0,
+            1 => 2.0,
+            2 => 4.0,
+            3 => 8.0,
+            4 => 16.0,
+            5 => 32.0,
+            6 => 64.0,
+            7 => 128.0,
+            8 => 256.0,
+            _ => unreachable!("StorageF8 exponent is outside the E4M3 range"),
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{FeagiByteContainer, FeagiByteStructureType};
-use feagi_structures::neuron_voxels::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::{FeagiDataError, FeagiJSON};
 use std::any::Any;
 use std::fmt::Debug;

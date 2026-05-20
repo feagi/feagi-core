@@ -4,7 +4,7 @@
 
 use feagi_structures::define_ref_immut_mut_access_trait_methods;
 use feagi_structures::genomic::cortical_area::CorticalAreaModelType;
-use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
+use feagi_structures::neuron_voxel::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NeuronMembranePotential, NumberNeuronsPerVoxel};
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::neuron_models::dimensional_models::dimensional_cortical_area_generator_traits::DimensionalCorticalAreaGeneratorTrait;

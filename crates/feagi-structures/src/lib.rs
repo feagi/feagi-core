@@ -15,7 +15,9 @@ pub mod genomic;
 pub mod feagi_log;
 pub mod useful_structs_traits_macros;
 pub mod neuron;
-pub mod neuron_voxels;
+pub mod neuron_voxel;
+pub mod neuron_voxel_collections;
+pub mod common_collection_templates;
 
 pub use feagi_structures_quantization as quantization;
 pub use feagi_structures_error::FeagiStructuresError;

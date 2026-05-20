@@ -1,5 +1,5 @@
 use feagi_structures::define_ref_immut_mut_access_trait_methods;
-use feagi_structures::neuron_voxels::descriptors::NeuronVoxelDimensions;
+use feagi_structures::neuron_voxel::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
 use crate::neuron::flags::DimensionalNeuronCorticalFlag;
 use crate::quantizables::{BurstDelta, FireThresholdLimit, NPUDimensionalNeuronQuantization, NPUGlobalQuantization, NeuronExcitability};
