@@ -67,24 +67,24 @@ impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>
         todo!()
     }
 
-    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item=EnumeratedLinearNeuron<CANQ, NeuronDataRef<CANQ, NMP>>> {
+    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item=EnumeratedLinearNeuron<'_, CANQ, NMP>> {
         todo!()
     }
 
-    fn enumerated_linear_neuron_iter_mut(&self) -> impl Iterator<Item=EnumeratedLinearNeuronMut<CANQ, NeuronDataRefMut<CANQ, NMP>>> {
-        todo!()
-    }
-}
-
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>, ND: NeuronDensityTrait, NeuronSetIndexTrait: QuantizableUIntType> PackedLinearIterationMut<CANQ, NMP> for NeuronCollectionMultiLinearPackedVector<CANQ, NMP, ND, NeuronSetIndexTrait> {
-    fn linear_neuron_iter_mut(&mut self) -> impl Iterator<Item=NeuronDataRefMut<'a, CANQ, NMP>> {
+    fn enumerated_linear_neuron_iter_mut(&mut self) -> impl Iterator<Item=EnumeratedLinearNeuronMut<'_, CANQ, NMP>> {
         todo!()
     }
 }
 
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>, ND: NeuronDensityTrait, NeuronSetIndexTrait: QuantizableUIntType> PackedLinearIteration<CANQ, NMP> for NeuronCollectionMultiLinearPackedVector<CANQ, NMP, ND, NeuronSetIndexTrait> {
+impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>, ND: NeuronDensityTrait, NeuronSetIndexTrait: QuantizableUIntType> PackedLinearIterationMut<CANQ, NMP> for NeuronCollectionMultiLinearPackedVector<CANQ, NMP, ND, NeuronSetIndexTrait> {
+    fn linear_neuron_iter_mut(&mut self) -> impl Iterator<Item=NeuronDataRefMut<'_, CANQ, NMP>> {
+        todo!()
+    }
+}
 
-    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'a, CANQ, NMP>> {
+impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>, ND: NeuronDensityTrait, NeuronSetIndexTrait: QuantizableUIntType> PackedLinearIteration<CANQ, NMP> for NeuronCollectionMultiLinearPackedVector<CANQ, NMP, ND, NeuronSetIndexTrait> {
+
+    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'_, CANQ, NMP>> {
         todo!()
     }
 }
@@ -115,19 +115,35 @@ impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>
         self.density
     }
 
-    fn try_get_neuron_set_ref(&self, set_index: NeuronSetIndexTrait) -> NeuronModelSlice<CANQ, NMP> {
+    fn try_get_neuron_group_ref(&self, set_index: NeuronSetIndexTrait) -> Result<NeuronModelSlice<CANQ, NMP>, FeagiNeuronError> {
         todo!()
     }
 
-    fn try_get_neuron_set_mut_ref(&mut self, set_index: NeuronSetIndexTrait) -> NeuronModelMutSlice<CANQ, NMP> {
+    fn try_get_neuron_group_mut_ref(&mut self, set_index: NeuronSetIndexTrait) -> Result<NeuronModelMutSlice<CANQ, NMP>, FeagiNeuronError> {
         todo!()
     }
 
-    fn enumerated_linear_neuron_set_iter(&self) -> impl Iterator<Item=EnumeratedLinearSetNeuron<CANQ, NMP, NeuronSetIndexTrait>> {
+    fn try_get_membrane_potential_data_group_ref(&self, set_index: NeuronSetIndexTrait) -> Result<&NeuronMembranePotential<CANQ::NeuronValueQuant>, FeagiNeuronError> {
         todo!()
     }
 
-    fn enumerated_linear_neuron_set_iter_mut(&self) -> impl Iterator<Item=EnumeratedLinearSetNeuronMut<CANQ, NMP, NeuronSetIndexTrait>> {
+    fn try_get_membrane_potential_data_group_ref_mut(&mut self, set_index: NeuronSetIndexTrait) -> Result<&mut NeuronMembranePotential<CANQ::NeuronValueQuant>, FeagiNeuronError> {
+        todo!()
+    }
+
+    fn try_get_neuron_model_data_group_ref(&self, set_index: NeuronSetIndexTrait) -> Result<&NMP, FeagiNeuronError> {
+        todo!()
+    }
+
+    fn try_get_neuron_model_data_group_ref_mut(&mut self, set_index: NeuronSetIndexTrait) -> Result<&mut NMP, FeagiNeuronError> {
+        todo!()
+    }
+
+    fn enumerated_linear_neuron_group_iter(&self) -> impl Iterator<Item=EnumeratedLinearSetNeuron<CANQ, NMP, NeuronSetIndexTrait>> {
+        todo!()
+    }
+
+    fn enumerated_linear_neuron_group_iter_mut(&self) -> impl Iterator<Item=EnumeratedLinearSetNeuronMut<CANQ, NMP, NeuronSetIndexTrait>> {
         todo!()
     }
 }

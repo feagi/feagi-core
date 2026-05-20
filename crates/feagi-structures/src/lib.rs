@@ -15,6 +15,7 @@ pub mod genomic;
 pub mod feagi_log;
 pub mod useful_structs_traits_macros;
 pub mod neuron;
+pub mod neuron_voxels;
 
 pub use feagi_structures_error::FeagiStructuresError;
 

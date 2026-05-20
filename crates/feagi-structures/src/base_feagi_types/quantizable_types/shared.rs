@@ -55,7 +55,7 @@ Copy
 {
     const NUMBER_OF_BYTES: usize;
     const QUANTIZATION_LEVEL: QuantizationLevel;
-
+    
     fn saturating_add(self, other: Self) -> Self;
     fn checked_add(self, other: Self) -> Option<Self>;
     fn saturating_sub(self, other: Self) -> Self;
@@ -64,12 +64,14 @@ Copy
     fn checked_mul(self, other: Self) -> Option<Self>;
     // No need for saturating div
     fn checked_div(self, other: Self) -> Option<Self>;
+    
+    fn unchecked_new_from_usize(n: usize) -> Self;
 }
 
 impl FeagiBaseQuantizationType for usize {
     const NUMBER_OF_BYTES: usize = size_of::<usize>();
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit32; // TODO: 64
-
+    
 
     #[inline(always)]
     fn saturating_add(self, other: Self) -> Self {
@@ -104,6 +106,11 @@ impl FeagiBaseQuantizationType for usize {
     #[inline(always)]
     fn checked_div(self, other: Self) -> Option<Self> {
         self.checked_div(other)
+    }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n
     }
 }
 
@@ -145,6 +152,11 @@ impl FeagiBaseQuantizationType for u8 {
     fn checked_div(self, other: Self) -> Option<Self> {
         self.checked_div(other)
     }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n as Self
+    }
 }
 
 impl FeagiBaseQuantizationType for u16 {
@@ -184,6 +196,11 @@ impl FeagiBaseQuantizationType for u16 {
     #[inline(always)]
     fn checked_div(self, other: Self) -> Option<Self> {
         self.checked_div(other)
+    }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n as Self
     }
 }
 
@@ -225,6 +242,11 @@ impl FeagiBaseQuantizationType for u32 {
     fn checked_div(self, other: Self) -> Option<Self> {
         self.checked_div(other)
     }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n as Self
+    }
 }
 
 #[cfg(feature = "support_64bit_indexing")]
@@ -265,6 +287,11 @@ impl FeagiBaseQuantizationType for u64 {
     #[inline(always)]
     fn checked_div(self, other: Self) -> Option<Self> {
         self.checked_div(other)
+    }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n as Self
     }
 }
 
@@ -308,6 +335,11 @@ impl FeagiBaseQuantizationType for isize {
     fn checked_div(self, other: Self) -> Option<Self> {
         self.checked_div(other)
     }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n as Self
+    }
 }
 
 impl FeagiBaseQuantizationType for i8 {
@@ -347,6 +379,11 @@ impl FeagiBaseQuantizationType for i8 {
     #[inline(always)]
     fn checked_div(self, other: Self) -> Option<Self> {
         self.checked_div(other)
+    }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n as Self
     }
 }
 
@@ -388,6 +425,11 @@ impl FeagiBaseQuantizationType for i16 {
     fn checked_div(self, other: Self) -> Option<Self> {
         self.checked_div(other)
     }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n as Self
+    }
 }
 
 impl FeagiBaseQuantizationType for i32 {
@@ -427,6 +469,11 @@ impl FeagiBaseQuantizationType for i32 {
     #[inline(always)]
     fn checked_div(self, other: Self) -> Option<Self> {
         self.checked_div(other)
+    }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n as Self
     }
 }
 
@@ -470,6 +517,11 @@ impl FeagiBaseQuantizationType for i64 {
     #[inline(always)]
     fn checked_div(self, other: Self) -> Option<Self> {
         self.checked_div(other)
+    }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n as Self
     }
 }
 
@@ -530,6 +582,11 @@ impl FeagiBaseQuantizationType for f16 {
         } else {
             None
         }
+    }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        f16::from_f32(n as f32)
     }
 }
 
@@ -596,6 +653,11 @@ impl FeagiBaseQuantizationType for f32 {
         let value = self / other;
         if value.is_finite() { Some(value) } else { None }
     }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n as Self
+    }
 }
 
 #[cfg(feature = "support_64bit_values")]
@@ -661,6 +723,11 @@ impl FeagiBaseQuantizationType for f64 {
     fn checked_div(self, other: Self) -> Option<Self> {
         let value = self / other;
         if value.is_finite() { Some(value) } else { None }
+    }
+
+    #[inline(always)]
+    fn unchecked_new_from_usize(n: usize) -> Self {
+        n as Self
     }
 }
 /// Defines a single Quantizable element (a single number)

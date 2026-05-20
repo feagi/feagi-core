@@ -11,10 +11,10 @@ pub struct NeuronData<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelPara
     model_parameters: NMP,
 }
 
-impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> NeuronData<CANQ, CANQ>
+impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> NeuronData<CANQ, NMP>
 {
     pub(crate) fn new(potential: NeuronMembranePotential<CANQ::NeuronValueQuant>,
-                      model_parameters: NMP) -> NeuronData<CANQ, CANQ>
+                      model_parameters: NMP) -> NeuronData<CANQ, NMP>
     {
         NeuronData {
             potential,
@@ -29,10 +29,10 @@ pub struct NeuronDataRef<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronMo
     model_parameters: &'a NMP,
 }
 
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> NeuronDataRef<CANQ, CANQ>
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> NeuronDataRef<'a, CANQ, NMP>
 {
     pub(crate) fn new(potential: &'a NeuronMembranePotential<CANQ::NeuronValueQuant>,
-                      model_parameters: &'a NMP) -> NeuronDataRef<'a, CANQ, CANQ>
+                      model_parameters: &'a NMP) -> NeuronDataRef<'a, CANQ, NMP>
     {
         NeuronDataRef {
             potential,
@@ -47,10 +47,10 @@ pub struct NeuronDataRefMut<'a, CANQ: CorticalAreaNeuronQuantization, NMP: Neuro
     model_parameters: &'a mut NMP,
 }
 
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> NeuronDataRefMut<CANQ, CANQ>
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> NeuronDataRefMut<'a, CANQ, NMP>
 {
     pub(crate) fn new(potential: &'a mut NeuronMembranePotential<CANQ::NeuronValueQuant>,
-                      model_parameters: &'a mut NMP) -> NeuronDataRefMut<'a, CANQ, CANQ>
+                      model_parameters: &'a mut NMP) -> NeuronDataRefMut<'a, CANQ, NMP>
     {
         NeuronDataRefMut {
             potential,

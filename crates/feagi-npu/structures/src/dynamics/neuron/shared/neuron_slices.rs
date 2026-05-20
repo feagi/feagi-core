@@ -14,9 +14,12 @@ pub struct NeuronModelSlice<'a, CANQ: CorticalAreaNeuronQuantization, NMP: Neuro
     pub get_model_parameters: &'a [NMP]
 }
 
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIteration<'a, CANQ, NMP> for NeuronModelSlice<'a, CANQ, NMP> {
-    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'a, CANQ, NMP>> {
-        todo!()
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIteration<CANQ, NMP> for NeuronModelSlice<'a, CANQ, NMP> {
+    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'_, CANQ, NMP>> {
+        self.neuron_potentials
+            .iter()
+            .zip(self.get_model_parameters.iter())
+            .map(|(potential, model_parameters)| NeuronDataRef::new(potential, model_parameters))
     }
 }
 
@@ -30,15 +33,21 @@ pub struct NeuronModelMutSlice<'a, CANQ: CorticalAreaNeuronQuantization, NMP: Ne
     pub get_model_parameters: &'a mut [NMP]
 }
 
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIteration<'a, CANQ, NMP> for NeuronModelMutSlice<'a, CANQ, NMP> {
-    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'a, CANQ, NMP>> {
-        todo!()
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIteration<CANQ, NMP> for NeuronModelMutSlice<'a, CANQ, NMP> {
+    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'_, CANQ, NMP>> {
+        self.neuron_potentials
+            .iter()
+            .zip(self.get_model_parameters.iter())
+            .map(|(potential, model_parameters)| NeuronDataRef::new(potential, model_parameters))
     }
 }
 
-impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIterationMut<'a, CANQ, NMP> for NeuronModelMutSlice<'a, CANQ, NMP> {
+impl<'a, CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIterationMut<CANQ, NMP> for NeuronModelMutSlice<'a, CANQ, NMP> {
 
-    fn linear_neuron_iter_mut(&mut self) -> impl Iterator<Item=NeuronDataRefMut<'a, CANQ, NMP>> {
-        todo!()
+    fn linear_neuron_iter_mut(&mut self) -> impl Iterator<Item=NeuronDataRefMut<'_, CANQ, NMP>> {
+        self.neuron_potentials
+            .iter_mut()
+            .zip(self.get_model_parameters.iter_mut())
+            .map(|(potential, model_parameters)| NeuronDataRefMut::new(potential, model_parameters))
     }
 }

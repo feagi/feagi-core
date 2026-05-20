@@ -142,6 +142,11 @@ macro_rules! define_quantizable_value_type_family {
             fn checked_div(self, other: Self) -> Option<Self> {
                 self.0.checked_div(other.0).map(Self)
             }
+            
+            #[inline(always)]
+            fn unchecked_new_from_usize(n: usize) -> Self {
+                Self(T::unchecked_new_from_usize(n))
+            }
         }
 
         impl<T: $crate::base_feagi_types::quantizable_types::QuantizableValueType> $crate::base_feagi_types::quantizable_types::FeagiBaseSingleElementQuantizationType
@@ -168,9 +173,15 @@ macro_rules! define_quantizable_value_type_family {
 }
 
 
-pub trait QuantizableValueType: FeagiBaseSingleElementQuantizationType + core::convert::Into<f32> {
+pub trait QuantizableValueType: FeagiBaseSingleElementQuantizationType {
     fn to_f32(self) -> f32;
     fn from_f32(value: f32) -> Self;
+
+    fn new_from_average(slice: &[Self]) -> Self {
+        let a = slice.iter().fold(Self::ZERO, |a, &b| a + b);
+        a
+    }
+    
 }
 
 

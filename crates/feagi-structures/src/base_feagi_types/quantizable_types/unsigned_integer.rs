@@ -149,6 +149,11 @@ macro_rules! define_quantizable_uint_type_family {
             fn checked_div(self, other: Self) -> Option<Self> {
                 self.0.checked_div(other.0).map(Self)
             }
+
+            #[inline(always)]
+            fn unchecked_new_from_usize(n: usize) -> Self {
+                Self(T::unchecked_new_from_usize(n))
+            }
         }
 
         impl<T: crate::base_feagi_types::quantizable_types::QuantizableUIntType> $crate::base_feagi_types::quantizable_types::FeagiBaseSingleElementQuantizationType

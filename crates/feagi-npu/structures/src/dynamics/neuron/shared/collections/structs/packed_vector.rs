@@ -1,4 +1,4 @@
-use feagi_structures::base_feagi_types::quantizable_types::{QuantizableNonzeroUIntType, QuantizableUIntType};
+use feagi_structures::base_feagi_types::quantizable_types::{QuantizableUIntType};
 use feagi_structures::CorticalAreaNeuronQuantization;
 use feagi_structures::neuron::{FeagiNeuronError, LinearNeuronIndexCount, NeuronMembranePotential};
 use crate::dynamics::neuron::linear::collections::{NeuronCollectionType, NeuronModelCollectionBaseLinearTrait, NeuronModelCollectionPackedLinearTrait};
@@ -52,47 +52,73 @@ impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>
     }
 
     fn try_get_membrane_potential_data(&self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<NeuronMembranePotential<CANQ::NeuronValueQuant>, FeagiNeuronError> {
-        self.membrane_potentials[index.to_usize()]
+        Ok(self.membrane_potentials[index.to_usize()])
     }
 
     fn try_get_membrane_potential_data_ref(&self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<&NeuronMembranePotential<CANQ::NeuronValueQuant>, FeagiNeuronError> {
-        &self.membrane_potentials[index.to_usize()]
+        Ok(&self.membrane_potentials[index.to_usize()])
     }
 
     fn try_get_membrane_potential_data_ref_mut(&mut self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<&mut NeuronMembranePotential<CANQ::NeuronValueQuant>, FeagiNeuronError> {
-        &mut self.membrane_potentials[index.to_usize()]
+        Ok(&mut self.membrane_potentials[index.to_usize()])
     }
 
     fn try_get_neuron_model_data(&self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<NMP, FeagiNeuronError> {
-        self.model_parameters[index.to_usize()]
+        Ok(self.model_parameters[index.to_usize()])
     }
 
     fn try_get_neuron_model_data_ref(&self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<&NMP, FeagiNeuronError> {
-        &self.model_parameters[index.to_usize()]
+        Ok(&self.model_parameters[index.to_usize()])
     }
 
     fn try_get_neuron_model_data_ref_mut(&mut self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<&mut NMP, FeagiNeuronError> {
-        &mut self.model_parameters[index.to_usize()]
+        Ok(&mut self.model_parameters[index.to_usize()])
     }
 
-    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item=EnumeratedLinearNeuron<CANQ, NeuronDataRef<CANQ, NMP>>> {
-        todo!()
+    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item=EnumeratedLinearNeuron<'_, CANQ, NMP>> {
+        self.membrane_potentials
+            .iter()
+            .zip(self.model_parameters.iter())
+            .enumerate()
+            .map(|(linear_neuron_index, (potential, model_parameters))| {
+                EnumeratedLinearNeuron::new(
+                    LinearNeuronIndexCount::from_usize(linear_neuron_index),
+                    potential,
+                    model_parameters,
+                )
+            })
     }
 
-    fn enumerated_linear_neuron_iter_mut(&self) -> impl Iterator<Item=EnumeratedLinearNeuronMut<CANQ, NeuronDataRefMut<CANQ, NMP>>> {
-        todo!()
+    fn enumerated_linear_neuron_iter_mut(&mut self) -> impl Iterator<Item=EnumeratedLinearNeuronMut<'_, CANQ, NMP>> {
+        self.membrane_potentials
+            .iter_mut()
+            .zip(self.model_parameters.iter_mut())
+            .enumerate()
+            .map(|(linear_neuron_index, (potential, model_parameters))| {
+                EnumeratedLinearNeuronMut::new(
+                    LinearNeuronIndexCount::from_usize(linear_neuron_index),
+                    potential,
+                    model_parameters,
+                )
+            })
     }
 }
 
-impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIterationMut<'static, CANQ, NMP> for NeuronCollectionLinearPackedVector<CANQ, NMP> {
-    fn linear_neuron_iter_mut(&mut self) -> impl Iterator<Item=NeuronDataRefMut<'static, CANQ, NMP>> {
-        todo!()
+impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIterationMut<CANQ, NMP> for NeuronCollectionLinearPackedVector<CANQ, NMP> {
+    fn linear_neuron_iter_mut(&mut self) -> impl Iterator<Item=NeuronDataRefMut<'_, CANQ, NMP>> {
+        self.membrane_potentials
+            .iter_mut()
+            .zip(self.model_parameters.iter_mut())
+            .map(|(potential, model_parameters)| NeuronDataRefMut::new(potential, model_parameters))
     }
 }
 
-impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIteration<'static, CANQ, NMP> for NeuronCollectionLinearPackedVector<CANQ, NMP> {
-    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'static, CANQ, NMP>> {
-        todo!()
+impl<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> PackedLinearIteration<CANQ, NMP> for NeuronCollectionLinearPackedVector<CANQ, NMP> {
+    fn linear_neuron_iter(&self) -> impl Iterator<Item=NeuronDataRef<'_, CANQ, NMP>> {
+        self.membrane_potentials
+            .iter()
+            .zip(self.model_parameters.iter())
+            .map(|(potential, model_parameters)| NeuronDataRef::new(potential, model_parameters))
     }
 }
 

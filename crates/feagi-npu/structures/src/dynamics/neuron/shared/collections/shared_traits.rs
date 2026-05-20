@@ -55,9 +55,9 @@ pub trait NeuronModelCollectionBaseLinearTrait<CANQ: CorticalAreaNeuronQuantizat
 
     fn try_get_neuron_model_data_ref_mut(&mut self, index: LinearNeuronIndexCount<CANQ::NeuronIndexVoxelCountQuant>) -> Result<&mut NMP, FeagiNeuronError>;
 
-    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item = EnumeratedLinearNeuron<CANQ, NeuronDataRef<CANQ, NMP>>>;
+    fn enumerated_linear_neuron_iter(&self) -> impl Iterator<Item = EnumeratedLinearNeuron<'_, CANQ, NMP>>;
 
-    fn enumerated_linear_neuron_iter_mut(&self) -> impl Iterator<Item = EnumeratedLinearNeuronMut<CANQ, NeuronDataRefMut<CANQ, NMP>>>;
+    fn enumerated_linear_neuron_iter_mut(&mut self) -> impl Iterator<Item = EnumeratedLinearNeuronMut<'_, CANQ, NMP>>;
 
     // TODO RAYON iterators
 }
@@ -67,20 +67,20 @@ pub trait NeuronModelCollectionBaseLinearTrait<CANQ: CorticalAreaNeuronQuantizat
 /// Trait for structs that are densely packed (not sparse)
 pub trait NeuronModelCollectionPackedLinearTrait<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>>:
 NeuronModelCollectionBaseLinearTrait<CANQ, NMP> +
-PackedLinearIterationMut<'static, CANQ, NMP>
+PackedLinearIterationMut<CANQ, NMP>
 {
     fn get_membrane_potentials_as_slice(&self) -> &[NeuronMembranePotential<CANQ::NeuronValueQuant>];
     fn get_membrane_potentials_as_slice_mut(&mut self) -> &mut [NeuronMembranePotential<CANQ::NeuronValueQuant>];
     fn get_neuron_model_data_as_slice(&self) -> &[NMP];
     fn get_neuron_model_data_as_slice_mut(&mut self) -> &mut [NMP];
 
-    fn get_neuron_data_as_slice(&self) -> NeuronModelSlice<'static, CANQ, NMP> {
+    fn get_neuron_data_as_slice(&self) -> NeuronModelSlice<'_, CANQ, NMP> {
         NeuronModelSlice {
             neuron_potentials: self.get_membrane_potentials_as_slice(),
             get_model_parameters: self.get_neuron_model_data_as_slice(),
         }
     }
-    fn get_neuron_data_as_slice_mut(&mut self) -> NeuronModelMutSlice<'static, CANQ, NMP> {
+    fn get_neuron_data_as_slice_mut(&mut self) -> NeuronModelMutSlice<'_, CANQ, NMP> {
         NeuronModelMutSlice {
             neuron_potentials: self.get_membrane_potentials_as_slice_mut(),
             get_model_parameters: self.get_neuron_model_data_as_slice_mut(),
