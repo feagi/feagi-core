@@ -1856,6 +1856,7 @@ dependencies = [
  "feagi-io",
  "feagi-npu-burst-engine",
  "feagi-npu-neural",
+ "feagi-npu-neuron-models",
  "feagi-npu-plasticity",
  "feagi-sensorimotor",
  "feagi-serialization",
@@ -2068,6 +2069,15 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "feagi-npu-neuron-models"
+version = "0.0.10"
+dependencies = [
+ "feagi-structures",
+ "rayon",
+ "serde",
 ]
 
 [[package]]

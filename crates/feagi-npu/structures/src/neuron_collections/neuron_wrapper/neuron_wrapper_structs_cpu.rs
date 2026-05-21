@@ -1,7 +1,7 @@
 use feagi_structures::neuron::NeuronMembranePotential;
 use feagi_structures::quantization::CorticalAreaNeuronQuantization;
 use crate::neuron_collections::neuron_wrapper::neuron_wrapper_trait::{NeuronDataMutRefTrait, NeuronDataRefTrait};
-use crate::external_models_make_me_my_own_crate::shared_traits_and_structs::NeuronModelParametersTrait;
+use feagi_npu_neuron_models::::NeuronModelParametersTrait;
 
 
 //region Independent Neuron Struct

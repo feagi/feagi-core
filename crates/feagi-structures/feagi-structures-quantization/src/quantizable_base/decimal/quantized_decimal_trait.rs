@@ -1,6 +1,6 @@
 use half::f16;
+use crate::quantizable_base::decimal::custom_data_types::StorageF8;
 use crate::quantizable_base::quantized_base_trait::QuantizedBaseTrait;
-use crate::StorageF8;
 
 pub trait QuantizedDecimalTrait: QuantizedBaseTrait {
     fn to_f32(self) -> f32;

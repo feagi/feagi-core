@@ -1,0 +1,23 @@
+[package]
+name = "feagi-npu-neuron-models"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "The actual math of neuron activity that powers feagi"
+
+[features]
+
+
+std = []
+
+rayon = ["dep:rayon", "std"]
+
+
+[dependencies]
+serde = { workspace = true, default-features = false, features = [] }
+rayon = { workspace = true, optional = true}
+
+feagi-structures = {workspace = true}

@@ -7,10 +7,10 @@ use crate::quantizable_base::unsigned_integer::QuantizedUnsignedIntegerTrait;
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum QuantizationLevel
 {
-    Bit8,
-    Bit16,
-    Bit32,
-    Bit64, // NOTE: Always include this regardless of 64 bit feature flag, so we can have better error handling
+    Bit8 = 1,
+    Bit16 = 2,
+    Bit32 = 4,
+    Bit64 = 8, // NOTE: Always include this regardless of 64 bit feature flag, so we can have better error handling
 }
 
 impl QuantizationLevel {

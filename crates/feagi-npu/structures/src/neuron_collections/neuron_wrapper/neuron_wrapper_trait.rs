@@ -1,6 +1,6 @@
 use feagi_structures::neuron::NeuronMembranePotential;
 use feagi_structures::quantization::CorticalAreaNeuronQuantization;
-use crate::external_models_make_me_my_own_crate::shared_traits_and_structs::NeuronModelParametersTrait;
+use feagi_npu_neuron_models::::NeuronModelParametersTrait;
 
 pub trait NeuronDataRefTrait<CANQ: CorticalAreaNeuronQuantization, NMP: NeuronModelParametersTrait<CANQ>> 
 {

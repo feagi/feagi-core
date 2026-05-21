@@ -1,1 +1,1 @@
-mod quantizable_spatial_4d_collection_traits;
+pub mod quantizable_spatial_4d_collection_traits;
