@@ -920,6 +920,16 @@ impl PlasticityService {
         queue.drain(..count).collect()
     }
 
+    /// Return number of pending commands in the plasticity queue.
+    pub fn pending_command_count(&self) -> usize {
+        self.command_queue.lock().unwrap().len()
+    }
+
+    /// Return configured per-burst command processing budget.
+    pub fn max_ops_per_burst(&self) -> usize {
+        self.config.max_ops_per_burst
+    }
+
     /// Get statistics
     pub fn get_stats(&self) -> PlasticityStats {
         self.stats.lock().unwrap().clone()

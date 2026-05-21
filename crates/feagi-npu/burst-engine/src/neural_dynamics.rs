@@ -29,6 +29,7 @@ use crate::sparse_memory_lif::{
     resolve_memory_neuron_output, MemoryAssociativeLifParamsByArea,
     SparseMemoryAssociativeLifStates,
 };
+use ahash::AHashSet;
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::NeuronStorage;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -180,16 +181,68 @@ pub struct DynamicsResult {
     pub neurons_in_refractory: usize,
 }
 
+/// Option B refractory: tick countdown once per simulation burst for **all** neurons.
+///
+/// Call at **end** of each burst after [`process_neural_dynamics`] (and after merging any
+/// authoritative fires into the fire queue). Neurons that **fired** this burst must appear in
+/// `fired_neuron_ids` so their freshly assigned refractory countdown is not decremented in the
+/// same burst.
+///
+/// Semantics:
+/// - Every neuron with `refractory_countdown > 0` that **did not** fire this burst has its
+///   countdown decremented by one (membrane unchanged here; integration freeze happens in
+///   dynamics).
+/// - When countdown reaches zero after decrement, extended-refractory consecutive-fire reset runs
+///   (same rules as the former inline path in [`process_single_neuron`]).
+pub fn finish_burst_refractory_period<T: NeuralValue>(
+    neuron_array: &mut impl NeuronStorage<Value = T>,
+    fired_neuron_ids: &AHashSet<u32>,
+) {
+    let n = neuron_array.count();
+    for idx in 0..n {
+        if !neuron_array.valid_mask()[idx] {
+            continue;
+        }
+        let id = idx as u32;
+        if fired_neuron_ids.contains(&id) {
+            continue;
+        }
+        let cd = neuron_array.refractory_countdowns()[idx];
+        if cd == 0 {
+            continue;
+        }
+        let new_cd = cd - 1;
+        neuron_array.refractory_countdowns_mut()[idx] = new_cd;
+
+        let consecutive_fire_limit_raw = neuron_array.consecutive_fire_limits()[idx];
+        let consecutive_fire_limit = if consecutive_fire_limit_raw == 0 {
+            u16::MAX
+        } else {
+            consecutive_fire_limit_raw
+        };
+        if new_cd == 0
+            && consecutive_fire_limit_raw != 0
+            && consecutive_fire_limit != u16::MAX
+            && neuron_array.consecutive_fire_counts()[idx] >= consecutive_fire_limit
+        {
+            neuron_array.consecutive_fire_counts_mut()[idx] = 0;
+        }
+    }
+}
+
 /// Process neural dynamics for all candidate neurons
 ///
 /// This is the CRITICAL HOT PATH - every microsecond matters!
 ///
 /// ## Algorithm:
-/// 1. Apply leak/decay to membrane potentials
-/// 2. Add candidate potentials from FCL
+/// 1. Apply leak/decay to membrane potentials (non-refractory FCL neurons only)
+/// 2. Add candidate potentials from FCL (skipped when refractory — Option B freeze)
 /// 3. Check firing thresholds (with refractory period)
 /// 4. Apply probabilistic excitability
 /// 5. Create Fire Queue from firing neurons
+///
+/// **Refractory:** After this returns, callers **must** invoke [`finish_burst_refractory_period`]
+/// once per burst so countdown advances for **all** neurons, including those not listed in the FCL.
 #[allow(clippy::too_many_arguments)] // Hot path: explicit params avoid alloc and match call sites
 pub fn process_neural_dynamics<T: NeuralValue>(
     fcl: &FireCandidateList,
@@ -732,11 +785,9 @@ fn process_single_neuron<T: NeuralValue>(
     //              candidate_potential);
     // }
 
-    // 1. Handle unified refractory period (normal + extended)
-    // CRITICAL: Decrement countdown, but BLOCK THIS ENTIRE BURST
-    // Semantics: refractory_period=1 → fire, block 1 burst, fire
-    // When countdown=1, this burst is blocked, then countdown becomes 0 for next burst
-    // IMPORTANT: avoid mixing *_mut() borrows with immutable borrows in logging.
+    // 1. Option B refractory: block integration and firing; membrane unchanged this burst.
+    // Countdown decrements once per simulation burst in [`finish_burst_refractory_period`], not
+    // here (so sparse FCL still advances global refractory time).
     let refractory_countdown = neuron_array.refractory_countdowns()[idx];
     if refractory_countdown > 0 {
         if allow_trace {
@@ -757,37 +808,6 @@ fn process_single_neuron<T: NeuralValue>(
                 leak
             );
         }
-        let _old_countdown = neuron_array.refractory_countdowns_mut()[idx];
-
-        // Decrement countdown for next burst
-        neuron_array.refractory_countdowns_mut()[idx] -= 1;
-        let new_countdown = neuron_array.refractory_countdowns_mut()[idx];
-
-        // Check if extended refractory just expired → reset consecutive fire count
-        // This happens AFTER this burst is blocked, ready for next burst
-        let consecutive_fire_limit_raw = neuron_array.consecutive_fire_limits()[idx];
-        let consecutive_fire_limit = if consecutive_fire_limit_raw == 0 {
-            u16::MAX
-        } else {
-            consecutive_fire_limit_raw
-        };
-        if new_countdown == 0
-            && consecutive_fire_limit_raw != 0
-            && consecutive_fire_limit != u16::MAX
-            && neuron_array.consecutive_fire_counts()[idx] >= consecutive_fire_limit
-        {
-            // Reset happens when countdown expires (Option A logic)
-            let _old_count = neuron_array.consecutive_fire_counts()[idx];
-            neuron_array.consecutive_fire_counts_mut()[idx] = 0;
-            // if neuron_id.0 == 16438 {
-            //     println!("[RUST-16438] → BLOCKED by refrac (countdown {} → {}), count reset {} → 0",
-            //              old_countdown, new_countdown, old_count);
-            // }
-        } // else if neuron_id.0 == 16438 {
-          // println!("[RUST-16438] → BLOCKED by refrac (countdown {} → {})", old_countdown, new_countdown);
-          // }
-
-        // BLOCK THIS BURST - neuron cannot fire
         return None;
     }
 
@@ -999,6 +1019,7 @@ mod tests {
     use super::*;
     use crate::fire_structures::{FIRE_KIND_EPISODIC_MEMORY, FIRE_KIND_STDP_ELIGIBLE};
     use crate::sparse_memory_lif::MemoryAssociativeLifParams;
+    use ahash::AHashSet;
     use feagi_npu_runtime::StdNeuronArray; // OK: dev-dependency for tests
 
     fn empty_assoc_sparse() -> crate::sparse_memory_lif::SparseMemoryAssociativeLifStates {
@@ -1283,7 +1304,60 @@ mod tests {
         .unwrap();
 
         assert_eq!(result.neurons_fired, 0);
-        assert_eq!(neurons.refractory_countdowns[0], 2); // Decremented
+        assert_eq!(neurons.refractory_countdowns[0], 3); // Unchanged until end-of-burst tick
+        let fired: AHashSet<u32> = result
+            .fire_queue
+            .get_all_neuron_ids()
+            .iter()
+            .map(|n| n.0)
+            .collect();
+        finish_burst_refractory_period(&mut neurons, &fired);
+        assert_eq!(neurons.refractory_countdowns[0], 2); // One global burst elapsed
+    }
+
+    #[test]
+    fn test_refractory_countdown_ticks_without_fcl_entry() {
+        let mut neurons = StdNeuronArray::new(10);
+        let mut empty_sparse = empty_assoc_sparse();
+
+        let _id = neurons
+            .add_neuron(
+                1.0,
+                f32::MAX,
+                0.0,
+                0.0,
+                0,
+                5,
+                1.0,
+                u16::MAX,
+                0,
+                true,
+                1,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        neurons.refractory_countdowns[0] = 4;
+
+        let fcl = FireCandidateList::new();
+        let result = process_neural_dynamics(
+            &fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            0,
+        )
+        .unwrap();
+        assert_eq!(result.neurons_processed, 0);
+        assert_eq!(neurons.refractory_countdowns[0], 4);
+
+        finish_burst_refractory_period(&mut neurons, &AHashSet::new());
+        assert_eq!(neurons.refractory_countdowns[0], 3);
     }
 
     #[test]

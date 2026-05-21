@@ -249,3 +249,104 @@ impl<'de> Deserialize<'de> for CorticalID {
             .map_err(|e| serde::de::Error::custom(format!("Invalid CorticalID: {}", e)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::genomic::cortical_area::cortical_area_type::CoreCorticalType;
+
+    #[test]
+    fn test_u64_round_trip() {
+        // Create a cortical ID from a core type
+        let original_id = CoreCorticalType::Power.to_cortical_id();
+
+        // Convert to u64
+        let as_u64 = original_id.as_u64();
+
+        // Convert back from u64
+        let restored_id = CorticalID::try_from_u64(as_u64).unwrap();
+
+        // Verify they're equal
+        assert_eq!(original_id, restored_id);
+        assert_eq!(original_id.as_bytes(), restored_id.as_bytes());
+    }
+
+    #[test]
+    fn test_base64_round_trip() {
+        // Create a cortical ID from a core type
+        let original_id = CoreCorticalType::Death.to_cortical_id();
+
+        // Convert to base64
+        let as_base64 = original_id.as_base_64();
+
+        // Convert back from base64
+        let restored_id = CorticalID::try_from_base_64(&as_base64).unwrap();
+
+        // Verify they're equal
+        assert_eq!(original_id, restored_id);
+        assert_eq!(original_id.as_bytes(), restored_id.as_bytes());
+    }
+
+    #[test]
+    fn test_base64_length() {
+        let id = CoreCorticalType::Power.to_cortical_id();
+        let base64_str = id.as_base_64();
+
+        // Base64 of 8 bytes should be 12 characters (with potential padding)
+        // 8 bytes = 64 bits, base64 uses 6 bits per character
+        // 64 / 6 = 10.67, rounded up to 11, but base64 padding rounds to multiple of 4 = 12
+        assert!(base64_str.len() >= 11 && base64_str.len() <= 12);
+    }
+
+    #[test]
+    fn test_invalid_base64() {
+        // Test with invalid base64 string
+        let result = CorticalID::try_from_base_64("not valid base64!");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_base64_wrong_length() {
+        // Test with valid base64 but wrong length (only 4 bytes encoded)
+        let short_base64 = general_purpose::STANDARD.encode([1u8, 2, 3, 4]);
+        let result = CorticalID::try_from_base_64(&short_base64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_try_from_legacy_ascii_uppercase() {
+        // Legacy genomes may use uppercase C/M/I/O for custom/memory/IPU/OPU
+        let id = CorticalID::try_from_legacy_ascii("C03bbb").unwrap();
+        assert_eq!(id.bytes[0], b'c');
+        assert_eq!(&id.bytes[1..6], b"03bbb");
+    }
+
+    #[test]
+    fn test_try_from_legacy_ascii_invalid_as_custom() {
+        // visioA, visioB, 0_45de etc. treated as custom cortical areas
+        for s in ["visioA", "visioB", "0_45de"] {
+            let id = CorticalID::try_from_legacy_ascii(s).unwrap();
+            assert_eq!(id.bytes[0], b'c');
+        }
+    }
+
+    #[test]
+    fn test_u64_with_various_core_types() {
+        let core_types = [
+            CoreCorticalType::Power,
+            CoreCorticalType::Death,
+            CoreCorticalType::Fatigue,
+            CoreCorticalType::Pain,
+            CoreCorticalType::Pleasure,
+            CoreCorticalType::Fear,
+            CoreCorticalType::Hope,
+        ];
+
+        for core_type in &core_types {
+            let id = core_type.to_cortical_id();
+            let as_u64 = id.as_u64();
+            let restored = CorticalID::try_from_u64(as_u64).unwrap();
+            assert_eq!(id, restored, "Failed round-trip for {:?}", core_type);
+        }
+    }
+}

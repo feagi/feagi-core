@@ -71,11 +71,10 @@ __global__ void neural_dynamics_fcl(
     float excitability = excitabilities[neuron_id];
     unsigned short refractory = refractory_countdowns[neuron_id];
     
-    // Update refractory period
+    // Update refractory period (host finish_burst_refractory_period also ticks all neurons; do not
+    // decrement in-kernel to avoid double-counting when the host path is wired.)
     if (refractory > 0) {
-        refractory--;
-        refractory_countdowns[neuron_id] = refractory;
-        return;  // Cannot fire during refractory period
+        return;  // Option B: no synaptic add, no leak, membrane unchanged
     }
     
     // Leak toward resting potential

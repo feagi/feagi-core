@@ -83,6 +83,12 @@ pub struct RawGenome {
     pub genome_title: Option<String>,
     pub genome_description: Option<String>,
     pub version: String,
+    /// Integer schema version. Optional on the wire so older genomes that
+    /// pre-date this field still deserialize. The authoritative resolver
+    /// is `crate::genome::schema::detect_schema_version` and consumers
+    /// MUST go through it instead of branching on this field directly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub genome_schema_version: Option<u32>,
     pub blueprint: HashMap<String, RawCorticalArea>,
     #[serde(default)]
     pub brain_regions: HashMap<String, RawBrainRegion>,
@@ -218,6 +224,18 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
         if bytes == *b"___fatig" {
             return Ok(CoreCorticalType::Fatigue.to_cortical_id());
         }
+        if bytes == *b"___pain_" {
+            return Ok(CoreCorticalType::Pain.to_cortical_id());
+        }
+        if bytes == *b"___pleas" {
+            return Ok(CoreCorticalType::Pleasure.to_cortical_id());
+        }
+        if bytes == *b"___fear_" {
+            return Ok(CoreCorticalType::Fear.to_cortical_id());
+        }
+        if bytes == *b"___hope_" {
+            return Ok(CoreCorticalType::Hope.to_cortical_id());
+        }
         return Ok(cortical_id);
     }
 
@@ -243,11 +261,35 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
     if id_str == "___fatig" {
         return Ok(CoreCorticalType::Fatigue.to_cortical_id());
     }
+    if id_str == "___pain_" {
+        return Ok(CoreCorticalType::Pain.to_cortical_id());
+    }
+    if id_str == "___pleas" {
+        return Ok(CoreCorticalType::Pleasure.to_cortical_id());
+    }
+    if id_str == "___fear_" {
+        return Ok(CoreCorticalType::Fear.to_cortical_id());
+    }
+    if id_str == "___hope_" {
+        return Ok(CoreCorticalType::Hope.to_cortical_id());
+    }
     if id_str == "_death" {
         return Ok(CoreCorticalType::Death.to_cortical_id());
     }
     if id_str == "_fatigue" {
         return Ok(CoreCorticalType::Fatigue.to_cortical_id());
+    }
+    if id_str == "_pain" {
+        return Ok(CoreCorticalType::Pain.to_cortical_id());
+    }
+    if id_str == "_pleasure" {
+        return Ok(CoreCorticalType::Pleasure.to_cortical_id());
+    }
+    if id_str == "_fear" {
+        return Ok(CoreCorticalType::Fear.to_cortical_id());
+    }
+    if id_str == "_hope" {
+        return Ok(CoreCorticalType::Hope.to_cortical_id());
     }
 
     // For non-core areas, use CorticalID's legacy ASCII parser (6-char and 8-char)

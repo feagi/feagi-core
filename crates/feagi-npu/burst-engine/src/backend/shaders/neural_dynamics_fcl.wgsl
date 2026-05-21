@@ -11,9 +11,9 @@
 // Algorithm:
 // 1. Get FCL index from workgroup
 // 2. Lookup actual neuron_id from FCL array
-// 3. Apply FCL accumulated potential to membrane potential
-// 4. Process LIF neural dynamics: V(t+1) = V(t) + I_syn - leak * (V(t) - V_rest)
-// 5. Check firing condition and write sparse output
+// 3. Option B refractory: if countdown > 0, exit without modifying membrane or dynamic state
+//    (host [`finish_burst_refractory_period`] advances countdown once per burst).
+// 4. Else apply FCL accumulated potential and leak; threshold / fire / refractory assignment.
 //
 // **IMPORTANT**: Keep formulas synchronized with:
 // - CPU implementation: feagi-burst-engine/src/neuron_models/lif.rs
@@ -89,8 +89,20 @@ fn neural_dynamics_fcl_main(@builtin(global_invocation_id) global_id: vec3<u32>)
     let neuron_id = fcl_neuron_ids[fcl_idx];
     let fcl_potential = fcl_potentials[fcl_idx];
     
+    // u16_dynamic_state first: Option B gate (no FCL, no leak when refractory)
+    let u16_dyn_idx = neuron_id * 2u;
+    var refractory_countdown = u16_dynamic_state[u16_dyn_idx + 0u];
+    let consecutive_fires_load = u16_dynamic_state[u16_dyn_idx + 1u];
+    
+    if (refractory_countdown > 0u) {
+        // Membrane and countdown unchanged; host finish_burst_refractory_period handles ticks.
+        return;
+    }
+    
+    var consecutive_fires = consecutive_fires_load;
+    
     // ═══════════════════════════════════════════════════════════
-    // LOAD NEURON STATE (Random access into dense arrays)
+    // LOAD STATIC PARAMETERS
     // ═══════════════════════════════════════════════════════════
     
     // f32_params: stride=4 (threshold, leak, resting, excitability)
@@ -106,49 +118,26 @@ fn neural_dynamics_fcl_main(@builtin(global_invocation_id) global_id: vec3<u32>)
     let consecutive_limit = u16_static_params[u16_static_idx + 1u];
     let snooze_period = u16_static_params[u16_static_idx + 2u];
     
-    // u16_dynamic_state: stride=2 (refrac_countdown, consec_count)
-    let u16_dyn_idx = neuron_id * 2u;
-    var refractory_countdown = u16_dynamic_state[u16_dyn_idx + 0u];
-    var consecutive_fires = u16_dynamic_state[u16_dyn_idx + 1u];
-    
     // ═══════════════════════════════════════════════════════════
-    // APPLY FCL POTENTIAL TO MEMBRANE
+    // APPLY FCL POTENTIAL TO MEMBRANE + LEAK
     // ═══════════════════════════════════════════════════════════
     
     var membrane = membrane_potentials[neuron_id];
     membrane = membrane + fcl_potential;  // Add accumulated synaptic input
     
-    // ═══════════════════════════════════════════════════════════
-    // NEURAL DYNAMICS
-    // ═══════════════════════════════════════════════════════════
-    
     // Step 1: Apply leak toward resting potential
     membrane = membrane + (resting - membrane) * leak_coef;
     
-    // Step 2: Check unified refractory period
-    if (refractory_countdown > 0u) {
-        refractory_countdown = refractory_countdown - 1u;
-        u16_dynamic_state[u16_dyn_idx + 0u] = refractory_countdown;
-        
-        // Reset consecutive fire count when extended refractory expires
-        if (refractory_countdown == 0u && consecutive_limit > 0u && consecutive_fires >= consecutive_limit) {
-            consecutive_fires = 0u;
-            u16_dynamic_state[u16_dyn_idx + 1u] = consecutive_fires;
-        }
-        
-        // Update membrane and exit (neuron in refractory)
-        membrane_potentials[neuron_id] = membrane;
-        return;
-    }
+    // (refractory branch removed — handled at top)
     
-    // Step 3: Check firing threshold (>= to match CPU logic)
+    // Step 2: Check firing threshold (>= to match CPU .ge() logic)
     if (membrane < threshold) {
         // Below threshold - not firing
         membrane_potentials[neuron_id] = membrane;
         return;
     }
     
-    // Step 4: Apply probabilistic excitability
+    // Step 3: Apply probabilistic excitability
     // Fast path: excitability >= 0.999 means always fire (matches CPU, avoids floating-point edge cases)
     if (excitability < 0.999) {
         let rand_val = excitability_random(neuron_id, params.burst_count);

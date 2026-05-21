@@ -3,7 +3,7 @@
 //! STDP integration tests for synaptic plasticity behavior.
 
 use feagi_npu_burst_engine::backend::CPUBackend;
-use feagi_npu_burst_engine::npu::StdpMappingParams;
+use feagi_npu_burst_engine::npu::{PlasticityMode, StdpMappingParams};
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_burst_engine::FIRE_KIND_STDP_ELIGIBLE;
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
@@ -57,8 +57,8 @@ fn create_stdp_network() -> (
 fn stdp_params(
     plasticity_window: usize,
     plasticity_constant: i64,
-    ltp_multiplier: i64,
-    ltd_multiplier: i64,
+    ltp_multiplier: i8,
+    ltd_multiplier: i8,
     bidirectional_stdp: bool,
     synapse_psp: f32,
     synapse_type: SynapseType,
@@ -71,6 +71,12 @@ fn stdp_params(
         bidirectional_stdp,
         synapse_psp,
         synapse_type,
+        plasticity_mode: PlasticityMode::Stdp,
+        eligibility_decay_bursts: 0,
+        reward_source_area: None,
+        punishment_source_area: None,
+        max_weight: f32::INFINITY,
+        plasticity_eta: 1.0,
     }
 }
 

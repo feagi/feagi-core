@@ -37,6 +37,7 @@ use crate::fire_structures::{
 };
 use crate::fq_sampler::{FQSampler, SamplingMode};
 use crate::neural_dynamics::*;
+use crate::rate_modulated_leak::RateModulatedLeakRegistry;
 use crate::sparse_memory_lif::{
     MemoryAssociativeLifParams, MemoryAssociativeLifParamsByArea, SparseMemoryAssociativeLifStates,
 };
@@ -130,29 +131,136 @@ fn should_emit_throttled_warning(last_emitted_ms: &AtomicU64, interval_ms: u64) 
     true
 }
 
-/// STDP parameters for a plastic cortical mapping A→B.
+/// Plasticity mode for a cortical mapping A→B.
+///
+/// Drives the burst-engine plasticity loop:
+/// - `Off`: no weight updates, no eligibility tracking.
+/// - `Stdp`: pure correlation-based STDP. Equivalent to the legacy plasticity_flag=true path.
+///   Internally implemented via the eligibility-trace machinery with full reset each burst
+///   and `R(t)=1`, which preserves legacy STDP numerics.
+/// - `RStdp`: reward-modulated STDP. Eligibility traces persist across bursts (decaying with
+///   `eligibility_decay_bursts`), and weight commits are gated by
+///   `R(t) = density(reward_source_area) - density(punishment_source_area)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlasticityMode {
+    #[default]
+    Off,
+    Stdp,
+    RStdp,
+}
+
+/// STDP / R-STDP parameters for a plastic cortical mapping A→B.
 ///
 /// Note: New synapse weight from LTP uses `delta_plus_u8()` cast to `f32`; PSP is float-valued.
+///
+/// For R-STDP, the burst engine maintains a per-synapse eligibility trace `e_ij` updated by
+/// the same LTP/LTD windowed-correlation rule, then commits weight as
+/// `w_ij += plasticity_eta * R(t) * e_ij` at end-of-burst (timing option (a)). `plasticity_eta`
+/// defaults to `1.0` and is a separate f32 from the integer LTP/LTD `delta_plus` / `delta_minus`
+/// (see `delta_plus_u8`); this gives sub-unit scaling of weight updates without changing trace
+/// accumulation, which is useful when the multipliers are stored as `i8`.
+/// The wireheading lint enforces that `reward_source_area` and `punishment_source_area`
+/// have `plasticity_mode = Off` on all incoming mappings, so the policy cannot drive the
+/// reward source itself.
 #[derive(Debug, Clone, Copy)]
 pub struct StdpMappingParams {
     pub plasticity_window: usize,
     pub plasticity_constant: i64,
-    pub ltp_multiplier: i64,
-    pub ltd_multiplier: i64,
+    /// Per-event LTP scale factor, multiplied with `plasticity_constant` to form `delta_plus`
+    /// (clamped to `u8` for the trace update). Stored as `i8` to match the effective range
+    /// (product is always clamped to 255) while keeping the struct compact for RTOS/embedded
+    /// targets; JSON layers validate `-128..=127`.
+    pub ltp_multiplier: i8,
+    /// See `ltp_multiplier` (LTD / `delta_minus` path).
+    pub ltd_multiplier: i8,
     pub bidirectional_stdp: bool,
     pub synapse_psp: f32,
     pub synapse_type: SynapseType,
+    /// Plasticity mode (Off / Stdp / RStdp). See `PlasticityMode`.
+    pub plasticity_mode: PlasticityMode,
+    /// Eligibility-trace decay constant in bursts. `0` means "no persistence" (STDP-equivalent
+    /// full reset each burst). For R-STDP, typical values are 5-50 bursts depending on the
+    /// task's reward latency. Ignored when `plasticity_mode == Off`.
+    pub eligibility_decay_bursts: u32,
+    /// Source cortical area whose firing density contributes positively to `R(t)`. `None`
+    /// means no positive reward channel. For R-STDP this is typically a fixed-wiring
+    /// "pleasure detector" sub-circuit.
+    pub reward_source_area: Option<u32>,
+    /// Source cortical area whose firing density contributes negatively to `R(t)` (punishment).
+    /// `None` means no negative reward channel.
+    pub punishment_source_area: Option<u32>,
+    /// Upper bound applied to `w_ij` after a positive (potentiating) commit in the unified
+    /// plasticity update path. Prevents runaway weight growth under sustained reward when the
+    /// integer-valued `delta_plus` and persistent eligibility traces would otherwise compound
+    /// without bound (see runaway-PSP postmortem in feagi-mcp/docs/FAQ.md).
+    ///
+    /// Semantics:
+    /// - `f32::INFINITY` (default): no clamp; legacy behaviour preserved.
+    /// - Finite, strictly positive: each potentiating commit produces
+    ///   `w_ij_new = (w_ij_old + delta_w).min(max_weight)`.
+    /// - `NaN`, zero, or negative values are rejected at JSON parse time (BDU layer).
+    ///
+    /// Negative (depressing) commits are NOT affected by this field; they are still floored at
+    /// `0.0` as before, so LTD / punishment can always drive a synapse all the way to zero.
+    pub max_weight: f32,
+    /// Scales the end-of-burst weight commit in the unified plasticity path:
+    /// `w_ij += plasticity_eta * R(t) * e_ij` (Stdp: R=1.0; RStdp: R=reward-pain density).
+    /// `1.0` preserves the historical magnitude; use `(0, 1]` to slow runaway R-STDP when
+    /// integer `ltp`/`ltd` cannot be fractional, complementary to `max_weight`.
+    /// Rejected in the BDU at parse time if not finite, `<= 0`, or non-finite/NaN. Omitted
+    /// from JSON is treated as `1.0`.
+    pub plasticity_eta: f32,
+}
+
+impl Default for StdpMappingParams {
+    fn default() -> Self {
+        Self {
+            plasticity_window: 1,
+            plasticity_constant: 0,
+            ltp_multiplier: 0,
+            ltd_multiplier: 0,
+            bidirectional_stdp: false,
+            synapse_psp: 0.0,
+            synapse_type: SynapseType::Excitatory,
+            plasticity_mode: PlasticityMode::Off,
+            eligibility_decay_bursts: 0,
+            reward_source_area: None,
+            punishment_source_area: None,
+            max_weight: f32::INFINITY,
+            plasticity_eta: 1.0,
+        }
+    }
 }
 
 impl StdpMappingParams {
     pub fn delta_plus_u8(&self) -> u8 {
-        let delta = self.plasticity_constant.saturating_mul(self.ltp_multiplier);
+        let delta = self
+            .plasticity_constant
+            .saturating_mul(self.ltp_multiplier as i64);
         delta.clamp(0, u8::MAX as i64) as u8
     }
 
     pub fn delta_minus_u8(&self) -> u8 {
-        let delta = self.plasticity_constant.saturating_mul(self.ltd_multiplier);
+        let delta = self
+            .plasticity_constant
+            .saturating_mul(self.ltd_multiplier as i64);
         delta.clamp(0, u8::MAX as i64) as u8
+    }
+
+    /// Multiplicative trace-decay factor applied each burst BEFORE the new co-fire delta is
+    /// added. For `eligibility_decay_bursts == 0` the trace is fully reset (STDP semantics).
+    /// For `>0`, returns `exp(-1 / decay_bursts)`.
+    pub fn trace_decay_factor(&self) -> f32 {
+        if self.eligibility_decay_bursts == 0 {
+            0.0
+        } else {
+            (-1.0_f32 / self.eligibility_decay_bursts as f32).exp()
+        }
+    }
+
+    /// Whether plasticity is active for this mapping (either STDP or R-STDP).
+    pub fn is_plastic(&self) -> bool {
+        !matches!(self.plasticity_mode, PlasticityMode::Off)
     }
 }
 
@@ -269,6 +377,8 @@ pub struct RustNPU<
     /// Long-term memory predicate (wired by plasticity from memory neuron state). Reciprocal
     /// associative edges are not synthesized in STDP; register a second mapping for B→A if needed.
     memory_neuron_longterm_predicate: std::sync::RwLock<Option<MemoryNeuronPredicate>>,
+    /// @cursor:critical-path — only allocated when at least one cortical area enables rate-modulated leak.
+    rate_modulated_leak: std::sync::Mutex<RateModulatedLeakRegistry>,
 }
 
 const POWER_NEURON_UNSET: u32 = u32::MAX;
@@ -411,6 +521,7 @@ impl<
             power_neuron_id: std::sync::atomic::AtomicU32::new(POWER_NEURON_UNSET),
             memory_neuron_assoc_predicate: std::sync::RwLock::new(None),
             memory_neuron_longterm_predicate: std::sync::RwLock::new(None),
+            rate_modulated_leak: std::sync::Mutex::new(RateModulatedLeakRegistry::default()),
         })
     }
 }
@@ -1501,6 +1612,44 @@ impl<
             .set_psp_uniform_distribution_flag(cortical_id, enabled);
     }
 
+    /// Set configured baseline PSP values for cortical areas.
+    ///
+    /// These values are used when restoring an area's outgoing synapses on reset.
+    pub fn set_postsynaptic_current_flags(&mut self, flags: AHashMap<CorticalID, f32>) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_postsynaptic_current_flags(flags);
+    }
+
+    /// Set configured baseline PSP for one cortical area.
+    pub fn set_postsynaptic_current_flag(&mut self, cortical_id: CorticalID, postsynaptic: f32) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_postsynaptic_current_flag(cortical_id, postsynaptic);
+    }
+
+    /// Set degeneration coefficients for cortical areas.
+    ///
+    /// Coefficients <= 0 are treated as disabled.
+    pub fn set_degeneration_flags(&mut self, flags: AHashMap<CorticalID, f32>) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_degeneration_flags(flags);
+    }
+
+    /// Set degeneration coefficient for a single cortical area (in-place).
+    ///
+    /// Coefficients <= 0 disable degeneration for that area.
+    pub fn set_degeneration_flag(&mut self, cortical_id: CorticalID, degeneration: f32) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_degeneration_flag(cortical_id, degeneration);
+    }
+
     // ===== SENSORY INJECTION API =====
 
     /// Inject sensory neurons into FCL (called from Rust sensory threads)
@@ -2139,6 +2288,16 @@ impl<
                 &*neuron_storage,
             );
         }
+        // Option B refractory: one global countdown step per burst for all neurons (not FCL-scoped)
+        {
+            let fired_this_burst: AHashSet<u32> = dynamics_result
+                .fire_queue
+                .get_all_neuron_ids()
+                .iter()
+                .map(|n| n.0)
+                .collect();
+            finish_burst_refractory_period(&mut *neuron_storage, &fired_this_burst);
+        }
         let phase2_duration = phase2_start.elapsed();
 
         if let Some(area_idx) = trace_fcl_cortical_idx_for_logging() {
@@ -2169,8 +2328,8 @@ impl<
 
         // PSP from fires at `burst_count` arrives at `burst_count + delay_bursts` (see synaptic delay docs).
         {
-            let synapse_storage = self.synapse_storage.read().unwrap();
             let fired_ids = dynamics_result.fire_queue.get_all_neuron_ids();
+            let mut synapse_storage = self.synapse_storage.write().unwrap();
             let mut neuron_mps: ahash::AHashMap<NeuronId, f32> = ahash::AHashMap::new();
             for neurons in dynamics_result.fire_queue.neurons_by_area.values() {
                 for neuron in neurons {
@@ -2192,6 +2351,19 @@ impl<
                     &delayed.fcl_by_delay,
                     &delayed.memory_associative_by_delay,
                 );
+            let psp_degradation_updates = self.apply_psp_degeneration_from_fired_neurons(
+                &fired_ids,
+                &propagation_engine,
+                &mut *synapse_storage,
+            );
+            if psp_degradation_updates > 0 {
+                tracing::debug!(
+                    target: "feagi-npu",
+                    "Applied PSP degeneration updates to {} synapses after burst {}",
+                    psp_degradation_updates,
+                    burst_count
+                );
+            }
         }
 
         // Release neuron/synapse locks before plasticity updates to avoid lock contention.
@@ -2219,6 +2391,22 @@ impl<
         // Phase 3.5: Synaptic Plasticity (STDP-like) updates
         // Uses FireLedger window ending at this burst and applies weight updates to affect burst t+1.
         self.apply_stdp_updates_for_burst(burst_count, &fire_structures.fire_ledger)?;
+
+        {
+            // Phase 3.6: opt-in homeostatic leak (cold path; no-op if registry is empty)
+            if let (Ok(mut rml), Ok(mut ns)) =
+                (self.rate_modulated_leak.lock(), self.neuron_storage.write())
+            {
+                if !rml.is_empty() {
+                    rml.apply_burstal(
+                        burst_count,
+                        &fire_structures.fire_ledger,
+                        ns.leak_coefficients_mut(),
+                    );
+                }
+            }
+        }
+
         let phase3_duration = phase3_start.elapsed();
 
         // Phase 4: Swap fire queues (current becomes previous for next burst)
@@ -2306,11 +2494,15 @@ impl<
     /// Register a cortical area name for visualization encoding
     /// This mapping is populated during neuroembryogenesis
     ///
-    /// ARCHITECTURE: For core areas (0=_death, 1=_power, 2=_fatigue), automatically creates
+    /// ARCHITECTURE: For core areas (0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure, 5=_fear, 6=_hope), automatically creates
     /// a single neuron (1x1x1) with deterministic ID matching the area ID:
     /// - Area 0 → neuron ID 0
     /// - Area 1 → neuron ID 1
     /// - Area 2 → neuron ID 2
+    /// - Area 3 → neuron ID 3
+    /// - Area 4 → neuron ID 4
+    /// - Area 5 → neuron ID 5
+    /// - Area 6 → neuron ID 6
     ///
     /// This eliminates the need to scan for power neurons (O(1) lookup instead of O(n))
     pub fn register_cortical_area(&mut self, area_id: u32, cortical_name: String) {
@@ -2320,8 +2512,8 @@ impl<
             .insert(area_id, cortical_name);
 
         // CRITICAL ARCHITECTURE: Create core area neurons with deterministic IDs
-        // Core areas (0, 1, 2) get neurons at matching IDs (0, 1, 2)
-        if area_id <= 2 {
+        // Core areas (0..=6) get neurons at matching IDs.
+        if area_id <= 6 {
             let neuron_storage = self.neuron_storage.read().unwrap();
             let neuron_id = NeuronId(area_id);
             let neuron_idx = neuron_id.0 as usize;
@@ -2366,7 +2558,7 @@ impl<
             }
 
             if needs_creation {
-                // Ensure previous core area neurons exist (must be created in order: 0, then 1, then 2)
+                // Ensure previous core area neurons exist (must be created in order: 0..=6)
                 if area_id > 0 {
                     let prev_neuron_storage = self.neuron_storage.read().unwrap();
                     let prev_neuron_idx = (area_id - 1) as usize;
@@ -2380,7 +2572,7 @@ impl<
 
                     if !prev_exists {
                         warn!(
-                            "[NPU] Core area {} registered before area {} - core areas should be registered in order (0, 1, 2)",
+                            "[NPU] Core area {} registered before area {} - core areas should be registered in order (0..=6)",
                             area_id, area_id - 1
                         );
                     }
@@ -3449,6 +3641,26 @@ impl<
         updated_count
     }
 
+    /// (Re)register or clear rate-modulated leak for a cortical area. See `neural/docs/rate_modulated_leak.md`.
+    pub fn sync_rate_modulated_leak_from_cortical_property(
+        &mut self,
+        cortical_idx: u32,
+        value: &serde_json::Value,
+        base_leak: f32,
+        neuron_global_indices: Vec<usize>,
+    ) {
+        if let Ok(mut g) = self.rate_modulated_leak.lock() {
+            g.sync_cortical(cortical_idx, value, base_leak, neuron_global_indices);
+        }
+    }
+
+    /// Remove a cortical area from the rate-modulated leak homeostat.
+    pub fn remove_rate_modulated_leak(&mut self, cortical_idx: u32) {
+        if let Ok(mut g) = self.rate_modulated_leak.lock() {
+            g.remove(cortical_idx);
+        }
+    }
+
     /// Update consecutive fire limit for all neurons in a cortical area (bulk parameter change)
     pub fn update_cortical_area_consecutive_fire_limit(
         &mut self,
@@ -3859,19 +4071,55 @@ impl<
                 .retain(|r| r.twin_area_idx != cortical_area);
         }
 
-        let mut neuron_storage_write = self.neuron_storage.write().unwrap();
-        let mut reset_count = 0usize;
-        for idx in 0..neuron_storage_write.count() {
-            if neuron_storage_write.valid_mask()[idx]
-                && neuron_storage_write.cortical_areas()[idx] == cortical_area
-            {
-                neuron_storage_write.membrane_potentials_mut()[idx] = T::zero();
-                neuron_storage_write.refractory_countdowns_mut()[idx] = 0;
-                neuron_storage_write.consecutive_fire_counts_mut()[idx] = 0;
-                reset_count += 1;
+        let reset_count = {
+            let mut neuron_storage_write = self.neuron_storage.write().unwrap();
+            let mut reset_count = 0usize;
+            for idx in 0..neuron_storage_write.count() {
+                if neuron_storage_write.valid_mask()[idx]
+                    && neuron_storage_write.cortical_areas()[idx] == cortical_area
+                {
+                    neuron_storage_write.membrane_potentials_mut()[idx] = T::zero();
+                    neuron_storage_write.refractory_countdowns_mut()[idx] = 0;
+                    neuron_storage_write.consecutive_fire_counts_mut()[idx] = 0;
+                    reset_count += 1;
+                }
             }
+            reset_count
+        };
+        let restored_synapses =
+            self.restore_cortical_area_postsynaptic_current_from_config(cortical_area);
+        if restored_synapses > 0 {
+            tracing::debug!(
+                target: "feagi-npu",
+                "Reset cortical area {} restored outgoing PSP on {} synapses",
+                cortical_area,
+                restored_synapses
+            );
         }
         reset_count
+    }
+
+    /// Restore all outgoing synapse PSP values for a cortical area from the configured baseline.
+    ///
+    /// Returns number of synapses updated, or 0 when no baseline is available.
+    fn restore_cortical_area_postsynaptic_current_from_config(
+        &mut self,
+        cortical_area: u32,
+    ) -> usize {
+        let Some(cortical_name) = self.get_cortical_area_name(cortical_area) else {
+            return 0;
+        };
+        let Ok(cortical_id) = CorticalID::try_from_base_64(&cortical_name) else {
+            return 0;
+        };
+        let postsynaptic = {
+            let prop = self.propagation_engine.read().unwrap();
+            let Some(psp) = prop.area_postsynaptic_current.get(&cortical_id) else {
+                return 0;
+            };
+            *psp
+        };
+        self.update_cortical_area_postsynaptic_current(cortical_area, postsynaptic)
     }
 
     /// Remove delayed PSP schedule entries and associative-memory buckets for the given neuron ids.
@@ -3938,6 +4186,15 @@ impl<
         cortical_area: u32,
         postsynaptic_potential: f32,
     ) -> usize {
+        if let Some(cortical_name) = self.get_cortical_area_name(cortical_area) {
+            if let Ok(cortical_id) = CorticalID::try_from_base_64(&cortical_name) {
+                self.propagation_engine
+                    .write()
+                    .unwrap()
+                    .set_postsynaptic_current_flag(cortical_id, postsynaptic_potential);
+            }
+        }
+
         // Phase 1: Gather source neuron IDs for this cortical area.
         // NeuronId == array index by design in this NPU (see process_single_neuron).
         let source_neuron_ids: Vec<u32> = {
@@ -4004,6 +4261,54 @@ impl<
                 updated += 1;
             }
         }
+        updated
+    }
+
+    /// Apply per-fire PSP degeneration to outgoing synapses of fired source neurons.
+    ///
+    /// Legacy parity: degradation happens after a source neuron fires, so that fire uses current PSP
+    /// and subsequent fires use the decremented PSP.
+    fn apply_psp_degeneration_from_fired_neurons(
+        &self,
+        fired_ids: &[NeuronId],
+        propagation_engine: &SynapticPropagationEngine,
+        synapse_storage: &mut R::SynapseStorage,
+    ) -> usize {
+        if fired_ids.is_empty() || propagation_engine.area_degeneration.is_empty() {
+            return 0;
+        }
+
+        let mut updated = 0usize;
+        for source in fired_ids {
+            let Some(source_area) = propagation_engine.neuron_to_area.get(source) else {
+                continue;
+            };
+            let Some(degeneration) = propagation_engine.area_degeneration.get(source_area) else {
+                continue;
+            };
+            if *degeneration <= 0.0 {
+                continue;
+            }
+
+            let Some(indices) = propagation_engine.synapse_index.get(source) else {
+                continue;
+            };
+
+            for &syn_idx in indices {
+                let is_valid = {
+                    let valid = synapse_storage.valid_mask();
+                    syn_idx < valid.len() && valid[syn_idx]
+                };
+                if !is_valid {
+                    continue;
+                }
+
+                let psps = synapse_storage.postsynaptic_potentials_mut();
+                psps[syn_idx] = (psps[syn_idx] - *degeneration).max(0.0);
+                updated += 1;
+            }
+        }
+
         updated
     }
 
@@ -4220,7 +4525,11 @@ impl<
         self.rebuild_stdp_mapping_index();
     }
 
-    /// Register or update STDP parameters for a plastic cortical mapping A→B.
+    /// Register or update STDP / R-STDP parameters for a plastic cortical mapping A→B.
+    ///
+    /// Rebuilds the per-mapping synapse index so any synapses already present between A and B
+    /// are immediately picked up by the plasticity loop. Without this rebuild, registering a
+    /// mapping after the synapses exist would silently no-op.
     pub fn register_stdp_mapping(
         &mut self,
         src_cortical_idx: u32,
@@ -4232,8 +4541,66 @@ impl<
                 "plasticity_window must be > 0".to_string(),
             ));
         }
+
+        // Wireheading lint. Reward/punishment source areas must never receive plastic input,
+        // otherwise the brain can learn to inject its own reward by stimulating the detector.
+        // Two checks are needed because mapping registration order is not guaranteed:
+        //   1. The new mapping itself terminates on a protected area declared by an existing
+        //      plastic mapping.
+        //   2. The new mapping declares a protected area that is already the destination of an
+        //      existing plastic mapping.
+        if params.is_plastic() {
+            let mappings = self.stdp_mappings.read().unwrap();
+            let new_protected: [Option<u32>; 2] =
+                [params.reward_source_area, params.punishment_source_area];
+
+            for (existing_key, existing_params) in mappings.iter() {
+                if !existing_params.is_plastic() {
+                    continue;
+                }
+                let existing_protected: [Option<u32>; 2] = [
+                    existing_params.reward_source_area,
+                    existing_params.punishment_source_area,
+                ];
+
+                // Check 1: new mapping terminates on a protected area of an existing mapping.
+                for protected in existing_protected.iter().flatten().copied() {
+                    if protected == dst_cortical_idx {
+                        return Err(FeagiError::RuntimeError(format!(
+                            "Wireheading violation: plastic mapping {} -> {} would write into \
+                             reward/punishment source area {} (protected by mapping {} -> {}). \
+                             Reward/punishment areas must be driven by hard-wired (plasticity_mode=Off) \
+                             input only.",
+                            src_cortical_idx,
+                            dst_cortical_idx,
+                            protected,
+                            existing_key.0,
+                            existing_key.1
+                        )));
+                    }
+                }
+
+                // Check 2: new mapping declares a protected area that already receives plastic input.
+                for protected in new_protected.iter().flatten().copied() {
+                    if protected == existing_key.1 {
+                        return Err(FeagiError::RuntimeError(format!(
+                            "Wireheading violation: declared reward/punishment source area {} on \
+                             mapping {} -> {} already receives plastic input via mapping {} -> {}. \
+                             Detector areas must have plasticity_mode=Off on all incoming mappings.",
+                            protected,
+                            src_cortical_idx,
+                            dst_cortical_idx,
+                            existing_key.0,
+                            existing_key.1
+                        )));
+                    }
+                }
+            }
+        }
+
         let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
         self.stdp_mappings.write().unwrap().insert(key, params);
+        self.rebuild_stdp_mapping_index();
         Ok(())
     }
 
@@ -4312,6 +4679,37 @@ impl<
                 .is_some_and(|idx| idx == dst_area);
         }
         false
+    }
+
+    /// Firing density of `cortical_area` at `burst_timestep`, in `[0.0, 1.0]`.
+    ///
+    /// Defined as `fired_neurons_in_burst / total_neurons_in_area`. Used by R-STDP to compute
+    /// the reward signal `R(t) = density(reward_source) - density(punishment_source)`.
+    /// Returns 0.0 if the area is untracked, has no neurons, or insufficient history.
+    fn activity_density(
+        &self,
+        cortical_area: u32,
+        burst_timestep: u64,
+        fire_ledger: &crate::fire_ledger::FireLedger,
+        neuron_storage: &R::NeuronStorage<T>,
+    ) -> f32 {
+        let total_neurons = neuron_storage.get_neuron_count(cortical_area);
+        if total_neurons == 0 {
+            return 0.0;
+        }
+        let window = match fire_ledger.get_dense_window_bitmaps(cortical_area, burst_timestep, 1) {
+            Ok(w) => w,
+            Err(_) => return 0.0,
+        };
+        let Some((_, bitmap)) = window.into_iter().next() else {
+            return 0.0;
+        };
+        // bitmap.cardinality() can exceed total_neurons if memory neurons are tracked, so clamp.
+        let fired = bitmap
+            .iter()
+            .filter(|&id| id < MEMORY_NEURON_ID_START)
+            .count();
+        (fired as f32 / total_neurons as f32).clamp(0.0, 1.0)
     }
 
     fn apply_stdp_updates_for_burst(
@@ -4443,12 +4841,65 @@ impl<
             return Ok(());
         }
 
-        // Apply weight updates to existing synapses.
+        // Unified plasticity update: maintain per-synapse eligibility traces and commit weights
+        // modulated by R(t). This single code path handles both `PlasticityMode::Stdp` and
+        // `PlasticityMode::RStdp`:
+        //   - Stdp:  trace_decay = 0  → trace fully reset each burst (legacy semantics);
+        //            R(t) = 1         → weight commit equals the burst's STDP delta exactly.
+        //   - RStdp: trace_decay = exp(-1 / eligibility_decay_bursts) → trace persists;
+        //            R(t) = density(reward_source) - density(punishment_source).
+        //
+        // Step ordering per synapse (option (a) end-of-burst timing):
+        //   1. e_ij <- e_ij * decay
+        //   2. if co-fire across the plasticity window:                e_ij += delta_plus
+        //      else if uncorrelated firing across the window:          e_ij -= delta_minus
+        //   3. w_ij += R(t) * e_ij        (clamp at 0 on negative deltas)
         {
             let neuron_storage = self.neuron_storage.read().unwrap();
             let mut synapse_storage = self.synapse_storage.write().unwrap();
 
+            // Pre-compute R(t) per mapping. Stdp mappings always get R=1. R-STDP mappings sample
+            // current-burst firing density of their reward / punishment source areas. Mappings
+            // with `Off` plasticity_mode are filtered out at registration; defensively skip here.
+            let mut reward_signals: AHashMap<CorticalMappingKey, f32> =
+                AHashMap::with_capacity(mappings.len());
             for (key, params) in &mappings {
+                let r = match params.plasticity_mode {
+                    PlasticityMode::Off => continue,
+                    PlasticityMode::Stdp => 1.0_f32,
+                    PlasticityMode::RStdp => {
+                        let pleasure = params
+                            .reward_source_area
+                            .map(|area| {
+                                self.activity_density(
+                                    area,
+                                    burst_timestep,
+                                    fire_ledger,
+                                    &neuron_storage,
+                                )
+                            })
+                            .unwrap_or(0.0);
+                        let pain = params
+                            .punishment_source_area
+                            .map(|area| {
+                                self.activity_density(
+                                    area,
+                                    burst_timestep,
+                                    fire_ledger,
+                                    &neuron_storage,
+                                )
+                            })
+                            .unwrap_or(0.0);
+                        pleasure - pain
+                    }
+                };
+                reward_signals.insert(*key, r);
+            }
+
+            for (key, params) in &mappings {
+                if matches!(params.plasticity_mode, PlasticityMode::Off) {
+                    continue;
+                }
                 let Some(activity) = activity_sets.get(key) else {
                     continue;
                 };
@@ -4456,9 +4907,13 @@ impl<
                     continue;
                 };
 
-                let delta_plus = params.delta_plus_u8();
-                let delta_minus = params.delta_minus_u8();
-                if delta_plus == 0 && delta_minus == 0 {
+                let delta_plus = params.delta_plus_u8() as f32;
+                let delta_minus = params.delta_minus_u8() as f32;
+                let trace_decay = params.trace_decay_factor();
+                let reward = *reward_signals.get(key).unwrap_or(&0.0);
+
+                // No-op fast path: nothing to learn for this mapping this burst.
+                if delta_plus == 0.0 && delta_minus == 0.0 && reward == 0.0 {
                     continue;
                 }
 
@@ -4500,22 +4955,40 @@ impl<
                         }
                     }
 
+                    // Step 1: decay any persistent trace (factor 0 for STDP = full reset).
+                    let mut e_ij = synapse_storage.eligibility_traces()[syn_idx] * trace_decay;
+
+                    // Step 2: apply correlation-window stimulus.
                     let src_any_present = activity.src_any.contains(src_neuron);
                     let dst_any_present = activity.dst_any.contains(dst_neuron);
-                    if !src_any_present && !dst_any_present {
-                        continue;
+                    if src_any_present || dst_any_present {
+                        let src_all_present = activity.src_all.contains(src_neuron);
+                        let dst_all_present = activity.dst_all.contains(dst_neuron);
+                        if src_all_present && dst_all_present {
+                            e_ij += delta_plus;
+                        } else if delta_minus > 0.0 {
+                            e_ij -= delta_minus;
+                        }
                     }
 
-                    let src_all_present = activity.src_all.contains(src_neuron);
-                    let dst_all_present = activity.dst_all.contains(dst_neuron);
+                    synapse_storage.eligibility_traces_mut()[syn_idx] = e_ij;
 
-                    if src_all_present && dst_all_present {
+                    // Step 3: R(t)-modulated weight commit.
+                    //
+                    // Positive deltas are clamped to `params.max_weight` (default
+                    // `f32::INFINITY`) to prevent runaway potentiation when the integer-valued
+                    // `delta_plus` and persistent eligibility traces would otherwise compound
+                    // without bound under sustained reward. Negative deltas are floored at
+                    // `0.0` as before so LTD / punishment can still drive a synapse to zero
+                    // regardless of `max_weight`.
+                    if reward != 0.0 && e_ij != 0.0 {
+                        let delta_w = params.plasticity_eta * reward * e_ij;
                         let old = synapse_storage.weights()[syn_idx];
-                        let new_w = old + delta_plus as f32;
-                        synapse_storage.weights_mut()[syn_idx] = new_w;
-                    } else if delta_minus > 0 {
-                        let old = synapse_storage.weights()[syn_idx];
-                        let new_w = (old - delta_minus as f32).max(0.0);
+                        let new_w = if delta_w >= 0.0 {
+                            (old + delta_w).min(params.max_weight)
+                        } else {
+                            (old + delta_w).max(0.0)
+                        };
                         synapse_storage.weights_mut()[syn_idx] = new_w;
                     }
                 }
@@ -4810,6 +5283,11 @@ fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>>(
             continue;
         }
         if fired_previous.contains(&neuron_id.0) {
+            continue;
+        }
+        // Option B refractory: membrane is frozen for the whole burst; do not clear sub-threshold MP
+        // here or Phase 2 sees zeros while countdown > 0 (looks like cross-burst dilution).
+        if neuron_storage.refractory_countdowns()[idx] > 0 {
             continue;
         }
         if !neuron_storage.mp_charge_accumulation()[idx] {
@@ -5343,9 +5821,8 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 1000, 10000, 20,
             );
-        // Use a non-core cortical_idx to avoid auto-creating core neurons (0=_death, 1=_power, 2=_fatigue)
-        // which would shift neuron IDs and counts in this test.
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        // Use area_id > 6 so register_cortical_area does not auto-create core neurons (0..=6).
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let id1 = npu
             .add_neuron(
@@ -5359,7 +5836,7 @@ mod tests {
                 u16::MAX,
                 0,
                 true,
-                3,
+                10,
                 0,
                 0,
                 0,
@@ -5377,7 +5854,7 @@ mod tests {
                 u16::MAX,
                 0,
                 true,
-                3,
+                10,
                 1,
                 0,
                 0,
@@ -5395,7 +5872,7 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         for i in 0..10 {
             let id = npu
@@ -5410,7 +5887,7 @@ mod tests {
                     u16::MAX,
                     0,
                     true,
-                    3,
+                    10,
                     i,
                     0,
                     0,
@@ -5478,7 +5955,7 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         // High threshold
         let _n1 = npu
@@ -5493,7 +5970,7 @@ mod tests {
                 u16::MAX,
                 0,
                 true,
-                3,
+                10,
                 0,
                 0,
                 0,
@@ -5502,17 +5979,17 @@ mod tests {
 
         // High leak
         let _n2 = npu
-            .add_neuron(1.0, 0.0, 0.9, 0.0, 0, 0, 1.0, 0, 0, true, 3, 1, 0, 0)
+            .add_neuron(1.0, 0.0, 0.9, 0.0, 0, 0, 1.0, 0, 0, true, 10, 1, 0, 0)
             .unwrap();
 
         // Long refractory period
         let _n3 = npu
-            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 100, 1.0, 0, 0, true, 3, 2, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 100, 1.0, 0, 0, true, 10, 2, 0, 0)
             .unwrap();
 
         // Low excitability
         let _n4 = npu
-            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 0.1, 0, 0, true, 3, 3, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 0.1, 0, 0, true, 10, 3, 0, 0)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 4);
@@ -5524,19 +6001,19 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        // Use non-core area IDs to avoid implicit core neuron creation (0..=2).
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
-        npu.register_cortical_area(4, CoreCorticalType::Death.to_cortical_id().as_base_64());
-        npu.register_cortical_area(5, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        // Use area_id > 6 to avoid implicit core neuron creation (0..=6).
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(11, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(12, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let _power = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 3, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 10, 0, 0, 0)
             .unwrap();
         let _area2 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 4, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 11, 0, 0, 0)
             .unwrap();
         let _area3 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 5, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 12, 0, 0, 0)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 3);
@@ -5548,13 +6025,74 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let _n1 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 3, 5, 10, 15)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 10, 5, 10, 15)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 1);
+    }
+
+    /// Option B: Phase 1 sparse MP clear (mp_charge_accumulation=false) must not wipe membrane while
+    /// refractory_countdown > 0 — otherwise sub-threshold state looks "diluted" across bursts.
+    #[test]
+    fn test_phase1_sparse_mp_reset_skips_neurons_in_refractory() {
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
+
+        let nid = npu
+            .add_neuron(
+                100.0,
+                f32::MAX,
+                0.0,
+                0.0,
+                0,
+                0,
+                1.0,
+                u16::MAX,
+                0,
+                false, // mp_charge_accumulation: Phase 1 normally clears carry-over next burst
+                10,
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        npu.inject_sensory_with_potentials(&[(nid, 5.0)]);
+        npu.process_burst().unwrap();
+
+        let mp_after_b1 = {
+            let ns = npu.neuron_storage.read().unwrap();
+            ns.membrane_potentials()[nid.0 as usize].to_f32()
+        };
+        assert!(
+            (mp_after_b1 - 5.0).abs() < 0.02,
+            "sub-threshold MP should reflect injected candidate (~5), got {}",
+            mp_after_b1
+        );
+
+        {
+            let mut ns = npu.neuron_storage.write().unwrap();
+            ns.refractory_countdowns_mut()[nid.0 as usize] = 3;
+        }
+
+        npu.process_burst().unwrap();
+
+        let mp_after_b2 = {
+            let ns = npu.neuron_storage.read().unwrap();
+            ns.membrane_potentials()[nid.0 as usize].to_f32()
+        };
+        assert!(
+            (mp_after_b2 - mp_after_b1).abs() < 0.02,
+            "MP must not be cleared at Phase 1 while refractory (got {} vs {})",
+            mp_after_b2,
+            mp_after_b1
+        );
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -6057,14 +6595,14 @@ mod tests {
             <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
                 100, 1000, 10,
             );
-        npu.register_cortical_area(5, CoreCorticalType::Death.to_cortical_id().as_base_64());
-        npu.register_cortical_area(6, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(11, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let n_area5 = npu
-            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 5, 0, 0, 0)
+            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 10, 0, 0, 0)
             .unwrap();
         let n_area6 = npu
-            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 6, 0, 0, 0)
+            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 11, 0, 0, 0)
             .unwrap();
 
         npu.inject_sensory_with_potentials(&[(n_area5, 5.0)]);
@@ -6078,7 +6616,7 @@ mod tests {
             );
         }
 
-        assert_eq!(npu.reset_membrane_potentials_for_cortical_area(5), 1);
+        assert_eq!(npu.reset_membrane_potentials_for_cortical_area(10), 1);
         {
             let ns = npu.neuron_storage.read().unwrap();
             assert_eq!(ns.membrane_potentials()[n_area5.0 as usize].to_f32(), 0.0);
@@ -6095,7 +6633,10 @@ mod tests {
             );
         }
 
-        assert_eq!(npu.update_cortical_area_mp_charge_accumulation(5, false), 1);
+        assert_eq!(
+            npu.update_cortical_area_mp_charge_accumulation(10, false),
+            1
+        );
         {
             let ns = npu.neuron_storage.read().unwrap();
             assert_eq!(ns.membrane_potentials()[n_area5.0 as usize].to_f32(), 0.0);
@@ -6124,7 +6665,11 @@ mod tests {
             let mut fs = npu.fire_structures.lock().unwrap();
             fs.last_fcl_snapshot.push((n_id, 99.0));
         }
-        assert_eq!(npu.reset_cortical_area_runtime_state(5), 1);
+        let reset_count = npu.reset_cortical_area_runtime_state(5);
+        assert!(
+            reset_count >= 1,
+            "expected at least source neuron to be reset"
+        );
         assert!(
             !npu.get_last_fcl_snapshot()
                 .iter()
@@ -6159,7 +6704,11 @@ mod tests {
                 .or_default()
                 .add_candidate(n_id, 3.0);
         }
-        assert_eq!(npu.reset_cortical_area_runtime_state(5), 1);
+        let reset_count = npu.reset_cortical_area_runtime_state(5);
+        assert!(
+            reset_count >= 1,
+            "expected at least source neuron to be reset"
+        );
         let fs = npu.fire_structures.lock().unwrap();
         assert!(
             fs.synaptic_arrival_schedule
@@ -6167,6 +6716,65 @@ mod tests {
                 .values()
                 .all(|fcl| fcl.get(n_id).is_none()),
             "delayed FCL arrivals targeting reset neurons must be scrubbed"
+        );
+    }
+
+    #[test]
+    fn test_reset_cortical_area_runtime_state_restores_psp_after_degeneration() {
+        use feagi_npu_neural::{SynapseType, SynapticPsp, SynapticWeight};
+
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        let src_id = CoreCorticalType::Death.to_cortical_id();
+        let dst_id = CoreCorticalType::Power.to_cortical_id();
+        npu.register_cortical_area(5, src_id.as_base_64());
+        npu.register_cortical_area(6, dst_id.as_base_64());
+
+        let source = npu
+            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 5, 0, 0, 0)
+            .unwrap();
+        let target = npu
+            .add_neuron(0.8, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 6, 0, 0, 0)
+            .unwrap();
+
+        npu.add_synapse(
+            source,
+            target,
+            SynapticWeight(1.0),
+            SynapticPsp(1.0),
+            SynapseType::Excitatory,
+            0,
+            1,
+        )
+        .unwrap();
+        npu.rebuild_synapse_index();
+        npu.set_postsynaptic_current_flag(src_id, 1.0);
+        npu.set_degeneration_flag(src_id, 0.6);
+
+        // Fire once; target fires on next burst with PSP=1.0. Then PSP decays to 0.4.
+        npu.inject_sensory_with_potentials(&[(source, 2.0)]);
+        let burst1 = npu.process_burst().unwrap();
+        assert!(burst1.fired_neurons.contains(&source));
+        let burst2 = npu.process_burst().unwrap();
+        assert!(burst2.fired_neurons.contains(&target));
+
+        // Reset source area runtime state; this must revive outgoing PSP to configured baseline.
+        let reset_count = npu.reset_cortical_area_runtime_state(5);
+        assert!(
+            reset_count >= 1,
+            "expected at least source neuron to be reset"
+        );
+
+        // Fire again; target should fire again, proving PSP was restored to 1.0.
+        npu.inject_sensory_with_potentials(&[(source, 2.0)]);
+        let burst3 = npu.process_burst().unwrap();
+        assert!(burst3.fired_neurons.contains(&source));
+        let burst4 = npu.process_burst().unwrap();
+        assert!(
+            burst4.fired_neurons.contains(&target),
+            "reset must restore outgoing PSP for source area despite prior degeneration"
         );
     }
 
@@ -6266,6 +6874,61 @@ mod tests {
         assert!(
             result2.fired_neurons.contains(&neuron_dst),
             "Target neuron should fire when mp_driven_psp uses src firing-time MP"
+        );
+    }
+
+    #[test]
+    fn test_degeneration_reduces_source_psp_across_fires() {
+        use feagi_npu_neural::{SynapseType, SynapticPsp, SynapticWeight};
+
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        let src_id = CoreCorticalType::Death.to_cortical_id();
+        let dst_id = CoreCorticalType::Power.to_cortical_id();
+        npu.register_cortical_area(10, src_id.as_base_64());
+        npu.register_cortical_area(11, dst_id.as_base_64());
+
+        let source = npu
+            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 10, 0, 0, 0)
+            .unwrap();
+        let target = npu
+            .add_neuron(0.8, f32::MAX, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 11, 0, 0, 0)
+            .unwrap();
+
+        npu.add_synapse(
+            source,
+            target,
+            SynapticWeight(1.0),
+            SynapticPsp(1.0),
+            SynapseType::Excitatory,
+            0,
+            1,
+        )
+        .unwrap();
+        npu.rebuild_synapse_index();
+        npu.set_degeneration_flag(src_id, 0.6);
+
+        // Fire #1 from source.
+        npu.inject_sensory_with_potentials(&[(source, 2.0)]);
+        let burst1 = npu.process_burst().unwrap();
+        assert!(burst1.fired_neurons.contains(&source));
+
+        // Burst 2 uses PSP=1.0 contribution (decay applies after fire), so target fires.
+        let burst2 = npu.process_burst().unwrap();
+        assert!(burst2.fired_neurons.contains(&target));
+
+        // Fire #2 from source.
+        npu.inject_sensory_with_potentials(&[(source, 2.0)]);
+        let burst3 = npu.process_burst().unwrap();
+        assert!(burst3.fired_neurons.contains(&source));
+
+        // Burst 4 uses decayed PSP=0.4 (1.0 - 0.6), below threshold 0.8.
+        let burst4 = npu.process_burst().unwrap();
+        assert!(
+            !burst4.fired_neurons.contains(&target),
+            "Target should not fire after source PSP decays below threshold"
         );
     }
 
@@ -6669,8 +7332,8 @@ mod tests {
                 100, 1000, 10,
             );
 
-        // Use a non-core, non-power area to avoid implicit core neuron creation (0..=2).
-        npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        // Use area_id > 6 to avoid implicit core neuron creation (0..=6).
+        npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         // Add a neuron with a bounded threshold limit first (so the update actually changes it).
         let neuron_id = npu
@@ -6685,7 +7348,7 @@ mod tests {
                 u16::MAX,
                 0,
                 true,
-                3,
+                10,
                 0,
                 0,
                 0,
@@ -6693,7 +7356,7 @@ mod tests {
             .unwrap();
 
         // Live-update: 0.0 must be encoded as "no upper bound".
-        let updated = npu.update_cortical_area_threshold_limit(3, 0.0);
+        let updated = npu.update_cortical_area_threshold_limit(10, 0.0);
         assert_eq!(updated, 1);
 
         // Verify internal encoding.

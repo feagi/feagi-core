@@ -218,8 +218,8 @@ impl ConnectomeManager {
             cortical_areas: HashMap::new(),
             cortical_id_to_idx: HashMap::new(),
             cortical_idx_to_id: HashMap::new(),
-            // CRITICAL: Reserve indices 0 (_death) and 1 (_power) - start regular areas at 2
-            next_cortical_idx: 3, // Reserve 0=_death, 1=_power, 2=_fatigue
+            // CRITICAL: Reserve indices for invariant core areas (0..=6).
+            next_cortical_idx: 7, // Reserve 0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure, 5=_fear, 6=_hope
             brain_regions: BrainRegionHierarchy::new(),
             morphology_registry: feagi_evolutionary::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
@@ -331,7 +331,7 @@ impl ConnectomeManager {
             cortical_areas: HashMap::new(),
             cortical_id_to_idx: HashMap::new(),
             cortical_idx_to_id: HashMap::new(),
-            next_cortical_idx: 3,
+            next_cortical_idx: 7,
             brain_regions: BrainRegionHierarchy::new(),
             morphology_registry: feagi_evolutionary::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
@@ -696,17 +696,25 @@ impl ConnectomeManager {
             )));
         }
 
-        // CRITICAL: Reserve cortical_idx 0 for _death, 1 for _power, 2 for _fatigue
+        // CRITICAL: Reserve cortical_idx 0..=6 for invariant core areas.
         // Use feagi-data-processing types as single source of truth
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
         let death_id = CoreCorticalType::Death.to_cortical_id();
         let power_id = CoreCorticalType::Power.to_cortical_id();
         let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
+        let pain_id = CoreCorticalType::Pain.to_cortical_id();
+        let pleasure_id = CoreCorticalType::Pleasure.to_cortical_id();
+        let fear_id = CoreCorticalType::Fear.to_cortical_id();
+        let hope_id = CoreCorticalType::Hope.to_cortical_id();
 
         let is_death_area = area.cortical_id == death_id;
         let is_power_area = area.cortical_id == power_id;
         let is_fatigue_area = area.cortical_id == fatigue_id;
+        let is_pain_area = area.cortical_id == pain_id;
+        let is_pleasure_area = area.cortical_id == pleasure_id;
+        let is_fear_area = area.cortical_id == fear_id;
+        let is_hope_area = area.cortical_id == hope_id;
 
         if is_death_area {
             trace!(
@@ -729,20 +737,48 @@ impl ConnectomeManager {
                 area.cortical_id
             );
             area.cortical_idx = 2;
+        } else if is_pain_area {
+            trace!(
+                target: "feagi-bdu",
+                "[CORE-AREA] Assigning RESERVED cortical_idx=3 to _pain area (id={})",
+                area.cortical_id
+            );
+            area.cortical_idx = 3;
+        } else if is_pleasure_area {
+            trace!(
+                target: "feagi-bdu",
+                "[CORE-AREA] Assigning RESERVED cortical_idx=4 to _pleasure area (id={})",
+                area.cortical_id
+            );
+            area.cortical_idx = 4;
+        } else if is_fear_area {
+            trace!(
+                target: "feagi-bdu",
+                "[CORE-AREA] Assigning RESERVED cortical_idx=5 to _fear area (id={})",
+                area.cortical_id
+            );
+            area.cortical_idx = 5;
+        } else if is_hope_area {
+            trace!(
+                target: "feagi-bdu",
+                "[CORE-AREA] Assigning RESERVED cortical_idx=6 to _hope area (id={})",
+                area.cortical_id
+            );
+            area.cortical_idx = 6;
         } else {
-            // Regular areas: assign cortical_idx if not set (will be ≥3 due to next_cortical_idx=3 initialization)
+            // Regular areas: assign cortical_idx if not set (will be >=7 due to reservation)
             if area.cortical_idx == 0 {
                 area.cortical_idx = self.next_cortical_idx;
                 self.next_cortical_idx += 1;
                 trace!(
                     target: "feagi-bdu",
-                    "[REGULAR-AREA] Assigned cortical_idx={} to area '{}' (should be ≥3)",
+                    "[REGULAR-AREA] Assigned cortical_idx={} to area '{}' (should be >=7)",
                     area.cortical_idx,
                     area.cortical_id.as_base_64()
                 );
             } else {
                 // Check for reserved index collision
-                if area.cortical_idx == 0 || area.cortical_idx == 1 || area.cortical_idx == 2 {
+                if area.cortical_idx <= 6 {
                     warn!(
                         "Regular area '{}' attempted to use RESERVED cortical_idx={}! Reassigning to next available.",
                         area.cortical_id, area.cortical_idx);
@@ -2377,7 +2413,7 @@ impl ConnectomeManager {
                     src_area_id, dst_area_id
                 ))
             })?;
-        let ltp_multiplier = rule_obj
+        let ltp_i64 = rule_obj
             .get("ltp_multiplier")
             .and_then(Self::json_number_as_i64_for_stdp)
             .ok_or_else(|| {
@@ -2386,7 +2422,17 @@ impl ConnectomeManager {
                     src_area_id, dst_area_id
                 ))
             })?;
-        let ltd_multiplier = rule_obj
+        let ltp_multiplier = i8::try_from(ltp_i64).map_err(|_| {
+            BduError::Internal(format!(
+                "ltp_multiplier must fit in i8 range {}..={} (got {}) on mapping {} -> {}",
+                i8::MIN,
+                i8::MAX,
+                ltp_i64,
+                src_area_id,
+                dst_area_id
+            ))
+        })?;
+        let ltd_i64 = rule_obj
             .get("ltd_multiplier")
             .and_then(Self::json_number_as_i64_for_stdp)
             .ok_or_else(|| {
@@ -2395,6 +2441,187 @@ impl ConnectomeManager {
                     src_area_id, dst_area_id
                 ))
             })?;
+        let ltd_multiplier = i8::try_from(ltd_i64).map_err(|_| {
+            BduError::Internal(format!(
+                "ltd_multiplier must fit in i8 range {}..={} (got {}) on mapping {} -> {}",
+                i8::MIN,
+                i8::MAX,
+                ltd_i64,
+                src_area_id,
+                dst_area_id
+            ))
+        })?;
+
+        // Resolve plasticity_mode with legacy fallback (auto-migrate strategy):
+        //   - new genomes set `plasticity_mode: "off" | "stdp" | "rstdp"` directly;
+        //   - legacy genomes only have `plasticity_flag: bool` -> Stdp / Off mapping.
+        let plasticity_mode = match rule_obj.get("plasticity_mode").and_then(|v| v.as_str()) {
+            Some(s) if s.eq_ignore_ascii_case("rstdp") || s.eq_ignore_ascii_case("r-stdp") => {
+                feagi_npu_burst_engine::npu::PlasticityMode::RStdp
+            }
+            Some(s) if s.eq_ignore_ascii_case("stdp") => {
+                feagi_npu_burst_engine::npu::PlasticityMode::Stdp
+            }
+            Some(s) if s.eq_ignore_ascii_case("off") => {
+                feagi_npu_burst_engine::npu::PlasticityMode::Off
+            }
+            Some(other) => {
+                return Err(BduError::Internal(format!(
+                    "Unknown plasticity_mode '{}' in mapping rule {} -> {}",
+                    other, src_area_id, dst_area_id
+                )));
+            }
+            None => feagi_npu_burst_engine::npu::PlasticityMode::Stdp,
+        };
+
+        // R-STDP-only fields. Strings name cortical areas by 6-char base-64 ID; resolve via NPU.
+        let eligibility_decay_bursts = rule_obj
+            .get("eligibility_decay_bursts")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as u32)
+            .unwrap_or(0);
+        let reward_source_area_id = rule_obj
+            .get("reward_source_area")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let punishment_source_area_id = rule_obj
+            .get("punishment_source_area")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+
+        // Optional upper-bound clamp for plasticity weight commits. Absent / null means no
+        // clamp (legacy unbounded behaviour). When provided, must be a strictly positive
+        // f32 (finite or `+inf`); `NaN`, zero, and negatives are rejected so the runtime
+        // never sees a malformed sentinel.
+        let max_weight_provided = rule_obj.get("max_weight").is_some()
+            && !rule_obj
+                .get("max_weight")
+                .map(|v| v.is_null())
+                .unwrap_or(true);
+        let max_weight: f32 = if max_weight_provided {
+            let raw = rule_obj
+                .get("max_weight")
+                .and_then(|v| v.as_f64())
+                .ok_or_else(|| {
+                    BduError::Internal(format!(
+                        "max_weight must be a number on mapping {} -> {}",
+                        src_area_id, dst_area_id
+                    ))
+                })?;
+            if raw.is_nan() || raw <= 0.0 {
+                return Err(BduError::Internal(format!(
+                    "max_weight must be strictly positive (got {}) on mapping {} -> {}",
+                    raw, src_area_id, dst_area_id
+                )));
+            }
+            raw as f32
+        } else {
+            f32::INFINITY
+        };
+
+        // Optional f32 learning-rate scale on the end-of-burst weight commit: w += eta * R * e.
+        // Omitted / null → 1.0. Must be finite, strictly positive, and not +inf.
+        let plasticity_eta_provided = rule_obj.get("plasticity_eta").is_some()
+            && !rule_obj
+                .get("plasticity_eta")
+                .map(|v| v.is_null())
+                .unwrap_or(true);
+        let plasticity_eta: f32 = if plasticity_eta_provided {
+            let raw = rule_obj
+                .get("plasticity_eta")
+                .and_then(|v| v.as_f64())
+                .ok_or_else(|| {
+                    BduError::Internal(format!(
+                        "plasticity_eta must be a number on mapping {} -> {}",
+                        src_area_id, dst_area_id
+                    ))
+                })?;
+            if raw.is_nan() || raw <= 0.0 || !raw.is_finite() {
+                return Err(BduError::Internal(format!(
+                    "plasticity_eta must be finite and strictly positive (got {}) on mapping {} -> {}",
+                    raw, src_area_id, dst_area_id
+                )));
+            }
+            raw as f32
+        } else {
+            1.0
+        };
+
+        // Validate R-STDP fields are absent when not in RStdp mode (catches genome typos early).
+        if !matches!(
+            plasticity_mode,
+            feagi_npu_burst_engine::npu::PlasticityMode::RStdp
+        ) && (reward_source_area_id.is_some()
+            || punishment_source_area_id.is_some()
+            || eligibility_decay_bursts != 0)
+        {
+            return Err(BduError::Internal(format!(
+                "R-STDP fields (reward_source_area / punishment_source_area / eligibility_decay_bursts) \
+                 only valid when plasticity_mode='rstdp' on mapping {} -> {}",
+                src_area_id, dst_area_id
+            )));
+        }
+
+        // `max_weight` is only meaningful when plasticity is active. Reject explicit values
+        // on Off-mode mappings to surface genome typos early; an absent field silently
+        // resolves to `f32::INFINITY` above and is fine.
+        if matches!(
+            plasticity_mode,
+            feagi_npu_burst_engine::npu::PlasticityMode::Off
+        ) && max_weight_provided
+        {
+            return Err(BduError::Internal(format!(
+                "max_weight is only valid when plasticity_mode is 'stdp' or 'rstdp' (got off) on mapping {} -> {}",
+                src_area_id, dst_area_id
+            )));
+        }
+
+        if matches!(
+            plasticity_mode,
+            feagi_npu_burst_engine::npu::PlasticityMode::Off
+        ) && plasticity_eta_provided
+        {
+            return Err(BduError::Internal(format!(
+                "plasticity_eta is only valid when plasticity_mode is 'stdp' or 'rstdp' (got off) on mapping {} -> {}",
+                src_area_id, dst_area_id
+            )));
+        }
+
+        trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: attempting NPU lock");
+        let mut npu_lock = npu
+            .lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: acquired NPU lock");
+
+        // Resolve reward/punishment area names to cortical_idx (R-STDP only). The detector
+        // areas must already be registered with the NPU before this mapping is parsed; the
+        // genome ordering normally handles this because cortical areas are processed before
+        // their cross-area mapping rules.
+        let resolve_optional_area =
+            |label: &str, name_opt: &Option<String>| -> BduResult<Option<u32>> {
+                let Some(name) = name_opt else {
+                    return Ok(None);
+                };
+                match npu_lock.get_cortical_area_id(name.as_str()) {
+                    Some(idx) => Ok(Some(idx)),
+                    None => Err(BduError::Internal(format!(
+                        "Unknown {} cortical area '{}' on R-STDP mapping {} -> {}",
+                        label, name, src_area_id, dst_area_id
+                    ))),
+                }
+            };
+        let reward_source_area =
+            resolve_optional_area("reward_source_area", &reward_source_area_id)?;
+        let punishment_source_area =
+            resolve_optional_area("punishment_source_area", &punishment_source_area_id)?;
+
+        // Off-mode mappings are skipped (no NPU registration, no fire-ledger tracking).
+        if matches!(
+            plasticity_mode,
+            feagi_npu_burst_engine::npu::PlasticityMode::Off
+        ) {
+            return Ok(());
+        }
 
         let params = feagi_npu_burst_engine::npu::StdpMappingParams {
             plasticity_window,
@@ -2404,13 +2631,13 @@ impl ConnectomeManager {
             bidirectional_stdp,
             synapse_psp,
             synapse_type,
+            plasticity_mode,
+            eligibility_decay_bursts,
+            reward_source_area,
+            punishment_source_area,
+            max_weight,
+            plasticity_eta,
         };
-
-        trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: attempting NPU lock");
-        let mut npu_lock = npu
-            .lock()
-            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
-        trace!(target: "feagi-bdu", "[LOCK-TRACE] create_neurons_for_area: acquired NPU lock");
 
         npu_lock
             .register_stdp_mapping(src_cortical_idx, dst_cortical_idx, params)
@@ -2421,15 +2648,28 @@ impl ConnectomeManager {
                 ))
             })?;
 
-        // FireLedger tracking for STDP (ensure A and B are tracked at least to plasticity_window)
+        // FireLedger tracking. Plain STDP needs depth=plasticity_window on src+dst. R-STDP
+        // additionally needs depth>=1 on reward/punishment source areas so `activity_density`
+        // can sample current-burst firing.
+        let mut areas_to_track: Vec<(u32, usize)> = vec![
+            (src_cortical_idx, plasticity_window),
+            (dst_cortical_idx, plasticity_window),
+        ];
+        if let Some(area) = reward_source_area {
+            areas_to_track.push((area, 1));
+        }
+        if let Some(area) = punishment_source_area {
+            areas_to_track.push((area, 1));
+        }
+
         let existing_configs = npu_lock.get_all_fire_ledger_configs();
-        for area_idx in [src_cortical_idx, dst_cortical_idx] {
+        for (area_idx, required_depth) in areas_to_track {
             let existing = existing_configs
                 .iter()
                 .find(|(idx, _)| *idx == area_idx)
                 .map(|(_, w)| *w)
                 .unwrap_or(0);
-            let resolved = existing.max(plasticity_window);
+            let resolved = existing.max(required_depth);
             if resolved != existing {
                 npu_lock
                     .configure_fire_ledger_window(area_idx, resolved)
@@ -3078,6 +3318,47 @@ impl ConnectomeManager {
                 );
 
                 let count = crate::connectivity::core_morphologies::apply_last_to_first_morphology_with_dimensions(
+                    npu,
+                    src_idx,
+                    dst_idx,
+                    src_dimensions,
+                    dst_dimensions,
+                    weight,
+                    psp,
+                    synapse_attractivity,
+                    synapse_type,
+                    delay_bursts,
+                )?;
+                if count > 0 {
+                    npu.rebuild_synapse_index();
+                }
+                Ok(count as usize)
+            }
+            "first_to_last" => {
+                let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Source area not found: {}",
+                        src_area_id
+                    ))
+                })?;
+                let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Destination area not found: {}",
+                        dst_area_id
+                    ))
+                })?;
+                let src_dimensions = (
+                    src_area.dimensions.width as usize,
+                    src_area.dimensions.height as usize,
+                    src_area.dimensions.depth as usize,
+                );
+                let dst_dimensions = (
+                    dst_area.dimensions.width as usize,
+                    dst_area.dimensions.height as usize,
+                    dst_area.dimensions.depth as usize,
+                );
+
+                let count = crate::connectivity::core_morphologies::apply_first_to_last_morphology_with_dimensions(
                     npu,
                     src_idx,
                     dst_idx,
@@ -3797,32 +4078,35 @@ impl ConnectomeManager {
 
         // Call NPU to create neurons
         // NOTE: Cortical area should already be registered in NPU during corticogenesis
-        let mut npu_lock = npu
-            .lock()
-            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
-
-        let neuron_count = npu_lock
-            .create_cortical_area_neurons(
-                *cortical_idx,
-                area.dimensions.width,
-                area.dimensions.height,
-                area.dimensions.depth,
-                per_voxel_cnt,
-                firing_threshold,
-                firing_threshold_increment_x,
-                firing_threshold_increment_y,
-                firing_threshold_increment_z,
-                firing_threshold_limit,
-                leak_coefficient,
-                0.0, // resting_potential (LIF default)
-                0,   // neuron_type (excitatory)
-                refractory_period,
-                excitability,
-                consecutive_fire_limit,
-                snooze_length,
-                mp_charge_accumulation,
-            )
-            .map_err(|e| BduError::Internal(format!("NPU neuron creation failed: {}", e)))?;
+        // Scope the lock so it is released before the rate_modulated_leak block below, which
+        // must take the same NPU mutex again (second lock while npu_lock lived = deadlock).
+        let neuron_count: u32 = {
+            let mut npu_lock = npu
+                .lock()
+                .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+            npu_lock
+                .create_cortical_area_neurons(
+                    *cortical_idx,
+                    area.dimensions.width,
+                    area.dimensions.height,
+                    area.dimensions.depth,
+                    per_voxel_cnt,
+                    firing_threshold,
+                    firing_threshold_increment_x,
+                    firing_threshold_increment_y,
+                    firing_threshold_increment_z,
+                    firing_threshold_limit,
+                    leak_coefficient,
+                    0.0, // resting_potential (LIF default)
+                    0,   // neuron_type (excitatory)
+                    refractory_period,
+                    excitability,
+                    consecutive_fire_limit,
+                    snooze_length,
+                    mp_charge_accumulation,
+                )
+                .map_err(|e| BduError::Internal(format!("NPU neuron creation failed: {}", e)))?
+        };
 
         trace!(
             target: "feagi-bdu",
@@ -3857,6 +4141,28 @@ impl ConnectomeManager {
         let core_state = state_manager.get_core_state();
         core_state.add_neuron_count(neuron_count);
         core_state.add_regular_neuron_count(neuron_count);
+
+        // Opt-in homeostatic leak: register on NPU (cold pass only when enabled; see `neural/docs/rate_modulated_leak.md`).
+        if let Some(npu) = &self.npu {
+            if let Ok(mut npl) = npu.lock() {
+                if let Some(v) = area.properties.get("rate_modulated_leak") {
+                    use crate::models::CorticalAreaExt;
+                    let idxs: Vec<usize> = npl
+                        .get_neurons_in_cortical_area(*cortical_idx)
+                        .into_iter()
+                        .map(|id| id as usize)
+                        .collect();
+                    npl.sync_rate_modulated_leak_from_cortical_property(
+                        *cortical_idx,
+                        v,
+                        area.leak_coefficient(),
+                        idxs,
+                    );
+                } else {
+                    npl.remove_rate_modulated_leak(*cortical_idx);
+                }
+            }
+        }
 
         // Trigger fatigue index recalculation after neuron creation
         // NOTE: Disabled during genome loading to prevent blocking
@@ -4733,12 +5039,16 @@ impl ConnectomeManager {
     // Genome I/O
     // ======================================================================
 
-    /// Ensure core cortical areas (_death, _power, _fatigue) exist
+    /// Ensure core cortical areas (_death, _power, _fatigue, _pain, _pleasure, _fear, _hope) exist
     ///
     /// Core areas are required for brain operation:
     /// - `_death` (cortical_idx=0): Manages neuron death and cleanup
     /// - `_power` (cortical_idx=1): Provides power injection for burst engine
     /// - `_fatigue` (cortical_idx=2): Monitors brain fatigue and triggers sleep mode
+    /// - `_pain` (cortical_idx=3): Pain signal processing
+    /// - `_pleasure` (cortical_idx=4): Pleasure signal processing
+    /// - `_fear` (cortical_idx=5): Fear signal processing
+    /// - `_hope` (cortical_idx=6): Hope signal processing
     ///
     /// If any core area is missing from the genome, it will be automatically created
     /// with default properties (1x1x1 dimensions, minimal configuration).
@@ -4816,6 +5126,10 @@ impl ConnectomeManager {
 
         // Check and create _fatigue (cortical_idx=2)
         let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
+        let pain_id = CoreCorticalType::Pain.to_cortical_id();
+        let pleasure_id = CoreCorticalType::Pleasure.to_cortical_id();
+        let fear_id = CoreCorticalType::Fear.to_cortical_id();
+        let hope_id = CoreCorticalType::Hope.to_cortical_id();
         if !self.cortical_areas.contains_key(&fatigue_id) {
             info!(target: "feagi-bdu", "🔧 [CORE-AREA] Creating missing _fatigue area (cortical_idx=2)");
             let fatigue_area = CorticalArea::new(
@@ -4838,6 +5152,106 @@ impl ConnectomeManager {
             }
         } else {
             info!(target: "feagi-bdu", "  ✓ _fatigue area already exists");
+        }
+
+        // Check and create _pain (cortical_idx=3)
+        if !self.cortical_areas.contains_key(&pain_id) {
+            info!(target: "feagi-bdu", "🔧 [CORE-AREA] Creating missing _pain area (cortical_idx=3)");
+            let pain_area = CorticalArea::new(
+                pain_id,
+                3, // Will be overridden by add_cortical_area to 3
+                "_pain".to_string(),
+                core_dimensions,
+                core_position,
+                CorticalAreaType::Core(CoreCorticalType::Pain),
+            )
+            .map_err(|e| BduError::Internal(format!("Failed to create _pain area: {}", e)))?;
+            match self.add_cortical_area(pain_area) {
+                Ok(idx) => {
+                    info!(target: "feagi-bdu", "  ✅ Created _pain area with cortical_idx={}", idx);
+                }
+                Err(e) => {
+                    error!(target: "feagi-bdu", "  ❌ Failed to add _pain area: {}", e);
+                    return Err(e);
+                }
+            }
+        } else {
+            info!(target: "feagi-bdu", "  ✓ _pain area already exists");
+        }
+
+        // Check and create _pleasure (cortical_idx=4)
+        if !self.cortical_areas.contains_key(&pleasure_id) {
+            info!(target: "feagi-bdu", "🔧 [CORE-AREA] Creating missing _pleasure area (cortical_idx=4)");
+            let pleasure_area = CorticalArea::new(
+                pleasure_id,
+                4, // Will be overridden by add_cortical_area to 4
+                "_pleasure".to_string(),
+                core_dimensions,
+                core_position,
+                CorticalAreaType::Core(CoreCorticalType::Pleasure),
+            )
+            .map_err(|e| BduError::Internal(format!("Failed to create _pleasure area: {}", e)))?;
+            match self.add_cortical_area(pleasure_area) {
+                Ok(idx) => {
+                    info!(target: "feagi-bdu", "  ✅ Created _pleasure area with cortical_idx={}", idx);
+                }
+                Err(e) => {
+                    error!(target: "feagi-bdu", "  ❌ Failed to add _pleasure area: {}", e);
+                    return Err(e);
+                }
+            }
+        } else {
+            info!(target: "feagi-bdu", "  ✓ _pleasure area already exists");
+        }
+
+        // Check and create _fear (cortical_idx=5)
+        if !self.cortical_areas.contains_key(&fear_id) {
+            info!(target: "feagi-bdu", "🔧 [CORE-AREA] Creating missing _fear area (cortical_idx=5)");
+            let fear_area = CorticalArea::new(
+                fear_id,
+                5, // Will be overridden by add_cortical_area to 5
+                "_fear".to_string(),
+                core_dimensions,
+                core_position,
+                CorticalAreaType::Core(CoreCorticalType::Fear),
+            )
+            .map_err(|e| BduError::Internal(format!("Failed to create _fear area: {}", e)))?;
+            match self.add_cortical_area(fear_area) {
+                Ok(idx) => {
+                    info!(target: "feagi-bdu", "  ✅ Created _fear area with cortical_idx={}", idx);
+                }
+                Err(e) => {
+                    error!(target: "feagi-bdu", "  ❌ Failed to add _fear area: {}", e);
+                    return Err(e);
+                }
+            }
+        } else {
+            info!(target: "feagi-bdu", "  ✓ _fear area already exists");
+        }
+
+        // Check and create _hope (cortical_idx=6)
+        if !self.cortical_areas.contains_key(&hope_id) {
+            info!(target: "feagi-bdu", "🔧 [CORE-AREA] Creating missing _hope area (cortical_idx=6)");
+            let hope_area = CorticalArea::new(
+                hope_id,
+                6, // Will be overridden by add_cortical_area to 6
+                "_hope".to_string(),
+                core_dimensions,
+                core_position,
+                CorticalAreaType::Core(CoreCorticalType::Hope),
+            )
+            .map_err(|e| BduError::Internal(format!("Failed to create _hope area: {}", e)))?;
+            match self.add_cortical_area(hope_area) {
+                Ok(idx) => {
+                    info!(target: "feagi-bdu", "  ✅ Created _hope area with cortical_idx={}", idx);
+                }
+                Err(e) => {
+                    error!(target: "feagi-bdu", "  ❌ Failed to add _hope area: {}", e);
+                    return Err(e);
+                }
+            }
+        } else {
+            info!(target: "feagi-bdu", "  ✓ _hope area already exists");
         }
 
         info!(target: "feagi-bdu", "🔧 [CORE-AREA] Core area check complete");
@@ -4929,9 +5343,9 @@ impl ConnectomeManager {
         self.cortical_areas.clear();
         self.cortical_id_to_idx.clear();
         self.cortical_idx_to_id.clear();
-        // CRITICAL: Reserve indices 0 (_death) and 1 (_power)
-        self.next_cortical_idx = 3;
-        info!("🔧 [BRAIN-RESET] Cortical mapping cleared, next_cortical_idx reset to 3 (reserves 0=_death, 1=_power, 2=_fatigue)");
+        // CRITICAL: Reserve 0..=6 for invariant core areas.
+        self.next_cortical_idx = 7;
+        info!("🔧 [BRAIN-RESET] Cortical mapping cleared, next_cortical_idx reset to 7 (reserves 0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure, 5=_fear, 6=_hope)");
 
         // Clear brain regions
         self.brain_regions = BrainRegionHierarchy::new();
@@ -5104,6 +5518,8 @@ impl ConnectomeManager {
                 // Build psp_uniform_distribution flags map
                 let mut psp_uniform_flags = ahash::AHashMap::new();
                 let mut mp_driven_psp_flags = ahash::AHashMap::new();
+                let mut postsynaptic_current_flags = ahash::AHashMap::new();
+                let mut degeneration_flags = ahash::AHashMap::new();
 
                 for (cortical_id, area) in &self.cortical_areas {
                     // When the property is absent: Power and Memory cortical areas default to uniform
@@ -5123,11 +5539,29 @@ impl ConnectomeManager {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
                     mp_driven_psp_flags.insert(*cortical_id, mp_driven_psp);
+
+                    // Store configured baseline PSP for reset-time restoration.
+                    let postsynaptic_current = area
+                        .get_property("postsynaptic_current")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(1.0) as f32;
+                    postsynaptic_current_flags.insert(*cortical_id, postsynaptic_current);
+
+                    // Get degeneration coefficient (default 0.0 = disabled)
+                    let degeneration = area
+                        .get_property("degeneration")
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0) as f32;
+                    if degeneration > 0.0 {
+                        degeneration_flags.insert(*cortical_id, degeneration);
+                    }
                 }
 
                 // Update NPU with flags
                 npu_lock.set_psp_uniform_distribution_flags(psp_uniform_flags);
                 npu_lock.set_mp_driven_psp_flags(mp_driven_psp_flags);
+                npu_lock.set_postsynaptic_current_flags(postsynaptic_current_flags);
+                npu_lock.set_degeneration_flags(degeneration_flags);
 
                 trace!(
                     target: "feagi-bdu",
@@ -7644,6 +8078,303 @@ mod tests {
                 .get("memory_twin_for")
                 .and_then(|v| v.as_str()),
             Some(mem_id.as_base_64().as_str())
+        );
+    }
+
+    /// Helper for the `max_weight` validation tests below: stand up a minimal connectome with
+    /// a plastic mapping `src -> dst` plus the two detector areas required for R-STDP rules.
+    /// Returns the manager (so individual tests can drive `update_cortical_mapping` against
+    /// it) along with the four cortical IDs in (src, dst, reward, pain) order.
+    fn build_max_weight_test_manager() -> (
+        ConnectomeManager,
+        CorticalID,
+        CorticalID,
+        CorticalID,
+        CorticalID,
+    ) {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::TracingMutex;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaConfigurationFlag,
+        };
+
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("npu");
+        let dyn_npu = Arc::new(TracingMutex::new(DynamicNPU::F32(npu), "TestNPU"));
+        let mut mgr = ConnectomeManager::new_for_testing_with_npu(dyn_npu);
+        // Seed the core morphology registry; `all_to_all` is the simplest plastic morphology
+        // available and is required to exercise the STDP rule parser path in
+        // `regenerate_synapses_for_mapping`.
+        feagi_evolutionary::templates::add_core_morphologies(&mut mgr.morphology_registry);
+
+        let src = CorticalID::try_from_bytes(b"cstmwsrc").unwrap();
+        let dst = CorticalID::try_from_bytes(b"cstmwdst").unwrap();
+        let reward = CorticalID::try_from_bytes(b"cstmwrwd").unwrap();
+        let pain = CorticalID::try_from_bytes(b"cstmwpan").unwrap();
+
+        for (id, label, kind) in [
+            (
+                src,
+                "src",
+                CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
+            ),
+            (
+                dst,
+                "dst",
+                CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
+            ),
+            (
+                reward,
+                "reward",
+                CorticalAreaType::Custom(
+                    feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                ),
+            ),
+            (
+                pain,
+                "pain",
+                CorticalAreaType::Custom(
+                    feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire,
+                ),
+            ),
+        ] {
+            mgr.add_cortical_area(
+                CorticalArea::new(
+                    id,
+                    0,
+                    label.to_string(),
+                    CorticalAreaDimensions::new(1, 1, 1).unwrap(),
+                    (0, 0, 0).into(),
+                    kind,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            mgr.add_neuron(&id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+                .unwrap();
+        }
+        (mgr, src, dst, reward, pain)
+    }
+
+    /// Drive the full BDU mapping pipeline (store rules then regenerate synapses, which is
+    /// where the STDP rule parser actually runs) so the validation tests below exercise the
+    /// same code path as a `PUT /v1/cortical_mapping/mapping_properties` followed by the
+    /// regeneration step kicked off by the connectome service.
+    fn write_and_regenerate_mapping(
+        mgr: &mut ConnectomeManager,
+        src: &CorticalID,
+        dst: &CorticalID,
+        rule: serde_json::Value,
+    ) -> BduResult<usize> {
+        mgr.update_cortical_mapping(src, dst, vec![rule])?;
+        mgr.regenerate_synapses_for_mapping(src, dst)
+    }
+
+    /// Acceptance test: an R-STDP mapping rule with a finite, positive `max_weight` parses
+    /// cleanly through the BDU pipeline used by `PUT /v1/cortical_mapping/mapping_properties`
+    /// + the post-write regeneration step.
+    #[test]
+    fn test_max_weight_finite_positive_accepted_on_rstdp_rule() {
+        let (mut mgr, src, dst, reward, pain) = build_max_weight_test_manager();
+
+        let result = write_and_regenerate_mapping(
+            &mut mgr,
+            &src,
+            &dst,
+            serde_json::json!({
+                "morphology_id": "block_to_block",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1,
+                "plasticity_flag": true,
+                "plasticity_constant": 1,
+                "ltp_multiplier": 1,
+                "ltd_multiplier": 1,
+                "plasticity_window": 10,
+                "synaptic_delay_bursts": 1,
+                "plasticity_mode": "rstdp",
+                "eligibility_decay_bursts": 50,
+                "reward_source_area": reward.as_base_64(),
+                "punishment_source_area": pain.as_base_64(),
+                "max_weight": 12.5,
+            }),
+        );
+        assert!(
+            result.is_ok(),
+            "valid max_weight=12.5 must be accepted, got {:?}",
+            result
+        );
+    }
+
+    /// Validation test: zero, negative, and non-numeric `max_weight` values must be rejected
+    /// at parse time so the runtime never sees a malformed sentinel. (`NaN` and `Infinity`
+    /// cannot appear in valid JSON -- `serde_json::json!(f64::NAN)` already serializes to
+    /// `Null` -- so we cover the in-band wrong-type case via a string instead.)
+    #[test]
+    fn test_max_weight_invalid_values_rejected() {
+        for bad in &[
+            serde_json::json!(0.0),
+            serde_json::json!(-1.5),
+            serde_json::json!("not_a_number"),
+        ] {
+            let (mut mgr, src, dst, reward, pain) = build_max_weight_test_manager();
+            let result = write_and_regenerate_mapping(
+                &mut mgr,
+                &src,
+                &dst,
+                serde_json::json!({
+                    "morphology_id": "block_to_block",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": true,
+                    "plasticity_constant": 1,
+                    "ltp_multiplier": 1,
+                    "ltd_multiplier": 1,
+                    "plasticity_window": 10,
+                    "synaptic_delay_bursts": 1,
+                    "plasticity_mode": "rstdp",
+                    "eligibility_decay_bursts": 50,
+                    "reward_source_area": reward.as_base_64(),
+                    "punishment_source_area": pain.as_base_64(),
+                    "max_weight": bad,
+                }),
+            );
+            assert!(
+                result.is_err(),
+                "max_weight={:?} should have been rejected, got {:?}",
+                bad,
+                result
+            );
+        }
+    }
+
+    /// `ltp_multiplier` / `ltd_multiplier` are stored as `i8` in the NPU; values outside
+    /// `-128..=127` must fail at BDU parse time.
+    #[test]
+    fn test_ltp_ltd_multiplier_out_of_i8_range_rejected() {
+        let (mut mgr, src, dst, reward, pain) = build_max_weight_test_manager();
+        let result = write_and_regenerate_mapping(
+            &mut mgr,
+            &src,
+            &dst,
+            serde_json::json!({
+                "morphology_id": "block_to_block",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1,
+                "plasticity_flag": true,
+                "plasticity_constant": 1,
+                "ltp_multiplier": 200,
+                "ltd_multiplier": 1,
+                "plasticity_window": 10,
+                "synaptic_delay_bursts": 1,
+                "plasticity_mode": "rstdp",
+                "eligibility_decay_bursts": 50,
+                "reward_source_area": reward.as_base_64(),
+                "punishment_source_area": pain.as_base_64(),
+            }),
+        );
+        assert!(
+            result.is_err(),
+            "ltp_multiplier=200 must be rejected (i8 range); got {:?}",
+            result
+        );
+    }
+
+    /// Validation test: setting an explicit `max_weight` on an off-mode (non-plastic) rule
+    /// is meaningless and must surface as a clear error instead of being silently ignored.
+    #[test]
+    fn test_max_weight_rejected_when_plasticity_off() {
+        let (mut mgr, src, dst, _reward, _pain) = build_max_weight_test_manager();
+
+        let result = write_and_regenerate_mapping(
+            &mut mgr,
+            &src,
+            &dst,
+            serde_json::json!({
+                "morphology_id": "block_to_block",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1,
+                // `plasticity_flag: true` is required to enter the rule-parsing branch in
+                // `regenerate_synapses_for_mapping`; the off-mode validation is then driven
+                // by the explicit `plasticity_mode: "off"` selector below, which is the
+                // canonical successor of the legacy boolean flag.
+                "plasticity_flag": true,
+                "plasticity_constant": 0,
+                "ltp_multiplier": 0,
+                "ltd_multiplier": 0,
+                "plasticity_window": 0,
+                "synaptic_delay_bursts": 1,
+                "plasticity_mode": "off",
+                "max_weight": 10.0,
+            }),
+        );
+        assert!(
+            result.is_err(),
+            "max_weight on off-mode rule must be rejected; got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_plasticity_eta_rejected_when_plasticity_off() {
+        let (mut mgr, src, dst, _reward, _pain) = build_max_weight_test_manager();
+
+        let result = write_and_regenerate_mapping(
+            &mut mgr,
+            &src,
+            &dst,
+            serde_json::json!({
+                "morphology_id": "block_to_block",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1,
+                "plasticity_flag": true,
+                "plasticity_constant": 0,
+                "ltp_multiplier": 0,
+                "ltd_multiplier": 0,
+                "plasticity_window": 0,
+                "synaptic_delay_bursts": 1,
+                "plasticity_mode": "off",
+                "plasticity_eta": 0.5,
+            }),
+        );
+        assert!(
+            result.is_err(),
+            "plasticity_eta on off-mode rule must be rejected; got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_plasticity_eta_non_positive_rejected() {
+        let (mut mgr, src, dst, reward, pain) = build_max_weight_test_manager();
+
+        let result = write_and_regenerate_mapping(
+            &mut mgr,
+            &src,
+            &dst,
+            serde_json::json!({
+                "morphology_id": "block_to_block",
+                "morphology_scalar": [1, 1, 1],
+                "postSynapticCurrent_multiplier": 1,
+                "plasticity_flag": true,
+                "plasticity_constant": 1,
+                "ltp_multiplier": 1,
+                "ltd_multiplier": 1,
+                "plasticity_window": 10,
+                "synaptic_delay_bursts": 1,
+                "plasticity_mode": "rstdp",
+                "eligibility_decay_bursts": 50,
+                "reward_source_area": reward.as_base_64(),
+                "punishment_source_area": pain.as_base_64(),
+                "plasticity_eta": 0.0,
+            }),
+        );
+        assert!(
+            result.is_err(),
+            "plasticity_eta=0 must be rejected; got {:?}",
+            result
         );
     }
 }

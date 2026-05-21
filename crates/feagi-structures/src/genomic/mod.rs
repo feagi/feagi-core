@@ -15,6 +15,7 @@ mod descriptors; // DO NOT EXPOSE DIRECTLY! Macros here generate types we do not
 pub use feagi_genome_error::FeagiStructuresGenomicError;
 pub use motor_cortical_unit::MotorCorticalUnit;
 pub use sensory_cortical_unit::SensoryCorticalUnit;
+pub use sensory_cortical_unit::UnitTopology;
 
 // SPECIFICALLY ONLY EXPOSE I32 VARIANTS!
 pub use descriptors::{GenomeCoordinate2DI32, GenomeCoordinate3DI32};

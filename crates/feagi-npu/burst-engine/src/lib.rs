@@ -99,6 +99,9 @@ pub mod tracing_mutex;
 pub mod dynamic_npu;
 pub mod npu;
 pub mod parameter_update_queue;
+/// Intrinsic firing-rate homeostasis via LIF `leak_coefficient` (opt-in areas only; see `neural/docs/rate_modulated_leak.md`).
+pub mod rate_modulated_leak;
+pub mod runtime_taps;
 pub mod sensory; // Rust sensory injection system
                  // Disabled - uses DynamicNPU
                  // pub mod sleep; // Sleep manager for energy efficiency and memory optimization
@@ -127,6 +130,11 @@ pub use neural_dynamics::*;
 // Neuron models now in feagi-neural::models
 pub use npu::*;
 pub use parameter_update_queue::{ParameterUpdate, ParameterUpdateQueue};
+pub use rate_modulated_leak::{RateModulatedLeakConfig, RateModulatedLeakRegistry};
+pub use runtime_taps::{
+    AgentPublishStats, AreaActivity as TapAreaActivity, BurstTaps, MotorOutputTap, SensorInputTap,
+    TapSample,
+};
 pub use sensory::*;
 // pub use sleep::*;
 pub use sparse_memory_lif::{

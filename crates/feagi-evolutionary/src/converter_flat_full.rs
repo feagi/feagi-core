@@ -52,6 +52,7 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     // Also map _group to cortical_group for classification (needed by neuroembryogenesis)
     ("_group-t", "cortical_group"),
     ("dstmap-d", "cortical_mapping_dst"),
+    ("hmlk-d", "rate_modulated_leak"),
     ("de_gen-f", "degeneration"),
     ("pspuni-b", "psp_uniform_distribution"),
     ("mp_acc-b", "mp_charge_accumulation"),
@@ -589,11 +590,20 @@ fn process_dstmap(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn test_property_map_completeness() {
         let map = build_property_map();
-        assert_eq!(map.len(), 40); // All 40 property mappings
+        let unique_flat_keys: HashSet<&str> = PROPERTY_MAPPINGS
+            .iter()
+            .map(|(flat_key, _)| *flat_key)
+            .collect();
+        assert_eq!(
+            map.len(),
+            unique_flat_keys.len(),
+            "lookup table size must match unique flat keys (duplicate flat keys keep last hierarchical target)"
+        );
         assert!(map.contains_key("__name-t"));
         assert!(map.contains_key("dstmap-d"));
         assert!(map.contains_key("fire_t-f"));

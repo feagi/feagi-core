@@ -201,6 +201,10 @@ impl Neuroembryogenesis {
         let death_id = CoreCorticalType::Death.to_cortical_id();
         let power_id = CoreCorticalType::Power.to_cortical_id();
         let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
+        let pain_id = CoreCorticalType::Pain.to_cortical_id();
+        let pleasure_id = CoreCorticalType::Pleasure.to_cortical_id();
+        let fear_id = CoreCorticalType::Fear.to_cortical_id();
+        let hope_id = CoreCorticalType::Hope.to_cortical_id();
 
         let mut core_areas = Vec::new();
         let mut other_areas = Vec::new();
@@ -213,12 +217,20 @@ impl Neuroembryogenesis {
                 core_areas.push((1, area)); // Area 1 = _power
             } else if area.cortical_id == fatigue_id {
                 core_areas.push((2, area)); // Area 2 = _fatigue
+            } else if area.cortical_id == pain_id {
+                core_areas.push((3, area)); // Area 3 = _pain
+            } else if area.cortical_id == pleasure_id {
+                core_areas.push((4, area)); // Area 4 = _pleasure
+            } else if area.cortical_id == fear_id {
+                core_areas.push((5, area)); // Area 5 = _fear
+            } else if area.cortical_id == hope_id {
+                core_areas.push((6, area)); // Area 6 = _hope
             } else {
                 other_areas.push(area);
             }
         }
 
-        // Sort core areas by their deterministic index (0, 1, 2)
+        // Sort core areas by their deterministic index (0..=6)
         core_areas.sort_by_key(|(idx, _)| *idx);
 
         // STEP 1: Create core area neurons FIRST
@@ -821,8 +833,8 @@ impl Neuroembryogenesis {
     /// Each cortical area is processed with `create_cortical_area_neurons()` which creates
     /// ALL neurons for that area in one vectorized operation (not a loop).
     ///
-    /// CRITICAL: Core areas (0=_death, 1=_power, 2=_fatigue) are created FIRST to ensure
-    /// deterministic neuron IDs (neuron 0 for area 0, neuron 1 for area 1, neuron 2 for area 2).
+    /// CRITICAL: Core areas (0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure, 5=_fear, 6=_hope) are created
+    /// FIRST to ensure deterministic neuron IDs.
     fn neurogenesis(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
         self.update_stage(DevelopmentStage::Neurogenesis, 0);
         info!(target: "feagi-bdu","🔬 Stage 3: Neurogenesis - Generating neurons (SIMD-optimized batches)");
@@ -835,6 +847,10 @@ impl Neuroembryogenesis {
         let death_id = CoreCorticalType::Death.to_cortical_id();
         let power_id = CoreCorticalType::Power.to_cortical_id();
         let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
+        let pain_id = CoreCorticalType::Pain.to_cortical_id();
+        let pleasure_id = CoreCorticalType::Pleasure.to_cortical_id();
+        let fear_id = CoreCorticalType::Fear.to_cortical_id();
+        let hope_id = CoreCorticalType::Hope.to_cortical_id();
 
         let mut core_areas = Vec::new();
         let mut other_areas = Vec::new();
@@ -847,12 +863,20 @@ impl Neuroembryogenesis {
                 core_areas.push((1, *cortical_id, area)); // Area 1 = _power
             } else if *cortical_id == fatigue_id {
                 core_areas.push((2, *cortical_id, area)); // Area 2 = _fatigue
+            } else if *cortical_id == pain_id {
+                core_areas.push((3, *cortical_id, area)); // Area 3 = _pain
+            } else if *cortical_id == pleasure_id {
+                core_areas.push((4, *cortical_id, area)); // Area 4 = _pleasure
+            } else if *cortical_id == fear_id {
+                core_areas.push((5, *cortical_id, area)); // Area 5 = _fear
+            } else if *cortical_id == hope_id {
+                core_areas.push((6, *cortical_id, area)); // Area 6 = _hope
             } else {
                 other_areas.push((*cortical_id, area));
             }
         }
 
-        // Sort core areas by their deterministic index (0, 1, 2)
+        // Sort core areas by their deterministic index (0..=6)
         core_areas.sort_by_key(|(idx, _, _)| *idx);
 
         info!(target: "feagi-bdu","  🎯 Creating core area neurons FIRST ({} areas) for deterministic IDs", core_areas.len());
@@ -861,7 +885,7 @@ impl Neuroembryogenesis {
         let mut processed_count = 0;
         let total_areas = genome.cortical_areas.len();
 
-        // STEP 1: Create core area neurons FIRST (in order: 0, 1, 2)
+        // STEP 1: Create core area neurons FIRST (in order: 0..=6)
         for (core_idx, cortical_id, area) in &core_areas {
             let existing_core_neurons = {
                 let manager = self.connectome_manager.read();

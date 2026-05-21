@@ -335,6 +335,11 @@ fn validate_core_area_id(display: &str, result: &mut ValidationResult) {
     let valid_core_ids: Vec<String> = vec![
         CoreCorticalType::Power.to_cortical_id().to_string(), // "___power"
         CoreCorticalType::Death.to_cortical_id().to_string(), // "___death"
+        CoreCorticalType::Fatigue.to_cortical_id().to_string(), // "___fatig"
+        CoreCorticalType::Pain.to_cortical_id().to_string(),  // "___pain_"
+        CoreCorticalType::Pleasure.to_cortical_id().to_string(), // "___pleas"
+        CoreCorticalType::Fear.to_cortical_id().to_string(),  // "___fear_"
+        CoreCorticalType::Hope.to_cortical_id().to_string(),  // "___hope_"
     ];
 
     if !valid_core_ids.contains(&display.to_string()) {
