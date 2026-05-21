@@ -10,8 +10,6 @@ pub trait NeuronGeneratorBase<NPUQ: NPUGlobalQuantization, CANQ: CorticalAreaNeu
 }
 
 
-
-
 /// Neuron Generator for dimensional cortical areas. Functions iterate through xyz(tO neurons to init them
 pub trait NeuronGeneratorNeuronDimensional<
     NPUQ: NPUGlobalQuantization,
@@ -26,6 +24,7 @@ pub trait NeuronGeneratorNeuronDimensional<
     (&self,
      dimensions: &Q3D::Coord3DType,
      enumerated_neuron_ref: &mut IterItemCoordinate3DRefMut<Q3D, Collection3DType>);
+
 
 
 }
