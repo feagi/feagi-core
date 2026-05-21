@@ -1,2 +1,0 @@
-pub mod neuron_property_executors;
-pub mod cortical_mapping_definition_executors;

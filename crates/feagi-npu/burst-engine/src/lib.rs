@@ -105,7 +105,9 @@ pub mod sensory; // Rust sensory injection system
 pub mod sparse_memory_lif;
 pub mod synaptic_arrival_schedule;
 pub mod synaptic_propagation;
-pub mod viz_shm_writer; // Rust visualization SHM writer // Rust motor SHM writer
+pub mod viz_shm_writer;
+pub mod new_burst;
+// Rust visualization SHM writer // Rust motor SHM writer
 
 pub use backend::*;
 #[cfg(feature = "std")]
