@@ -12,3 +12,13 @@ where
 {
 
 }
+
+pub trait DenseLinearArrayBasicCPUAccess<LinearIndexCountQuant, Value>:
+DenseLinearArrayBasic<LinearIndexCountQuant, Value>
+where
+    LinearIndexCountQuant: QuantizedIndexCountTrait,
+    Value: FECSComponentBase + FeagiQuantizedGeneric,
+{
+    fn get_slice(&self) -> &[Value];
+    fn get_slice_mut(&mut self) -> &mut [Value];
+}
