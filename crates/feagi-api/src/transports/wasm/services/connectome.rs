@@ -10,7 +10,7 @@ use feagi_evolutionary::RuntimeGenome;
 use feagi_services::traits::connectome_service::ConnectomeService;
 use feagi_services::types::errors::{ServiceError, ServiceResult};
 use feagi_services::types::*;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genome_definitions::::CorticalID;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -33,9 +33,9 @@ impl WasmConnectomeService {
     fn area_to_info(
         &self,
         cortical_id: &CorticalID,
-        area: &feagi_structures::genomic::cortical_area::CorticalArea,
+        area: &feagi_genome_definitions::::CorticalArea,
     ) -> CorticalAreaInfo {
-        use feagi_structures::genomic::cortical_area::CorticalArea;
+        use feagi_genome_definitions::::CorticalArea;
 
         // Extract physiology parameters from properties
         let leak_coefficient = area

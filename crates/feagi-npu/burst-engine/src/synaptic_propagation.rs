@@ -41,7 +41,7 @@
 use ahash::AHashMap;
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::SynapseStorage;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genome_definitions::::CorticalID;
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Once, OnceLock};
@@ -899,7 +899,7 @@ mod tests {
         engine.build_synapse_index(&synapses);
 
         // Set neuron mapping
-        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_genome_definitions::::CoreCorticalType;
         let mut mapping = AHashMap::new();
         mapping.insert(NeuronId(1), CoreCorticalType::Power.to_cortical_id());
         mapping.insert(NeuronId(2), CoreCorticalType::Power.to_cortical_id());
@@ -932,7 +932,7 @@ mod tests {
         let mut engine = SynapticPropagationEngine::new();
         engine.build_synapse_index(&synapses);
 
-        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_genome_definitions::::CoreCorticalType;
         let mut mapping = AHashMap::new();
         mapping.insert(NeuronId(1), CoreCorticalType::Power.to_cortical_id());
         mapping.insert(NeuronId(2), CoreCorticalType::Power.to_cortical_id());

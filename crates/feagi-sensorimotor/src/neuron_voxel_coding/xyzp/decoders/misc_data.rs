@@ -4,9 +4,9 @@ use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, NeuronDepth};
-use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_genome_definitions::::descriptors::{CorticalChannelCount, NeuronDepth};
+use feagi_genome_definitions::::CorticalID;
+use feagi_potential_voxels::::coord_potential::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 

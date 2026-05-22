@@ -7,7 +7,7 @@ use feagi_npu_burst_engine::npu::MemoryReplayFrame;
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_neural::types::NeuronId;
 use feagi_npu_runtime::StdRuntime;
-use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
+use feagi_genome_definitions::::{CoreCorticalType, CorticalID};
 
 /// Create a minimal NPU instance for replay testing.
 fn create_npu() -> RustNPU<StdRuntime, f32, CPUBackend> {

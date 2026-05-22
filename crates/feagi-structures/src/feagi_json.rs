@@ -1,6 +1,9 @@
-use crate::feagi_structures_error::FeagiStructuresError;
+
+use crate::feagi_common_error::FeagiCommonError;
 
 // TODO serialize from json serializable directly
+
+// TODO this maybe shouldnt be here?
 
 /// A wrapper around serde_json::Value for handling JSON data in FEAGI.
 ///
@@ -34,10 +37,10 @@ impl FeagiJSON {
     ///
     /// let json = FeagiJSON::from_json_string(r#"{"key": "value"}"#.to_string()).unwrap();
     /// ```
-    pub fn from_json_string(string: String) -> Result<FeagiJSON, FeagiStructuresError> {
+    pub fn from_json_string(string: String) -> Result<FeagiJSON, FeagiCommonError> {
         match serde_json::from_str(&string) {
             Ok(json_value) => Ok(FeagiJSON { json: json_value }),
-            Err(e) => Err(FeagiStructuresError::JSONError{context: "Failed to parse JSON string"}),
+            Err(e) => Err(FeagiCommonError::JSONError{context: "Failed to parse JSON string"}),
         }
     }
 

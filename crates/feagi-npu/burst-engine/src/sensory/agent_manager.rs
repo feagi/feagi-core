@@ -17,7 +17,7 @@
 //! 4. Inject directly into FCL
 
 use super::{RateLimiter, ShmReader};
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genome_definitions::::CorticalID;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -390,7 +390,7 @@ fn agent_polling_loop(
                 };
 
             // Downcast to CorticalMappedXYZPNeuronData
-            use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
+            use feagi_potential_voxels::::coord_potential::CorticalMappedXYZPNeuronVoxels;
             let cortical_mapped = match boxed_struct
                 .as_any()
                 .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()

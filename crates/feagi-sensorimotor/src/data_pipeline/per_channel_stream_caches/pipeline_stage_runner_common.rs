@@ -4,7 +4,7 @@ use crate::data_pipeline::{
     stage_properties_to_stages, PipelineStageProperties, PipelineStagePropertyIndex,
 };
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
+use feagi_genome_definitions::::descriptors::CorticalChannelIndex;
 use feagi_structures::FeagiDataError;
 use std::cmp::PartialEq;
 use std::time::Instant;

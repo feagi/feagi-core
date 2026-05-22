@@ -1,1 +1,0 @@
-mod dimensional_propagating_neuron_specifications;

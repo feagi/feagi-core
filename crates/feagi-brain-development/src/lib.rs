@@ -62,10 +62,10 @@ pub use region_io_designation::{
 pub use types::{AreaId, BduError, BduResult, Weight};
 
 // Re-export core types from feagi_data_structures (single source of truth)
-pub use feagi_structures::genomic::cortical_area::{
+pub use feagi_genome_definitions::::{
     CorticalArea, CorticalAreaDimensions as Dimensions, CorticalID,
 };
-pub use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
+pub use feagi_genome_definitions::::brain_region::BrainRegion;
 pub mod models;
 pub use models::{BrainRegionHierarchy, CorticalAreaExt};
 
@@ -86,7 +86,7 @@ pub use cortical_type_utils::{
     describe_cortical_type, get_io_data_type, uses_absolute_frames, uses_cartesian_encoding,
     uses_incremental_frames, uses_percentage_encoding, validate_connectivity,
 };
-pub use feagi_structures::genomic::brain_regions::region_type::RegionType;
+pub use feagi_genome_definitions::::region_type::RegionType;
 
 #[cfg(test)]
 mod tests {

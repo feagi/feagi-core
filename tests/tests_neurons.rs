@@ -5,8 +5,8 @@
 // - overwrite_byte_data_with_single_struct_data() instead of as_new_feagi_byte_structure()
 // TODO: Update tests to use new serialization API
 use feagi_serialization::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
-use feagi_structures::genomic::cortical_area::CoreCorticalType;
-use feagi_structures::neuron_voxel::coord_potential::{
+use feagi_genome_definitions::::CoreCorticalType;
+use feagi_potential_voxels::::coord_potential::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPSparseVectors,
 };
 use ndarray::prelude::*;

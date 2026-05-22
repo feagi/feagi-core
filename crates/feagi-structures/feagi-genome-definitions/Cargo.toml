@@ -1,0 +1,20 @@
+[package]
+name = "feagi-genome-definitions"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+std = ["alloc"]
+alloc = []
+
+[dependencies]
+feagi-data = {path = "../feagi-data"} # RISKY! Let this be the only crate with a sibling dependency!
+cortical-unit-definitions = {path = "cortical-unit-definitions"} # Technically this is a child so its fine!
+# DO NOT ADD OTHER FEAGI DEPENDENCIES
+serde = {workspace = true}
+serde_json = {workspace = true}
+paste = {workspace = true}

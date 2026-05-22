@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_state_manager::StateManager;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genome_definitions::::CorticalID;
 use parking_lot::RwLock;
 use tracing::trace;
 

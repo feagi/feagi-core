@@ -9,7 +9,7 @@ use feagi_npu_burst_engine::FIRE_KIND_STDP_ELIGIBLE;
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 use feagi_npu_runtime::StdRuntime;
-use feagi_structures::genomic::cortical_area::CoreCorticalType;
+use feagi_genome_definitions::::CoreCorticalType;
 use std::sync::Arc;
 
 /// Create a minimal STDP test network with two cortical areas.

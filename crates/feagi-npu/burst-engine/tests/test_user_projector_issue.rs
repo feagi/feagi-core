@@ -10,7 +10,7 @@ use feagi_npu_burst_engine::npu::RustNPU;
 use feagi_npu_neural::synapse::SynapseType;
 use feagi_npu_neural::types::{SynapticPsp, SynapticWeight};
 use feagi_npu_runtime::StdRuntime;
-use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
+use feagi_genome_definitions::::{CoreCorticalType, CorticalID};
 
 #[test]
 fn test_projector_psp_division_issue() {

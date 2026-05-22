@@ -20,10 +20,10 @@ use feagi_evolutionary::{templates, RuntimeGenome};
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
 use feagi_npu_runtime::StdRuntime;
-use feagi_structures::genomic::cortical_area::{
+use feagi_genome_definitions::::{
     CoreCorticalType, CorticalArea, CorticalAreaDimensions as Dimensions, CorticalID,
 };
-use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+use feagi_genome_definitions::descriptors::GenomeCoordinate3D;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

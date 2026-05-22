@@ -2,8 +2,8 @@
 
 use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 use byteorder::{ByteOrder, LittleEndian};
-use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::neuron_voxel::coord_potential::{
+use feagi_genome_definitions::::CorticalID;
+use feagi_potential_voxels::::coord_potential::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPSparseVectors,
 };
 use feagi_structures::FeagiDataError;

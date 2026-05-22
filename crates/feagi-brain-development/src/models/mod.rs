@@ -31,7 +31,7 @@ pub mod brain_region_hierarchy;
 pub mod cortical_area;
 
 // Re-export CorticalArea types from feagi_data_structures (single source of truth)
-pub use feagi_structures::genomic::cortical_area::{
+pub use feagi_genome_definitions::::{
     CorticalArea, CorticalAreaDimensions, CorticalID,
 };
 
@@ -40,5 +40,5 @@ pub use cortical_area::CorticalAreaExt;
 
 // BrainRegion and RegionType now come from feagi_data_structures
 pub use brain_region_hierarchy::BrainRegionHierarchy;
-pub use feagi_structures::genomic::brain_regions::brain_region::BrainRegion;
-pub use feagi_structures::genomic::brain_regions::region_type::RegionType;
+pub use feagi_genome_definitions::::brain_region::BrainRegion;
+pub use feagi_genome_definitions::::region_type::RegionType;

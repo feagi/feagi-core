@@ -2,19 +2,21 @@
 #![doc = include_str!("../docs/readme.md")]
 
 //#![cfg_attr(not(feature = "std"), no_std)] // Switch to no_std mode if the std feature is disabled
-// Expose quantization crate
-pub use feagi_structures_quantization as quantization;
+
+
+pub use feagi_data; // Expose feagi-data crate
+pub use feagi_genome_definitions;
+pub use feagi_potential_voxels;
 
 
 mod feagi_json;
-mod templates;
-mod feagi_structures_error;
-mod cortical_area__neuron_data_collections;
+mod feagi_common_error;
 pub mod genomic;
 pub mod feagi_log;
 //pub mod useful_structs_traits_macros;
 pub mod neuron;
-pub mod neuron_voxel;
+pub mod wgpu_temp;
+pub mod useful_structs;
+mod common;
 
-
-pub use feagi_structures_error::FeagiStructuresError;
+pub use feagi_common_error::FeagiCommonError;

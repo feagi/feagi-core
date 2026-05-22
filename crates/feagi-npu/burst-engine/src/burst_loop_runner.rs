@@ -38,7 +38,7 @@ type FireQueueSample = ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u
 
 /// Decoded sensory data: list of (cortical ID, XYZP list per cortical area)
 type SensoryXyzpDecoded = Vec<(
-    feagi_structures::genomic::cortical_area::CorticalID,
+    feagi_genome_definitions::::CorticalID,
     Vec<(u32, u32, u32, f32)>,
 )>;
 
@@ -63,7 +63,7 @@ fn should_emit_throttled_warning(last_emitted_ms: &AtomicU64, interval_ms: u64) 
 use tracing::{debug, error, info, trace, warn};
 
 use std::thread;
-use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_potential_voxels::::coord_potential::CorticalMappedXYZPNeuronVoxels;
 
 /// Trait for visualization publishing (abstraction to avoid circular dependency with feagi-io)
 /// Any component that can publish visualization data implements this trait.
@@ -1034,8 +1034,8 @@ fn encode_fire_data_to_xyzp(
     fire_data: RawFireQueueSnapshot,
     cortical_id_filter: Option<&ahash::AHashSet<String>>,
 ) -> Result<Vec<u8>, String> {
-    use feagi_structures::genomic::cortical_area::CorticalID;
-    use feagi_structures::neuron_voxel::coord_potential::{
+    use feagi_genome_definitions::::CorticalID;
+    use feagi_potential_voxels::::coord_potential::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPSparseVectors,
     };
 
@@ -1180,7 +1180,7 @@ fn get_timestamp() -> String {
 /// Decode sensory bytes (FeagiByteContainer) into cortical XYZP list.
 /// Transport-agnostic; same format whether source is ZMQ, WebSocket, or SHM.
 fn decode_sensory_bytes(bytes: &[u8]) -> Result<SensoryXyzpDecoded, String> {
-    use feagi_structures::neuron_voxel::coord_potential::CorticalMappedXYZPNeuronVoxels;
+    use feagi_potential_voxels::::coord_potential::CorticalMappedXYZPNeuronVoxels;
 
     let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
     let mut data_vec = bytes.to_vec();
@@ -1900,7 +1900,7 @@ fn burst_loop(
                                             update.cortical_idx,
                                             psp_f32,
                                         );
-                                    if let Ok(cortical_id) = feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                    if let Ok(cortical_id) = feagi_genome_definitions::::CorticalID::try_from_base_64(
                                         &update.cortical_id,
                                     ) {
                                         npu_lock.set_postsynaptic_current_flag(cortical_id, psp_f32);
@@ -1920,7 +1920,7 @@ fn burst_loop(
                             }
                             "mp_driven_psp" | "neuron_mp_driven_psp" => {
                                 if let Some(enabled) = update.value.as_bool() {
-                                    match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                    match feagi_genome_definitions::::CorticalID::try_from_base_64(
                                         &update.cortical_id,
                                     ) {
                                         Ok(cortical_id) => {
@@ -1935,7 +1935,7 @@ fn burst_loop(
                             }
                             "psp_uniform_distribution" | "neuron_psp_uniform_distribution" => {
                                 if let Some(enabled) = update.value.as_bool() {
-                                    match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                    match feagi_genome_definitions::::CorticalID::try_from_base_64(
                                         &update.cortical_id,
                                     ) {
                                         Ok(cortical_id) => {
@@ -1956,7 +1956,7 @@ fn burst_loop(
                                     if degeneration < 0.0 {
                                         0
                                     } else {
-                                        match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                        match feagi_genome_definitions::::CorticalID::try_from_base_64(
                                             &update.cortical_id,
                                         ) {
                                             Ok(cortical_id) => {
@@ -2485,7 +2485,7 @@ fn burst_loop(
                         Some(id) => id.clone(),
                         None => {
                             // Fallback for reserved core areas (BV needs correct cortical_id to identify them)
-                            use feagi_structures::genomic::cortical_area::CoreCorticalType;
+                            use feagi_genome_definitions::::CoreCorticalType;
                             match area_id {
                                 0 => CoreCorticalType::Death.to_cortical_id().as_base_64(),
                                 1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
@@ -2608,7 +2608,7 @@ fn burst_loop(
                     // Detect memory areas by decoding cortical ID bytes (deterministic; no hardcoded IDs).
                     // Memory areas may be encoded as custom IDs prefixed by `cmem...`.
                     let is_memory_area =
-                        feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                        feagi_genome_definitions::::CorticalID::try_from_base_64(
                             &cortical_id,
                         )
                         .ok()
@@ -2801,7 +2801,7 @@ fn burst_loop(
                         Some(id) => id.clone(),
                         None => {
                             // Fallback for reserved core areas (BV needs correct cortical_id to identify them)
-                            use feagi_structures::genomic::cortical_area::CoreCorticalType;
+                            use feagi_genome_definitions::::CoreCorticalType;
                             match area_id {
                                 0 => CoreCorticalType::Death.to_cortical_id().as_base_64(),
                                 1 => CoreCorticalType::Power.to_cortical_id().as_base_64(),
@@ -3385,7 +3385,7 @@ mod tests {
         }
 
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_genome_definitions::::CoreCorticalType;
 
         // Build an NPU with one neuron we can deterministically force to fire.
         let mut rust_npu =

@@ -1,0 +1,14 @@
+use crate::feagi_ecs::component::FECSComponentBase;
+use crate::linear_collections::traits_and_generics::{ECSLinearCollection, QuantizableLinearCollection};
+use crate::quantizable::base_types::QuantizedIndexCountTrait;
+use crate::quantizable::FeagiQuantizedGeneric;
+
+pub trait DenseLinearArrayBasic<LinearIndexCountQuant, Value>:
+ECSLinearCollection<LinearIndexCountQuant, Value>
++ QuantizableLinearCollection<LinearIndexCountQuant, Value>
+where
+    LinearIndexCountQuant: QuantizedIndexCountTrait,
+    Value: FECSComponentBase + FeagiQuantizedGeneric,
+{
+
+}

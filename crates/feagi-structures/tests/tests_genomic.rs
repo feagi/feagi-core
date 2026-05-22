@@ -1,11 +1,11 @@
 //! Tests for the genomic module (cortical area types, IDs, I/O flags, descriptors).
 
-use feagi_structures::genomic::cortical_area::descriptors::*;
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::*;
-use feagi_structures::genomic::cortical_area::*;
+use feagi_genome_definitions::cortical_area::descriptors::*;
+use feagi_genome_definitions::cortical_area::io_cortical_area_configuration_flag::*;
+use feagi_genome_definitions::cortical_area::*;
 use feagi_structures::genomic::{FeagiStructuresGenomicError, GenomeCoordinate3DI32, SensoryCorticalUnit};
 use feagi_structures::neuron_old::::::voxel_structs::NeuronVoxelCoordinate;
-use feagi_structures::FeagiStructuresError;
+use feagi_structures::FeagiCommonError;
 
 // TODO: CorticalArea lives in cortical_area.rs but is not wired into `genomic::cortical_area` module exports yet; restore integration tests when `CorticalArea` is public again.
 
@@ -112,7 +112,7 @@ mod descriptor_tests {
         let count = CorticalChannelCount::new(5u32).unwrap();
         assert_eq!(count.get(), 5u32);
         let err = CorticalChannelCount::new(0u32).unwrap_err();
-        assert!(matches!(err, FeagiStructuresError::InvalidValue { .. }));
+        assert!(matches!(err, FeagiCommonError::InvalidValue { .. }));
     }
 
     #[test]

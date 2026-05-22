@@ -3,8 +3,8 @@
 // - FeagiSerializable trait instead of FeagiByteStructureCompatible
 // TODO: Update tests to use new serialization API
 use feagi_serialization::{FeagiByteContainer, FeagiByteStructureType};
-use feagi_structures::genomic::cortical_area::CoreCorticalType;
-use feagi_structures::neuron_voxel::coord_potential::{
+use feagi_genome_definitions::::CoreCorticalType;
+use feagi_potential_voxels::::coord_potential::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPSparseVectors,
 };
 use feagi_structures::FeagiJSON;

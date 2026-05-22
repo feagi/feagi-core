@@ -287,7 +287,7 @@ where
 
     pub fn inject_sensory_xyzp_by_id(
         &mut self,
-        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+        cortical_id: &feagi_genome_definitions::::CorticalID,
         xyzp_data: &[(u32, u32, u32, f32)],
     ) -> usize {
         dispatch_mut!(self, inject_sensory_xyzp_by_id(cortical_id, xyzp_data))
@@ -295,7 +295,7 @@ where
 
     pub fn inject_force_fire_by_coordinates(
         &mut self,
-        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+        cortical_id: &feagi_genome_definitions::::CorticalID,
         xyzp_data: &[(u32, u32, u32, f32)],
     ) -> usize {
         dispatch_mut!(
@@ -306,7 +306,7 @@ where
 
     pub fn inject_sensory_xyzp_arrays_by_id(
         &mut self,
-        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+        cortical_id: &feagi_genome_definitions::::CorticalID,
         x_coords: &[u32],
         y_coords: &[u32],
         z_coords: &[u32],
@@ -756,14 +756,14 @@ where
 
     pub fn get_mp_driven_psp_for_cortical(
         &self,
-        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+        cortical_id: &feagi_genome_definitions::::CorticalID,
     ) -> bool {
         dispatch!(self, get_mp_driven_psp_for_cortical(cortical_id))
     }
 
     pub fn get_psp_uniform_distribution_for_cortical(
         &self,
-        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+        cortical_id: &feagi_genome_definitions::::CorticalID,
     ) -> bool {
         dispatch!(self, get_psp_uniform_distribution_for_cortical(cortical_id))
     }
@@ -988,7 +988,7 @@ where
     pub fn register_dynamic_neuron_mapping(
         &mut self,
         neuron_id: u32,
-        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        cortical_id: feagi_genome_definitions::::CorticalID,
     ) {
         match self {
             DynamicNPUGeneric::F32(npu) => {
@@ -1184,14 +1184,14 @@ where
 
     pub fn set_psp_uniform_distribution_flags(
         &mut self,
-        flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, bool>,
+        flags: ahash::AHashMap<feagi_genome_definitions::::CorticalID, bool>,
     ) {
         dispatch_mut!(self, set_psp_uniform_distribution_flags(flags))
     }
 
     pub fn set_psp_uniform_distribution_flag(
         &mut self,
-        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        cortical_id: feagi_genome_definitions::::CorticalID,
         enabled: bool,
     ) {
         dispatch_mut!(
@@ -1202,14 +1202,14 @@ where
 
     pub fn set_postsynaptic_current_flags(
         &mut self,
-        flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, f32>,
+        flags: ahash::AHashMap<feagi_genome_definitions::::CorticalID, f32>,
     ) {
         dispatch_mut!(self, set_postsynaptic_current_flags(flags))
     }
 
     pub fn set_postsynaptic_current_flag(
         &mut self,
-        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        cortical_id: feagi_genome_definitions::::CorticalID,
         postsynaptic: f32,
     ) {
         dispatch_mut!(
@@ -1220,14 +1220,14 @@ where
 
     pub fn set_mp_driven_psp_flags(
         &mut self,
-        flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, bool>,
+        flags: ahash::AHashMap<feagi_genome_definitions::::CorticalID, bool>,
     ) {
         dispatch_mut!(self, set_mp_driven_psp_flags(flags))
     }
 
     pub fn set_mp_driven_psp_flag(
         &mut self,
-        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        cortical_id: feagi_genome_definitions::::CorticalID,
         enabled: bool,
     ) {
         dispatch_mut!(self, set_mp_driven_psp_flag(cortical_id, enabled))
@@ -1235,14 +1235,14 @@ where
 
     pub fn set_degeneration_flags(
         &mut self,
-        flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, f32>,
+        flags: ahash::AHashMap<feagi_genome_definitions::::CorticalID, f32>,
     ) {
         dispatch_mut!(self, set_degeneration_flags(flags))
     }
 
     pub fn set_degeneration_flag(
         &mut self,
-        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        cortical_id: feagi_genome_definitions::::CorticalID,
         degeneration: f32,
     ) {
         dispatch_mut!(self, set_degeneration_flag(cortical_id, degeneration))

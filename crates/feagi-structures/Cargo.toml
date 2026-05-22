@@ -8,10 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 description = "The most core library, defines the basic data types used by FEAGI, as well as some processors to modify them"
 
-# TODO investigate possible split between neuron structures and certain genomic identifiers
-
 [features]
-
 default = ["default-linux-x86"]
 
 default-win-x86 = [
@@ -50,24 +47,48 @@ default-embedded-generic = ["defmt"] # break this into more types later
 # TODO It is possible to have serde functionality without std / alloc, but for now we will feature gate it
 # TODO think of a better way to toggle tracing off in embedded / wasm envs
 
-std = ["alloc",
+std = [
+    "feagi-data/std",
+    "feagi-genome-definitions/std",
+    "feagi-potential-voxels/std",
+    "alloc",
     "ahash/std",
-    "dep:tracing"] # allows use of the std library
-alloc = [ # allows use of alloc (through core, not strictly std) and structures here that need it
+    "dep:tracing"]
+alloc = [
+    "feagi-data/alloc",
+    "feagi-genome-definitions/alloc",
+    "feagi-potential-voxels/alloc",
     "dep:serde",
     "dep:serde_json",
-    "feagi-structures-quantization/alloc",
     "half/serde",
     "ahash/serde",
 ]
+support_64bit_indexing = [ # Allow 64 bit indexing. This is pretty rare. Not compatible with WASM, Embedded
+    "feagi-data/support_64bit_indexing",
+    "feagi-potential-voxels/support_64bit_indexing",
+]
+support_64bit_values = [ # Allow 64 bit values (IE: Membrane potentials). Extremely rare! Not compatible with WASM, Embedded
+    "feagi-data/support_64bit_values",
+    "feagi-potential-voxels/support_64bit_values",
+]
+support_wgpu = [
+    "feagi-data/support_wgpu",
+    "feagi-potential-voxels/support_wgpu",
+]
+
+
 defmt = ["dep:defmt"]
 ndarray = ["dep:ndarray"]
 rayon = ["dep:rayon", "std"]
-support_64bit_indexing = ["feagi-structures-quantization/support_64bit_indexing"] # Allow 64 bit indexing. This is pretty rare. Not compatible with WASM or Embedded
-support_64bit_values = ["feagi-structures-quantization/support_64bit_values"] # Allow 64 bit values (IE: Membrane potentials). Extremely rare! Not compatible with WASM or Embedded
 
 [dependencies]
-feagi-structures-quantization = { path = "feagi-structures-quantization" }
+# Subcrates
+feagi-data = {path = "feagi-data"} # This crate has sibling crates dependent on it. Be Cautious!
+feagi-genome-definitions = {path = "feagi-genome-definitions"}
+feagi-potential-voxels = {path = "feagi-potential-voxels"}
+
+
+# External crates
 serde = { workspace = true, optional = true, default-features = false, features = ["alloc", "derive"] }
 serde_json = { workspace = true, optional = true}
 half = { workspace = true, default-features = false, features = [] } # STD enables autoarch detection, which we may not want
@@ -78,6 +99,4 @@ rayon = { workspace = true, optional = true}
 defmt = {workspace = true, optional = true}
 tracing = {workspace = true, optional = true}
 paste = { workspace = true } # Despite only using the paste macro, it seems that the crate cannot be in dev dependencies
-
-
 base64 = { version = "0.22.1" } # TODO special notes about alloc, discuss later!

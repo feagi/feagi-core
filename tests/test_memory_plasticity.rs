@@ -22,7 +22,7 @@ use feagi_npu_plasticity::{
     ReplayFrame,
 };
 use feagi_npu_runtime::StdRuntime;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genome_definitions::::CorticalID;
 use parking_lot::RwLock;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -1125,7 +1125,7 @@ fn test_memory_neuron_count_stalls_with_limited_unique_patterns() {
 fn test_memory_replay_injects_twin_area() {
     use feagi_brain_development::models::CorticalAreaExt;
     use feagi_brain_development::ConnectomeManager;
-    use feagi_structures::genomic::cortical_area::{
+    use feagi_genome_definitions::::{
         CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
         IOCorticalAreaConfigurationFlag, MemoryCorticalType,
     };

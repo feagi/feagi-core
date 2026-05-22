@@ -19,7 +19,7 @@ use feagi_npu_burst_engine::synaptic_propagation::SynapticPropagationEngine;
 use feagi_npu_neural::synapse::SynapseType;
 use feagi_npu_neural::types::{FireCandidateList, NeuronId};
 use feagi_npu_runtime::std_impl::{NeuronArray, SynapseArray};
-use feagi_structures::genomic::cortical_area::CoreCorticalType;
+use feagi_genome_definitions::::CoreCorticalType;
 
 fn create_test_genome(
     neuron_count: usize,

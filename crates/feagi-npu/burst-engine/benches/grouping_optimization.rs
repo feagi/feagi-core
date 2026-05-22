@@ -24,7 +24,7 @@ use std::time::Duration;
 use ahash::AHashMap;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use feagi_npu_neural::types::{NeuronId, SynapticContribution};
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genome_definitions::::CorticalID;
 use rayon::prelude::*;
 
 /// Propagation result type (matches production code)

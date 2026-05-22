@@ -17,7 +17,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::types::EvoError;
-use feagi_structures::genomic::cortical_area::CorticalAreaType;
+use feagi_genome_definitions::::CorticalAreaType;
 use std::collections::HashMap;
 
 /// Parse CorticalAreaType from genome properties
@@ -43,23 +43,23 @@ pub fn parse_cortical_type(
     // Parse base type from cortical_group
     let cortical_type = match cortical_group.to_uppercase().as_str() {
         "IPU" => CorticalAreaType::BrainInput(
-            feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag::CartesianPlane(
-                feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute
+            feagi_genome_definitions::::IOCorticalAreaConfigurationFlag::CartesianPlane(
+                feagi_genome_definitions::::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute
             )
         ),
         "OPU" => CorticalAreaType::BrainOutput(
-            feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag::CartesianPlane(
-                feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute
+            feagi_genome_definitions::::IOCorticalAreaConfigurationFlag::CartesianPlane(
+                feagi_genome_definitions::::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute
             )
         ),
         "CORE" => CorticalAreaType::Core(
-            feagi_structures::genomic::cortical_area::CoreCorticalType::Death
+            feagi_genome_definitions::::CoreCorticalType::Death
         ),
         "CUSTOM" => CorticalAreaType::Custom(
-            feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire
+            feagi_genome_definitions::::CustomCorticalType::LeakyIntegrateFire
         ),
         "MEMORY" => CorticalAreaType::Memory(
-            feagi_structures::genomic::cortical_area::MemoryCorticalType::Memory
+            feagi_genome_definitions::::MemoryCorticalType::Memory
         ),
         _ => return Err(EvoError::InvalidGenome(format!("Unknown cortical_group: {}", cortical_group))),
     };
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_validate_ipu_type() {
-        use feagi_structures::genomic::cortical_area::{
+        use feagi_genome_definitions::::{
             io_cortical_area_configuration_flag::FrameChangeHandling,
             IOCorticalAreaConfigurationFlag,
         };

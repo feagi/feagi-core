@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use crate::types::{BduError, BduResult, Position};
 
 // Import core types from feagi_data_structures
-pub use feagi_structures::genomic::cortical_area::{
+pub use feagi_genome_definitions::::{
     CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalID,
 };
 
@@ -284,7 +284,7 @@ impl CorticalAreaExt for CorticalArea {
             .map(|s| s.to_string())
             .or_else(|| {
                 // Derive from cortical_type if not in properties
-                use feagi_structures::genomic::cortical_area::CorticalAreaType;
+                use feagi_genome_definitions::::CorticalAreaType;
                 match self.cortical_type {
                     CorticalAreaType::BrainInput(_) => Some("IPU".to_string()),
                     CorticalAreaType::BrainOutput(_) => Some("OPU".to_string()),

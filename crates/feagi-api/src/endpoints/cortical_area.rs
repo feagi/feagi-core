@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use feagi_evolutionary::extract_memory_properties;
-use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genome_definitions::::descriptors::CorticalSubUnitIndex;
+use feagi_genome_definitions::::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use utoipa::{IntoParams, ToSchema};
 
@@ -1458,7 +1458,7 @@ pub async fn post_clone(
 ) -> ApiResult<Json<HashMap<String, String>>> {
     use base64::{engine::general_purpose, Engine as _};
     use feagi_services::types::CreateCorticalAreaParams;
-    use feagi_structures::genomic::cortical_area::CorticalID;
+    use feagi_genome_definitions::::CorticalID;
     use serde_json::Value;
     use std::time::{SystemTime, UNIX_EPOCH};
 

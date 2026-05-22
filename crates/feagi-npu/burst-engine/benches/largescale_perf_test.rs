@@ -11,7 +11,7 @@ use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criteri
 use feagi_npu_burst_engine::synaptic_propagation::SynapticPropagationEngine;
 use feagi_npu_neural::types::{FireCandidateList, NeuronId};
 use feagi_npu_runtime::std_impl::{NeuronArray, SynapseArray};
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genome_definitions::::CorticalID;
 
 /// Create a large-scale test genome
 fn create_large_genome(

@@ -2,8 +2,8 @@ use super::descriptors::{
     ColorChannelLayout, ColorSpace, ImageFrameProperties, ImageXYResolution, ImageXYZDimensions,
     MemoryOrderLayout,
 };
-use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
-use feagi_structures::neuron_voxel::coord_potential::NeuronVoxelXYZPSparseVectors;
+use feagi_genome_definitions::::descriptors::CorticalChannelIndex;
+use feagi_potential_voxels::::coord_potential::NeuronVoxelXYZPSparseVectors;
 use feagi_structures::FeagiDataError;
 use image::{DynamicImage, GenericImageView};
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};

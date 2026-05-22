@@ -22,7 +22,7 @@ use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_neural::types::{NeuronId, SynapticPsp, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 use feagi_npu_runtime::StdRuntime;
-use feagi_structures::genomic::cortical_area::CoreCorticalType;
+use feagi_genome_definitions::::CoreCorticalType;
 
 // ═══════════════════════════════════════════════════════════
 // Helper Functions

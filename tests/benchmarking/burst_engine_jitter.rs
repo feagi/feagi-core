@@ -28,7 +28,7 @@ use feagi_npu_burst_engine::{
 };
 use feagi_npu_neural::types::NeuronId;
 use feagi_npu_runtime::StdRuntime;
-use feagi_structures::genomic::cortical_area::CoreCorticalType;
+use feagi_genome_definitions::::CoreCorticalType;
 
 fn read_env_u64(name: &str, default: u64) -> u64 {
     std::env::var(name)

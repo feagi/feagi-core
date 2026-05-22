@@ -64,9 +64,9 @@ use feagi_services::types::CreateCorticalAreaParams;
 #[cfg(feature = "feagi-agent")]
 use feagi_services::RuntimeService;
 #[cfg(feature = "feagi-agent")]
-use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
+use feagi_genome_definitions::::descriptors::CorticalUnitIndex;
 #[cfg(feature = "feagi-agent")]
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+use feagi_genome_definitions::::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 #[cfg(feature = "feagi-agent")]

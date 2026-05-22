@@ -20,7 +20,7 @@ path for more realistic integration tests.
 
 use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID};
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU, TracingMutex};
-use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
+use feagi_genome_definitions::::CorticalAreaDimensions;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -54,7 +54,7 @@ fn create_test_area(
     depth: u32,
     idx: u32,
 ) -> (CorticalArea, CorticalID) {
-    use feagi_structures::genomic::cortical_area::{CorticalAreaType, CustomCorticalType};
+    use feagi_genome_definitions::::{CorticalAreaType, CustomCorticalType};
 
     // Create custom cortical ID: 8 bytes starting with 'c', padded with nulls
     // Format: 'c' + up to 7 characters from name, padded to 8 bytes

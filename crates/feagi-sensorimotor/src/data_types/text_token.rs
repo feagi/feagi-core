@@ -1,6 +1,6 @@
 use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
-use feagi_structures::neuron_voxel::coord_potential::NeuronVoxelXYZPSparseVectors;
+use feagi_potential_voxels::::coord_potential::NeuronVoxelXYZPSparseVectors;
 use feagi_structures::FeagiDataError;
 
 /// A single token ID transported through FEAGI as a Z-bitplane value at (x=0,y=0).

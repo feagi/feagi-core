@@ -2,6 +2,8 @@
 
 // TODO WASM?
 
+// TODO move into a sub crate because lol
+
 #[doc(hidden)]
 pub use tracing as __log_tracing; // force export such that all down stream crates don't pull all of tracing
 

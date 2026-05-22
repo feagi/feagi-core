@@ -7,7 +7,7 @@
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, State};
 use feagi_services::types::CreateBrainRegionParams;
-use feagi_structures::genomic::brain_regions::RegionID;
+use feagi_genome_definitions::::RegionID;
 use std::collections::HashMap;
 
 /// GET /v1/region/regions_members

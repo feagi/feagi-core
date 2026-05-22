@@ -1,0 +1,19 @@
+[package]
+name = "feagi-potential-voxels"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+std = ["alloc"]
+alloc = [] # Do we support dynamic allocating memory?
+support_64bit_indexing = [] # Allow 64 bit indexing. This is pretty rare. Not compatible with WASM, Embedded or WGPU
+support_64bit_values = [] # Allow 64 bit values (IE: Membrane potentials). Extremely rare! Not compatible with WASM, Embedded or WGPU
+support_wgpu = [] # TODO Sending data to / from WGPU
+
+[dependencies]
+feagi-data = {path = "../feagi-data"} # RISKY! Let this be the only crate with a sibling dependency!
+# DO NOT ADD OTHER FEAGI DEPENDENCIES

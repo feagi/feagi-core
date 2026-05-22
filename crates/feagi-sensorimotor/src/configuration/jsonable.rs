@@ -20,11 +20,11 @@ use crate::neuron_voxel_coding::xyzp::encoders::{
 };
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::wrapped_io_data::WrappedIOData;
-use feagi_structures::genomic::cortical_area::descriptors::{
+use feagi_genome_definitions::::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
-use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_genome_definitions::::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+use feagi_genome_definitions::::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::FeagiDataError;
 use serde::{Deserialize, Serialize};

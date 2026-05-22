@@ -9,7 +9,7 @@
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_runtime::StdRuntime;
-use feagi_structures::genomic::cortical_area::CoreCorticalType;
+use feagi_genome_definitions::::CoreCorticalType;
 
 #[test]
 fn test_firing_threshold_spatial_gradient_3d() {

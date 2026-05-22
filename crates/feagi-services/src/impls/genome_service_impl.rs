@@ -16,13 +16,13 @@ use feagi_brain_development::neuroembryogenesis::Neuroembryogenesis;
 use feagi_brain_development::ConnectomeManager;
 use feagi_evolutionary::{get_default_neural_properties, MemoryAreaProperties};
 use feagi_npu_burst_engine::{BurstLoopRunner, ParameterUpdateQueue};
-use feagi_structures::genomic::cortical_area::descriptors::{
+use feagi_genome_definitions::::descriptors::{
     CorticalSubUnitIndex, CorticalUnitIndex,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+use feagi_genome_definitions::::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use feagi_structures::genomic::cortical_area::{
+use feagi_genome_definitions::::{
     CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
     IOCorticalAreaConfigurationFlag,
 };

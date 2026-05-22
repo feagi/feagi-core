@@ -10,9 +10,9 @@ mod connectome {
     use feagi_npu_structures::synapse::non_plastic_dimensional::{NonPlasticSynapseFull, NonplasticSynapseProperties};
     use feagi_npu_structures::synapse::SynapseFlag;
     use feagi_structures::base_feagi_types::::{QuantizableUIntType, QuantizableValueType};
-    use feagi_structures::FeagiStructuresError;
-    use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
-    use feagi_structures::neuron_voxel::descriptors::NeuronVoxelDimensions;
+    use feagi_structures::FeagiCommonError;
+    use feagi_genome_definitions::::DimensionCorticalAreaType;
+    use feagi_potential_voxels::::descriptors::NeuronVoxelDimensions;
     use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
 
     struct TestQuantization;
@@ -39,7 +39,7 @@ mod connectome {
                                         destination_area_type: DimensionCorticalAreaType, 
                                         _destination_cortical_data: &DimensionalNeuronCorticalData<Q>, 
                                         _destination_neuron_flags: &[NeuronFlag]) 
-            -> Result<(impl Iterator<Item=NonPlasticSynapseFull<Q::NeuronIndexQuant, Q::BurstDeltaQuant, Q::ValueQuant>>, SynapseCount<Q::SynapseIndexQuant>), FeagiStructuresError> {
+            -> Result<(impl Iterator<Item=NonPlasticSynapseFull<Q::NeuronIndexQuant, Q::BurstDeltaQuant, Q::ValueQuant>>, SynapseCount<Q::SynapseIndexQuant>), FeagiCommonError> {
             let iter = (0usize..=5).map(move |i| {
                 let mut synapse_flag = SynapseFlag::ALL_ZEROS;
                 synapse_flag.set_valid(true);
