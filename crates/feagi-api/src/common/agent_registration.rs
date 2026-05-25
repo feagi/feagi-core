@@ -49,6 +49,9 @@ fn percentage_tuple_first_depth_u32(depth_json: &Value) -> Option<u32> {
 /// For [`MotorCorticalUnit::CountOutput`], Z depth may be taken from the agent's
 /// `JSONDecoderProperties::Percentage` tuple (first element = [`NeuronDepth`]) so the
 /// connectome matches the embodiment decoder (e.g. Perception Inspector max count).
+/// For [`MotorCorticalUnit::ObjectSegmentation`], all three dims may be taken from the
+/// agent's `JSONDecoderProperties::MiscData` block so the connectome matches whatever
+/// grid size the agent registered with (e.g. Vision Lab user-chosen oseg resolution).
 /// Other motor units keep template `channel_dimensions_default` only.
 fn per_channel_motor_dimensions_for_registration(
     motor_unit: MotorCorticalUnit,
@@ -58,28 +61,74 @@ fn per_channel_motor_dimensions_for_registration(
     let default_w = unit_topology.channel_dimensions_default[0] as usize;
     let default_h = unit_topology.channel_dimensions_default[1] as usize;
     let default_d = unit_topology.channel_dimensions_default[2] as usize;
-    if motor_unit != MotorCorticalUnit::CountOutput {
+    if motor_unit != MotorCorticalUnit::CountOutput
+        && motor_unit != MotorCorticalUnit::ObjectSegmentation
+    {
         return (default_w, default_h, default_d);
     }
-    let z_min = unit_topology.channel_dimensions_min[2].max(1);
-    let z_max = unit_topology.channel_dimensions_max[2].max(1);
-    let Some(decode) = decoder_properties else {
-        return (default_w, default_h, default_d);
-    };
-    let Some(arr) = decode.get("Percentage").and_then(|v| v.as_array()) else {
-        return (default_w, default_h, default_d);
-    };
-    let Some(depth_json) = arr.first() else {
-        return (default_w, default_h, default_d);
-    };
-    let Some(d32) = percentage_tuple_first_depth_u32(depth_json) else {
-        return (default_w, default_h, default_d);
-    };
-    if d32 == 0 {
-        return (default_w, default_h, default_d);
+    if motor_unit == MotorCorticalUnit::CountOutput {
+        let z_min = unit_topology.channel_dimensions_min[2].max(1);
+        let z_max = unit_topology.channel_dimensions_max[2].max(1);
+        let Some(decode) = decoder_properties else {
+            return (default_w, default_h, default_d);
+        };
+        let Some(arr) = decode.get("Percentage").and_then(|v| v.as_array()) else {
+            return (default_w, default_h, default_d);
+        };
+        let Some(depth_json) = arr.first() else {
+            return (default_w, default_h, default_d);
+        };
+        let Some(d32) = percentage_tuple_first_depth_u32(depth_json) else {
+            return (default_w, default_h, default_d);
+        };
+        if d32 == 0 {
+            return (default_w, default_h, default_d);
+        }
+        let clamped = d32.clamp(z_min, z_max);
+        return (default_w, default_h, clamped as usize);
     }
-    let clamped = d32.clamp(z_min, z_max);
-    (default_w, default_h, clamped as usize)
+    // ObjectSegmentation: honor MiscData dimensions declared by the agent decoder.
+    if let Some(dims) =
+        oseg_dims_from_misc_data_decoder(decoder_properties, unit_topology)
+    {
+        return dims;
+    }
+    (default_w, default_h, default_d)
+}
+
+/// Extracts and clamps oseg (width, height, depth) from a `{"MiscData": {…}}` decoder block.
+/// Returns `None` if the block is absent, malformed, or contains any zero dimension.
+fn oseg_dims_from_misc_data_decoder(
+    decoder_properties: Option<&Value>,
+    unit_topology: &UnitTopology,
+) -> Option<(usize, usize, usize)> {
+    let misc = decoder_properties?.get("MiscData")?;
+    let w = misc
+        .get("width")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    let h = misc
+        .get("height")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    let d = misc
+        .get("depth")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    if w == 0 || h == 0 || d == 0 {
+        return None;
+    }
+    let w_min = unit_topology.channel_dimensions_min[0].max(1);
+    let h_min = unit_topology.channel_dimensions_min[1].max(1);
+    let d_min = unit_topology.channel_dimensions_min[2].max(1);
+    let w_max = unit_topology.channel_dimensions_max[0].max(1);
+    let h_max = unit_topology.channel_dimensions_max[1].max(1);
+    let d_max = unit_topology.channel_dimensions_max[2].max(1);
+    Some((
+        w.clamp(w_min, w_max) as usize,
+        h.clamp(h_min, h_max) as usize,
+        d.clamp(d_min, d_max) as usize,
+    ))
 }
 
 fn build_friendly_unit_name(unit_label: &str, group: u8, sub_unit_index: usize) -> String {
@@ -1353,6 +1402,35 @@ mod count_output_registration_tests {
         let dec = json!({"Percentage": [99u32, "Linear", false, "D1"]});
         let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
         assert_eq!((w, h, d), (1, 1, 9));
+    }
+
+    #[test]
+    fn object_segmentation_uses_misc_data_decoder_dimensions() {
+        let motor = MotorCorticalUnit::ObjectSegmentation;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"MiscData": {"width": 128u32, "height": 96u32, "depth": 12u32}});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (128, 96, 12));
+    }
+
+    #[test]
+    fn object_segmentation_clamps_misc_data_to_template_bounds() {
+        let motor = MotorCorticalUnit::ObjectSegmentation;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"MiscData": {"width": 9999u32, "height": 9999u32, "depth": 9999u32}});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (4096, 4096, 1024));
+    }
+
+    #[test]
+    fn object_segmentation_falls_back_to_template_when_no_misc_data_decoder() {
+        let motor = MotorCorticalUnit::ObjectSegmentation;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, None);
+        assert_eq!((w, h, d), (32, 32, 8));
     }
 }
 
