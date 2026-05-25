@@ -392,6 +392,7 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
     let required_morphologies = vec![
         "block_to_block",
         "projector",
+        "centered_projector",
         "transpose_xy",
         "transpose_yz",
         "transpose_xz",
@@ -453,6 +454,16 @@ pub fn add_core_morphologies(registry: &mut MorphologyRegistry) {
     // projector - Function-based morphology
     registry.add_morphology(
         "projector".to_string(),
+        Morphology {
+            morphology_type: MorphologyType::Functions,
+            parameters: MorphologyParameters::Functions {},
+            class: "core".to_string(),
+        },
+    );
+
+    // centered_projector - Function-based center-aligned 1:1 mapping morphology
+    registry.add_morphology(
+        "centered_projector".to_string(),
         Morphology {
             morphology_type: MorphologyType::Functions,
             parameters: MorphologyParameters::Functions {},
@@ -880,6 +891,7 @@ mod tests {
         assert!(genome.morphologies.count() > 0);
         assert!(genome.morphologies.contains("block_to_block"));
         assert!(genome.morphologies.contains("projector"));
+        assert!(genome.morphologies.contains("centered_projector"));
         assert!(genome.morphologies.contains("transpose_xy"));
         assert!(genome.morphologies.contains("transpose_yz"));
         assert!(genome.morphologies.contains("transpose_xz"));
@@ -896,6 +908,7 @@ mod tests {
         assert!(registry.count() >= 11);
         assert!(registry.contains("block_to_block"));
         assert!(registry.contains("projector"));
+        assert!(registry.contains("centered_projector"));
         assert!(registry.contains("transpose_xy"));
         assert!(registry.contains("transpose_yz"));
         assert!(registry.contains("transpose_xz"));
@@ -998,6 +1011,7 @@ mod tests {
         assert!(morphs_added > 0);
         assert!(genome.morphologies.contains("block_to_block"));
         assert!(genome.morphologies.contains("projector"));
+        assert!(genome.morphologies.contains("centered_projector"));
         assert!(genome.morphologies.contains("transpose_xy"));
         assert!(genome.morphologies.contains("transpose_yz"));
         assert!(genome.morphologies.contains("transpose_xz"));

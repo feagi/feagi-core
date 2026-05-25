@@ -1408,9 +1408,8 @@ fn estimate_synapses_for_area(
             // Basic estimation by morphology type
             let count = match morphology_id {
                 "block_to_block" => src_neurons * dst_per_voxel * scalar,
-                "projector" | "transpose_xy" | "transpose_yz" | "transpose_xz" => {
-                    src_neurons * dst_neurons * scalar
-                }
+                "projector" | "transpose_xy" | "transpose_yz" | "transpose_xz"
+                | "centered_projector" => src_neurons * dst_neurons * scalar,
                 _ if morphology_id.contains("lateral") => src_neurons * scalar,
                 _ => (src_neurons * scalar).min(src_neurons * dst_neurons / 10),
             };
