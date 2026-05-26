@@ -11,7 +11,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
 };
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
-    FrameChangeHandling, PercentageNeuronPositioning,
+    FrameChangeHandling, PercentageNeuronPositioning, PoseSchema,
 };
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::MotorCorticalUnit;
@@ -469,6 +469,43 @@ macro_rules! motor_unit_functions {
         }
 
         motor_unit_functions!(@generate_similar_functions $motor_unit, ImageFilteringSettings);
+    };
+
+    // Arm for PoseEstimationData
+    (@generate_functions
+        $motor_unit:ident,
+        PoseEstimationData
+    ) => {
+        ::paste::paste! {
+            pub fn [<$motor_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                pose_schema: PoseSchema,
+                pose_properties: PoseEstimationProperties,
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, pose_schema, unit)[0];
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PoseEstimationNeuronVoxelXYZPDecoder::new_box(cortical_id, pose_properties, number_channels)?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "pose_schema": pose_schema,
+                    "PoseEstimation": {
+                        "width": pose_properties.width,
+                        "height": pose_properties.height,
+                        "depth": pose_properties.depth
+                    }
+                }).as_object().unwrap().clone();
+
+                let initial_val: WrappedIOData = WrappedIOType::PoseEstimationData(Some(pose_properties)).create_blank_data_of_type()?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        motor_unit_functions!(@generate_similar_functions $motor_unit, PoseEstimationData);
     };
 }
 

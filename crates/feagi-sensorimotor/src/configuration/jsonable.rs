@@ -1,7 +1,7 @@
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality,
-    SegmentedImageFrameProperties,
+    PoseEstimationProperties, SegmentedImageFrameProperties,
 };
 use crate::data_types::{
     GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
@@ -12,6 +12,7 @@ use crate::feedbacks::FeedbackRegistrar;
 use crate::neuron_voxel_coding::xyzp::decoders::{
     GazePropertiesNeuronVoxelXYZPDecoder, ImageFilteringSettingsNeuronVoxelXYZPDecoder,
     MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder,
+    PoseEstimationNeuronVoxelXYZPDecoder,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::{
     BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder,
@@ -370,6 +371,7 @@ pub enum JSONDecoderProperties {
         NeuronDepth,
         PercentageNeuronPositioning,
     ), // brightness z depth, contrast z depth, diff z depth
+    PoseEstimation(PoseEstimationProperties),
 }
 
 impl JSONDecoderProperties {
@@ -478,6 +480,18 @@ impl JSONDecoderProperties {
                     *percentage_neuron_positioning,
                 )
             }
+            JSONDecoderProperties::PoseEstimation(pose_properties) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected one cortical id for PoseEstimation!".to_string(),
+                    ));
+                }
+                PoseEstimationNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.first().unwrap(),
+                    *pose_properties,
+                    number_channels,
+                )
+            }
         }
     }
 
@@ -553,6 +567,11 @@ impl JSONDecoderProperties {
             ) => Ok(WrappedIOData::ImageFilteringSettings(
                 ImageFilteringSettings::default(),
             )),
+            JSONDecoderProperties::PoseEstimation(pose_properties) => {
+                Ok(WrappedIOData::PoseEstimationData(
+                    crate::data_types::PoseEstimationData::new(pose_properties)?,
+                ))
+            }
         }
     }
 }

@@ -61,6 +61,7 @@ fn signage_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static s
         | IOCorticalAreaConfigurationFlag::Percentage4D(..) => "Percentage Unsigned",
         IOCorticalAreaConfigurationFlag::CartesianPlane(..) => "Cartesian Plane",
         IOCorticalAreaConfigurationFlag::Misc(..) => "Misc",
+        IOCorticalAreaConfigurationFlag::PoseEstimation(..) => "Pose Estimation",
         IOCorticalAreaConfigurationFlag::Boolean => "Boolean",
     }
 }
@@ -107,6 +108,7 @@ fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static 
         IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
         IOCorticalAreaConfigurationFlag::CartesianPlane(frame)
         | IOCorticalAreaConfigurationFlag::Misc(frame)
+        | IOCorticalAreaConfigurationFlag::PoseEstimation(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage2D(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage3D(frame, _)
@@ -134,6 +136,7 @@ fn coding_type_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'stat
         }
         IOCorticalAreaConfigurationFlag::CartesianPlane(..)
         | IOCorticalAreaConfigurationFlag::Misc(..)
+        | IOCorticalAreaConfigurationFlag::PoseEstimation(..)
         | IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
     }
 }
@@ -2325,6 +2328,24 @@ impl GenomeServiceImpl {
                 }
                 let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 IOCorticalAreaConfigurationFlag::Misc(new_frame)
+            }
+            IOCorticalAreaConfigurationFlag::PoseEstimation(frame, schema) => {
+                if let Some(signage) = requested_signage {
+                    if !signage.trim().eq_ignore_ascii_case("not applicable") {
+                        return Err(ServiceError::InvalidInput(
+                            "coding_signage not supported for PoseEstimation".to_string(),
+                        ));
+                    }
+                }
+                if let Some(coding_type) = requested_type {
+                    if !coding_type.trim().eq_ignore_ascii_case("not applicable") {
+                        return Err(ServiceError::InvalidInput(
+                            "coding_type not supported for PoseEstimation".to_string(),
+                        ));
+                    }
+                }
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
+                IOCorticalAreaConfigurationFlag::PoseEstimation(new_frame, schema)
             }
             IOCorticalAreaConfigurationFlag::Boolean => {
                 if let Some(signage) = requested_signage {

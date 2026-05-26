@@ -541,3 +541,50 @@ define_xyz_mapping!(MiscDataDimensions, ImageXYZDimensions);
 define_xyz_mapping!(MiscDataDimensions, CorticalChannelDimensions);
 
 //endregion
+
+//region Pose Estimation
+
+/// Properties describing a pose estimation cortical area's spatial dimensions.
+///
+/// `width` and `height` define the spatial resolution of the XY plane (joint location precision).
+/// `depth` is the number of joints (Z layers), e.g. 17 for COCO keypoints.
+///
+/// The pose schema (HumanBody, HumanHand, Quadruped, etc.) is encoded in the cortical ID
+/// bitmask and does not need to be stored here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PoseEstimationProperties {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+}
+
+impl PoseEstimationProperties {
+    pub fn new(
+        width: u32,
+        height: u32,
+        depth: u32,
+    ) -> Result<Self, FeagiDataError> {
+        if width == 0 || height == 0 || depth == 0 {
+            return Err(FeagiDataError::BadParameters(
+                "PoseEstimationProperties dimensions must all be non-zero".into(),
+            ));
+        }
+        Ok(PoseEstimationProperties {
+            width,
+            height,
+            depth,
+        })
+    }
+}
+
+impl Display for PoseEstimationProperties {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "PoseEstimation({}x{}x{})",
+            self.width, self.height, self.depth
+        )
+    }
+}
+
+//endregion

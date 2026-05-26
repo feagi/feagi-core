@@ -1730,6 +1730,7 @@ pub async fn get_cortical_template(
             }
             IOCorticalAreaConfigurationFlag::CartesianPlane(f) => ("CartesianPlane", f, None),
             IOCorticalAreaConfigurationFlag::Misc(f) => ("Misc", f, None),
+            IOCorticalAreaConfigurationFlag::PoseEstimation(f, _) => ("PoseEstimation", f, None),
         };
 
         let frame_str = match frame {

@@ -130,6 +130,11 @@ fn extract_io_type_details(
             Some(frame_handling_to_string(frame_handling)),
             None,
         ),
+        PoseEstimation(frame_handling, _) => (
+            Some("PoseEstimation".to_string()),
+            Some(frame_handling_to_string(frame_handling)),
+            None,
+        ),
     }
 }
 

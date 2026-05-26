@@ -127,6 +127,22 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "Pose estimation output - XY plane encodes joint location, Z depth encodes joint ID. PSP magnitude encodes confidence."]
+                PoseEstimation => {
+                    friendly_name: "Pose Estimation",
+                    accepted_wrapped_io_data_type: PoseEstimationData,
+                    cortical_id_unit_reference: *b"pos",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        pose_schema: PoseSchema,
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::PoseEstimation(frame_change_handling, pose_schema), relative_position: [-200, 60, 0], channel_dimensions_default: [64, 64, 17], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 256])
+                    }
+                },
+
                 #[doc = "Image Processing configuration - dynamically control brightness, contrast, and per pixel diff thresholding"]
                 DynamicImageProcessing => {
                     friendly_name: "Image Enhancements",

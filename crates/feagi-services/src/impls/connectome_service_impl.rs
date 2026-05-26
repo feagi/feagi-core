@@ -152,6 +152,7 @@ fn signage_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static s
         | IOCorticalAreaConfigurationFlag::Percentage4D(..) => "Percentage Unsigned",
         IOCorticalAreaConfigurationFlag::CartesianPlane(..) => "Cartesian Plane",
         IOCorticalAreaConfigurationFlag::Misc(..) => "Misc",
+        IOCorticalAreaConfigurationFlag::PoseEstimation(..) => "Pose Estimation",
         IOCorticalAreaConfigurationFlag::Boolean => "Boolean",
     }
 }
@@ -161,6 +162,7 @@ fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static 
         IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
         IOCorticalAreaConfigurationFlag::CartesianPlane(frame)
         | IOCorticalAreaConfigurationFlag::Misc(frame)
+        | IOCorticalAreaConfigurationFlag::PoseEstimation(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage2D(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage3D(frame, _)
@@ -188,6 +190,7 @@ fn coding_type_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'stat
         }
         IOCorticalAreaConfigurationFlag::CartesianPlane(_)
         | IOCorticalAreaConfigurationFlag::Misc(_)
+        | IOCorticalAreaConfigurationFlag::PoseEstimation(..)
         | IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
     }
 }

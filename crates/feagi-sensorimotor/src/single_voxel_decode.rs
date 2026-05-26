@@ -246,6 +246,9 @@ pub fn decode_single_voxel(
         IOCorticalAreaConfigurationFlag::Misc(_) => {
             decode_misc(voxel_x, voxel_y, voxel_z, channel_dims, num_channels)
         }
+        IOCorticalAreaConfigurationFlag::PoseEstimation(..) => {
+            decode_pose_estimation(voxel_x, voxel_y, voxel_z, channel_dims, num_channels)
+        }
     }
 }
 
@@ -454,6 +457,34 @@ fn decode_misc(
     let local_z = voxel_z % ch_dim_z;
     let value_0_1 = local_z as f32 / (ch_dim_z - 1) as f32;
     SingleVoxelDecodeResult::ok(channel, value_0_1 * 100.0, value_0_1, "Misc")
+}
+
+fn decode_pose_estimation(
+    voxel_x: u32,
+    voxel_y: u32,
+    voxel_z: u32,
+    channel_dims: ChannelDimensions,
+    num_channels: u32,
+) -> SingleVoxelDecodeResult {
+    let ch_dim_x = channel_dims.x.max(1);
+    let ch_dim_y = channel_dims.y.max(1);
+    let ch_dim_z = channel_dims.z.max(1);
+
+    let channel = (voxel_x / ch_dim_x) as i32;
+    if channel < 0 || channel >= num_channels as i32 {
+        return SingleVoxelDecodeResult::err(format!(
+            "channel {} out of range [0, {})",
+            channel, num_channels
+        ));
+    }
+
+    let local_x = voxel_x % ch_dim_x;
+    let x_norm = local_x as f32 / (ch_dim_x - 1).max(1) as f32;
+    let _y_norm = voxel_y as f32 / (ch_dim_y - 1).max(1) as f32;
+    let joint_id = voxel_z % ch_dim_z;
+
+    let value_percent = joint_id as f32 / (ch_dim_z - 1).max(1) as f32 * 100.0;
+    SingleVoxelDecodeResult::ok(channel, value_percent, x_norm, "PoseEstimation")
 }
 
 #[cfg(test)]

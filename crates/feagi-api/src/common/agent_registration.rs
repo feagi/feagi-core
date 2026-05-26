@@ -63,6 +63,7 @@ fn per_channel_motor_dimensions_for_registration(
     let default_d = unit_topology.channel_dimensions_default[2] as usize;
     if motor_unit != MotorCorticalUnit::CountOutput
         && motor_unit != MotorCorticalUnit::ObjectSegmentation
+        && motor_unit != MotorCorticalUnit::PoseEstimation
     {
         return (default_w, default_h, default_d);
     }
@@ -88,10 +89,21 @@ fn per_channel_motor_dimensions_for_registration(
         return (default_w, default_h, clamped as usize);
     }
     // ObjectSegmentation: honor MiscData dimensions declared by the agent decoder.
-    if let Some(dims) =
-        oseg_dims_from_misc_data_decoder(decoder_properties, unit_topology)
-    {
-        return dims;
+    if motor_unit == MotorCorticalUnit::ObjectSegmentation {
+        if let Some(dims) = oseg_dims_from_misc_data_decoder(decoder_properties, unit_topology) {
+            return dims;
+        }
+        return (default_w, default_h, default_d);
+    }
+    // PoseEstimation: honor dimensions from decoder block.
+    // Expected: {"PoseEstimation": {"width": N, "height": N, "depth": N}}
+    if motor_unit == MotorCorticalUnit::PoseEstimation {
+        if let Some(dims) =
+            pose_dims_from_decoder_properties(decoder_properties, unit_topology)
+        {
+            return dims;
+        }
+        return (default_w, default_h, default_d);
     }
     (default_w, default_h, default_d)
 }
@@ -112,6 +124,42 @@ fn oseg_dims_from_misc_data_decoder(
         .and_then(|v| v.as_u64())
         .and_then(|u| u32::try_from(u).ok())?;
     let d = misc
+        .get("depth")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    if w == 0 || h == 0 || d == 0 {
+        return None;
+    }
+    let w_min = unit_topology.channel_dimensions_min[0].max(1);
+    let h_min = unit_topology.channel_dimensions_min[1].max(1);
+    let d_min = unit_topology.channel_dimensions_min[2].max(1);
+    let w_max = unit_topology.channel_dimensions_max[0].max(1);
+    let h_max = unit_topology.channel_dimensions_max[1].max(1);
+    let d_max = unit_topology.channel_dimensions_max[2].max(1);
+    Some((
+        w.clamp(w_min, w_max) as usize,
+        h.clamp(h_min, h_max) as usize,
+        d.clamp(d_min, d_max) as usize,
+    ))
+}
+
+/// Extracts and clamps pose estimation (width, height, depth) from a
+/// `{"PoseEstimation": {"width": N, "height": N, "depth": N}}` decoder block.
+/// Returns `None` if the block is absent, malformed, or contains any zero dimension.
+fn pose_dims_from_decoder_properties(
+    decoder_properties: Option<&Value>,
+    unit_topology: &UnitTopology,
+) -> Option<(usize, usize, usize)> {
+    let pose = decoder_properties?.get("PoseEstimation")?;
+    let w = pose
+        .get("width")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    let h = pose
+        .get("height")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    let d = pose
         .get("depth")
         .and_then(|v| v.as_u64())
         .and_then(|u| u32::try_from(u).ok())?;
@@ -249,6 +297,12 @@ fn build_io_config_map_from_unit_def(
         serde_json::to_value(positioning)
             .map_err(|e| format!("Failed to serialize PercentageNeuronPositioning: {}", e))?,
     );
+    if let Some(pose_schema_value) = io_flags
+        .and_then(|flags| flags.get("pose_schema"))
+        .cloned()
+    {
+        config.insert("pose_schema".to_string(), pose_schema_value);
+    }
     Ok(config)
 }
 
@@ -1515,7 +1569,10 @@ mod servo_encoder_registration_helpers_tests {
                 }
             ]
         });
-        assert_eq!(motor_servo_group_id_u8_from_first_channel(&unit_def), Some(2));
+        assert_eq!(
+            motor_servo_group_id_u8_from_first_channel(&unit_def),
+            Some(2)
+        );
         assert_eq!(
             primary_sensor_tag_first_channel(&unit_def).as_deref(),
             Some("jointpos")
