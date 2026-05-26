@@ -2013,6 +2013,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-ecs"
+version = "0.0.11"
+
+[[package]]
 name = "feagi-evolutionary"
 version = "0.0.11"
 dependencies = [
@@ -2078,6 +2082,24 @@ dependencies = [
  "serde_json",
  "tungstenite",
  "zmq",
+]
+
+[[package]]
+name = "feagi-logging-and-errors"
+version = "0.0.11"
+dependencies = [
+ "defmt",
+ "feagi-logging-and-errors-derive",
+ "tracing",
+]
+
+[[package]]
+name = "feagi-logging-and-errors-derive"
+version = "0.0.11"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -2279,7 +2301,6 @@ version = "0.0.11"
 dependencies = [
  "ahash",
  "base64 0.22.1",
- "defmt",
  "feagi-data",
  "feagi-genome-definitions",
  "feagi-potential-voxels",
@@ -2289,7 +2310,6 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "tracing",
  "uuid",
 ]
 

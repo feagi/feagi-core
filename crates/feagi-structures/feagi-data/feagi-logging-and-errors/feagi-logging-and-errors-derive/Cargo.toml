@@ -1,0 +1,16 @@
+[package]
+name = "feagi-logging-and-errors-derive"
+version = "0.0.11"
+edition = "2021"
+authors = ["Neuraville Inc. <feagi@neuraville.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/feagi/feagi-core"
+homepage = "https://feagi.org"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }

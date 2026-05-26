@@ -70,4 +70,4 @@ Copy
     fn to_f32(self) -> f32;
 }
 
-// TODO remove option implementations for hardware
+

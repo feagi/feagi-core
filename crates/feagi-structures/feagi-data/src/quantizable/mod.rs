@@ -5,14 +5,9 @@
 mod feagi_data_quantized_error;
 
 mod quantization_levels;
-mod shared_traits;
-
 
 pub mod base_types;
-pub mod spatial;
-pub mod collections;
 pub mod wrappers;
 
 pub use feagi_data_quantized_error::FeagiDataQuantizedError;
 pub use quantization_levels::*;
-pub use shared_traits::*;

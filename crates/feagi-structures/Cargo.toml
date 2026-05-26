@@ -53,7 +53,7 @@ std = [
     "feagi-potential-voxels/std",
     "alloc",
     "ahash/std",
-    "dep:tracing"]
+    ]
 alloc = [
     "feagi-data/alloc",
     "feagi-genome-definitions/alloc",
@@ -77,7 +77,7 @@ support_wgpu = [
 ]
 
 
-defmt = ["dep:defmt"]
+defmt = []
 ndarray = ["dep:ndarray"]
 rayon = ["dep:rayon", "std"]
 
@@ -96,7 +96,7 @@ ahash = { workspace = true, default-features = true} # TODO we need default feat
 uuid = { workspace = true, features = ["v7"] } # TODO Special notes for embedded and WASM support, discuss later!
 ndarray = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
-defmt = {workspace = true, optional = true}
-tracing = {workspace = true, optional = true}
+
+
 paste = { workspace = true } # Despite only using the paste macro, it seems that the crate cannot be in dev dependencies
 base64 = { version = "0.22.1" } # TODO special notes about alloc, discuss later!
