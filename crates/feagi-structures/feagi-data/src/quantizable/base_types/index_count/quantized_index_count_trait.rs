@@ -1,20 +1,10 @@
-use crate::linear_index_types::LinearIndexCountType;
-use crate::quantizable::quantization_levels::QuantizationLevel;
+use crate::core_numerical_types::{SupportsUintOps};
 use crate::quantizable::base_types::quantized_base_traits::QuantizedElementBase;
 
 /// Trait designed to hold index and count values in a quantized form
 pub trait QuantizedIndexCountTrait: QuantizedElementBase
-+ core::ops::Rem<Output = Self>
-+ core::ops::RemAssign
-+ LinearIndexCountType
++ SupportsUintOps
 {
-    const MAX_VALUE: Self;
-    const MAX_AS_USIZE: usize;
-    const QUANT_ONE: Self;
-
-    /// Tries to convert from usize, does NOT check bounds!
-    fn from_usize(value: usize) -> Self;
-
     /// Converts to u32
     fn to_u32(self) -> u32;
 
@@ -24,14 +14,9 @@ pub trait QuantizedIndexCountTrait: QuantizedElementBase
     /// Tries to convert from u32, clamping if it goes out of range!
     fn from_u32_clamped(value: u32) -> Self;
 
-    /// Tries to convert from usize, clamping if it goes out or range!
-    fn from_usize_clamped(value: usize) -> Self {
-        if value < Self::MAX_AS_USIZE {
-            return Self::from_usize(value);
-        }
-        Self::MAX_VALUE
-    }
-
+    // TODO should be in wrapper
+    // TODO add increment with rollover
+    /*
     /// Calculates what the minimum quantization level is needed to hold the current value
     fn minimum_required_quantization_level(self) -> QuantizationLevel {
         QuantizationLevel::minimum_quantization_needed_for_usize(self.to_usize())
@@ -39,24 +24,17 @@ pub trait QuantizedIndexCountTrait: QuantizedElementBase
 
     /// Returns true if the given usize needs to be clamped to fit in the current quantization
     fn should_clamp(self, value: usize) -> bool {
-        value > Self::MAX_AS_USIZE
+        value > Self::QUANT_MAX_AS_USIZE
     }
     
     fn is_zero(self) -> bool {
         self == Self::QUANT_ZERO
     }
+
+     */
 }
 
 impl QuantizedIndexCountTrait for u8 {
-    const MAX_VALUE: Self = u8::MAX;
-    const MAX_AS_USIZE: usize = u8::MAX as usize;
-    const QUANT_ONE: Self = 1;
-    
-
-    fn from_usize(value: usize) -> Self {
-        value as u8
-    }
-
     fn to_u32(self) -> u32 {
         self as u32
     }
@@ -75,14 +53,6 @@ impl QuantizedIndexCountTrait for u8 {
 }
 
 impl QuantizedIndexCountTrait for u16 {
-    const MAX_VALUE: Self = u16::MAX;
-    const MAX_AS_USIZE: usize = u16::MAX as usize;
-    const QUANT_ONE: Self = 1;
-
-    fn from_usize(value: usize) -> Self {
-        value as u16
-    }
-
     fn to_u32(self) -> u32 {
         self as u32
     }
@@ -102,14 +72,6 @@ impl QuantizedIndexCountTrait for u16 {
 
 // lol, lmao even
 impl QuantizedIndexCountTrait for u32 {
-    const MAX_VALUE: Self = u32::MAX;
-    const MAX_AS_USIZE: usize = u32::MAX as usize;
-    const QUANT_ONE: Self = 1;
-
-    fn from_usize(value: usize) -> Self {
-        value as u32
-    }
-
     fn to_u32(self) -> u32 {
         self
     }
@@ -125,14 +87,6 @@ impl QuantizedIndexCountTrait for u32 {
 
 #[cfg(feature = "support_64bit_indexing")]
 impl QuantizedIndexCountTrait for u64 {
-    const MAX_VALUE: Self = u64::MAX;
-    const MAX_AS_USIZE: usize = u64::MAX as usize;
-    const QUANT_ONE: Self = 1;
-
-    fn from_usize(value: usize) -> Self {
-        value as u64
-    }
-
     fn to_u32(self) -> u32 {
         self as u32
     }

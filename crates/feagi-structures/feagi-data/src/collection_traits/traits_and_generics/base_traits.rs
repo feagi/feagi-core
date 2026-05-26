@@ -3,10 +3,10 @@ use crate::LinearIndexCountType;
 use crate::quantizable::base_types::QuantizedIndexCountTrait;
 use crate::quantizable::FeagiQuantizedGeneric;
 
-//region Shared
+
+//region Common
 
 // Note: Yes, these are not very detailed. We only have basic metadata guarenteed
-
 
 pub trait LinearCollection<LinearIndexCount, ElementType>
 where
@@ -39,8 +39,6 @@ where
 }
 
 //endregion
-
-
 
 //region ECS
 

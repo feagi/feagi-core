@@ -1,4 +1,4 @@
-mod quantized_index_trait;
+mod quantized_index_count_trait;
 mod wrapper_cpu;
 
-pub use quantized_index_trait::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};
+pub use quantized_index_count_trait::{QuantizedIndexCountTrait, QuantizedIndexCountWrapperTrait};

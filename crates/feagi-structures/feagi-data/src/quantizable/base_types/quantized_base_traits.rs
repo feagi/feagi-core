@@ -1,53 +1,12 @@
 use half::f16;
+use crate::core_numerical_types::SupportsBasicCoreMathOps;
 use crate::quantizable::base_types::decimal::custom_data_types::StorageF8;
 use crate::quantizable::quantization_levels::QuantizationLevel;
 
 /// Common base for all quantizable types (Alloc methods enabled)
-#[cfg(not(feature = "alloc"))]
-pub trait QuantizedBaseTrait:
-Copy
-+ Clone
-+ Send
-+ Sync
-+ Default
-+ core::ops::Add<Output = Self>
-+ core::ops::Sub<Output = Self>
-+ core::ops::Mul<Output = Self>
-+ core::ops::Div<Output = Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::cmp::PartialOrd
-
-+ 'static
-{
-    const QUANTIZATION_LEVEL: QuantizationLevel;
-    const QUANT_ZERO: Self;
-}
-
-
-/// Common base for all quantizable types (Alloc methods enabled)
 #[cfg(feature = "alloc")]
 pub trait QuantizedElementBase:
-Copy
-+ Clone
-+ Send
-+ Sync
-+ Default
-+ core::ops::Add<Output = Self>
-+ core::ops::Sub<Output = Self>
-+ core::ops::Mul<Output = Self>
-+ core::ops::Div<Output = Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::cmp::PartialOrd
-
-+ core::fmt::Debug
-+ core::fmt::Display
-+ 'static
+SupportsBasicCoreMathOps
 {
     const QUANTIZATION_LEVEL: QuantizationLevel;
     const QUANT_ZERO: Self;
@@ -70,7 +29,6 @@ impl QuantizedElementBase for u32 {
 
 #[cfg(feature = "support_64bit_indexing")]
 impl QuantizedElementBase for u64 {
-    const NUMBER_OF_BYTES: u8 = 8;
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit64;
     const QUANT_ZERO: Self = 0;
 }

@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use crate::feagi_ecs::component::FECSComponentBase;
-use crate::linear_collections::generic_implementations::fixed_size::dense_linear_array_basic::shared_trait::DenseLinearArrayBasic;
-use crate::linear_collections::traits_and_generics::{ECSLinearCollection, LinearCollection, QuantizableLinearCollection};
+use crate::collection_traits::generic_implementations::fixed_size::dense_linear_array_basic::shared_trait::DenseLinearArrayBasic;
+use crate::collection_traits::traits_and_generics::{ECSLinearCollection, LinearCollection, QuantizableLinearCollection};
 use crate::quantizable::base_types::QuantizedIndexCountTrait;
 use crate::quantizable::FeagiQuantizedGeneric;
 

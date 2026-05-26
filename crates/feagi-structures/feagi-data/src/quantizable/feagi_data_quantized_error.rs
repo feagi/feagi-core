@@ -21,7 +21,7 @@ impl FeagiDataQuantizedError {
     pub const fn verify_quantization_index<QuantIndexCount: QuantizedIndexCountTrait>(loading_data: usize,
                                      error_message: &'static str) -> Result<(), FeagiDataQuantizedError>
     {
-        if loading_data < QuantIndexCount::MAX_AS_USIZE {
+        if loading_data < QuantIndexCount::QUANT_MAX_AS_USIZE {
             return Ok(())
         }
         Err(FeagiDataQuantizedError::QuantizationOverflowError{

@@ -8,6 +8,9 @@ pub trait QuantizedDecimalTrait: QuantizedElementBase {
 
     fn load_f32_inplace(&mut self, value: f32);
     
+    // TODO this should bea  wrapper extention
+    /*
+    
     /// Creates a new value from an average of multiple given
     fn from_average_of_slice(slice: &[Self]) -> Self {
         let sum = slice.iter()
@@ -29,6 +32,8 @@ pub trait QuantizedDecimalTrait: QuantizedElementBase {
             );
         *self = *self / *len_as_dec;
     }
+    
+     */
     
 }
 

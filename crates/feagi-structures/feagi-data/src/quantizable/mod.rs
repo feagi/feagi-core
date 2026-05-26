@@ -2,12 +2,16 @@
 //! Quantization is the act of representing the same information with varying amounts of bits,
 //! with there being a tradeoff between memory usage and precision/representable range.
 
-mod quantization_levels;
 mod feagi_data_quantized_error;
+
+mod quantization_levels;
+mod shared_traits;
+
+
 pub mod base_types;
 pub mod spatial;
 pub mod collections;
-mod shared_traits;
+pub mod wrappers;
 
 pub use feagi_data_quantized_error::FeagiDataQuantizedError;
 pub use quantization_levels::*;
