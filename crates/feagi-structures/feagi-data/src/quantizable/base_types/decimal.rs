@@ -1,6 +1,6 @@
 use half::f16;
-use crate::quantizable::base_types::decimal::custom_data_types::StorageF8;
-use crate::quantizable::base_types::quantized_base_traits::QuantizedElementBase;
+use crate::quantizable::custom_data_types::StorageF8;
+use crate::quantizable::base_types::QuantizedElementBase;
 
 pub trait QuantizedDecimalTrait: QuantizedElementBase {
     fn to_f32(self) -> f32;
@@ -93,25 +93,4 @@ impl QuantizedDecimalTrait for f64 {
     fn load_f32_inplace(&mut self, value: f32) {
         *self = value as f64
     }
-}
-
-
-/// Something all wrappers share, for easy data access
-pub trait QuantizedDecimalWrapperTrait<QuantDeci: QuantizedDecimalTrait>:
-Copy
-+ Clone
-+ core::ops::Add<Output = Self>
-+ core::ops::Sub<Output = Self>
-+ core::ops::Mul<Output = Self>
-+ core::ops::Div<Output = Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::cmp::PartialOrd
-{
-    fn wrap_quant(quant: QuantDeci) -> Self;
-    fn quant(self) -> QuantDeci;
-    fn quant_ref(&self) -> &QuantDeci;
-    fn quant_mut(&mut self) -> &mut QuantDeci;
 }

@@ -1,5 +1,5 @@
 use crate::core_numerical_types::{SupportsUintOps};
-use crate::quantizable::base_types::quantized_base_traits::QuantizedElementBase;
+use crate::quantizable::base_types::QuantizedElementBase;
 
 /// Trait designed to hold index and count values in a quantized form
 pub trait QuantizedIndexCountTrait: QuantizedElementBase
@@ -98,27 +98,4 @@ impl QuantizedIndexCountTrait for u64 {
     fn from_u32_clamped(value: u32) -> Self {
         value as u64 // no way it can escape the clamp
     }
-}
-
-/// Something all wrappers share, for easy data access
-pub trait QuantizedIndexCountWrapperTrait<QuantIndex: QuantizedIndexCountTrait>:
-Copy
-+ Clone
-+ core::ops::Add<Output = Self>
-+ core::ops::Sub<Output = Self>
-+ core::ops::Mul<Output = Self>
-+ core::ops::Div<Output = Self>
-+ core::ops::AddAssign
-+ core::ops::SubAssign
-+ core::ops::MulAssign
-+ core::ops::DivAssign
-+ core::cmp::PartialOrd
-+ Send
-+ Sync
-+ 'static
-{
-    fn wrap_quant(quant: QuantIndex) -> Self;
-    fn quant(self) -> QuantIndex;
-    fn quant_ref(&self) -> &QuantIndex;
-    fn quant_mut(&mut self) -> &mut QuantIndex;
 }

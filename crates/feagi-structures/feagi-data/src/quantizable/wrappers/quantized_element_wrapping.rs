@@ -3,10 +3,6 @@
 //! Best to use the macros to generate these
 
 
-//region Macros Implementations
-
-//region Wrap Generators
-
 #[macro_export]
 /// Creates a Wrapped Index Count Wrapper struct of given name
 macro_rules! create_quantized_index_count_wrapper  {
@@ -56,6 +52,8 @@ macro_rules! create_quantized_index_count_wrapper  {
     };
 }
 
+
+
 #[macro_export]
 /// Creates a Wrapped Unsigned Integer Wrapper struct of given name
 macro_rules! create_quantized_unsigned_integer_wrapper {
@@ -63,11 +61,11 @@ macro_rules! create_quantized_unsigned_integer_wrapper {
         
         #[repr(transparent)]
         #[derive(Copy, Clone, Default)]
-        pub struct $struct_name<QE: $crate::quantizable::base_types::unsigned_integer::QuantizedUnsignedIntegerTrait>(QE);
+        pub struct $struct_name<QE: $crate::quantizable::base_types::QuantizedIndexCountTrait>(QE);
         
         impl<QE> $crate::quantizable::wrappers::QuantizedElementWrapperUnsignedInteger<QE> for $struct_name<QE>
         where
-            QE: $crate::quantizable::base_types::unsigned_integer::QuantizedUnsignedIntegerTrait
+            QE: $crate::quantizable::base_types::QuantizedIndexCountTrait
                 + $crate::SupportsUintOps,
         {
         }
@@ -75,25 +73,58 @@ macro_rules! create_quantized_unsigned_integer_wrapper {
         $crate::__impl_common_quantized_wrapper!(
             $struct_name,
             QE,
-            $crate::quantizable::base_types::unsigned_integer::QuantizedUnsignedIntegerTrait
+            $crate::quantizable::base_types::QuantizedUnsignedIntegerTrait
                 + $crate::SupportsUintOps
         );
         $crate::__impl_supports_uint_ops!(
             $struct_name,
             QE,
-            $crate::quantizable::base_types::unsigned_integer::QuantizedUnsignedIntegerTrait
+            $crate::quantizable::base_types::QuantizedUnsignedIntegerTrait
                 + $crate::SupportsUintOps
         );
         
-        impl<QE> $crate::quantizable::base_types::unsigned_integer::QuantizedUnsignedIntegerTrait for $struct_name<QE>
+        impl<QE> $crate::quantizable::base_types::QuantizedIndexCountTrait for $struct_name<QE>
         where
-            QE: $crate::quantizable::base_types::unsigned_integer::QuantizedUnsignedIntegerTrait
+            QE: $crate::quantizable::base_types::QuantizedIndexCountTrait
                 + $crate::SupportsUintOps,
         {
         }
         
     };
 }
+
+
+
+#[macro_export]
+/// Creates a Wrapped Signed Integer Wrapper struct of given name
+macro_rules! create_quantized_signed_integer_wrapper {
+    ( $struct_name:ident ) => {
+        
+        #[repr(transparent)]
+        #[derive(Copy, Clone, Default)]
+        pub struct $struct_name<QE: $crate::quantizable::base_types::QuantizedSignedIntegerTrait>(QE);
+        
+        impl<QE> $crate::quantizable::wrappers::QuantizedElementWrapperSignedInteger<QE> for $struct_name<QE>
+        where
+            QE: $crate::quantizable::base_types::QuantizedSignedIntegerTrait
+        {
+        }
+        
+        $crate::__impl_common_quantized_wrapper!(
+            $struct_name,
+            QE,
+            $crate::quantizable::base_types::QuantizedSignedIntegerTrait
+        );
+        
+        impl<QE> $crate::quantizable::base_types::QuantizedSignedIntegerTrait for $struct_name<QE>
+        where
+            QE: $crate::quantizable::base_types::QuantizedSignedIntegerTrait
+        {
+        }
+        
+    };
+}
+
 
 
 #[macro_export]
@@ -103,9 +134,9 @@ macro_rules! create_quantized_decimal_wrapper {
         
         #[repr(transparent)]
         #[derive(Copy, Clone, Default)]
-        pub struct $struct_name<QE: $crate::quantizable::base_types::decimal::QuantizedDecimalTrait>(QE);
+        pub struct $struct_name<QE: $crate::quantizable::base_types::QuantizedDecimalTrait>(QE);
         
-        impl<QE: $crate::quantizable::base_types::decimal::QuantizedDecimalTrait>
+        impl<QE: $crate::quantizable::base_types::QuantizedDecimalTrait>
             $crate::quantizable::wrappers::QuantizedElementWrapperDecimal<QE>
             for $struct_name<QE>
         {
@@ -114,11 +145,11 @@ macro_rules! create_quantized_decimal_wrapper {
         $crate::__impl_common_quantized_wrapper!(
             $struct_name,
             QE,
-            $crate::quantizable::base_types::decimal::QuantizedDecimalTrait
+            $crate::quantizable::base_types::QuantizedDecimalTrait
         );
         
-        impl<QE: $crate::quantizable::base_types::decimal::QuantizedDecimalTrait>
-            $crate::quantizable::base_types::decimal::QuantizedDecimalTrait
+        impl<QE: $crate::quantizable::base_types::QuantizedDecimalTrait>
+            $crate::quantizable::base_types::QuantizedDecimalTrait
             for $struct_name<QE>
         {
             #[inline(always)]
@@ -139,8 +170,5 @@ macro_rules! create_quantized_decimal_wrapper {
                 
             };
 }
-//endregion
-
-//endregion
 
 

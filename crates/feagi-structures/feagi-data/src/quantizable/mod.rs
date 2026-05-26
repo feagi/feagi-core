@@ -3,11 +3,12 @@
 //! with there being a tradeoff between memory usage and precision/representable range.
 
 mod feagi_data_quantized_error;
-
 mod quantization_levels;
 
 pub mod base_types;
 pub mod wrappers;
+pub mod custom_data_types;
+pub mod shared_quantization_sets;
 
 pub use feagi_data_quantized_error::FeagiDataQuantizedError;
-pub use quantization_levels::*;
+pub use quantization_levels::QuantizationLevel;

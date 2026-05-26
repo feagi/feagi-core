@@ -12,7 +12,7 @@ homepage.workspace = true
 ####################################################################################
 # Since sibling crates depend on this crate (which is a rust antipattern but makes
 # sense given the current context), this crate must NOT depend on any other
-# FEAGI crates, as it risks causing recursive compilation issues!
+# sibling / parent FEAGI crates, as it risks causing recursive compilation issues!
 
 
 [features]
@@ -26,19 +26,23 @@ alloc = [ # Do we support dynamic allocating memory?
 support_64bit_indexing = [] # Allow 64 bit indexing. This is pretty rare. Not compatible with some targets
 support_64bit_values = [] # Allow 64 bit values (IE: Membrane potentials). Extremely rare! Not compatible with some targets
 support_wgpu = []
+defmt = []
 
 [dependencies]
-# DO NOT ADD ANY FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# These are child subcrates
+feagi-ecs = {path = "feagi-ecs"}
+feagi-logging-and-errors = {path = "feagi-logging-and-errors"}
 # Note: The official F8 crate is bad. Don't use it!
-# DO NOT ADD ANY FEAGI CEATES!
-# DO NOT ADD ANY FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
 paste = {workspace = true}
 half = {workspace = true, default-features = false}
-# DO NOT ADD ANY FEAGI CEATES!
-# DO NOT ADD ANY FEAGI CEATES!
-# DO NOT ADD ANY FEAGI CEATES!
-# DO NOT ADD ANY FEAGI CEATES!
-# DO NOT ADD ANY FEAGI CEATES!
-# DO NOT ADD ANY FEAGI CEATES!
-# DO NOT ADD ANY FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
 

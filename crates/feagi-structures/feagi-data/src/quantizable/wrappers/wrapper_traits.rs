@@ -1,7 +1,6 @@
 use crate::core_numerical_types::{SupportsBasicCoreMathOps, SupportsUintOps};
-use crate::quantizable::base_types::{QuantizedElementBase, QuantizedIndexCountTrait};
-use crate::quantizable::base_types::decimal::QuantizedDecimalTrait;
-use crate::quantizable::base_types::unsigned_integer::QuantizedUnsignedIntegerTrait;
+use crate::quantizable::base_types::{QuantizedElementBase, QuantizedIndexCountTrait, QuantizedSignedIntegerTrait};
+use crate::quantizable::base_types::QuantizedDecimalTrait;
 
 
 // region Wrapper Traits
@@ -28,9 +27,15 @@ QuantizedElementWrapperBase<QE>
 
 }
 
-pub trait QuantizedElementWrapperUnsignedInteger<QE: QuantizedUnsignedIntegerTrait>:
+pub trait QuantizedElementWrapperUnsignedInteger<QE: QuantizedIndexCountTrait>:
 QuantizedElementWrapperBase<QE>
 + SupportsUintOps
+{
+
+}
+
+pub trait QuantizedElementWrapperSignedInteger<QE: QuantizedSignedIntegerTrait>:
+QuantizedElementWrapperBase<QE>
 {
 
 }

@@ -9,9 +9,9 @@ homepage.workspace = true
 
 [features]
 default = ["std"]
-std = ["alloc", "tracing"]
+std = ["alloc", "dep:tracing"]
 alloc = []
-defmt = ["dep:defmt"]
+defmt = ["dep:defmt"] # This should not be enabled with std
 
 [dependencies]
 tracing = {workspace = true, optional = true}

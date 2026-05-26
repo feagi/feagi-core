@@ -2008,6 +2008,8 @@ dependencies = [
 name = "feagi-data"
 version = "0.0.11"
 dependencies = [
+ "feagi-ecs",
+ "feagi-logging-and-errors",
  "half",
  "paste",
 ]

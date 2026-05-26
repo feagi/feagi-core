@@ -1,7 +1,7 @@
 //! A Trait that simply requires those that implement to support basic number and math operations.
 
 use half::f16;
-use crate::quantizable::base_types::decimal::custom_data_types::StorageF8;
+use crate::quantizable::custom_data_types::StorageF8;
 
 #[cfg(not(feature = "alloc"))]
 /// Supports basic core / math operations
@@ -105,8 +105,6 @@ SupportsBasicCoreMathOps
 {
     const QUANT_MAX_AS_USIZE: usize;
 
-    const QUANT_ZERO: Self;
-
     const QUANT_ONE: Self;
 
     /// will convert from usize to self type without checks, which if outside the range could
@@ -126,7 +124,6 @@ SupportsBasicCoreMathOps
 // lol
 impl SupportsUintOps for usize {
     const QUANT_MAX_AS_USIZE: usize = usize::MAX;
-    const QUANT_ZERO: Self = 0;
     const QUANT_ONE: Self = 1;
 
     #[inline(always)]
@@ -147,7 +144,6 @@ impl SupportsUintOps for usize {
 
 impl SupportsUintOps for u8 {
     const QUANT_MAX_AS_USIZE: usize = u8::MAX as usize;
-    const QUANT_ZERO: Self = 0;
     const QUANT_ONE: Self = 1;
 
     #[inline(always)]
@@ -171,7 +167,6 @@ impl SupportsUintOps for u8 {
 
 impl SupportsUintOps for u16 {
     const QUANT_MAX_AS_USIZE: usize = u16::MAX as usize;
-    const QUANT_ZERO: Self = 0;
     const QUANT_ONE: Self = 1;
 
     #[inline(always)]
@@ -195,7 +190,6 @@ impl SupportsUintOps for u16 {
 
 impl SupportsUintOps for u32 {
     const QUANT_MAX_AS_USIZE: usize = u32::MAX as usize;
-    const QUANT_ZERO: Self = 0;
     const QUANT_ONE: Self = 1;
 
     #[inline(always)]
@@ -220,7 +214,6 @@ impl SupportsUintOps for u32 {
 #[cfg(feature = "support_64bit_indexing")]
 impl SupportsUintOps for u64 {
     const QUANT_MAX_AS_USIZE: usize = u64::MAX as usize;
-    const QUANT_ZERO: Self = 0;
     const QUANT_ONE: Self = 1;
 
     #[inline(always)]

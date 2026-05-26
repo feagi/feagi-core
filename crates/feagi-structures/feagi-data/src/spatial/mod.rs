@@ -1,5 +1,7 @@
 mod feagi_data_spatial_error;
-pub mod spatial_3d;
-pub mod spatial_4d;
+pub mod shared_traits;
+pub mod index;
+pub mod unsigned_integer;
+pub mod signed_integer;
 
-pub use feagi_data_spatial_error::FeagiDataSpatialError;
+pub use feagi_data_spatial_error::FeagiSpatialError;

@@ -1,11 +1,32 @@
+use feagi_logging_and_errors::{FeagiErrorKey, FeagiError, generate_feagi_error};
 
+#[derive(FeagiErrorKey)]
+pub struct FeagiInvalidCoordErrKey {
+    context: &'static str
+}
 
-#[derive(Debug)]
-pub enum FeagiDataSpatialError {
-    InvalidCoordinate{
-        context: &'static str
+#[derive(FeagiErrorKey)]
+pub struct FeagiDimensionsErrKey {
+    context: &'static str
+}
+
+generate_feagi_error!{
+    FeagiSpatialError,
+    keys: {
+        InvalidCoordinate: FeagiInvalidCoordErrKey,
+        InvalidDimensions: FeagiDimensionsErrKey
     },
-    InvalidDimensions{
-        context: &'static str
+    sub_errors: {
+
     },
 }
+
+/*
+#[derive(FeagiError)]
+pub enum FeagiSpatialError {
+    InvalidCoordinate(FeagiInvalidCoordErrKey),
+    InvalidDimensions(FeagiDimensionsErrKey)
+}
+
+
+ */
