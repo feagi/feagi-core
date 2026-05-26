@@ -1,6 +1,6 @@
 use std::hash::Hash;
 use ahash::AHashMap;
-use feagi_data::quantizable::base_types::QuantizedIndexCountTrait;
+use feagi_data::quantizable_linear::base_types::QuantizedIndexCountTrait;
 use crate::FeagiCommonError;
 use crate::useful_structs::{IndexedDataTracker};
 

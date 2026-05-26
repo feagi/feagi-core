@@ -8,9 +8,9 @@ mod core_numerical_types;
 
 
 pub mod percentages;
-pub mod quantizable;
+pub mod quantizable_linear;
 pub mod bit_packing;
-pub mod spatial;
+pub mod quantizable_spatial;
 
 pub use core_numerical_types::{SupportsBasicCoreMathOps, SupportsUintOps};
 pub use paste;

@@ -1,7 +1,7 @@
 //! A Trait that simply requires those that implement to support basic number and math operations.
 
 use half::f16;
-use crate::quantizable::custom_data_types::StorageF8;
+use crate::quantizable_linear::custom_data_types::StorageF8;
 
 #[cfg(not(feature = "alloc"))]
 /// Supports basic core / math operations
