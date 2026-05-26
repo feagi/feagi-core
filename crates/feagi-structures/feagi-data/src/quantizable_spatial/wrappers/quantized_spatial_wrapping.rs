@@ -1,11 +1,21 @@
 #[macro_export]
 macro_rules! create_quantized_spatial_index_coordinate_2d_wrapper {
     ($struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_coordinate_2d_wrapper!(@impl [pub] $struct_name, $x_wrapper, $y_wrapper);
+    };
+    (private $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_coordinate_2d_wrapper!(@impl [] $struct_name, $x_wrapper, $y_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_coordinate_2d_wrapper!(@impl [$visibility] $struct_name, $x_wrapper, $y_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
         $crate::__create_quantized_spatial_coordinate_2d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::index::SpatialIndexCoordinate2D<QE>,
             $crate::quantizable_linear::base_types::QuantizedIndexCountTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount<QE>,
             $x_wrapper,
             $y_wrapper
         );
@@ -15,11 +25,21 @@ macro_rules! create_quantized_spatial_index_coordinate_2d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_index_coordinate_3d_wrapper {
     ($struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_coordinate_3d_wrapper!(@impl [pub] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (private $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_coordinate_3d_wrapper!(@impl [] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_coordinate_3d_wrapper!(@impl [$visibility] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
         $crate::__create_quantized_spatial_coordinate_3d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::index::SpatialIndexCoordinate3D<QE>,
             $crate::quantizable_linear::base_types::QuantizedIndexCountTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount<QE>,
             $x_wrapper,
             $y_wrapper,
             $z_wrapper
@@ -30,11 +50,21 @@ macro_rules! create_quantized_spatial_index_coordinate_3d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_index_coordinate_4d_wrapper {
     ($struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_coordinate_4d_wrapper!(@impl [pub] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (private $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_coordinate_4d_wrapper!(@impl [] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_coordinate_4d_wrapper!(@impl [$visibility] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
         $crate::__create_quantized_spatial_coordinate_4d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::index::SpatialIndexCoordinate4D<QE>,
             $crate::quantizable_linear::base_types::QuantizedIndexCountTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount<QE>,
             $x_wrapper,
             $y_wrapper,
             $z_wrapper,
@@ -46,11 +76,21 @@ macro_rules! create_quantized_spatial_index_coordinate_4d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_unsigned_coordinate_2d_wrapper {
     ($struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_coordinate_2d_wrapper!(@impl [pub] $struct_name, $x_wrapper, $y_wrapper);
+    };
+    (private $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_coordinate_2d_wrapper!(@impl [] $struct_name, $x_wrapper, $y_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_coordinate_2d_wrapper!(@impl [$visibility] $struct_name, $x_wrapper, $y_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
         $crate::__create_quantized_spatial_coordinate_2d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::unsigned_integer::SpatialUintCoordinate2D<QE>,
             $crate::quantizable_linear::base_types::QuantizedUnsignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger<QE>,
             $x_wrapper,
             $y_wrapper
         );
@@ -60,11 +100,21 @@ macro_rules! create_quantized_spatial_unsigned_coordinate_2d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_unsigned_coordinate_3d_wrapper {
     ($struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_coordinate_3d_wrapper!(@impl [pub] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (private $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_coordinate_3d_wrapper!(@impl [] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_coordinate_3d_wrapper!(@impl [$visibility] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
         $crate::__create_quantized_spatial_coordinate_3d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::unsigned_integer::SpatialUintCoordinate3D<QE>,
             $crate::quantizable_linear::base_types::QuantizedUnsignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger<QE>,
             $x_wrapper,
             $y_wrapper,
             $z_wrapper
@@ -75,11 +125,21 @@ macro_rules! create_quantized_spatial_unsigned_coordinate_3d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_unsigned_coordinate_4d_wrapper {
     ($struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_coordinate_4d_wrapper!(@impl [pub] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (private $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_coordinate_4d_wrapper!(@impl [] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_coordinate_4d_wrapper!(@impl [$visibility] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
         $crate::__create_quantized_spatial_coordinate_4d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::unsigned_integer::SpatialUintCoordinate4D<QE>,
             $crate::quantizable_linear::base_types::QuantizedUnsignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger<QE>,
             $x_wrapper,
             $y_wrapper,
             $z_wrapper,
@@ -91,11 +151,21 @@ macro_rules! create_quantized_spatial_unsigned_coordinate_4d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_signed_coordinate_2d_wrapper {
     ($struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_coordinate_2d_wrapper!(@impl [pub] $struct_name, $x_wrapper, $y_wrapper);
+    };
+    (private $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_coordinate_2d_wrapper!(@impl [] $struct_name, $x_wrapper, $y_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_coordinate_2d_wrapper!(@impl [$visibility] $struct_name, $x_wrapper, $y_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident) => {
         $crate::__create_quantized_spatial_coordinate_2d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::signed_integer::SpatialSintCoordinate2D<QE>,
             $crate::quantizable_linear::base_types::QuantizedSignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger<QE>,
             $x_wrapper,
             $y_wrapper
         );
@@ -105,11 +175,21 @@ macro_rules! create_quantized_spatial_signed_coordinate_2d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_signed_coordinate_3d_wrapper {
     ($struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_coordinate_3d_wrapper!(@impl [pub] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (private $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_coordinate_3d_wrapper!(@impl [] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_coordinate_3d_wrapper!(@impl [$visibility] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
         $crate::__create_quantized_spatial_coordinate_3d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::signed_integer::SpatialSintCoordinate3D<QE>,
             $crate::quantizable_linear::base_types::QuantizedSignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger<QE>,
             $x_wrapper,
             $y_wrapper,
             $z_wrapper
@@ -120,11 +200,21 @@ macro_rules! create_quantized_spatial_signed_coordinate_3d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_signed_coordinate_4d_wrapper {
     ($struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_coordinate_4d_wrapper!(@impl [pub] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (private $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_coordinate_4d_wrapper!(@impl [] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_coordinate_4d_wrapper!(@impl [$visibility] $struct_name, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
         $crate::__create_quantized_spatial_coordinate_4d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::signed_integer::SpatialSintCoordinate4D<QE>,
             $crate::quantizable_linear::base_types::QuantizedSignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger<QE>,
             $x_wrapper,
             $y_wrapper,
             $z_wrapper,
@@ -136,12 +226,22 @@ macro_rules! create_quantized_spatial_signed_coordinate_4d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_index_dimensions_2d_wrapper {
     ($struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_dimensions_2d_wrapper!(@impl [pub] $struct_name, $coordinate_wrapper, $linear_wrapper, $x_wrapper, $y_wrapper);
+    };
+    (private $struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_dimensions_2d_wrapper!(@impl [] $struct_name, $coordinate_wrapper, $linear_wrapper, $x_wrapper, $y_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_dimensions_2d_wrapper!(@impl [$visibility] $struct_name, $coordinate_wrapper, $linear_wrapper, $x_wrapper, $y_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
         $crate::__create_quantized_spatial_dimensions_2d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::index::SpatialIndexDimensions2D<QE>,
             $crate::quantizable_spatial::index::SpatialIndexCoordinate2D<QE>,
             $crate::quantizable_linear::base_types::QuantizedIndexCountTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount<QE>,
             $coordinate_wrapper,
             $x_wrapper,
             $y_wrapper
@@ -158,12 +258,22 @@ macro_rules! create_quantized_spatial_index_dimensions_2d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_index_dimensions_3d_wrapper {
     ($struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_dimensions_3d_wrapper!(@impl [pub] $struct_name, $coordinate_wrapper, $linear_wrapper, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (private $struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_dimensions_3d_wrapper!(@impl [] $struct_name, $coordinate_wrapper, $linear_wrapper, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_dimensions_3d_wrapper!(@impl [$visibility] $struct_name, $coordinate_wrapper, $linear_wrapper, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
         $crate::__create_quantized_spatial_dimensions_3d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::index::SpatialIndexDimensions3D<QE>,
             $crate::quantizable_spatial::index::SpatialIndexCoordinate3D<QE>,
             $crate::quantizable_linear::base_types::QuantizedIndexCountTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount<QE>,
             $coordinate_wrapper,
             $x_wrapper,
             $y_wrapper,
@@ -181,12 +291,22 @@ macro_rules! create_quantized_spatial_index_dimensions_3d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_index_dimensions_4d_wrapper {
     ($struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_dimensions_4d_wrapper!(@impl [pub] $struct_name, $coordinate_wrapper, $linear_wrapper, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (private $struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_dimensions_4d_wrapper!(@impl [] $struct_name, $coordinate_wrapper, $linear_wrapper, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_index_dimensions_4d_wrapper!(@impl [$visibility] $struct_name, $coordinate_wrapper, $linear_wrapper, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $coordinate_wrapper:ident, $linear_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
         $crate::__create_quantized_spatial_dimensions_4d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::index::SpatialIndexDimensions4D<QE>,
             $crate::quantizable_spatial::index::SpatialIndexCoordinate4D<QE>,
             $crate::quantizable_linear::base_types::QuantizedIndexCountTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperIndexCount<QE>,
             $coordinate_wrapper,
             $x_wrapper,
             $y_wrapper,
@@ -205,12 +325,22 @@ macro_rules! create_quantized_spatial_index_dimensions_4d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_unsigned_dimensions_2d_wrapper {
     ($struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_dimensions_2d_wrapper!(@impl [pub] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper);
+    };
+    (private $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_dimensions_2d_wrapper!(@impl [] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_dimensions_2d_wrapper!(@impl [$visibility] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
         $crate::__create_quantized_spatial_dimensions_2d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::unsigned_integer::SpatialUintDimensions2D<QE>,
             $crate::quantizable_spatial::unsigned_integer::SpatialUintCoordinate2D<QE>,
             $crate::quantizable_linear::base_types::QuantizedUnsignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger<QE>,
             $coordinate_wrapper,
             $x_wrapper,
             $y_wrapper
@@ -221,12 +351,22 @@ macro_rules! create_quantized_spatial_unsigned_dimensions_2d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_unsigned_dimensions_3d_wrapper {
     ($struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_dimensions_3d_wrapper!(@impl [pub] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (private $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_dimensions_3d_wrapper!(@impl [] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_dimensions_3d_wrapper!(@impl [$visibility] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
         $crate::__create_quantized_spatial_dimensions_3d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::unsigned_integer::SpatialUintDimensions3D<QE>,
             $crate::quantizable_spatial::unsigned_integer::SpatialUintCoordinate3D<QE>,
             $crate::quantizable_linear::base_types::QuantizedUnsignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger<QE>,
             $coordinate_wrapper,
             $x_wrapper,
             $y_wrapper,
@@ -238,12 +378,22 @@ macro_rules! create_quantized_spatial_unsigned_dimensions_3d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_unsigned_dimensions_4d_wrapper {
     ($struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_dimensions_4d_wrapper!(@impl [pub] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (private $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_dimensions_4d_wrapper!(@impl [] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_unsigned_dimensions_4d_wrapper!(@impl [$visibility] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
         $crate::__create_quantized_spatial_dimensions_4d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::unsigned_integer::SpatialDimensions4D<QE>,
             $crate::quantizable_spatial::unsigned_integer::SpatialUintCoordinate4D<QE>,
             $crate::quantizable_linear::base_types::QuantizedUnsignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperUnsignedInteger<QE>,
             $coordinate_wrapper,
             $x_wrapper,
             $y_wrapper,
@@ -256,12 +406,22 @@ macro_rules! create_quantized_spatial_unsigned_dimensions_4d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_signed_dimensions_2d_wrapper {
     ($struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_dimensions_2d_wrapper!(@impl [pub] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper);
+    };
+    (private $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_dimensions_2d_wrapper!(@impl [] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_dimensions_2d_wrapper!(@impl [$visibility] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident) => {
         $crate::__create_quantized_spatial_dimensions_2d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::signed_integer::SpatialSintDimensions2D<QE>,
             $crate::quantizable_spatial::signed_integer::SpatialSintCoordinate2D<QE>,
             $crate::quantizable_linear::base_types::QuantizedSignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger<QE>,
             $coordinate_wrapper,
             $x_wrapper,
             $y_wrapper
@@ -272,12 +432,22 @@ macro_rules! create_quantized_spatial_signed_dimensions_2d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_signed_dimensions_3d_wrapper {
     ($struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_dimensions_3d_wrapper!(@impl [pub] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (private $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_dimensions_3d_wrapper!(@impl [] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_dimensions_3d_wrapper!(@impl [$visibility] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident) => {
         $crate::__create_quantized_spatial_dimensions_3d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::signed_integer::SpatialSintDimensions3D<QE>,
             $crate::quantizable_spatial::signed_integer::SpatialSintCoordinate3D<QE>,
             $crate::quantizable_linear::base_types::QuantizedSignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger<QE>,
             $coordinate_wrapper,
             $x_wrapper,
             $y_wrapper,
@@ -289,12 +459,22 @@ macro_rules! create_quantized_spatial_signed_dimensions_3d_wrapper {
 #[macro_export]
 macro_rules! create_quantized_spatial_signed_dimensions_4d_wrapper {
     ($struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_dimensions_4d_wrapper!(@impl [pub] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (private $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_dimensions_4d_wrapper!(@impl [] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    ($visibility:vis $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
+        $crate::create_quantized_spatial_signed_dimensions_4d_wrapper!(@impl [$visibility] $struct_name, $coordinate_wrapper, $x_wrapper, $y_wrapper, $z_wrapper, $w_wrapper);
+    };
+    (@impl [$($visibility:tt)*] $struct_name:ident, $coordinate_wrapper:ident, $x_wrapper:ident, $y_wrapper:ident, $z_wrapper:ident, $w_wrapper:ident) => {
         $crate::__create_quantized_spatial_dimensions_4d_wrapper!(
+            [$($visibility)*],
             $struct_name,
             $crate::quantizable_spatial::signed_integer::SpatialDimensions4D<QE>,
             $crate::quantizable_spatial::signed_integer::SpatialSintCoordinate4D<QE>,
             $crate::quantizable_linear::base_types::QuantizedSignedIntegerTrait,
-            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger,
+            $crate::quantizable_linear::wrappers::QuantizedElementWrapperSignedInteger<QE>,
             $coordinate_wrapper,
             $x_wrapper,
             $y_wrapper,

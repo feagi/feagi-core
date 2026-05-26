@@ -34,6 +34,7 @@ macro_rules! __impl_quantized_spatial_wrapper_base {
 #[macro_export]
 macro_rules! __create_quantized_spatial_coordinate_2d_wrapper {
     (
+        [$($visibility:tt)*],
         $struct_name:ident,
         $base_coordinate:ty,
         $quant_bound:path,
@@ -42,13 +43,13 @@ macro_rules! __create_quantized_spatial_coordinate_2d_wrapper {
         $y_wrapper:ident
     ) => {
         #[repr(transparent)]
-        pub struct $struct_name<QE: $quant_bound>($base_coordinate);
+        $($visibility)* struct $struct_name<QE: $quant_bound>($base_coordinate);
 
         impl<QE> $struct_name<QE>
         where
             QE: $quant_bound,
-            $x_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $y_wrapper<QE>: $axis_wrapper_bound<QE>,
+            $x_wrapper<QE>: $axis_wrapper_bound,
+            $y_wrapper<QE>: $axis_wrapper_bound,
         {
             #[inline(always)]
             pub fn new(x: $x_wrapper<QE>, y: $y_wrapper<QE>) -> Self {
@@ -82,6 +83,7 @@ macro_rules! __create_quantized_spatial_coordinate_2d_wrapper {
 #[macro_export]
 macro_rules! __create_quantized_spatial_coordinate_3d_wrapper {
     (
+        [$($visibility:tt)*],
         $struct_name:ident,
         $base_coordinate:ty,
         $quant_bound:path,
@@ -91,14 +93,14 @@ macro_rules! __create_quantized_spatial_coordinate_3d_wrapper {
         $z_wrapper:ident
     ) => {
         #[repr(transparent)]
-        pub struct $struct_name<QE: $quant_bound>($base_coordinate);
+        $($visibility)* struct $struct_name<QE: $quant_bound>($base_coordinate);
 
         impl<QE> $struct_name<QE>
         where
             QE: $quant_bound,
-            $x_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $y_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $z_wrapper<QE>: $axis_wrapper_bound<QE>,
+            $x_wrapper<QE>: $axis_wrapper_bound,
+            $y_wrapper<QE>: $axis_wrapper_bound,
+            $z_wrapper<QE>: $axis_wrapper_bound,
         {
             #[inline(always)]
             pub fn new(x: $x_wrapper<QE>, y: $y_wrapper<QE>, z: $z_wrapper<QE>) -> Self {
@@ -138,6 +140,7 @@ macro_rules! __create_quantized_spatial_coordinate_3d_wrapper {
 #[macro_export]
 macro_rules! __create_quantized_spatial_coordinate_4d_wrapper {
     (
+        [$($visibility:tt)*],
         $struct_name:ident,
         $base_coordinate:ty,
         $quant_bound:path,
@@ -148,15 +151,15 @@ macro_rules! __create_quantized_spatial_coordinate_4d_wrapper {
         $w_wrapper:ident
     ) => {
         #[repr(transparent)]
-        pub struct $struct_name<QE: $quant_bound>($base_coordinate);
+        $($visibility)* struct $struct_name<QE: $quant_bound>($base_coordinate);
 
         impl<QE> $struct_name<QE>
         where
             QE: $quant_bound,
-            $x_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $y_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $z_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $w_wrapper<QE>: $axis_wrapper_bound<QE>,
+            $x_wrapper<QE>: $axis_wrapper_bound,
+            $y_wrapper<QE>: $axis_wrapper_bound,
+            $z_wrapper<QE>: $axis_wrapper_bound,
+            $w_wrapper<QE>: $axis_wrapper_bound,
         {
             #[inline(always)]
             pub fn new(x: $x_wrapper<QE>, y: $y_wrapper<QE>, z: $z_wrapper<QE>, w: $w_wrapper<QE>) -> Self {
@@ -202,6 +205,7 @@ macro_rules! __create_quantized_spatial_coordinate_4d_wrapper {
 #[macro_export]
 macro_rules! __create_quantized_spatial_dimensions_2d_wrapper {
     (
+        [$($visibility:tt)*],
         $struct_name:ident,
         $base_dimensions:ty,
         $base_coordinate:ty,
@@ -212,14 +216,14 @@ macro_rules! __create_quantized_spatial_dimensions_2d_wrapper {
         $y_wrapper:ident
     ) => {
         #[repr(transparent)]
-        pub struct $struct_name<QE: $quant_bound>($base_dimensions);
+        $($visibility)* struct $struct_name<QE: $quant_bound>($base_dimensions);
 
         impl<QE> $struct_name<QE>
         where
             QE: $quant_bound,
             $coordinate_wrapper<QE>: $crate::quantizable_spatial::wrappers::QuantizedSpatialWrapperBase<$base_coordinate>,
-            $x_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $y_wrapper<QE>: $axis_wrapper_bound<QE>,
+            $x_wrapper<QE>: $axis_wrapper_bound,
+            $y_wrapper<QE>: $axis_wrapper_bound,
         {
             #[inline(always)]
             pub fn new_unchecked(x: $x_wrapper<QE>, y: $y_wrapper<QE>) -> Self {
@@ -268,6 +272,7 @@ macro_rules! __create_quantized_spatial_dimensions_2d_wrapper {
 #[macro_export]
 macro_rules! __create_quantized_spatial_dimensions_3d_wrapper {
     (
+        [$($visibility:tt)*],
         $struct_name:ident,
         $base_dimensions:ty,
         $base_coordinate:ty,
@@ -279,15 +284,15 @@ macro_rules! __create_quantized_spatial_dimensions_3d_wrapper {
         $z_wrapper:ident
     ) => {
         #[repr(transparent)]
-        pub struct $struct_name<QE: $quant_bound>($base_dimensions);
+        $($visibility)* struct $struct_name<QE: $quant_bound>($base_dimensions);
 
         impl<QE> $struct_name<QE>
         where
             QE: $quant_bound,
             $coordinate_wrapper<QE>: $crate::quantizable_spatial::wrappers::QuantizedSpatialWrapperBase<$base_coordinate>,
-            $x_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $y_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $z_wrapper<QE>: $axis_wrapper_bound<QE>,
+            $x_wrapper<QE>: $axis_wrapper_bound,
+            $y_wrapper<QE>: $axis_wrapper_bound,
+            $z_wrapper<QE>: $axis_wrapper_bound,
         {
             #[inline(always)]
             pub fn new_unchecked(x: $x_wrapper<QE>, y: $y_wrapper<QE>, z: $z_wrapper<QE>) -> Self {
@@ -343,6 +348,7 @@ macro_rules! __create_quantized_spatial_dimensions_3d_wrapper {
 #[macro_export]
 macro_rules! __create_quantized_spatial_dimensions_4d_wrapper {
     (
+        [$($visibility:tt)*],
         $struct_name:ident,
         $base_dimensions:ty,
         $base_coordinate:ty,
@@ -355,16 +361,16 @@ macro_rules! __create_quantized_spatial_dimensions_4d_wrapper {
         $w_wrapper:ident
     ) => {
         #[repr(transparent)]
-        pub struct $struct_name<QE: $quant_bound>($base_dimensions);
+        $($visibility)* struct $struct_name<QE: $quant_bound>($base_dimensions);
 
         impl<QE> $struct_name<QE>
         where
             QE: $quant_bound,
             $coordinate_wrapper<QE>: $crate::quantizable_spatial::wrappers::QuantizedSpatialWrapperBase<$base_coordinate>,
-            $x_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $y_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $z_wrapper<QE>: $axis_wrapper_bound<QE>,
-            $w_wrapper<QE>: $axis_wrapper_bound<QE>,
+            $x_wrapper<QE>: $axis_wrapper_bound,
+            $y_wrapper<QE>: $axis_wrapper_bound,
+            $z_wrapper<QE>: $axis_wrapper_bound,
+            $w_wrapper<QE>: $axis_wrapper_bound,
         {
             #[inline(always)]
             pub fn new_unchecked(x: $x_wrapper<QE>, y: $y_wrapper<QE>, z: $z_wrapper<QE>, w: $w_wrapper<QE>) -> Self {

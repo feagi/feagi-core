@@ -231,8 +231,6 @@ macro_rules! __impl_supports_uint_ops {
         {
             const QUANT_MAX_AS_USIZE: usize =
                 <$quant_element as $crate::SupportsUintOps>::QUANT_MAX_AS_USIZE;
-            const QUANT_ZERO: Self =
-                Self(<$quant_element as $crate::SupportsUintOps>::QUANT_ZERO);
             const QUANT_ONE: Self =
                 Self(<$quant_element as $crate::SupportsUintOps>::QUANT_ONE);
 
