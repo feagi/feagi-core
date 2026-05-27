@@ -5,9 +5,8 @@
 // Furthermore, if different services use different quantizations, we risk problems
 
 mod cortical_unit_index;
-mod io_cortical_area_channels;
-mod motor_cortical_unit;
-mod sensory_cortical_unit;
+mod cortical_channel_index;
 
-pub mod io_cortical_area_configuration_flag;
+pub use cortical_unit_index::{CorticalUnitIndex, CorticalSubUnitIndex};
+pub use cortical_channel_index::{CorticalChannelCount, CorticalChannelNeuronDepth};
 

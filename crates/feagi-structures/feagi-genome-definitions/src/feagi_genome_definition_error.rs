@@ -1,9 +1,17 @@
 use feagi_data::feagi_logging_and_errors::{FeagiError, FeagiErrorKey, generate_feagi_error};
+use feagi_logging_and_errors::cortical_area_properties::cortical_id::CorticalIDPacked;
+
 extern crate self as feagi_logging_and_errors;
 
 #[derive(FeagiErrorKey)]
-pub struct CorticalIDErrKey {
+pub struct CorticalIDEtcErrKey {
     context: &'static str
+}
+
+#[derive(FeagiErrorKey)]
+pub struct CorticalIDLookupErrKey {
+    context: &'static str,
+    given_bytes: [u8; CorticalIDPacked::BYTE_COUNT]
 }
 
 #[derive(FeagiErrorKey)]
@@ -19,9 +27,10 @@ pub struct CorticalUnitErrKey {
 generate_feagi_error!(
     FeagiGenomeDefinitionsError,
     keys: {
-        cortical_id_error: CorticalIDErrKey,
-        cortical_area_error: CorticalAreaErrKey,
-        cortical_unit_error: CorticalUnitErrKey,
+        CorticalIdEtcError: CorticalIDEtcErrKey,
+        CorticalIdLookupError: CorticalIDLookupErrKey,
+        CorticalAreaError: CorticalAreaErrKey,
+        CorticalUnitError: CorticalUnitErrKey,
     },
     sub_errors: {
 

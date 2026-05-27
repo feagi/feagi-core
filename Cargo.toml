@@ -138,15 +138,14 @@ resolver = "2"
 members = [
     # === Feagi Structures ===
     "crates/feagi-structures", # Unifying "core" data structures crates. Uses features to expose various commonly used structs, traits, and other common implementations. TODO rename to feagi-common or something similar
+
     "crates/feagi-structures/feagi-data", # Base data types used often in feagi, notably quantizable data types. Use features to target various hardware specific data types. As this crate is depended on by sibling crates, this must have NO dependencies!
     "crates/feagi-structures/feagi-data/feagi-ecs", # Base ECS traits / Derive Macros
     "crates/feagi-structures/feagi-data/feagi-logging-and-errors", # Base FEAGI Error and logging macros and trait definitions
     "crates/feagi-structures/feagi-data/feagi-logging-and-errors/feagi-logging-and-errors-derive", # derive crate
 
+    "crates/feagi-structures/feagi-genome-definitions", # Holds structs and definitions of various genome identifiers or common definitions used acrosss crates, such as CorticalID. Also holds definitions for cortical units
 
-
-    "crates/feagi-structures/feagi-genome-definitions", # Holds structs and definitions of various genome identifiers or common definitions used acrosss crates, such as CorticalID.
-    "crates/feagi-structures/feagi-genome-definitions/cortical-unit-definitions", # Holds macros that define the sensor and motor cortical of FEAGI as macros for compile time defnitions. Literally only those macros.
     "crates/feagi-structures/feagi-potential-voxels", # Holds structs responsible for describing neuron potential ina  given neuron voxel
 
 

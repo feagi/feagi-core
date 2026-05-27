@@ -1048,10 +1048,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cortical-unit-definitions"
-version = "0.0.11"
-
-[[package]]
 name = "cpp_demangle"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2044,7 +2040,6 @@ dependencies = [
 name = "feagi-genome-definitions"
 version = "0.0.11"
 dependencies = [
- "cortical-unit-definitions",
  "feagi-data",
  "paste",
  "serde",
