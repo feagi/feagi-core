@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use cortical_unit_definitions::sensor_cortical_units;
-use crate::cortical_area::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)] // TODO move me!
 pub struct UnitTopology {

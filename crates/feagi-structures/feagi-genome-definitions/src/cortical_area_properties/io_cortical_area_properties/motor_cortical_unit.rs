@@ -3,7 +3,6 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use cortical_unit_definitions::{motor_cortical_units};
-use crate::cortical_area::*;
 
 // Helper macro to handle optional allowed_frame_change_handling
 macro_rules! get_allowed_frame_change_handling_impl { // TODO delete this!

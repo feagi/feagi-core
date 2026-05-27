@@ -10,18 +10,22 @@ use feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
 create_quantized_index_count_wrapper!(PublicIndexAxis);
 create_quantized_index_count_wrapper!(pub(crate) CrateIndexAxis);
 create_quantized_index_count_wrapper!(private PrivateIndexAxis);
+create_quantized_index_count_wrapper!(ConcreteIndexAxis, u32);
 
 create_quantized_unsigned_integer_wrapper!(PublicUnsignedAxis);
 create_quantized_unsigned_integer_wrapper!(pub(crate) CrateUnsignedAxis);
 create_quantized_unsigned_integer_wrapper!(private PrivateUnsignedAxis);
+create_quantized_unsigned_integer_wrapper!(ConcreteUnsignedAxis, u32);
 
 create_quantized_signed_integer_wrapper!(PublicSignedAxis);
 create_quantized_signed_integer_wrapper!(pub(crate) CrateSignedAxis);
 create_quantized_signed_integer_wrapper!(private PrivateSignedAxis);
+create_quantized_signed_integer_wrapper!(ConcreteSignedAxis, i32);
 
 create_quantized_decimal_wrapper!(PublicDecimalAxis);
 create_quantized_decimal_wrapper!(pub(crate) CrateDecimalAxis);
 create_quantized_decimal_wrapper!(private PrivateDecimalAxis);
+create_quantized_decimal_wrapper!(ConcreteDecimalAxis, f32);
 
 #[test]
 fn generated_index_count_wrappers_support_visibility_forms_and_index_methods() {
@@ -71,4 +75,17 @@ fn generated_decimal_wrappers_forward_decimal_methods() {
     assert_eq!(public.to_f32(), 1.5);
     assert_eq!((crate_visible + CrateDecimalAxis::from_f32(0.5)).to_f32(), 2.5);
     assert_eq!(private.to_f32(), 3.25);
+}
+
+#[test]
+fn generated_concrete_wrappers_do_not_require_generic_quantization_parameters() {
+    let index = ConcreteIndexAxis::from_u32(12);
+    let unsigned = ConcreteUnsignedAxis::wrap(10);
+    let signed = ConcreteSignedAxis::wrap(-4);
+    let decimal = ConcreteDecimalAxis::from_f32(1.25);
+
+    assert_eq!(index.const_take(), 12);
+    assert_eq!((unsigned % ConcreteUnsignedAxis::wrap(3)).const_take(), 1);
+    assert!(signed.is_negative());
+    assert_eq!(decimal.const_take(), 1.25);
 }

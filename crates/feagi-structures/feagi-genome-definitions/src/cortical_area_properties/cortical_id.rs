@@ -1,7 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Display;
-use crate::cortical_area::{CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType};
-use crate::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
+use crate::cortical_area_properties::cortical_area_type::{CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType};
+use crate::cortical_area_properties::IOCorticalAreaConfigurationFlag;
 
 macro_rules! match_bytes_by_cortical_type {
     ($cortical_id_bytes: expr,

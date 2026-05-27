@@ -21,10 +21,14 @@ use feagi_data::{
     create_quantized_unsigned_integer_wrapper,
 };
 use feagi_data::quantizable_linear::base_types::QuantizedIndexCountTrait;
+use feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
 
 create_quantized_index_count_wrapper!(IndexAxis);
 create_quantized_unsigned_integer_wrapper!(UnsignedAxis);
 create_quantized_signed_integer_wrapper!(SignedAxis);
+create_quantized_index_count_wrapper!(ConcreteIndexAxis, u32);
+create_quantized_unsigned_integer_wrapper!(ConcreteUnsignedAxis, u32);
+create_quantized_signed_integer_wrapper!(ConcreteSignedAxis, i32);
 
 create_quantized_spatial_index_coordinate_2d_wrapper!(IndexCoord2D, IndexAxis, IndexAxis);
 create_quantized_spatial_index_coordinate_3d_wrapper!(pub(crate) IndexCoord3D, IndexAxis, IndexAxis, IndexAxis);
@@ -93,6 +97,49 @@ create_quantized_spatial_signed_dimensions_4d_wrapper!(
     SignedAxis
 );
 
+create_quantized_spatial_index_coordinate_3d_wrapper!(
+    ConcreteIndexCoord3D,
+    u32,
+    ConcreteIndexAxis,
+    ConcreteIndexAxis,
+    ConcreteIndexAxis
+);
+create_quantized_spatial_index_dimensions_3d_wrapper!(
+    ConcreteIndexDims3D,
+    u32,
+    ConcreteIndexCoord3D,
+    ConcreteIndexAxis,
+    ConcreteIndexAxis,
+    ConcreteIndexAxis,
+    ConcreteIndexAxis
+);
+create_quantized_spatial_unsigned_coordinate_2d_wrapper!(
+    ConcreteUnsignedCoord2D,
+    u32,
+    ConcreteUnsignedAxis,
+    ConcreteUnsignedAxis
+);
+create_quantized_spatial_unsigned_dimensions_2d_wrapper!(
+    ConcreteUnsignedDims2D,
+    u32,
+    ConcreteUnsignedCoord2D,
+    ConcreteUnsignedAxis,
+    ConcreteUnsignedAxis
+);
+create_quantized_spatial_signed_coordinate_2d_wrapper!(
+    ConcreteSignedCoord2D,
+    i32,
+    ConcreteSignedAxis,
+    ConcreteSignedAxis
+);
+create_quantized_spatial_signed_dimensions_2d_wrapper!(
+    ConcreteSignedDims2D,
+    i32,
+    ConcreteSignedCoord2D,
+    ConcreteSignedAxis,
+    ConcreteSignedAxis
+);
+
 fn index_axis(value: u32) -> IndexAxis<u16> {
     IndexAxis::from_u32(value)
 }
@@ -103,6 +150,10 @@ fn unsigned_axis(value: u16) -> UnsignedAxis<u16> {
 
 fn signed_axis(value: i16) -> SignedAxis<i16> {
     <SignedAxis<i16> as feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase<i16>>::wrap(value)
+}
+
+fn concrete_index_axis(value: u32) -> ConcreteIndexAxis {
+    ConcreteIndexAxis::from_u32(value)
 }
 
 #[test]
@@ -182,4 +233,51 @@ fn generated_spatial_wrappers_cover_all_dimensions_and_visibility_forms() {
         signed_axis(5),
     )
     .expect("positive signed dimensions should be valid");
+}
+
+#[test]
+fn generated_concrete_spatial_wrappers_use_fixed_quantization_and_const_take() {
+    let coord = ConcreteIndexCoord3D::new(
+        concrete_index_axis(1),
+        concrete_index_axis(2),
+        concrete_index_axis(3),
+    );
+    let dims = ConcreteIndexDims3D::new_checked(
+        concrete_index_axis(4),
+        concrete_index_axis(5),
+        concrete_index_axis(6),
+    )
+    .expect("non-zero concrete index dimensions should be valid");
+
+    let linear = dims.coordinate_to_linear_index(coord);
+    let inner_coord = dims.linear_index_to_coordinate(linear).const_take();
+
+    assert_eq!(linear.const_take(), 69);
+    assert_eq!(*inner_coord.get_x(), 1);
+    assert_eq!(*inner_coord.get_y(), 2);
+    assert_eq!(*inner_coord.get_z(), 3);
+
+    let unsigned_coord = ConcreteUnsignedCoord2D::new(
+        ConcreteUnsignedAxis::wrap(1),
+        ConcreteUnsignedAxis::wrap(2),
+    );
+    let unsigned_dims = ConcreteUnsignedDims2D::new_checked(
+        ConcreteUnsignedAxis::wrap(3),
+        ConcreteUnsignedAxis::wrap(4),
+    )
+    .expect("non-zero concrete unsigned dimensions should be valid");
+    assert!(unsigned_dims.does_coordinate_fit(unsigned_coord));
+    assert_eq!(*unsigned_dims.const_take().get_x(), 3);
+
+    let signed_coord = ConcreteSignedCoord2D::new(
+        ConcreteSignedAxis::wrap(1),
+        ConcreteSignedAxis::wrap(2),
+    );
+    let signed_dims = ConcreteSignedDims2D::new_checked(
+        ConcreteSignedAxis::wrap(3),
+        ConcreteSignedAxis::wrap(4),
+    )
+    .expect("positive concrete signed dimensions should be valid");
+    assert!(signed_dims.does_coordinate_fit(signed_coord));
+    assert_eq!(*signed_dims.const_take().get_y(), 4);
 }

@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use crate::cortical_area::CorticalID;
-use crate::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
+use crate::cortical_area_properties::{CorticalID, IOCorticalAreaConfigurationFlag};
 // Describes the method data is encoded within a cortical area
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize)]

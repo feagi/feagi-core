@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use crate::cortical_area::CorticalID;
-use crate::cortical_area::descriptors::{CorticalSubUnitIndex, CorticalUnitIndex};
-use crate::feagi_genome_error::FeagiGenomeDefinitionsError;
+use feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
+use crate::cortical_area_properties::CorticalID;
+use crate::cortical_area_properties::io_cortical_area_properties::cortical_unit_index::{CorticalSubUnitIndex, CorticalUnitIndex};
+use crate::feagi_genome_definition_error::{CorticalAreaErrKey, FeagiGenomeDefinitionsError};
 
 pub type IOCorticalAreaConfigurationFlagBitmask = u16; // 16 Total bits
 
@@ -42,9 +43,7 @@ impl IOCorticalAreaConfigurationFlag {
             0 => FrameChangeHandling::Absolute,
             1 => FrameChangeHandling::Incremental,
             _ => {
-                return Err(FeagiGenomeDefinitionsError::CorticalAreaError {
-                    context: "invalid frame handling bit in IO cortical configuration flag",
-                });
+                return Err(FeagiGenomeDefinitionsError::cortical_area_error(CorticalAreaErrKey::new("invalid frame handling bit in IO cortical configuration flag")));
             }
         };
 
@@ -52,9 +51,7 @@ impl IOCorticalAreaConfigurationFlag {
             0 => PercentageNeuronPositioning::Linear,
             1 => PercentageNeuronPositioning::Fractional,
             _ => {
-                return Err(FeagiGenomeDefinitionsError::CorticalAreaError {
-                    context: "invalid neuron positioning bit in IO cortical configuration flag",
-                });
+                return Err(FeagiGenomeDefinitionsError::cortical_area_error(CorticalAreaErrKey::new("Invalid neuron positioning bit in IO cortical configuration flag")));
             }
         };
 
@@ -95,9 +92,7 @@ impl IOCorticalAreaConfigurationFlag {
             9 => {
                 // CartesianPlane doesn't use positioning, but we'll accept it if set to 0
                 if positioning != 0 {
-                    return Err(FeagiGenomeDefinitionsError::CorticalAreaError {
-                        context: "IO CartesianPlane configuration does not allow positioning",
-                    });
+                    return Err(FeagiGenomeDefinitionsError::cortical_area_error(CorticalAreaErrKey::new("IO CartesianPlane configuration does not allow positioning")));
                 }
                 Ok(IOCorticalAreaConfigurationFlag::CartesianPlane(
                     frame_handling_enum,
@@ -106,15 +101,12 @@ impl IOCorticalAreaConfigurationFlag {
             10 => {
                 // Misc doesn't use positioning, but we'll accept it if set to 0
                 if positioning != 0 {
-                    return Err(FeagiGenomeDefinitionsError::CorticalAreaError {
-                        context: "IO Misc configuration does not allow positioning",
-                    });
+                    return Err(FeagiGenomeDefinitionsError::cortical_area_error(CorticalAreaErrKey::new("IO Misc configuration does not allow positioning")));
                 }
                 Ok(IOCorticalAreaConfigurationFlag::Misc(frame_handling_enum))
             }
-            _ => Err(FeagiGenomeDefinitionsError::CorticalAreaError {
-                context: "invalid IO cortical configuration variant",
-            }),
+            _ =>
+                Err(FeagiGenomeDefinitionsError::cortical_area_error(CorticalAreaErrKey::new("invalid IO cortical configuration variant")))
         }
     }
 
@@ -167,8 +159,8 @@ impl IOCorticalAreaConfigurationFlag {
             cortical_unit_identifier[2],
             data_type_configuration_bytes[0],
             data_type_configuration_bytes[1],
-            cortical_sub_unit_index.0,
-            cortical_unit_index.0,
+            cortical_sub_unit_index.const_take(),
+            cortical_unit_index.const_take(),
         ];
 
         CorticalID {
@@ -246,15 +238,11 @@ impl PercentageNeuronPositioning {
         map: &serde_json::Map<String, serde_json::Value>,
     ) -> Result<PercentageNeuronPositioning, FeagiGenomeDefinitionsError> {
         let val = map.get("percentage_neuron_positioning").ok_or(
-            FeagiGenomeDefinitionsError::CorticalAreaError {
-                context: "missing or invalid percentage_neuron_positioning in serde map",
-            },
+            CorticalAreaErrKey::new("missing or invalid percentage_neuron_positioning in serde map").into()
         )?;
         let output: PercentageNeuronPositioning =
             serde_json::from_value(val.clone()).map_err(|_| {
-                FeagiGenomeDefinitionsError::CorticalAreaError {
-                    context: "missing or invalid percentage_neuron_positioning in serde map",
-                }
+                CorticalAreaErrKey::new("missing or invalid percentage_neuron_positioning in serde map").into()
             })?;
         Ok(output)
     }
@@ -282,14 +270,10 @@ impl FrameChangeHandling {
     ) -> Result<FrameChangeHandling, FeagiGenomeDefinitionsError> {
         let val = map
             .get("frame_change_handling")
-            .ok_or(FeagiGenomeDefinitionsError::CorticalAreaError {
-                context: "missing or invalid frame_change_handling in serde map",
-            })?;
-        let output: FrameChangeHandling = serde_json::from_value(val.clone()).map_err(|_| {
-            FeagiGenomeDefinitionsError::CorticalAreaError {
-                context: "missing or invalid frame_change_handling in serde map",
-            }
-        })?;
+            .ok_or(CorticalAreaErrKey::new("missing or invalid frame_change_handling in serde map").into())?;
+        let output: FrameChangeHandling = serde_json::from_value(
+            val.clone())
+                .map_err(|_| { CorticalAreaErrKey::new("missing or invalid frame_change_handling in serde map").into() })?;
         Ok(output)
     }
 }
