@@ -1371,6 +1371,14 @@ impl GenomeServiceImpl {
                                 }
                             }
                         }
+                        "mp_learning_enabled" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "mp_learning_enabled".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
 
                         // Membrane potential / runtime flags
                         "mp_charge_accumulation" | "neuron_mp_charge_accumulation" => {
@@ -1681,6 +1689,14 @@ impl GenomeServiceImpl {
                                         serde_json::json!(v as u32),
                                     );
                                 }
+                            }
+                        }
+                        "mp_learning_enabled" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "mp_learning_enabled".to_string(),
+                                    serde_json::json!(v),
+                                );
                             }
                         }
                         "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
@@ -2039,6 +2055,7 @@ impl GenomeServiceImpl {
                         | "longterm_mem_threshold"
                         | "neuron_longterm_mem_threshold"
                         | "temporal_depth"
+                        | "mp_learning_enabled"
                 )
             });
 
@@ -2109,6 +2126,7 @@ impl GenomeServiceImpl {
                                     mem_props.temporal_depth,
                                     upstream_non_memory,
                                     Some(lifecycle_config),
+                                    mem_props.mp_learning_enabled,
                                 );
                             } else {
                                 warn!(target: "feagi-services", "[GENOME-UPDATE] Failed to lock PlasticityExecutor for memory-area update");
@@ -3870,6 +3888,10 @@ impl GenomeServiceImpl {
                     use feagi_evolutionary::extract_memory_properties;
                     extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
                 },
+                mp_learning_enabled: {
+                    use feagi_evolutionary::extract_memory_properties;
+                    extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
+                },
                 properties: HashMap::new(),
                 cortical_subtype,
                 encoding_type,
@@ -4061,6 +4083,10 @@ impl GenomeServiceImpl {
             temporal_depth: {
                 use feagi_evolutionary::extract_memory_properties;
                 extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
+            },
+            mp_learning_enabled: {
+                use feagi_evolutionary::extract_memory_properties;
+                extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
             },
             properties: HashMap::new(),
             cortical_subtype,
@@ -4254,6 +4280,10 @@ impl GenomeServiceImpl {
             temporal_depth: {
                 use feagi_evolutionary::extract_memory_properties;
                 extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
+            },
+            mp_learning_enabled: {
+                use feagi_evolutionary::extract_memory_properties;
+                extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
             },
             properties: HashMap::new(),
             cortical_subtype,

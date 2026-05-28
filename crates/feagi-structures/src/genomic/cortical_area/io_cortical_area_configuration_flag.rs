@@ -14,7 +14,7 @@ pub mod bit_indexes {
     // Bits 10-12 -> PoseSchema (3 bits, used only by PoseEstimation variant)
     pub const POSE_SCHEMA_START: usize = 10;
     pub const POSE_SCHEMA_MASK: u16 = 0b111; // 3 bits
-    // Bits 13-15 -> RESERVED
+                                             // Bits 13-15 -> RESERVED
 }
 
 /// Different types of Input/Output cortical areas exist, and have their own nested configurations. This enum defines that
@@ -141,13 +141,23 @@ impl IOCorticalAreaConfigurationFlag {
             IOCorticalAreaConfigurationFlag::Percentage2D(f, p) => (2u16, Some(*f), Some(*p), None),
             IOCorticalAreaConfigurationFlag::Percentage3D(f, p) => (3u16, Some(*f), Some(*p), None),
             IOCorticalAreaConfigurationFlag::Percentage4D(f, p) => (4u16, Some(*f), Some(*p), None),
-            IOCorticalAreaConfigurationFlag::SignedPercentage(f, p) => (5u16, Some(*f), Some(*p), None),
-            IOCorticalAreaConfigurationFlag::SignedPercentage2D(f, p) => (6u16, Some(*f), Some(*p), None),
-            IOCorticalAreaConfigurationFlag::SignedPercentage3D(f, p) => (7u16, Some(*f), Some(*p), None),
-            IOCorticalAreaConfigurationFlag::SignedPercentage4D(f, p) => (8u16, Some(*f), Some(*p), None),
+            IOCorticalAreaConfigurationFlag::SignedPercentage(f, p) => {
+                (5u16, Some(*f), Some(*p), None)
+            }
+            IOCorticalAreaConfigurationFlag::SignedPercentage2D(f, p) => {
+                (6u16, Some(*f), Some(*p), None)
+            }
+            IOCorticalAreaConfigurationFlag::SignedPercentage3D(f, p) => {
+                (7u16, Some(*f), Some(*p), None)
+            }
+            IOCorticalAreaConfigurationFlag::SignedPercentage4D(f, p) => {
+                (8u16, Some(*f), Some(*p), None)
+            }
             IOCorticalAreaConfigurationFlag::CartesianPlane(f) => (9u16, Some(*f), None, None),
             IOCorticalAreaConfigurationFlag::Misc(f) => (10u16, Some(*f), None, None),
-            IOCorticalAreaConfigurationFlag::PoseEstimation(f, s) => (11u16, Some(*f), None, Some(*s)),
+            IOCorticalAreaConfigurationFlag::PoseEstimation(f, s) => {
+                (11u16, Some(*f), None, Some(*s))
+            }
         };
 
         let frame_bits = match frame_handling {
@@ -377,15 +387,13 @@ impl PoseSchema {
     pub fn try_from_serde_map(
         map: &serde_json::Map<String, serde_json::Value>,
     ) -> Result<PoseSchema, FeagiDataError> {
-        let val = map.get("pose_schema").ok_or(
-            FeagiDataError::DeserializationError(
+        let val = map
+            .get("pose_schema")
+            .ok_or(FeagiDataError::DeserializationError(
                 "Unable to extract pose_schema!".to_string(),
-            ),
-        )?;
+            ))?;
         let output: PoseSchema = serde_json::from_value(val.clone()).map_err(|_err| {
-            FeagiDataError::DeserializationError(
-                "Unable to extract pose_schema!".to_string(),
-            )
+            FeagiDataError::DeserializationError("Unable to extract pose_schema!".to_string())
         })?;
         Ok(output)
     }

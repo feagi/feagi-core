@@ -1193,7 +1193,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
             init_lifespan: area.init_lifespan(),
             lifespan_growth_rate: area.lifespan_growth_rate() as f64,
             longterm_mem_threshold: area.longterm_mem_threshold(),
-            temporal_depth: memory_props.map(|p| p.temporal_depth.max(1)),
+            temporal_depth: memory_props.as_ref().map(|p| p.temporal_depth.max(1)),
+            mp_learning_enabled: memory_props.as_ref().map(|p| p.mp_learning_enabled),
             properties: filtered_properties,
             // IPU/OPU-specific decoded fields (only populated for IPU/OPU areas)
             cortical_subtype,

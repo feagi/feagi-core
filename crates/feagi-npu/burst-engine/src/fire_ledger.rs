@@ -69,6 +69,10 @@ pub struct FireLedger {
     tracked: AHashMap<u32, TrackedAreaHistory>,
     current_timestep: u64,
     capacity_hint: usize,
+    /// Areas for which membrane potentials are also archived (MP-aware memory encoding).
+    mp_enabled_areas: AHashMap<u32, bool>,
+    /// Per-area MP history: cortical_idx -> ring of (timestep, neuron_id -> MP at fire time).
+    mp_history: AHashMap<u32, VecDeque<(u64, AHashMap<u32, f32>)>>,
 }
 
 #[derive(Debug, Clone)]
@@ -86,6 +90,8 @@ impl FireLedger {
             tracked: AHashMap::new(),
             current_timestep: 0,
             capacity_hint,
+            mp_enabled_areas: AHashMap::new(),
+            mp_history: AHashMap::new(),
         }
     }
 
@@ -129,6 +135,8 @@ impl FireLedger {
     }
 
     pub fn untrack_area(&mut self, cortical_idx: u32) -> bool {
+        self.mp_enabled_areas.remove(&cortical_idx);
+        self.mp_history.remove(&cortical_idx);
         self.tracked.remove(&cortical_idx).is_some()
     }
 
@@ -149,6 +157,64 @@ impl FireLedger {
             .collect();
         out.sort_unstable_by_key(|(idx, _)| *idx);
         out
+    }
+
+    /// Enable membrane potential archival for a tracked area.
+    /// The area must already be tracked. MP history shares the same window size.
+    pub fn enable_mp_archival(&mut self, cortical_idx: u32) -> Result<(), FireLedgerError> {
+        if !self.tracked.contains_key(&cortical_idx) {
+            return Err(FireLedgerError::AreaNotTracked { cortical_idx });
+        }
+        self.mp_enabled_areas.insert(cortical_idx, true);
+        self.mp_history
+            .entry(cortical_idx)
+            .or_insert_with(|| VecDeque::with_capacity(self.capacity_hint.max(1)));
+        Ok(())
+    }
+
+    /// Check if MP archival is enabled for an area.
+    pub fn is_mp_archival_enabled(&self, cortical_idx: u32) -> bool {
+        self.mp_enabled_areas
+            .get(&cortical_idx)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// Get dense MP window for a tracked area.
+    /// Returns (timestep, neuron_id -> membrane_potential) for each frame in the window.
+    pub fn get_dense_window_mp(
+        &self,
+        cortical_idx: u32,
+        end_timestep: u64,
+        depth: usize,
+    ) -> Result<Vec<(u64, AHashMap<u32, f32>)>, FireLedgerError> {
+        if depth == 0 {
+            return Err(FireLedgerError::InvalidDepth);
+        }
+        if !self
+            .mp_enabled_areas
+            .get(&cortical_idx)
+            .copied()
+            .unwrap_or(false)
+        {
+            return Err(FireLedgerError::AreaNotTracked { cortical_idx });
+        }
+        let mp_ring = self
+            .mp_history
+            .get(&cortical_idx)
+            .ok_or(FireLedgerError::AreaNotTracked { cortical_idx })?;
+
+        let start = end_timestep.saturating_sub(depth as u64).saturating_add(1);
+        let mut result = Vec::with_capacity(depth);
+        for target_t in start..=end_timestep {
+            let mp_map = mp_ring
+                .iter()
+                .find(|(t, _)| *t == target_t)
+                .map(|(_, m)| m.clone())
+                .unwrap_or_default();
+            result.push((target_t, mp_map));
+        }
+        Ok(result)
     }
 
     /// Archive firing data for a burst.
@@ -176,9 +242,24 @@ impl FireLedger {
         // Build bitmaps only for tracked areas that fired this timestep.
         let mut fired_bitmaps: AHashMap<u32, RoaringBitmap> =
             AHashMap::with_capacity(self.tracked.len());
+        // Also build MP maps for MP-enabled areas.
+        let mut fired_mps: AHashMap<u32, AHashMap<u32, f32>> = AHashMap::new();
+
         for (&cortical_idx, neurons) in &fire_queue.neurons_by_area {
             if self.tracked.contains_key(&cortical_idx) {
                 let bitmap: RoaringBitmap = neurons.iter().map(|n| n.neuron_id.0).collect();
+                if self
+                    .mp_enabled_areas
+                    .get(&cortical_idx)
+                    .copied()
+                    .unwrap_or(false)
+                {
+                    let mp_map: AHashMap<u32, f32> = neurons
+                        .iter()
+                        .map(|n| (n.neuron_id.0, n.membrane_potential))
+                        .collect();
+                    fired_mps.insert(cortical_idx, mp_map);
+                }
                 fired_bitmaps.insert(cortical_idx, bitmap);
             }
         }
@@ -189,6 +270,24 @@ impl FireLedger {
                 for hist in self.tracked.values_mut() {
                     hist.push_frame(missing_t, RoaringBitmap::new());
                 }
+                for (&area_idx, mp_ring) in self.mp_history.iter_mut() {
+                    if self
+                        .mp_enabled_areas
+                        .get(&area_idx)
+                        .copied()
+                        .unwrap_or(false)
+                    {
+                        mp_ring.push_back((missing_t, AHashMap::new()));
+                        let window_size = self
+                            .tracked
+                            .get(&area_idx)
+                            .map(|h| h.window_size)
+                            .unwrap_or(1);
+                        while mp_ring.len() > window_size {
+                            mp_ring.pop_front();
+                        }
+                    }
+                }
             }
         }
 
@@ -196,6 +295,27 @@ impl FireLedger {
         for (&cortical_idx, hist) in self.tracked.iter_mut() {
             let bitmap = fired_bitmaps.remove(&cortical_idx).unwrap_or_default();
             hist.push_frame(timestep, bitmap);
+        }
+
+        // Write MP data for this timestep.
+        for (&area_idx, mp_ring) in self.mp_history.iter_mut() {
+            if self
+                .mp_enabled_areas
+                .get(&area_idx)
+                .copied()
+                .unwrap_or(false)
+            {
+                let mp_map = fired_mps.remove(&area_idx).unwrap_or_default();
+                mp_ring.push_back((timestep, mp_map));
+                let window_size = self
+                    .tracked
+                    .get(&area_idx)
+                    .map(|h| h.window_size)
+                    .unwrap_or(1);
+                while mp_ring.len() > window_size {
+                    mp_ring.pop_front();
+                }
+            }
         }
 
         self.current_timestep = timestep;
@@ -404,5 +524,49 @@ mod tests {
 
         let err = ledger.get_dense_window_bitmaps(1, 1, 3).unwrap_err();
         assert!(matches!(err, FireLedgerError::InsufficientHistory { .. }));
+    }
+
+    #[test]
+    fn test_mp_archival_stores_membrane_potentials() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 5).unwrap();
+        ledger.enable_mp_archival(1).unwrap();
+
+        let mut fq = FireQueue::new();
+        fq.add_neuron(FiringNeuron {
+            neuron_id: NeuronId(100),
+            membrane_potential: 7.5,
+            cortical_idx: 1,
+            x: 0,
+            y: 0,
+            z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+        });
+        fq.add_neuron(FiringNeuron {
+            neuron_id: NeuronId(200),
+            membrane_potential: 3.2,
+            cortical_idx: 1,
+            x: 1,
+            y: 0,
+            z: 0,
+            fire_kind: FIRE_KIND_STDP_ELIGIBLE,
+        });
+        ledger.archive_burst(1, &fq).unwrap();
+
+        let mp_window = ledger.get_dense_window_mp(1, 1, 1).unwrap();
+        assert_eq!(mp_window.len(), 1);
+        let (ts, mp_map) = &mp_window[0];
+        assert_eq!(*ts, 1);
+        assert!((mp_map.get(&100).copied().unwrap() - 7.5).abs() < 0.001);
+        assert!((mp_map.get(&200).copied().unwrap() - 3.2).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_mp_archival_not_enabled_returns_error() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 5).unwrap();
+
+        let err = ledger.get_dense_window_mp(1, 1, 1).unwrap_err();
+        assert!(matches!(err, FireLedgerError::AreaNotTracked { .. }));
     }
 }

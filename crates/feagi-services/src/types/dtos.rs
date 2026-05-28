@@ -129,6 +129,13 @@ pub struct CorticalAreaInfo {
     /// Omitted for non-memory areas.
     #[serde(rename = "temporal_depth", skip_serializing_if = "Option::is_none")]
     pub temporal_depth: Option<u32>,
+    /// Whether membrane potential learning is enabled for this memory area.
+    /// Omitted for non-memory areas.
+    #[serde(
+        rename = "mp_learning_enabled",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mp_learning_enabled: Option<bool>,
     pub properties: HashMap<String, serde_json::Value>,
 
     // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)

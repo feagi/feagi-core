@@ -158,9 +158,9 @@ impl WrappedIOType {
                             .into(),
                     ));
                 }
-                Ok(WrappedIOData::PoseEstimationData(
-                    PoseEstimationData::new(&pose_properties.unwrap())?,
-                ))
+                Ok(WrappedIOData::PoseEstimationData(PoseEstimationData::new(
+                    &pose_properties.unwrap(),
+                )?))
             }
         }
     }

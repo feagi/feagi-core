@@ -157,6 +157,8 @@ impl CorticalChangeClassifier {
             "init_lifespan",
             "neuron_init_lifespan",
             "temporal_depth",
+            // MP learning mode for memory areas
+            "mp_learning_enabled",
             // Membrane potential
             "mp_charge_accumulation",
             "neuron_mp_charge_accumulation",

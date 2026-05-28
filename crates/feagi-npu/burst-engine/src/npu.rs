@@ -430,6 +430,10 @@ pub struct MemoryReplayFrame {
     pub offset: u32,
     pub upstream_area_idx: u32,
     pub coords: Vec<(u32, u32, u32)>,
+    /// Per-coordinate membrane potentials for MP-aware replay.
+    /// When Some, replay injects each coordinate at its stored potential
+    /// instead of the fixed twin target potential.
+    pub membrane_potentials: Option<Vec<f32>>,
 }
 
 #[derive(Debug, Clone)]
@@ -443,7 +447,17 @@ pub(crate) struct ReplayInjection {
     target_burst: u64,
     twin_area_idx: u32,
     coords: Vec<(u32, u32, u32)>,
-    potential: f32,
+    /// Replay potential mode: fixed for all coords or per-coordinate.
+    potentials: ReplayPotentialMode,
+}
+
+/// How membrane potentials are applied during twin area replay injection.
+#[derive(Debug, Clone)]
+pub(crate) enum ReplayPotentialMode {
+    /// All coordinates replayed at a single fixed potential (default behavior).
+    Fixed(f32),
+    /// Each coordinate replayed at its own stored potential.
+    PerCoordinate(Vec<f32>),
 }
 
 impl<
@@ -1944,6 +1958,15 @@ impl<
         replay_frames.insert(neuron_id, std::sync::Arc::new(frames));
     }
 
+    /// Get stored replay frames for a memory neuron (for EMA averaging on reactivation).
+    pub fn get_memory_replay_frames(
+        &self,
+        neuron_id: u32,
+    ) -> Option<std::sync::Arc<Vec<MemoryReplayFrame>>> {
+        let replay_frames = self.memory_replay_frames.read().unwrap();
+        replay_frames.get(&neuron_id).cloned()
+    }
+
     /// Register the twin cortical area for replay from a memory area and upstream area.
     pub fn register_memory_twin_mapping(
         &mut self,
@@ -2005,7 +2028,10 @@ impl<
                             target_burst: burst_count + frame.offset as u64 + 1,
                             twin_area_idx: target.twin_area_idx,
                             coords: frame.coords.clone(),
-                            potential: target.potential,
+                            potentials: match &frame.membrane_potentials {
+                                Some(mps) => ReplayPotentialMode::PerCoordinate(mps.clone()),
+                                None => ReplayPotentialMode::Fixed(target.potential),
+                            },
                         });
                     scheduled += 1;
                 }
@@ -2094,9 +2120,22 @@ impl<
             for replay in replay_due.into_iter() {
                 let neuron_ids =
                     neuron_storage.batch_coordinate_lookup(replay.twin_area_idx, &replay.coords);
-                for idx in neuron_ids.into_iter().flatten() {
-                    staged.push((NeuronId(idx as u32), replay.potential));
-                    total_replay_candidates += 1;
+                match &replay.potentials {
+                    ReplayPotentialMode::Fixed(potential) => {
+                        for idx in neuron_ids.into_iter().flatten() {
+                            staged.push((NeuronId(idx as u32), *potential));
+                            total_replay_candidates += 1;
+                        }
+                    }
+                    ReplayPotentialMode::PerCoordinate(mps) => {
+                        for (i, opt_idx) in neuron_ids.into_iter().enumerate() {
+                            if let Some(idx) = opt_idx {
+                                let mp = mps.get(i).copied().unwrap_or(1.0);
+                                staged.push((NeuronId(idx as u32), mp));
+                                total_replay_candidates += 1;
+                            }
+                        }
+                    }
                 }
             }
             tracing::debug!(
@@ -5450,6 +5489,34 @@ impl<
             .get_tracked_windows()
     }
 
+    /// Enable membrane potential archival for a tracked area in the FireLedger.
+    /// The area must already be tracked via `configure_fire_ledger_window`.
+    pub fn enable_fire_ledger_mp_archival(&mut self, cortical_idx: u32) -> Result<()> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .fire_ledger
+            .enable_mp_archival(cortical_idx)
+            .map_err(|e| {
+                FeagiError::RuntimeError(format!("FireLedger MP archival enable failed: {e}"))
+            })
+    }
+
+    /// Get dense MP window for a tracked area (membrane potentials per neuron per timestep).
+    pub fn get_fire_ledger_dense_window_mp(
+        &self,
+        cortical_idx: u32,
+        end_timestep: u64,
+        depth: usize,
+    ) -> Result<Vec<(u64, AHashMap<u32, f32>)>> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .fire_ledger
+            .get_dense_window_mp(cortical_idx, end_timestep, depth)
+            .map_err(|e| FeagiError::RuntimeError(format!("FireLedger MP query failed: {e}")))
+    }
+
     /// Track a cortical area on the episodic memory FireLedger (pattern-injection fires only).
     pub fn configure_episodic_memory_fire_ledger_window(
         &mut self,
@@ -5935,7 +6002,7 @@ mod tests {
                     target_burst: 0,
                     twin_area_idx: 3,
                     coords: vec![(0, 0, 0)],
-                    potential: 10.0,
+                    potentials: ReplayPotentialMode::Fixed(10.0),
                 });
         }
 

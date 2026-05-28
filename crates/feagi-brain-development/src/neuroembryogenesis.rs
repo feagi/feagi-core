@@ -1205,6 +1205,7 @@ impl Neuroembryogenesis {
                                     mem_props.temporal_depth,
                                     upstream_non_memory,
                                     Some(lifecycle_config),
+                                    mem_props.mp_learning_enabled,
                                 );
 
                                 registered_count += 1;

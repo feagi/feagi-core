@@ -62,6 +62,7 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     ("mem_gr-i", "lifespan_growth_rate"),
     ("mem_ls-i", "init_lifespan"),
     ("tmpdpt-i", "temporal_depth"),
+    ("mplrn-b", "mp_learning_enabled"),
     ("excite-f", "neuron_excitability"),
     ("devcnt-i", "dev_count"),
     ("twinrf-t", "memory_twin_of"),

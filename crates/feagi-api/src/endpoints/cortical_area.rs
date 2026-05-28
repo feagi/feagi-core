@@ -138,6 +138,7 @@ pub struct MemoryCorticalAreaParamsResponse {
     pub longterm_mem_threshold: u32,
     pub lifespan_growth_rate: f32,
     pub init_lifespan: u32,
+    pub mp_learning_enabled: bool,
 }
 
 /// Response for [`get_memory_cortical_area`].
@@ -2184,6 +2185,7 @@ pub async fn get_memory_cortical_area(
             longterm_mem_threshold: mem_props.longterm_threshold,
             lifespan_growth_rate: mem_props.lifespan_growth_rate,
             init_lifespan: mem_props.init_lifespan,
+            mp_learning_enabled: mem_props.mp_learning_enabled,
         },
         upstream_cortical_area_indices,
         upstream_cortical_area_count,

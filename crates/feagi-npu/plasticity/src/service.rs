@@ -125,6 +125,10 @@ pub struct ReplayFrame {
     pub offset: u32,
     pub upstream_area_idx: u32,
     pub coords: Vec<(u32, u32, u32)>,
+    /// Per-coordinate membrane potential at encoding time.
+    /// Present only when mp_learning_enabled=true for the memory area.
+    /// Length matches `coords` when present.
+    pub membrane_potentials: Option<Vec<f32>>,
 }
 
 /// Memory area configuration
@@ -132,6 +136,7 @@ pub struct ReplayFrame {
 pub struct MemoryAreaConfig {
     pub temporal_depth: u32,
     pub upstream_areas: Vec<u32>,
+    pub mp_learning_enabled: bool,
 }
 
 /// Runtime counts for a memory cortical area (plasticity layer).
@@ -440,7 +445,7 @@ impl PlasticityService {
                 current_timestep,
                 memory_area_idx
             );
-            let (timestep_bitmaps, windows) = {
+            let (timestep_bitmaps, windows, mp_windows) = {
                 let temporal_depth = area_config.temporal_depth as usize;
 
                 // Brief lock to query FireLedger - data is already CPU-resident from burst processing
@@ -459,7 +464,7 @@ impl PlasticityService {
                 );
 
                 let result = if temporal_depth == 0 || area_config.upstream_areas.is_empty() {
-                    (Vec::new(), Vec::new())
+                    (Vec::new(), Vec::new(), None)
                 } else {
                     // Deterministic: upstream areas are processed in sorted order so hashing is stable.
                     let mut upstream_sorted = area_config.upstream_areas.clone();
@@ -506,7 +511,7 @@ impl PlasticityService {
                     }
 
                     if !windows_ok || windows.is_empty() {
-                        (Vec::new(), Vec::new())
+                        (Vec::new(), Vec::new(), None)
                     } else {
                         // Validate alignment: all upstream windows must share the same timesteps.
                         let reference_timesteps: Vec<u64> =
@@ -525,7 +530,7 @@ impl PlasticityService {
                         }
 
                         if !aligned {
-                            (Vec::new(), Vec::new())
+                            (Vec::new(), Vec::new(), None)
                         } else {
                             // Flatten as: for each timestep (oldest->newest), for each upstream area (sorted),
                             // append that area's fired-neuron set at that timestep.
@@ -539,7 +544,38 @@ impl PlasticityService {
                                     out.push(neuron_set);
                                 }
                             }
-                            (out, windows)
+
+                            // Fetch MP windows if mp_learning_enabled
+                            let mp_data = if area_config.mp_learning_enabled {
+                                let mut mp_wins: Vec<(u32, Vec<(u64, ahash::AHashMap<u32, f32>)>)> =
+                                    Vec::new();
+                                for &upstream_idx in &upstream_sorted {
+                                    match npu_lock.get_fire_ledger_dense_window_mp(
+                                        upstream_idx,
+                                        current_timestep,
+                                        temporal_depth,
+                                    ) {
+                                        Ok(mp_window) => mp_wins.push((upstream_idx, mp_window)),
+                                        Err(e) => {
+                                            tracing::warn!(
+                                                target: "plasticity",
+                                                "[PLASTICITY] MP window unavailable for upstream {}: {}",
+                                                upstream_idx,
+                                                e
+                                            );
+                                        }
+                                    }
+                                }
+                                if mp_wins.is_empty() {
+                                    None
+                                } else {
+                                    Some(mp_wins)
+                                }
+                            } else {
+                                None
+                            };
+
+                            (out, windows, mp_data)
                         }
                     }
                 };
@@ -590,7 +626,7 @@ impl PlasticityService {
                 timestep_bitmaps,
                 Some(area_config.temporal_depth),
             ) {
-                let replay_frames = Self::build_replay_frames(npu, &windows);
+                let replay_frames = Self::build_replay_frames(npu, &windows, mp_windows.as_deref());
                 tracing::debug!(
                     target: "plasticity",
                     "[PLASTICITY] Burst {} pattern detected area={} hash={} upstream={} replay_frames={}",
@@ -616,6 +652,13 @@ impl PlasticityService {
 
                         let neuron_id = array.get_neuron_id(existing_neuron_idx).unwrap();
 
+                        // EMA averaging of membrane potentials on reactivation
+                        let final_replay_frames = if area_config.mp_learning_enabled {
+                            Self::average_replay_frame_mps(npu, neuron_id, &replay_frames)
+                        } else {
+                            replay_frames.clone()
+                        };
+
                         // Register and inject reactivated neuron
                         commands.push(PlasticityCommand::RegisterMemoryNeuron {
                             neuron_id,
@@ -624,7 +667,7 @@ impl PlasticityService {
                             membrane_potential: 0.0,
                         });
 
-                        if replay_frames.is_empty() {
+                        if final_replay_frames.is_empty() {
                             tracing::warn!(
                                 target: "plasticity",
                                 "[PLASTICITY] Burst {} reactivation area={} neuron_id={} has empty replay frames",
@@ -639,7 +682,7 @@ impl PlasticityService {
                             membrane_potential: 1.5,
                             pattern_hash: pattern.pattern_hash,
                             is_reactivation: true,
-                            replay_frames: replay_frames.clone(),
+                            replay_frames: final_replay_frames,
                         });
 
                         let total_memory = array.get_stats().active_neurons;
@@ -771,9 +814,11 @@ impl PlasticityService {
     }
 
     /// Build replay frames from dense upstream windows for pattern reconstruction.
+    /// When `mp_windows` is Some, membrane potentials are captured per coordinate.
     fn build_replay_frames(
         npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
         windows: &[(u32, Vec<(u64, roaring::RoaringBitmap)>)],
+        mp_windows: Option<&[(u32, Vec<(u64, ahash::AHashMap<u32, f32>)>)]>,
     ) -> Vec<ReplayFrame> {
         if windows.is_empty() {
             return Vec::new();
@@ -784,26 +829,48 @@ impl PlasticityService {
         let mut empty_bitmaps = 0usize;
         let mut missing_coords = 0usize;
         for (upstream_area_idx, window) in windows {
+            let mp_window_for_area = mp_windows.and_then(|mw| {
+                mw.iter()
+                    .find(|(idx, _)| idx == upstream_area_idx)
+                    .map(|(_, w)| w)
+            });
+
             for (offset, (_timestep, bitmap)) in window.iter().enumerate() {
                 if bitmap.is_empty() {
                     empty_bitmaps += 1;
                     continue;
                 }
 
-                let mut coords: Vec<(u32, u32, u32)> = bitmap
+                let mp_map = mp_window_for_area
+                    .and_then(|w| w.get(offset))
+                    .map(|(_, mp)| mp);
+
+                let mut entries: Vec<((u32, u32, u32), Option<f32>)> = bitmap
                     .iter()
-                    .filter_map(|neuron_id| npu_lock.get_neuron_coordinates(neuron_id))
+                    .filter_map(|neuron_id| {
+                        let coord = npu_lock.get_neuron_coordinates(neuron_id)?;
+                        let mp = mp_map.and_then(|m| m.get(&neuron_id).copied());
+                        Some((coord, mp))
+                    })
                     .collect();
-                if coords.is_empty() {
+                if entries.is_empty() {
                     missing_coords += 1;
                     continue;
                 }
-                coords.sort_unstable();
+                entries.sort_unstable_by_key(|(coord, _)| *coord);
+
+                let coords: Vec<(u32, u32, u32)> = entries.iter().map(|(c, _)| *c).collect();
+                let membrane_potentials = if mp_map.is_some() {
+                    Some(entries.iter().map(|(_, mp)| mp.unwrap_or(0.0)).collect())
+                } else {
+                    None
+                };
 
                 frames.push(ReplayFrame {
                     offset: offset as u32,
                     upstream_area_idx: *upstream_area_idx,
                     coords,
+                    membrane_potentials,
                 });
             }
         }
@@ -818,6 +885,52 @@ impl PlasticityService {
         frames
     }
 
+    /// Average membrane potentials between stored replay frames and new ones (EMA alpha=0.5).
+    /// Retrieves existing frames from NPU, averages with new frames, returns merged result.
+    fn average_replay_frame_mps(
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        neuron_id: u32,
+        new_frames: &[ReplayFrame],
+    ) -> Vec<ReplayFrame> {
+        let npu_lock = npu.lock().unwrap();
+        let stored = match npu_lock.get_memory_replay_frames(neuron_id) {
+            Some(arc) => arc,
+            None => return new_frames.to_vec(),
+        };
+        drop(npu_lock);
+
+        if stored.len() != new_frames.len() {
+            return new_frames.to_vec();
+        }
+
+        new_frames
+            .iter()
+            .zip(stored.iter())
+            .map(|(new_frame, old_frame)| {
+                let membrane_potentials = match (
+                    &new_frame.membrane_potentials,
+                    &old_frame.membrane_potentials,
+                ) {
+                    (Some(new_mps), Some(old_mps)) if new_mps.len() == old_mps.len() => Some(
+                        new_mps
+                            .iter()
+                            .zip(old_mps.iter())
+                            .map(|(new_mp, old_mp)| (old_mp + new_mp) / 2.0)
+                            .collect(),
+                    ),
+                    (Some(new_mps), None) => Some(new_mps.clone()),
+                    _ => new_frame.membrane_potentials.clone(),
+                };
+                ReplayFrame {
+                    offset: new_frame.offset,
+                    upstream_area_idx: new_frame.upstream_area_idx,
+                    coords: new_frame.coords.clone(),
+                    membrane_potentials,
+                }
+            })
+            .collect()
+    }
+
     /// Register a memory area for pattern detection
     pub fn register_memory_area(
         &self,
@@ -826,6 +939,7 @@ impl PlasticityService {
         temporal_depth: u32,
         upstream_areas: Vec<u32>,
         lifecycle_config: Option<MemoryNeuronLifecycleConfig>,
+        mp_learning_enabled: bool,
     ) -> bool {
         let upstream_len = upstream_areas.len();
         let upstream_clone = upstream_areas.clone();
@@ -835,6 +949,7 @@ impl PlasticityService {
             MemoryAreaConfig {
                 temporal_depth,
                 upstream_areas,
+                mp_learning_enabled,
             },
         );
 
@@ -890,6 +1005,30 @@ impl PlasticityService {
                         e
                     );
                 }
+            }
+
+            // Enable MP archival on upstream areas when mp_learning_enabled is true
+            if mp_learning_enabled {
+                let upstream_for_mp = areas
+                    .get(&area_idx)
+                    .map(|c| c.upstream_areas.clone())
+                    .unwrap_or_default();
+                for upstream_idx in upstream_for_mp {
+                    if let Err(e) = npu.enable_fire_ledger_mp_archival(upstream_idx) {
+                        tracing::warn!(
+                            target: "plasticity",
+                            "[PLASTICITY] Failed to enable MP archival for upstream {} (memory area {}): {}",
+                            upstream_idx,
+                            area_idx,
+                            e
+                        );
+                    }
+                }
+                tracing::info!(
+                    target: "plasticity",
+                    "[PLASTICITY] MP learning enabled for memory area {} - upstream MP archival active",
+                    area_idx
+                );
             }
         } else {
             tracing::warn!(
@@ -1173,7 +1312,8 @@ mod tests {
         ));
         let service = PlasticityService::new(config, cache, npu);
 
-        let result = service.register_memory_area(100, "mem_00".to_string(), 3, vec![1, 2], None);
+        let result =
+            service.register_memory_area(100, "mem_00".to_string(), 3, vec![1, 2], None, false);
         assert!(result);
 
         let areas = service.memory_areas.lock().unwrap();

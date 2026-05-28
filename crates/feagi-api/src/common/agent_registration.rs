@@ -98,9 +98,7 @@ fn per_channel_motor_dimensions_for_registration(
     // PoseEstimation: honor dimensions from decoder block.
     // Expected: {"PoseEstimation": {"width": N, "height": N, "depth": N}}
     if motor_unit == MotorCorticalUnit::PoseEstimation {
-        if let Some(dims) =
-            pose_dims_from_decoder_properties(decoder_properties, unit_topology)
-        {
+        if let Some(dims) = pose_dims_from_decoder_properties(decoder_properties, unit_topology) {
             return dims;
         }
         return (default_w, default_h, default_d);
@@ -297,10 +295,7 @@ fn build_io_config_map_from_unit_def(
         serde_json::to_value(positioning)
             .map_err(|e| format!("Failed to serialize PercentageNeuronPositioning: {}", e))?,
     );
-    if let Some(pose_schema_value) = io_flags
-        .and_then(|flags| flags.get("pose_schema"))
-        .cloned()
-    {
+    if let Some(pose_schema_value) = io_flags.and_then(|flags| flags.get("pose_schema")).cloned() {
         config.insert("pose_schema".to_string(), pose_schema_value);
     }
     Ok(config)

@@ -559,11 +559,7 @@ pub struct PoseEstimationProperties {
 }
 
 impl PoseEstimationProperties {
-    pub fn new(
-        width: u32,
-        height: u32,
-        depth: u32,
-    ) -> Result<Self, FeagiDataError> {
+    pub fn new(width: u32, height: u32, depth: u32) -> Result<Self, FeagiDataError> {
         if width == 0 || height == 0 || depth == 0 {
             return Err(FeagiDataError::BadParameters(
                 "PoseEstimationProperties dimensions must all be non-zero".into(),

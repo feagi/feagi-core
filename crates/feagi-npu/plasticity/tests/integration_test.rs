@@ -246,7 +246,8 @@ fn test_plasticity_service_basic_workflow() {
     let service = PlasticityService::new(config, cache, npu);
 
     // Register a memory area
-    let success = service.register_memory_area(100, "mem_00".to_string(), 3, vec![1, 2], None);
+    let success =
+        service.register_memory_area(100, "mem_00".to_string(), 3, vec![1, 2], None, false);
     assert!(success);
 
     // Notify of a burst
@@ -283,6 +284,7 @@ fn test_register_memory_area_configures_fire_ledger() {
         temporal_depth,
         vec![upstream_idx],
         None,
+        false,
     );
 
     let npu_guard = npu.lock().unwrap();

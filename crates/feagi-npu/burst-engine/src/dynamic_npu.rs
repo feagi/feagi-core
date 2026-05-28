@@ -1012,6 +1012,17 @@ where
         }
     }
 
+    /// Get stored replay frames for a memory neuron (for EMA averaging on reactivation).
+    pub fn get_memory_replay_frames(
+        &self,
+        neuron_id: u32,
+    ) -> Option<std::sync::Arc<Vec<crate::npu::MemoryReplayFrame>>> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.get_memory_replay_frames(neuron_id),
+            DynamicNPUGeneric::INT8(npu) => npu.get_memory_replay_frames(neuron_id),
+        }
+    }
+
     /// Register the twin cortical area mapping for memory replay.
     pub fn register_memory_twin_mapping(
         &mut self,
@@ -1055,6 +1066,29 @@ where
         match self {
             DynamicNPUGeneric::F32(npu) => npu.get_all_fire_ledger_configs(),
             DynamicNPUGeneric::INT8(npu) => npu.get_all_fire_ledger_configs(),
+        }
+    }
+
+    pub fn enable_fire_ledger_mp_archival(&mut self, cortical_idx: u32) -> Result<()> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.enable_fire_ledger_mp_archival(cortical_idx),
+            DynamicNPUGeneric::INT8(npu) => npu.enable_fire_ledger_mp_archival(cortical_idx),
+        }
+    }
+
+    pub fn get_fire_ledger_dense_window_mp(
+        &self,
+        cortical_idx: u32,
+        end_timestep: u64,
+        depth: usize,
+    ) -> Result<Vec<(u64, ahash::AHashMap<u32, f32>)>> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => {
+                npu.get_fire_ledger_dense_window_mp(cortical_idx, end_timestep, depth)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.get_fire_ledger_dense_window_mp(cortical_idx, end_timestep, depth)
+            }
         }
     }
 
