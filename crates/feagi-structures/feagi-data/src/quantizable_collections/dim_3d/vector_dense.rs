@@ -1,4 +1,5 @@
-use crate::quantizable_collections::spatial::dim_3d::shared_traits::{QuantizableSpatialCollection3DAsSlice, QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithIndex};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData};
+use crate::quantizable_collections::dim_3d::spatial_shared_traits::{QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithIndex};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 use crate::quantizable_spatial::index::SpatialIndexDimensions3D;
 
@@ -61,7 +62,39 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DAsSlice<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionBase<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn max_linear_index(&self) -> LIQ {
+        self.dimensions.max_linear_index()
+    }
+}
+
+impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn try_get_value(&self, index: LIQ) -> Option<&Value> {
+        self.values.get(index.to_usize())
+    }
+
+    fn try_get_value_mut(&mut self, index: LIQ) -> Option<&mut Value> {
+        self.values.get_mut(index.to_usize())
+    }
+
+    fn get_unchecked_value(&self, index: LIQ) -> &Value {
+        &self.values[index.to_usize()]
+    }
+
+    fn get_unchecked_value_mut(&mut self, index: LIQ) -> &mut Value {
+        &mut self.values[index.to_usize()]
+    }
+}
+
+impl<LIQ, Value> QuantizableLinearCollectionAsSlice<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -72,6 +105,23 @@ where
 
     fn get_values_slice_mut(&mut self) -> &mut [Value] {
         self.values.as_mut_slice()
+    }
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection3DCPUData<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection3DBase<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn get_dimensions(&self) -> &SpatialIndexDimensions3D<LIQ> {
+        &self.dimensions
     }
 }
 
@@ -98,37 +148,5 @@ where
             .iter_mut()
             .enumerate()
             .map(|(index, value)| (LIQ::from_usize_unchecked(index), value))
-    }
-}
-
-impl<LIQ, Value> QuantizableSpatialCollection3DCPUData<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-    fn try_get_value(&self, index: LIQ) -> Option<&Value> {
-        self.values.get(index.to_usize())
-    }
-
-    fn try_get_value_mut(&mut self, index: LIQ) -> Option<&mut Value> {
-        self.values.get_mut(index.to_usize())
-    }
-
-    fn get_unchecked_value(&self, index: LIQ) -> &Value {
-        &self.values[index.to_usize()]
-    }
-
-    fn get_unchecked_value_mut(&mut self, index: LIQ) -> &mut Value {
-        &mut self.values[index.to_usize()]
-    }
-}
-
-impl<LIQ, Value> QuantizableSpatialCollection3DBase<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-    fn get_dimensions(&self) -> &SpatialIndexDimensions3D<LIQ> {
-        &self.dimensions
     }
 }

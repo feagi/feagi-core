@@ -1,5 +1,6 @@
 use ahash::AHashMap;
-use crate::quantizable_collections::spatial::dim_3d::shared_traits::{QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithIndex};
+use crate::quantizable_collections::dim_3d::spatial_shared_traits::{QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithIndex};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 use crate::quantizable_spatial::index::SpatialIndexDimensions3D;
 
@@ -38,32 +39,17 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DIterWithIndex<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionBase<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
-    fn iter_with_index<'a>(&'a self) -> impl Iterator<Item=(LIQ, &'a Value)>
-    where
-        Value: 'a
-    {
-        self.values
-            .iter()
-            .map(|(index, value)| (*index, value))
-    }
-
-    fn iter_mut_with_index<'a>(&'a mut self) -> impl Iterator<Item=(LIQ, &'a mut Value)>
-    where
-        Value: 'a
-    {
-        self.values
-            .iter_mut()
-            .map(|(index, value)| (*index, value))
+    fn max_linear_index(&self) -> LIQ {
+        self.dimensions.max_linear_index()
     }
 }
 
-
-impl<LIQ, Value> QuantizableSpatialCollection3DCPUData<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -87,6 +73,13 @@ where
     }
 }
 
+impl<LIQ, Value> QuantizableSpatialCollection3DCPUData<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+}
+
 impl<LIQ, Value> QuantizableSpatialCollection3DBase<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
@@ -94,5 +87,29 @@ where
 {
     fn get_dimensions(&self) -> &SpatialIndexDimensions3D<LIQ> {
         &self.dimensions
+    }
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection3DIterWithIndex<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn iter_with_index<'a>(&'a self) -> impl Iterator<Item=(LIQ, &'a Value)>
+    where
+        Value: 'a
+    {
+        self.values
+            .iter()
+            .map(|(index, value)| (*index, value))
+    }
+
+    fn iter_mut_with_index<'a>(&'a mut self) -> impl Iterator<Item=(LIQ, &'a mut Value)>
+    where
+        Value: 'a
+    {
+        self.values
+            .iter_mut()
+            .map(|(index, value)| (*index, value))
     }
 }

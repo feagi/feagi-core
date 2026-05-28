@@ -422,6 +422,22 @@ macro_rules! __impl_supports_uint_ops {
             }
         }
 
+        impl<$quant_element> core::cmp::Eq for $wrapper_type<$quant_element>
+        where
+            $quant_element: $($quant_bound)+,
+        {
+        }
+
+        impl<$quant_element> core::hash::Hash for $wrapper_type<$quant_element>
+        where
+            $quant_element: $($quant_bound)+,
+        {
+            #[inline(always)]
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                core::hash::Hash::hash(&self.0, state);
+            }
+        }
+
         impl<$quant_element> $crate::SupportsUintOps for $wrapper_type<$quant_element>
         where
             $quant_element: $($quant_bound)+,
@@ -473,6 +489,22 @@ macro_rules! __impl_supports_uint_ops_concrete {
             #[inline(always)]
             fn rem_assign(&mut self, rhs: Self) {
                 self.0 %= rhs.0;
+            }
+        }
+
+        impl core::cmp::Eq for $wrapper_type
+        where
+            $quant_element: $($quant_bound)+,
+        {
+        }
+
+        impl core::hash::Hash for $wrapper_type
+        where
+            $quant_element: $($quant_bound)+,
+        {
+            #[inline(always)]
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                core::hash::Hash::hash(&self.0, state);
             }
         }
 

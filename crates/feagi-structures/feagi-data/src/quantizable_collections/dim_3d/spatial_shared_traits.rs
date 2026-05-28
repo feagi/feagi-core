@@ -1,3 +1,4 @@
+use crate::quantizable_collections::shared_traits::QuantizableLinearCollectionCPUData;
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 use crate::quantizable_spatial::index::{SpatialIndexCoordinate3D, SpatialIndexDimensions3D};
 
@@ -29,18 +30,11 @@ where
 /// Data is accessible by the CPU (CPU ECS)
 pub trait QuantizableSpatialCollection3DCPUData<LIQ, Value>:
 QuantizableSpatialCollection3DBase<LIQ, Value>
++ QuantizableLinearCollectionCPUData<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
-    fn try_get_value(&self, index: LIQ) -> Option<&Value>;
-
-    fn try_get_value_mut(&mut self, index: LIQ) -> Option<&mut Value>;
-
-    fn get_unchecked_value(&self, index: LIQ) -> &Value;
-
-    fn get_unchecked_value_mut(&mut self, index: LIQ) -> &mut Value;
-
     fn try_get_value_by_coordinate(&self, coordinate: SpatialIndexCoordinate3D<LIQ>) -> Option<&Value> {
         self.try_get_value(self.coordinate_to_linear_index(coordinate))
     }
@@ -63,18 +57,6 @@ where
     fn iter_mut_with_index<'a>(&'a mut self) -> impl Iterator<Item = (LIQ, &'a mut Value)> where Value: 'a;
 }
 
-
-/// Data is dense and accessible
-pub trait QuantizableSpatialCollection3DAsSlice<LIQ, Value>:
-QuantizableSpatialCollection3DCPUData<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-    fn get_values_slice(&self) -> &[Value];
-
-    fn get_values_slice_mut(&mut self) -> &mut [Value];
-}
 
 /// Structure can be resized without needing to wait (no async)
 pub trait QuantizableSpatialCollection3DSyncResizable<LIQ, Value>:

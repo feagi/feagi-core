@@ -19,7 +19,7 @@ homepage.workspace = true
 std = [  # do we support the standard library?
     "alloc",
     "half/std",
-    "dep:ahash"
+    #"dep:ahash"
 ]
 alloc = [ # Do we support dynamic allocating memory?
     "half/alloc"
@@ -39,7 +39,7 @@ feagi-logging-and-errors = {path = "feagi-logging-and-errors"}
 # DO NOT ADD ANY SIBLING FEAGI CEATES!
 paste = {workspace = true}
 half = {workspace = true, default-features = false}
-ahash = {workspace = true, optional = true} # TODO this probably shouldnt be entirely toggled by std?
+ahash = {workspace = true} # TODO this probably shouldnt be entirely toggled by std?
 # DO NOT ADD ANY SIBLING FEAGI CEATES!
 # DO NOT ADD ANY SIBLING FEAGI CEATES!
 # DO NOT ADD ANY SIBLING FEAGI CEATES!

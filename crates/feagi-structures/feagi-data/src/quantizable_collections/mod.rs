@@ -1,1 +1,2 @@
-pub mod spatial;
+pub mod dim_3d;
+pub mod shared_traits;
