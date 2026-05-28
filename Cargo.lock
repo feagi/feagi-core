@@ -2004,6 +2004,7 @@ dependencies = [
 name = "feagi-data"
 version = "0.0.11"
 dependencies = [
+ "ahash",
  "feagi-ecs",
  "feagi-logging-and-errors",
  "half",
@@ -2034,16 +2035,6 @@ dependencies = [
  "tracing",
  "wasm-bindgen",
  "web-sys",
-]
-
-[[package]]
-name = "feagi-genome-definitions"
-version = "0.0.11"
-dependencies = [
- "feagi-data",
- "paste",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -2299,7 +2290,6 @@ dependencies = [
  "ahash",
  "base64 0.22.1",
  "feagi-data",
- "feagi-genome-definitions",
  "feagi-potential-voxels",
  "half",
  "ndarray",

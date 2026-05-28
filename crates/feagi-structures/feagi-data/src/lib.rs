@@ -11,6 +11,8 @@ pub mod percentages;
 pub mod quantizable_linear;
 pub mod bit_packing;
 pub mod quantizable_spatial;
+pub mod shared_quantization_sets;
+pub mod quantizable_collections;
 
 pub use core_numerical_types::{SupportsBasicCoreMathOps, SupportsUintOps};
 pub use paste;

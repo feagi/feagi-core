@@ -102,6 +102,8 @@ pub trait SupportsUintOps:
 SupportsBasicCoreMathOps
 + core::ops::Rem<Output = Self>
 + core::ops::RemAssign
++ core::cmp::Eq
++ core::hash::Hash
 {
     const QUANT_MAX_AS_USIZE: usize;
 

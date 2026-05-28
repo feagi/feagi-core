@@ -5,18 +5,13 @@
 
 
 pub use feagi_data; // Expose feagi-data crate
-pub use feagi_genome_definitions;
 pub use feagi_potential_voxels;
 
 
 mod feagi_json;
 mod feagi_common_error;
 pub mod genomic;
-pub mod feagi_log;
-//pub mod useful_structs_traits_macros;
-pub mod neuron;
 pub mod wgpu_temp;
 pub mod useful_structs;
-mod common;
 
 pub use feagi_common_error::FeagiCommonError;

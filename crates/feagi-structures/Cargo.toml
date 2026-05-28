@@ -49,14 +49,14 @@ default-embedded-generic = ["defmt"] # break this into more types later
 
 std = [
     "feagi-data/std",
-    "feagi-genome-definitions/std",
+    #"feagi-genome-definitions/std",
     "feagi-potential-voxels/std",
     "alloc",
     "ahash/std",
     ]
 alloc = [
     "feagi-data/alloc",
-    "feagi-genome-definitions/alloc",
+    #"feagi-genome-definitions/alloc",
     "feagi-potential-voxels/alloc",
     "dep:serde",
     "dep:serde_json",
@@ -84,7 +84,7 @@ rayon = ["dep:rayon", "std"]
 [dependencies]
 # Subcrates
 feagi-data = {path = "feagi-data"} # This crate has sibling crates dependent on it. Be Cautious!
-feagi-genome-definitions = {path = "feagi-genome-definitions"}
+#feagi-genome-definitions = {path = "feagi-genome-definitions"}
 feagi-potential-voxels = {path = "feagi-potential-voxels"}
 
 

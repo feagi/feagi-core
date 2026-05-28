@@ -3,6 +3,5 @@
 
 extern crate self as feagi_ecs;
 
-pub mod device;
-pub mod memory;
+pub mod collection;
 pub mod metadata;
