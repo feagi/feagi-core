@@ -6,7 +6,9 @@ use crate::quantizable_linear::quantization_levels::QuantizationLevel;
 #[derive(FeagiErrorKey)]
 pub struct QuantizationOverflowFeagiErrKey {
     context: &'static str,
+    #[allow(unused)]
     limiting_quantization: QuantizationLevel,
+    #[allow(unused)]
     required_quantization: QuantizationLevel,
 }
 
