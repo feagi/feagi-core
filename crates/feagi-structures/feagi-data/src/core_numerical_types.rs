@@ -105,6 +105,7 @@ SupportsBasicCoreMathOps
 + core::cmp::Eq
 + core::hash::Hash
 {
+    const QUANT_MAX: Self;
     const QUANT_MAX_AS_USIZE: usize;
 
     const QUANT_ONE: Self;
@@ -125,6 +126,7 @@ SupportsBasicCoreMathOps
 
 // lol
 impl SupportsUintOps for usize {
+    const QUANT_MAX: Self = core::usize::MAX;
     const QUANT_MAX_AS_USIZE: usize = usize::MAX;
     const QUANT_ONE: Self = 1;
 
@@ -145,6 +147,7 @@ impl SupportsUintOps for usize {
 }
 
 impl SupportsUintOps for u8 {
+    const QUANT_MAX: Self = core::u8::MAX;
     const QUANT_MAX_AS_USIZE: usize = u8::MAX as usize;
     const QUANT_ONE: Self = 1;
 
@@ -168,6 +171,7 @@ impl SupportsUintOps for u8 {
 }
 
 impl SupportsUintOps for u16 {
+    const QUANT_MAX: Self = core::u16::MAX;
     const QUANT_MAX_AS_USIZE: usize = u16::MAX as usize;
     const QUANT_ONE: Self = 1;
 
@@ -191,6 +195,7 @@ impl SupportsUintOps for u16 {
 }
 
 impl SupportsUintOps for u32 {
+    const QUANT_MAX: Self = core::u32::MAX;
     const QUANT_MAX_AS_USIZE: usize = u32::MAX as usize;
     const QUANT_ONE: Self = 1;
 
@@ -215,6 +220,7 @@ impl SupportsUintOps for u32 {
 
 #[cfg(feature = "support_64bit_indexing")]
 impl SupportsUintOps for u64 {
+    const QUANT_MAX: Self = core::u64::MAX;
     const QUANT_MAX_AS_USIZE: usize = u64::MAX as usize;
     const QUANT_ONE: Self = 1;
 

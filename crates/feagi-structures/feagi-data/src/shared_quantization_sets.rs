@@ -12,14 +12,8 @@ pub trait NPUGlobalQuantization {
     type NeuronIndexCountQuant: QuantizedIndexCountTrait; // Should be global since synapses reference these
 }
 
-
-
-/// Quantization level definitions for a given neuron model. This is the base implementation,
-/// specific neuron models will have their own extension of this
-pub trait NeuronModelQuantizationBase {}
-
-/// Defines the quantization used in a cortical area
-pub trait CorticalAreaModelQuantization {
+/// Shared between all cortical areas within an NPU
+pub trait CorticalAreasIndexQuantization {
     /// Defines the quantization of the NPU global burst index. This is not model configurable,
     /// rather its in sync with the global setting but also put here since some neuron models need
     /// to have this information to store "burst of last X" as a property
@@ -27,7 +21,14 @@ pub trait CorticalAreaModelQuantization {
     /// Also in sync with the global setting. Neuron linear indexing, linear count, voxel indexing,
     /// and voxel count quantization
     type NeuronIndexCountQuant: QuantizedIndexCountTrait;
+}
+
+/// Defines the quantization used in a cortical area for the calculation of neuron dynamics.
+/// All are required to support neuron potentials, hence this is the shared base of each model's
+/// implementation. Each cortical area within an NPU may have different quantization levels.
+pub trait CorticalAreaModelQuantizationBase {
+
     /// Defines the quantization of the membrane potential of a neuron, which all models must
-    /// include.
+    /// include. This may vary between cortical areas, even of the same model
     type NeuronPotentialQuant: QuantizedDecimalTrait;
 }

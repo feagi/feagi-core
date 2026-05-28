@@ -4,23 +4,23 @@ use feagi_data::quantizable_collections::shared_traits::{QuantizableLinearCollec
 use feagi_data::quantizable_linear::base_types::QuantizedElementBase;
 use feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
 use feagi_data::quantizable_spatial::wrappers::QuantizedSpatialWrapperBase;
-use feagi_data::shared_quantization_sets::CorticalAreaModelQuantization;
+use feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, CorticalAreasIndexQuantization};
 use crate::neuron_voxels::nondense_collections::shared_traits::{CPUNeuronVoxelCollection, CPUNeuronVoxelCollectionDense, NeuronVoxelCollection, NeuronVoxelCollectionDense};
 use crate::neuron_voxels::voxel_collection_generic_descriptors::*;
 
-pub struct NeuronVoxelCollectionContiguousVectorGeneric<CANQ: CorticalAreaModelQuantization>
+pub struct NeuronVoxelCollectionContiguousVectorGeneric<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase>
 (
     QuantizableSpatialCollection3DVectorDense<
-        CANQ::NeuronIndexCountQuant,
+        CAIQ::NeuronIndexCountQuant,
         NeuronVoxelPotentialGeneric<
             CANQ::NeuronPotentialQuant
         >
     >
 );
 
-impl<CANQ: CorticalAreaModelQuantization> NeuronVoxelCollectionContiguousVectorGeneric<CANQ>
+impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ>
 {
-    pub fn new(dimensions: NeuronVoxelDimensionsGeneric<CANQ::NeuronIndexCountQuant>) -> Self {
+    pub fn new(dimensions: NeuronVoxelDimensionsGeneric<CAIQ::NeuronIndexCountQuant>) -> Self {
         Self(
             QuantizableSpatialCollection3DVectorDense::new_uniform(
                 dimensions.unwrap(),
@@ -30,26 +30,26 @@ impl<CANQ: CorticalAreaModelQuantization> NeuronVoxelCollectionContiguousVectorG
     }
 }
 
-impl<CANQ: CorticalAreaModelQuantization> NeuronVoxelCollection<CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CANQ> {
-    fn get_voxel_dimensions(&self) -> &NeuronVoxelDimensionsGeneric<CANQ::NeuronIndexCountQuant> {
+impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollection<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
+    fn get_voxel_dimensions(&self) -> &NeuronVoxelDimensionsGeneric<CAIQ::NeuronIndexCountQuant> {
         NeuronVoxelDimensionsGeneric::wrap_ref(self.0.get_dimensions())
     }
 }
 
-impl<CANQ: CorticalAreaModelQuantization> NeuronVoxelCollectionDense<CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CANQ> {
+impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollectionDense<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
 
 }
 
-impl<CANQ: CorticalAreaModelQuantization> CPUNeuronVoxelCollection<CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CANQ> {
-    fn try_get_potential_by_voxel_index(&self, voxel_index: NeuronVoxelLinearIndexGeneric<CANQ::NeuronIndexCountQuant>) -> Option<&NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>> {
+impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> CPUNeuronVoxelCollection<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
+    fn try_get_potential_by_voxel_index(&self, voxel_index: NeuronVoxelLinearIndexGeneric<CAIQ::NeuronIndexCountQuant>) -> Option<&NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>> {
         self.0.try_get_value(voxel_index.unwrap())
     }
 
-    fn try_get_potential_by_voxel_index_mut(&mut self, voxel_index: NeuronVoxelLinearIndexGeneric<CANQ::NeuronIndexCountQuant>) -> Option<&mut NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>> {
+    fn try_get_potential_by_voxel_index_mut(&mut self, voxel_index: NeuronVoxelLinearIndexGeneric<CAIQ::NeuronIndexCountQuant>) -> Option<&mut NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>> {
         self.0.try_get_value_mut(voxel_index.unwrap())
     }
 
-    fn iter_with_voxel_index<'a>(&'a self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<CANQ::NeuronIndexCountQuant>, &'a NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>)>
+    fn iter_with_voxel_index<'a>(&'a self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<CAIQ::NeuronIndexCountQuant>, &'a NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>)>
     where
         NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>: 'a
     {
@@ -59,7 +59,7 @@ impl<CANQ: CorticalAreaModelQuantization> CPUNeuronVoxelCollection<CANQ> for Neu
             )
     }
 
-    fn iter_mut_with_voxel_index<'a>(&'a mut self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<CANQ::NeuronIndexCountQuant>, &'a mut NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>)>
+    fn iter_mut_with_voxel_index<'a>(&'a mut self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<CAIQ::NeuronIndexCountQuant>, &'a mut NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>)>
     where
         NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>: 'a
     {
@@ -69,7 +69,7 @@ impl<CANQ: CorticalAreaModelQuantization> CPUNeuronVoxelCollection<CANQ> for Neu
         )
     }
 
-    fn iter_with_index_and_coordinate<'a>(&'a self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<CANQ::NeuronIndexCountQuant>, NeuronVoxelCoordinateGeneric<CANQ::NeuronIndexCountQuant>, &'a NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>)>
+    fn iter_with_index_and_coordinate<'a>(&'a self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<CAIQ::NeuronIndexCountQuant>, NeuronVoxelCoordinateGeneric<CAIQ::NeuronIndexCountQuant>, &'a NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>)>
     where
         NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>: 'a
     {
@@ -79,7 +79,7 @@ impl<CANQ: CorticalAreaModelQuantization> CPUNeuronVoxelCollection<CANQ> for Neu
         )
     }
 
-    fn iter_mut_with_index_and_coordinate<'a>(&'a mut self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<CANQ::NeuronIndexCountQuant>, NeuronVoxelCoordinateGeneric<CANQ::NeuronIndexCountQuant>, &'a mut NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>)>
+    fn iter_mut_with_index_and_coordinate<'a>(&'a mut self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<CAIQ::NeuronIndexCountQuant>, NeuronVoxelCoordinateGeneric<CAIQ::NeuronIndexCountQuant>, &'a mut NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>)>
     where
         NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>: 'a
     {
@@ -90,7 +90,7 @@ impl<CANQ: CorticalAreaModelQuantization> CPUNeuronVoxelCollection<CANQ> for Neu
     }
 }
 
-impl<CANQ: CorticalAreaModelQuantization> CPUNeuronVoxelCollectionDense<CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CANQ> {
+impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> CPUNeuronVoxelCollectionDense<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
     fn get_neuron_voxel_potentials_slice(&self) -> &[NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>] {
         self.0.get_values_slice()
     }
