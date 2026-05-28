@@ -1,3 +1,4 @@
+use feagi_ecs::collection::FeagiECSCollectionDataLivesOnCPU;
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 
 
@@ -9,8 +10,10 @@ where
     fn max_linear_index(&self) -> LIQ;
 }
 
+/// Defines that the data is accessible via Sync CPU functions
 pub trait QuantizableLinearCollectionCPUData<LIQ, Value>:
 QuantizableLinearCollectionBase<LIQ, Value>
++ FeagiECSCollectionDataLivesOnCPU
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone

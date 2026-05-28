@@ -1,29 +1,29 @@
 use ahash::AHashMap;
 use feagi_ecs::collection::{FeagiECSCollectionDataLivesOnCPU, FeagiECSCollectionDataLivesOnDeviceBase};
-use crate::quantizable_collections::dim_3d::spatial_shared_traits::{QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithIndex};
+use crate::quantizable_collections::dim_2d::spatial_shared_traits::{QuantizableSpatialCollection2DBase, QuantizableSpatialCollection2DCPUData, QuantizableSpatialCollection2DIterWithIndex};
 use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
-use crate::quantizable_spatial::index::SpatialIndexDimensions3D;
+use crate::quantizable_spatial::index::SpatialIndexDimensions2D;
 
 
 // TODO some way to free memory, resize?
 
-pub struct QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+pub struct QuantizableSpatialCollection2DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
     values: AHashMap<LIQ, Value>,
-    dimensions: SpatialIndexDimensions3D<LIQ>
+    dimensions: SpatialIndexDimensions2D<LIQ>
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableSpatialCollection2DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
-    pub fn new(dimensions: SpatialIndexDimensions3D<LIQ>) -> Self {
-        QuantizableSpatialCollection3DHashmapSparse{
+    pub fn new(dimensions: SpatialIndexDimensions2D<LIQ>) -> Self {
+        QuantizableSpatialCollection2DHashmapSparse{
             values: AHashMap::new(),
             dimensions
         }
@@ -35,12 +35,12 @@ where
     }
 
     /// Mainly used to make more unique wrapper systems
-    pub fn internal_get_dimensions_mut(&mut self) -> &mut SpatialIndexDimensions3D<LIQ> {
+    pub fn internal_get_dimensions_mut(&mut self) -> &mut SpatialIndexDimensions2D<LIQ> {
         &mut self.dimensions
     }
 }
 
-impl<LIQ, Value> QuantizableLinearCollectionBase<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionBase<LIQ, Value> for QuantizableSpatialCollection2DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -50,11 +50,11 @@ where
     }
 }
 
-impl<LIQ, Value> FeagiECSCollectionDataLivesOnDeviceBase for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+impl<LIQ, Value> FeagiECSCollectionDataLivesOnDeviceBase for QuantizableSpatialCollection2DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
-impl<LIQ, Value> FeagiECSCollectionDataLivesOnCPU for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
+impl<LIQ, Value> FeagiECSCollectionDataLivesOnCPU for QuantizableSpatialCollection2DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
 
-impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableSpatialCollection2DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -78,24 +78,24 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DCPUData<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableSpatialCollection2DCPUData<LIQ, Value> for QuantizableSpatialCollection2DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DBase<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableSpatialCollection2DBase<LIQ, Value> for QuantizableSpatialCollection2DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
-    fn get_dimensions(&self) -> &SpatialIndexDimensions3D<LIQ> {
+    fn get_dimensions(&self) -> &SpatialIndexDimensions2D<LIQ> {
         &self.dimensions
     }
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DIterWithIndex<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableSpatialCollection2DIterWithIndex<LIQ, Value> for QuantizableSpatialCollection2DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone

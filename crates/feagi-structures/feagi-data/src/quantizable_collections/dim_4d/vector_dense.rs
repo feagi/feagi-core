@@ -1,24 +1,24 @@
 use feagi_ecs::collection::{FeagiECSCollectionDataLivesOnCPU, FeagiECSCollectionDataLivesOnDeviceBase};
 use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData};
-use crate::quantizable_collections::dim_3d::spatial_shared_traits::{QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithIndex};
+use crate::quantizable_collections::dim_4d::spatial_shared_traits::{QuantizableSpatialCollection4DBase, QuantizableSpatialCollection4DCPUData, QuantizableSpatialCollection4DIterWithIndex};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
-use crate::quantizable_spatial::index::SpatialIndexDimensions3D;
+use crate::quantizable_spatial::index::SpatialIndexDimensions4D;
 
-pub struct QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+pub struct QuantizableSpatialCollection4DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
     values: Vec<Value>,
-    dimensions: SpatialIndexDimensions3D<LIQ>
+    dimensions: SpatialIndexDimensions4D<LIQ>
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+impl<LIQ, Value> QuantizableSpatialCollection4DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
-    pub fn new_uniform(dimensions: SpatialIndexDimensions3D<LIQ>, filling_value: Value) -> Self {
+    pub fn new_uniform(dimensions: SpatialIndexDimensions4D<LIQ>, filling_value: Value) -> Self {
         let values = vec![filling_value; dimensions.max_linear_index().to_usize()];
 
         Self {
@@ -27,7 +27,7 @@ where
         }
     }
 
-    pub fn new_with_iter<I>(dimensions: SpatialIndexDimensions3D<LIQ>, iterator: I) -> Self
+    pub fn new_with_iter<I>(dimensions: SpatialIndexDimensions4D<LIQ>, iterator: I) -> Self
     where
         I: IntoIterator<Item = Value>,
     {
@@ -58,16 +58,12 @@ where
     }
 
     /// Mainly used to make more unique wrapper systems
-    pub fn internal_get_dimensions_mut(&mut self) -> &mut SpatialIndexDimensions3D<LIQ> {
+    pub fn internal_get_dimensions_mut(&mut self) -> &mut SpatialIndexDimensions4D<LIQ> {
         &mut self.dimensions
     }
 }
 
-impl<LIQ, Value> FeagiECSCollectionDataLivesOnDeviceBase for QuantizableSpatialCollection3DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
-
-impl<LIQ, Value> FeagiECSCollectionDataLivesOnCPU for QuantizableSpatialCollection3DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
-
-impl<LIQ, Value> QuantizableLinearCollectionBase<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionBase<LIQ, Value> for QuantizableSpatialCollection4DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -77,7 +73,11 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+impl<LIQ, Value> FeagiECSCollectionDataLivesOnDeviceBase for QuantizableSpatialCollection4DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+
+impl<LIQ, Value> FeagiECSCollectionDataLivesOnCPU for QuantizableSpatialCollection4DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
+
+impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableSpatialCollection4DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -99,7 +99,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableLinearCollectionAsSlice<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionAsSlice<LIQ, Value> for QuantizableSpatialCollection4DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -113,24 +113,24 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DCPUData<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+impl<LIQ, Value> QuantizableSpatialCollection4DCPUData<LIQ, Value> for QuantizableSpatialCollection4DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DBase<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+impl<LIQ, Value> QuantizableSpatialCollection4DBase<LIQ, Value> for QuantizableSpatialCollection4DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
-    fn get_dimensions(&self) -> &SpatialIndexDimensions3D<LIQ> {
+    fn get_dimensions(&self) -> &SpatialIndexDimensions4D<LIQ> {
         &self.dimensions
     }
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DIterWithIndex<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+impl<LIQ, Value> QuantizableSpatialCollection4DIterWithIndex<LIQ, Value> for QuantizableSpatialCollection4DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
