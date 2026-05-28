@@ -3,7 +3,6 @@
 
 
 pub use feagi_data; // Expose feagi-data crate
-pub use feagi_potential_voxels;
 
 mod templates;
 mod feagi_json;
@@ -11,6 +10,7 @@ mod feagi_common_error;
 pub mod genomic;
 pub mod wgpu_temp;
 pub mod useful_structs;
+pub mod neuron_voxels;
 
 pub use feagi_common_error::FeagiCommonError;
 pub use feagi_json::FeagiJSON; // TODO delete me

@@ -1,4 +1,4 @@
-use crate::quantizable_collections::shared_traits::QuantizableLinearCollectionCPUData;
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionCPUData, QuantizableLinearCollectionSyncSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 use crate::quantizable_spatial::index::{SpatialIndexCoordinate3D, SpatialIndexDimensions3D};
 
@@ -45,22 +45,45 @@ where
 }
 
 
-/// Data is iterable with the index
-pub trait QuantizableSpatialCollection3DIterWithIndex<LIQ, Value>:
+/// Data is iterable with the index and coordinate
+pub trait QuantizableSpatialCollection3DIterWithCoordinate<LIQ, Value>:
 QuantizableSpatialCollection3DCPUData<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
-    fn iter_with_index<'a>(&'a self) -> impl Iterator<Item = (LIQ, &'a Value)> where Value: 'a;
+    fn iter_with_index_and_coordinate<'a>(&'a self) -> impl Iterator<Item = (LIQ, SpatialIndexCoordinate3D<LIQ>, &'a Value)> where Value: 'a;
 
-    fn iter_mut_with_index<'a>(&'a mut self) -> impl Iterator<Item = (LIQ, &'a mut Value)> where Value: 'a;
+    fn iter_mut_with_index_and_coordinate<'a>(&'a mut self) -> impl Iterator<Item = (LIQ, SpatialIndexCoordinate3D<LIQ>, &'a mut Value)> where Value: 'a;
+}
+
+
+/// Structure is sparse, and thus can add / remove items
+pub trait QuantizableSpatialCollection3DSyncSparse<LIQ, Value>:
+QuantizableLinearCollectionSyncSparse<LIQ, Value>
++ QuantizableSpatialCollection3DCPUData<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn insert_value_at_coordinate(&mut self, coordinate: SpatialIndexCoordinate3D<LIQ>, value: Value) -> Option<Value> {
+        self.insert_value_at_index(
+            self.coordinate_to_linear_index(coordinate),
+            value
+        )
+    }
+
+    fn remove_value_at_coordinate(&mut self, coordinate: SpatialIndexCoordinate3D<LIQ>) -> Option<Value> {
+        self.remove_value_at_index(
+            self.coordinate_to_linear_index(coordinate),
+        )
+    }
 }
 
 
 /// Structure can be resized without needing to wait (no async)
 pub trait QuantizableSpatialCollection3DSyncResizable<LIQ, Value>:
-QuantizableSpatialCollection3DBase<LIQ, Value>
+QuantizableSpatialCollection3DCPUData<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone

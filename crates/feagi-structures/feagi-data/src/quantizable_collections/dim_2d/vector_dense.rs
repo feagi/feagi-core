@@ -1,8 +1,8 @@
 use feagi_ecs::collection::{FeagiECSCollectionDataLivesOnCPU, FeagiECSCollectionDataLivesOnDeviceBase};
-use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData};
-use crate::quantizable_collections::dim_2d::spatial_shared_traits::{QuantizableSpatialCollection2DBase, QuantizableSpatialCollection2DCPUData, QuantizableSpatialCollection2DIterWithIndex};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex};
+use crate::quantizable_collections::dim_2d::spatial_shared_traits::{QuantizableSpatialCollection2DBase, QuantizableSpatialCollection2DCPUData, QuantizableSpatialCollection2DIterWithCoordinate};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
-use crate::quantizable_spatial::index::SpatialIndexDimensions2D;
+use crate::quantizable_spatial::index::{SpatialIndexCoordinate2D, SpatialIndexDimensions2D};
 
 pub struct QuantizableSpatialCollection2DVectorDense<LIQ, Value>
 where
@@ -113,24 +113,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection2DCPUData<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-}
-
-impl<LIQ, Value> QuantizableSpatialCollection2DBase<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-    fn get_dimensions(&self) -> &SpatialIndexDimensions2D<LIQ> {
-        &self.dimensions
-    }
-}
-
-impl<LIQ, Value> QuantizableSpatialCollection2DIterWithIndex<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionIterWithIndex<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -153,5 +136,56 @@ where
             .iter_mut()
             .enumerate()
             .map(|(index, value)| (LIQ::from_usize_unchecked(index), value))
+    }
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection2DCPUData<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection2DBase<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn get_dimensions(&self) -> &SpatialIndexDimensions2D<LIQ> {
+        &self.dimensions
+    }
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection2DIterWithCoordinate<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn iter_with_index_and_coordinate<'a>(&'a self) -> impl Iterator<Item=(LIQ, SpatialIndexCoordinate2D<LIQ>, &'a Value)>
+    where
+        Value: 'a
+    {
+        let dimensions = &self.dimensions;
+        self.values
+            .iter()
+            .enumerate()
+            .map(move |(index, value)| {
+                let linear_index = LIQ::from_usize_unchecked(index);
+                (linear_index, dimensions.linear_index_to_coordinate(linear_index), value)
+            })
+    }
+
+    fn iter_mut_with_index_and_coordinate<'a>(&'a mut self) -> impl Iterator<Item=(LIQ, SpatialIndexCoordinate2D<LIQ>, &'a mut Value)>
+    where
+        Value: 'a
+    {
+        let dimensions = &self.dimensions;
+        self.values
+            .iter_mut()
+            .enumerate()
+            .map(move |(index, value)| {
+                let linear_index = LIQ::from_usize_unchecked(index);
+                (linear_index, dimensions.linear_index_to_coordinate(linear_index), value)
+            })
     }
 }

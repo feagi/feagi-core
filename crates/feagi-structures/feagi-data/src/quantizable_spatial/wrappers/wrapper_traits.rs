@@ -1,11 +1,11 @@
-/// Common base trait for quantized spatial wrappers.
-///
-/// Spatial wrappers are transparent newtypes around one of the generic spatial
-/// coordinate or dimension structs. Their public constructors and accessors use
-/// linear quantized wrappers per axis, while this trait gives access to the
-/// enclosed spatial value.
+
+#[doc(hidden)]
+/// Common base trait for quantized spatial wrappers. DO not implement directly as we make
+/// use of unsafe functions internally, only make wrappers through the macros!
 pub trait QuantizedSpatialWrapperBase<Spatial>: Sized {
     fn wrap(spatial: Spatial) -> Self;
+
+    fn wrap_ref(spatial: &Spatial) -> &Self; // scary!
 
     fn unwrap(self) -> Spatial;
 

@@ -146,8 +146,6 @@ members = [
 
     #"crates/feagi-structures/feagi-genome-definitions", # Holds structs and definitions of various genome identifiers or common definitions used acrosss crates, such as CorticalID. Also holds definitions for cortical units
 
-    "crates/feagi-structures/feagi-potential-voxels", # Holds structs responsible for describing neuron potential ina  given neuron voxel
-
 
 
     "crates/feagi-config",             # Configuration loader (TOML + overrides)

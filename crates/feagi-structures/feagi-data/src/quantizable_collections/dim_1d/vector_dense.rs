@@ -1,5 +1,5 @@
 use feagi_ecs::collection::{FeagiECSCollectionDataLivesOnCPU, FeagiECSCollectionDataLivesOnDeviceBase};
-use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 
 pub struct QuantizableLinearCollection1DVectorDense<LIQ, Value>
@@ -108,5 +108,31 @@ where
 
     fn get_values_slice_mut(&mut self) -> &mut [Value] {
         self.values.as_mut_slice()
+    }
+}
+
+impl<LIQ, Value> QuantizableLinearCollectionIterWithIndex<LIQ, Value> for QuantizableLinearCollection1DVectorDense<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn iter_with_index<'a>(&'a self) -> impl Iterator<Item=(LIQ, &'a Value)>
+    where
+        Value: 'a
+    {
+        self.values
+            .iter()
+            .enumerate()
+            .map(|(index, value)| (LIQ::from_usize_unchecked(index), value))
+    }
+
+    fn iter_mut_with_index<'a>(&'a mut self) -> impl Iterator<Item=(LIQ, &'a mut Value)>
+    where
+        Value: 'a
+    {
+        self.values
+            .iter_mut()
+            .enumerate()
+            .map(|(index, value)| (LIQ::from_usize_unchecked(index), value))
     }
 }

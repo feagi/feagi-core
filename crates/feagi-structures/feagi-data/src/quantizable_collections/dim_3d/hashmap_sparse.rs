@@ -1,9 +1,9 @@
 use ahash::AHashMap;
 use feagi_ecs::collection::{FeagiECSCollectionDataLivesOnCPU, FeagiECSCollectionDataLivesOnDeviceBase};
-use crate::quantizable_collections::dim_3d::spatial_shared_traits::{QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithIndex};
-use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData};
+use crate::quantizable_collections::dim_3d::spatial_shared_traits::{QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithCoordinate, QuantizableSpatialCollection3DSyncSparse};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex, QuantizableLinearCollectionSyncSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
-use crate::quantizable_spatial::index::SpatialIndexDimensions3D;
+use crate::quantizable_spatial::index::{SpatialIndexCoordinate3D, SpatialIndexDimensions3D};
 
 
 // TODO some way to free memory, resize?
@@ -78,24 +78,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DCPUData<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-}
-
-impl<LIQ, Value> QuantizableSpatialCollection3DBase<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-    fn get_dimensions(&self) -> &SpatialIndexDimensions3D<LIQ> {
-        &self.dimensions
-    }
-}
-
-impl<LIQ, Value> QuantizableSpatialCollection3DIterWithIndex<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionIterWithIndex<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -116,5 +99,69 @@ where
         self.values
             .iter_mut()
             .map(|(index, value)| (*index, value))
+    }
+}
+
+impl<LIQ, Value> QuantizableLinearCollectionSyncSparse<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn insert_value_at_index(&mut self, index: LIQ, value: Value) -> Option<Value> {
+        self.values.insert(index, value)
+    }
+
+    fn remove_value_at_index(&mut self, index: LIQ) -> Option<Value> {
+        self.values.remove(&index)
+    }
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection3DCPUData<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection3DBase<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn get_dimensions(&self) -> &SpatialIndexDimensions3D<LIQ> {
+        &self.dimensions
+    }
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection3DSyncSparse<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection3DIterWithCoordinate<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn iter_with_index_and_coordinate<'a>(&'a self) -> impl Iterator<Item=(LIQ, SpatialIndexCoordinate3D<LIQ>, &'a Value)>
+    where
+        Value: 'a
+    {
+        let dimensions = &self.dimensions;
+        self.values
+            .iter()
+            .map(move |(index, value)| (*index, dimensions.linear_index_to_coordinate(*index), value))
+    }
+
+    fn iter_mut_with_index_and_coordinate<'a>(&'a mut self) -> impl Iterator<Item=(LIQ, SpatialIndexCoordinate3D<LIQ>, &'a mut Value)>
+    where
+        Value: 'a
+    {
+        let dimensions = &self.dimensions;
+        self.values
+            .iter_mut()
+            .map(move |(index, value)| (*index, dimensions.linear_index_to_coordinate(*index), value))
     }
 }

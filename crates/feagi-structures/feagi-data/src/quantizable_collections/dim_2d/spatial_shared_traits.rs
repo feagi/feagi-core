@@ -1,4 +1,4 @@
-use crate::quantizable_collections::shared_traits::QuantizableLinearCollectionCPUData;
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionCPUData, QuantizableLinearCollectionSyncSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 use crate::quantizable_spatial::index::{SpatialIndexCoordinate2D, SpatialIndexDimensions2D};
 
@@ -45,16 +45,39 @@ where
 }
 
 
-/// Data is iterable with the index
-pub trait QuantizableSpatialCollection2DIterWithIndex<LIQ, Value>:
+/// Data is iterable with the index and coordinate
+pub trait QuantizableSpatialCollection2DIterWithCoordinate<LIQ, Value>:
 QuantizableSpatialCollection2DCPUData<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
-    fn iter_with_index<'a>(&'a self) -> impl Iterator<Item = (LIQ, &'a Value)> where Value: 'a;
+    fn iter_with_index_and_coordinate<'a>(&'a self) -> impl Iterator<Item = (LIQ, SpatialIndexCoordinate2D<LIQ>, &'a Value)> where Value: 'a;
 
-    fn iter_mut_with_index<'a>(&'a mut self) -> impl Iterator<Item = (LIQ, &'a mut Value)> where Value: 'a;
+    fn iter_mut_with_index_and_coordinate<'a>(&'a mut self) -> impl Iterator<Item = (LIQ, SpatialIndexCoordinate2D<LIQ>, &'a mut Value)> where Value: 'a;
+}
+
+
+/// Structure is sparse, and thus can add / remove items
+pub trait QuantizableSpatialCollection2DSyncSparse<LIQ, Value>:
+QuantizableLinearCollectionSyncSparse<LIQ, Value>
++ QuantizableSpatialCollection2DCPUData<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn insert_value_at_coordinate(&mut self, coordinate: SpatialIndexCoordinate2D<LIQ>, value: Value) -> Option<Value> {
+        self.insert_value_at_index(
+            self.coordinate_to_linear_index(coordinate),
+            value
+        )
+    }
+
+    fn remove_value_at_coordinate(&mut self, coordinate: SpatialIndexCoordinate2D<LIQ>) -> Option<Value> {
+        self.remove_value_at_index(
+            self.coordinate_to_linear_index(coordinate),
+        )
+    }
 }
 
 

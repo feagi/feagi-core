@@ -2203,13 +2203,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-potential-voxels"
-version = "0.0.11"
-dependencies = [
- "feagi-data",
-]
-
-[[package]]
 name = "feagi-sensorimotor"
 version = "0.0.11"
 dependencies = [
@@ -2290,7 +2283,6 @@ dependencies = [
  "ahash",
  "base64 0.22.1",
  "feagi-data",
- "feagi-potential-voxels",
  "half",
  "ndarray",
  "paste",

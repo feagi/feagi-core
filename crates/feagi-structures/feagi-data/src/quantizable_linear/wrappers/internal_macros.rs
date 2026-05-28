@@ -16,6 +16,14 @@ macro_rules! __impl_quantized_element_wrapper_base {
             }
 
             #[inline(always)]
+            fn wrap_ref(quantizable: &$quant_element) -> &Self {
+                // The generated wrapper is #[repr(transparent)] over exactly one quantized element.
+                // If the struct you use this on is not #[repr(transparent)], you are in for a
+                // bad time...
+                unsafe { &*(quantizable as *const $quant_element as *const Self) }
+            }
+
+            #[inline(always)]
             fn unwrap(self) -> $quant_element {
                 self.0
             }
@@ -45,6 +53,12 @@ macro_rules! __impl_quantized_element_wrapper_base_concrete {
             #[inline(always)]
             fn wrap(quantizable: $quant_element) -> Self {
                 Self(quantizable)
+            }
+
+            #[inline(always)]
+            fn wrap_ref(quantizable: &$quant_element) -> &Self {
+                // The generated wrapper is #[repr(transparent)] over exactly one quantized element.
+                unsafe { &*(quantizable as *const $quant_element as *const Self) }
             }
 
             #[inline(always)]

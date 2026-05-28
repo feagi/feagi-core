@@ -3,13 +3,12 @@ use feagi_data::quantizable_collections::dim_1d::{
 };
 use feagi_data::quantizable_collections::dim_2d::QuantizableSpatialCollection2DHashmapSparse;
 use feagi_data::quantizable_collections::dim_2d::spatial_shared_traits::{
-    QuantizableSpatialCollection2DBase, QuantizableSpatialCollection2DCPUData,
-    QuantizableSpatialCollection2DIterWithIndex,
+    QuantizableSpatialCollection2DBase, QuantizableSpatialCollection2DCPUData
 };
 use feagi_data::quantizable_collections::dim_2d::QuantizableSpatialCollection2DVectorDense;
 use feagi_data::quantizable_collections::dim_3d::QuantizableSpatialCollection3DHashmapSparse;
 use feagi_data::quantizable_collections::dim_3d::spatial_shared_traits::{
-    QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithIndex,
+    QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithCoordinate,
 };
 use feagi_data::quantizable_collections::dim_3d::QuantizableSpatialCollection3DVectorDense;
 use feagi_data::quantizable_collections::dim_4d::QuantizableSpatialCollection4DHashmapSparse;
@@ -17,9 +16,7 @@ use feagi_data::quantizable_collections::dim_4d::spatial_shared_traits::{
     QuantizableSpatialCollection4DBase, QuantizableSpatialCollection4DCPUData,
 };
 use feagi_data::quantizable_collections::dim_4d::QuantizableSpatialCollection4DVectorDense;
-use feagi_data::quantizable_collections::shared_traits::{
-    QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData,
-};
+use feagi_data::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex};
 use feagi_data::quantizable_spatial::index::{
     SpatialIndexCoordinate2D, SpatialIndexCoordinate3D, SpatialIndexCoordinate4D, SpatialIndexDimensions2D,
     SpatialIndexDimensions3D, SpatialIndexDimensions4D,
@@ -110,10 +107,13 @@ fn three_dimensional_sparse_collection_supports_index_iteration() {
     collection.internal_get_values_mut().insert(0, 10);
     collection.internal_get_values_mut().insert(7, 70);
 
-    let mut values: Vec<_> = collection.iter_with_index().map(|(index, value)| (index, *value)).collect();
-    values.sort_by_key(|(index, _)| *index);
+    let mut values: Vec<_> = collection
+        .iter_with_index_and_coordinate()
+        .map(|(index, coordinate, value)| (index, (*coordinate.get_x(), *coordinate.get_y(), *coordinate.get_z()), *value))
+        .collect();
+    values.sort_by_key(|(index, _, _)| *index);
 
-    assert_eq!(values, vec![(0, 10), (7, 70)]);
+    assert_eq!(values, vec![(0, (0, 0, 0), 10), (7, (1, 1, 1), 70)]);
 }
 
 #[test]

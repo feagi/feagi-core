@@ -1,6 +1,6 @@
 use ahash::AHashMap;
 use feagi_ecs::collection::{FeagiECSCollectionDataLivesOnCPU, FeagiECSCollectionDataLivesOnDeviceBase};
-use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex, QuantizableLinearCollectionSyncSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 
 
@@ -73,5 +73,43 @@ where
 
     fn get_unchecked_value_mut(&mut self, index: LIQ) -> &mut Value {
         self.values.get_mut(&index).unwrap()
+    }
+}
+
+impl<LIQ, Value> QuantizableLinearCollectionIterWithIndex<LIQ, Value> for QuantizableLinearCollection1DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn iter_with_index<'a>(&'a self) -> impl Iterator<Item=(LIQ, &'a Value)>
+    where
+        Value: 'a
+    {
+        self.values
+            .iter()
+            .map(|(index, value)| (*index, value))
+    }
+
+    fn iter_mut_with_index<'a>(&'a mut self) -> impl Iterator<Item=(LIQ, &'a mut Value)>
+    where
+        Value: 'a
+    {
+        self.values
+            .iter_mut()
+            .map(|(index, value)| (*index, value))
+    }
+}
+
+impl<LIQ, Value> QuantizableLinearCollectionSyncSparse<LIQ, Value> for QuantizableLinearCollection1DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn insert_value_at_index(&mut self, index: LIQ, value: Value) -> Option<Value> {
+        self.values.insert(index, value)
+    }
+
+    fn remove_value_at_index(&mut self, index: LIQ) -> Option<Value> {
+        self.values.remove(&index)
     }
 }

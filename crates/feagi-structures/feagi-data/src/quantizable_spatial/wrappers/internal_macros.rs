@@ -13,6 +13,12 @@ macro_rules! __impl_quantized_spatial_wrapper_base {
             }
 
             #[inline(always)]
+            fn wrap_ref(spatial: &$inner_type) -> &Self {
+                // The generated wrapper is #[repr(transparent)] over exactly one spatial value.
+                unsafe { &*(spatial as *const $inner_type as *const Self) }
+            }
+
+            #[inline(always)]
             fn unwrap(self) -> $inner_type {
                 self.0
             }
@@ -42,6 +48,12 @@ macro_rules! __impl_quantized_spatial_wrapper_base_concrete {
             #[inline(always)]
             fn wrap(spatial: $inner_type) -> Self {
                 Self(spatial)
+            }
+
+            #[inline(always)]
+            fn wrap_ref(spatial: &$inner_type) -> &Self {
+                // The generated wrapper is #[repr(transparent)] over exactly one spatial value.
+                unsafe { &*(spatial as *const $inner_type as *const Self) }
             }
 
             #[inline(always)]

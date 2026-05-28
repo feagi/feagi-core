@@ -1,9 +1,9 @@
 use ahash::AHashMap;
 use feagi_ecs::collection::{FeagiECSCollectionDataLivesOnCPU, FeagiECSCollectionDataLivesOnDeviceBase};
-use crate::quantizable_collections::dim_4d::spatial_shared_traits::{QuantizableSpatialCollection4DBase, QuantizableSpatialCollection4DCPUData, QuantizableSpatialCollection4DIterWithIndex};
-use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData};
+use crate::quantizable_collections::dim_4d::spatial_shared_traits::{QuantizableSpatialCollection4DBase, QuantizableSpatialCollection4DCPUData, QuantizableSpatialCollection4DIterWithCoordinate};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex, QuantizableLinearCollectionSyncSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
-use crate::quantizable_spatial::index::SpatialIndexDimensions4D;
+use crate::quantizable_spatial::index::{SpatialIndexCoordinate4D, SpatialIndexDimensions4D};
 
 
 // TODO some way to free memory, resize?
@@ -78,24 +78,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection4DCPUData<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-}
-
-impl<LIQ, Value> QuantizableSpatialCollection4DBase<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-    fn get_dimensions(&self) -> &SpatialIndexDimensions4D<LIQ> {
-        &self.dimensions
-    }
-}
-
-impl<LIQ, Value> QuantizableSpatialCollection4DIterWithIndex<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionIterWithIndex<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -116,5 +99,62 @@ where
         self.values
             .iter_mut()
             .map(|(index, value)| (*index, value))
+    }
+}
+
+impl<LIQ, Value> QuantizableLinearCollectionSyncSparse<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn insert_value_at_index(&mut self, index: LIQ, value: Value) -> Option<Value> {
+        self.values.insert(index, value)
+    }
+
+    fn remove_value_at_index(&mut self, index: LIQ) -> Option<Value> {
+        self.values.remove(&index)
+    }
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection4DCPUData<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection4DBase<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn get_dimensions(&self) -> &SpatialIndexDimensions4D<LIQ> {
+        &self.dimensions
+    }
+}
+
+impl<LIQ, Value> QuantizableSpatialCollection4DIterWithCoordinate<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn iter_with_index_and_coordinate<'a>(&'a self) -> impl Iterator<Item=(LIQ, SpatialIndexCoordinate4D<LIQ>, &'a Value)>
+    where
+        Value: 'a
+    {
+        let dimensions = &self.dimensions;
+        self.values
+            .iter()
+            .map(move |(index, value)| (*index, dimensions.linear_index_to_coordinate(*index), value))
+    }
+
+    fn iter_mut_with_index_and_coordinate<'a>(&'a mut self) -> impl Iterator<Item=(LIQ, SpatialIndexCoordinate4D<LIQ>, &'a mut Value)>
+    where
+        Value: 'a
+    {
+        let dimensions = &self.dimensions;
+        self.values
+            .iter_mut()
+            .map(move |(index, value)| (*index, dimensions.linear_index_to_coordinate(*index), value))
     }
 }
