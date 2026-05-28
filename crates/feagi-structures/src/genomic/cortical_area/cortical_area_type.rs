@@ -1,6 +1,6 @@
 use crate::genomic::cortical_area::cortical_id::CorticalID;
 use crate::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
-use crate::FeagiDataError;
+use crate::genomic::FeagiStructuresGenomicError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -40,32 +40,19 @@ pub enum CoreCorticalType {
     Power,
     /// Brain fatigue indicator - activates when neuron/synapse arrays exceed 85% capacity
     Fatigue,
-    /// Pain signal processing
-    Pain,
-    /// Pleasure signal processing
-    Pleasure,
-    /// Fear signal processing
-    Fear,
-    /// Hope signal processing
-    Hope,
 }
 
 impl CoreCorticalType {
     pub(crate) fn try_from_cortical_id_bytes_type_unchecked(
         cortical_id_bytes: &[u8; CorticalID::NUMBER_OF_BYTES],
-    ) -> Result<CoreCorticalType, FeagiDataError> {
+    ) -> Result<CoreCorticalType, FeagiStructuresGenomicError> {
         match cortical_id_bytes {
             b"___death" => Ok(CoreCorticalType::Death),
             b"___power" => Ok(CoreCorticalType::Power),
             b"___fatig" => Ok(CoreCorticalType::Fatigue),
-            b"___pain_" => Ok(CoreCorticalType::Pain),
-            b"___pleas" => Ok(CoreCorticalType::Pleasure),
-            b"___fear_" => Ok(CoreCorticalType::Fear),
-            b"___hope_" => Ok(CoreCorticalType::Hope),
-            _ => Err(FeagiDataError::BadParameters(format!(
-                "Unable to cast cortical ID bytes '{}' to a core cortical type!",
-                String::from_utf8_lossy(cortical_id_bytes)
-            ))),
+            _ => Err(FeagiStructuresGenomicError::CorticalAreaError {
+                context: "cortical ID bytes do not match a known core cortical type",
+            }),
         }
     }
 
@@ -80,18 +67,6 @@ impl CoreCorticalType {
             Self::Fatigue => CorticalID {
                 bytes: *b"___fatig",
             },
-            Self::Pain => CorticalID {
-                bytes: *b"___pain_",
-            },
-            Self::Pleasure => CorticalID {
-                bytes: *b"___pleas",
-            },
-            Self::Fear => CorticalID {
-                bytes: *b"___fear_",
-            },
-            Self::Hope => CorticalID {
-                bytes: *b"___hope_",
-            },
         }
     }
 }
@@ -102,10 +77,6 @@ impl fmt::Display for CoreCorticalType {
             CoreCorticalType::Death => "Death",
             CoreCorticalType::Power => "Power",
             CoreCorticalType::Fatigue => "Fatigue",
-            CoreCorticalType::Pain => "Pain",
-            CoreCorticalType::Pleasure => "Pleasure",
-            CoreCorticalType::Fear => "Fear",
-            CoreCorticalType::Hope => "Hope",
         };
         write!(f, "CoreCorticalType({})", ch)
     }

@@ -7,33 +7,20 @@ RegionID - UUID-based unique identifier for brain regions.
 Provides type safety and global uniqueness for brain region identifiers.
 */
 
-use crate::FeagiDataError;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use uuid::Uuid;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::genomic::FeagiStructuresGenomicError;
+
+
 
 /// Unique identifier for a brain region, based on UUID v7.
 ///
 /// This struct provides type safety and ensures global uniqueness for brain region IDs.
 /// UUID v7 is time-ordered, which provides better database indexing and sortability.
 /// It handles serialization to and deserialization from string representations of UUIDs.
-///
-/// # Examples
-///
-/// ```
-/// use feagi_structures::genomic::brain_regions::RegionID;
-///
-/// // Generate a new time-ordered RegionID
-/// let region_id = RegionID::new();
-///
-/// // Convert to string for storage/display
-/// let id_string = region_id.to_string();
-///
-/// // Parse from string
-/// let parsed_id = RegionID::from_string(&id_string).unwrap();
-/// assert_eq!(region_id, parsed_id);
-/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RegionID {
     uuid: Uuid,
@@ -87,10 +74,12 @@ impl RegionID {
     /// let region_id = RegionID::from_string("550e8400-e29b-41d4-a716-446655440000").unwrap();
     /// assert_eq!(region_id.to_string(), "550e8400-e29b-41d4-a716-446655440000");
     /// ```
-    pub fn from_string(s: &str) -> Result<Self, FeagiDataError> {
+    pub fn from_string(s: &str) -> Result<Self, FeagiStructuresGenomicError> {
         Uuid::parse_str(s)
             .map(RegionID::from_uuid)
-            .map_err(|e| FeagiDataError::BadParameters(format!("Invalid RegionID string: {}", e)))
+            .map_err(|_| FeagiStructuresGenomicError::BrainRegionError {
+                context: "invalid region ID string",
+            })
     }
 
     /// Returns the underlying UUID.
@@ -136,12 +125,10 @@ impl Display for RegionID {
 }
 
 impl FromStr for RegionID {
-    type Err = FeagiDataError;
+    type Err = FeagiStructuresGenomicError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Uuid::parse_str(s)
-            .map(RegionID::from_uuid)
-            .map_err(|e| FeagiDataError::BadParameters(format!("Invalid RegionID string: {}", e)))
+        RegionID::from_string(s)
     }
 }
 

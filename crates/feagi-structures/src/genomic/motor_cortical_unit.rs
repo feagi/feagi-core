@@ -1,17 +1,16 @@
-use crate::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
-use crate::genomic::cortical_area::descriptors::CorticalUnitIndex;
-use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
-    FrameChangeHandling, PercentageNeuronPositioning,
-};
-use crate::genomic::cortical_area::{
-    CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
-};
-use crate::genomic::sensory_cortical_unit::UnitTopology;
-use crate::motor_cortical_units;
 use paste;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
+use crate::genomic::cortical_area::descriptors::*;
+use crate::genomic::cortical_area::{CorticalAreaType, CorticalID};
+use crate::genomic::FeagiStructuresGenomicError;
+use crate::genomic::sensory_cortical_unit::UnitTopology;
+use crate::motor_cortical_units;
 
 // Helper macro to handle optional allowed_frame_change_handling
 #[macro_export]
@@ -74,7 +73,7 @@ macro_rules! define_motor_cortical_units_enum {
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
                             $(
-                                $io_cortical_area_configuration_flag_expr .as_io_cortical_id(false, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::from($cortical_sub_unit_index))
+                                $io_cortical_area_configuration_flag_expr .as_io_cortical_id(false, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::const_wrap($cortical_sub_unit_index))
                             ),*
                         ]
                     }
@@ -163,7 +162,7 @@ macro_rules! define_motor_cortical_units_enum {
                             let mut topology = HashMap::new();
                             $(
                                 topology.insert(
-                                    CorticalSubUnitIndex::from($cortical_sub_unit_index),
+                                    CorticalSubUnitIndex::const_wrap($cortical_sub_unit_index),
                                     UnitTopology {
                                         relative_position: [$rel_x, $rel_y, $rel_z],
                                         channel_dimensions_default: [$dim_default_x, $dim_default_y, $dim_default_z],
@@ -191,7 +190,7 @@ macro_rules! define_motor_cortical_units_enum {
                 }
             }
 
-            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, crate::FeagiDataError> {
+            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, FeagiStructuresGenomicError> {
                 match self {
                     $(
                         MotorCorticalUnit::$variant_name => {
@@ -234,7 +233,7 @@ impl MotorCorticalUnit {
         let subtype_arr = [subtype_bytes[0], subtype_bytes[1], subtype_bytes[2]];
         for unit in Self::list_all() {
             if unit.get_cortical_id_unit_reference() == subtype_arr {
-                return Some(unit.get_default_cortical_id_for_group(CorticalUnitIndex::from(0u8)));
+                return Some(unit.get_default_cortical_id_for_group(CorticalUnitIndex::wrap(0u8)));
             }
         }
         None

@@ -84,8 +84,8 @@ fn generated_concrete_wrappers_do_not_require_generic_quantization_parameters() 
     let signed = ConcreteSignedAxis::wrap(-4);
     let decimal = ConcreteDecimalAxis::from_f32(1.25);
 
-    assert_eq!(index.const_take(), 12);
-    assert_eq!((unsigned % ConcreteUnsignedAxis::wrap(3)).const_take(), 1);
+    assert_eq!(index.const_unwrap(), 12);
+    assert_eq!((unsigned % ConcreteUnsignedAxis::wrap(3)).const_unwrap(), 1);
     assert!(signed.is_negative());
-    assert_eq!(decimal.const_take(), 1.25);
+    assert_eq!(decimal.const_unwrap(), 1.25);
 }

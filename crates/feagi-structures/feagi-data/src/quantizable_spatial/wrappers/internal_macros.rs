@@ -102,7 +102,7 @@ macro_rules! __create_quantized_spatial_coordinate_2d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_coordinate {
+            pub const fn const_unwrap(self) -> $base_coordinate {
                 self.0
             }
         }
@@ -152,7 +152,7 @@ macro_rules! __create_quantized_spatial_coordinate_2d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_coordinate {
+            pub const fn const_unwrap(self) -> $base_coordinate {
                 self.0
             }
         }
@@ -214,7 +214,7 @@ macro_rules! __create_quantized_spatial_coordinate_3d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_coordinate {
+            pub const fn const_unwrap(self) -> $base_coordinate {
                 self.0
             }
         }
@@ -272,7 +272,7 @@ macro_rules! __create_quantized_spatial_coordinate_3d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_coordinate {
+            pub const fn const_unwrap(self) -> $base_coordinate {
                 self.0
             }
         }
@@ -342,7 +342,7 @@ macro_rules! __create_quantized_spatial_coordinate_4d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_coordinate {
+            pub const fn const_unwrap(self) -> $base_coordinate {
                 self.0
             }
         }
@@ -408,7 +408,7 @@ macro_rules! __create_quantized_spatial_coordinate_4d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_coordinate {
+            pub const fn const_unwrap(self) -> $base_coordinate {
                 self.0
             }
         }
@@ -480,7 +480,7 @@ macro_rules! __create_quantized_spatial_dimensions_2d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_dimensions {
+            pub const fn const_unwrap(self) -> $base_dimensions {
                 self.0
             }
         }
@@ -548,7 +548,7 @@ macro_rules! __create_quantized_spatial_dimensions_2d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_dimensions {
+            pub const fn const_unwrap(self) -> $base_dimensions {
                 self.0
             }
         }
@@ -629,7 +629,7 @@ macro_rules! __create_quantized_spatial_dimensions_3d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_dimensions {
+            pub const fn const_unwrap(self) -> $base_dimensions {
                 self.0
             }
         }
@@ -706,7 +706,7 @@ macro_rules! __create_quantized_spatial_dimensions_3d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_dimensions {
+            pub const fn const_unwrap(self) -> $base_dimensions {
                 self.0
             }
         }
@@ -796,7 +796,7 @@ macro_rules! __create_quantized_spatial_dimensions_4d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_dimensions {
+            pub const fn const_unwrap(self) -> $base_dimensions {
                 self.0
             }
         }
@@ -882,7 +882,7 @@ macro_rules! __create_quantized_spatial_dimensions_4d_wrapper {
             }
 
             #[inline(always)]
-            pub const fn const_take(self) -> $base_dimensions {
+            pub const fn const_unwrap(self) -> $base_dimensions {
                 self.0
             }
         }

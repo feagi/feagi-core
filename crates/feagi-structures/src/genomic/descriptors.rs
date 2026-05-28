@@ -1,34 +1,10 @@
-use crate::{define_xy_coordinates, define_xyz_coordinates};
+use feagi_data::{create_quantized_signed_integer_wrapper, create_quantized_spatial_signed_coordinate_2d_wrapper, create_quantized_spatial_signed_coordinate_3d_wrapper};
 
-define_xy_coordinates!(
-    GenomeCoordinate2D,
-    i32,
-    "GenomeCoordinate2D",
-    "2D coordinate local to the FEAGI Genome space.
 
-Represents a 2D position within the global genome coordinate system,
-using signed integers to allow for negative coordinates and relative
-positioning across the entire genome space.
+create_quantized_signed_integer_wrapper!(GenomeAxis, i32);
 
-# Usage
-Used for 2D visualization positioning of brain regions and cortical areas
-within the genome's 2D projection plane."
-);
+// Represents a 2D position within the Circuit Builder of brain visualizer
+create_quantized_spatial_signed_coordinate_2d_wrapper!(GenomeCoordinate2D, i32, GenomeAxis, GenomeAxis);
 
-define_xyz_coordinates!(
-    GenomeCoordinate3D,
-    i32,
-    "GenomeCoordinate3D",
-    "3D coordinate local to the FEAGI Genome space.
-
-Represents a position within the global genome coordinate system,
-using signed integers to allow for negative coordinates and relative
-positioning across the entire genome space.
-
-# Usage
-Used for absolute positioning of cortical areas within the genome
-and for calculating spatial relationships between different brain regions."
-);
-
-// Alias for backward compatibility
-pub type GenomeCoordinate = GenomeCoordinate3D;
+// Represents a 3D position within the Cortical Area Viewer of Brain Visualizer
+create_quantized_spatial_signed_coordinate_3d_wrapper!(GenomeCoordinate3D, i32, GenomeAxis, GenomeAxis, GenomeAxis);

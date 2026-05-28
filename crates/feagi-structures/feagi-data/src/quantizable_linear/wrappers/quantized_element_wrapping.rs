@@ -71,8 +71,13 @@ macro_rules! create_quantized_index_count_wrapper  {
         impl<QE: $crate::quantizable_linear::base_types::QuantizedIndexCountTrait> $struct_name<QE>
         {
             #[inline(always)]
-            pub const fn const_take(self) -> QE {
+            pub const fn const_unwrap(self) -> QE {
                 self.0
+            }
+
+            #[inline(always)]
+            pub const fn const_wrap(e: QE) -> Self {
+                Self(e)
             }
         }
 
@@ -126,8 +131,13 @@ macro_rules! create_quantized_index_count_wrapper  {
         impl $struct_name
         {
             #[inline(always)]
-            pub const fn const_take(self) -> $quant_element {
+            pub const fn const_unwrap(self) -> $quant_element {
                 self.0
+            }
+
+            #[inline(always)]
+            pub const fn const_wrap(e: $quant_element) -> Self {
+                Self(e)
             }
         }
 
@@ -191,8 +201,13 @@ macro_rules! create_quantized_unsigned_integer_wrapper {
         impl<QE: $crate::quantizable_linear::base_types::QuantizedUnsignedIntegerTrait> $struct_name<QE>
         {
             #[inline(always)]
-            pub const fn const_take(self) -> QE {
+            pub const fn const_unwrap(self) -> QE {
                 self.0
+            }
+
+            #[inline(always)]
+            pub const fn const_wrap(e: QE) -> Self {
+                Self(e)
             }
         }
         
@@ -231,8 +246,13 @@ macro_rules! create_quantized_unsigned_integer_wrapper {
         impl $struct_name
         {
             #[inline(always)]
-            pub const fn const_take(self) -> $quant_element {
+            pub const fn const_unwrap(self) -> $quant_element {
                 self.0
+            }
+
+            #[inline(always)]
+            pub const fn const_wrap(e: $quant_element) -> Self {
+                Self(e)
             }
         }
         
@@ -298,8 +318,13 @@ macro_rules! create_quantized_signed_integer_wrapper {
         impl<QE: $crate::quantizable_linear::base_types::QuantizedSignedIntegerTrait> $struct_name<QE>
         {
             #[inline(always)]
-            pub const fn const_take(self) -> QE {
+            pub const fn const_unwrap(self) -> QE {
                 self.0
+            }
+
+            #[inline(always)]
+            pub const fn const_wrap(e: QE) -> Self {
+                Self(e)
             }
         }
         
@@ -340,8 +365,13 @@ macro_rules! create_quantized_signed_integer_wrapper {
         impl $struct_name
         {
             #[inline(always)]
-            pub const fn const_take(self) -> $quant_element {
+            pub const fn const_unwrap(self) -> $quant_element {
                 self.0
+            }
+
+            #[inline(always)]
+            pub const fn const_wrap(e: $quant_element) -> Self {
+                Self(e)
             }
         }
         
@@ -412,8 +442,13 @@ macro_rules! create_quantized_decimal_wrapper {
         impl<QE: $crate::quantizable_linear::base_types::QuantizedDecimalTrait> $struct_name<QE>
         {
             #[inline(always)]
-            pub const fn const_take(self) -> QE {
+            pub const fn const_unwrap(self) -> QE {
                 self.0
+            }
+
+            #[inline(always)]
+            pub const fn const_wrap(e: QE) -> Self {
+                Self(e)
             }
         }
                 
@@ -461,8 +496,13 @@ macro_rules! create_quantized_decimal_wrapper {
         impl $struct_name
         {
             #[inline(always)]
-            pub const fn const_take(self) -> $quant_element {
+            pub const fn const_unwrap(self) -> $quant_element {
                 self.0
+            }
+
+            #[inline(always)]
+            pub const fn const_wrap(e: $quant_element) -> Self {
+                Self(e)
             }
         }
                 

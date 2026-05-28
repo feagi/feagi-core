@@ -236,7 +236,7 @@ fn generated_spatial_wrappers_cover_all_dimensions_and_visibility_forms() {
 }
 
 #[test]
-fn generated_concrete_spatial_wrappers_use_fixed_quantization_and_const_take() {
+fn generated_concrete_spatial_wrappers_use_fixed_quantization_and_const_unwrap() {
     let coord = ConcreteIndexCoord3D::new(
         concrete_index_axis(1),
         concrete_index_axis(2),
@@ -250,9 +250,9 @@ fn generated_concrete_spatial_wrappers_use_fixed_quantization_and_const_take() {
     .expect("non-zero concrete index dimensions should be valid");
 
     let linear = dims.coordinate_to_linear_index(coord);
-    let inner_coord = dims.linear_index_to_coordinate(linear).const_take();
+    let inner_coord = dims.linear_index_to_coordinate(linear).const_unwrap();
 
-    assert_eq!(linear.const_take(), 69);
+    assert_eq!(linear.const_unwrap(), 69);
     assert_eq!(*inner_coord.get_x(), 1);
     assert_eq!(*inner_coord.get_y(), 2);
     assert_eq!(*inner_coord.get_z(), 3);
@@ -267,7 +267,7 @@ fn generated_concrete_spatial_wrappers_use_fixed_quantization_and_const_take() {
     )
     .expect("non-zero concrete unsigned dimensions should be valid");
     assert!(unsigned_dims.does_coordinate_fit(unsigned_coord));
-    assert_eq!(*unsigned_dims.const_take().get_x(), 3);
+    assert_eq!(*unsigned_dims.const_unwrap().get_x(), 3);
 
     let signed_coord = ConcreteSignedCoord2D::new(
         ConcreteSignedAxis::wrap(1),
@@ -279,5 +279,5 @@ fn generated_concrete_spatial_wrappers_use_fixed_quantization_and_const_take() {
     )
     .expect("positive concrete signed dimensions should be valid");
     assert!(signed_dims.does_coordinate_fit(signed_coord));
-    assert_eq!(*signed_dims.const_take().get_y(), 4);
+    assert_eq!(*signed_dims.const_unwrap().get_y(), 4);
 }

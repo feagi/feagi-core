@@ -1,16 +1,19 @@
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
 use crate::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
 use crate::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 use crate::genomic::cortical_area::{
-    CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
+    CorticalAreaType, CorticalID,
 };
+use crate::genomic::FeagiStructuresGenomicError;
 use crate::sensor_cortical_units;
 use paste;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)] // TODO move me!
 pub struct UnitTopology {
@@ -86,7 +89,7 @@ macro_rules! define_sensory_cortical_units_enum {
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
                             $(
-                                $io_cortical_area_configuration_flag_expr .as_io_cortical_id(true, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::from($cortical_sub_unit_index))
+                                $io_cortical_area_configuration_flag_expr .as_io_cortical_id(true, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::const_wrap($cortical_sub_unit_index))
                             ),*
                         ]
                     }
@@ -104,7 +107,7 @@ macro_rules! define_sensory_cortical_units_enum {
             /// Parse a sensory cortical unit from its snake_case name
             ///
             /// # Arguments
-            /// * `name` - The snake_case name (e.g., "simple_vision", "raw_i_m_u")
+            /// * `name` - The snake_case name (e.g., "simple_vision", "accelerometer")
             ///
             /// # Returns
             /// * `Some(SensoryCorticalUnit)` - If name matches a known type
@@ -196,7 +199,7 @@ macro_rules! define_sensory_cortical_units_enum {
                             let mut topology = HashMap::new();
                             $(
                                 topology.insert(
-                                    CorticalSubUnitIndex::from($cortical_sub_unit_index),
+                                    CorticalSubUnitIndex::const_wrap($cortical_sub_unit_index),
                                     UnitTopology {
                                         relative_position: [$rel_x, $rel_y, $rel_z],
                                         channel_dimensions_default: [$dim_default_x, $dim_default_y, $dim_default_z],
@@ -225,7 +228,7 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, crate::FeagiDataError> {
+            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, FeagiStructuresGenomicError> {
                 match self {
                     $(
                         SensoryCorticalUnit::$variant_name => {
@@ -270,7 +273,7 @@ impl SensoryCorticalUnit {
         let subtype_arr = [subtype_bytes[0], subtype_bytes[1], subtype_bytes[2]];
         for unit in Self::list_all() {
             if unit.get_cortical_id_unit_reference() == subtype_arr {
-                return Some(unit.get_default_cortical_id_for_group(CorticalUnitIndex::from(0u8)));
+                return Some(unit.get_default_cortical_id_for_group(CorticalUnitIndex::wrap(0u8)));
             }
         }
         None
@@ -327,14 +330,12 @@ impl SensoryCorticalUnit {
                 Self::get_cortical_ids_array_for_segmented_vision_with_parameters(fh, group_index)
                     [0]
             }
-            SensoryCorticalUnit::RawIMU => {
-                // Default group index returns the accelerometer (sub-area 0) as
-                // the canonical "primary" cortical id of a Raw IMU unit.
-                Self::get_cortical_ids_array_for_raw_i_m_u_with_parameters(fh, pos, group_index)[0]
-            }
-            SensoryCorticalUnit::SmartIMU => {
-                Self::get_cortical_ids_array_for_smart_i_m_u_with_parameters(fh, pos, group_index)
+            SensoryCorticalUnit::Accelerometer => {
+                Self::get_cortical_ids_array_for_accelerometer_with_parameters(fh, pos, group_index)
                     [0]
+            }
+            SensoryCorticalUnit::Gyroscope => {
+                Self::get_cortical_ids_array_for_gyroscope_with_parameters(fh, pos, group_index)[0]
             }
         }
     }
