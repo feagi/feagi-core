@@ -2886,6 +2886,53 @@ impl ConnectomeManager {
                 }
             }
 
+            // Handle conditional gate (transistor synapse) configuration if present.
+            // The gate_source_area field specifies a cortical area whose firing activity
+            // gates propagation through all synapses created by this mapping rule.
+            if let Some(gate_area_str) = rule
+                .as_object()
+                .and_then(|obj| obj.get("gate_source_area"))
+                .and_then(|v| v.as_str())
+            {
+                let gate_area_id = CorticalID::try_from_base_64(gate_area_str).map_err(|_| {
+                    crate::types::BduError::Internal(format!(
+                        "Invalid gate_source_area '{}' on mapping {} -> {}",
+                        gate_area_str, src_area_id, dst_area_id
+                    ))
+                })?;
+                let gate_cortical_idx =
+                    self.cortical_id_to_idx.get(&gate_area_id).ok_or_else(|| {
+                        crate::types::BduError::Internal(format!(
+                            "Unknown gate_source_area '{}' on mapping {} -> {}",
+                            gate_area_str, src_area_id, dst_area_id
+                        ))
+                    })?;
+
+                let mut npu_lock = npu_arc.lock().map_err(|_| {
+                    crate::types::BduError::Internal(
+                        "Failed to acquire NPU lock for gate registration".to_string(),
+                    )
+                })?;
+                if let Err(e) = npu_lock.register_gate_mapping(
+                    src_cortical_idx,
+                    dst_cortical_idx,
+                    *gate_cortical_idx,
+                ) {
+                    tracing::error!(
+                        target: "feagi-bdu",
+                        "Gate mapping registration failed for {} -> {} (gate={}): {}",
+                        src_area_id,
+                        dst_area_id,
+                        gate_area_str,
+                        e
+                    );
+                    return Err(crate::types::BduError::Internal(format!(
+                        "Gate registration failed: {}",
+                        e
+                    )));
+                }
+            }
+
             // Apply the morphology rule
             let synapse_count = match self.apply_single_morphology_rule(
                 src_area_id,

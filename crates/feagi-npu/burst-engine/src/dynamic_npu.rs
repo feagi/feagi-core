@@ -712,6 +712,29 @@ where
         )
     }
 
+    pub fn register_gate_mapping(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        gate_cortical_idx: u32,
+    ) -> Result<()> {
+        dispatch_mut!(
+            self,
+            register_gate_mapping(src_cortical_idx, dst_cortical_idx, gate_cortical_idx)
+        )
+    }
+
+    pub fn unregister_gate_mapping(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+    ) -> bool {
+        dispatch_mut!(
+            self,
+            unregister_gate_mapping(src_cortical_idx, dst_cortical_idx)
+        )
+    }
+
     pub fn get_neuron_capacity(&self) -> usize {
         match self {
             DynamicNPUGeneric::F32(npu) => {

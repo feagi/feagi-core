@@ -379,6 +379,11 @@ pub struct RustNPU<
     memory_neuron_longterm_predicate: std::sync::RwLock<Option<MemoryNeuronPredicate>>,
     /// @cursor:critical-path — only allocated when at least one cortical area enables rate-modulated leak.
     rate_modulated_leak: std::sync::Mutex<RateModulatedLeakRegistry>,
+
+    /// Conditional gate configurations: maps (src_cortical_idx, dst_cortical_idx) to
+    /// the gate cortical area index. Used to check the fire queue each burst and compute
+    /// which gates are closed before propagation.
+    gate_configs: std::sync::RwLock<AHashMap<CorticalMappingKey, u32>>,
 }
 
 const POWER_NEURON_UNSET: u32 = u32::MAX;
@@ -536,6 +541,7 @@ impl<
             memory_neuron_assoc_predicate: std::sync::RwLock::new(None),
             memory_neuron_longterm_predicate: std::sync::RwLock::new(None),
             rate_modulated_leak: std::sync::Mutex::new(RateModulatedLeakRegistry::default()),
+            gate_configs: std::sync::RwLock::new(AHashMap::new()),
         })
     }
 }
@@ -2381,6 +2387,37 @@ impl<
                     neuron_mps.insert(neuron.neuron_id, mp);
                 }
             }
+
+            // Compute conditional gate states before propagation. For each gated mapping,
+            // check if the gate area has any firing neurons in the current burst's fire queue.
+            // If not, mark the mapping as closed so propagation skips those synapses.
+            if propagation_engine.has_gate_mappings() {
+                let gate_configs = self.gate_configs.read().unwrap();
+                let mut closed = ahash::AHashSet::new();
+                for (&(src_idx, dst_idx), &gate_idx) in gate_configs.iter() {
+                    let gate_active = dynamics_result
+                        .fire_queue
+                        .neurons_by_area
+                        .get(&gate_idx)
+                        .map(|neurons| !neurons.is_empty())
+                        .unwrap_or(false);
+                    if !gate_active {
+                        if let (Some(src_name), Some(dst_name)) = (
+                            self.get_cortical_area_name(src_idx),
+                            self.get_cortical_area_name(dst_idx),
+                        ) {
+                            if let (Ok(src_id), Ok(dst_id)) = (
+                                CorticalID::try_from_base_64(&src_name),
+                                CorticalID::try_from_base_64(&dst_name),
+                            ) {
+                                closed.insert((src_id, dst_id));
+                            }
+                        }
+                    }
+                }
+                propagation_engine.set_closed_gates(closed);
+            }
+
             let delayed =
                 propagation_engine.propagate_delayed(&fired_ids, &*synapse_storage, &neuron_mps)?;
             fire_structures
@@ -4651,6 +4688,111 @@ impl<
     ) -> bool {
         let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
         self.stdp_mappings.write().unwrap().remove(&key).is_some()
+    }
+
+    /// Register a conditional gate on a cortical mapping A→B.
+    ///
+    /// When registered, all synapses from `src_cortical_idx` to `dst_cortical_idx` will
+    /// produce zero contribution during propagation if `gate_cortical_idx` has no neuron
+    /// firing in the same burst (transistor-OFF semantics). When the gate area fires,
+    /// propagation proceeds normally (transistor-ON).
+    ///
+    /// The gate area's CorticalID is resolved from its index and stored on the
+    /// propagation engine for use during the parallel propagation pass.
+    pub fn register_gate_mapping(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        gate_cortical_idx: u32,
+    ) -> Result<()> {
+        let src_name = self
+            .get_cortical_area_name(src_cortical_idx)
+            .ok_or_else(|| {
+                FeagiError::RuntimeError(format!(
+                    "Gate registration: unknown source cortical area idx {}",
+                    src_cortical_idx
+                ))
+            })?;
+        let dst_name = self
+            .get_cortical_area_name(dst_cortical_idx)
+            .ok_or_else(|| {
+                FeagiError::RuntimeError(format!(
+                    "Gate registration: unknown destination cortical area idx {}",
+                    dst_cortical_idx
+                ))
+            })?;
+        let gate_name = self
+            .get_cortical_area_name(gate_cortical_idx)
+            .ok_or_else(|| {
+                FeagiError::RuntimeError(format!(
+                    "Gate registration: unknown gate cortical area idx {}",
+                    gate_cortical_idx
+                ))
+            })?;
+
+        let src_id = CorticalID::try_from_base_64(&src_name).map_err(|e| {
+            FeagiError::RuntimeError(format!("Gate registration: invalid src CorticalID: {}", e))
+        })?;
+        let dst_id = CorticalID::try_from_base_64(&dst_name).map_err(|e| {
+            FeagiError::RuntimeError(format!("Gate registration: invalid dst CorticalID: {}", e))
+        })?;
+        let gate_id = CorticalID::try_from_base_64(&gate_name).map_err(|e| {
+            FeagiError::RuntimeError(format!("Gate registration: invalid gate CorticalID: {}", e))
+        })?;
+
+        self.gate_configs
+            .write()
+            .unwrap()
+            .insert((src_cortical_idx, dst_cortical_idx), gate_cortical_idx);
+
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .register_gate_mapping(src_id, dst_id, gate_id);
+
+        tracing::debug!(
+            target: "feagi-npu",
+            "Registered conditional gate: mapping {} -> {} gated by area {} (idx={})",
+            src_name,
+            dst_name,
+            gate_name,
+            gate_cortical_idx
+        );
+
+        Ok(())
+    }
+
+    /// Remove the conditional gate from a cortical mapping A→B.
+    pub fn unregister_gate_mapping(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+    ) -> bool {
+        let removed = self
+            .gate_configs
+            .write()
+            .unwrap()
+            .remove(&(src_cortical_idx, dst_cortical_idx))
+            .is_some();
+
+        if removed {
+            if let (Some(src_name), Some(dst_name)) = (
+                self.get_cortical_area_name(src_cortical_idx),
+                self.get_cortical_area_name(dst_cortical_idx),
+            ) {
+                if let (Ok(src_id), Ok(dst_id)) = (
+                    CorticalID::try_from_base_64(&src_name),
+                    CorticalID::try_from_base_64(&dst_name),
+                ) {
+                    self.propagation_engine
+                        .write()
+                        .unwrap()
+                        .unregister_gate_mapping(src_id, dst_id);
+                }
+            }
+        }
+
+        removed
     }
 
     fn rebuild_stdp_mapping_index(&self) {
