@@ -2293,6 +2293,7 @@ impl ConnectomeManager {
                                 mem_props.temporal_depth,
                                 upstream_non_memory,
                                 Some(lifecycle_config),
+                                mem_props.mp_learning_enabled,
                             );
                         } else {
                             warn!(target: "feagi-bdu", "Failed to lock PlasticityExecutor");
@@ -3637,6 +3638,32 @@ impl ConnectomeManager {
                                 EvoPatternElement::Wildcard => Ok(RulePatternElement::Wildcard),
                                 EvoPatternElement::Skip => Ok(RulePatternElement::Skip),
                                 EvoPatternElement::Exclude => Ok(RulePatternElement::Exclude),
+                                EvoPatternElement::DirectionPositive => {
+                                    Ok(RulePatternElement::DirectionExclusive(
+                                        crate::connectivity::rules::patterns::Direction::Positive,
+                                    ))
+                                }
+                                EvoPatternElement::DirectionNegative => {
+                                    Ok(RulePatternElement::DirectionExclusive(
+                                        crate::connectivity::rules::patterns::Direction::Negative,
+                                    ))
+                                }
+                                EvoPatternElement::DirectionPositiveInclusive => {
+                                    Ok(RulePatternElement::DirectionInclusive(
+                                        crate::connectivity::rules::patterns::Direction::Positive,
+                                    ))
+                                }
+                                EvoPatternElement::DirectionNegativeInclusive => {
+                                    Ok(RulePatternElement::DirectionInclusive(
+                                        crate::connectivity::rules::patterns::Direction::Negative,
+                                    ))
+                                }
+                                EvoPatternElement::Offset(off) => {
+                                    Ok(RulePatternElement::Offset(*off))
+                                }
+                                EvoPatternElement::Range(lo, hi) => {
+                                    Ok(RulePatternElement::Range(*lo, *hi))
+                                }
                             }
                         };
 

@@ -276,7 +276,7 @@ fn parse_morphology_parameters(
     }
 }
 
-/// Parse pattern elements (handles *, ?, !, and integer values)
+/// Parse pattern elements (handles *, ?, !, directional, offset, range, and integer values)
 fn parse_pattern_elements(value: &Value) -> EvoResult<Vec<PatternElement>> {
     let array = value
         .as_array()
@@ -285,17 +285,8 @@ fn parse_pattern_elements(value: &Value) -> EvoResult<Vec<PatternElement>> {
     let mut elements = Vec::new();
     for elem in array {
         let pattern_elem = if let Some(s) = elem.as_str() {
-            match s {
-                "*" => PatternElement::Wildcard,
-                "?" => PatternElement::Skip,
-                "!" => PatternElement::Exclude,
-                _ => {
-                    return Err(EvoError::InvalidGenome(format!(
-                        "Unknown pattern element: {}",
-                        s
-                    )))
-                }
-            }
+            PatternElement::parse_string(s)
+                .ok_or_else(|| EvoError::InvalidGenome(format!("Unknown pattern element: {}", s)))?
         } else if let Some(i) = elem.as_i64() {
             PatternElement::Value(i as i32)
         } else {
@@ -447,6 +438,29 @@ mod tests {
         assert_eq!(elements[2], PatternElement::Skip);
         assert_eq!(elements[3], PatternElement::Exclude);
         assert_eq!(elements[4], PatternElement::Value(5));
+    }
+
+    #[test]
+    fn test_parse_pattern_elements_directional() {
+        let json = serde_json::json!(["?+", "?-", "?+=", "?-="]);
+        let elements = parse_pattern_elements(&json).unwrap();
+
+        assert_eq!(elements.len(), 4);
+        assert_eq!(elements[0], PatternElement::DirectionPositive);
+        assert_eq!(elements[1], PatternElement::DirectionNegative);
+        assert_eq!(elements[2], PatternElement::DirectionPositiveInclusive);
+        assert_eq!(elements[3], PatternElement::DirectionNegativeInclusive);
+    }
+
+    #[test]
+    fn test_parse_pattern_elements_offset_and_range() {
+        let json = serde_json::json!(["?+3", "?-2", "?-1:?+1"]);
+        let elements = parse_pattern_elements(&json).unwrap();
+
+        assert_eq!(elements.len(), 3);
+        assert_eq!(elements[0], PatternElement::Offset(3));
+        assert_eq!(elements[1], PatternElement::Offset(-2));
+        assert_eq!(elements[2], PatternElement::Range(-1, 1));
     }
 
     #[test]
