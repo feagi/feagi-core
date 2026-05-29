@@ -83,7 +83,7 @@ where
 
 /// Structure can be resized without needing to wait (no async)
 pub trait QuantizableSpatialCollection3DSyncResizable<LIQ, Value>:
-QuantizableSpatialCollection3DCPUData<LIQ, Value>
+QuantizableSpatialCollection3DBase<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone

@@ -1,4 +1,4 @@
-use feagi_ecs::collection::{FeagiECSCollectionCPU, FeagiECSCollectionDevice};
+use feagi_ecs::tag_device::{FeagiECSTagCPU, FeagiECSTagGenericDevice};
 use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex};
 use crate::quantizable_collections::dim_3d::spatial_shared_traits::{QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithCoordinate};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
@@ -63,10 +63,6 @@ where
     }
 }
 
-impl<LIQ, Value> FeagiECSCollectionDevice for QuantizableSpatialCollection3DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
-
-impl<LIQ, Value> FeagiECSCollectionCPU for QuantizableSpatialCollection3DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
-
 impl<LIQ, Value> QuantizableLinearCollectionBase<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
@@ -76,6 +72,19 @@ where
         self.dimensions.max_linear_index()
     }
 }
+
+impl<LIQ, Value> QuantizableSpatialCollection3DBase<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn get_dimensions(&self) -> &SpatialIndexDimensions3D<LIQ> {
+        &self.dimensions
+    }
+}
+
+
+//region ECS CPU Access
 
 impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
 where
@@ -146,16 +155,6 @@ where
 {
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection3DBase<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-    fn get_dimensions(&self) -> &SpatialIndexDimensions3D<LIQ> {
-        &self.dimensions
-    }
-}
-
 impl<LIQ, Value> QuantizableSpatialCollection3DIterWithCoordinate<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
@@ -189,3 +188,14 @@ where
             })
     }
 }
+
+//endregion
+
+
+//region ECS Tagging
+
+impl<LIQ, Value> FeagiECSTagGenericDevice for QuantizableSpatialCollection3DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+
+impl<LIQ, Value> FeagiECSTagCPU for QuantizableSpatialCollection3DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+
+//endregion

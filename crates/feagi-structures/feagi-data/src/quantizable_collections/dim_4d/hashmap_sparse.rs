@@ -1,5 +1,5 @@
 use ahash::AHashMap;
-use feagi_ecs::collection::{FeagiECSCollectionCPU, FeagiECSCollectionDevice};
+use feagi_ecs::tag_device::{FeagiECSTagCPU, FeagiECSTagGenericDevice};
 use crate::quantizable_collections::dim_4d::spatial_shared_traits::{QuantizableSpatialCollection4DBase, QuantizableSpatialCollection4DCPUData, QuantizableSpatialCollection4DIterWithCoordinate};
 use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex, QuantizableLinearCollectionCPUSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
@@ -50,9 +50,18 @@ where
     }
 }
 
-impl<LIQ, Value> FeagiECSCollectionDevice for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+impl<LIQ, Value> QuantizableSpatialCollection4DBase<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn get_dimensions(&self) -> &SpatialIndexDimensions4D<LIQ> {
+        &self.dimensions
+    }
+}
 
-impl<LIQ, Value> FeagiECSCollectionCPU for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
+
+//region ECS CPU Access
 
 impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
 where
@@ -123,16 +132,6 @@ where
 {
 }
 
-impl<LIQ, Value> QuantizableSpatialCollection4DBase<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-    fn get_dimensions(&self) -> &SpatialIndexDimensions4D<LIQ> {
-        &self.dimensions
-    }
-}
-
 impl<LIQ, Value> QuantizableSpatialCollection4DIterWithCoordinate<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
@@ -158,3 +157,14 @@ where
             .map(move |(index, value)| (*index, dimensions.linear_index_to_coordinate(*index), value))
     }
 }
+
+//endregion
+
+
+//region ECS Tagging
+
+impl<LIQ, Value> FeagiECSTagGenericDevice for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+
+impl<LIQ, Value> FeagiECSTagCPU for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+
+//endregion
