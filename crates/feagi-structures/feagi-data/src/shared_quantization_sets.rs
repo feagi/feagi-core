@@ -26,7 +26,7 @@ pub trait CorticalAreasIndexQuantization {
 /// Defines the quantization used in a cortical area for the calculation of neuron dynamics.
 /// All are required to support neuron potentials, hence this is the shared base of each model's
 /// implementation. Each cortical area within an NPU may have different quantization levels.
-pub trait CorticalAreaModelQuantizationBase {
+pub trait CorticalAreaModelQuantizationBase: Sized {
 
     /// Defines the quantization of the membrane potential of a neuron, which all models must
     /// include. This may vary between cortical areas, even of the same model

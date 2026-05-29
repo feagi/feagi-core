@@ -20,6 +20,38 @@ CorticalAreaModelQuantizationBase
     type ConsecutiveFireLimit: QuantizedIndexCountTrait;
 }
 
+pub struct TempFeagiStandardQuant32;
+
+impl CorticalAreaModelQuantizationBase for TempFeagiStandardQuant32 {
+    type NeuronPotentialQuant = f32;
+}
+
+impl FeagiStandardModelQuantizationTrait for TempFeagiStandardQuant32 {
+    type LeakCoefficientQuant = f32;
+    type ConsecutiveFireCountdownQuant = u32;
+    type RefractoryCountdownQuant = u32;
+    type ExcitabilityQuant = f32;
+    type RefractoryPeriodLimitQuant = u32;
+    type FireThresholdLimit = f32;
+    type ConsecutiveFireLimit = u32;
+}
+
+pub enum TempFeagiStandardQuantizations {
+    Bit32(TempFeagiStandardQuant32)
+}
+
+impl TempFeagiStandardQuantizations {
+    fn get_quantization_impl(self) -> dyn FeagiStandardModelQuantizationTrait
+    {
+        match self {
+            TempFeagiStandardQuantizations::Bit32(x) => {
+
+            }
+        }
+    }
+}
+
+
 
 pub struct FeagiStandardModelCorticalDataCPUGeneric<CAIQ, FSMQ>
 where
