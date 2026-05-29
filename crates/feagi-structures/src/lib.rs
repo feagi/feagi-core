@@ -9,6 +9,7 @@ pub mod genomic;
 pub mod wgpu_temp;
 pub mod useful_structs;
 pub mod neuron_voxels;
+pub mod neuron_descriptors;
 
 pub use feagi_common_error::FeagiCommonError;
 pub use feagi_json::FeagiJSON; // TODO delete me

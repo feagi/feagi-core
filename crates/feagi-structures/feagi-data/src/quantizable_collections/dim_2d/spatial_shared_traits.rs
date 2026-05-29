@@ -1,4 +1,4 @@
-use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionCPUData, QuantizableLinearCollectionSyncSparse};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 use crate::quantizable_spatial::index::{SpatialIndexCoordinate2D, SpatialIndexDimensions2D};
 
@@ -60,7 +60,7 @@ where
 
 /// Structure is sparse, and thus can add / remove items
 pub trait QuantizableSpatialCollection2DSyncSparse<LIQ, Value>:
-QuantizableLinearCollectionSyncSparse<LIQ, Value>
+QuantizableLinearCollectionCPUSparse<LIQ, Value>
 + QuantizableSpatialCollection2DCPUData<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,

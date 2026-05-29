@@ -1,11 +1,19 @@
-//! Defines the device type the data resides in. CPU is always supported, but other crates may add
-//! their own devices
+//! A collection is the top level data holder, denotes that all of its contained data is on a
+//! specific device and independent. These are the structures that FeagiECSSystems will operate
+//! upon, to ensure maximum performance via parallelization. They can contain elements directly
+//! or element sets
 
-#[doc(hidden)]
-/// Shared trait among all Feagi ECS Device traits
-pub trait FeagiECSCollectionOnDevice {}
+use crate::element::FeagiECSElementGenericDevice;
+use crate::tag_device::FeagiECSTagGenericDevice;
 
-/// Defines that the collection data lives on the CPU / RAM
-pub trait FeagiECSCollectionOnCPU: FeagiECSCollectionOnDevice {}
+/// Shared trait among all Feagi ECS Device traits. While only those that extend FeagiECSTagCPU
+/// can have their internal data accessible and workable from standard Rust CPU systems, it is
+/// possible for structs implementing other devices to still have "Metadata" that allows the CPU
+/// to at least have some context of what is being held
+pub trait FeagiECSCollectionDevice<Element>: FeagiECSTagGenericDevice 
+where
+    Element: FeagiECSElementGenericDevice
 
-// Other devices should be defined here but feature gated
+{
+    
+}

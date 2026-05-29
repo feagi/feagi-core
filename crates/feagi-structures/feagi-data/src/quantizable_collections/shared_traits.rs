@@ -2,11 +2,12 @@
 //! As this is base level, we do not even have FeagiError support, so we use Options for now
 // TODO maybe this should be moved up? 
 
-use feagi_ecs::collection::FeagiECSCollectionOnCPU;
+use feagi_ecs::tag_device::{FeagiECSTagCPU, FeagiECSTagGenericDevice};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 
 
-pub trait QuantizableLinearCollectionBase<LIQ, Value>
+pub trait QuantizableLinearCollectionBase<LIQ, Value>:
+FeagiECSTagGenericDevice
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -17,7 +18,7 @@ where
 /// Defines that the data is accessible via Sync CPU functions
 pub trait QuantizableLinearCollectionCPUData<LIQ, Value>:
 QuantizableLinearCollectionBase<LIQ, Value>
-+ FeagiECSCollectionOnCPU
++ FeagiECSTagCPU
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -32,7 +33,7 @@ where
 }
 
 /// Defines that the data is accessible via Sync CPU functions
-pub trait QuantizableLinearCollectionIterWithIndex<LIQ, Value>:
+pub trait QuantizableLinearCollectionCPUIterWithIndex<LIQ, Value>:
 QuantizableLinearCollectionCPUData<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
@@ -56,7 +57,7 @@ where
 }
 
 /// Structure is sparse, and can add / remove items in a Sync manner
-pub trait QuantizableLinearCollectionSyncSparse<LIQ, Value>:
+pub trait QuantizableLinearCollectionCPUSparse<LIQ, Value>:
 QuantizableLinearCollectionCPUData<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,

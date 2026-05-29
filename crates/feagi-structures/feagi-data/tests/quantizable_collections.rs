@@ -16,7 +16,7 @@ use feagi_data::quantizable_collections::dim_4d::spatial_shared_traits::{
     QuantizableSpatialCollection4DBase, QuantizableSpatialCollection4DCPUData,
 };
 use feagi_data::quantizable_collections::dim_4d::QuantizableSpatialCollection4DVectorDense;
-use feagi_data::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex};
+use feagi_data::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex};
 use feagi_data::quantizable_spatial::index::{
     SpatialIndexCoordinate2D, SpatialIndexCoordinate3D, SpatialIndexCoordinate4D, SpatialIndexDimensions2D,
     SpatialIndexDimensions3D, SpatialIndexDimensions4D,

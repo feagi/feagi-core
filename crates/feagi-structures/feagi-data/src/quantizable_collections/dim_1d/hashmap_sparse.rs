@@ -1,6 +1,6 @@
 use ahash::AHashMap;
-use feagi_ecs::collection::{FeagiECSCollectionOnCPU, FeagiECSCollectionOnDevice};
-use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex, QuantizableLinearCollectionSyncSparse};
+use feagi_ecs::tag_device::{FeagiECSTagCPU, FeagiECSTagGenericDevice};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex, QuantizableLinearCollectionCPUSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 
 
@@ -14,6 +14,7 @@ where
     values: AHashMap<LIQ, Value>,
     max_linear_index: LIQ
 }
+
 
 impl<LIQ, Value> QuantizableLinearCollection1DHashmapSparse<LIQ, Value>
 where
@@ -38,6 +39,7 @@ where
     }
 }
 
+
 impl<LIQ, Value> QuantizableLinearCollectionBase<LIQ, Value> for QuantizableLinearCollection1DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
@@ -48,9 +50,8 @@ where
     }
 }
 
-impl<LIQ, Value> FeagiECSCollectionOnDevice for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
-impl<LIQ, Value> FeagiECSCollectionOnCPU for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
+//region ECS CPU Access
 
 impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableLinearCollection1DHashmapSparse<LIQ, Value>
 where
@@ -76,7 +77,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableLinearCollectionIterWithIndex<LIQ, Value> for QuantizableLinearCollection1DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionCPUIterWithIndex<LIQ, Value> for QuantizableLinearCollection1DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -100,7 +101,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableLinearCollectionSyncSparse<LIQ, Value> for QuantizableLinearCollection1DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionCPUSparse<LIQ, Value> for QuantizableLinearCollection1DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -113,3 +114,14 @@ where
         self.values.remove(&index)
     }
 }
+
+//endregion
+
+
+//region ECS Tagging
+
+impl<LIQ, Value> FeagiECSTagGenericDevice for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+
+impl<LIQ, Value> FeagiECSTagCPU for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+
+//endregion

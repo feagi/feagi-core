@@ -1,13 +1,13 @@
-use feagi_structures::feagi_data::feagi_ecs::element::FeagiECSElementOnDevice;
-use feagi_structures::feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, CorticalAreasIndexQuantization};
+use feagi_structures::feagi_data::feagi_ecs::element::FeagiECSElementDevice;
+use feagi_structures::feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, FeagiGlobalIndexQuantization};
 
 
 
 /// Root trait for all cortical data implementations
 pub trait CorticalModelData<CAIQ, NMQ>:
-FeagiECSElementOnDevice
+FeagiECSElementDevice
 where
-    CAIQ: CorticalAreasIndexQuantization,
+    CAIQ: FeagiGlobalIndexQuantization,
     NMQ: CorticalAreaModelQuantizationBase,
 {
     // nothing

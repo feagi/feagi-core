@@ -1,7 +1,7 @@
 use ahash::AHashMap;
-use feagi_ecs::collection::{FeagiECSCollectionOnCPU, FeagiECSCollectionOnDevice};
+use feagi_ecs::collection::{FeagiECSCollectionCPU, FeagiECSCollectionDevice};
 use crate::quantizable_collections::dim_3d::spatial_shared_traits::{QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithCoordinate, QuantizableSpatialCollection3DSyncSparse};
-use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex, QuantizableLinearCollectionSyncSparse};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex, QuantizableLinearCollectionCPUSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 use crate::quantizable_spatial::index::{SpatialIndexCoordinate3D, SpatialIndexDimensions3D};
 
@@ -50,9 +50,9 @@ where
     }
 }
 
-impl<LIQ, Value> FeagiECSCollectionOnDevice for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+impl<LIQ, Value> FeagiECSCollectionDevice for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
-impl<LIQ, Value> FeagiECSCollectionOnCPU for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
+impl<LIQ, Value> FeagiECSCollectionCPU for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
 
 impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
 where
@@ -78,7 +78,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableLinearCollectionIterWithIndex<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionCPUIterWithIndex<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -102,7 +102,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableLinearCollectionSyncSparse<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionCPUSparse<LIQ, Value> for QuantizableSpatialCollection3DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone

@@ -1,6 +1,6 @@
-use feagi_structures::feagi_data::feagi_ecs::element::{FeagiECSElementOnCPU, FeagiECSElementOnDevice};
+use feagi_structures::feagi_data::feagi_ecs::element::{FeagiECSElementCPU, FeagiECSElementDevice};
 use feagi_structures::feagi_data::quantizable_linear::base_types::QuantizedDecimalTrait;
-use feagi_structures::feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, CorticalAreasIndexQuantization};
+use feagi_structures::feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, FeagiGlobalIndexQuantization};
 use crate::shared_traits_and_structs::neuron_model_common::cortical_configuration::CorticalConfiguration;
 use crate::shared_traits_and_structs::neuron_model_common::cortical_data_traits::CorticalModelData;
 
@@ -8,9 +8,9 @@ use crate::shared_traits_and_structs::neuron_model_common::cortical_data_traits:
 #[doc(hidden)]
 /// Root base trait for the data of a neuron model
 pub trait NeuronDataCommon<CAIQ, CAMQB, CC, CMC>:
-FeagiECSElementOnDevice
+FeagiECSElementDevice
 where
-    CAIQ: CorticalAreasIndexQuantization,
+    CAIQ: FeagiGlobalIndexQuantization,
     CAMQB: CorticalAreaModelQuantizationBase,
     CC: CorticalConfiguration<CAIQ>,
     CMC: CorticalModelData<CAIQ, CAMQB>
@@ -35,9 +35,9 @@ where
 /// Root base trait for the data of a neuron model
 pub trait NeuronDataCommonCPU<CAIQ, CAMQB, CC, CMC>:
 NeuronDataCommon<CAIQ, CAMQB, CC, CMC>
-+ FeagiECSElementOnCPU
++ FeagiECSElementCPU
 where
-    CAIQ: CorticalAreasIndexQuantization,
+    CAIQ: FeagiGlobalIndexQuantization,
     CAMQB: CorticalAreaModelQuantizationBase,
     CC: CorticalConfiguration<CAIQ>,
     CMC: CorticalModelData<CAIQ, CAMQB>

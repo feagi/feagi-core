@@ -5,8 +5,8 @@
 
 use crate::{CorticalTypedCorticalIndex, CorticalTypedNeuronIndex};
 use crate::quantizables::{NPUGlobalQuantization, NPUSynapseQuantization, SynapseCount};
-use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStaticStorageTrait, BaseSynapseStorageTrait};
-use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;
+use crate::synapse_aaa::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStaticStorageTrait, BaseSynapseStorageTrait};
+use crate::synapse_aaa::feagi_npu_synapse_error::FeagiNPUSynapseError;
 
 // NOTE: We know the type of synapse that will be created will always be a dimension to a dimensional neuron
 

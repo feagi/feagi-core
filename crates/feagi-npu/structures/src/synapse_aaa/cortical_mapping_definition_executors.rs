@@ -1,9 +1,9 @@
-use feagi_structures::base_feagi_types::::{QuantizableUIntType, QuantizableValueType};
+
 use feagi_structures::FeagiStructuresError;
 use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
 use feagi_structures::neuron_voxel::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::NumberNeuronsPerVoxel;
-use crate::neuron::npu_storage::::shared_structs::DimensionalNeuronCorticalData;
+
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{NPUNeuronIndex, NPUGlobalQuantization, SynapseCount};

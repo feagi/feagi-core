@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
-use feagi_structures::feagi_data::feagi_ecs::element::{FeagiECSElementOnCPU, FeagiECSElementOnDevice};
+use feagi_structures::feagi_data::feagi_ecs::element::{FeagiECSElementCPU, FeagiECSElementDevice};
 use feagi_structures::feagi_data::quantizable_linear::base_types::{QuantizedDecimalTrait, QuantizedIndexCountTrait};
-use feagi_structures::feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, CorticalAreasIndexQuantization};
+use feagi_structures::feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, FeagiGlobalIndexQuantization};
 use crate::shared_traits_and_structs::neuron_model_common::cortical_configuration::CorticalConfiguration;
 use crate::shared_traits_and_structs::neuron_model_common::cortical_data_traits::CorticalModelData;
 use crate::shared_traits_and_structs::neuron_model_common::neuron_data_traits::{NeuronDataCommon, NeuronDataCommonCPU};
@@ -64,7 +64,7 @@ impl TempFeagiStandardQuantizations {
 
 pub struct FeagiStandardModelCorticalDataCPUGeneric<CAIQ, FSMQ>
 where
-    CAIQ: CorticalAreasIndexQuantization,
+    CAIQ: FeagiGlobalIndexQuantization,
     FSMQ: FeagiStandardModelQuantizationTrait,
 {
     pub excitability: FSMQ::ExcitabilityQuant,
@@ -74,17 +74,17 @@ where
     _p: PhantomData<(CAIQ, FSMQ)>,
 }
 
-impl<CAIQ, FSMQ> FeagiECSElementOnDevice for FeagiStandardModelCorticalDataCPUGeneric<CAIQ, FSMQ> where CAIQ: CorticalAreasIndexQuantization, FSMQ: FeagiStandardModelQuantizationTrait, {}
+impl<CAIQ, FSMQ> FeagiECSElementDevice for FeagiStandardModelCorticalDataCPUGeneric<CAIQ, FSMQ> where CAIQ: FeagiGlobalIndexQuantization, FSMQ: FeagiStandardModelQuantizationTrait, {}
 
-impl<CAIQ, FSMQ> FeagiECSElementOnCPU for FeagiStandardModelCorticalDataCPUGeneric<CAIQ, FSMQ> where CAIQ: CorticalAreasIndexQuantization, FSMQ: FeagiStandardModelQuantizationTrait, {}
+impl<CAIQ, FSMQ> FeagiECSElementCPU for FeagiStandardModelCorticalDataCPUGeneric<CAIQ, FSMQ> where CAIQ: FeagiGlobalIndexQuantization, FSMQ: FeagiStandardModelQuantizationTrait, {}
 
-impl<CAIQ, FSMQ> CorticalModelData<CAIQ, FSMQ> for FeagiStandardModelCorticalDataCPUGeneric<CAIQ, FSMQ> where CAIQ: CorticalAreasIndexQuantization, FSMQ: FeagiStandardModelQuantizationTrait, {}
+impl<CAIQ, FSMQ> CorticalModelData<CAIQ, FSMQ> for FeagiStandardModelCorticalDataCPUGeneric<CAIQ, FSMQ> where CAIQ: FeagiGlobalIndexQuantization, FSMQ: FeagiStandardModelQuantizationTrait, {}
 
 
 
 pub struct FeagiStandardModelNeuronDataCPUGeneric<CAIQ, FSMQ, CC, CMC>
 where
-    CAIQ: CorticalAreasIndexQuantization,
+    CAIQ: FeagiGlobalIndexQuantization,
     FSMQ: FeagiStandardModelQuantizationTrait,
     CC: CorticalConfiguration<CAIQ>,
     CMC: CorticalModelData<CAIQ, FSMQ>
@@ -99,7 +99,7 @@ where
 
 impl<CAIQ, FSMQ, CC, CMC> NeuronDataCommon<CAIQ, FSMQ, CC, CMC> for FeagiStandardModelNeuronDataCPUGeneric<CAIQ, FSMQ, CC, CMC>
 where
-    CAIQ: CorticalAreasIndexQuantization,
+    CAIQ: FeagiGlobalIndexQuantization,
     FSMQ: FeagiStandardModelQuantizationTrait,
     CC: CorticalConfiguration<CAIQ>,
     CMC: CorticalModelData<CAIQ, FSMQ>
@@ -107,17 +107,17 @@ where
     const NEURON_NEEDS_TO_BE_INFORMED_OF_BURST_INDEX_ROLLOVER: bool = false;
 }
 
-impl<CAIQ, FSMQ, CC, CMC> FeagiECSElementOnDevice for FeagiStandardModelNeuronDataCPUGeneric<CAIQ, FSMQ, CC, CMC>
+impl<CAIQ, FSMQ, CC, CMC> FeagiECSElementDevice for FeagiStandardModelNeuronDataCPUGeneric<CAIQ, FSMQ, CC, CMC>
 where
-    CAIQ: CorticalAreasIndexQuantization,
+    CAIQ: FeagiGlobalIndexQuantization,
     FSMQ: FeagiStandardModelQuantizationTrait,
     CC: CorticalConfiguration<CAIQ>,
     CMC: CorticalModelData<CAIQ, FSMQ>
 {}
 
-impl<CAIQ, FSMQ, CC, CMC> FeagiECSElementOnCPU for FeagiStandardModelNeuronDataCPUGeneric<CAIQ, FSMQ, CC, CMC>
+impl<CAIQ, FSMQ, CC, CMC> FeagiECSElementCPU for FeagiStandardModelNeuronDataCPUGeneric<CAIQ, FSMQ, CC, CMC>
 where
-    CAIQ: CorticalAreasIndexQuantization,
+    CAIQ: FeagiGlobalIndexQuantization,
     FSMQ: FeagiStandardModelQuantizationTrait,
     CC: CorticalConfiguration<CAIQ>,
     CMC: CorticalModelData<CAIQ, FSMQ>
@@ -125,7 +125,7 @@ where
 
 impl<CAIQ, FSMQ, CC, CMC> NeuronDataCommonCPU<CAIQ, FSMQ, CC, CMC> for FeagiStandardModelNeuronDataCPUGeneric<CAIQ, FSMQ, CC, CMC>
 where
-    CAIQ: CorticalAreasIndexQuantization,
+    CAIQ: FeagiGlobalIndexQuantization,
     FSMQ: FeagiStandardModelQuantizationTrait,
     CC: CorticalConfiguration<CAIQ>,
     CMC: CorticalModelData<CAIQ, FSMQ>

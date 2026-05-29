@@ -1,5 +1,5 @@
-use feagi_ecs::collection::{FeagiECSCollectionOnCPU, FeagiECSCollectionOnDevice};
-use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex};
+use feagi_ecs::tag_device::{FeagiECSTagCPU, FeagiECSTagGenericDevice};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 
 pub struct QuantizableLinearCollection1DVectorDense<LIQ, Value>
@@ -71,9 +71,9 @@ where
     }
 }
 
-impl<LIQ, Value> FeagiECSCollectionOnDevice for QuantizableLinearCollection1DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
-impl<LIQ, Value> FeagiECSCollectionOnCPU for QuantizableLinearCollection1DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
+//region ECS CPU Access
+
 
 impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableLinearCollection1DVectorDense<LIQ, Value>
 where
@@ -111,7 +111,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableLinearCollectionIterWithIndex<LIQ, Value> for QuantizableLinearCollection1DVectorDense<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionCPUIterWithIndex<LIQ, Value> for QuantizableLinearCollection1DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -136,3 +136,14 @@ where
             .map(|(index, value)| (LIQ::from_usize_unchecked(index), value))
     }
 }
+
+//endregion
+
+
+//region ECS Tagging
+
+impl<LIQ, Value> FeagiECSTagGenericDevice for QuantizableLinearCollection1DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+
+impl<LIQ, Value> FeagiECSTagCPU for QuantizableLinearCollection1DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+
+//endregion

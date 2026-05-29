@@ -1,0 +1,13 @@
+use feagi_data::{create_quantized_decimal_wrapper, create_quantized_index_count_wrapper, create_quantized_spatial_index_coordinate_4d_wrapper, create_quantized_spatial_index_dimensions_4d_wrapper};
+
+create_quantized_decimal_wrapper!(NeuronMembranePotential);
+
+create_quantized_index_count_wrapper!(NeuronLinearIndex);
+create_quantized_index_count_wrapper!(NeuronCoordinateAxis);
+create_quantized_index_count_wrapper!(NeuronDensityIndex);
+
+create_quantized_spatial_index_coordinate_4d_wrapper!(NeuronCoordinate, NeuronCoordinateAxis, NeuronCoordinateAxis, NeuronCoordinateAxis, NeuronCoordinateAxis);
+
+create_quantized_spatial_index_dimensions_4d_wrapper!(NeuronDimension, NeuronCoordinate, NeuronLinearIndex, NeuronCoordinateAxis, NeuronCoordinateAxis, NeuronCoordinateAxis, NeuronCoordinateAxis);
+
+// TODO downcast to 3d?

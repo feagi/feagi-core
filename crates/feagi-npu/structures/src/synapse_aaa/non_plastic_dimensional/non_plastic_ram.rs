@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use core::ops::Range;
 use ahash::AHashMap;
-use feagi_structures::base_feagi_types::::QuantizableUIntType;
+
 use feagi_structures::FeagiStructuresError;
 use feagi_structures::genomic::cortical_area::descriptors::CorticalAreaIndex;
 use feagi_structures::genomic::cortical_area::DimensionCorticalAreaType;
@@ -9,14 +9,14 @@ use feagi_structures::neuron_voxel::descriptors::NeuronVoxelDimensions;
 use feagi_structures::neurons::descriptors::{NeuronCount, NumberNeuronsPerVoxel};
 use feagi_structures::useful_structs_traits_macros::{IndexTracker, indexed_data_tracker, RangeUintVector};
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
-use crate::neuron::npu_storage::::shared_structs::{DimensionalNeuronCorticalData, DimensionalTypedCorticalIndex, CorticalTypedNeuronIndex};
+
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{NPUGlobalQuantization, NPUNeuronIndex, SynapseIndex, SynapseBundleIndex, SynapseCount};
-use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStorageTrait};
-use crate::synapse::dimension_to_dimension_traits::{Dim2DimSynapseAllocStorageTrait, Dim2DimSynapseBaseStorageTrait};
-use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;
-use crate::synapse::non_plastic_dimensional::NonPlasticSynapseFull;
-use crate::synapse::non_plastic_dimensional::non_plastic_traits::{NonplasticSynapseAllocStorageTrait, NonplasticSynapseBaseStorageTrait};
+use crate::synapse_aaa::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStorageTrait};
+use crate::synapse_aaa::dimension_to_dimension_traits::{Dim2DimSynapseAllocStorageTrait, Dim2DimSynapseBaseStorageTrait};
+use crate::synapse_aaa::feagi_npu_synapse_error::FeagiNPUSynapseError;
+use crate::synapse_aaa::non_plastic_dimensional::NonPlasticSynapseFull;
+use crate::synapse_aaa::non_plastic_dimensional::non_plastic_traits::{NonplasticSynapseAllocStorageTrait, NonplasticSynapseBaseStorageTrait};
 // NOTE: since deletions are going to be generally uncommon (and done in blocks0 and since this
 // synapse is very numerous, we are not going to store the neuron indexes in the synaptic data struct.
 // This does mean there is no "easy" way to look up the source / destination neurons from a synapse

@@ -1,8 +1,10 @@
 // TODO some things probably dont need to be exposed.
 
 
-mod synapse;
-mod connectome;
+//mod synapse_aaa;
+//mod connectome;
 
-pub mod generators;
+pub mod morphology_mappers;
 mod npu_descriptors;
+pub mod dynamic_burst_engine_interface;
+pub mod mapping;

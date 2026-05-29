@@ -1,14 +1,14 @@
-use feagi_structures::feagi_data::feagi_ecs::element::{FeagiECSElementOnCPU, FeagiECSElementOnDevice};
+use feagi_structures::feagi_data::feagi_ecs::element::{FeagiECSElementCPU, FeagiECSElementDevice};
 use feagi_structures::feagi_data::quantizable_spatial::index::SpatialIndexDimensions4D;
-use feagi_structures::feagi_data::shared_quantization_sets::CorticalAreasIndexQuantization;
+use feagi_structures::feagi_data::shared_quantization_sets::FeagiGlobalIndexQuantization;
 
 
 /// Base trait for Cortical configuration, which is simply general details about a cortical area
 /// not related to the neuron model, such as size / dimensions
 pub trait CorticalConfiguration<CAIQ>:
-FeagiECSElementOnDevice
+FeagiECSElementDevice
 where
-    CAIQ: CorticalAreasIndexQuantization,
+    CAIQ: FeagiGlobalIndexQuantization,
 {
     // Only contain usable data if on the CPU
 }
@@ -16,18 +16,20 @@ where
 //region Implementations
 
 
-pub struct CorticalConfigurationCPUDimensional<CAIQ: CorticalAreasIndexQuantization>
+pub struct CorticalConfigurationCPUDimensional<CAIQ: FeagiGlobalIndexQuantization>
 {
-    dimensions: SpatialIndexDimensions4D<CAIQ::NeuronIndexCountQuant>,
+    pub dimensions: SpatialIndexDimensions4D<CAIQ::NeuronIndexCountQuant>,
+    //pub check_for_neuron_activity_following_every_burst: bool, // TODO maybe we should always have this on....
+    // TODO how do we mark if any neuron activity? atomics?
 }
 
-impl<CAIQ: CorticalAreasIndexQuantization> FeagiECSElementOnDevice for CorticalConfigurationCPUDimensional<CAIQ> {}
+impl<CAIQ: FeagiGlobalIndexQuantization> FeagiECSElementDevice for CorticalConfigurationCPUDimensional<CAIQ> {}
 
-impl<CAIQ: CorticalAreasIndexQuantization> FeagiECSElementOnCPU for CorticalConfigurationCPUDimensional<CAIQ> {}
+impl<CAIQ: FeagiGlobalIndexQuantization> FeagiECSElementCPU for CorticalConfigurationCPUDimensional<CAIQ> {}
 
-impl<CAIQ: CorticalAreasIndexQuantization> CorticalConfiguration<CAIQ> for CorticalConfigurationCPUDimensional<CAIQ> {}
+impl<CAIQ: FeagiGlobalIndexQuantization> CorticalConfiguration<CAIQ> for CorticalConfigurationCPUDimensional<CAIQ> {}
 
-impl<CAIQ: CorticalAreasIndexQuantization> CorticalConfigurationCPUDimensional<CAIQ> {
+impl<CAIQ: FeagiGlobalIndexQuantization> CorticalConfigurationCPUDimensional<CAIQ> {
     pub(crate) fn new(dimensions: SpatialIndexDimensions4D<CAIQ::NeuronIndexCountQuant>) -> Self {
         CorticalConfigurationCPUDimensional { dimensions }
     }

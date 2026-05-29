@@ -3,16 +3,16 @@ use feagi_data::quantizable_collections::dim_3d::spatial_shared_traits::{
 };
 use feagi_data::quantizable_collections::dim_3d::QuantizableSpatialCollection3DHashmapSparse;
 use feagi_data::quantizable_collections::shared_traits::{
-    QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex,
-    QuantizableLinearCollectionSyncSparse,
+    QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex,
+    QuantizableLinearCollectionCPUSparse,
 };
 use feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
 use feagi_data::quantizable_spatial::wrappers::QuantizedSpatialWrapperBase;
-use feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, CorticalAreasIndexQuantization};
+use feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, FeagiGlobalIndexQuantization};
 use crate::neuron_voxels::nondense_collections::shared_traits::{CPUNeuronVoxelCollection, CPUNeuronVoxelCollectionSparse, NeuronVoxelCollection, NeuronVoxelCollectionSparse};
 use crate::neuron_voxels::voxel_collection_generic_descriptors::*;
 
-pub struct NeuronVoxelCollectionSparseHashmapGeneric<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase>
+pub struct NeuronVoxelCollectionSparseHashmapGeneric<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase>
 (
     QuantizableSpatialCollection3DHashmapSparse<
         CAIQ::NeuronIndexCountQuant,
@@ -22,7 +22,7 @@ pub struct NeuronVoxelCollectionSparseHashmapGeneric<CAIQ: CorticalAreasIndexQua
     >
 );
 
-impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollectionSparseHashmapGeneric<CAIQ, CANQ>
+impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollectionSparseHashmapGeneric<CAIQ, CANQ>
 {
     pub fn new(dimensions: NeuronVoxelDimensionsGeneric<CAIQ::NeuronIndexCountQuant>) -> Self {
         Self(
@@ -33,17 +33,17 @@ impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationB
     }
 }
 
-impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollection<CAIQ, CANQ> for NeuronVoxelCollectionSparseHashmapGeneric<CAIQ, CANQ> {
+impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollection<CAIQ, CANQ> for NeuronVoxelCollectionSparseHashmapGeneric<CAIQ, CANQ> {
     fn get_voxel_dimensions(&self) -> &NeuronVoxelDimensionsGeneric<CAIQ::NeuronIndexCountQuant> {
         NeuronVoxelDimensionsGeneric::wrap_ref(self.0.get_dimensions())
     }
 }
 
-impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollectionSparse<CAIQ, CANQ> for NeuronVoxelCollectionSparseHashmapGeneric<CAIQ, CANQ> {
+impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollectionSparse<CAIQ, CANQ> for NeuronVoxelCollectionSparseHashmapGeneric<CAIQ, CANQ> {
 
 }
 
-impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> CPUNeuronVoxelCollection<CAIQ, CANQ> for NeuronVoxelCollectionSparseHashmapGeneric<CAIQ, CANQ> {
+impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> CPUNeuronVoxelCollection<CAIQ, CANQ> for NeuronVoxelCollectionSparseHashmapGeneric<CAIQ, CANQ> {
     fn try_get_potential_by_voxel_index(&self, voxel_index: NeuronVoxelLinearIndexGeneric<CAIQ::NeuronIndexCountQuant>) -> Option<&NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>> {
         self.0.try_get_value(voxel_index.unwrap())
     }
@@ -93,7 +93,7 @@ impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationB
     }
 }
 
-impl<CAIQ: CorticalAreasIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> CPUNeuronVoxelCollectionSparse<CAIQ, CANQ> for NeuronVoxelCollectionSparseHashmapGeneric<CAIQ, CANQ> {
+impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> CPUNeuronVoxelCollectionSparse<CAIQ, CANQ> for NeuronVoxelCollectionSparseHashmapGeneric<CAIQ, CANQ> {
     fn insert_potential_at_voxel_index(
         &mut self,
         voxel_index: NeuronVoxelLinearIndexGeneric<CAIQ::NeuronIndexCountQuant>,

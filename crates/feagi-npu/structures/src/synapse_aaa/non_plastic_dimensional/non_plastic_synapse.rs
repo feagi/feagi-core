@@ -1,7 +1,7 @@
 use feagi_structures::base_feagi_types::::{QuantizableUIntType, QuantizableValueType};
 use crate::CorticalTypedNeuronIndex;
 use crate::quantizables::{BurstDelta, NPUGlobalQuantization, NPUSynapseQuantization, PSPMultiplier, SynapticWeight};
-use crate::synapse::non_plastic_dimensional::non_plastic_synapse_flag::NonPlasticSynapseFlag;
+use crate::synapse_aaa::non_plastic_dimensional::non_plastic_synapse_flag::NonPlasticSynapseFlag;
 
 #[derive(Debug, Copy, Clone)]
 pub struct NonPlasticSynapseFull<Q: NPUGlobalQuantization, S: NPUSynapseQuantization>

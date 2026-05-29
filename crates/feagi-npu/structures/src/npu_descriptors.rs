@@ -18,3 +18,6 @@ impl<QE: QuantizedIndexCountTrait> NPUGlobalBurstCounter<QE> {
         false
     }
 }
+
+
+

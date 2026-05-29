@@ -1,7 +1,7 @@
 use ahash::AHashMap;
-use feagi_ecs::collection::{FeagiECSCollectionOnCPU, FeagiECSCollectionOnDevice};
+use feagi_ecs::collection::{FeagiECSCollectionCPU, FeagiECSCollectionDevice};
 use crate::quantizable_collections::dim_4d::spatial_shared_traits::{QuantizableSpatialCollection4DBase, QuantizableSpatialCollection4DCPUData, QuantizableSpatialCollection4DIterWithCoordinate};
-use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex, QuantizableLinearCollectionSyncSparse};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex, QuantizableLinearCollectionCPUSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 use crate::quantizable_spatial::index::{SpatialIndexCoordinate4D, SpatialIndexDimensions4D};
 
@@ -50,9 +50,9 @@ where
     }
 }
 
-impl<LIQ, Value> FeagiECSCollectionOnDevice for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+impl<LIQ, Value> FeagiECSCollectionDevice for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
-impl<LIQ, Value> FeagiECSCollectionOnCPU for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
+impl<LIQ, Value> FeagiECSCollectionCPU for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
 
 impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
 where
@@ -78,7 +78,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableLinearCollectionIterWithIndex<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionCPUIterWithIndex<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -102,7 +102,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableLinearCollectionSyncSparse<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionCPUSparse<LIQ, Value> for QuantizableSpatialCollection4DHashmapSparse<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone

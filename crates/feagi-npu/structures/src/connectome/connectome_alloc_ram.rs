@@ -24,8 +24,8 @@ use crate::neuron::npu_storage::::shared_structs::{DimensionalNeuronCorticalData
 use crate::neuron::FeagiNPUNeuronError;
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{NPUGlobalQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, SynapseCount, NPUNeuronMembranePotential};
-use crate::synapse::non_plastic_dimensional::NonplasticDimensionalSynapseAllocRAMStorage;
-use crate::synapse::non_plastic_dimensional::non_plastic_traits::{NonplasticSynapseAllocStorageTrait, NonplasticSynapseBaseStorageTrait};
+use crate::synapse_aaa::non_plastic_dimensional::NonplasticDimensionalSynapseAllocRAMStorage;
+use crate::synapse_aaa::non_plastic_dimensional::non_plastic_traits::{NonplasticSynapseAllocStorageTrait, NonplasticSynapseBaseStorageTrait};
 
 pub struct ConnectomeAllocRam<Q: NPUGlobalQuantization>
 {

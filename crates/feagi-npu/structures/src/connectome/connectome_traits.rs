@@ -9,7 +9,7 @@ use feagi_structures::neurons::descriptors::{NumberNeuronsPerVoxel};
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
 use crate::executors::neuron_property_executors::NeuronFireThresholdExecutor;
 use crate::FeagiNPUStructureError;
-use crate::neuron::npu_storage::::shared_structs::DimensionalNeuronDataFromCorticalArea;
+
 use crate::quantizables::{NPUGlobalQuantization, BurstDelta, BurstGlobalIndex, FireThreshold, FireThresholdLimit, LeakCoefficient, NPUNeuronIndex, NeuronExcitability, SynapseBundleIndex, NPUNeuronMembranePotential};
 
 pub trait ConnectomeBaseTrait<Q: NPUGlobalQuantization>

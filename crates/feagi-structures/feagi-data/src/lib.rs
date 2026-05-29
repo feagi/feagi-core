@@ -1,8 +1,11 @@
 //! This library Contains the core common systems used throughout Feagi
 
+extern crate self as feagi_data;
+//extern crate feagi_logging_and_errors;
+
 // Reexpose subcrates
-pub use feagi_ecs;
 pub use feagi_logging_and_errors;
+pub use feagi_ecs;
 pub use feagi_bitpacking;
 
 mod core_numerical_types;

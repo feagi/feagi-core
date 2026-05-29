@@ -13,10 +13,10 @@ use crate::{CorticalTypedCorticalIndex, CorticalTypedNeuronIndex};
 use crate::executors::cortical_mapping_definition_executors::NonPlasticCorticalMappingDefinitionExecutor;
 use crate::neuron::flags::NeuronFlag;
 use crate::quantizables::{NPUGlobalQuantization, NPUNeuronIndex, NPUSynapseQuantization, PSPMultiplier, SynapseBundleIndex, SynapticWeight};
-use crate::synapse::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStorageTrait};
-use crate::synapse::dimension_to_dimension_traits::{Dim2DimSynapseBaseStorageTrait, Dim2DimSynapseStaticStorageTrait};
-use crate::synapse::feagi_npu_synapse_error::FeagiNPUSynapseError;
-use crate::synapse::non_plastic_dimensional::non_plastic_synapse::NonPlasticSynapseFull;
+use crate::synapse_aaa::base_traits::{BaseSynapseAllocStorageTrait, BaseSynapseStorageTrait};
+use crate::synapse_aaa::dimension_to_dimension_traits::{Dim2DimSynapseBaseStorageTrait, Dim2DimSynapseStaticStorageTrait};
+use crate::synapse_aaa::feagi_npu_synapse_error::FeagiNPUSynapseError;
+use crate::synapse_aaa::non_plastic_dimensional::non_plastic_synapse::NonPlasticSynapseFull;
 
 pub trait NonplasticSynapseBaseStorageTrait<Q: NPUGlobalQuantization, S: NPUSynapseQuantization>:
 Dim2DimSynapseBaseStorageTrait<Q, S>

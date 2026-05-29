@@ -1,5 +1,6 @@
-use feagi_ecs::collection::{FeagiECSCollectionOnCPU, FeagiECSCollectionOnDevice};
-use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex};
+use feagi_ecs::collection::{FeagiECSCollectionDevice};
+use feagi_ecs::tag_device::{FeagiECSTagCPU, FeagiECSTagGenericDevice};
+use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex};
 use crate::quantizable_collections::dim_2d::spatial_shared_traits::{QuantizableSpatialCollection2DBase, QuantizableSpatialCollection2DCPUData, QuantizableSpatialCollection2DIterWithCoordinate};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 use crate::quantizable_spatial::index::{SpatialIndexCoordinate2D, SpatialIndexDimensions2D};
@@ -12,6 +13,7 @@ where
     values: Vec<Value>,
     dimensions: SpatialIndexDimensions2D<LIQ>
 }
+
 
 impl<LIQ, Value> QuantizableSpatialCollection2DVectorDense<LIQ, Value>
 where
@@ -63,6 +65,7 @@ where
     }
 }
 
+
 impl<LIQ, Value> QuantizableLinearCollectionBase<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
@@ -73,9 +76,19 @@ where
     }
 }
 
-impl<LIQ, Value> FeagiECSCollectionOnDevice for QuantizableSpatialCollection2DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
-impl<LIQ, Value> FeagiECSCollectionOnCPU for QuantizableSpatialCollection2DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
+impl<LIQ, Value> QuantizableSpatialCollection2DBase<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
+where
+    LIQ: QuantizedIndexCountTrait,
+    Value: Clone
+{
+    fn get_dimensions(&self) -> &SpatialIndexDimensions2D<LIQ> {
+        &self.dimensions
+    }
+}
+
+
+//region ECS CPU Access
 
 impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
 where
@@ -113,7 +126,7 @@ where
     }
 }
 
-impl<LIQ, Value> QuantizableLinearCollectionIterWithIndex<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
+impl<LIQ, Value> QuantizableLinearCollectionCPUIterWithIndex<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -144,16 +157,6 @@ where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
 {
-}
-
-impl<LIQ, Value> QuantizableSpatialCollection2DBase<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
-where
-    LIQ: QuantizedIndexCountTrait,
-    Value: Clone
-{
-    fn get_dimensions(&self) -> &SpatialIndexDimensions2D<LIQ> {
-        &self.dimensions
-    }
 }
 
 impl<LIQ, Value> QuantizableSpatialCollection2DIterWithCoordinate<LIQ, Value> for QuantizableSpatialCollection2DVectorDense<LIQ, Value>
@@ -189,3 +192,14 @@ where
             })
     }
 }
+
+//endregion
+
+
+//region ECS Tagging
+
+impl<LIQ, Value> FeagiECSTagGenericDevice for QuantizableSpatialCollection2DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+
+impl<LIQ, Value> FeagiECSTagCPU for QuantizableSpatialCollection2DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+
+//endregion

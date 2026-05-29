@@ -7,8 +7,8 @@ mod connectome {
     use feagi_npu_structures::neuron::npu_storage::::shared_structs::DimensionalTypedNeuronIndex;
     use feagi_npu_structures::neuron::flags::NeuronFlag;
     use feagi_npu_structures::quantizables::{BurstDelta, NPUGlobalQuantization, NPUNeuronIndex, PSPMultiplier, SynapseCount, SynapticWeight, BurstGlobalIndex};
-    use feagi_npu_structures::synapse::non_plastic_dimensional::{NonPlasticSynapseFull, NonplasticSynapseProperties};
-    use feagi_npu_structures::synapse::SynapseFlag;
+    use feagi_npu_structures::synapse_aaa::non_plastic_dimensional::{NonPlasticSynapseFull, NonplasticSynapseProperties};
+    use feagi_npu_structures::synapse_aaa::SynapseFlag;
     use feagi_structures::base_feagi_types::::{QuantizableUIntType, QuantizableValueType};
     use feagi_structures::FeagiCommonError;
     use feagi_genome_definitions::::DimensionCorticalAreaType;
