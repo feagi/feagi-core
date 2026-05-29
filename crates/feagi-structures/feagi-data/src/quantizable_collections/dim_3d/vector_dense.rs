@@ -1,4 +1,4 @@
-use feagi_ecs::collection::{FeagiECSCollectionDataLivesOnCPU, FeagiECSCollectionDataLivesOnDeviceBase};
+use feagi_ecs::collection::{FeagiECSCollectionOnCPU, FeagiECSCollectionOnDevice};
 use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex};
 use crate::quantizable_collections::dim_3d::spatial_shared_traits::{QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DCPUData, QuantizableSpatialCollection3DIterWithCoordinate};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
@@ -63,9 +63,9 @@ where
     }
 }
 
-impl<LIQ, Value> FeagiECSCollectionDataLivesOnDeviceBase for QuantizableSpatialCollection3DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+impl<LIQ, Value> FeagiECSCollectionOnDevice for QuantizableSpatialCollection3DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
-impl<LIQ, Value> FeagiECSCollectionDataLivesOnCPU for QuantizableSpatialCollection3DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
+impl<LIQ, Value> FeagiECSCollectionOnCPU for QuantizableSpatialCollection3DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
 
 impl<LIQ, Value> QuantizableLinearCollectionBase<LIQ, Value> for QuantizableSpatialCollection3DVectorDense<LIQ, Value>
 where

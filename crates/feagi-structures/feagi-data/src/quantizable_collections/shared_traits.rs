@@ -2,7 +2,7 @@
 //! As this is base level, we do not even have FeagiError support, so we use Options for now
 // TODO maybe this should be moved up? 
 
-use feagi_ecs::collection::FeagiECSCollectionDataLivesOnCPU;
+use feagi_ecs::collection::FeagiECSCollectionOnCPU;
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 
 
@@ -17,7 +17,7 @@ where
 /// Defines that the data is accessible via Sync CPU functions
 pub trait QuantizableLinearCollectionCPUData<LIQ, Value>:
 QuantizableLinearCollectionBase<LIQ, Value>
-+ FeagiECSCollectionDataLivesOnCPU
++ FeagiECSCollectionOnCPU
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone

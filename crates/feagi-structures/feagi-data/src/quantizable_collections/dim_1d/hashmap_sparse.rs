@@ -1,5 +1,5 @@
 use ahash::AHashMap;
-use feagi_ecs::collection::{FeagiECSCollectionDataLivesOnCPU, FeagiECSCollectionDataLivesOnDeviceBase};
+use feagi_ecs::collection::{FeagiECSCollectionOnCPU, FeagiECSCollectionOnDevice};
 use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionIterWithIndex, QuantizableLinearCollectionSyncSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 
@@ -48,9 +48,9 @@ where
     }
 }
 
-impl<LIQ, Value> FeagiECSCollectionDataLivesOnDeviceBase for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+impl<LIQ, Value> FeagiECSCollectionOnDevice for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
-impl<LIQ, Value> FeagiECSCollectionDataLivesOnCPU for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
+impl<LIQ, Value> FeagiECSCollectionOnCPU for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone {}
 
 impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableLinearCollection1DHashmapSparse<LIQ, Value>
 where

@@ -1,20 +1,19 @@
-use feagi_structures::feagi_data::feagi_ecs::collection::FeagiECSCollectionDataLivesOnCPU;
+use feagi_structures::feagi_data::feagi_ecs::element::{FeagiECSElementOnCPU, FeagiECSElementOnDevice};
 use feagi_structures::feagi_data::quantizable_linear::base_types::QuantizedDecimalTrait;
 use feagi_structures::feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, CorticalAreasIndexQuantization};
-use crate::shared_traits_and_structs::neuron_model_common::cortical_data_traits::{NeuronModelCorticalDataCommonCPU, NeuronModelCorticalDataCommonDevice, NeuronModelCorticalDataDimensionalDevice, NeuronModelCorticalDataLinearCPUTemplate, NeuronModelCorticalDataLinearDevice};
-use crate::shared_traits_and_structs::neuron_model_common::cortical_state_data::{CorticalDataStateDataCommonCPU, CorticalDataStateDataCommonDevice, CorticalDataStateDataDimensionalDevice, CorticalDataStateDataLinearDevice};
-
-//region Base "Tag" Traits
+use crate::shared_traits_and_structs::neuron_model_common::cortical_configuration::CorticalConfiguration;
+use crate::shared_traits_and_structs::neuron_model_common::cortical_data_traits::CorticalModelData;
 
 
 #[doc(hidden)]
 /// Root base trait for the data of a neuron model
-pub trait NeuronDataCommonDevice<CAIQ, NMQ, CSD, CNMCD>
+pub trait NeuronDataCommon<CAIQ, CAMQB, CC, CMC>:
+FeagiECSElementOnDevice
 where
     CAIQ: CorticalAreasIndexQuantization,
-    NMQ: CorticalAreaModelQuantizationBase,
-    CSD: CorticalDataStateDataCommonDevice<CAIQ>,
-    CNMCD: NeuronModelCorticalDataCommonDevice<CAIQ, NMQ>
+    CAMQB: CorticalAreaModelQuantizationBase,
+    CC: CorticalConfiguration<CAIQ>,
+    CMC: CorticalModelData<CAIQ, CAMQB>
 {
     // As per CorticalAreasIndexQuantization, this takes in GlobalBurstIndexQuant,
     // and NeuronIndexCountQuant. These are not settable by the model and instead picked by
@@ -30,19 +29,18 @@ where
     // method for calculating the resultant neuron potential of the neuron following input
 }
 
-//endregion
 
-//region CPU
 
-#[doc(hidden)]
+
 /// Root base trait for the data of a neuron model
-pub trait NeuronDataCommonCPU<CAIQ, NMQ, CSD, CNMCD>:
-NeuronDataCommonDevice<CAIQ, NMQ, CSD, CNMCD>
+pub trait NeuronDataCommonCPU<CAIQ, CAMQB, CC, CMC>:
+NeuronDataCommon<CAIQ, CAMQB, CC, CMC>
++ FeagiECSElementOnCPU
 where
     CAIQ: CorticalAreasIndexQuantization,
-    NMQ: CorticalAreaModelQuantizationBase,
-    CSD: CorticalDataStateDataCommonCPU<CAIQ>, // Can be dimensional or linear
-    CNMCD: NeuronModelCorticalDataCommonCPU<CAIQ, NMQ>
+    CAMQB: CorticalAreaModelQuantizationBase,
+    CC: CorticalConfiguration<CAIQ>,
+    CMC: CorticalModelData<CAIQ, CAMQB>
 {
 
     /// Neuron received input potential. Process it, updating any internal states and update
@@ -52,9 +50,9 @@ where
         &mut self,
         incoming_neuron_potential: &IPQuant,
         this_neuron_linear_index: &CAIQ::NeuronIndexCountQuant,
-        cortical_state_data: &CSD,
-        cortical_neuron_model_data: &CNMCD,
-        self_neuron_potential: &mut NMQ::NeuronPotentialQuant
+        cortical_configuration: &CC,
+        cortical_model_data: &CMC,
+        self_neuron_potential: &mut CAMQB::NeuronPotentialQuant
     ) -> bool;
 
     /// If enabled via the const, this method will be called on all neurons of that

@@ -3,5 +3,8 @@
 
 extern crate self as feagi_ecs;
 
-pub mod collection;
-pub mod metadata;
+pub mod element; // E for Element, though rust devs often already have e
+pub mod collection; // C for collection
+pub mod intercollection_data_flow;
+
+// TODO can we make some sort of trait for System?
