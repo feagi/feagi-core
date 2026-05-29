@@ -20,6 +20,8 @@ CorticalAreaModelQuantizationBase
     type ConsecutiveFireLimit: QuantizedIndexCountTrait;
 }
 
+
+// TODO obviously temporary
 pub struct TempFeagiStandardQuant32;
 
 impl CorticalAreaModelQuantizationBase for TempFeagiStandardQuant32 {
@@ -36,6 +38,11 @@ impl FeagiStandardModelQuantizationTrait for TempFeagiStandardQuant32 {
     type ConsecutiveFireLimit = u32;
 }
 
+
+// TODO lets think about how we tackle this. Expecting something dynamic in nature, but can
+// we try avoiding box anyways? Or maybe we shouldnt in this case and as_any will get us through
+// this issue
+/*
 pub enum TempFeagiStandardQuantizations {
     Bit32(TempFeagiStandardQuant32)
 }
@@ -50,6 +57,8 @@ impl TempFeagiStandardQuantizations {
         }
     }
 }
+
+ */
 
 
 
@@ -128,13 +137,11 @@ where
         cortical_model_data: &CMC,
         self_neuron_potential: &mut FSMQ::NeuronPotentialQuant) -> bool {
 
+
+
         // TODO obviously a temp setup
         self_neuron_potential.load_f32_inplace(incoming_neuron_potential.to_f32() * 1.05);
         false
     }
 }
-
-
-
-pub type TEMPFeagiStandardModelNeuronDataCPU<CAIQ, FSMQ, CC, CMC> = FeagiStandardModelNeuronDataCPUGeneric<CAIQ, FSMQ, CC, CMC>;
 

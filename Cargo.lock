@@ -1960,6 +1960,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-bitpacking"
+version = "0.0.11"
+
+[[package]]
 name = "feagi-brain-development"
 version = "0.0.11"
 dependencies = [
@@ -2005,6 +2009,7 @@ name = "feagi-data"
 version = "0.0.11"
 dependencies = [
  "ahash",
+ "feagi-bitpacking",
  "feagi-ecs",
  "feagi-logging-and-errors",
  "half",

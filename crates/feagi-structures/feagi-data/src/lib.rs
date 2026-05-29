@@ -3,16 +3,17 @@
 // Reexpose subcrates
 pub use feagi_ecs;
 pub use feagi_logging_and_errors;
+pub use feagi_bitpacking;
 
 mod core_numerical_types;
 
 
 pub mod percentages;
 pub mod quantizable_linear;
-pub mod bit_packing;
 pub mod quantizable_spatial;
 pub mod shared_quantization_sets;
 pub mod quantizable_collections;
+pub mod common_const_labels;
 
 pub use core_numerical_types::{SupportsBasicCoreMathOps, SupportsUintOps};
 pub use paste;

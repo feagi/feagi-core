@@ -1,1 +1,0 @@
-mod neuron_collection_base_trait;

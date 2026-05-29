@@ -1,6 +1,10 @@
+use crate::common_const_labels::NeuronModelConstLabel;
 use crate::quantizable_linear::base_types::QuantizedDecimalTrait;
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 
+
+
+/*
 /// Defines the burst index and cortical indexing across an entire NPU / Burst engine, as it needs 
 /// to be synced across neural structures
 pub trait NPUGlobalQuantization {
@@ -11,6 +15,7 @@ pub trait NPUGlobalQuantization {
     /// Neuron linear indexing, linear count, voxel indexing, and voxel count quantization
     type NeuronIndexCountQuant: QuantizedIndexCountTrait; // Should be global since synapses reference these
 }
+ */
 
 /// Shared between all cortical areas within an NPU
 pub trait CorticalAreasIndexQuantization {
@@ -26,8 +31,7 @@ pub trait CorticalAreasIndexQuantization {
 /// Defines the quantization used in a cortical area for the calculation of neuron dynamics.
 /// All are required to support neuron potentials, hence this is the shared base of each model's
 /// implementation. Each cortical area within an NPU may have different quantization levels.
-pub trait CorticalAreaModelQuantizationBase: Sized {
-
+pub trait CorticalAreaModelQuantizationBase {
     /// Defines the quantization of the membrane potential of a neuron, which all models must
     /// include. This may vary between cortical areas, even of the same model
     type NeuronPotentialQuant: QuantizedDecimalTrait;

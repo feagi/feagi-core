@@ -34,6 +34,7 @@ defmt = []
 # These are child subcrates
 feagi-ecs = {path = "feagi-ecs"}
 feagi-logging-and-errors = {path = "feagi-logging-and-errors"}
+feagi-bitpacking = {path = "feagi-bitpacking"}
 # Note: The official F8 crate is bad. Don't use it!
 # DO NOT ADD ANY SIBLING FEAGI CEATES!
 # DO NOT ADD ANY SIBLING FEAGI CEATES!

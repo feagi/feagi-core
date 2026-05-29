@@ -1,7 +1,5 @@
 //! The core crate for FEAGI. Defines the most common data structures used throughout
 
-
-
 pub use feagi_data; // Expose feagi-data crate
 
 mod templates;
