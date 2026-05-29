@@ -1,8 +1,3 @@
-use feagi_structures::quantization::{CorticalAreaNeuronQuantization, NPUGlobalQuantization};
-use feagi_structures::quantization::quantizable_collections::spatial_collections::dim_3::quantizable_spatial_3d_collection_traits::{IterItemCoordinate3DRefMut, QuantizableSpatial3DCollectionUncheckedTrait, QuantizableSpatial3DQuantTypes};
-use feagi_structures::quantization::quantizable_collections::spatial_collections::dim_4::quantizable_spatial_4d_collection_traits::{IterItemCoordinate4DRefMut, QuantizableSpatial4DCollectionUncheckedTrait, QuantizableSpatial4DQuantTypes};
-use feagi_npu_neuron_models::::NeuronModelParametersTrait;
-use crate::shared_traits_and_structs::NeuronModelParametersTrait;
 
 /// A Neuron Generator is a struct that handles generating neurons in the case of cortical area
 /// creation or resets (such as from resizing)

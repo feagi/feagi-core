@@ -4,3 +4,4 @@
 
 pub mod cortical_areas;
 pub mod generators;
+mod npu_descriptors;

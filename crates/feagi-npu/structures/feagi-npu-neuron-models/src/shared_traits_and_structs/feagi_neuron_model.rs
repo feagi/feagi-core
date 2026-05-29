@@ -1,4 +1,4 @@
-use feagi_structures::quantization::CorticalAreaNeuronQuantization;
+
 
 /// This trait is used as a factory to generate cortical areas
 pub trait FeagiNeuronModelDefinition<CANQ: CorticalAreaNeuronQuantization> {
