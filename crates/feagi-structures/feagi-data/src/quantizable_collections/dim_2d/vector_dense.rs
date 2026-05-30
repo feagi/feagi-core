@@ -1,4 +1,4 @@
-use feagi_ecs::collection::{FeagiECSCollectionDevice};
+use feagi_ecs::collection::{FeagiECSCollection};
 use feagi_ecs::tag_device::{FeagiECSTagCPU, FeagiECSTagGenericDevice};
 use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex};
 use crate::quantizable_collections::dim_2d::spatial_shared_traits::{QuantizableSpatialCollection2DBase, QuantizableSpatialCollection2DCPUData, QuantizableSpatialCollection2DIterWithCoordinate};

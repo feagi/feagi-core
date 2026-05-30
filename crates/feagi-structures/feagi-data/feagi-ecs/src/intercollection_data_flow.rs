@@ -1,5 +1,5 @@
-use crate::collection::{FeagiECSCollectionDevice};
-use crate::element::FeagiECSElementGenericDevice;
+use crate::collection::{FeagiECSCollection};
+use crate::element::FeagiECSElement;
 use crate::tag_device::FeagiECSTagCPU;
 
 /// Used to designate if data between the cpu and the external device is in sync
@@ -26,9 +26,9 @@ impl ECSCollectionDataSyncStatus {
 /// implementation. That needs a separate action from the system managing the sync.
 pub trait FeagiECSDataFlowsOutOfCPUSync<ECSElement, CPUCollection, OtherCollection>
 where
-    ECSElement: FeagiECSElementGenericDevice,
-    CPUCollection: FeagiECSCollectionDevice<ECSElement> + FeagiECSTagCPU,
-    OtherCollection: FeagiECSCollectionDevice<ECSElement>
+    ECSElement: FeagiECSElement,
+    CPUCollection: FeagiECSCollection<ECSElement> + FeagiECSTagCPU,
+    OtherCollection: FeagiECSCollection<ECSElement>
     
 
 {
@@ -47,8 +47,8 @@ where
 pub trait FeagiECSDataFlowsOutOfCPUSyncFaux<ECSElement, CPUCollection>:
 FeagiECSDataFlowsOutOfCPUSync<ECSElement, CPUCollection, CPUCollection>
 where
-    ECSElement: FeagiECSElementGenericDevice,
-    CPUCollection: FeagiECSCollectionDevice<ECSElement> + FeagiECSTagCPU,
+    ECSElement: FeagiECSElement,
+    CPUCollection: FeagiECSCollection<ECSElement> + FeagiECSTagCPU,
 {
 
 }
@@ -64,9 +64,9 @@ where
 /// sync from the other device -> CPU.
 pub trait FeagiECSDataFlowsIntoCPUSync<ECSElement, OtherCollection, CPUCollection>
 where
-    ECSElement: FeagiECSElementGenericDevice,
-    OtherCollection: FeagiECSCollectionDevice<ECSElement>,
-    CPUCollection: FeagiECSCollectionDevice<ECSElement> + FeagiECSTagCPU,
+    ECSElement: FeagiECSElement,
+    OtherCollection: FeagiECSCollection<ECSElement>,
+    CPUCollection: FeagiECSCollection<ECSElement> + FeagiECSTagCPU,
     
 {
     // Setting the sync flag is up to the specific implementation
@@ -84,8 +84,8 @@ where
 pub trait FeagiECSDataFlowsIntoCPUSyncFaux<ECSElement, CPUCollection>:
 FeagiECSDataFlowsIntoCPUSync<ECSElement, CPUCollection, CPUCollection>
 where
-    ECSElement: FeagiECSElementGenericDevice,
-    CPUCollection: FeagiECSCollectionDevice<ECSElement> + FeagiECSTagCPU,
+    ECSElement: FeagiECSElement,
+    CPUCollection: FeagiECSCollection<ECSElement> + FeagiECSTagCPU,
 {
 
 }

@@ -1,4 +1,5 @@
-use feagi_structures::feagi_data::feagi_ecs::element::{FeagiECSElementCPU, FeagiECSElementDevice};
+use feagi_structures::feagi_data::feagi_ecs::element::FeagiECSElement;
+use feagi_structures::feagi_data::feagi_ecs::tag_device::FeagiECSTagCPU;
 use feagi_structures::feagi_data::quantizable_linear::base_types::QuantizedDecimalTrait;
 use feagi_structures::feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, FeagiGlobalIndexQuantization};
 use crate::shared_traits_and_structs::neuron_model_common::cortical_configuration::CorticalConfiguration;
@@ -7,13 +8,13 @@ use crate::shared_traits_and_structs::neuron_model_common::cortical_data_traits:
 
 #[doc(hidden)]
 /// Root base trait for the data of a neuron model
-pub trait NeuronDataCommon<CAIQ, CAMQB, CC, CMC>:
-FeagiECSElementDevice
+pub trait NeuronDataCommon<FGIQ, CAMQB, CC, CMC>:
+FeagiECSElement
 where
-    CAIQ: FeagiGlobalIndexQuantization,
+    FGIQ: FeagiGlobalIndexQuantization,
     CAMQB: CorticalAreaModelQuantizationBase,
-    CC: CorticalConfiguration<CAIQ>,
-    CMC: CorticalModelData<CAIQ, CAMQB>
+    CC: CorticalConfiguration<FGIQ>,
+    CMC: CorticalModelData<FGIQ, CAMQB>
 {
     // As per CorticalAreasIndexQuantization, this takes in GlobalBurstIndexQuant,
     // and NeuronIndexCountQuant. These are not settable by the model and instead picked by
@@ -35,7 +36,7 @@ where
 /// Root base trait for the data of a neuron model
 pub trait NeuronDataCommonCPU<CAIQ, CAMQB, CC, CMC>:
 NeuronDataCommon<CAIQ, CAMQB, CC, CMC>
-+ FeagiECSElementCPU
++ FeagiECSTagCPU
 where
     CAIQ: FeagiGlobalIndexQuantization,
     CAMQB: CorticalAreaModelQuantizationBase,

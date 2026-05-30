@@ -2178,6 +2178,7 @@ name = "feagi-npu-structures"
 version = "0.0.11"
 dependencies = [
  "ahash",
+ "feagi-npu-neuron-models",
  "feagi-structures",
  "half",
  "paste",

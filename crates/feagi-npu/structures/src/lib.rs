@@ -8,3 +8,4 @@ pub mod morphology_mappers;
 mod npu_descriptors;
 pub mod dynamic_burst_engine_interface;
 pub mod mapping;
+pub mod cortical_area;

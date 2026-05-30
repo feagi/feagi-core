@@ -10,6 +10,6 @@ use crate::tag_device::FeagiECSTagGenericDevice;
 /// Root trait for ECS Elements, simply states that the element data lives on some device. As such,
 /// anything inheriting only this trait cannot have any data access methods of any sort. This
 /// is essentially just a tag
-pub trait FeagiECSElementGenericDevice: FeagiECSTagGenericDevice {}
+pub trait FeagiECSElement: FeagiECSTagGenericDevice {}
 
 
