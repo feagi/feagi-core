@@ -4,11 +4,11 @@ use feagi_data::quantizable_collections::shared_traits::{QuantizableLinearCollec
 use feagi_data::quantizable_linear::base_types::QuantizedElementBase;
 use feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
 use feagi_data::quantizable_spatial::wrappers::QuantizedSpatialWrapperBase;
-use feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, FeagiGlobalIndexQuantization};
+use feagi_data::shared_quantization_sets::{NeuronModelQuantization, FeagiGlobalQuantization};
 use crate::neuron_voxels::nondense_collections::shared_traits::{CPUNeuronVoxelCollection, CPUNeuronVoxelCollectionDense, NeuronVoxelCollection, NeuronVoxelCollectionDense};
 use crate::neuron_voxels::voxel_collection_generic_descriptors::*;
 
-pub struct NeuronVoxelCollectionContiguousVectorGeneric<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase>
+pub struct NeuronVoxelCollectionContiguousVectorGeneric<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization>
 (
     QuantizableSpatialCollection3DVectorDense<
         CAIQ::NeuronIndexCountQuant,
@@ -18,7 +18,7 @@ pub struct NeuronVoxelCollectionContiguousVectorGeneric<CAIQ: FeagiGlobalIndexQu
     >
 );
 
-impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ>
+impl<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization> NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ>
 {
     pub fn new(dimensions: NeuronVoxelDimensionsGeneric<CAIQ::NeuronIndexCountQuant>) -> Self {
         Self(
@@ -30,17 +30,17 @@ impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBas
     }
 }
 
-impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollection<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
+impl<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization> NeuronVoxelCollection<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
     fn get_voxel_dimensions(&self) -> &NeuronVoxelDimensionsGeneric<CAIQ::NeuronIndexCountQuant> {
         NeuronVoxelDimensionsGeneric::wrap_ref(self.0.get_dimensions())
     }
 }
 
-impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> NeuronVoxelCollectionDense<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
+impl<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization> NeuronVoxelCollectionDense<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
 
 }
 
-impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> CPUNeuronVoxelCollection<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
+impl<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization> CPUNeuronVoxelCollection<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
     fn try_get_potential_by_voxel_index(&self, voxel_index: NeuronVoxelLinearIndexGeneric<CAIQ::NeuronIndexCountQuant>) -> Option<&NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>> {
         self.0.try_get_value(voxel_index.unwrap())
     }
@@ -90,7 +90,7 @@ impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBas
     }
 }
 
-impl<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> CPUNeuronVoxelCollectionDense<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
+impl<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization> CPUNeuronVoxelCollectionDense<CAIQ, CANQ> for NeuronVoxelCollectionContiguousVectorGeneric<CAIQ, CANQ> {
     fn get_neuron_voxel_potentials_slice(&self) -> &[NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>] {
         self.0.get_values_slice()
     }

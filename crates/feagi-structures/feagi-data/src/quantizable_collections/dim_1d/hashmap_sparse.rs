@@ -51,7 +51,7 @@ where
 }
 
 
-//region ECS CPU Access
+//region PDI CPU Access
 
 impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableLinearCollection1DHashmapSparse<LIQ, Value>
 where
@@ -118,7 +118,7 @@ where
 //endregion
 
 
-//region ECS Tagging
+//region PDI TAgging
 
 impl<LIQ, Value> PDITagGenericDevice for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 

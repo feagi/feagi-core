@@ -72,7 +72,7 @@ where
 }
 
 
-//region ECS CPU Access
+//region PDI CPU Access
 
 
 impl<LIQ, Value> QuantizableLinearCollectionCPUData<LIQ, Value> for QuantizableLinearCollection1DVectorDense<LIQ, Value>
@@ -140,7 +140,7 @@ where
 //endregion
 
 
-//region ECS Tagging
+//region PDI TAgging
 
 impl<LIQ, Value> PDITagGenericDevice for QuantizableLinearCollection1DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 

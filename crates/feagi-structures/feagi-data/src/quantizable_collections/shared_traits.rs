@@ -1,4 +1,4 @@
-//! Base traits for linear quantizable collections with some ECS components mixed in.
+//! Base traits for linear quantizable collections with some PDI components mixed in.
 //! As this is base level, we do not even have FeagiError support, so we use Options for now
 // TODO maybe this should be moved up? 
 

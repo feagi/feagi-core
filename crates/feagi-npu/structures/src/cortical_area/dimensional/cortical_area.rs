@@ -1,10 +1,12 @@
-use feagi_structures::feagi_data::shared_quantization_sets::FeagiGlobalIndexQuantization;
+use feagi_structures::feagi_data::shared_quantization_sets::{NeuronModelQuantization, FeagiGlobalQuantization};
 
 
 
-pub struct NPUDimensionalCorticalAreaCPU<FGIQ>
+pub struct NPUDimensionalCorticalAreaCPU<FGIQ, CAMQ>
 where
-    FGIQ: FeagiGlobalIndexQuantization
+    FGIQ: FeagiGlobalQuantization,
+    CAMQ: NeuronModelQuantization,
 {
     
+    dimensional_neurons
 }

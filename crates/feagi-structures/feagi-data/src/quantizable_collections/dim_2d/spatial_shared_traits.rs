@@ -27,7 +27,7 @@ where
     }
 }
 
-/// Data is accessible by the CPU (CPU ECS)
+/// Data is accessible by the CPU (CPU PDI)
 pub trait QuantizableSpatialCollection2DCPUData<LIQ, Value>:
 QuantizableSpatialCollection2DBase<LIQ, Value>
 + QuantizableLinearCollectionCPUData<LIQ, Value>

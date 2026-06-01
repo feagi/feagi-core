@@ -2,7 +2,7 @@ use feagi_structures::feagi_data::create_quantized_index_count_wrapper;
 use feagi_structures::feagi_data::feagi_ecs::collection::FeagiECSCollection;
 use feagi_structures::feagi_data::feagi_ecs::element::FeagiECSElement;
 use feagi_structures::feagi_data::feagi_ecs::element_set::FeagiECSElementSet;
-use feagi_structures::feagi_data::shared_quantization_sets::FeagiGlobalIndexQuantization;
+use feagi_structures::feagi_data::shared_quantization_sets::FeagiGlobalQuantization;
 
 create_quantized_index_count_wrapper!(SynapseIndex);
 create_quantized_index_count_wrapper!(AxonBundleIndex);
@@ -15,7 +15,7 @@ create_quantized_index_count_wrapper!(AxonBundleIndex);
 pub trait SynapseDataCommon<FGIQ>:
 FeagiECSElement
 where
-    FGIQ: FeagiGlobalIndexQuantization,
+    FGIQ: FeagiGlobalQuantization,
 {
     // Cant store data for unknown device
 
@@ -29,7 +29,7 @@ where
 pub trait AxonBundleHeaderDataCommon<FGIQ>:
 FeagiECSElement
 where
-    FGIQ: FeagiGlobalIndexQuantization,
+    FGIQ: FeagiGlobalQuantization,
 {
     // Cant store data for unknown device
 
@@ -43,7 +43,7 @@ where
 pub trait SynapseIndexRedirectCommon<FGIQ, SynapseData, AxonHeaderData>:
 FeagiECSElementSet<SynapseData> // Technically we store AxonHeaderData too, but lets just define one to make the trait happy
 where
-    FGIQ: FeagiGlobalIndexQuantization,
+    FGIQ: FeagiGlobalQuantization,
     SynapseData: SynapseDataCommon<FGIQ>,
     AxonHeaderData: AxonBundleHeaderDataCommon<FGIQ>
 {
@@ -57,7 +57,7 @@ where
 pub trait AxonBundleCommon<FGIQ, SynapseData, AxonHeaderData>:
 FeagiECSElementSet<SynapseData>
 where
-    FGIQ: FeagiGlobalIndexQuantization,
+    FGIQ: FeagiGlobalQuantization,
     SynapseData: SynapseDataCommon<FGIQ>,
     AxonHeaderData: AxonBundleHeaderDataCommon<FGIQ>
 {

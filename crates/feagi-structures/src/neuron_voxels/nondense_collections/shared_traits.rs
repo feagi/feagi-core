@@ -1,8 +1,8 @@
 use feagi_data::quantizable_spatial::index::SpatialIndexCoordinate3D;
-use feagi_data::shared_quantization_sets::{CorticalAreaModelQuantizationBase, FeagiGlobalIndexQuantization};
+use feagi_data::shared_quantization_sets::{NeuronModelQuantization, FeagiGlobalQuantization};
 use crate::neuron_voxels::voxel_collection_generic_descriptors::*;
 
-pub trait NeuronVoxelCollection<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase> 
+pub trait NeuronVoxelCollection<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization> 
 {
     fn get_voxel_dimensions(&self) -> &NeuronVoxelDimensionsGeneric<CAIQ::NeuronIndexCountQuant>;
 
@@ -11,14 +11,14 @@ pub trait NeuronVoxelCollection<CAIQ: FeagiGlobalIndexQuantization,  CANQ: Corti
     }
 }
 
-pub trait NeuronVoxelCollectionDense<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase>:
+pub trait NeuronVoxelCollectionDense<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization>:
 NeuronVoxelCollection<CAIQ, CANQ>
 {
     // No certain access to data
 }
 
 
-pub trait NeuronVoxelCollectionSparse<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase>:
+pub trait NeuronVoxelCollectionSparse<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization>:
 NeuronVoxelCollection<CAIQ, CANQ>
 {
     // No certain access to data
@@ -27,7 +27,7 @@ NeuronVoxelCollection<CAIQ, CANQ>
 
 
 
-pub trait CPUNeuronVoxelCollection<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase>:
+pub trait CPUNeuronVoxelCollection<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization>:
 NeuronVoxelCollection<CAIQ, CANQ>
 {
     fn try_get_potential_by_voxel_index(&self,  voxel_index: NeuronVoxelLinearIndexGeneric<CAIQ::NeuronIndexCountQuant>) -> Option<&NeuronVoxelPotentialGeneric<CANQ::NeuronPotentialQuant>>;
@@ -62,7 +62,7 @@ NeuronVoxelCollection<CAIQ, CANQ>
 
 }
 
-pub trait CPUNeuronVoxelCollectionDense<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase>:
+pub trait CPUNeuronVoxelCollectionDense<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization>:
 CPUNeuronVoxelCollection<CAIQ, CANQ>
 + NeuronVoxelCollectionDense<CAIQ, CANQ>
 {
@@ -72,7 +72,7 @@ CPUNeuronVoxelCollection<CAIQ, CANQ>
 }
 
 
-pub trait CPUNeuronVoxelCollectionSparse<CAIQ: FeagiGlobalIndexQuantization,  CANQ: CorticalAreaModelQuantizationBase>:
+pub trait CPUNeuronVoxelCollectionSparse<CAIQ: FeagiGlobalQuantization,  CANQ: NeuronModelQuantization>:
 CPUNeuronVoxelCollection<CAIQ, CANQ>
 + NeuronVoxelCollectionSparse<CAIQ, CANQ>
 {

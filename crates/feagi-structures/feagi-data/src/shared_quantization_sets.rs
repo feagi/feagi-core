@@ -18,7 +18,7 @@ pub trait NPUGlobalQuantization {
  */
 
 /// Global Indexing across an instance of FEAGI, primarily NPU. Controlled by NPU primarily
-pub trait FeagiGlobalIndexQuantization {
+pub trait FeagiGlobalQuantization {
     /// Defines the quantization of the NPU global burst index. This is not model configurable,
     /// rather its in sync with the global setting but also put here since some neuron models need
     /// to have this information to store "burst of last X" as a property
@@ -41,7 +41,9 @@ pub trait FeagiGlobalIndexQuantization {
 /// Defines the quantization used in a cortical area for the calculation of neuron dynamics.
 /// All are required to support neuron potentials, hence this is the shared base of each model's
 /// implementation. Each cortical area within an NPU may have different quantization levels.
-pub trait CorticalAreaModelQuantizationBase
+/// DO NOT IMPLEMENT THIS IN ACTUAL DATA STRUCTURES! THIS IS ONLY INTENDED TO CARRY QUANTIZATION
+/// CONTEXTS
+pub trait NeuronModelQuantization
 {
     /// Defines the quantization of the membrane potential of a neuron, which all models must
     /// include. This may vary between cortical areas, even of the same model

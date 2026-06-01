@@ -1,8 +1,8 @@
-use feagi_structures::feagi_data::shared_quantization_sets::FeagiGlobalIndexQuantization;
+use feagi_structures::feagi_data::shared_quantization_sets::FeagiGlobalQuantization;
 use feagi_structures::neuron_descriptors::NeuronDimension;
 
 
-pub trait NonPlasticDimensionalMorphologyMapper<FGIQ: FeagiGlobalIndexQuantization, SD> {
+pub trait NonPlasticDimensionalMorphologyMapper<FGIQ: FeagiGlobalQuantization, SD> {
 
     fn generate_synapse_iterator(
         &self,
