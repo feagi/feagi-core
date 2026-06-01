@@ -140,7 +140,7 @@ members = [
     "crates/feagi-structures", # Unifying "core" data structures crates. Uses features to expose various commonly used structs, traits, and other common implementations. TODO rename to feagi-common or something similar
 
     "crates/feagi-structures/feagi-data", # Base data types used often in feagi, notably quantizable data types. Use features to target various hardware specific data types. As this crate is depended on by sibling crates, this must have NO dependencies!
-    "crates/feagi-structures/feagi-data/feagi-ecs", # Base ECS traits / Derive Macros
+    "crates/feagi-structures/feagi-data/feagi-pdi", # Base ECS traits / Derive Macros
     "crates/feagi-structures/feagi-data/feagi-logging-and-errors", # Base FEAGI Error and logging macros and trait definitions
     "crates/feagi-structures/feagi-data/feagi-logging-and-errors/feagi-logging-and-errors-derive", # derive crate
     "crates/feagi-structures/feagi-data/feagi-bitpacking", # Common bitpacking macros and structs

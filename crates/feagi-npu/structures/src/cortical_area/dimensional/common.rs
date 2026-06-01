@@ -25,7 +25,9 @@ where
 {
     // Cant store data for unknown device
 
-    // Stores neuron model data, as well as potential data, and cortical levvel flags as well
+    // Stores the following information
+    //
+    // neuron model data, as well as potential data, and cortical levvel flags as well
     // (as a header)
 
 

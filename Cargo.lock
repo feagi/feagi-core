@@ -2010,15 +2010,11 @@ version = "0.0.11"
 dependencies = [
  "ahash",
  "feagi-bitpacking",
- "feagi-ecs",
  "feagi-logging-and-errors",
+ "feagi-pdi",
  "half",
  "paste",
 ]
-
-[[package]]
-name = "feagi-ecs"
-version = "0.0.11"
 
 [[package]]
 name = "feagi-evolutionary"
@@ -2207,6 +2203,10 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]
+
+[[package]]
+name = "feagi-pdi"
+version = "0.0.11"
 
 [[package]]
 name = "feagi-sensorimotor"

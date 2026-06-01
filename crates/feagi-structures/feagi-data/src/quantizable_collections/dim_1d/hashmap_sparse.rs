@@ -1,5 +1,5 @@
 use ahash::AHashMap;
-use feagi_ecs::tag_device::{FeagiECSTagCPU, FeagiECSTagGenericDevice};
+use feagi_pdi::tag_device::{PDITagCPU, PDITagGenericDevice};
 use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex, QuantizableLinearCollectionCPUSparse};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 
@@ -120,8 +120,8 @@ where
 
 //region ECS Tagging
 
-impl<LIQ, Value> FeagiECSTagGenericDevice for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+impl<LIQ, Value> PDITagGenericDevice for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
-impl<LIQ, Value> FeagiECSTagCPU for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+impl<LIQ, Value> PDITagCPU for QuantizableLinearCollection1DHashmapSparse<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
 //endregion

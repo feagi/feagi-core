@@ -1,5 +1,4 @@
-use feagi_ecs::collection::{FeagiECSCollection};
-use feagi_ecs::tag_device::{FeagiECSTagCPU, FeagiECSTagGenericDevice};
+use feagi_pdi::tag_device::{PDITagCPU, PDITagGenericDevice};
 use crate::quantizable_collections::shared_traits::{QuantizableLinearCollectionAsSlice, QuantizableLinearCollectionBase, QuantizableLinearCollectionCPUData, QuantizableLinearCollectionCPUIterWithIndex};
 use crate::quantizable_collections::dim_2d::spatial_shared_traits::{QuantizableSpatialCollection2DBase, QuantizableSpatialCollection2DCPUData, QuantizableSpatialCollection2DIterWithCoordinate};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
@@ -198,8 +197,8 @@ where
 
 //region ECS Tagging
 
-impl<LIQ, Value> FeagiECSTagGenericDevice for QuantizableSpatialCollection2DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+impl<LIQ, Value> PDITagGenericDevice for QuantizableSpatialCollection2DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
-impl<LIQ, Value> FeagiECSTagCPU for QuantizableSpatialCollection2DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
+impl<LIQ, Value> PDITagCPU for QuantizableSpatialCollection2DVectorDense<LIQ, Value> where LIQ: QuantizedIndexCountTrait, Value: Clone, {}
 
 //endregion

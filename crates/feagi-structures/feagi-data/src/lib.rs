@@ -5,7 +5,7 @@ extern crate self as feagi_data;
 
 // Reexpose subcrates
 pub use feagi_logging_and_errors;
-pub use feagi_ecs;
+pub use feagi_pdi;
 pub use feagi_bitpacking;
 
 mod core_numerical_types;

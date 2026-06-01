@@ -2,12 +2,12 @@
 //! As this is base level, we do not even have FeagiError support, so we use Options for now
 // TODO maybe this should be moved up? 
 
-use feagi_ecs::tag_device::{FeagiECSTagCPU, FeagiECSTagGenericDevice};
+use feagi_pdi::tag_device::{PDITagCPU, PDITagGenericDevice};
 use crate::quantizable_linear::base_types::QuantizedIndexCountTrait;
 
 
 pub trait QuantizableLinearCollectionBase<LIQ, Value>:
-FeagiECSTagGenericDevice
+PDITagGenericDevice
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
@@ -18,7 +18,7 @@ where
 /// Defines that the data is accessible via Sync CPU functions
 pub trait QuantizableLinearCollectionCPUData<LIQ, Value>:
 QuantizableLinearCollectionBase<LIQ, Value>
-+ FeagiECSTagCPU
++ PDITagCPU
 where
     LIQ: QuantizedIndexCountTrait,
     Value: Clone
