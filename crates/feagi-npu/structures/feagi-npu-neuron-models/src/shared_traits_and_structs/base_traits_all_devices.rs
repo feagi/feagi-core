@@ -40,7 +40,7 @@ where
     // No methods!
 }
 
-/// Root base trait for defining neuron firing and other dynamics. Does NOT store actual data
+/// Root base trait for defining neuron firing and other dynamics. Does NOT store actual data,
 pub trait NeuronModelProcessor<FGQ, NMQ, CCC, CMD, NMD>:
 PDIElement
 where
@@ -54,7 +54,7 @@ where
     /// Set to true if the neuron model needs to be informed if the global burst index counter is
     /// about to overflow. Otherwise, set to false
     const MODEL_NEEDS_TO_BE_INFORMED_OF_BURST_INDEX_ROLLOVER: bool;
-    
+
     // Methods for neuron firing, resetting cortical and neuron fields for burst index rollover
-    
+
 }

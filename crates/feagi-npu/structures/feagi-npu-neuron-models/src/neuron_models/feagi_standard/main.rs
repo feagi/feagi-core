@@ -5,7 +5,7 @@ use feagi_structures::feagi_data::quantizable_linear::base_types::{QuantizedDeci
 use feagi_structures::feagi_data::shared_quantization_sets::{NeuronModelQuantization, FeagiGlobalQuantization};
 use crate::shared_traits_and_structs::base_traits_all_devices::{NeuronModelProcessor, CorticalModelData, NeuronModelData};
 use crate::shared_traits_and_structs::base_traits_cpu::{NeuronModelProcessorCPU, CorticalModelDataCPU, NeuronModelDataCPU};
-use crate::shared_traits_and_structs::cortical_configuration::{CorticalConfiguration, CorticalConfigurationDimensional, CorticalConfigurationDimensionalCPU};
+use crate::shared_traits_and_structs::cortical_configuration::{CorticalConfiguration, CorticalConfigurationDimensionalCPU};
 // TODO derive macro for cortical data, neuron data trait impls! (take class like CPU)
 
 
@@ -153,49 +153,59 @@ impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> FeagiSta
 
 
 
-pub struct FeagiStandardModelProcessorCPU<FGQ, NMQ, CCC, CMD, NMD>
+pub struct FeagiStandardModelProcessorCPU<FGQ, NMQ>
 where
     FGQ: FeagiGlobalQuantization,
-    NMQ: NeuronModelQuantization,
-    CCC: CorticalConfigurationDimensional<FGQ>,
-    CMD: CorticalModelDataCPU<FGQ, NMQ>,
-    NMD: NeuronModelDataCPU<FGQ, NMQ>
+    NMQ: FeagiStandardModelQuantization, // fsm quant impl
 {
     // No actual members
-    _p: PhantomData<(FGQ, NMQ, CCC, CMD, NMD)>,
+    _p: PhantomData<(FGQ, NMQ)>,
 }
 
-impl<FGQ, NMQ, CCC, CMD, NMD> PDITagGenericDevice for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCC, CMD, NMD>
-where CCC: CorticalConfigurationDimensional<FGQ>, CMD: CorticalModelDataCPU<FGQ, NMQ>, FGQ: FeagiGlobalQuantization, NMD: NeuronModelDataCPU<FGQ, NMQ>, NMQ: NeuronModelQuantization, {}
+impl<FGQ, NMQ> PDITagGenericDevice for FeagiStandardModelProcessorCPU<FGQ, NMQ>
+where
+    FGQ: FeagiGlobalQuantization,
+    NMQ: FeagiStandardModelQuantization, {}
 
-impl<FGQ, NMQ, CCC, CMD, NMD> PDITagCPU for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCC, CMD, NMD>
-where CCC: CorticalConfigurationDimensional<FGQ>, CMD: CorticalModelDataCPU<FGQ, NMQ>, FGQ: FeagiGlobalQuantization, NMD: NeuronModelDataCPU<FGQ, NMQ>, NMQ: NeuronModelQuantization, {}
+impl<FGQ, NMQ> PDITagCPU for FeagiStandardModelProcessorCPU<FGQ, NMQ>
+where
+    FGQ: FeagiGlobalQuantization,
+    NMQ: FeagiStandardModelQuantization, {}
 
-impl<FGQ, NMQ, CCC, CMD, NMD> PDIElement for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCC, CMD, NMD>
-where CCC: CorticalConfigurationDimensional<FGQ>, CMD: CorticalModelDataCPU<FGQ, NMQ>, FGQ: FeagiGlobalQuantization, NMD: NeuronModelDataCPU<FGQ, NMQ>, NMQ: NeuronModelQuantization, {}
+impl<FGQ, NMQ> PDIElement for FeagiStandardModelProcessorCPU<FGQ, NMQ>
+where
+    FGQ: FeagiGlobalQuantization,
+    NMQ: FeagiStandardModelQuantization, {}
 
-impl<FGQ, NMQ, CCC, CMD, NMD> NeuronModelProcessor<FGQ, NMQ, CCC, CMD, NMD> for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCC, CMD, NMD>
-where CCC: CorticalConfigurationDimensional<FGQ>, CMD: CorticalModelDataCPU<FGQ, NMQ>, FGQ: FeagiGlobalQuantization, NMD: NeuronModelDataCPU<FGQ, NMQ>, NMQ: NeuronModelQuantization,
+impl<FGQ, NMQ, CCC, CMD, NMD> NeuronModelProcessor<FGQ, NMQ, CCC, CMD, NMD> for FeagiStandardModelProcessorCPU<FGQ, NMQ>
+where
+    FGQ: FeagiGlobalQuantization,
+    NMQ: FeagiStandardModelQuantization,
+    CCC: CorticalConfiguration<FGQ>,
+    CMD: CorticalModelDataCPU<FGQ, NMQ>,
+    NMD: NeuronModelDataCPU<FGQ, NMQ>,
 {
     const MODEL_NEEDS_TO_BE_INFORMED_OF_BURST_INDEX_ROLLOVER: bool = true;
 }
 
-impl<FGQ, NMQ, CCC, CMD, NMD> NeuronModelProcessorCPU<FGQ, NMQ, CCC, CMD, NMD> for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCC, CMD, NMD>
+impl<FGQ, NMQ> NeuronModelProcessorCPU<
+    FGQ,
+    NMQ,
+    CorticalConfigurationDimensionalCPU<FGQ>,
+    FeagiStandardModelCorticalDataCPU<FGQ, NMQ>,
+    FeagiStandardModelNeuronDataCPU<FGQ, NMQ>> for FeagiStandardModelProcessorCPU<FGQ, NMQ>
 where
     FGQ: FeagiGlobalQuantization,
-    NMQ: NeuronModelQuantization,
-    CCC: CorticalConfigurationDimensional<FGQ>,
-    CMD: CorticalModelDataCPU<FGQ, NMQ>,
-    NMD: NeuronModelDataCPU<FGQ, NMQ>
+    NMQ: FeagiStandardModelQuantization,
 {
     fn process_neuron_potential<IPQuant: QuantizedDecimalTrait>(
         &self,
         incoming_neuron_potential: &IPQuant,
         neuron_linear_index: &FGQ::NeuronIndexCountQuant,
         burst_index: &FGQ::GlobalBurstIndexQuant,
-        cortical_area_configuration: &CCC,
-        cortical_area_data: &CMD,
-        neuron_model_data: &mut NMD,
+        cortical_area_configuration: &CorticalConfigurationDimensionalCPU<FGQ>,
+        cortical_area_data: &FeagiStandardModelCorticalDataCPU<FGQ, NMQ>,
+        neuron_model_data: &mut FeagiStandardModelNeuronDataCPU<FGQ, NMQ>,
         this_neuron_potential: &mut NMQ::NeuronPotentialQuant)
         -> bool
     {
@@ -204,7 +214,7 @@ where
 
     fn prepare_cortical_data_for_burst_index_rollover(
         &self,
-        cortical_area_data: &mut CMD)
+        cortical_area_data: &mut FeagiStandardModelCorticalDataCPU<FGQ, NMQ>)
     {
         todo!()
     }
@@ -212,7 +222,7 @@ where
     fn prepare_neuron_data_for_burst_index_rollover(
         &self,
         neuron_linear_index: &FGQ::NeuronIndexCountQuant,
-        neuron_model_data: &mut NMD)
+        neuron_model_data: &mut FeagiStandardModelNeuronDataCPU<FGQ, NMQ>)
     {
         todo!()
     }

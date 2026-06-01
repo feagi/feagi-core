@@ -1,7 +1,6 @@
 
 use feagi_npu_neuron_models::shared_traits_and_structs::cortical_configuration::CorticalConfiguration;
 use feagi_npu_neuron_models::shared_traits_and_structs::base_traits_all_devices::CorticalModelData;
-use feagi_npu_neuron_models::shared_traits_and_structs::neuron_model_common::neuron_data_traits::NeuronDataCommon;
 use feagi_structures::feagi_data::create_quantized_index_count_wrapper;
 use feagi_structures::feagi_data::shared_quantization_sets::{NeuronModelQuantization, FeagiGlobalQuantization};
 
@@ -12,7 +11,6 @@ create_quantized_index_count_wrapper!(SynapseRedirectSliceLength);
 
 /// Represents a dimensional cortical area, and all their neurons and other properties
 pub trait DimensionalCorticalAreaCommon<FGIQ, CAMQB, CC, CMC,  ND>:
-FeagiECSElementSet<ND> // Stores more than neuron data but this is fine
 where
     FGIQ: FeagiGlobalQuantization,
     CAMQB: NeuronModelQuantization,
