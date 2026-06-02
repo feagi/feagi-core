@@ -5,7 +5,7 @@ use feagi_structures::feagi_data::quantizable_linear::base_types::{QuantizedDeci
 use feagi_structures::feagi_data::shared_quantization_sets::{NeuronModelQuantization, FeagiGlobalQuantization};
 use crate::shared_traits_and_structs::base_traits_all_devices::{NeuronModelProcessor, CorticalModelData, NeuronModelData};
 use crate::shared_traits_and_structs::base_traits_cpu::{NeuronModelProcessorCPU, CorticalModelDataCPU, NeuronModelDataCPU};
-use crate::shared_traits_and_structs::cortical_configuration::{CorticalConfiguration, CorticalConfigurationDimensionalCPU};
+use crate::shared_traits_and_structs::cortical_configuration::{CorticalConfiguration, CorticalConfigurationDimensional, CorticalConfigurationDimensionalCPU};
 // TODO derive macro for cortical data, neuron data trait impls! (take class like CPU)
 
 
@@ -74,8 +74,13 @@ where
     pub refractory_period_limit: NMQ::RefractoryPeriodLimitQuant,
     pub fire_threshold_limit: NMQ::FireThresholdLimit,
     pub consecutive_fire_limit: NMQ::ConsecutiveFireLimit,
+    pub post_synaptic_potential: NMQ::NeuronPotentialQuant,
+    pub mp_driven_psp: bool,
+    pub psp_uniformity: bool,
     _p: PhantomData<(FGQ, NMQ)>,
 }
+
+//region Tag Traits
 
 impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> PDITagGenericDevice for FeagiStandardModelCorticalDataCPU<FGQ, NMQ> {}
 
@@ -85,7 +90,31 @@ impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> PDIEleme
 
 impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> CorticalModelData<FGQ, NMQ> for FeagiStandardModelCorticalDataCPU<FGQ, NMQ> {}
 
-impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> CorticalModelDataCPU<FGQ, NMQ> for FeagiStandardModelCorticalDataCPU<FGQ, NMQ> {}
+impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> CorticalModelDataCPU<FGQ, NMQ> for FeagiStandardModelCorticalDataCPU<FGQ, NMQ> {
+    fn get_mp_driven_psp(&self) -> bool {
+        self.mp_driven_psp
+    }
+
+    fn set_mp_driven_psp(&mut self, mp_driven_psp: bool) {
+        self.mp_driven_psp = mp_driven_psp;
+    }
+
+    fn get_psp_uniformity(&self) -> bool {
+        self.psp_uniformity
+    }
+
+    fn set_psp_uniformity(&mut self, psp_uniformity: bool) {
+        self.psp_uniformity = psp_uniformity;
+    }
+
+    fn get_post_synaptic_potential(&self) -> NMQ::NeuronPotentialQuant {
+        self.post_synaptic_potential
+    }
+
+    fn set_post_synaptic_potential(&mut self, post_synaptic_potential: NMQ::NeuronPotentialQuant) {
+        self.post_synaptic_potential = post_synaptic_potential;
+    }
+}
 
 impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> FeagiStandardModelCorticalDataCPU<FGQ, NMQ> {
     pub fn new(
@@ -93,18 +122,24 @@ impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> FeagiSta
         refractory_period_limit: NMQ::RefractoryPeriodLimitQuant,
         fire_threshold_limit: NMQ::FireThresholdLimit,
         consecutive_fire_limit: NMQ::ConsecutiveFireLimit,
+        post_synaptic_potential: NMQ::NeuronPotentialQuant,
+        mp_driven_psp: bool,
+        psp_uniformity: bool,
     ) -> Self {
         Self {
             excitability,
             refractory_period_limit,
             fire_threshold_limit,
             consecutive_fire_limit,
+            post_synaptic_potential,
+            mp_driven_psp,
+            psp_uniformity,
             _p: PhantomData,
         }
     }
 }
 
-
+//endregion
 
 pub struct FeagiStandardModelNeuronDataCPU<FGQ, NMQ>
 where
@@ -119,6 +154,7 @@ where
     _p: PhantomData<(FGQ, NMQ)>,
 }
 
+//region Tag Traits
 
 impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> PDITagGenericDevice for FeagiStandardModelNeuronDataCPU<FGQ, NMQ> {}
 
@@ -151,7 +187,7 @@ impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> FeagiSta
 
 }
 
-
+//endregion
 
 pub struct FeagiStandardModelProcessorCPU<FGQ, NMQ>
 where
@@ -161,6 +197,8 @@ where
     // No actual members
     _p: PhantomData<(FGQ, NMQ)>,
 }
+
+//region Tag Traits
 
 impl<FGQ, NMQ> PDITagGenericDevice for FeagiStandardModelProcessorCPU<FGQ, NMQ>
 where
@@ -181,12 +219,14 @@ impl<FGQ, NMQ, CCC, CMD, NMD> NeuronModelProcessor<FGQ, NMQ, CCC, CMD, NMD> for 
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
-    CCC: CorticalConfiguration<FGQ>,
+    CCC: CorticalConfigurationDimensional<FGQ>,
     CMD: CorticalModelDataCPU<FGQ, NMQ>,
     NMD: NeuronModelDataCPU<FGQ, NMQ>,
 {
     const MODEL_NEEDS_TO_BE_INFORMED_OF_BURST_INDEX_ROLLOVER: bool = true;
 }
+
+//endregion
 
 impl<FGQ, NMQ> NeuronModelProcessorCPU<
     FGQ,

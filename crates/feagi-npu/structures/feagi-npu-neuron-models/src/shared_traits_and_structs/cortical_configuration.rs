@@ -19,6 +19,15 @@ where
     // Number of neurons contained should be accessible
 }
 
+pub trait CorticalConfigurationDimensional<FGQ>:
+CorticalConfiguration<FGQ>
+where
+    FGQ: FeagiGlobalQuantization,
+{
+    // Dimensions of cortical area (4D) should be accessible
+}
+
+
 
 // Region CPU implementations
 
@@ -36,6 +45,9 @@ impl<FGQ: FeagiGlobalQuantization> PDITagCPU for CorticalConfigurationDimensiona
 impl<FGQ: FeagiGlobalQuantization> PDIElement for CorticalConfigurationDimensionalCPU<FGQ> {}
 
 impl<FGQ: FeagiGlobalQuantization> CorticalConfiguration<FGQ> for CorticalConfigurationDimensionalCPU<FGQ> {}
+
+impl<FGQ: FeagiGlobalQuantization> CorticalConfigurationDimensional<FGQ> for CorticalConfigurationDimensionalCPU<FGQ> {
+}
 
 impl<FGQ: FeagiGlobalQuantization> CorticalConfigurationDimensionalCPU<FGQ> {
     pub fn new(dimensions: SpatialIndexDimensions4D<FGQ::NeuronIndexCountQuant>) -> Self {
