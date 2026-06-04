@@ -74,9 +74,6 @@ where
     pub refractory_period_limit: NMQ::RefractoryPeriodLimitQuant,
     pub fire_threshold_limit: NMQ::FireThresholdLimit,
     pub consecutive_fire_limit: NMQ::ConsecutiveFireLimit,
-    pub post_synaptic_potential: NMQ::NeuronPotentialQuant,
-    pub mp_driven_psp: bool,
-    pub psp_uniformity: bool,
     _p: PhantomData<(FGQ, NMQ)>,
 }
 
@@ -91,29 +88,7 @@ impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> PDIEleme
 impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> CorticalModelData<FGQ, NMQ> for FeagiStandardModelCorticalDataCPU<FGQ, NMQ> {}
 
 impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> CorticalModelDataCPU<FGQ, NMQ> for FeagiStandardModelCorticalDataCPU<FGQ, NMQ> {
-    fn get_mp_driven_psp(&self) -> bool {
-        self.mp_driven_psp
-    }
 
-    fn set_mp_driven_psp(&mut self, mp_driven_psp: bool) {
-        self.mp_driven_psp = mp_driven_psp;
-    }
-
-    fn get_psp_uniformity(&self) -> bool {
-        self.psp_uniformity
-    }
-
-    fn set_psp_uniformity(&mut self, psp_uniformity: bool) {
-        self.psp_uniformity = psp_uniformity;
-    }
-
-    fn get_post_synaptic_potential(&self) -> NMQ::NeuronPotentialQuant {
-        self.post_synaptic_potential
-    }
-
-    fn set_post_synaptic_potential(&mut self, post_synaptic_potential: NMQ::NeuronPotentialQuant) {
-        self.post_synaptic_potential = post_synaptic_potential;
-    }
 }
 
 impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> FeagiStandardModelCorticalDataCPU<FGQ, NMQ> {
@@ -122,18 +97,12 @@ impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> FeagiSta
         refractory_period_limit: NMQ::RefractoryPeriodLimitQuant,
         fire_threshold_limit: NMQ::FireThresholdLimit,
         consecutive_fire_limit: NMQ::ConsecutiveFireLimit,
-        post_synaptic_potential: NMQ::NeuronPotentialQuant,
-        mp_driven_psp: bool,
-        psp_uniformity: bool,
     ) -> Self {
         Self {
             excitability,
             refractory_period_limit,
             fire_threshold_limit,
             consecutive_fire_limit,
-            post_synaptic_potential,
-            mp_driven_psp,
-            psp_uniformity,
             _p: PhantomData,
         }
     }

@@ -36,6 +36,8 @@ pub trait SpatialCoordinate4DTrait<Axis>: Sized {
     fn get_w_mut(&mut self) -> &mut Axis;
 }
 
+
+
 pub trait SpatialDimensions2DTrait<Axis, Coordinate>: Sized
 where
     Axis: PartialOrd,

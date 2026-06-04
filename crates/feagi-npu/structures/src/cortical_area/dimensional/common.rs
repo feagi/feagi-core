@@ -10,13 +10,12 @@ create_quantized_index_count_wrapper!(SynapseRedirectIndex);
 create_quantized_index_count_wrapper!(SynapseRedirectSliceLength);
 
 /// Represents a dimensional cortical area, and all their neurons and other properties
-pub trait DimensionalCorticalAreaCommon<FGIQ, CAMQB, CC, CMC,  ND>:
+pub trait DimensionalCorticalAreaCommon<FGQ, NMQ, CC, CMC>:
 where
-    FGIQ: FeagiGlobalQuantization,
-    CAMQB: NeuronModelQuantization,
-    CC: CorticalConfiguration<FGIQ>,
-    CMC: CorticalModelData<FGIQ, CAMQB>,
-    ND: NeuronDataCommon<FGIQ, CAMQB, CC, CMC>
+    FGQ: FeagiGlobalQuantization,
+    NMQ: NeuronModelQuantization,
+    CC: CorticalConfiguration<FGQ>,
+    CMC: CorticalModelData<FGQ, NMQ>,
 {
     // Cant store data for unknown device
 
@@ -25,38 +24,6 @@ where
     // neuron model data, as well as potential data, and cortical levvel flags as well
     // (as a header)
 
-
-}
-
-
-
-
-
-
-/// Represents a firing neuron that has nonplastic connections. This is a collected structure
-/// element to de-sparsify the sparse firing dimensional cortical area. This probably isnt needed
-/// for CPU implementations ( we can just do something separate to count the number of firing
-/// neurons but otherwise just read forward
-pub trait FiringNeuronRedirectCommon<FGIQ>:
-FeagiECSElement
-where
-    FGIQ: FeagiGlobalQuantization,
-{
-    // Cant store data for unknown device
-
-    // The implementation will have the:
-    // - source neuron index
-    // - source cortical area index
-    // - destination synapse redirect slice start index
-    // - destination synapse redirect slice length
-}
-
-pub trait FiringNeuronRedirectsCommon<FGIQ, FNRE>:
-FeagiECSCollection<FNRE>
-where
-    FGIQ: FeagiGlobalQuantization,
-    FNRE: FiringNeuronRedirectCommon<FGIQ>
-{
 
 }
 

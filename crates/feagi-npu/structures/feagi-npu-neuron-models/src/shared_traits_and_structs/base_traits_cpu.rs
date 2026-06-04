@@ -18,24 +18,6 @@ where
     NMQ: NeuronModelQuantization,
 {
     // Implement any cortical level data members (or make members pub)
-    // The following is required
-
-    // mp_driven_psp (membrane potential driven post synaptic potential) is a bool set at the
-    // cortical area level as it does not affect the actual neuron dynamics, only the post
-    // firing dynamics
-    fn get_mp_driven_psp(&self) -> bool;
-    fn set_mp_driven_psp(&mut self, mp_driven_psp: bool);
-
-    // psp_uniformity (post synaptic potential uniformity) dictates to down stream synapses
-    // what uniformity they would use
-    fn get_psp_uniformity(&self) -> bool;
-    fn set_psp_uniformity(&mut self, psp_uniformity: bool);
-
-    // *psp (post synaptic potential) defines what potential to emit if mp_driven_psp is off
-    // while neuron is firing
-    fn get_post_synaptic_potential(&self) -> NMQ::NeuronPotentialQuant;
-    fn set_post_synaptic_potential(&mut self, post_synaptic_potential: NMQ::NeuronPotentialQuant);
-
 }
 
 /// Root CPU trait for all neuron data implementation, essentially per neuron data for a given
@@ -62,7 +44,7 @@ NeuronModelProcessor<FGQ, NMQ, CCC, CMD, NMD>
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: NeuronModelQuantization,
-    CCC: CorticalConfiguration<FGQ>, // Extend to dimensional
+    CCC: CorticalConfiguration<FGQ>,
     CMD: CorticalModelDataCPU<FGQ, NMQ>,
     NMD: NeuronModelDataCPU<FGQ, NMQ>
 {

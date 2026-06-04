@@ -128,6 +128,7 @@ impl<QIC: QuantizedIndexCountTrait> SpatialIndexDimensions2D<QIC> {
 
 //endregion
 
+
 impl<QIC: QuantizedIndexCountTrait> SpatialDimensions2DTrait<QIC, SpatialIndexCoordinate2D<QIC>>
     for SpatialIndexDimensions2D<QIC>
 {

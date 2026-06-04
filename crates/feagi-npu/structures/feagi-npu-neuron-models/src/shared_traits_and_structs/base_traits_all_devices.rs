@@ -16,8 +16,6 @@ where
     NMQ: NeuronModelQuantization,
 {
     // Implement any per-neuron level data members
-    
-    // must implement a bool for mp_driven_psp
 
     // No methods!
 }

@@ -14,6 +14,10 @@ pub trait QuantizedIndexCountTrait: QuantizedElementBase
     /// Tries to convert from u32, clamping if it goes out of range!
     fn from_u32_clamped(value: u32) -> Self;
 
+    fn start_length_to_usize_range(start: Self, length: Self) -> core::ops::Range<usize> {
+        start.to_usize().. length.to_usize()
+    }
+
     // TODO should be in wrapper
     // TODO add increment with rollover
     /*

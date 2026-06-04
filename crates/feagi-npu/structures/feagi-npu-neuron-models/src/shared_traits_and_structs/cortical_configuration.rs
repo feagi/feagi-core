@@ -34,8 +34,13 @@ where
 pub struct CorticalConfigurationDimensionalCPU<FGQ: FeagiGlobalQuantization>
 {
     pub dimensions: SpatialIndexDimensions4D<FGQ::NeuronIndexCountQuant>,
-    //pub check_for_neuron_activity_following_every_burst: bool, // TODO maybe we should always have this on....
-    // TODO how do we mark if any neuron activity? atomics?
+    post_synaptic_potential_base: f32, // TODO address me!
+    is_postsynaptic_potential_drive_by_membrane_potential: bool,
+    post_synaptic_potential_should_be_uniform: bool,
+
+
+
+    // NOTE: Using plain bools for now, no need to pack here
 }
 
 impl<FGQ: FeagiGlobalQuantization> PDITagGenericDevice for CorticalConfigurationDimensionalCPU<FGQ> {}
@@ -51,7 +56,12 @@ impl<FGQ: FeagiGlobalQuantization> CorticalConfigurationDimensional<FGQ> for Cor
 
 impl<FGQ: FeagiGlobalQuantization> CorticalConfigurationDimensionalCPU<FGQ> {
     pub fn new(dimensions: SpatialIndexDimensions4D<FGQ::NeuronIndexCountQuant>) -> Self {
-        CorticalConfigurationDimensionalCPU { dimensions }
+        CorticalConfigurationDimensionalCPU {
+            dimensions,
+            post_synaptic_potential_base: 0.0,
+            is_postsynaptic_potential_drive_by_membrane_potential: false,
+            post_synaptic_potential_should_be_uniform: false,
+        }
     }
 }
 

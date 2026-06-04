@@ -1,2 +1,4 @@
-pub mod common;
-pub mod cortical_area;
+
+
+mod common;
+mod cortical_area;
