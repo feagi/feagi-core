@@ -176,6 +176,39 @@ fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static 
     }
 }
 
+fn resolve_non_overlapping_position(
+    requested_position: (i32, i32, i32),
+    area_width: usize,
+    occupied_positions: &mut HashSet<(i32, i32, i32)>,
+) -> ServiceResult<(i32, i32, i32)> {
+    if !occupied_positions.contains(&requested_position) {
+        occupied_positions.insert(requested_position);
+        return Ok(requested_position);
+    }
+
+    let width_for_gap = area_width.max(1);
+    let gap = ((width_for_gap + 4) / 5).max(1); // ceil(20% of width)
+    let step_usize = width_for_gap.saturating_add(gap);
+    let step = i32::try_from(step_usize).map_err(|_| {
+        ServiceError::InvalidInput(format!(
+            "Unable to place cortical area: width {} creates horizontal step {} outside i32 range",
+            area_width, step_usize
+        ))
+    })?;
+
+    let mut candidate = requested_position;
+    while occupied_positions.contains(&candidate) {
+        candidate.0 = candidate.0.checked_add(step).ok_or_else(|| {
+            ServiceError::InvalidInput(format!(
+                "Unable to place cortical area: overflow while shifting x from {} by {}",
+                candidate.0, step
+            ))
+        })?;
+    }
+    occupied_positions.insert(candidate);
+    Ok(candidate)
+}
+
 fn coding_type_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
     match flag {
         IOCorticalAreaConfigurationFlag::Percentage(_, positioning)
@@ -572,6 +605,36 @@ impl ConnectomeService for ConnectomeServiceImpl {
             ServiceError::InvalidInput(format!("Failed to determine cortical area type: {}", e))
         })?;
 
+        let mut occupied_positions: HashSet<(i32, i32, i32)> = {
+            let manager = self.connectome.read();
+            manager
+                .get_cortical_area_ids()
+                .iter()
+                .filter_map(|id| manager.get_cortical_area(id))
+                .map(|area| (area.position.x, area.position.y, area.position.z))
+                .collect()
+        };
+        let requested_position = params.position;
+        let resolved_position = resolve_non_overlapping_position(
+            requested_position,
+            params.dimensions.0,
+            &mut occupied_positions,
+        )?;
+        if resolved_position != requested_position {
+            info!(
+                target: "feagi-services",
+                "Adjusted cortical area position to avoid overlap: id={} requested=({},{},{}) resolved=({},{},{}) width={} gap_rule=20pct",
+                params.cortical_id,
+                requested_position.0,
+                requested_position.1,
+                requested_position.2,
+                resolved_position.0,
+                resolved_position.1,
+                resolved_position.2,
+                params.dimensions.0
+            );
+        }
+
         // Create CorticalArea
         let mut area = CorticalArea::new(
             cortical_id_typed,
@@ -582,7 +645,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 params.dimensions.1 as u32,
                 params.dimensions.2 as u32,
             )?,
-            params.position.into(), // Convert (i32, i32, i32) to GenomeCoordinate3D
+            resolved_position.into(), // Convert (i32, i32, i32) to GenomeCoordinate3D
             area_type,
         )?;
 
