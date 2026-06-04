@@ -301,6 +301,13 @@ impl MotorCorticalUnit {
                     group_index,
                 )[0]
             }
+            MotorCorticalUnit::SpatialPointer => {
+                Self::get_cortical_ids_array_for_spatial_pointer_with_parameters(
+                    fh,
+                    pos,
+                    group_index,
+                )[0]
+            }
         }
     }
 }

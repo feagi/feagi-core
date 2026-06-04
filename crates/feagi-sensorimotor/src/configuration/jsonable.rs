@@ -1,7 +1,7 @@
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality,
-    PoseEstimationProperties, SegmentedImageFrameProperties,
+    PoseEstimationProperties, SegmentedImageFrameProperties, SpatialPointerProperties,
 };
 use crate::data_types::{
     GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
@@ -12,7 +12,7 @@ use crate::feedbacks::FeedbackRegistrar;
 use crate::neuron_voxel_coding::xyzp::decoders::{
     GazePropertiesNeuronVoxelXYZPDecoder, ImageFilteringSettingsNeuronVoxelXYZPDecoder,
     MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder,
-    PoseEstimationNeuronVoxelXYZPDecoder,
+    PoseEstimationNeuronVoxelXYZPDecoder, SpatialPointerNeuronVoxelXYZPDecoder,
 };
 use crate::neuron_voxel_coding::xyzp::encoders::{
     BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder,
@@ -24,7 +24,9 @@ use crate::wrapped_io_data::WrappedIOData;
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
+};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::FeagiDataError;
@@ -371,6 +373,7 @@ pub enum JSONDecoderProperties {
         NeuronDepth,
         PercentageNeuronPositioning,
     ), // brightness z depth, contrast z depth, diff z depth
+    SpatialPointer(SpatialPointerProperties),
     PoseEstimation(PoseEstimationProperties),
 }
 
@@ -492,10 +495,30 @@ impl JSONDecoderProperties {
                     number_channels,
                 )
             }
+            JSONDecoderProperties::SpatialPointer(pointer_properties) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError(
+                        "Expected one cortical id for SpatialPointer!".to_string(),
+                    ));
+                }
+                SpatialPointerNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.first().unwrap(),
+                    *pointer_properties,
+                    number_channels,
+                )
+            }
         }
     }
 
-    pub fn default_wrapped_value(&self) -> Result<WrappedIOData, FeagiDataError> {
+    /// Returns the initial cached value (and therefore the output slot type) for a decoder.
+    ///
+    /// `cortical_ids` is required because some areas (SpatialPointer) choose their decoded
+    /// output type from the area's configuration flag (`Percentage3D` for Absolute position
+    /// vs `SignedPercentage3D` for Incremental motion) rather than from the properties alone.
+    pub fn default_wrapped_value(
+        &self,
+        cortical_ids: &[CorticalID],
+    ) -> Result<WrappedIOData, FeagiDataError> {
         match self {
             JSONDecoderProperties::CartesianPlane(image_frame_properties) => {
                 Ok(WrappedIOData::ImageFrame(
@@ -571,6 +594,22 @@ impl JSONDecoderProperties {
                 Ok(WrappedIOData::PoseEstimationData(
                     crate::data_types::PoseEstimationData::new(pose_properties)?,
                 ))
+            }
+            JSONDecoderProperties::SpatialPointer(_pointer_properties) => {
+                // SpatialPointer's output type follows the area flag: Absolute decodes an
+                // unsigned position (Percentage3D); Incremental decodes a signed motion
+                // vector (SignedPercentage3D).
+                let cortical_id = cortical_ids.first().ok_or_else(|| {
+                    FeagiDataError::InternalError(
+                        "Expected one cortical id for SpatialPointer!".to_string(),
+                    )
+                })?;
+                match cortical_id.extract_io_data_flag()? {
+                    IOCorticalAreaConfigurationFlag::SignedPercentage3D(..) => Ok(
+                        WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero()),
+                    ),
+                    _ => Ok(WrappedIOData::Percentage_3D(Percentage3D::new_zero())),
+                }
             }
         }
     }

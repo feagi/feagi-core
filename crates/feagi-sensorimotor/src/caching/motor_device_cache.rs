@@ -329,6 +329,95 @@ macro_rules! motor_unit_functions {
     // Arm for WrappedIOType::SignedPercentage
     (@generate_functions
         $motor_unit:ident,
+        SpatialPointer3D
+    ) => {
+        ::paste::paste! {
+            pub fn [<$motor_unit:snake _register>](
+                &mut self,
+                unit: CorticalUnitIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                percentage_neuron_positioning: PercentageNeuronPositioning,
+                pointer_properties: SpatialPointerProperties,
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](
+                    frame_change_handling,
+                    percentage_neuron_positioning,
+                    unit
+                )[0];
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> =
+                    SpatialPointerNeuronVoxelXYZPDecoder::new_box(cortical_id, pointer_properties, number_channels)?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning,
+                    "SpatialPointer": {
+                        "width": pointer_properties.width,
+                        "height": pointer_properties.height,
+                        "depth": pointer_properties.depth,
+                        "window_ms": pointer_properties.window_ms,
+                        "max_axis_velocity": pointer_properties.max_axis_velocity
+                    }
+                }).as_object().unwrap().clone();
+
+                // Output type follows the area's mode: Absolute -> unsigned position,
+                // Incremental -> signed motion vector.
+                let initial_val: WrappedIOData = match frame_change_handling {
+                    FrameChangeHandling::Absolute => {
+                        WrappedIOData::Percentage_3D(Percentage3D::new_zero())
+                    }
+                    FrameChangeHandling::Incremental => {
+                        WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero())
+                    }
+                };
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        motor_unit_functions!(@generate_similar_functions $motor_unit, Percentage3D);
+        motor_unit_functions!(@generate_spatial_pointer_signed_read $motor_unit);
+    };
+
+    // Bespoke signed read accessors for SpatialPointer (Incremental mode emits
+    // SignedPercentage3D, which the generic Percentage3D accessors cannot return).
+    (@generate_spatial_pointer_signed_read
+        $motor_unit:ident
+    ) => {
+        ::paste::paste! {
+            /// Reads the preprocessed Incremental motion vector for a SpatialPointer channel.
+            ///
+            /// Use this in Incremental mode; the unsigned `*_read_preprocessed_cache_value`
+            /// accessor is for Absolute (position) mode.
+            pub fn [<$motor_unit:snake _read_signed_preprocessed_cache_value>](
+                &self,
+                unit: CorticalUnitIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result<SignedPercentage3D, FeagiDataError> {
+                const MOTOR_TYPE: MotorCorticalUnit = MotorCorticalUnit::$motor_unit;
+                let wrapped = self.try_read_preprocessed_cached_value(MOTOR_TYPE, unit, channel)?;
+                let val: SignedPercentage3D = wrapped.try_into()?;
+                Ok(val)
+            }
+
+            /// Reads the postprocessed Incremental motion vector for a SpatialPointer channel.
+            pub fn [<$motor_unit:snake _read_signed_postprocessed_cache_value>](
+                &self,
+                unit: CorticalUnitIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result<SignedPercentage3D, FeagiDataError> {
+                const MOTOR_TYPE: MotorCorticalUnit = MotorCorticalUnit::$motor_unit;
+                let wrapped = self.try_read_postprocessed_cached_value(MOTOR_TYPE, unit, channel)?;
+                let val: SignedPercentage3D = wrapped.try_into()?;
+                Ok(val)
+            }
+        }
+    };
+
+    // Arm for WrappedIOType::SignedPercentage
+    (@generate_functions
+        $motor_unit:ident,
         SignedPercentage
     ) => {
         ::paste::paste! {
@@ -509,6 +598,67 @@ macro_rules! motor_unit_functions {
     };
 }
 
+/// A single decoded motor value, flattened to one scalar per axis/channel.
+///
+/// Multi-dimensional decode outputs (e.g. `SpatialPointer` 3D) are flattened into
+/// one entry per axis so downstream consumers can address every value with a
+/// `(group, channel)` pair regardless of dimensionality.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DecodedMotorValue {
+    /// Cortical unit index (a.k.a. device group).
+    pub group: u32,
+    /// Flattened channel index. For scalar units this is the source channel; for
+    /// N-dimensional units it is `source_channel * N + axis`.
+    pub channel: u32,
+    /// Decode mode of the owning unit: `"absolute"` or `"incremental"`.
+    pub mode: &'static str,
+    /// Decoded scalar value. Unsigned types report `[0, 1]`; signed types report
+    /// `[-1, 1]`; booleans report `0.0`/`1.0`.
+    pub value: f64,
+}
+
+/// Flattens a decoded [`WrappedIOData`] into its scalar axis values.
+///
+/// Returns `None` for non-scalar payloads (images, raw IMU, misc structures) that
+/// have no meaningful single-axis float representation.
+fn flatten_motor_scalars(data: &WrappedIOData) -> Option<Vec<f64>> {
+    use WrappedIOData::*;
+    Some(match data {
+        Boolean(value) => vec![if *value { 1.0 } else { 0.0 }],
+        Percentage(value) => vec![value.get_as_0_1() as f64],
+        Percentage_2D(value) => {
+            vec![value.a.get_as_0_1() as f64, value.b.get_as_0_1() as f64]
+        }
+        Percentage_3D(value) => vec![
+            value.a.get_as_0_1() as f64,
+            value.b.get_as_0_1() as f64,
+            value.c.get_as_0_1() as f64,
+        ],
+        Percentage_4D(value) => vec![
+            value.a.get_as_0_1() as f64,
+            value.b.get_as_0_1() as f64,
+            value.c.get_as_0_1() as f64,
+            value.d.get_as_0_1() as f64,
+        ],
+        SignedPercentage(value) => vec![value.get_as_m1_1() as f64],
+        SignedPercentage_2D(value) => {
+            vec![value.a.get_as_m1_1() as f64, value.b.get_as_m1_1() as f64]
+        }
+        SignedPercentage_3D(value) => vec![
+            value.a.get_as_m1_1() as f64,
+            value.b.get_as_m1_1() as f64,
+            value.c.get_as_m1_1() as f64,
+        ],
+        SignedPercentage_4D(value) => vec![
+            value.a.get_as_m1_1() as f64,
+            value.b.get_as_m1_1() as f64,
+            value.c.get_as_m1_1() as f64,
+            value.d.get_as_m1_1() as f64,
+        ],
+        _ => return None,
+    })
+}
+
 pub struct MotorDeviceCache {
     motor_cortical_unit_caches:
         HashMap<(MotorCorticalUnit, CorticalUnitIndex), MotorCorticalUnitCache>,
@@ -670,6 +820,47 @@ impl MotorDeviceCache {
             );
         }
         Ok(())
+    }
+
+    /// Reads every registered motor unit's latest post-processed decode output as a
+    /// flat snapshot of scalar `(group, channel, mode, value)` tuples.
+    ///
+    /// This is the generic, type-erased accessor used to build motor command maps for
+    /// downstream clients without needing per-unit typed reads. Multi-axis units are
+    /// flattened (see [`DecodedMotorValue`]); non-scalar payloads are skipped.
+    pub fn read_decoded_motor_snapshot(&self) -> Vec<DecodedMotorValue> {
+        let mut snapshot: Vec<DecodedMotorValue> = Vec::new();
+        for ((_motor_unit, cortical_unit_index), unit_cache) in self.motor_cortical_unit_caches.iter()
+        {
+            let group = cortical_unit_index.get() as u32;
+            let mode = unit_cache.frame_change_mode_str();
+            for channel in 0..unit_cache.channel_count_usize() {
+                let channel_index: CorticalChannelIndex = (channel as u32).into();
+                let decoded = match unit_cache.get_postprocessed_motor_value(channel_index) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                let scalars = match flatten_motor_scalars(decoded) {
+                    Some(scalars) => scalars,
+                    None => continue,
+                };
+                let axis_count = scalars.len() as u32;
+                for (axis, value) in scalars.into_iter().enumerate() {
+                    let flattened_channel = if axis_count <= 1 {
+                        channel as u32
+                    } else {
+                        channel as u32 * axis_count + axis as u32
+                    };
+                    snapshot.push(DecodedMotorValue {
+                        group,
+                        channel: flattened_channel,
+                        mode,
+                        value,
+                    });
+                }
+            }
+        }
+        snapshot
     }
 
     //endregion

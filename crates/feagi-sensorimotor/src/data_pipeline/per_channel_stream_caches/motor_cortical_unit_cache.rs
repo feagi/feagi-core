@@ -70,7 +70,7 @@ impl MotorCorticalUnitCache {
                 unit_definition.io_configuration_flags.clone(),
             )?;
 
-        let initial_value = decoder_definition.default_wrapped_value()?;
+        let initial_value = decoder_definition.default_wrapped_value(&cortical_ids)?;
         let encoder = decoder_definition.to_box_decoder(channel_count, &cortical_ids)?;
 
         let mut motor_cortical_unit_cache = MotorCorticalUnitCache::new(
@@ -118,6 +118,26 @@ impl MotorCorticalUnitCache {
     #[allow(dead_code)]
     pub fn number_of_channels(&self) -> CorticalChannelCount {
         (self.pipeline_runners.len() as u32).try_into().unwrap()
+    }
+
+    /// Number of decode channels (pipeline runners) for this unit.
+    pub(crate) fn channel_count_usize(&self) -> usize {
+        self.pipeline_runners.len()
+    }
+
+    /// Returns the frame-change decode mode of this unit as a lowercase string
+    /// (`"absolute"` or `"incremental"`), derived from the registered IO flags.
+    ///
+    /// Defaults to `"absolute"` when the flag is absent, matching the genome default.
+    pub(crate) fn frame_change_mode_str(&self) -> &'static str {
+        match self
+            .io_configuration_flags
+            .get("frame_change_handling")
+            .and_then(|value| value.as_str())
+        {
+            Some(flag) if flag.eq_ignore_ascii_case("incremental") => "incremental",
+            _ => "absolute",
+        }
     }
 
     #[allow(dead_code)]

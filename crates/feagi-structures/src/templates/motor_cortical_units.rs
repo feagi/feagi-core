@@ -161,6 +161,22 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "Spatial pointer output - decodes activity into one normalized XYZ percentage tuple."]
+                SpatialPointer => {
+                    friendly_name: "Spatial Pointer",
+                    accepted_wrapped_io_data_type: SpatialPointer3D,
+                    cortical_id_unit_reference: *b"ptr",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute, Incremental],
+                    cortical_area_properties: {
+                        0 => ($crate::genomic::cortical_area::io_cortical_area_configuration_flag::spatial_pointer_io_flag(frame_change_handling, percentage_neuron_positioning), relative_position: [210, 0, -30], channel_dimensions_default: [64, 64, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 4096])
+                    }
+                },
+
             }
         }
     };

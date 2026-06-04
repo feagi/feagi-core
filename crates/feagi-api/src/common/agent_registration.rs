@@ -64,6 +64,7 @@ fn per_channel_motor_dimensions_for_registration(
     if motor_unit != MotorCorticalUnit::CountOutput
         && motor_unit != MotorCorticalUnit::ObjectSegmentation
         && motor_unit != MotorCorticalUnit::PoseEstimation
+        && motor_unit != MotorCorticalUnit::SpatialPointer
     {
         return (default_w, default_h, default_d);
     }
@@ -99,6 +100,16 @@ fn per_channel_motor_dimensions_for_registration(
     // Expected: {"PoseEstimation": {"width": N, "height": N, "depth": N}}
     if motor_unit == MotorCorticalUnit::PoseEstimation {
         if let Some(dims) = pose_dims_from_decoder_properties(decoder_properties, unit_topology) {
+            return dims;
+        }
+        return (default_w, default_h, default_d);
+    }
+    // SpatialPointer: honor dimensions from decoder block.
+    // Expected: {"SpatialPointer": {"width": N, "height": N, "depth": N}}
+    if motor_unit == MotorCorticalUnit::SpatialPointer {
+        if let Some(dims) =
+            spatial_pointer_dims_from_decoder_properties(decoder_properties, unit_topology)
+        {
             return dims;
         }
         return (default_w, default_h, default_d);
@@ -158,6 +169,42 @@ fn pose_dims_from_decoder_properties(
         .and_then(|v| v.as_u64())
         .and_then(|u| u32::try_from(u).ok())?;
     let d = pose
+        .get("depth")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    if w == 0 || h == 0 || d == 0 {
+        return None;
+    }
+    let w_min = unit_topology.channel_dimensions_min[0].max(1);
+    let h_min = unit_topology.channel_dimensions_min[1].max(1);
+    let d_min = unit_topology.channel_dimensions_min[2].max(1);
+    let w_max = unit_topology.channel_dimensions_max[0].max(1);
+    let h_max = unit_topology.channel_dimensions_max[1].max(1);
+    let d_max = unit_topology.channel_dimensions_max[2].max(1);
+    Some((
+        w.clamp(w_min, w_max) as usize,
+        h.clamp(h_min, h_max) as usize,
+        d.clamp(d_min, d_max) as usize,
+    ))
+}
+
+/// Extracts and clamps spatial pointer (width, height, depth) from a
+/// `{"SpatialPointer": {"width": N, "height": N, "depth": N}}` decoder block.
+/// Returns `None` if the block is absent, malformed, or contains any zero dimension.
+fn spatial_pointer_dims_from_decoder_properties(
+    decoder_properties: Option<&Value>,
+    unit_topology: &UnitTopology,
+) -> Option<(usize, usize, usize)> {
+    let pointer = decoder_properties?.get("SpatialPointer")?;
+    let w = pointer
+        .get("width")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    let h = pointer
+        .get("height")
+        .and_then(|v| v.as_u64())
+        .and_then(|u| u32::try_from(u).ok())?;
+    let d = pointer
         .get("depth")
         .and_then(|v| v.as_u64())
         .and_then(|u| u32::try_from(u).ok())?;
@@ -1480,6 +1527,16 @@ mod count_output_registration_tests {
         let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
         let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, None);
         assert_eq!((w, h, d), (32, 32, 8));
+    }
+
+    #[test]
+    fn spatial_pointer_uses_decoder_dimensions() {
+        let motor = MotorCorticalUnit::SpatialPointer;
+        let topo = motor.get_unit_default_topology();
+        let ut = topo.get(&CorticalSubUnitIndex::from(0u8)).unwrap();
+        let dec = json!({"SpatialPointer": {"width": 64u32, "height": 64u32, "depth": 64u32}});
+        let (w, h, d) = per_channel_motor_dimensions_for_registration(motor, ut, Some(&dec));
+        assert_eq!((w, h, d), (64, 64, 64));
     }
 }
 

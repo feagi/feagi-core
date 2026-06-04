@@ -306,6 +306,33 @@ impl fmt::Display for PercentageNeuronPositioning {
     }
 }
 
+/// Returns the area configuration flag for a SpatialPointer cortical area.
+///
+/// SpatialPointer encodes its decode mechanism in the area's data type so the genome is
+/// self-describing for consumers:
+/// - `Absolute` decodes an unsigned position centroid, so the area is `Percentage3D`
+///   (each axis in `[0, 1]`).
+/// - `Incremental` decodes a signed motion vector, so the area is `SignedPercentage3D`
+///   (each axis in `[-1, 1]`, `0` meaning no motion).
+///
+/// Signedness is therefore fully determined by the frame-change mode; there is no valid
+/// "absolute + signed" or "incremental + unsigned" combination.
+pub const fn spatial_pointer_io_flag(
+    frame_change_handling: FrameChangeHandling,
+    percentage_neuron_positioning: PercentageNeuronPositioning,
+) -> IOCorticalAreaConfigurationFlag {
+    match frame_change_handling {
+        FrameChangeHandling::Absolute => IOCorticalAreaConfigurationFlag::Percentage3D(
+            frame_change_handling,
+            percentage_neuron_positioning,
+        ),
+        FrameChangeHandling::Incremental => IOCorticalAreaConfigurationFlag::SignedPercentage3D(
+            frame_change_handling,
+            percentage_neuron_positioning,
+        ),
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum FrameChangeHandling {
     #[default]
