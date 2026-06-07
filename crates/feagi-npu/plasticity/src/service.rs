@@ -29,6 +29,9 @@ use ahash::AHashSet;
 use feagi_npu_neural::types::NeuronId;
 use serde::{Deserialize, Serialize};
 
+type MpWindowFrame = (u64, ahash::AHashMap<u32, f32>);
+type PerAreaMpWindow = (u32, Vec<MpWindowFrame>);
+
 // State manager access for fatigue reporting
 // TODO: Add feagi_state_manager dependency when wiring up state manager access
 // #[cfg(feature = "std")]
@@ -547,8 +550,7 @@ impl PlasticityService {
 
                             // Fetch MP windows if mp_learning_enabled
                             let mp_data = if area_config.mp_learning_enabled {
-                                let mut mp_wins: Vec<(u32, Vec<(u64, ahash::AHashMap<u32, f32>)>)> =
-                                    Vec::new();
+                                let mut mp_wins: Vec<PerAreaMpWindow> = Vec::new();
                                 for &upstream_idx in &upstream_sorted {
                                     match npu_lock.get_fire_ledger_dense_window_mp(
                                         upstream_idx,
@@ -818,7 +820,7 @@ impl PlasticityService {
     fn build_replay_frames(
         npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
         windows: &[(u32, Vec<(u64, roaring::RoaringBitmap)>)],
-        mp_windows: Option<&[(u32, Vec<(u64, ahash::AHashMap<u32, f32>)>)]>,
+        mp_windows: Option<&[PerAreaMpWindow]>,
     ) -> Vec<ReplayFrame> {
         if windows.is_empty() {
             return Vec::new();

@@ -187,7 +187,7 @@ fn resolve_non_overlapping_position(
     }
 
     let width_for_gap = area_width.max(1);
-    let gap = ((width_for_gap + 4) / 5).max(1); // ceil(20% of width)
+    let gap = width_for_gap.div_ceil(5).max(1); // ceil(20% of width)
     let step_usize = width_for_gap.saturating_add(gap);
     let step = i32::try_from(step_usize).map_err(|_| {
         ServiceError::InvalidInput(format!(

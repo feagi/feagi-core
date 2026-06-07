@@ -22,6 +22,10 @@ use std::collections::VecDeque;
 
 use crate::fire_structures::FireQueue;
 
+type MembranePotentialMap = AHashMap<u32, f32>;
+type TimestampedMembranePotentialFrame = (u64, MembranePotentialMap);
+type MembranePotentialHistory = VecDeque<TimestampedMembranePotentialFrame>;
+
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum FireLedgerError {
     #[error("window size must be > 0")]
@@ -72,7 +76,7 @@ pub struct FireLedger {
     /// Areas for which membrane potentials are also archived (MP-aware memory encoding).
     mp_enabled_areas: AHashMap<u32, bool>,
     /// Per-area MP history: cortical_idx -> ring of (timestep, neuron_id -> MP at fire time).
-    mp_history: AHashMap<u32, VecDeque<(u64, AHashMap<u32, f32>)>>,
+    mp_history: AHashMap<u32, MembranePotentialHistory>,
 }
 
 #[derive(Debug, Clone)]
@@ -187,7 +191,7 @@ impl FireLedger {
         cortical_idx: u32,
         end_timestep: u64,
         depth: usize,
-    ) -> Result<Vec<(u64, AHashMap<u32, f32>)>, FireLedgerError> {
+    ) -> Result<Vec<TimestampedMembranePotentialFrame>, FireLedgerError> {
         if depth == 0 {
             return Err(FireLedgerError::InvalidDepth);
         }
@@ -254,7 +258,7 @@ impl FireLedger {
                     .copied()
                     .unwrap_or(false)
                 {
-                    let mp_map: AHashMap<u32, f32> = neurons
+                    let mp_map: MembranePotentialMap = neurons
                         .iter()
                         .map(|n| (n.neuron_id.0, n.membrane_potential))
                         .collect();

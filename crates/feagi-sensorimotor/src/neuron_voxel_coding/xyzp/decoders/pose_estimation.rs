@@ -62,7 +62,11 @@ impl NeuronVoxelXYZPDecoder for PoseEstimationNeuronVoxelXYZPDecoder {
 
         let depth = self.properties.depth as usize;
 
-        for channel_idx in 0..(number_of_channels as usize) {
+        for (channel_idx, pipeline_runner) in pipelines_with_data_to_update
+            .iter_mut()
+            .enumerate()
+            .take(number_of_channels as usize)
+        {
             let x_offset = (channel_idx as u32) * per_channel_width;
             let x_end = x_offset + per_channel_width;
 
@@ -91,9 +95,7 @@ impl NeuronVoxelXYZPDecoder for PoseEstimationNeuronVoxelXYZPDecoder {
                 });
             }
 
-            let pose_data: &mut PoseEstimationData = pipelines_with_data_to_update
-                .get_mut(channel_idx)
-                .unwrap()
+            let pose_data: &mut PoseEstimationData = pipeline_runner
                 .get_preprocessed_cached_value_mut()
                 .try_into()?;
 
@@ -102,8 +104,7 @@ impl NeuronVoxelXYZPDecoder for PoseEstimationNeuronVoxelXYZPDecoder {
                 channel_changed[channel_idx] = true;
             }
 
-            for z_layer in 0..depth {
-                let activations = &layer_activations[z_layer];
+            for (z_layer, activations) in layer_activations.iter().enumerate().take(depth) {
                 let joint = extract_centroid_from_layer(activations);
                 pose_data.set_joint(z_layer, joint);
             }

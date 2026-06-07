@@ -305,7 +305,7 @@ fn test_centered_projector_even_dimensions_use_lower_center_anchor() {
     };
     let mut npu_guard = npu_arc.lock().unwrap();
 
-    let src_lower_center_nid = src_neurons[(1 * 4 + 1) as usize] as u32; // (1,1,0)
+    let src_lower_center_nid = src_neurons[5] as u32; // (1,1,0)
     let src_upper_center_nid = src_neurons[(2 * 4 + 2) as usize] as u32; // (2,2,0)
 
     match *npu_guard {
