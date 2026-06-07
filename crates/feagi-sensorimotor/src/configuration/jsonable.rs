@@ -581,7 +581,9 @@ impl JSONDecoderProperties {
             JSONDecoderProperties::PositionalServo(
                 _neuron_depth,
                 _percentage_neuron_positioning,
-            ) => Ok(WrappedIOData::Percentage(Percentage::new_zero())),
+            ) => Ok(WrappedIOData::Percentage(
+                Percentage::new_from_0_1(0.5).expect("0.5 is always valid"),
+            )),
             JSONDecoderProperties::ImageFilteringSettings(
                 _brightness,
                 _contrast,

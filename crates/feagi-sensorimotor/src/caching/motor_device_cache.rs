@@ -242,10 +242,12 @@ macro_rules! motor_unit_functions {
             {
                 let cortical_ids = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit);
 
-                // Handle both single-area and dual-area percentage types
+                // Handle both single-area and dual-area percentage types.
+                // Dual-area means PositionalServo (absolute + incremental);
+                // single-area is a plain percentage (e.g. CountOutput).
+                let is_dual_area = cortical_ids.get(1).is_some();
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = match (cortical_ids.get(0), cortical_ids.get(1)) {
                     (Some(&id0), Some(&id1)) => {
-                        // Dual-area type (e.g., PositionalServo with absolute + incremental)
                         PositionalServoNeuronVoxelXYZPDecoder::new_box(
                             id0,
                             id1,
@@ -277,7 +279,15 @@ macro_rules! motor_unit_functions {
                     "percentage_neuron_positioning": percentage_neuron_positioning
                 }).as_object().unwrap().clone();
 
-                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                // Dual-area (PositionalServo) must seed at mid-range so the
+                // first incremental tick doesn't snap from 0% to near-min.
+                let initial_val: WrappedIOData = if is_dual_area {
+                    WrappedIOData::Percentage(
+                        Percentage::new_from_0_1(0.5).expect("0.5 is always valid"),
+                    )
+                } else {
+                    WrappedIOData::Percentage(Percentage::new_zero())
+                };
                 self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
@@ -830,7 +840,8 @@ impl MotorDeviceCache {
     /// flattened (see [`DecodedMotorValue`]); non-scalar payloads are skipped.
     pub fn read_decoded_motor_snapshot(&self) -> Vec<DecodedMotorValue> {
         let mut snapshot: Vec<DecodedMotorValue> = Vec::new();
-        for ((_motor_unit, cortical_unit_index), unit_cache) in self.motor_cortical_unit_caches.iter()
+        for ((_motor_unit, cortical_unit_index), unit_cache) in
+            self.motor_cortical_unit_caches.iter()
         {
             let group = cortical_unit_index.get() as u32;
             let mode = unit_cache.frame_change_mode_str();
@@ -861,6 +872,23 @@ impl MotorDeviceCache {
             }
         }
         snapshot
+    }
+
+    /// Override PositionalServo preprocessed cache value for a channel.
+    ///
+    /// This seeds the decoder's internal integration state to a known live value.
+    pub fn motor_positional_servo_write_preprocessed_cache_value(
+        &mut self,
+        unit: CorticalUnitIndex,
+        channel: CorticalChannelIndex,
+        value: Percentage,
+    ) -> Result<(), FeagiDataError> {
+        self.try_write_preprocessed_cached_value(
+            MotorCorticalUnit::PositionalServo,
+            unit,
+            channel,
+            WrappedIOData::Percentage(value),
+        )
     }
 
     //endregion
@@ -925,6 +953,18 @@ impl MotorDeviceCache {
         let motor_stream_caches =
             self.try_get_motor_channel_stream_caches(motor_type, unit_index)?;
         motor_stream_caches.get_postprocessed_motor_value(channel_index)
+    }
+
+    fn try_write_preprocessed_cached_value(
+        &mut self,
+        motor_type: MotorCorticalUnit,
+        unit_index: CorticalUnitIndex,
+        channel_index: CorticalChannelIndex,
+        value: WrappedIOData,
+    ) -> Result<(), FeagiDataError> {
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches_mut(motor_type, unit_index)?;
+        motor_stream_caches.try_set_preprocessed_motor_value(channel_index, value)
     }
 
     fn try_register_motor_callback<F>(

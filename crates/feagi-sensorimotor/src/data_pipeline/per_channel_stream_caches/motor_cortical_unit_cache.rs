@@ -178,6 +178,20 @@ impl MotorCorticalUnitCache {
         Ok(pipeline_runner.get_postprocessed_cached_value())
     }
 
+    /// Overwrite a channel's preprocessed motor cache value.
+    ///
+    /// Used by controllers to align decoder state to live hardware position
+    /// before incremental updates are consumed.
+    pub fn try_set_preprocessed_motor_value(
+        &mut self,
+        cortical_channel_index: CorticalChannelIndex,
+        value: WrappedIOData,
+    ) -> Result<(), FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        *pipeline_runner.get_preprocessed_cached_value_mut() = value;
+        Ok(())
+    }
+
     #[allow(dead_code)]
     pub fn try_get_channel_last_processed_instant(
         &self,
