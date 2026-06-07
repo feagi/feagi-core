@@ -144,6 +144,26 @@ impl WasmConnectomeService {
             .and_then(|v| v.as_u64())
             .map(|u| u as u32);
 
+        let cid_bytes = cortical_id.as_bytes();
+        let is_io_area_wasm = cid_bytes.len() == 8
+            && (cid_bytes.first().copied() == Some(b'i')
+                || cid_bytes.first().copied() == Some(b'o'));
+        let cortical_subtype_field = if is_io_area_wasm {
+            String::from_utf8(cid_bytes[0..4].to_vec()).ok()
+        } else {
+            None
+        };
+        let wasm_subunit_id = if is_io_area_wasm {
+            cid_bytes.get(6).copied()
+        } else {
+            None
+        };
+        let wasm_cortical_unit_index = if is_io_area_wasm {
+            cid_bytes.get(7).copied()
+        } else {
+            None
+        };
+
         CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
             cortical_id_s: cortical_id.to_string(), // TODO: Decode base64 if needed
@@ -230,11 +250,12 @@ impl WasmConnectomeService {
             longterm_mem_threshold,
             temporal_depth,
             properties: area.properties.clone(),
-            cortical_subtype: None, // TODO: Extract from cortical_id if IPU/OPU
-            encoding_type: None,    // TODO: Extract from cortical_id if IPU/OPU
-            encoding_format: None,  // TODO: Extract from cortical_id if IPU/OPU
-            unit_id: None,          // TODO: Extract from cortical_id if IPU/OPU
-            group_id: None,         // TODO: Extract from cortical_id if IPU/OPU
+            cortical_subtype: cortical_subtype_field,
+            encoding_type: None,
+            encoding_format: None,
+            unit_id: wasm_cortical_unit_index,
+            subunit_id: wasm_subunit_id,
+            group_id: wasm_cortical_unit_index,
             coding_signage: None,
             coding_behavior: None,
             coding_type: None,

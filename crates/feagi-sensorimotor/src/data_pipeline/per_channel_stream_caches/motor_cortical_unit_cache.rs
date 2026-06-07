@@ -70,7 +70,7 @@ impl MotorCorticalUnitCache {
                 unit_definition.io_configuration_flags.clone(),
             )?;
 
-        let initial_value = decoder_definition.default_wrapped_value()?;
+        let initial_value = decoder_definition.default_wrapped_value(&cortical_ids)?;
         let encoder = decoder_definition.to_box_decoder(channel_count, &cortical_ids)?;
 
         let mut motor_cortical_unit_cache = MotorCorticalUnitCache::new(
@@ -120,6 +120,26 @@ impl MotorCorticalUnitCache {
         (self.pipeline_runners.len() as u32).try_into().unwrap()
     }
 
+    /// Number of decode channels (pipeline runners) for this unit.
+    pub(crate) fn channel_count_usize(&self) -> usize {
+        self.pipeline_runners.len()
+    }
+
+    /// Returns the frame-change decode mode of this unit as a lowercase string
+    /// (`"absolute"` or `"incremental"`), derived from the registered IO flags.
+    ///
+    /// Defaults to `"absolute"` when the flag is absent, matching the genome default.
+    pub(crate) fn frame_change_mode_str(&self) -> &'static str {
+        match self
+            .io_configuration_flags
+            .get("frame_change_handling")
+            .and_then(|value| value.as_str())
+        {
+            Some(flag) if flag.eq_ignore_ascii_case("incremental") => "incremental",
+            _ => "absolute",
+        }
+    }
+
     #[allow(dead_code)]
     pub fn verify_channel_exists(
         &self,
@@ -156,6 +176,20 @@ impl MotorCorticalUnitCache {
     ) -> Result<&WrappedIOData, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         Ok(pipeline_runner.get_postprocessed_cached_value())
+    }
+
+    /// Overwrite a channel's preprocessed motor cache value.
+    ///
+    /// Used by controllers to align decoder state to live hardware position
+    /// before incremental updates are consumed.
+    pub fn try_set_preprocessed_motor_value(
+        &mut self,
+        cortical_channel_index: CorticalChannelIndex,
+        value: WrappedIOData,
+    ) -> Result<(), FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        *pipeline_runner.get_preprocessed_cached_value_mut() = value;
+        Ok(())
     }
 
     #[allow(dead_code)]

@@ -40,6 +40,32 @@ pub(crate) fn decode_signed_percentage_from_linear_neurons(
     replace_val.inplace_update_unchecked(positive - negative);
 }
 
+/// Linear signed percentage on a **single** X column per channel: `z = 0` decodes to **+1.0**,
+/// `z = z_max_depth - 1` decodes to **-1.0**, with averaging when multiple spikes are present.
+///
+/// This layout matches motor cortical units such as one-wide signed `1×1×N` per device (e.g.
+/// RotaryMotor with linear positioning).
+#[inline]
+pub(crate) fn decode_signed_percentage_from_linear_neurons_along_z(
+    neuron_indexes_along_z: &[u32],
+    z_max_depth: u32,
+    replace_val: &mut SignedPercentage,
+) {
+    if neuron_indexes_along_z.is_empty() {
+        replace_val.inplace_update_unchecked(0.0);
+        return;
+    }
+    let max_idx = z_max_depth.saturating_sub(1) as f32;
+    if max_idx <= 0.0 {
+        replace_val.inplace_update_unchecked(0.0);
+        return;
+    }
+    let avg_z = neuron_indexes_along_z.iter().copied().sum::<u32>() as f32
+        / neuron_indexes_along_z.len() as f32;
+    let v = 1.0 - 2.0 * (avg_z / max_idx);
+    replace_val.inplace_update_unchecked(v.clamp(-1.0, 1.0));
+}
+
 #[inline]
 pub(crate) fn decode_unsigned_percentage_from_fractional_exponential_neurons(
     neuron_indexes_along_z: &Vec<u32>,
@@ -144,6 +170,21 @@ pub(crate) fn encode_signed_percentage_to_linear_neuron_z_index(
         let raw_idx = ((1.0 - (-v)) * z_length_as_float).floor() as u32;
         neuron_indexes_along_z_negative.push(raw_idx.min(max_idx));
     }
+}
+
+/// Encode [`SignedPercentage`] for [`decode_signed_percentage_from_linear_neurons_along_z`]:
+/// `v = +1` → `z = 0`, `v = -1` → `z = z_len - 1`.
+#[inline]
+pub(crate) fn encode_signed_percentage_to_linear_neuron_z_index_along_z(
+    val: &SignedPercentage,
+    z_length_as_float: f32,
+    neuron_indexes_along_z: &mut Vec<u32>,
+) {
+    neuron_indexes_along_z.clear();
+    let max_idx = (z_length_as_float as u32).saturating_sub(1);
+    let v = val.get_as_m1_1().clamp(-1.0, 1.0);
+    let raw_idx = ((1.0 - v) / 2.0 * max_idx as f32).floor() as u32;
+    neuron_indexes_along_z.push(raw_idx.min(max_idx));
 }
 
 #[inline]
@@ -459,6 +500,49 @@ mod tests {
             assert!(
                 (percentage.get_as_m1_1() - 0.5).abs() < tolerance,
                 "Round trip should preserve 0.5"
+            );
+        }
+
+        //endregion
+
+        //region Linear signed along-Z (one X column per channel, e.g. RotaryMotor template 1x1x9)
+
+        let z_along_z: u32 = 9;
+        let z_along_z_float: f32 = z_along_z as f32;
+
+        {
+            let mut p = SignedPercentage::new_from_m1_1(0.0).unwrap();
+            decode_signed_percentage_from_linear_neurons_along_z(&[0], z_along_z, &mut p);
+            assert!(
+                (p.get_as_m1_1() - 1.0).abs() < tolerance,
+                "z=0 should decode to +1.0"
+            );
+        }
+        {
+            let mut p = SignedPercentage::new_from_m1_1(0.0).unwrap();
+            decode_signed_percentage_from_linear_neurons_along_z(&[8], z_along_z, &mut p);
+            assert!(
+                (p.get_as_m1_1() - (-1.0)).abs() < tolerance,
+                "z=8 (depth 9) should decode to -1.0"
+            );
+        }
+        {
+            let mut p = SignedPercentage::new_from_m1_1(1.0).unwrap();
+            let mut zs: Vec<u32> = Vec::new();
+            encode_signed_percentage_to_linear_neuron_z_index_along_z(&p, z_along_z_float, &mut zs);
+            assert_eq!(zs, vec![0]);
+            decode_signed_percentage_from_linear_neurons_along_z(&zs, z_along_z, &mut p);
+            assert!((p.get_as_m1_1() - 1.0).abs() < tolerance, "round-trip +1.0");
+        }
+        {
+            let mut p = SignedPercentage::new_from_m1_1(-1.0).unwrap();
+            let mut zs: Vec<u32> = Vec::new();
+            encode_signed_percentage_to_linear_neuron_z_index_along_z(&p, z_along_z_float, &mut zs);
+            assert_eq!(zs, vec![8]);
+            decode_signed_percentage_from_linear_neurons_along_z(&zs, z_along_z, &mut p);
+            assert!(
+                (p.get_as_m1_1() - (-1.0)).abs() < tolerance,
+                "round-trip -1.0"
             );
         }
 

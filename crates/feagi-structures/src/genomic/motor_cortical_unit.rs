@@ -1,7 +1,7 @@
 use crate::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
 use crate::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
-    FrameChangeHandling, PercentageNeuronPositioning,
+    FrameChangeHandling, PercentageNeuronPositioning, PoseSchema,
 };
 use crate::genomic::cortical_area::{
     CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
@@ -287,8 +287,22 @@ impl MotorCorticalUnit {
                     group_index,
                 )[0]
             }
+            MotorCorticalUnit::PoseEstimation => {
+                Self::get_cortical_ids_array_for_pose_estimation_with_parameters(
+                    fh,
+                    PoseSchema::HumanBody,
+                    group_index,
+                )[0]
+            }
             MotorCorticalUnit::DynamicImageProcessing => {
                 Self::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                    fh,
+                    pos,
+                    group_index,
+                )[0]
+            }
+            MotorCorticalUnit::SpatialPointer => {
+                Self::get_cortical_ids_array_for_spatial_pointer_with_parameters(
                     fh,
                     pos,
                     group_index,

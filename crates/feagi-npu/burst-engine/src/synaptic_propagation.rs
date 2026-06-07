@@ -38,7 +38,7 @@
 //! - Python: ~165ms for 12K neurons
 //! - Rust Target: <3ms (50-100x speedup)
 
-use ahash::AHashMap;
+use ahash::{AHashMap, AHashSet};
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::SynapseStorage;
 use feagi_structures::genomic::cortical_area::CorticalID;
@@ -204,6 +204,13 @@ pub struct SynapticPropagationEngine {
     /// Cortical Area -> degeneration coefficient (PSP decrement per source fire)
     /// Values <= 0 are treated as disabled and removed from the map.
     pub area_degeneration: AHashMap<CorticalID, f32>,
+    /// Conditional gate mappings: (src_area, dst_area) -> gate_area CorticalID.
+    /// Synapses belonging to a gated mapping produce zero contribution when the
+    /// gate area has no firing activity in the current burst (transistor semantics).
+    gate_mappings: AHashMap<(CorticalID, CorticalID), CorticalID>,
+    /// Set of (src_area, dst_area) pairs whose gate is currently closed (no activity
+    /// in the gate area this burst). Updated before each propagation call by the NPU.
+    closed_gates: AHashSet<(CorticalID, CorticalID)>,
     /// Performance stats
     total_propagations: u64,
     total_synapses_processed: u64,
@@ -238,6 +245,8 @@ impl SynapticPropagationEngine {
             area_psp_uniform_distribution: AHashMap::new(),
             area_postsynaptic_current: AHashMap::new(),
             area_degeneration: AHashMap::new(),
+            gate_mappings: AHashMap::new(),
+            closed_gates: AHashSet::new(),
             total_propagations: 0,
             total_synapses_processed: 0,
             last_profile: None,
@@ -331,6 +340,40 @@ impl SynapticPropagationEngine {
         }
     }
 
+    /// Register a conditional gate on a mapping: synapses from `src_area` to `dst_area`
+    /// will produce zero contribution unless `gate_area` has firing activity in the
+    /// current burst.
+    pub fn register_gate_mapping(
+        &mut self,
+        src_area: CorticalID,
+        dst_area: CorticalID,
+        gate_area: CorticalID,
+    ) {
+        self.gate_mappings.insert((src_area, dst_area), gate_area);
+    }
+
+    /// Remove the conditional gate from a mapping.
+    pub fn unregister_gate_mapping(&mut self, src_area: CorticalID, dst_area: CorticalID) {
+        self.gate_mappings.remove(&(src_area, dst_area));
+    }
+
+    /// Returns true if any gate mappings are registered.
+    pub fn has_gate_mappings(&self) -> bool {
+        !self.gate_mappings.is_empty()
+    }
+
+    /// Returns a reference to the gate mappings for external gate-state computation.
+    pub fn gate_mappings(&self) -> &AHashMap<(CorticalID, CorticalID), CorticalID> {
+        &self.gate_mappings
+    }
+
+    /// Update the set of closed gates for the current burst. Called by the NPU before
+    /// each propagation pass with the set of (src, dst) pairs whose gate area had no
+    /// firing activity.
+    pub fn set_closed_gates(&mut self, closed: AHashSet<(CorticalID, CorticalID)>) {
+        self.closed_gates = closed;
+    }
+
     /// Compute synaptic propagation for a set of fired neurons
     ///
     /// This is the MAIN PERFORMANCE-CRITICAL function that replaces the Python bottleneck.
@@ -417,6 +460,7 @@ impl SynapticPropagationEngine {
 
         let use_fast_path = self.area_mp_driven_psp.is_empty()
             && self.area_psp_uniform_distribution.is_empty()
+            && self.closed_gates.is_empty()
             && !trace_cfg.enabled;
 
         if use_fast_path {
@@ -610,6 +654,12 @@ impl SynapticPropagationEngine {
                 // Get pre-computed source neuron metadata (eliminates 4 HashMap lookups per synapse!)
                 let source_meta = source_metadata.get(&source_neuron)?;
 
+                // Conditional gate check: if this (src_area, dst_area) pair has a closed
+                // gate, the synapse contributes nothing (transistor OFF state).
+                if self.closed_gates.contains(&(source_meta.area, cortical_area)) {
+                    return None;
+                }
+
                 // Logging: exclude power sources unless tracing a destination cortical area (then
                 // power→area drive is often relevant).
                 let has_focus = trace_cfg.src_filter.is_some()
@@ -720,10 +770,15 @@ impl SynapticPropagationEngine {
                 if (synapse_storage.edge_flags()[syn_idx] & SYNAPSE_EDGE_ASSOCIATIVE_MEMORY) == 0 {
                     return None;
                 }
-                let _ = self.neuron_to_area.get(&target_neuron)?;
+                let target_area = self.neuron_to_area.get(&target_neuron)?;
                 let delay_bursts = synapse_storage.delay_bursts()[syn_idx].max(1) as u32;
                 let source_neuron = NeuronId(synapse_storage.source_neurons()[syn_idx]);
                 let source_meta = source_metadata.get(&source_neuron)?;
+
+                if self.closed_gates.contains(&(source_meta.area, *target_area)) {
+                    return None;
+                }
+
                 let base_psp = if source_meta.mp_driven {
                     *neuron_membrane_potentials.get(&source_neuron).unwrap_or_else(|| {
                         panic!(

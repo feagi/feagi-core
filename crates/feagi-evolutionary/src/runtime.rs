@@ -161,7 +161,7 @@ pub enum MorphologyParameters {
     },
 }
 
-/// Pattern element: exact value, wildcard (*), skip (?), or exclude (!)
+/// Pattern element: exact value, wildcard (*), skip (?), exclude (!), or relative directional
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PatternElement {
     /// Exact coordinate value
@@ -172,6 +172,18 @@ pub enum PatternElement {
     Skip, // "?"
     /// Exclude - exclude this coordinate
     Exclude, // "!"
+    /// All coordinates strictly above source on this axis
+    DirectionPositive, // "?+"
+    /// All coordinates strictly below source on this axis
+    DirectionNegative, // "?-"
+    /// All coordinates at or above source on this axis
+    DirectionPositiveInclusive, // "?+="
+    /// All coordinates at or below source on this axis
+    DirectionNegativeInclusive, // "?-="
+    /// Single coordinate at offset from source
+    Offset(i32), // "?+N" or "?-N"
+    /// Inclusive range relative to source [src+lo, src+hi]
+    Range(i32, i32), // "?-A:?+B"
 }
 
 // Custom serialization to convert PatternElement back to JSON properly
@@ -185,6 +197,30 @@ impl Serialize for PatternElement {
             PatternElement::Wildcard => serializer.serialize_str("*"),
             PatternElement::Skip => serializer.serialize_str("?"),
             PatternElement::Exclude => serializer.serialize_str("!"),
+            PatternElement::DirectionPositive => serializer.serialize_str("?+"),
+            PatternElement::DirectionNegative => serializer.serialize_str("?-"),
+            PatternElement::DirectionPositiveInclusive => serializer.serialize_str("?+="),
+            PatternElement::DirectionNegativeInclusive => serializer.serialize_str("?-="),
+            PatternElement::Offset(off) => {
+                if *off >= 0 {
+                    serializer.serialize_str(&format!("?+{}", off))
+                } else {
+                    serializer.serialize_str(&format!("?{}", off))
+                }
+            }
+            PatternElement::Range(lo, hi) => {
+                let lo_str = if *lo >= 0 {
+                    format!("?+{}", lo)
+                } else {
+                    format!("?{}", lo)
+                };
+                let hi_str = if *hi >= 0 {
+                    format!("?+{}", hi)
+                } else {
+                    format!("?{}", hi)
+                };
+                serializer.serialize_str(&format!("{}:{}", lo_str, hi_str))
+            }
         }
     }
 }
@@ -206,19 +242,62 @@ impl<'de> Deserialize<'de> for PatternElement {
                     ))
                 }
             }
-            serde_json::Value::String(s) => match s.as_str() {
-                "*" => Ok(PatternElement::Wildcard),
-                "?" => Ok(PatternElement::Skip),
-                "!" => Ok(PatternElement::Exclude),
-                _ => Err(serde::de::Error::custom(format!(
-                    "Unknown pattern element: {}",
-                    s
-                ))),
-            },
+            serde_json::Value::String(s) => Self::parse_string(&s)
+                .ok_or_else(|| serde::de::Error::custom(format!("Unknown pattern element: {}", s))),
             _ => Err(serde::de::Error::custom(
                 "Pattern element must be number or string",
             )),
         }
+    }
+}
+
+impl PatternElement {
+    /// Parse a pattern element from its string representation.
+    pub fn parse_string(s: &str) -> Option<Self> {
+        match s {
+            "*" => Some(PatternElement::Wildcard),
+            "?" => Some(PatternElement::Skip),
+            "!" => Some(PatternElement::Exclude),
+            "?+" => Some(PatternElement::DirectionPositive),
+            "?-" => Some(PatternElement::DirectionNegative),
+            "?+=" => Some(PatternElement::DirectionPositiveInclusive),
+            "?-=" => Some(PatternElement::DirectionNegativeInclusive),
+            _ => {
+                if let Some(range) = Self::try_parse_range(s) {
+                    return Some(range);
+                }
+                if let Some(offset) = Self::try_parse_offset(s) {
+                    return Some(offset);
+                }
+                None
+            }
+        }
+    }
+
+    fn try_parse_range(s: &str) -> Option<Self> {
+        let parts: Vec<&str> = s.split(':').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+        let lo = Self::extract_relative_offset(parts[0])?;
+        let hi = Self::extract_relative_offset(parts[1])?;
+        Some(PatternElement::Range(lo, hi))
+    }
+
+    fn try_parse_offset(s: &str) -> Option<Self> {
+        let offset = Self::extract_relative_offset(s)?;
+        Some(PatternElement::Offset(offset))
+    }
+
+    fn extract_relative_offset(s: &str) -> Option<i32> {
+        if !s.starts_with('?') {
+            return None;
+        }
+        let rest = &s[1..];
+        if rest.is_empty() || rest == "+" || rest == "-" || rest == "+=" || rest == "-=" {
+            return None;
+        }
+        rest.parse::<i32>().ok()
     }
 }
 

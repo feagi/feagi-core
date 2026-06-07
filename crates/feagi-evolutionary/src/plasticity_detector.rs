@@ -100,6 +100,8 @@ pub struct MemoryAreaProperties {
     pub lifespan_growth_rate: f32,
     /// Initial lifespan for newly created memory neurons
     pub init_lifespan: u32,
+    /// When true, membrane potentials are captured and stored with replay frames
+    pub mp_learning_enabled: bool,
 }
 
 impl Default for MemoryAreaProperties {
@@ -111,6 +113,7 @@ impl Default for MemoryAreaProperties {
             longterm_threshold: 100,
             lifespan_growth_rate: 1.0,
             init_lifespan: 9,
+            mp_learning_enabled: false,
         }
     }
 }
@@ -153,6 +156,10 @@ pub fn extract_memory_properties(
             .get("init_lifespan")
             .and_then(|v| v.as_u64())
             .unwrap_or(9) as u32,
+        mp_learning_enabled: properties
+            .get("mp_learning_enabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
     })
 }
 

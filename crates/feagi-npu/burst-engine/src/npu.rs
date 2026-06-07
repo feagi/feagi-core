@@ -379,6 +379,11 @@ pub struct RustNPU<
     memory_neuron_longterm_predicate: std::sync::RwLock<Option<MemoryNeuronPredicate>>,
     /// @cursor:critical-path — only allocated when at least one cortical area enables rate-modulated leak.
     rate_modulated_leak: std::sync::Mutex<RateModulatedLeakRegistry>,
+
+    /// Conditional gate configurations: maps (src_cortical_idx, dst_cortical_idx) to
+    /// the gate cortical area index. Used to check the fire queue each burst and compute
+    /// which gates are closed before propagation.
+    gate_configs: std::sync::RwLock<AHashMap<CorticalMappingKey, u32>>,
 }
 
 const POWER_NEURON_UNSET: u32 = u32::MAX;
@@ -430,6 +435,10 @@ pub struct MemoryReplayFrame {
     pub offset: u32,
     pub upstream_area_idx: u32,
     pub coords: Vec<(u32, u32, u32)>,
+    /// Per-coordinate membrane potentials for MP-aware replay.
+    /// When Some, replay injects each coordinate at its stored potential
+    /// instead of the fixed twin target potential.
+    pub membrane_potentials: Option<Vec<f32>>,
 }
 
 #[derive(Debug, Clone)]
@@ -443,7 +452,17 @@ pub(crate) struct ReplayInjection {
     target_burst: u64,
     twin_area_idx: u32,
     coords: Vec<(u32, u32, u32)>,
-    potential: f32,
+    /// Replay potential mode: fixed for all coords or per-coordinate.
+    potentials: ReplayPotentialMode,
+}
+
+/// How membrane potentials are applied during twin area replay injection.
+#[derive(Debug, Clone)]
+pub(crate) enum ReplayPotentialMode {
+    /// All coordinates replayed at a single fixed potential (default behavior).
+    Fixed(f32),
+    /// Each coordinate replayed at its own stored potential.
+    PerCoordinate(Vec<f32>),
 }
 
 impl<
@@ -522,6 +541,7 @@ impl<
             memory_neuron_assoc_predicate: std::sync::RwLock::new(None),
             memory_neuron_longterm_predicate: std::sync::RwLock::new(None),
             rate_modulated_leak: std::sync::Mutex::new(RateModulatedLeakRegistry::default()),
+            gate_configs: std::sync::RwLock::new(AHashMap::new()),
         })
     }
 }
@@ -1944,6 +1964,15 @@ impl<
         replay_frames.insert(neuron_id, std::sync::Arc::new(frames));
     }
 
+    /// Get stored replay frames for a memory neuron (for EMA averaging on reactivation).
+    pub fn get_memory_replay_frames(
+        &self,
+        neuron_id: u32,
+    ) -> Option<std::sync::Arc<Vec<MemoryReplayFrame>>> {
+        let replay_frames = self.memory_replay_frames.read().unwrap();
+        replay_frames.get(&neuron_id).cloned()
+    }
+
     /// Register the twin cortical area for replay from a memory area and upstream area.
     pub fn register_memory_twin_mapping(
         &mut self,
@@ -2005,7 +2034,10 @@ impl<
                             target_burst: burst_count + frame.offset as u64 + 1,
                             twin_area_idx: target.twin_area_idx,
                             coords: frame.coords.clone(),
-                            potential: target.potential,
+                            potentials: match &frame.membrane_potentials {
+                                Some(mps) => ReplayPotentialMode::PerCoordinate(mps.clone()),
+                                None => ReplayPotentialMode::Fixed(target.potential),
+                            },
                         });
                     scheduled += 1;
                 }
@@ -2094,9 +2126,22 @@ impl<
             for replay in replay_due.into_iter() {
                 let neuron_ids =
                     neuron_storage.batch_coordinate_lookup(replay.twin_area_idx, &replay.coords);
-                for idx in neuron_ids.into_iter().flatten() {
-                    staged.push((NeuronId(idx as u32), replay.potential));
-                    total_replay_candidates += 1;
+                match &replay.potentials {
+                    ReplayPotentialMode::Fixed(potential) => {
+                        for idx in neuron_ids.into_iter().flatten() {
+                            staged.push((NeuronId(idx as u32), *potential));
+                            total_replay_candidates += 1;
+                        }
+                    }
+                    ReplayPotentialMode::PerCoordinate(mps) => {
+                        for (i, opt_idx) in neuron_ids.into_iter().enumerate() {
+                            if let Some(idx) = opt_idx {
+                                let mp = mps.get(i).copied().unwrap_or(1.0);
+                                staged.push((NeuronId(idx as u32), mp));
+                                total_replay_candidates += 1;
+                            }
+                        }
+                    }
                 }
             }
             tracing::debug!(
@@ -2342,6 +2387,37 @@ impl<
                     neuron_mps.insert(neuron.neuron_id, mp);
                 }
             }
+
+            // Compute conditional gate states before propagation. For each gated mapping,
+            // check if the gate area has any firing neurons in the current burst's fire queue.
+            // If not, mark the mapping as closed so propagation skips those synapses.
+            if propagation_engine.has_gate_mappings() {
+                let gate_configs = self.gate_configs.read().unwrap();
+                let mut closed = ahash::AHashSet::new();
+                for (&(src_idx, dst_idx), &gate_idx) in gate_configs.iter() {
+                    let gate_active = dynamics_result
+                        .fire_queue
+                        .neurons_by_area
+                        .get(&gate_idx)
+                        .map(|neurons| !neurons.is_empty())
+                        .unwrap_or(false);
+                    if !gate_active {
+                        if let (Some(src_name), Some(dst_name)) = (
+                            self.get_cortical_area_name(src_idx),
+                            self.get_cortical_area_name(dst_idx),
+                        ) {
+                            if let (Ok(src_id), Ok(dst_id)) = (
+                                CorticalID::try_from_base_64(&src_name),
+                                CorticalID::try_from_base_64(&dst_name),
+                            ) {
+                                closed.insert((src_id, dst_id));
+                            }
+                        }
+                    }
+                }
+                propagation_engine.set_closed_gates(closed);
+            }
+
             let delayed =
                 propagation_engine.propagate_delayed(&fired_ids, &*synapse_storage, &neuron_mps)?;
             fire_structures
@@ -4614,6 +4690,111 @@ impl<
         self.stdp_mappings.write().unwrap().remove(&key).is_some()
     }
 
+    /// Register a conditional gate on a cortical mapping A→B.
+    ///
+    /// When registered, all synapses from `src_cortical_idx` to `dst_cortical_idx` will
+    /// produce zero contribution during propagation if `gate_cortical_idx` has no neuron
+    /// firing in the same burst (transistor-OFF semantics). When the gate area fires,
+    /// propagation proceeds normally (transistor-ON).
+    ///
+    /// The gate area's CorticalID is resolved from its index and stored on the
+    /// propagation engine for use during the parallel propagation pass.
+    pub fn register_gate_mapping(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        gate_cortical_idx: u32,
+    ) -> Result<()> {
+        let src_name = self
+            .get_cortical_area_name(src_cortical_idx)
+            .ok_or_else(|| {
+                FeagiError::RuntimeError(format!(
+                    "Gate registration: unknown source cortical area idx {}",
+                    src_cortical_idx
+                ))
+            })?;
+        let dst_name = self
+            .get_cortical_area_name(dst_cortical_idx)
+            .ok_or_else(|| {
+                FeagiError::RuntimeError(format!(
+                    "Gate registration: unknown destination cortical area idx {}",
+                    dst_cortical_idx
+                ))
+            })?;
+        let gate_name = self
+            .get_cortical_area_name(gate_cortical_idx)
+            .ok_or_else(|| {
+                FeagiError::RuntimeError(format!(
+                    "Gate registration: unknown gate cortical area idx {}",
+                    gate_cortical_idx
+                ))
+            })?;
+
+        let src_id = CorticalID::try_from_base_64(&src_name).map_err(|e| {
+            FeagiError::RuntimeError(format!("Gate registration: invalid src CorticalID: {}", e))
+        })?;
+        let dst_id = CorticalID::try_from_base_64(&dst_name).map_err(|e| {
+            FeagiError::RuntimeError(format!("Gate registration: invalid dst CorticalID: {}", e))
+        })?;
+        let gate_id = CorticalID::try_from_base_64(&gate_name).map_err(|e| {
+            FeagiError::RuntimeError(format!("Gate registration: invalid gate CorticalID: {}", e))
+        })?;
+
+        self.gate_configs
+            .write()
+            .unwrap()
+            .insert((src_cortical_idx, dst_cortical_idx), gate_cortical_idx);
+
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .register_gate_mapping(src_id, dst_id, gate_id);
+
+        tracing::debug!(
+            target: "feagi-npu",
+            "Registered conditional gate: mapping {} -> {} gated by area {} (idx={})",
+            src_name,
+            dst_name,
+            gate_name,
+            gate_cortical_idx
+        );
+
+        Ok(())
+    }
+
+    /// Remove the conditional gate from a cortical mapping A→B.
+    pub fn unregister_gate_mapping(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+    ) -> bool {
+        let removed = self
+            .gate_configs
+            .write()
+            .unwrap()
+            .remove(&(src_cortical_idx, dst_cortical_idx))
+            .is_some();
+
+        if removed {
+            if let (Some(src_name), Some(dst_name)) = (
+                self.get_cortical_area_name(src_cortical_idx),
+                self.get_cortical_area_name(dst_cortical_idx),
+            ) {
+                if let (Ok(src_id), Ok(dst_id)) = (
+                    CorticalID::try_from_base_64(&src_name),
+                    CorticalID::try_from_base_64(&dst_name),
+                ) {
+                    self.propagation_engine
+                        .write()
+                        .unwrap()
+                        .unregister_gate_mapping(src_id, dst_id);
+                }
+            }
+        }
+
+        removed
+    }
+
     fn rebuild_stdp_mapping_index(&self) {
         let mappings = self.stdp_mappings.read().unwrap().clone();
         if mappings.is_empty() {
@@ -5450,6 +5631,34 @@ impl<
             .get_tracked_windows()
     }
 
+    /// Enable membrane potential archival for a tracked area in the FireLedger.
+    /// The area must already be tracked via `configure_fire_ledger_window`.
+    pub fn enable_fire_ledger_mp_archival(&mut self, cortical_idx: u32) -> Result<()> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .fire_ledger
+            .enable_mp_archival(cortical_idx)
+            .map_err(|e| {
+                FeagiError::RuntimeError(format!("FireLedger MP archival enable failed: {e}"))
+            })
+    }
+
+    /// Get dense MP window for a tracked area (membrane potentials per neuron per timestep).
+    pub fn get_fire_ledger_dense_window_mp(
+        &self,
+        cortical_idx: u32,
+        end_timestep: u64,
+        depth: usize,
+    ) -> Result<Vec<(u64, AHashMap<u32, f32>)>> {
+        self.fire_structures
+            .lock()
+            .unwrap()
+            .fire_ledger
+            .get_dense_window_mp(cortical_idx, end_timestep, depth)
+            .map_err(|e| FeagiError::RuntimeError(format!("FireLedger MP query failed: {e}")))
+    }
+
     /// Track a cortical area on the episodic memory FireLedger (pattern-injection fires only).
     pub fn configure_episodic_memory_fire_ledger_window(
         &mut self,
@@ -5935,7 +6144,7 @@ mod tests {
                     target_burst: 0,
                     twin_area_idx: 3,
                     coords: vec![(0, 0, 0)],
-                    potential: 10.0,
+                    potentials: ReplayPotentialMode::Fixed(10.0),
                 });
         }
 

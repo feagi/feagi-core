@@ -142,6 +142,7 @@ pub struct RawCorticalArea {
     pub lifespan_growth_rate: Option<f32>,
     pub init_lifespan: Option<u32>,
     pub temporal_depth: Option<u32>,
+    pub mp_learning_enabled: Option<bool>,
     pub consecutive_fire_cnt_max: Option<u32>,
     pub snooze_length: Option<u32>,
 
@@ -591,6 +592,10 @@ impl GenomeParser {
             if let Some(v) = raw_area.temporal_depth {
                 area.properties
                     .insert("temporal_depth".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.mp_learning_enabled {
+                area.properties
+                    .insert("mp_learning_enabled".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.consecutive_fire_cnt_max {
                 area.properties

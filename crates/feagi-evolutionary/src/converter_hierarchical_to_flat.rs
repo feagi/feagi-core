@@ -288,6 +288,7 @@ fn convert_properties_to_flat(
         ("lifespan_growth_rate", ("mem_gr-i", "cx")),
         ("init_lifespan", ("mem_ls-i", "cx")),
         ("temporal_depth", ("tmpdpt-i", "cx")),
+        ("mp_learning_enabled", ("mplrn-b", "cx")),
         ("neuron_excitability", ("excite-f", "nx")),
         ("dev_count", ("devcnt-i", "cx")),
         ("memory_twin_of", ("twinrf-t", "cx")),
@@ -457,6 +458,30 @@ fn pattern_elements_to_json(elements: &[crate::PatternElement]) -> Value {
             crate::PatternElement::Wildcard => json!("*"),
             crate::PatternElement::Skip => json!("?"),
             crate::PatternElement::Exclude => json!("!"),
+            crate::PatternElement::DirectionPositive => json!("?+"),
+            crate::PatternElement::DirectionNegative => json!("?-"),
+            crate::PatternElement::DirectionPositiveInclusive => json!("?+="),
+            crate::PatternElement::DirectionNegativeInclusive => json!("?-="),
+            crate::PatternElement::Offset(off) => {
+                if *off >= 0 {
+                    json!(format!("?+{}", off))
+                } else {
+                    json!(format!("?{}", off))
+                }
+            }
+            crate::PatternElement::Range(lo, hi) => {
+                let lo_str = if *lo >= 0 {
+                    format!("?+{}", lo)
+                } else {
+                    format!("?{}", lo)
+                };
+                let hi_str = if *hi >= 0 {
+                    format!("?+{}", hi)
+                } else {
+                    format!("?{}", hi)
+                };
+                json!(format!("{}:{}", lo_str, hi_str))
+            }
         })
         .collect();
 

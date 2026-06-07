@@ -17,6 +17,7 @@ mod image_filtering_settings;
 mod image_frame;
 mod misc_data;
 mod percentages;
+mod pose_estimation;
 pub mod processing;
 mod raw_imu;
 mod segmented_image_frame;
@@ -27,6 +28,7 @@ pub use image_filtering_settings::ImageFilteringSettings;
 pub use image_frame::ImageFrame;
 pub use misc_data::MiscData;
 pub use percentages::*;
+pub use pose_estimation::{JointPosition, PoseEstimationData};
 pub(crate) use processing::*;
 pub use raw_imu::{
     RawIMU, RAW_IMU_INDEX_ACCELEROMETER, RAW_IMU_INDEX_GYROSCOPE, RAW_IMU_INDEX_MAGNETOMETER,

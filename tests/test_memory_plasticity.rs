@@ -345,6 +345,7 @@ fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
         m1_temporal_depth as u32,
         m1_upstream,
         None,
+        false,
     );
     service.register_memory_area(
         m2_idx,
@@ -352,6 +353,7 @@ fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
         m2_temporal_depth as u32,
         m2_upstream,
         None,
+        false,
     );
 
     let (l1_neuron, l2_neuron) = {
@@ -575,6 +577,7 @@ fn apply_plasticity_commands(npu: &Arc<TracingMutex<DynamicNPU>>, commands: &[Pl
                             offset: frame.offset,
                             upstream_area_idx: frame.upstream_area_idx,
                             coords: frame.coords.clone(),
+                            membrane_potentials: frame.membrane_potentials.clone(),
                         })
                         .collect();
                     npu_lock.register_memory_replay_frames(*neuron_id, frames);
@@ -628,6 +631,7 @@ fn apply_plasticity_commands_with_manager(
                             offset: frame.offset,
                             upstream_area_idx: frame.upstream_area_idx,
                             coords: frame.coords.clone(),
+                            membrane_potentials: frame.membrane_potentials.clone(),
                         })
                         .collect();
                     npu_lock.register_memory_replay_frames(*neuron_id, frames);
@@ -657,6 +661,7 @@ fn test_memory_area_registration_tracks_fire_ledger() {
         temporal_depth,
         vec![upstream_idx],
         None,
+        false,
     );
 
     let configs = npu.lock().unwrap().get_all_fire_ledger_configs();
@@ -678,7 +683,7 @@ fn test_upstream_firing_is_available_for_pattern_detection() {
         feagi_npu_plasticity::create_memory_stats_cache(),
         npu.clone(),
     );
-    service.register_memory_area(100, "mem_00".to_string(), 1, vec![7], None);
+    service.register_memory_area(100, "mem_00".to_string(), 1, vec![7], None, false);
 
     let upstream_neuron_id = {
         let npu_lock = npu.lock().unwrap();
@@ -743,7 +748,7 @@ fn test_memory_command_flow_creates_and_reactivates() {
         npu.clone(),
     );
     service.start();
-    service.register_memory_area(100, "mem_00".to_string(), 1, vec![7], None);
+    service.register_memory_area(100, "mem_00".to_string(), 1, vec![7], None, false);
 
     let upstream_neuron_id = {
         let npu_lock = npu.lock().unwrap();
@@ -799,7 +804,7 @@ fn test_insufficient_history_blocks_pattern_detection_until_ready() {
         npu.clone(),
     );
     service.start();
-    service.register_memory_area(100, "mem_00".to_string(), 2, vec![7], None);
+    service.register_memory_area(100, "mem_00".to_string(), 2, vec![7], None, false);
 
     let upstream_neuron_id = {
         let npu_lock = npu.lock().unwrap();
@@ -836,7 +841,7 @@ fn test_memory_area_temporal_depth_zero_never_detects() {
         npu.clone(),
     );
     service.start();
-    service.register_memory_area(100, "mem_00".to_string(), 0, vec![7], None);
+    service.register_memory_area(100, "mem_00".to_string(), 0, vec![7], None, false);
 
     let upstream_neuron_id = {
         let npu_lock = npu.lock().unwrap();
@@ -864,7 +869,7 @@ fn test_memory_area_with_no_upstream_areas_emits_no_commands() {
         npu.clone(),
     );
     service.start();
-    service.register_memory_area(100, "mem_00".to_string(), 1, Vec::new(), None);
+    service.register_memory_area(100, "mem_00".to_string(), 1, Vec::new(), None, false);
 
     let upstream_neuron_id = {
         let npu_lock = npu.lock().unwrap();
@@ -893,7 +898,7 @@ fn test_multi_upstream_memory_area_requires_full_history_window() {
         npu.clone(),
     );
     service.start();
-    service.register_memory_area(100, "mem_00".to_string(), 2, vec![7, 8], None);
+    service.register_memory_area(100, "mem_00".to_string(), 2, vec![7, 8], None, false);
 
     let burst1 = {
         let mut npu_lock = npu.lock().unwrap();
@@ -941,7 +946,7 @@ fn test_late_notify_with_temporal_depth_one_misses_history() {
         npu.clone(),
     );
     service.start();
-    service.register_memory_area(100, "mem_00".to_string(), 1, vec![7], None);
+    service.register_memory_area(100, "mem_00".to_string(), 1, vec![7], None, false);
 
     let upstream_neuron_id = {
         let npu_lock = npu.lock().unwrap();
@@ -981,7 +986,7 @@ fn test_late_notify_with_temporal_depth_two_still_misses() {
         npu.clone(),
     );
     service.start();
-    service.register_memory_area(100, "mem_00".to_string(), 2, vec![7], None);
+    service.register_memory_area(100, "mem_00".to_string(), 2, vec![7], None, false);
 
     let upstream_neuron_id = {
         let npu_lock = npu.lock().unwrap();
@@ -1026,6 +1031,7 @@ fn test_longterm_memory_converts_and_never_dies() {
         1,
         vec![7],
         Some(lifecycle_config),
+        false,
     );
 
     let upstream_neuron_id = {
@@ -1099,6 +1105,7 @@ fn test_memory_neuron_count_stalls_with_limited_unique_patterns() {
         1,
         vec![7],
         Some(lifecycle_config),
+        false,
     );
 
     let sequence = [0usize, 1, 2, 0, 1, 2, 0, 1, 2, 0];
@@ -1197,6 +1204,7 @@ fn test_memory_replay_injects_twin_area() {
         1,
         vec![upstream_idx],
         None,
+        false,
     );
 
     let upstream_neuron_id = {
@@ -1278,6 +1286,7 @@ fn test_connectome_resolves_memory_neuron_cortical_idx_for_inspector_peers() {
         1,
         vec![7],
         None,
+        false,
     );
     executor.start();
 
@@ -1317,5 +1326,167 @@ fn test_connectome_resolves_memory_neuron_cortical_idx_for_inspector_peers() {
         manager.get_neuron_cortical_idx_opt(memory_nid as u64),
         Some(100u32),
         "Inspector peer resolution must map memory neuron id to its memory cortical index"
+    );
+}
+
+#[test]
+fn test_mp_learning_enabled_captures_membrane_potentials_in_replay_frames() {
+    let npu = build_npu("memory-mp-learning-npu");
+    create_single_neuron_area(&npu, 7, "upstream");
+
+    let service = PlasticityService::new(
+        PlasticityConfig::default(),
+        feagi_npu_plasticity::create_memory_stats_cache(),
+        npu.clone(),
+    );
+    service.start();
+    service.register_memory_area(100, "mem_00".to_string(), 1, vec![7], None, true);
+
+    let upstream_neuron_id = {
+        let npu_lock = npu.lock().unwrap();
+        npu_lock.get_neurons_in_cortical_area(7)[0]
+    };
+
+    let burst = inject_and_burst(&npu, upstream_neuron_id, 42.0);
+    service.notify_burst(burst);
+
+    let commands = wait_for_commands(&service);
+    let replay_frames = commands
+        .iter()
+        .find_map(|cmd| match cmd {
+            PlasticityCommand::InjectMemoryNeuronToFCL { replay_frames, .. } => {
+                Some(replay_frames.clone())
+            }
+            _ => None,
+        })
+        .expect("Expected replay frames from memory command");
+
+    assert!(
+        !replay_frames.is_empty(),
+        "Replay frames should not be empty"
+    );
+    let frame = &replay_frames[0];
+    assert!(
+        frame.membrane_potentials.is_some(),
+        "MP learning enabled should produce membrane_potentials in replay frames"
+    );
+    let mps = frame.membrane_potentials.as_ref().unwrap();
+    assert_eq!(
+        mps.len(),
+        frame.coords.len(),
+        "membrane_potentials length must match coords length"
+    );
+    assert!(
+        mps[0] > 0.0,
+        "Stored membrane potential should be positive (injected 42.0)"
+    );
+}
+
+#[test]
+fn test_mp_learning_disabled_does_not_capture_membrane_potentials() {
+    let npu = build_npu("memory-mp-disabled-npu");
+    create_single_neuron_area(&npu, 7, "upstream");
+
+    let service = PlasticityService::new(
+        PlasticityConfig::default(),
+        feagi_npu_plasticity::create_memory_stats_cache(),
+        npu.clone(),
+    );
+    service.start();
+    service.register_memory_area(100, "mem_00".to_string(), 1, vec![7], None, false);
+
+    let upstream_neuron_id = {
+        let npu_lock = npu.lock().unwrap();
+        npu_lock.get_neurons_in_cortical_area(7)[0]
+    };
+
+    let burst = inject_and_burst(&npu, upstream_neuron_id, 42.0);
+    service.notify_burst(burst);
+
+    let commands = wait_for_commands(&service);
+    let replay_frames = commands
+        .iter()
+        .find_map(|cmd| match cmd {
+            PlasticityCommand::InjectMemoryNeuronToFCL { replay_frames, .. } => {
+                Some(replay_frames.clone())
+            }
+            _ => None,
+        })
+        .expect("Expected replay frames from memory command");
+
+    assert!(
+        !replay_frames.is_empty(),
+        "Replay frames should not be empty"
+    );
+    let frame = &replay_frames[0];
+    assert!(
+        frame.membrane_potentials.is_none(),
+        "MP learning disabled should NOT produce membrane_potentials"
+    );
+}
+
+#[test]
+fn test_mp_ema_averaging_on_reactivation() {
+    let npu = build_npu("memory-mp-ema-npu");
+    create_single_neuron_area(&npu, 7, "upstream");
+
+    let service = PlasticityService::new(
+        PlasticityConfig::default(),
+        feagi_npu_plasticity::create_memory_stats_cache(),
+        npu.clone(),
+    );
+    service.start();
+    service.register_memory_area(100, "mem_00".to_string(), 1, vec![7], None, true);
+
+    let upstream_neuron_id = {
+        let npu_lock = npu.lock().unwrap();
+        npu_lock.get_neurons_in_cortical_area(7)[0]
+    };
+
+    // First presentation with MP=10.0
+    let burst1 = inject_and_burst(&npu, upstream_neuron_id, 10.0);
+    service.notify_burst(burst1);
+    let commands1 = wait_for_commands(&service);
+    apply_plasticity_commands(&npu, &commands1);
+
+    let first_mp = commands1
+        .iter()
+        .find_map(|cmd| match cmd {
+            PlasticityCommand::InjectMemoryNeuronToFCL { replay_frames, .. } => replay_frames
+                .first()
+                .and_then(|f| f.membrane_potentials.as_ref())
+                .and_then(|mps| mps.first().copied()),
+            _ => None,
+        })
+        .expect("First presentation should have MP");
+
+    // Second presentation with MP=20.0 -- should trigger reactivation with EMA averaging
+    let burst2 = inject_and_burst(&npu, upstream_neuron_id, 20.0);
+    service.notify_burst(burst2);
+    let commands2 = wait_for_commands(&service);
+
+    let reactivation_mp = commands2
+        .iter()
+        .find_map(|cmd| match cmd {
+            PlasticityCommand::InjectMemoryNeuronToFCL {
+                replay_frames,
+                is_reactivation,
+                ..
+            } if *is_reactivation => replay_frames
+                .first()
+                .and_then(|f| f.membrane_potentials.as_ref())
+                .and_then(|mps| mps.first().copied()),
+            _ => None,
+        })
+        .expect("Reactivation should have averaged MP");
+
+    // EMA: (first_mp + 20.0) / 2.0
+    let expected = (first_mp + 20.0) / 2.0;
+    assert!(
+        (reactivation_mp - expected).abs() < 0.01,
+        "EMA averaging failed: got {} expected {} (first_mp={})",
+        reactivation_mp,
+        expected,
+        first_mp
     );
 }

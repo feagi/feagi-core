@@ -541,3 +541,173 @@ define_xyz_mapping!(MiscDataDimensions, ImageXYZDimensions);
 define_xyz_mapping!(MiscDataDimensions, CorticalChannelDimensions);
 
 //endregion
+
+//region Pose Estimation
+
+/// Properties describing a pose estimation cortical area's spatial dimensions.
+///
+/// `width` and `height` define the spatial resolution of the XY plane (joint location precision).
+/// `depth` is the number of joints (Z layers), e.g. 17 for COCO keypoints.
+///
+/// The pose schema (HumanBody, HumanHand, Quadruped, etc.) is encoded in the cortical ID
+/// bitmask and does not need to be stored here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PoseEstimationProperties {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+}
+
+impl PoseEstimationProperties {
+    pub fn new(width: u32, height: u32, depth: u32) -> Result<Self, FeagiDataError> {
+        if width == 0 || height == 0 || depth == 0 {
+            return Err(FeagiDataError::BadParameters(
+                "PoseEstimationProperties dimensions must all be non-zero".into(),
+            ));
+        }
+        Ok(PoseEstimationProperties {
+            width,
+            height,
+            depth,
+        })
+    }
+}
+
+impl Display for PoseEstimationProperties {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "PoseEstimation({}x{}x{})",
+            self.width, self.height, self.depth
+        )
+    }
+}
+
+//endregion
+
+//region Spatial Pointer
+
+/// Properties describing a SpatialPointer cortical area.
+///
+/// `width`, `height`, and `depth` define the per-channel voxel grid the decoder reads.
+///
+/// The remaining fields configure the Incremental decode mode (see `FrameChangeHandling`).
+/// They are unused in Absolute mode and are therefore optional at the serialization
+/// boundary so that Absolute producers do not need to supply them. When the owning area
+/// is registered as Incremental they are mandatory: the decoder fails fast (no fallback)
+/// if either is missing, non-finite, or non-positive.
+///
+/// * `window_ms` - rolling-window length, in milliseconds, over which neuron-activity
+///   centroids are accumulated to estimate motion.
+/// * `max_axis_velocity` - full-scale motion magnitude, in normalized-units per second,
+///   that maps to the extremes of the 0.5-centered output encoding. A per-axis velocity
+///   of `+max_axis_velocity` encodes to 1.0 and `-max_axis_velocity` encodes to 0.0.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SpatialPointerProperties {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+    #[serde(default)]
+    pub window_ms: Option<u32>,
+    #[serde(default)]
+    pub max_axis_velocity: Option<f32>,
+}
+
+impl SpatialPointerProperties {
+    /// Creates properties for an Absolute-mode SpatialPointer area.
+    ///
+    /// The Incremental-only fields are left unset; using these properties with an
+    /// Incremental area will be rejected by the decoder constructor.
+    pub fn new_absolute(width: u32, height: u32, depth: u32) -> Result<Self, FeagiDataError> {
+        Self::validate_dimensions(width, height, depth)?;
+        Ok(SpatialPointerProperties {
+            width,
+            height,
+            depth,
+            window_ms: None,
+            max_axis_velocity: None,
+        })
+    }
+
+    /// Creates properties for an Incremental-mode SpatialPointer area.
+    ///
+    /// Validates the rolling-window length and full-scale velocity up front so that
+    /// invalid configuration is rejected at construction rather than at decode time.
+    pub fn new_incremental(
+        width: u32,
+        height: u32,
+        depth: u32,
+        window_ms: u32,
+        max_axis_velocity: f32,
+    ) -> Result<Self, FeagiDataError> {
+        Self::validate_dimensions(width, height, depth)?;
+        Self::validate_window_ms(window_ms)?;
+        Self::validate_max_axis_velocity(max_axis_velocity)?;
+        Ok(SpatialPointerProperties {
+            width,
+            height,
+            depth,
+            window_ms: Some(window_ms),
+            max_axis_velocity: Some(max_axis_velocity),
+        })
+    }
+
+    /// Returns the validated Incremental parameters, or an error explaining which one
+    /// is missing or invalid. Intended to be called by the decoder when the owning area
+    /// uses Incremental frame-change handling.
+    pub fn require_incremental_parameters(&self) -> Result<(u32, f32), FeagiDataError> {
+        let window_ms = self.window_ms.ok_or_else(|| {
+            FeagiDataError::BadParameters(
+                "Incremental SpatialPointer requires 'window_ms' in decoder properties".into(),
+            )
+        })?;
+        let max_axis_velocity = self.max_axis_velocity.ok_or_else(|| {
+            FeagiDataError::BadParameters(
+                "Incremental SpatialPointer requires 'max_axis_velocity' in decoder properties"
+                    .into(),
+            )
+        })?;
+        Self::validate_window_ms(window_ms)?;
+        Self::validate_max_axis_velocity(max_axis_velocity)?;
+        Ok((window_ms, max_axis_velocity))
+    }
+
+    fn validate_dimensions(width: u32, height: u32, depth: u32) -> Result<(), FeagiDataError> {
+        if width == 0 || height == 0 || depth == 0 {
+            return Err(FeagiDataError::BadParameters(
+                "SpatialPointerProperties dimensions must all be non-zero".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_window_ms(window_ms: u32) -> Result<(), FeagiDataError> {
+        if window_ms == 0 {
+            return Err(FeagiDataError::BadParameters(
+                "SpatialPointer 'window_ms' must be greater than zero".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_max_axis_velocity(max_axis_velocity: f32) -> Result<(), FeagiDataError> {
+        if !max_axis_velocity.is_finite() || max_axis_velocity <= 0.0 {
+            return Err(FeagiDataError::BadParameters(
+                "SpatialPointer 'max_axis_velocity' must be a finite, positive value".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl Display for SpatialPointerProperties {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "SpatialPointer({}x{}x{}, window_ms={:?}, max_axis_velocity={:?})",
+            self.width, self.height, self.depth, self.window_ms, self.max_axis_velocity
+        )
+    }
+}
+
+//endregion
