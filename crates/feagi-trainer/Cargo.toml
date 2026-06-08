@@ -1,0 +1,22 @@
+[package]
+name = "feagi-trainer"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "FEAGI Trainer - open-source train/evaluate/benchmark engine for FEAGI spiking neural brains"
+
+[lib]
+name = "feagi_trainer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "feagi-trainer"
+path = "src/main.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

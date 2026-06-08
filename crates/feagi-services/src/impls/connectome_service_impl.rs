@@ -1275,7 +1275,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
             dev_count: area
                 .properties
                 .get("dev_count")
-                .and_then(|v| v.as_u64().map(|n| n as usize)),
+                .and_then(|v| {
+                    v.as_u64()
+                        .map(|n| n as usize)
+                        .or_else(|| v.as_f64().map(|n| n as usize))
+                        .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+                }),
             cortical_dimensions_per_device: {
                 // Try to get from properties first
                 let from_properties = area
@@ -1299,7 +1304,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     if let Some(dev_count) = area
                         .properties
                         .get("dev_count")
-                        .and_then(|v| v.as_u64().map(|n| n as usize))
+                        .and_then(|v| {
+                            v.as_u64()
+                                .map(|n| n as usize)
+                                .or_else(|| v.as_f64().map(|n| n as usize))
+                                .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+                        })
                     {
                         let total_width = area.dimensions.width as usize;
                         let height = area.dimensions.height as usize;

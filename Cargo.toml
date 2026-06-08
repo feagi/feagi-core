@@ -148,6 +148,7 @@ members = [
     "crates/feagi-agent",              # Agent library (Rust client library)
     
     # === Applications ===
+    "crates/feagi-trainer",            # FEAGI Trainer - train/evaluate/benchmark engine (Apache-2.0)
     
     # === Data Processing ===
     "crates/feagi-sensorimotor",                # Sensorimotor System - data processing & encoding (sensory & motor)
