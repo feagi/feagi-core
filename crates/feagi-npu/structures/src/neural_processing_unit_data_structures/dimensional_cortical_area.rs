@@ -1,6 +1,6 @@
-use feagi_npu_neuron_models::shared_traits_and_structs::base_traits_all_devices::NeuronModelData;
-use feagi_npu_neuron_models::shared_traits_and_structs::base_traits_cpu::CorticalModelDataCPU;
-use feagi_npu_neuron_models::shared_traits_and_structs::cortical_configuration::CorticalConfigurationDimensionalCPU;
+use crate::neuron_models::shared_traits_and_structs::base_traits_all_devices::NeuronModelData;
+use crate::neuron_models::shared_traits_and_structs::base_traits_cpu::CorticalModelDataCPU;
+use crate::neuron_models::shared_traits_and_structs::cortical_configuration::CorticalConfigurationDimensionalCPU;
 use feagi_structures::feagi_data::feagi_bitpacking::bitpacking_backends::{BitPacked, BitPackedU32};
 use feagi_structures::feagi_data::feagi_bitpacking::collections::contiguous_vector::BitPackedContiguousBoolVector;
 use feagi_structures::feagi_data::quantizable_spatial::index::SpatialIndexDimensions4D;

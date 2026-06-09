@@ -4,6 +4,6 @@
 
 
 mod global_neuron_chunk_index_table;
-mod typed_neuron_mapping;
-mod typed_membrane_potentials;
-mod typed_fcl_input;
+mod quant_typed_membrane_potentials;
+mod quant_typed_fcl_input;
+mod model_typed_neuron_model_data;

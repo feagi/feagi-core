@@ -3,9 +3,9 @@ use feagi_structures::feagi_data::feagi_pdi::PDIElement;
 use feagi_structures::feagi_data::feagi_pdi::tag_device::{PDITagCPU, PDITagGenericDevice};
 use feagi_structures::feagi_data::quantizable_linear::base_types::{QuantizedDecimalTrait, QuantizedIndexCountTrait};
 use feagi_structures::feagi_data::shared_quantization_sets::{NeuronModelQuantization, FeagiGlobalQuantization};
-use crate::shared_traits_and_structs::base_traits_all_devices::{NeuronModelProcessor, CorticalModelData, NeuronModelData};
-use crate::shared_traits_and_structs::base_traits_cpu::{NeuronModelProcessorCPU, CorticalModelDataCPU, NeuronModelDataCPU};
-use crate::shared_traits_and_structs::cortical_configuration::{CorticalConfiguration, CorticalConfigurationDimensional, CorticalConfigurationDimensionalCPU};
+use crate::neuron_models::shared_traits_and_structs::base_traits_all_devices::{CorticalModelData, NeuronModelData, NeuronModelProcessor};
+use crate::neuron_models::shared_traits_and_structs::base_traits_cpu::{CorticalModelDataCPU, NeuronModelDataCPU, NeuronModelProcessorCPU};
+use crate::neuron_models::shared_traits_and_structs::cortical_configuration::{CorticalConfigurationDimensional, CorticalConfigurationDimensionalCPU};
 // TODO derive macro for cortical data, neuron data trait impls! (take class like CPU)
 
 
@@ -27,13 +27,13 @@ NeuronModelQuantization
 //region Quantization Instantiation
 #[derive(Default)]
 pub enum FeagiStandardModelQuantizationAndDeviceMode {
-    
+
     #[default]
     CPU32Bit(FeagiStandardModelCPU32Bit)
 }
 
 #[derive(Default)]
-pub(crate) struct FeagiStandardModelCPU32Bit;
+pub struct FeagiStandardModelCPU32Bit;
 
 impl NeuronModelQuantization for FeagiStandardModelCPU32Bit {
     type NeuronPotentialQuant = f32;

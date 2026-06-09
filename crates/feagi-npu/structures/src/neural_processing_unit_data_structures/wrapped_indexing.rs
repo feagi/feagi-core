@@ -83,15 +83,20 @@ create_quantized_decimal_wrapper!(NPUneuronFCLInputSecondaryPotential);
 //endregion
 
 
-
+/// Way of defining different neuron models and quantizations using a single u8 identifier
+#[repr(u8)]
+#[derive(Default)]
+pub enum NeuronModelTypeAndQuantizationFlat {
+    #[default]
+    FeagiStandardModel_StandardQuantization = 0, // This should be zero since this is the most common usecase and we check specifically for this
+}
 
 
 
 /// Defines a cortical area with an index unique in the entire NPU
 create_quantized_index_count_wrapper!(NPUCorticalAreaIndexGlobal);
 
-/// Defines a cortical area with an index of the same neuron model type and quantization
-create_quantized_index_count_wrapper!(NPUCorticalAreaIndexModelQuantizationLocal);
+
 
 
 

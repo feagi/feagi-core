@@ -5,8 +5,8 @@ use feagi_structures::feagi_data::feagi_pdi::PDIElement;
 use feagi_structures::feagi_data::feagi_pdi::tag_device::PDITagCPU;
 use feagi_structures::feagi_data::quantizable_linear::base_types::QuantizedDecimalTrait;
 use feagi_structures::feagi_data::shared_quantization_sets::{FeagiGlobalQuantization, NeuronModelQuantization};
-use crate::shared_traits_and_structs::base_traits_all_devices::{NeuronModelProcessor, CorticalModelData, NeuronModelData};
-use crate::shared_traits_and_structs::cortical_configuration::{CorticalConfiguration};
+use feagi_npu_structures::neuron_models::::base_traits_all_devices::{NeuronModelProcessor, CorticalModelData, NeuronModelData};
+use feagi_npu_structures::neuron_models::::cortical_configuration::{CorticalConfiguration};
 
 /// Root CPU trait for all cortical data implementations, essentially any cortical level data shared
 /// by all neurons in a cortical area of a given neuron model

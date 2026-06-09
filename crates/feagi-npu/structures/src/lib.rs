@@ -10,3 +10,4 @@ pub mod dynamic_burst_engine_interface;
 pub mod mapping;
 pub mod cortical_area;
 pub mod neural_processing_unit_data_structures;
+pub mod neuron_models;

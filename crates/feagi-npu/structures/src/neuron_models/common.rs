@@ -1,6 +1,5 @@
 use feagi_structures::feagi_data::feagi_pdi::tag_device::PDIDeviceClass;
-use crate::neuron_models::feagi_standard::{FeagiStandardModelQuantizationAndDeviceMode};
-
+use crate::neuron_models::neuron_models::feagi_standard::FeagiStandardModelQuantizationAndDeviceMode;
 // TODO these should probably be macro generated somehow
 
 
@@ -20,14 +19,7 @@ impl NeuronModelQuantizationAndDeviceClass {
 
 }
 
-#[repr(u8)]
-#[derive(Default)]
-pub enum NeuronModelTypeAndQuantizationFlat {
 
-
-    #[default]
-    FeagiStandardModel_Standard32 = 0, // This should be zero since this is the most common usecase and we check specifically for this
-}
 
 #[repr(u8)]
 #[derive(Default)]

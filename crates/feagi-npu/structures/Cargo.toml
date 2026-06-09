@@ -63,7 +63,6 @@ support_64bit_values = [ # Allow 64 bit values (IE: Membrane potentials). Extrem
 
 [dependencies]
 feagi-structures = {path = "../../feagi-structures"}
-feagi-npu-neuron-models = {path = "feagi-npu-neuron-models"}
 serde = { workspace = true, default-features = false, features = [] }
 ahash = { workspace = true, default-features = false, optional = true}
 rayon = { workspace = true, optional = true}

@@ -29,14 +29,14 @@ PDIElement
 #[repr(C)]
 pub(crate) struct NPUGlobalCorticalAreaHeaderCPU<FGQ: FeagiGlobalQuantization, NMQ: NeuronModelQuantization>
 {
-    number_neurons_in_area: FGQ::NeuronIndexCountQuant, // u32
+    number_neurons_in_area: NPUNeuronIndexCorticalLocal<FGQ::NeuronIndexCountQuant>, // u32
     /// The global neuron chunk index of the first neuron chunk of this cortical area
     neuron_chunk_global_index_of_first_cortical_neuron_chunk: NPUNeuronChunkIndexGlobal<FGQ::NeuronIndexCountQuant>, //u32
     // TODO other offsets
 
 
     neuron_chunk_neuron_count: NeuronChunkSize, //u8
-
+    number_firing_neurons_this_burst: NPUNeuronIndexCorticalLocal<FGQ::NeuronIndexCountQuant>,
 }
 
 impl<FGQ: FeagiGlobalQuantization, NMQ: NeuronModelQuantization> NPUGlobalCorticalAreaHeaderCPU<FGQ, NMQ>
@@ -57,8 +57,8 @@ impl<FGQ: FeagiGlobalQuantization, NMQ: NeuronModelQuantization> NPUGlobalCortic
     pub fn get_quant_local_neuron_first_index_from_chunk_global_index(&self, global_neuron_chunk_index: NPUNeuronChunkIndexGlobal<FGQ>) -> NPUNeuronIndexQuantizationLocal<FGQ> {
         todo!()
     }
-    
-    
+
+
 
     pub fn get_fcl_cortical_area_input(&self) -> &[NPUneuronFCLInputPotential<NMQ::NeuronPotentialQuant>] {
         todo!()
@@ -67,7 +67,7 @@ impl<FGQ: FeagiGlobalQuantization, NMQ: NeuronModelQuantization> NPUGlobalCortic
     pub fn get_fcl_cortical_area_input_mut(&mut self) -> &mut [NPUneuronFCLInputPotential<NMQ::NeuronPotentialQuant>] {
         todo!()
     }
-    
+
     pub fn get_cortical_area_membrane_potential(&self) -> &[NPUNeuronMembranePotential<NMQ::NeuronPotentialQuant>] {
         todo!()
     }

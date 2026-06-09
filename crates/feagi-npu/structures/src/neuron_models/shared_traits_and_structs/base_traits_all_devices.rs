@@ -4,7 +4,7 @@
 use feagi_structures::feagi_data::feagi_pdi::PDIElement;
 use feagi_structures::feagi_data::quantizable_linear::base_types::QuantizedDecimalTrait;
 use feagi_structures::feagi_data::shared_quantization_sets::{NeuronModelQuantization, FeagiGlobalQuantization};
-use crate::shared_traits_and_structs::cortical_configuration::CorticalConfiguration;
+use feagi_npu_structures::neuron_models::::cortical_configuration::CorticalConfiguration;
 
 /// Root trait for all cortical data implementations, essentially any cortical level data shared
 /// by all neurons in a cortical area of a given neuron model. This should be extended with only
