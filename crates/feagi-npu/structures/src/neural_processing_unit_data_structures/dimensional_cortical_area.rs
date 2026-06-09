@@ -1,6 +1,6 @@
-use crate::neuron_models::shared_traits_and_structs::base_traits_all_devices::NeuronModelData;
-use crate::neuron_models::shared_traits_and_structs::base_traits_cpu::CorticalModelDataCPU;
-use crate::neuron_models::shared_traits_and_structs::cortical_configuration::CorticalConfigurationDimensionalCPU;
+use crate::neuron_models::base_traits_all_devices::NeuronModelNeuronData;
+use crate::neuron_models::base_traits_cpu::NeuronModelCorticalDataCPU;
+use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::tables::cortical_structure_configuration::cortical_configuration::CorticalConfigurationDimensionalCPU;
 use feagi_structures::feagi_data::feagi_bitpacking::bitpacking_backends::{BitPacked, BitPackedU32};
 use feagi_structures::feagi_data::feagi_bitpacking::collections::contiguous_vector::BitPackedContiguousBoolVector;
 use feagi_structures::feagi_data::quantizable_spatial::index::SpatialIndexDimensions4D;
@@ -13,8 +13,8 @@ use feagi_structures::feagi_data::shared_quantization_sets::{FeagiGlobalQuantiza
 pub(crate) struct NPUDimensionalCorticalAreaCPURayon<FGQ, NMQ, CMD, NMD>
 where FGQ: FeagiGlobalQuantization,
       NMQ: NeuronModelQuantization,
-      CMD: CorticalModelDataCPU<FGQ, NMQ>,
-      NMD: NeuronModelData<FGQ, NMQ>
+      CMD: NeuronModelCorticalDataCPU<FGQ, NMQ>,
+      NMD: NeuronModelNeuronData<FGQ, NMQ>
 {
     pub cortical_configuration: CorticalConfigurationDimensionalCPU<FGQ>,
 
@@ -36,8 +36,8 @@ where FGQ: FeagiGlobalQuantization,
 impl<FGQ, NMQ, CMD, NMD> NPUDimensionalCorticalAreaCPURayon<FGQ, NMQ, CMD, NMD>
 where FGQ: FeagiGlobalQuantization,
       NMQ: NeuronModelQuantization,
-      CMD: CorticalModelDataCPU<FGQ, NMQ>,
-      NMD: NeuronModelData<FGQ, NMQ>
+      CMD: NeuronModelCorticalDataCPU<FGQ, NMQ>,
+      NMD: NeuronModelNeuronData<FGQ, NMQ>
 {
     pub fn new(
         cortical_configuration: CorticalConfigurationDimensionalCPU<FGQ::NeuronIndexCountQuant>,

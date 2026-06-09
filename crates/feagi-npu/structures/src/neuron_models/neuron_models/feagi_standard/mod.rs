@@ -1,6 +1,6 @@
-mod main;
-
-pub use main::*;
+pub mod processor;
+pub mod quantization;
+pub mod data;
 
 
 // TODO better exports!

@@ -101,7 +101,6 @@ feagi-state-manager = {  path = "crates/feagi-state-manager", optional = true }
 
 # Algorithms (vendored)
 feagi-npu-burst-engine = {  path = "crates/feagi-npu/burst-engine", optional = true }
-feagi-npu-neuron-models = {  path = "crates/feagi-npu/structures/feagi-npu-neuron-models" }
 feagi-brain-development = {  path = "crates/feagi-brain-development", optional = true }
 feagi-sensorimotor = {  path = "crates/feagi-sensorimotor", optional = true }
 feagi-npu-plasticity = {  path = "crates/feagi-npu/plasticity", optional = true }

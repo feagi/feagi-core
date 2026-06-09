@@ -3,9 +3,57 @@
 mod neural_processing_unit;
 mod dimensional_cortical_area;
 mod synapse_mappings;
-pub mod neuron;
-pub mod wrapped_indexing;
-pub mod cortical_area;
+
+pub mod global_tables;
+pub mod cortical_quantized_neuron_model;
+pub mod cortical_quantized;
+mod cortical_area_header;
+pub mod synapse_quantized;
+
+pub mod burst_engine_cluster;
+// differentiators
+// 0 is alive [1 bit]
+// 1 neuron membrane quant [3 bit]
+// 2 neuron model [3 bit]
+// 3 neuron model quant [3 bit] -> includes 1 neuron membrane quant
+// 4 cortical area structure type (dimensional?) [2 bit]
+
+// 5 synapse model/type [5 bit]
+// 6 synapse quantization [3 bit]
+
+
+
+// independent tables
+// burst count arr (0 is the current burst, beloiw is by index unique, a delay
+// fclc primary / secondary mapping tables -> global with cortical flag per element (duplicates of this with delay stuff tbd)
+// fcl data (used in different steps) -> under division by mp quant
+// mp data (..)  -> under division by mp quant
+
+// cortical configs (used in different steps)
+
+
+
+
+
+// temp before neuron fire -> fclc filled (sepoerate table logic)
+// condense to fcl
+//### fcl injection ( other device areas, NOT sensor!)
+// condense fcl to dense neuron pointers (mp typed neuron index, mp typed cortical index, cortical flag)
+// // iterate over fcl length array to do this, with data about fcl ranges per fcl index (seperate table) -> generic target index + range + u8 flag table for processing big vectors into small ones? (no dont, too specific)
+// phase, Neuron firing
+// dense neuron pointers
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1878,7 +1878,6 @@ dependencies = [
  "feagi-io",
  "feagi-npu-burst-engine",
  "feagi-npu-neural",
- "feagi-npu-neuron-models",
  "feagi-npu-plasticity",
  "feagi-sensorimotor",
  "feagi-serialization",
@@ -2132,15 +2131,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-npu-neuron-models"
-version = "0.0.11"
-dependencies = [
- "feagi-structures",
- "rayon",
- "serde",
-]
-
-[[package]]
 name = "feagi-npu-plasticity"
 version = "0.0.11"
 dependencies = [
@@ -2174,7 +2164,6 @@ name = "feagi-npu-structures"
 version = "0.0.11"
 dependencies = [
  "ahash",
- "feagi-npu-neuron-models",
  "feagi-structures",
  "half",
  "paste",
