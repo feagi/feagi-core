@@ -122,6 +122,7 @@ fn iris_run_spec() -> RunSpec {
         genome_version_id: None,
         execution_mode: run_spec::ExecutionMode::Embedded,
         backend: BackendKind::Cpu,
+        quantization: None,
     }
 }
 
@@ -143,6 +144,7 @@ fn iris_scorecard() -> Scorecard {
         backend_fingerprint: BackendFingerprint {
             backend: BackendKind::Cpu,
             descriptor: "x86_64-cpu".to_string(),
+            quantization: None,
             trainer_version: env!("CARGO_PKG_VERSION").to_string(),
             feagi_core_version: "0.0.12".to_string(),
         },

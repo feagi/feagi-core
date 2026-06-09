@@ -184,6 +184,21 @@ pub enum OutputType {
     BboxSet,
 }
 
+/// Fingerprint of the brain-under-test's numeric quantization configuration.
+///
+/// Quantization (e.g. 8/16/32/64-bit neuron/synapse storage) is a determinant of results
+/// on the evolving FEAGI NPU direction, so it must be captured in provenance and treated as
+/// part of the brain identity for comparability. Kept as a string `level` + opaque
+/// `details` so the contract does not couple to the in-flight `feagi-data` quantization
+/// enums; the authoritative configuration is anchored by the pinned `connectome_hash`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct QuantizationFingerprint {
+    /// Coarse quantization level descriptor (e.g. `bit8`, `bit16`, `bit32`, `bit64`, `mixed`).
+    pub level: String,
+    /// Opaque, structured detail of the quantization configuration.
+    pub details: serde_json::Value,
+}
+
 /// A scalar-or-list metadata value (the `scalar | list` value type from the IR design).
 ///
 /// Serialized untagged so it maps to natural JSON (`true`, `5`, `5.0`, `"x"`, `[...]`).

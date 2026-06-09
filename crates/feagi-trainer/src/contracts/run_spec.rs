@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use super::common::{
     BackendKind, ConnectomeHash, DatasetVersionId, EvaluationProtocolVersion, GenomeVersionId,
-    PluginRef, RunId, SplitId,
+    PluginRef, QuantizationFingerprint, RunId, SplitId,
 };
 
 /// Wire/format version of the `RunSpec` contract.
@@ -119,6 +119,9 @@ pub struct RunSpec {
     pub execution_mode: ExecutionMode,
     /// Execution backend (CPU baseline; GPU fingerprinted only).
     pub backend: BackendKind,
+    /// Optional quantization fingerprint of the brain under test (forward-compatible with
+    /// the quantization-capable NPU direction; `None` when not applicable).
+    pub quantization: Option<QuantizationFingerprint>,
 }
 
 #[cfg(test)]
@@ -170,6 +173,7 @@ mod tests {
             genome_version_id: None,
             execution_mode: ExecutionMode::Embedded,
             backend: BackendKind::Cpu,
+            quantization: None,
         }
     }
 

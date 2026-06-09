@@ -5,9 +5,15 @@
 //! contains no UI and makes no Composer/cloud calls. The closed-source "FEAGI Trainer" app
 //! consumes it one-way (ADR-006).
 //!
-//! This initial vertical slice exposes the public [`contracts`] (v1): `DatasetManifest`,
-//! `IRSample`, `RunSpec`, and `Scorecard`. Engine wiring (adapters, samplers, encoder/
-//! decoder binding selectors over `feagi-sensorimotor`, metric packs, and deterministic run
-//! execution) lands next.
+//! This vertical slice exposes the public [`contracts`] (v1) and the pure data-pipeline
+//! plugin axes — [`plugins`] interfaces with concrete [`adapters`], [`samplers`], and
+//! [`metrics`] implementations (the IRIS tabular-classification path). The FEAGI binding
+//! selectors and run execution (behind a runtime abstraction, remote/ZMQ first) land next.
 
+pub mod adapters;
+pub mod binding;
 pub mod contracts;
+pub mod error;
+pub mod metrics;
+pub mod plugins;
+pub mod samplers;

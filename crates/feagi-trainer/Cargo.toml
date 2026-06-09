@@ -20,3 +20,8 @@ path = "src/main.rs"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+
+# FEAGI substrate: neuron-voxel data types and the coder/ConnectorCache layer.
+# The encoder/decoder plugins are selectors over these (ADR-006, Appendix B.1).
+feagi-structures = { version = "=0.0.12", path = "../feagi-structures" }
+feagi-sensorimotor = { version = "=0.0.12", path = "../feagi-sensorimotor" }

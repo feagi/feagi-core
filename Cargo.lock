@@ -2216,6 +2216,8 @@ dependencies = [
 name = "feagi-trainer"
 version = "0.0.12"
 dependencies = [
+ "feagi-sensorimotor",
+ "feagi-structures",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
