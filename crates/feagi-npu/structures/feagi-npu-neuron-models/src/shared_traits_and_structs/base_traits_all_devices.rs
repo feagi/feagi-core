@@ -15,7 +15,7 @@ where
     FGQ: FeagiGlobalQuantization,
     NMQ: NeuronModelQuantization,
 {
-    // Implement any per-neuron level data members
+    // Implement any cortical level data
 
     // No methods!
 }

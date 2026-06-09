@@ -11,6 +11,8 @@ use crate::quantizable_linear::base_types::QuantizedDecimalTrait;
 pub trait QuantizedElementWrapperBase<QE: QuantizedElementBase>:
 SupportsBasicCoreMathOps
 {
+    const QUANT_ZERO: Self;
+    
     fn wrap(quantizable: QE) -> Self;
     
     

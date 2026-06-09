@@ -9,6 +9,7 @@ use crate::shared_traits_and_structs::cortical_configuration::{CorticalConfigura
 // TODO derive macro for cortical data, neuron data trait impls! (take class like CPU)
 
 
+
 /// The quantization parameters for this neuron model
 pub trait FeagiStandardModelQuantization:
 NeuronModelQuantization
@@ -23,15 +24,22 @@ NeuronModelQuantization
     type ConsecutiveFireLimit: QuantizedIndexCountTrait;
 }
 
+//region Quantization Instantiation
+#[derive(Default)]
+pub enum FeagiStandardModelQuantizationAndDeviceMode {
+    
+    #[default]
+    CPU32Bit(FeagiStandardModelCPU32Bit)
+}
 
-// TODO obviously temporary
-pub struct TempFeagiStandardQuant32;
+#[derive(Default)]
+pub(crate) struct FeagiStandardModelCPU32Bit;
 
-impl NeuronModelQuantization for TempFeagiStandardQuant32 {
+impl NeuronModelQuantization for FeagiStandardModelCPU32Bit {
     type NeuronPotentialQuant = f32;
 }
 
-impl FeagiStandardModelQuantization for TempFeagiStandardQuant32 {
+impl FeagiStandardModelQuantization for FeagiStandardModelCPU32Bit {
     type LeakCoefficientQuant = f32;
     type ConsecutiveFireCountdownQuant = u32;
     type RefractoryCountdownQuant = u32;
@@ -42,26 +50,15 @@ impl FeagiStandardModelQuantization for TempFeagiStandardQuant32 {
 }
 
 
-// TODO lets think about how we tackle this. Expecting something dynamic in nature, but can
-// we try avoiding box anyways? Or maybe we shouldnt in this case and as_any will get us through
-// this issue
-/*
-pub enum TempFeagiStandardQuantizations {
-    Bit32(TempFeagiStandardQuant32)
-}
 
-impl TempFeagiStandardQuantizations {
-    fn get_quantization_impl(self) -> dyn FeagiStandardModelQuantizationTrait
-    {
-        match self {
-            TempFeagiStandardQuantizations::Bit32(x) => {
+//endregion
 
-            }
-        }
-    }
-}
 
- */
+// TODO obviously temporary
+
+
+
+
 
 
 

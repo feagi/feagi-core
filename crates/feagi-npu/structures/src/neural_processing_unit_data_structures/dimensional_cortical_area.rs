@@ -16,7 +16,6 @@ where FGQ: FeagiGlobalQuantization,
       CMD: CorticalModelDataCPU<FGQ, NMQ>,
       NMD: NeuronModelData<FGQ, NMQ>
 {
-
     pub cortical_configuration: CorticalConfigurationDimensionalCPU<FGQ>,
 
     pub cortical_area_global_index_offset: FGQ::CorticalAreaIndexCountQuant, // how much greater the global offset is than the local
