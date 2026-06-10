@@ -24,6 +24,8 @@
 
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::binding::profile::{DecoderBindingProfile, EncoderBindingProfile};
 use crate::binding::{DecoderPlugin, EncoderPlugin, FeagiRuntime, RewardPolicy};
 use crate::contracts::prediction_record::SCHEMA_VERSION as PREDICTION_RECORD_SCHEMA_VERSION;
@@ -42,7 +44,7 @@ use crate::plugins::{MetricPackPlugin, MetricResult};
 /// sensory frame and collecting its motor frame. It is supplied by the caller (resolved from
 /// run/binding configuration) rather than hardcoded, so the same executor serves fast stubs
 /// and slower live brains.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecutorConfig {
     /// Number of bursts to step the runtime per sample (must be non-zero).
     pub ticks_per_sample: u32,

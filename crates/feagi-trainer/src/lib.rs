@@ -17,4 +17,5 @@ pub mod error;
 pub mod executor;
 pub mod metrics;
 pub mod plugins;
+pub mod run_config;
 pub mod samplers;

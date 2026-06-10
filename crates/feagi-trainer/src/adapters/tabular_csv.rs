@@ -11,6 +11,8 @@
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
+use serde::{Deserialize, Serialize};
+
 use crate::contracts::common::{
     ContentHash, DatasetAssetId, DatasetVersionId, Modality, OutputType, PluginId, PluginRef,
     SampleId, Split, SplitId,
@@ -22,7 +24,7 @@ use crate::error::TrainerError;
 use crate::plugins::{AdapterPlugin, DatasetSource, ValidationReport};
 
 /// Explicit configuration for the tabular CSV adapter.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TabularCsvConfig {
     /// Logical dataset name, used to derive the dataset version id and asset id.
     pub dataset_name: String,
