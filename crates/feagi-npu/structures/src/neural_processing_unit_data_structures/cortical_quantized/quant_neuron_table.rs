@@ -1,5 +1,5 @@
-se feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, CorticalPotentialQuantizationFloat32, FeagiGlobalQuantization};
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cortical_structure_configuration::cortical_configuration::CorticalConfigurationDimensionalCPUQuant;
+use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, CorticalPotentialQuantizationFloat32, FeagiGlobalQuantization};
+use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cortical_structure_configuration::CorticalConfigurationDimensionalCPUQuant;
 use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::tables::typed_by_membrane_potential::cpq_typed_fcl_collection::CPQTypedFCLCollectionCPU;
 use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::tables::typed_by_membrane_potential::cpq_typed_membrane_potential_collection::CPQTypedMembranePotentialCollectionCPU;
 
