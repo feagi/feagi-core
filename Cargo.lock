@@ -1968,6 +1968,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-dataset-contracts"
+version = "0.0.12"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "feagi-evolutionary"
 version = "0.0.12"
 dependencies = [
@@ -2216,7 +2224,11 @@ dependencies = [
 name = "feagi-trainer"
 version = "0.0.12"
 dependencies = [
+ "feagi-agent",
+ "feagi-dataset-contracts",
+ "feagi-io",
  "feagi-sensorimotor",
+ "feagi-serialization",
  "feagi-structures",
  "serde",
  "serde_json",

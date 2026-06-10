@@ -149,6 +149,7 @@ members = [
     
     # === Applications ===
     "crates/feagi-trainer",            # FEAGI Trainer - train/evaluate/benchmark engine (Apache-2.0)
+    "crates/feagi-dataset-contracts",  # Shared dataset/experience interchange primitives (Apache-2.0)
     
     # === Data Processing ===
     "crates/feagi-sensorimotor",                # Sensorimotor System - data processing & encoding (sensory & motor)
@@ -193,6 +194,7 @@ feagi-serialization = { version = "=0.0.12", path = "crates/feagi-serialization"
 # Workspace-internal crates
 feagi-npu-neural = { version = "=0.0.12", path = "crates/feagi-npu/neural" }
 feagi-observability = { version = "=0.0.12", path = "crates/feagi-observability" }
+feagi-dataset-contracts = { version = "=0.0.12", path = "crates/feagi-dataset-contracts" }
 
 [profile.release]
 lto = true           # Link-time optimization

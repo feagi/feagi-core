@@ -14,6 +14,7 @@ pub mod adapters;
 pub mod binding;
 pub mod contracts;
 pub mod error;
+pub mod executor;
 pub mod metrics;
 pub mod plugins;
 pub mod samplers;

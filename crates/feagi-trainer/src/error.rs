@@ -28,4 +28,13 @@ pub enum TrainerError {
     /// Evaluation could not be computed for the provided inputs.
     #[error("evaluation error: {0}")]
     Evaluation(String),
+
+    /// A reserved/optional capability is not implemented by the active runtime
+    /// (e.g. the target-motor teaching channel before imitation lands).
+    #[error("unsupported operation: {0}")]
+    Unsupported(String),
+
+    /// Communication with a live FEAGI runtime failed (transport/protocol error).
+    #[error("runtime error: {0}")]
+    Runtime(String),
 }
