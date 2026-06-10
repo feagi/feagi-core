@@ -1,6 +1,5 @@
 //! Neural Processing Unit Data Structures
 
-mod neural_processing_unit;
 mod dimensional_cortical_area;
 mod synapse_mappings;
 
@@ -8,7 +7,6 @@ pub mod global_tables;
 pub mod cortical_quantized_neuron_model;
 pub mod cortical_quantized;
 mod cortical_area_header;
-pub mod synapse_quantized;
 
 pub mod burst_engine_cluster;
 // differentiators

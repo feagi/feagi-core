@@ -18,19 +18,31 @@ pub struct FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB>
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization, // fsm quant impl
-    CCB: CorticalConfigurationBase<FGQ, NMQ>
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>
 {
     // No actual members
-    _p: PhantomData<(FGQ, NMQ)>,
+    _p: PhantomData<(FGQ, NMQ, CCB)>,
 }
 
 //region Tag Traits
 
-impl<FGQ, NMQ, CCB> PDIElement for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB> where FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization, CCB: CorticalConfigurationBase<FGQ, NMQ> {}
+impl<FGQ, NMQ, CCB> PDIElement for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB>
+where
+    FGQ: FeagiGlobalQuantization,
+    NMQ: FeagiStandardModelQuantization,
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant> {}
 
-impl<FGQ, NMQ, CCB> PDITagGenericDevice for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB> where FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization, CCB: CorticalConfigurationBase<FGQ, NMQ> {}
+impl<FGQ, NMQ, CCB> PDITagGenericDevice for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB>
+where 
+    FGQ: FeagiGlobalQuantization,
+    NMQ: FeagiStandardModelQuantization,
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant> {}
 
-impl<FGQ, NMQ, CCB> PDITagCPU for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB> where FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization, CCB: CorticalConfigurationBase<FGQ, NMQ> {}
+impl<FGQ, NMQ, CCB> PDITagCPU for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB> 
+where 
+    FGQ: FeagiGlobalQuantization,
+    NMQ: FeagiStandardModelQuantization,
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant> {}
 
 //endregion
 
@@ -38,7 +50,7 @@ impl<FGQ, NMQ, CCB> NeuronModelProcessor<FGQ, NMQ, CCB, FeagiStandardModelCortic
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ>,
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
 {
     const MODEL_NEEDS_TO_BE_INFORMED_OF_BURST_INDEX_ROLLOVER: bool = false;
 }
@@ -52,7 +64,7 @@ impl<FGQ, NMQ, CCB> NeuronModelProcessorCPU<
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ> // TODO CPU trait!
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant> // TODO CPU trait!
 {
     fn process_neuron_potential
     (

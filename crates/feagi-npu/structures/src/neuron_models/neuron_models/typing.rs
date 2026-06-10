@@ -2,12 +2,17 @@ use crate::neuron_models::neuron_models::feagi_standard::quantization::FeagiStan
 
 // TODO macroize this stuff
 
-#[derive(Default)]
 pub enum NeuronModelTypeAndQuantizationNested
 {
-    #[default]
     FeagiStandard(FeagiStandardModelQuantizationLevel)
 }
+
+impl Default for NeuronModelTypeAndQuantizationNested {
+    fn default() -> Self {
+        NeuronModelTypeAndQuantizationNested::FeagiStandard(FeagiStandardModelQuantizationLevel::default())
+    }
+}
+
 
 #[repr(u8)]
 #[derive(Default)]

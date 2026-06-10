@@ -15,7 +15,7 @@ PDIElement
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: NeuronModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ>
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>
 {
     // Implement any cortical level data
 
@@ -30,7 +30,7 @@ PDIElement
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: NeuronModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ>,
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
     NMCD: NeuronModelCorticalData<FGQ, NMQ, CCB>
 {
     // As per CorticalAreasIndexQuantization, this takes in GlobalBurstIndexQuant,
@@ -52,7 +52,7 @@ PDIElement // Is this really an element? this technically has no state and isnt 
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: NeuronModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ>,
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
     NMCD: NeuronModelCorticalData<FGQ, NMQ, CCB>,
     NMND: NeuronModelNeuronData<FGQ, NMQ, CCB, NMCD>
 {

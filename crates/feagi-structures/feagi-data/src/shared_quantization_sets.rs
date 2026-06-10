@@ -94,18 +94,6 @@ impl FeagiGlobalQuantization for FeagiGlobalQuantizationStandard {
     type FireCandidateListCacheIndexCountQuant = u32;
 }
 
-/*
-pub struct FeagiGlobalQuantizationMini;
-impl FeagiGlobalQuantization for FeagiGlobalQuantizationMini {
-    type GlobalBurstIndexQuant = u32;
-    type NeuronIndexCountQuant = u16;
-    type SynapseIndexCountQuant = u16;
-    type CorticalAreaIndexCountQuant = u16;
-    type AxonBundleIndexCountQuant = u8;
-}
-
-
- */
 
 
 //endregion

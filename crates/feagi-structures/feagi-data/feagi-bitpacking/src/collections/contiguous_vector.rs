@@ -20,11 +20,11 @@ impl<Packable: BitPacked> BitPackedContiguousBoolVector<Packable> {
             number_words = 1 + (number_bools_to_store / (Packable::BIT_PACKING_BACKEND as usize));
         }
 
-        let mut words: Vec<Packable> = vec![Packable::new(); number_words];
+        let words: Vec<Packable> = vec![Packable::new(); number_words];
         BitPackedContiguousBoolVector { words }
     }
-    
-    
+
+
 
     pub fn get_word(&self, word_index: usize) -> Option<&Packable> {
         self.words.get(word_index)
@@ -65,9 +65,9 @@ impl<Packable: BitPacked> BitPackedContiguousBoolVector<Packable> {
         let word = self.get_word_mut(bool_index / Packable::NUMBER_BITS)?;
         word.set_at((bool_index % Packable::NUMBER_BITS) as u8, boolean)
     }
-    
+
     pub fn make_range_from_word_index(&self, word_index: usize, number_bools_stored: usize) -> core::ops::Range<usize> {
-        core::cmp::min( word_index * Packable::NUMBER_BITS, number_bools_stored) 
+        core::cmp::min( word_index * Packable::NUMBER_BITS, number_bools_stored)
             .. core::cmp::min( (word_index + 1) * Packable::NUMBER_BITS, number_bools_stored)
     }
 

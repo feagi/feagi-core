@@ -11,7 +11,8 @@ macro_rules! __impl_quantized_element_wrapper_base {
             $quant_element: $($quant_bound)+,
         {
             
-            const QUANT_ZERO: Self = Self($quant_element::QUANT_ZERO);
+            const QUANT_ZERO: Self =
+                Self(<$quant_element as $crate::quantizable_linear::base_types::QuantizedElementBase>::QUANT_ZERO);
             
             #[inline(always)]
             fn wrap(quantizable: $quant_element) -> Self {
@@ -54,7 +55,8 @@ macro_rules! __impl_quantized_element_wrapper_base_concrete {
             $quant_element: $($quant_bound)+,
         {
             
-            const QUANT_ZERO: Self = Self($quant_element::QUANT_ZERO);
+            const QUANT_ZERO: Self =
+                Self(<$quant_element as $crate::quantizable_linear::base_types::QuantizedElementBase>::QUANT_ZERO);
             
             #[inline(always)]
             fn wrap(quantizable: $quant_element) -> Self {

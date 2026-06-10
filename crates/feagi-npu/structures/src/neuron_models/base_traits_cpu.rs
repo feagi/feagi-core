@@ -17,7 +17,7 @@ NeuronModelCorticalData<FGQ, NMQ, CCB>
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: NeuronModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ>
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>
 {
     // Implement any cortical level data members (or make members pub)
 }
@@ -30,7 +30,7 @@ NeuronModelNeuronData<FGQ, NMQ, CCB, NMCD>
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: NeuronModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ>,
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
     NMCD: NeuronModelCorticalDataCPU<FGQ, NMQ, CCB>,
 {
     // NOTE: Implementations of Neuron Models do not store their own membrane potential! They
@@ -43,7 +43,7 @@ where
         cortical_area_configuration: &CCB,
         cortical_area_data: &NMCD,
     ) -> Self;
-    
+
 }
 
 /// Root base trait for defining neuron firing and other dynamics on the CPU.
@@ -54,7 +54,7 @@ NeuronModelProcessor<FGQ, NMQ, CCB, NMCD, NMND>
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: NeuronModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ>, // TODO CPU version
+    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>, // TODO CPU version
     NMCD: NeuronModelCorticalDataCPU<FGQ, NMQ, CCB>,
     NMND: NeuronModelNeuronDataCPU<FGQ, NMQ, CCB, NMCD>
 {
@@ -64,7 +64,7 @@ where
     fn process_neuron_potential
     (
         &self,
-        incoming_potential: &NPUNeuronMembranePotential<NMQ::CorticalPotentialQuant::NeuronPotentialQuant>,
+        incoming_potential: &NPUNeuronMembranePotential<NMQ::CorticalPotentialQuant>,
         neuron_linear_index: &NPUNeuronIndexCorticalLocal<FGQ::NeuronIndexCountQuant>,
         burst_index: &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>,
         cortical_area_configuration: &CCB,
@@ -91,7 +91,7 @@ where
     /// method to update any values that need to be updated in that case
     fn prepare_neuron_data_for_burst_index_rollover(
         &self,
-        neuron_linear_index: &FGQ::NeuronIndexCountQuant,
+        neuron_linear_index: &NPUNeuronIndexCorticalLocal<FGQ::NeuronIndexCountQuant>,
         neuron_model_data: &mut NMND)
     {
         // by default nothing. Override me if you have something you need to do, but remember

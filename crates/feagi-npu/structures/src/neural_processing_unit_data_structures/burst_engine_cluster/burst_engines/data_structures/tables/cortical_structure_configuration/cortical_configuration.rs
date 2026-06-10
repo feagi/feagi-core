@@ -2,8 +2,8 @@ use feagi_structures::feagi_data::feagi_pdi::PDIElement;
 use feagi_structures::feagi_data::feagi_pdi::tag_device::{PDITagCPU, PDITagGenericDevice};
 use feagi_structures::feagi_data::quantizable_spatial::index::SpatialIndexDimensions4D;
 use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, CorticalPotentialQuantizationLevel, FeagiGlobalQuantization, FeagiGlobalQuantizationLevel};
-use crate::neural_processing_unit_data_structures::wrapped_indexing::{NPUCorticalAreaDimensions, NPUNeuronIndexCorticalLocal, NPUNeuronMembranePotential};
-
+use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_neuron::NPUNeuronMembranePotential;
+use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_spatial::{NPUCorticalAreaDimensions, NPUNeuronIndexCorticalLocal};
 
 #[repr(u8)]
 #[derive(Copy, Clone, Default)]
