@@ -9,8 +9,8 @@
 
 // TODO FEAGI Error
 
-use crate::dynamic_burst_engine_interface::npu_requests::enums::{NPURequestBase, NPURequestCorticalArea};
-use crate::dynamic_burst_engine_interface::npu_requests::npu_request::{NPURequest, NPURequestID};
+use crate::neural_processing_unit_data_structures::dynamic_burst_engine_interface::npu_requests::enums::{NPURequestBase, NPURequestCorticalArea};
+use crate::neural_processing_unit_data_structures::dynamic_burst_engine_interface::npu_requests::npu_request::{NPURequest, NPURequestID};
 
 pub struct DynamicNPUInterface {
     // TODO

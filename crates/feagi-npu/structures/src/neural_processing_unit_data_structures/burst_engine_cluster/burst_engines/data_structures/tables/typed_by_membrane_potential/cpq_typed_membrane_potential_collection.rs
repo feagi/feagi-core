@@ -1,3 +1,4 @@
+use core::marker::PhantomData;
 use feagi_structures::feagi_data::feagi_pdi::PDICollection;
 use feagi_structures::feagi_data::feagi_pdi::tag_device::{PDITagCPU, PDITagGenericDevice};
 use feagi_structures::feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
@@ -16,6 +17,7 @@ PDICollection
 pub struct CPQTypedMembranePotentialCollectionCPU<FGQ: FeagiGlobalQuantization, CPQ: CorticalPotentialQuantization>
 {
     pub potentials: Vec<NPUNeuronMembranePotential<CPQ::NeuronPotentialQuant>>,
+    _p: PhantomData<FGQ>,
 }
 
 impl <FGQ: FeagiGlobalQuantization, CPQ: CorticalPotentialQuantization> CPQTypedMembranePotentialCollectionCPU<FGQ, CPQ>

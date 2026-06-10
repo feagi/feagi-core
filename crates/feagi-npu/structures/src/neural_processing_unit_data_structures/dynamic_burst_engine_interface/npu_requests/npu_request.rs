@@ -1,8 +1,8 @@
-use feagi_npu_neuron_models::NeuronModelQuantizationAndDeviceClass;
 use feagi_structures::feagi_data::create_quantized_index_count_wrapper;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::bit_32::NeuronVoxelDimensions;
-use crate::dynamic_burst_engine_interface::npu_requests::enums::{NPURequestBase, NPURequestCorticalAreaCreate};
-
+use crate::neural_processing_unit_data_structures::dynamic_burst_engine_interface::npu_requests::enums::{NPURequestBase, NPURequestCorticalArea};
+use crate::neuron_models::neuron_models::NeuronModelTypeAndQuantization;
 // TODO switch to Feagi Error instead of option!
 
 create_quantized_index_count_wrapper!(NPURequestID, u32);
@@ -20,7 +20,8 @@ impl NPURequest {
     pub fn cortical_area_create_custom(
         dimensions: NeuronVoxelDimensions,
         voxel_density: u32,
-        neuron_model_quantization_and_device_class: NeuronModelQuantizationAndDeviceClass
+        cortical_id: CorticalID,
+        neuron_model_type_and_quantization: NeuronModelTypeAndQuantization
     ) -> Option<NPURequest>
 
     {
@@ -30,16 +31,16 @@ impl NPURequest {
 
         Some(Self {
             requestee: String::new(),
-            request: NPURequestBase::Create(NPURequestCorticalAreaCreate { dimensions, voxel_density, neuron_model_quantization_and_device_class })
+            request: NPURequestBase::CorticalArea(NPURequestCorticalArea::CreateCustomArea{dimensions, voxel_density, cortical_id, neuron_model_type_and_quantization })
         } )
     }
-    
-    
-    
+
+
+
     pub(crate) fn get_request(&self) -> &NPURequestBase {
         &self.request
     }
-    
+
 }
 
 

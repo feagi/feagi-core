@@ -3,7 +3,7 @@ use feagi_structures::feagi_data::feagi_pdi::PDIElement;
 use feagi_structures::feagi_data::feagi_pdi::tag_device::{PDITagCPU, PDITagGenericDevice};
 use feagi_structures::feagi_data::quantizable_linear::base_types::{QuantizedDecimalTrait, QuantizedElementBase};
 use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, FeagiGlobalQuantization};
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::tables::cortical_structure_configuration::cortical_configuration::CorticalConfigurationBase;
+use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cortical_structure_configuration::CorticalConfigurationBase;
 use crate::neuron_models::base_traits_all_devices::{NeuronModelCorticalData, NeuronModelNeuronData};
 use crate::neuron_models::base_traits_cpu::{NeuronModelCorticalDataCPU, NeuronModelNeuronDataCPU};
 use crate::neuron_models::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;

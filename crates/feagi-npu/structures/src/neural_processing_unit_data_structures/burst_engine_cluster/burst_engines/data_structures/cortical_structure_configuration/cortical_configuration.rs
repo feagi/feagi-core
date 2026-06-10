@@ -5,13 +5,6 @@ use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQu
 use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_neuron::NPUNeuronMembranePotential;
 use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_spatial::{NPUCorticalAreaDimensions, NPUNeuronIndexCorticalLocal};
 
-#[repr(u8)]
-#[derive(Copy, Clone, Default)]
-pub enum CorticalConfigurationType {
-    #[default]
-    Dimensional
-}
-
 
 /// Base trait for Cortical configuration, which is simply general details about a cortical area
 /// not related to the neuron model, but needed broadly for compute and context, This is NOT
@@ -57,9 +50,9 @@ where
     FGQ: FeagiGlobalQuantization,
     CPQ: CorticalPotentialQuantization
 {
-    pub dimensions: NPUCorticalAreaDimensions<SpatialIndexDimensions4D<FGQ::NeuronIndexCountQuant>>,
+    pub dimensions: NPUCorticalAreaDimensions<FGQ::NeuronIndexCountQuant>,
     pub number_active_neurons_this_burst: NPUNeuronIndexCorticalLocal<FGQ::NeuronIndexCountQuant>,
-    pub post_synaptic_potential_base: NPUNeuronMembranePotential<CPQ>,
+    pub post_synaptic_potential_base: NPUNeuronMembranePotential<CPQ::NeuronPotentialQuant>,
     pub is_postsynaptic_potential_drive_by_membrane_potential: bool,
     pub post_synaptic_potential_should_be_uniform: bool,
     _padding: [u8; PADDING_END]
@@ -79,7 +72,7 @@ where
     CPQ: CorticalPotentialQuantization
 {
     /// Use this to calculate the amount of padding needed depending on the quantization
-    pub const fn calculate_padding<FGQ, CPQ>() -> usize
+    pub const fn calculate_padding() -> usize
     where
         FGQ: FeagiGlobalQuantization,
         CPQ: CorticalPotentialQuantization

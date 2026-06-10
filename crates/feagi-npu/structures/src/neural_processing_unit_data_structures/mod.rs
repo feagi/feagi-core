@@ -1,14 +1,14 @@
 //! Neural Processing Unit Data Structures
 
-mod dimensional_cortical_area;
+//mod dimensional_cortical_area;
 mod synapse_mappings;
 
-pub mod global_tables;
 pub mod cortical_quantized_neuron_model;
 pub mod cortical_quantized;
-mod cortical_area_header;
+//mod cortical_area_header;
 
 pub mod burst_engine_cluster;
+pub mod dynamic_burst_engine_interface;
 // differentiators
 // 0 is alive [1 bit]
 // 1 neuron membrane quant [3 bit]

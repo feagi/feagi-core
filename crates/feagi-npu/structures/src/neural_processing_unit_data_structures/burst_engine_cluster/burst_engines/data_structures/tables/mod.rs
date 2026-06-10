@@ -1,3 +1,2 @@
 pub mod typed_by_membrane_potential;
-pub mod cortical_structure_configuration;
 mod fclc_to_fcl_mapping_table;

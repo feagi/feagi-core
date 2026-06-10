@@ -1,7 +1,7 @@
-use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, CorticalPotentialQuantizationFloat32, FeagiGlobalQuantization};
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::tables::cortical_structure_configuration::cortical_configuration::CorticalConfigurationDimensionalCPUQuant;
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::tables::typed_by_membrane_potential::input_fcl::quant_typed_collection::QuantTypedFCLInputPotentialCollectionCPU;
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::tables::typed_by_membrane_potential::cpq_typed_membrane_potentials::CPQTypedMembranePotentialCollectionCPU;
+se feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, CorticalPotentialQuantizationFloat32, FeagiGlobalQuantization};
+use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cortical_structure_configuration::cortical_configuration::CorticalConfigurationDimensionalCPUQuant;
+use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::tables::typed_by_membrane_potential::cpq_typed_fcl_collection::CPQTypedFCLCollectionCPU;
+use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::tables::typed_by_membrane_potential::cpq_typed_membrane_potential_collection::CPQTypedMembranePotentialCollectionCPU;
 
 
 
@@ -19,7 +19,7 @@ where
     FGQ: FeagiGlobalQuantization,
     CPQ: CorticalPotentialQuantization
 {
-    pub fcl_data: QuantTypedFCLInputPotentialCollectionCPU<FGQ, CPQ>,
+    pub fcl_data: CPQTypedFCLCollectionCPU<FGQ, CPQ>,
     pub neuron_potentials: CPQTypedMembranePotentialCollectionCPU<FGQ, CPQ>,
     // TODO nondimensional
     pub cortical_configuration_dimensional: CorticalConfigurationDimensionalCPUQuant<FGQ, CPQ, Self::CORTICAL_CONFIGURATION_PADDING>

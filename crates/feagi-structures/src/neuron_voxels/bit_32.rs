@@ -9,16 +9,16 @@ pub type NeuronVoxelPotential = NeuronVoxelPotentialGeneric<
     CorticalPotentialQuantizationFloat32
 >;
 pub type NeuronVoxelAxis = NeuronVoxelAxisGeneric<
-    CorticalPotentialQuantizationFloat32
+    FeagiGlobalQuantizationStandard
 >;
 pub type NeuronVoxelLinearIndex = NeuronVoxelLinearIndexGeneric<
-    CorticalPotentialQuantizationFloat32
+    FeagiGlobalQuantizationStandard
 >;
 pub type NeuronVoxelCoordinate = NeuronVoxelCoordinateGeneric<
-    CorticalPotentialQuantizationFloat32
+    FeagiGlobalQuantizationStandard
 >;
 pub type NeuronVoxelDimensions = NeuronVoxelDimensionsGeneric<
-    CorticalPotentialQuantizationFloat32
+    FeagiGlobalQuantizationStandard
 >;
 
 pub type NeuronVoxelContiguousVector = NeuronVoxelCollectionContiguousVectorGeneric<

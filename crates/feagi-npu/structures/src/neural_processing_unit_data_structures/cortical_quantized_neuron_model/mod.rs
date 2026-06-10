@@ -1,3 +1,1 @@
 mod typed_neuron_model_cortical_data;
-mod common_indexing;
-mod model_typed_neuron_model_data;

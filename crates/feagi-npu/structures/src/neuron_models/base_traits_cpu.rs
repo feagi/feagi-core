@@ -5,7 +5,7 @@ use feagi_structures::feagi_data::feagi_pdi::tag_device::PDITagCPU;
 use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, FeagiGlobalQuantization, NeuronModelQuantization};
 use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_neuron::NPUNeuronMembranePotential;
 use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_spatial::NPUNeuronIndexCorticalLocal;
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::tables::cortical_structure_configuration::cortical_configuration::CorticalConfigurationBase;
+use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cortical_structure_configuration::CorticalConfigurationBase;
 use crate::neuron_models::base_traits_all_devices::{NeuronModelCorticalData, NeuronModelNeuronData, NeuronModelProcessor};
 use crate::npu_descriptors::NPUGlobalBurstCounter;
 

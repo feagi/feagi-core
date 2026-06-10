@@ -1,10 +1,9 @@
 
 // TODO cortical area deletions, mapping deletions!
 
-use feagi_npu_neuron_models::NeuronModelQuantizationAndDeviceClass;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::bit_32::NeuronVoxelDimensions;
-
-
+use crate::neuron_models::neuron_models::NeuronModelTypeAndQuantization;
 
 pub(crate) enum NPURequestBase {
 
@@ -23,7 +22,8 @@ pub(crate) enum NPURequestCorticalArea {
     CreateCustomArea {
         dimensions: NeuronVoxelDimensions,
         voxel_density: u32,
-        neuron_model_quantization_and_device_class: NeuronModelQuantizationAndDeviceClass
+        cortical_id: CorticalID,
+        neuron_model_type_and_quantization: NeuronModelTypeAndQuantization
     }
 }
 
