@@ -13,9 +13,11 @@
 //! runtime payload types.
 
 pub mod adapter;
+pub mod episodic_metric;
 pub mod metric_pack;
 pub mod sampler;
 
 pub use adapter::{AdapterPlugin, DatasetSource, ValidationReport};
+pub use episodic_metric::{EpisodeOutcome, EpisodeTrajectory, EpisodicMetricPack};
 pub use metric_pack::{ClassMetrics, ConfusionMatrix, MetricPackPlugin, MetricResult};
 pub use sampler::SamplerPlugin;

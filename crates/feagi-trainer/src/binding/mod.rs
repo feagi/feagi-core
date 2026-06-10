@@ -19,6 +19,8 @@ pub mod class_decoder;
 pub mod decoder;
 pub mod encoder;
 pub mod encoding_scheme;
+pub mod environment;
+pub mod motor_decoder;
 pub mod population_encoder;
 pub mod profile;
 #[cfg(feature = "remote-runtime")]
@@ -29,12 +31,17 @@ pub mod stub_runtime;
 
 pub use class_decoder::ClassDecoder;
 pub use decoder::DecoderPlugin;
-pub use encoder::EncoderPlugin;
+pub use encoder::{EncoderPlugin, ObservationEncoder};
 pub use encoding_scheme::{BinSpacing, EncodingScheme, ResolvedEncodingScheme};
+pub use environment::{Action, Environment, Observation, StepOutcome, StubEnvironment};
+pub use motor_decoder::{ContinuousDecodeScheme, ContinuousMotorDecoder};
 pub use population_encoder::PopulationEncoder;
 pub use profile::{DecoderBindingProfile, EncoderBindingProfile};
 #[cfg(feature = "remote-runtime")]
 pub use remote_runtime::{RemoteFeagiRuntime, RemoteRuntimeConfig};
-pub use reward::{AffectChannel, PainPleasureReward, RewardPolicy, RewardSignal};
+pub use reward::{
+    AffectChannel, EnvironmentRewardPolicy, PainPleasureReward, RewardPolicy, RewardSignal,
+    SurvivalReward,
+};
 pub use runtime::FeagiRuntime;
 pub use stub_runtime::StubFeagiRuntime;

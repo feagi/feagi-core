@@ -22,7 +22,7 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
 };
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
-use crate::binding::encoder::EncoderPlugin;
+use crate::binding::encoder::{EncoderPlugin, ObservationEncoder};
 use crate::binding::encoding_scheme::BinSpacing;
 use crate::binding::profile::EncoderBindingProfile;
 use crate::contracts::common::{PluginId, PluginRef};
@@ -40,6 +40,62 @@ impl PopulationEncoder {
     /// Creates a new selector.
     pub fn new() -> Self {
         Self
+    }
+
+    /// Shared core: encodes a slice of normalized `[0,1]` features into a sensory frame via the
+    /// native population coder. Used by both the [`EncoderPlugin`] (dataset sample) and
+    /// [`ObservationEncoder`](crate::binding::encoder::ObservationEncoder) (control observation)
+    /// paths so the coder configuration lives in exactly one place.
+    fn encode_features(
+        &self,
+        features: &[f64],
+        profile: &EncoderBindingProfile,
+    ) -> Result<CorticalMappedXYZPNeuronVoxels, TrainerError> {
+        let resolved = profile.scheme.resolve()?;
+
+        if features.len() != profile.channels as usize {
+            return Err(TrainerError::Config(format!(
+                "feature count {} does not match profile channels {}",
+                features.len(),
+                profile.channels
+            )));
+        }
+
+        let cache = ConnectorCache::new();
+        let positioning = to_positioning(resolved.spacing);
+        let unit = CorticalUnitIndex::from(IRIS_SENSORY_UNIT);
+
+        let mut sensor_cache = cache.get_sensor_cache();
+        sensor_cache
+            .count_input_register(
+                unit,
+                CorticalChannelCount::new(profile.channels).map_err(map_err)?,
+                FrameChangeHandling::Absolute,
+                NeuronDepth::new(resolved.bins).map_err(map_err)?,
+                positioning,
+            )
+            .map_err(map_err)?;
+
+        for (channel, &feature) in features.iter().enumerate() {
+            // No silent clamping: a value outside [0,1] is a caller/normalization error.
+            let percentage = Percentage::new_from_0_1(feature as f32).map_err(|e| {
+                TrainerError::Config(format!(
+                    "feature {channel} = {feature} is not a normalized percentage in [0,1]: {e}"
+                ))
+            })?;
+            sensor_cache
+                .count_input_write(
+                    unit,
+                    CorticalChannelIndex::from(channel as u32),
+                    WrappedIOData::Percentage(percentage),
+                )
+                .map_err(map_err)?;
+        }
+
+        sensor_cache
+            .encode_all_sensors_to_neurons(Instant::now())
+            .map_err(map_err)?;
+        Ok(sensor_cache.get_neurons().clone())
     }
 }
 
@@ -69,8 +125,6 @@ impl EncoderPlugin for PopulationEncoder {
         sample: &IRSample,
         profile: &EncoderBindingProfile,
     ) -> Result<Self::Frame, TrainerError> {
-        let resolved = profile.scheme.resolve()?;
-
         let features = match &sample.payload {
             Payload::Tabular(values) => values,
             other => {
@@ -79,51 +133,25 @@ impl EncoderPlugin for PopulationEncoder {
                 )))
             }
         };
+        self.encode_features(features, profile)
+    }
+}
 
-        if features.len() != profile.channels as usize {
-            return Err(TrainerError::Config(format!(
-                "feature count {} does not match profile channels {}",
-                features.len(),
-                profile.channels
-            )));
+impl ObservationEncoder for PopulationEncoder {
+    type Frame = CorticalMappedXYZPNeuronVoxels;
+
+    fn plugin_ref(&self) -> PluginRef {
+        PluginRef {
+            id: PluginId("encoder.population_single_spike".to_string()),
+            version: "1.0.0".to_string(),
         }
+    }
 
-        let cache = ConnectorCache::new();
-        let positioning = to_positioning(resolved.spacing);
-        let unit = CorticalUnitIndex::from(IRIS_SENSORY_UNIT);
-
-        {
-            let mut sensor_cache = cache.get_sensor_cache();
-            sensor_cache
-                .count_input_register(
-                    unit,
-                    CorticalChannelCount::new(profile.channels).map_err(map_err)?,
-                    FrameChangeHandling::Absolute,
-                    NeuronDepth::new(resolved.bins).map_err(map_err)?,
-                    positioning,
-                )
-                .map_err(map_err)?;
-
-            for (channel, &feature) in features.iter().enumerate() {
-                // No silent clamping: a value outside [0,1] is a caller/normalization error.
-                let percentage = Percentage::new_from_0_1(feature as f32).map_err(|e| {
-                    TrainerError::Config(format!(
-                        "feature {channel} = {feature} is not a normalized percentage in [0,1]: {e}"
-                    ))
-                })?;
-                sensor_cache
-                    .count_input_write(
-                        unit,
-                        CorticalChannelIndex::from(channel as u32),
-                        WrappedIOData::Percentage(percentage),
-                    )
-                    .map_err(map_err)?;
-            }
-
-            sensor_cache
-                .encode_all_sensors_to_neurons(Instant::now())
-                .map_err(map_err)?;
-            Ok(sensor_cache.get_neurons().clone())
-        }
+    fn encode_observation(
+        &mut self,
+        observation: &crate::binding::environment::Observation,
+        profile: &EncoderBindingProfile,
+    ) -> Result<Self::Frame, TrainerError> {
+        self.encode_features(observation, profile)
     }
 }

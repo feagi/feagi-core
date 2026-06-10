@@ -27,15 +27,20 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::binding::profile::{DecoderBindingProfile, EncoderBindingProfile};
-use crate::binding::{DecoderPlugin, EncoderPlugin, FeagiRuntime, RewardPolicy};
+use crate::binding::{
+    DecoderPlugin, EncoderPlugin, Environment, EnvironmentRewardPolicy, FeagiRuntime,
+    ObservationEncoder, RewardPolicy,
+};
 use crate::contracts::prediction_record::SCHEMA_VERSION as PREDICTION_RECORD_SCHEMA_VERSION;
 use crate::contracts::run_summary::SCHEMA_VERSION as RUN_SUMMARY_SCHEMA_VERSION;
 use crate::contracts::scorecard::SCHEMA_VERSION as SCORECARD_SCHEMA_VERSION;
+use crate::contracts::TypedPrediction;
 use crate::contracts::{
     BackendFingerprint, ContentHash, DatasetAssetId, IRSample, PredictionRecord, RunId, RunSpec,
     RunStatus, RunSummary, Scorecard, ScorecardId, ScorecardStatus, ScorecardVisibility,
 };
 use crate::error::TrainerError;
+use crate::plugins::{EpisodeOutcome, EpisodeTrajectory, EpisodicMetricPack};
 use crate::plugins::{MetricPackPlugin, MetricResult};
 
 /// Tuning knobs for one rollout that are not part of the immutable [`RunSpec`] provenance.
@@ -213,6 +218,185 @@ pub fn assemble_scorecard(
         visibility: provenance.visibility,
         metadata: BTreeMap::new(),
     }
+}
+
+/// Tuning knobs for one closed-loop control rollout (plan Phase 1d).
+///
+/// These are *execution* knobs, not immutable `RunSpec` provenance: `episodes` is the number of
+/// episodes rolled (the aggregation window `K`), `max_steps` caps each episode, `ticks_per_step`
+/// is how many FEAGI bursts advance per control step, and `seed` is the base RNG seed (episode
+/// `e` resets with `seed + e`, so the run is reproducible — plan Section 9). The pinned
+/// pendulum values live in the `EvaluationSpec`/`RunConfig`, never hardcoded here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ControlConfig {
+    /// Number of episodes to roll (the aggregation window, `K`).
+    pub episodes: u32,
+    /// Maximum control steps per episode before truncation.
+    pub max_steps: u32,
+    /// FEAGI bursts to advance per control step (must be non-zero).
+    pub ticks_per_step: u32,
+    /// Base RNG seed; episode `e` resets the environment with `seed + e`.
+    pub seed: u64,
+}
+
+/// The artifacts produced by a single closed-loop control rollout.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ControlRolloutOutcome {
+    /// Terminal lifecycle summary + headline metrics (for control runs a "sample" is an episode).
+    pub summary: RunSummary,
+    /// Per-episode trajectories, in roll order.
+    pub episodes: Vec<EpisodeTrajectory>,
+    /// Aggregate episodic-control metric result.
+    pub metric_result: MetricResult,
+}
+
+/// Scales a normalized action (each component in `[-1, 1]`) to the environment's per-dimension
+/// actuator bounds `(low, high)`, clamping defensively. Length mismatch is an explicit error.
+fn scale_action(
+    normalized: &[f64],
+    bounds: &(Vec<f64>, Vec<f64>),
+) -> Result<Vec<f64>, TrainerError> {
+    let (low, high) = bounds;
+    if normalized.len() != low.len() || low.len() != high.len() {
+        return Err(TrainerError::Config(format!(
+            "decoded action dim {} does not match environment bounds dim {}",
+            normalized.len(),
+            low.len()
+        )));
+    }
+    Ok(normalized
+        .iter()
+        .zip(low.iter())
+        .zip(high.iter())
+        .map(|((n, lo), hi)| (lo + (n + 1.0) / 2.0 * (hi - lo)).clamp(*lo, *hi))
+        .collect())
+}
+
+/// Drives a closed-loop embodied/control rollout over `config.episodes` episodes and scores the
+/// episodic outcome (plan Phase 1d; Topology C).
+///
+/// Per step the loop encodes the environment observation, submits it, steps FEAGI, collects +
+/// decodes the motor frame into a normalized action, scales it to the environment's actuator
+/// bounds, applies it, and injects the environment-derived reward into FEAGI's affect channels.
+/// An episode ends on environment failure (`terminated`) or at `max_steps` (`truncated`); the
+/// completed [`EpisodeTrajectory`]s are scored by the episodic metric pack.
+///
+/// This is the embodied counterpart of [`run_rollout`]: it shares no state with the offline
+/// path and leaves it unchanged. The decoder must emit [`TypedPrediction::Vector`] (a continuous
+/// action); any other variant is an explicit error.
+///
+/// # Errors
+/// Returns the first [`TrainerError`] from any stage; the loop is fail-fast and does not
+/// partially score.
+#[allow(clippy::too_many_arguments)]
+pub fn run_control_rollout<Env, R, E, D, RP, M>(
+    run_id: &RunId,
+    env: &mut Env,
+    runtime: &mut R,
+    encoder: &mut E,
+    encoder_profile: &EncoderBindingProfile,
+    decoder: &mut D,
+    decoder_profile: &DecoderBindingProfile,
+    reward_policy: &RP,
+    metric_pack: &M,
+    config: &ControlConfig,
+) -> Result<ControlRolloutOutcome, TrainerError>
+where
+    Env: Environment,
+    R: FeagiRuntime,
+    E: ObservationEncoder<Frame = R::SensoryFrame>,
+    D: DecoderPlugin<Frame = R::MotorFrame>,
+    RP: EnvironmentRewardPolicy,
+    M: EpisodicMetricPack,
+{
+    if config.episodes == 0 {
+        return Err(TrainerError::Config(
+            "ControlConfig.episodes must be non-zero".to_string(),
+        ));
+    }
+    if config.max_steps == 0 {
+        return Err(TrainerError::Config(
+            "ControlConfig.max_steps must be non-zero".to_string(),
+        ));
+    }
+    if config.ticks_per_step == 0 {
+        return Err(TrainerError::Config(
+            "ControlConfig.ticks_per_step must be non-zero".to_string(),
+        ));
+    }
+
+    let bounds = env.action_bounds();
+    let mut episodes = Vec::with_capacity(config.episodes as usize);
+
+    for episode_index in 0..config.episodes {
+        let mut observation = env.reset(config.seed.wrapping_add(episode_index as u64))?;
+        let mut step_rewards = Vec::new();
+        let mut terminated = false;
+
+        for _ in 0..config.max_steps {
+            let frame = encoder.encode_observation(&observation, encoder_profile)?;
+            runtime.submit_sensory(frame)?;
+            runtime.step(config.ticks_per_step)?;
+            let motor = runtime.collect_motor()?;
+            let prediction = decoder.decode(motor, decoder_profile)?;
+
+            let normalized = match prediction {
+                TypedPrediction::Vector(v) => v,
+                other => {
+                    return Err(TrainerError::Evaluation(format!(
+                        "control rollout requires Vector predictions, got {other:?}"
+                    )))
+                }
+            };
+            let action = scale_action(&normalized, &bounds)?;
+            let outcome = env.step(&action)?;
+
+            let signals = reward_policy.reward(outcome.reward, outcome.terminated)?;
+            runtime.submit_reward(&signals)?;
+
+            step_rewards.push(outcome.reward);
+            observation = outcome.observation;
+
+            if outcome.terminated {
+                terminated = true;
+                break;
+            }
+            if outcome.truncated {
+                break;
+            }
+        }
+
+        episodes.push(EpisodeTrajectory {
+            step_rewards,
+            outcome: if terminated {
+                EpisodeOutcome::Terminated
+            } else {
+                EpisodeOutcome::Truncated
+            },
+        });
+    }
+
+    let metric_result = metric_pack.evaluate(&episodes)?;
+
+    let summary = RunSummary {
+        schema_version: RUN_SUMMARY_SCHEMA_VERSION,
+        run_id: run_id.clone(),
+        status: RunStatus::Completed,
+        // For control runs a "sample" is an episode.
+        total_samples: episodes.len() as u64,
+        evaluated_samples: episodes.len() as u64,
+        metrics: metric_result.metrics.clone(),
+        started_at: None,
+        completed_at: None,
+        scorecard_id: None,
+        metadata: BTreeMap::new(),
+    };
+
+    Ok(ControlRolloutOutcome {
+        summary,
+        episodes,
+        metric_result,
+    })
 }
 
 #[cfg(test)]
@@ -542,6 +726,167 @@ mod tests {
             backend: BackendKind::Cpu,
             quantization: None,
         }
+    }
+
+    // --- Closed-loop control rollout test doubles + tests (Phase 1d) ---
+
+    use crate::binding::environment::{Observation, StubEnvironment};
+    use crate::binding::reward::SurvivalReward;
+    use crate::metrics::EpisodicControlMetricPack;
+    use crate::plugins::EpisodeOutcome as Eo;
+
+    /// Passthrough observation encoder: emits the observation as the sensory frame (the executor
+    /// is the subject under test; the encoder is a collaborator).
+    struct PassthroughObsEncoder;
+
+    impl ObservationEncoder for PassthroughObsEncoder {
+        type Frame = Vec<f64>;
+
+        fn plugin_ref(&self) -> PluginRef {
+            PluginRef {
+                id: PluginId("test.passthrough_obs_encoder".to_string()),
+                version: "1.0.0".to_string(),
+            }
+        }
+
+        fn encode_observation(
+            &mut self,
+            observation: &Observation,
+            _profile: &EncoderBindingProfile,
+        ) -> Result<Self::Frame, TrainerError> {
+            Ok(observation.clone())
+        }
+    }
+
+    /// Decoder that always emits a fixed normalized action, ignoring the motor frame.
+    struct FixedActionDecoder(f64);
+
+    impl DecoderPlugin for FixedActionDecoder {
+        type Frame = Vec<f64>;
+
+        fn plugin_ref(&self) -> PluginRef {
+            PluginRef {
+                id: PluginId("test.fixed_action_decoder".to_string()),
+                version: "1.0.0".to_string(),
+            }
+        }
+
+        fn decode(
+            &mut self,
+            _motor: Self::Frame,
+            _profile: &DecoderBindingProfile,
+        ) -> Result<TypedPrediction, TrainerError> {
+            Ok(TypedPrediction::Vector(vec![self.0]))
+        }
+    }
+
+    fn control_config(episodes: u32, max_steps: u32) -> ControlConfig {
+        ControlConfig {
+            episodes,
+            max_steps,
+            ticks_per_step: 2,
+            seed: 7,
+        }
+    }
+
+    #[test]
+    fn control_rollout_truncates_and_scores_success() {
+        // High fail threshold + zero action -> every episode survives to the executor cap.
+        let mut env = StubEnvironment::new(10.0, 10_000, -1.0, 1.0).unwrap();
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut encoder = PassthroughObsEncoder;
+        let mut decoder = FixedActionDecoder(0.0); // normalized 0 -> mid of [-1,1] = 0 force
+        let reward = SurvivalReward::new(0.6, 0.9).unwrap();
+        let metric = EpisodicControlMetricPack::new(5).unwrap();
+
+        let outcome = run_control_rollout(
+            &RunId("ctrl-0001".to_string()),
+            &mut env,
+            &mut runtime,
+            &mut encoder,
+            &encoder_profile(),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &control_config(3, 5),
+        )
+        .expect("control rollout");
+
+        assert_eq!(outcome.episodes.len(), 3);
+        assert!(outcome.episodes.iter().all(|e| e.duration() == 5));
+        assert!(outcome.episodes.iter().all(|e| e.outcome == Eo::Truncated));
+        assert!((outcome.metric_result.metrics["mean_episode_length"] - 5.0).abs() < 1e-12);
+        assert!((outcome.metric_result.metrics["success_rate"] - 1.0).abs() < 1e-12);
+        assert!((outcome.metric_result.metrics["mean_return"] - 5.0).abs() < 1e-12);
+        assert_eq!(outcome.summary.total_samples, 3);
+        // 3 episodes * 5 steps * 2 ticks.
+        assert_eq!(runtime.burst_count(), 3 * 5 * 2);
+        // Every surviving step yields one Pleasure signal; no failure -> no Pain.
+        let rewards = runtime.submitted_rewards();
+        assert_eq!(rewards.len(), 3 * 5);
+        assert!(rewards
+            .iter()
+            .all(|r| r.channel == crate::binding::AffectChannel::Pleasure));
+    }
+
+    #[test]
+    fn control_rollout_failure_emits_pain_and_terminates() {
+        // Low fail threshold + max positive action -> state diverges and the pole "falls".
+        let mut env = StubEnvironment::new(1.0, 10_000, -1.0, 1.0).unwrap();
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut encoder = PassthroughObsEncoder;
+        let mut decoder = FixedActionDecoder(1.0); // normalized 1 -> max force = 1.0
+        let reward = SurvivalReward::new(0.6, 0.9).unwrap();
+        let metric = EpisodicControlMetricPack::new(1).unwrap();
+
+        let outcome = run_control_rollout(
+            &RunId("ctrl-0002".to_string()),
+            &mut env,
+            &mut runtime,
+            &mut encoder,
+            &encoder_profile(),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &control_config(2, 100),
+        )
+        .expect("control rollout");
+
+        assert_eq!(outcome.episodes.len(), 2);
+        assert!(outcome.episodes.iter().all(|e| e.outcome == Eo::Terminated));
+        // The terminating step of each episode injects exactly one Pain signal.
+        let pain = runtime
+            .submitted_rewards()
+            .iter()
+            .filter(|r| r.channel == crate::binding::AffectChannel::Pain)
+            .count();
+        assert_eq!(pain, 2);
+    }
+
+    #[test]
+    fn control_rollout_rejects_zero_episodes() {
+        let mut env = StubEnvironment::new(10.0, 100, -1.0, 1.0).unwrap();
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut encoder = PassthroughObsEncoder;
+        let mut decoder = FixedActionDecoder(0.0);
+        let reward = SurvivalReward::new(0.6, 0.9).unwrap();
+        let metric = EpisodicControlMetricPack::new(1).unwrap();
+
+        let result = run_control_rollout(
+            &RunId("ctrl-0003".to_string()),
+            &mut env,
+            &mut runtime,
+            &mut encoder,
+            &encoder_profile(),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &control_config(0, 5),
+        );
+        assert!(matches!(result, Err(TrainerError::Config(_))));
     }
 
     #[test]
