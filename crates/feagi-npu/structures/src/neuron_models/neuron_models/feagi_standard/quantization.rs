@@ -1,5 +1,5 @@
 use feagi_structures::feagi_data::quantizable_linear::base_types::{QuantizedDecimalTrait, QuantizedIndexCountTrait};
-use feagi_structures::feagi_data::shared_quantization_sets::NeuronModelQuantization;
+use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantizationFloat32, NeuronModelQuantization};
 
 #[repr(u8)]
 #[derive(Default)]
@@ -30,7 +30,7 @@ NeuronModelQuantization
 pub struct FeagiStandardModelStandard32BitQuant;
 
 impl NeuronModelQuantization for FeagiStandardModelStandard32BitQuant {
-    type CorticalPotentialQuant = f32;
+    type CorticalPotentialQuant = CorticalPotentialQuantizationFloat32;
 }
 
 impl FeagiStandardModelQuantization for FeagiStandardModelStandard32BitQuant {

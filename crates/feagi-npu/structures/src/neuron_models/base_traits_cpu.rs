@@ -2,7 +2,7 @@
 //! can actually have methods for accessing the data!
 
 use feagi_structures::feagi_data::feagi_pdi::tag_device::PDITagCPU;
-use feagi_structures::feagi_data::shared_quantization_sets::{FeagiGlobalQuantization, NeuronModelQuantization};
+use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, FeagiGlobalQuantization, NeuronModelQuantization};
 use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_neuron::NPUNeuronMembranePotential;
 use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_spatial::NPUNeuronIndexCorticalLocal;
 use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::tables::cortical_structure_configuration::cortical_configuration::CorticalConfigurationBase;
@@ -64,13 +64,13 @@ where
     fn process_neuron_potential
     (
         &self,
-        incoming_potential: &NPUNeuronMembranePotential<NMQ::CorticalPotentialQuant>,
+        incoming_potential: &NPUNeuronMembranePotential<<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant>,
         neuron_linear_index: &NPUNeuronIndexCorticalLocal<FGQ::NeuronIndexCountQuant>,
         burst_index: &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>,
         cortical_area_configuration: &CCB,
         cortical_area_data: &NMCD,
         neuron_model_data: &mut NMND,
-        this_neuron_potential: &mut NPUNeuronMembranePotential<NMQ::CorticalPotentialQuant::NeuronPotentialQuant>
+        this_neuron_potential: &mut NPUNeuronMembranePotential<<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant>
     ) -> bool;
 
 
