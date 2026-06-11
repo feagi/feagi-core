@@ -365,6 +365,70 @@ Trade-offs:
 
 ---
 
+## ADR-011: Control API, `RunEvent` Stream, and Trainer↔Desktop Transport
+
+### Status
+Proposed
+
+### Context
+
+ADR-001/ADR-005 push FEAGI protocol semantics out of the UI and require the desktop to drive runs through a service boundary and observe them via a normalized event stream — but neither names the **shape of that API**, the **event schema**, or the **transport**. The legacy trainer is the counter-pattern: the React webview opens a **direct WebSocket to `ws://127.0.0.1:9050?trainer=true`** and parses raw FEAGI frames (`feagi-react-core-pro/src/training/WebSocketManager.ts`, `feagi-desktop/src/pages/Trainer.tsx`), hardcoding the endpoint and coupling UI to protocol.
+
+Grounded findings from the current code that constrain this decision:
+
+- **The desktop ships unsandboxed and spawns subprocesses directly; XPC was removed.** `feagi-desktop/src-tauri/entitlements.plist` says *"Direct Distribution (NOT App Store) - No Sandbox"*; `src-tauri/src/main.rs` notes *"XPC removed - using simple subprocess launching instead"*. The `AITrainingService.xpc` slot exists only in design docs (`docs/ARCHITECTURE.md`, `docs/DISTRIBUTION_STRATEGY_ASSESSMENT.md`), not in runtime code. So the App Store sandbox constraint that worried ADR-001's review is **not active today**.
+- **The modern live-data pattern is already established and is the right analogue.** Rust backends own FEAGI ZMQ I/O via `feagi-agent`/`feagi-io` and emit **typed Tauri events** to React: `perception-inspector-frame`, `vision-lab-*-frame` (`feagi-desktop/src-tauri/src/plugins/{perception_inspector,vision_lab}/`, consumed via `hooks/useVisionLabFrame.ts`). This is the proven "backend owns protocol, UI renders normalized events" path.
+- **Trainer scaffolding already exists**: plugin manifest `id: 'ai-training'`, route `/trainer`, `open_trainer_window` Tauri command, registry slot, and the `background_service` plugin type (`feagi-desktop/src/plugins/trainer/`, `src/plugins/types.ts`).
+- **The open crate is a library + CLI**; `RunEvent` is not yet defined (`feagi-core/crates/feagi-trainer/src/contracts/mod.rs`: *"arrive with later engine/UI wiring"*).
+
+### Decision
+
+**1. The Control API is a Rust *library* surface in the open crate — transport-agnostic.** The crate exposes an in-process control trait/struct (create → `validate_run` → start/pause/resume/stop, plus status/metrics queries and the pre-registration `check_dataset_compatibility`) over the immutable `RunSpec`. The crate opens **no listening socket of its own**; transport is an *adapter* layered on top. This keeps the open/closed and embedded/RTOS invariants (ADR-006) intact and means the same API serves headless automation and the desktop without divergence.
+
+**2. The normalized `RunEvent` stream is a public, versioned contract in the open crate.** A `RunEvent` (with `schema_version`) is emitted by the engine through a sink/callback the host supplies. v1 variants:
+- lifecycle: `Created` / `Validating` / `Running` / `Completed` / `Failed` (mirrors `RunStatus`);
+- `Progress { samples_done, samples_total, repeat_index, repeat_total }`;
+- `MetricUpdate { partial | aggregate metric values }`;
+- `SampleEvent { … }` (optional, sampled — never raw motor/sensory frames);
+- `ScorecardReady { scorecard_id }`;
+- `Error { message }`.
+The UI renders these; it never sees raw FEAGI frames (ADR-005).
+
+**3. Desktop transport = the established Tauri-events pattern (recommended).** A small **Tauri-side trainer backend** (a `background_service`-type plugin) links the crate, owns the run + FEAGI ZMQ I/O, drives the library Control API, and **re-emits each `RunEvent` as a typed Tauri event** (e.g. `trainer-run-event`) to the React window — exactly mirroring `vision-lab-*-frame`. Run control flows React → Tauri command → crate Control API. No webview-to-FEAGI socket; the legacy `9050` WebSocket path is retired (ADR-004/ADR-005).
+
+**4. Endpoints come from config, never hardcoded.** FEAGI connection parameters resolve via `feagi-desktop/src-tauri/src/feagi_network_config.rs` / `feagi-config`; the `127.0.0.1:9050` literal and `FEAGI_TRAINER_PORT` default are removed from the trainer path.
+
+**5. Sandbox/App-Store forward-compatibility without crate change.** Because the Control API and `RunEvent` are a library surface, a future sandboxed build hosts the *same* API inside an `AITrainingService.xpc` (or a localhost HTTP/WS micro-service) that bridges to the React window — an adapter swap, not an engine change. No work is done for this now; the decision only preserves the option.
+
+### Consequences
+
+Positive:
+
+- One Control API serves desktop UI and headless/CI; reproducibility preserved because the UI cannot bypass `validate_run`/pinning.
+- Reuses the proven Tauri-event live-data pattern and existing trainer scaffolding; minimal new transport surface.
+- `RunEvent`/Control API stay in the open crate as versioned contracts (ADR-006), so the closed app consumes them one-way.
+
+Trade-offs:
+
+- Requires defining and versioning `RunEvent` + the Control API trait, and a Tauri event-bridge plugin.
+- A future App Store/sandbox target still needs an XPC/localhost adapter (deferred, but the seam is reserved).
+
+### Alternatives Considered
+
+1. **Crate hosts its own WebSocket/HTTP server** consumed directly by the webview — rejected: reintroduces protocol-in-frontend risk, puts a network listener in the open library (against ADR-006 embedded/RTOS posture), and duplicates the existing Tauri-event mechanism.
+2. **Keep the legacy direct `9050` WebSocket** — rejected: hardcoded endpoint, raw-frame parsing in UI, no headless path (contradicts ADR-001/004/005).
+3. **Separate standalone trainer service process now** — rejected for the MVP: heavier ops than an in-process library + Tauri bridge, and unnecessary while the desktop is unsandboxed (revisit only for the App Store/XPC target).
+
+### Implementation Notes
+
+- Define `RunEvent` (+ `schema_version`) and the Control API trait in the open crate; the existing `run_rollout`/`run_repeated` executors emit events through the supplied sink.
+- Add a `background_service` trainer plugin in `feagi-desktop/src-tauri` that links `feagi-trainer`, drives the Control API, relays subprocess/run logs via `SubprocessLogRelay` (per `PLUGIN_DEV_GUIDE.md`), and emits `trainer-run-event`; React subscribes with the `useVisionLabFrame`-style hook.
+- Replace the legacy `Trainer.tsx`/`react-core-pro` WebSocket path during ADR-004 M2; remove the `9050` literal.
+- `check_dataset_compatibility` is part of the Control API (advisory/soft per ADR-009) and serves Experience Capture preflight (design Section 6.2).
+- Read-only first slice (unblocked now): a Scorecard viewer/importer needs only the existing `Scorecard` contract (incl. `metric_stats`) — no Control API — and can ship ahead of the run-control bridge.
+
+---
+
 ## ADR-012: Genome Scorecards, Dataset Assets, and Competition Extensibility (local-first)
 
 ### Status
@@ -546,7 +610,7 @@ Trade-offs:
 
 Before implementation begins, confirm:
 
-- [ ] Architecture leads approve ADR-001..006, ADR-012, ADR-014, and ADR-015.
+- [ ] Architecture leads approve ADR-001..006, ADR-011, ADR-012, ADR-014, and ADR-015.
 - [ ] Contract schemas (`DatasetManifest`, `IRSample`, `RunSpec`, `EvaluationSpec`) explicitly reference these ADR decisions.
 - [ ] Conformance test strategy exists for all plugin axes.
 - [ ] Migration milestones have target release windows and owner assignments.
