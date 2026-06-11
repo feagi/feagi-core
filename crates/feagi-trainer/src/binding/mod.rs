@@ -14,6 +14,13 @@
 //! This slice (3b-1) provides the abstraction, the encoding-scheme registry (Appendix E),
 //! and a concrete `RewardPolicy`. The concrete `ConnectorCache`-backed selectors and the
 //! `FeagiRuntime` implementations (remote/embedded) land alongside the pinned connectome.
+//!
+//! PARKED submodules (ADR-014/ADR-015): `environment` (the `Environment`/`StepOutcome` seam),
+//! the env-sourced `reward::{EnvironmentRewardPolicy, SurvivalReward}`, and the env-driving use
+//! of `motor_decoder`/`encoder::ObservationEncoder` belonged to the superseded "Topology C —
+//! Trainer drives the sim" model. The live embodied path is the parallel co-agent model
+//! (controller owns physics; Trainer injects training signals on disjoint cortical I/O). These
+//! items are retained for a possible trainer-owned, no-controller sim path only.
 
 pub mod class_decoder;
 pub mod decoder;

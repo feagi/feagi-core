@@ -23,6 +23,7 @@ use super::common::{
     BackendKind, ConnectomeHash, ContentHash, DatasetAssetId, EvaluationProtocolVersion,
     GenomeVersionId, MetadataMap, PluginRef, QuantizationFingerprint, ScorecardId, SplitId,
 };
+use super::metric_stats::MetricStat;
 
 /// Wire/format version of the `Scorecard` contract.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -98,8 +99,16 @@ pub struct Scorecard {
     pub split_id: SplitId,
     /// Execution-environment fingerprint that produced the metrics.
     pub backend_fingerprint: BackendFingerprint,
-    /// Computed metric values (deterministically ordered).
+    /// Computed metric values (deterministically ordered). For a multi-seed run these are the
+    /// per-metric means (the point estimates); for a single run they are that run's values.
     pub metrics: BTreeMap<String, f64>,
+    /// Per-metric distribution across N-seed repeats (mean/stddev/confidence interval).
+    ///
+    /// Present only for multi-seed runs; omitted (and absent from the wire form) for single
+    /// runs so the contract stays backward-compatible (additive evolution, ADR-006). The `n`
+    /// and `confidence_level` inside each [`MetricStat`] record the repeat provenance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metric_stats: Option<BTreeMap<String, MetricStat>>,
     /// Verification state of the metrics.
     pub status: ScorecardStatus,
     /// Publication state (Trainer emits `Local`; desktop/Composer may publish).
@@ -138,6 +147,7 @@ mod tests {
                 feagi_core_version: "0.0.12".to_string(),
             },
             metrics,
+            metric_stats: None,
             status: ScorecardStatus::SelfReported,
             visibility: ScorecardVisibility::Local,
             metadata: BTreeMap::new(),
@@ -160,6 +170,39 @@ mod tests {
     fn json_round_trip_preserves_scorecard() {
         let card = iris_scorecard();
         let json = serde_json::to_string(&card).expect("serialize");
+        let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(card, restored);
+    }
+
+    #[test]
+    fn metric_stats_is_omitted_when_absent() {
+        // Backward compatibility: a single-run scorecard must not emit the new field, and an old
+        // wire form lacking it must still deserialize (additive evolution, ADR-006).
+        let card = iris_scorecard();
+        let json = serde_json::to_string(&card).expect("serialize");
+        assert!(!json.contains("metric_stats"));
+        let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.metric_stats, None);
+    }
+
+    #[test]
+    fn metric_stats_round_trips_when_present() {
+        let mut card = iris_scorecard();
+        let mut stats = BTreeMap::new();
+        stats.insert(
+            "accuracy".to_string(),
+            MetricStat {
+                n: 5,
+                mean: 0.9,
+                stddev: 0.05,
+                ci_low: 0.84,
+                ci_high: 0.96,
+                confidence_level: 0.95,
+            },
+        );
+        card.metric_stats = Some(stats);
+        let json = serde_json::to_string(&card).expect("serialize");
+        assert!(json.contains("metric_stats"));
         let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(card, restored);
     }

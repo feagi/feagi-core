@@ -19,3 +19,4 @@ pub mod metrics;
 pub mod plugins;
 pub mod run_config;
 pub mod samplers;
+pub mod stats;

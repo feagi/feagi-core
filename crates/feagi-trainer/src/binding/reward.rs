@@ -109,6 +109,11 @@ impl RewardPolicy for PainPleasureReward {
 
 /// Converts an environment step outcome into FEAGI affect stimulation for **control** runs.
 ///
+/// PARKED (ADR-014/ADR-015): used by the superseded Topology-C executor (`run_control_rollout`).
+/// The live embodied path injects reward via the parallel co-agent from a telemetry/goal-distance
+/// success predicate, not from a Trainer-owned `Environment`. Retained for the trainer-owned,
+/// no-controller sim path only.
+///
 /// Unlike [`RewardPolicy`] (prediction-vs-target), control reward is environment-derived: there
 /// is no per-step target. The policy maps the environment's scalar step reward plus the failure
 /// flag into Pain/Pleasure stimulation, injected after each control step (paradigms doc §2.4 /

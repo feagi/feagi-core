@@ -13,6 +13,7 @@ pub mod common;
 pub mod dataset_manifest;
 pub mod evaluation_spec;
 pub mod ir_sample;
+pub mod metric_stats;
 pub mod prediction_record;
 pub mod run_spec;
 pub mod run_summary;
@@ -26,6 +27,7 @@ pub use common::{
 pub use dataset_manifest::{DatasetManifest, SplitDescriptor};
 pub use evaluation_spec::EvaluationSpec;
 pub use ir_sample::{CoordinateFrame, IRSample, Payload, TypedTarget};
+pub use metric_stats::MetricStat;
 pub use prediction_record::{PredictionRecord, TypedPrediction};
 pub use run_spec::{
     CoderBinding, ExecutionMode, PinnedBinding, RewardPolicyBinding, RunSpec, SamplerBinding,

@@ -27,6 +27,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
+# Statistical distributions (Student's t quantile for confidence intervals on multi-seed
+# repeats). Pure-Rust, dependency-free, with no_std/libm features so it stays portable to the
+# wasm/embedded/RTOS targets (ADR-006 / Rust-migration constraints).
+distrs = "0.2.3"
+
 # Shared dataset/experience interchange primitives (extracted in Phase 1a so the capture
 # side can reuse them without depending on this engine).
 feagi-dataset-contracts = { workspace = true }

@@ -1,11 +1,19 @@
-//! Closed-loop environment seam (plan Phase 1d, Topology C).
+//! Closed-loop environment seam.
+//!
+//! PARKED (ADR-014/ADR-015): this seam was the engine for the superseded "Topology C — Trainer
+//! drives the sim" model. The live embodied path is now the **parallel co-agent** model: the
+//! embodiment controller owns the robot's sensory/motor + physics, and the Trainer is a separate
+//! FEAGI agent injecting training signals on disjoint cortical I/O — it does **not** drive the
+//! environment. This module is retained only for a possible *trainer-owned, no-controller* sim
+//! path and is not on the live embodied path. Do not wire it into `RunConfig`/CLI without a
+//! decision reopening that use case. The episodic-control metric pack + `EpisodeTrajectory`
+//! (which consume `StepOutcome`-shaped results) remain in active use.
 //!
 //! Embodied/control tasks are not driven by a static dataset: the observation at step *t+1* is
 //! the environment state produced by applying the brain's decoded action at step *t*. The
-//! [`Environment`] trait is the additive seam the closed-loop executor drives; it wraps a
-//! simulator (e.g. the MuJoCo inverted pendulum) without the offline `run_rollout` path
-//! changing. The Trainer implements no physics — it only sequences `reset` → (`step`)* and
-//! reads the environment-provided reward + termination.
+//! [`Environment`] trait wraps a simulator (e.g. the MuJoCo inverted pendulum). The Trainer
+//! implements no physics — it only sequences `reset` → (`step`)* and reads the
+//! environment-provided reward + termination.
 
 use crate::error::TrainerError;
 

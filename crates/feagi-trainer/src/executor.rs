@@ -201,6 +201,31 @@ pub fn assemble_scorecard(
     metrics: &BTreeMap<String, f64>,
     provenance: ScorecardProvenance,
 ) -> Scorecard {
+    assemble_scorecard_inner(run_spec, metrics, None, provenance)
+}
+
+/// Assembles a [`Scorecard`] for an N-seed repeated run.
+///
+/// Identical to [`assemble_scorecard`] but additionally stamps the per-metric distribution
+/// (`metric_stats`); `metrics` should be the per-metric means (the point estimates). The `n` and
+/// `confidence_level` recorded inside each [`MetricStat`](crate::contracts::MetricStat) make the
+/// repeat protocol part of the scorecard provenance.
+pub fn assemble_scorecard_with_stats(
+    run_spec: &RunSpec,
+    metrics: &BTreeMap<String, f64>,
+    metric_stats: BTreeMap<String, crate::contracts::MetricStat>,
+    provenance: ScorecardProvenance,
+) -> Scorecard {
+    assemble_scorecard_inner(run_spec, metrics, Some(metric_stats), provenance)
+}
+
+/// Shared pure mapping for both the single-run and repeated-run scorecard assemblers.
+fn assemble_scorecard_inner(
+    run_spec: &RunSpec,
+    metrics: &BTreeMap<String, f64>,
+    metric_stats: Option<BTreeMap<String, crate::contracts::MetricStat>>,
+    provenance: ScorecardProvenance,
+) -> Scorecard {
     Scorecard {
         schema_version: SCORECARD_SCHEMA_VERSION,
         scorecard_id: provenance.scorecard_id,
@@ -214,6 +239,7 @@ pub fn assemble_scorecard(
         split_id: run_spec.split_id.clone(),
         backend_fingerprint: provenance.backend_fingerprint,
         metrics: metrics.clone(),
+        metric_stats,
         status: provenance.status,
         visibility: provenance.visibility,
         metadata: BTreeMap::new(),
@@ -273,7 +299,12 @@ fn scale_action(
 }
 
 /// Drives a closed-loop embodied/control rollout over `config.episodes` episodes and scores the
-/// episodic outcome (plan Phase 1d; Topology C).
+/// episodic outcome.
+///
+/// PARKED (ADR-014/ADR-015): this is the executor for the superseded "Topology C — Trainer drives
+/// the sim" model. The live embodied path is the parallel co-agent model (the controller owns
+/// physics; the Trainer injects training signals on disjoint cortical I/O). Retained only for a
+/// possible trainer-owned, no-controller sim path; not wired into `RunConfig`/CLI.
 ///
 /// Per step the loop encodes the environment observation, submits it, steps FEAGI, collects +
 /// decodes the motor frame into a normalized action, scales it to the environment's actuator
