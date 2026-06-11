@@ -1,0 +1,6 @@
+pub mod neuron_membrane_potentials_mp_grouped_table;
+pub mod neuron_indexes_condensed_burst_engine_table;
+pub mod fclc_to_fcl_mapping_table;
+pub mod burst_engine_neuron_index_to_mp_quant_index_lookup_table;
+pub mod cortical_descriptor_lookup_table;
+pub mod cortical_area_data_mapping_table;

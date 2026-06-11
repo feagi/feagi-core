@@ -1,2 +1,0 @@
-mod quant_dense_active_neuron_scratch;
-mod quant_neuron_table;

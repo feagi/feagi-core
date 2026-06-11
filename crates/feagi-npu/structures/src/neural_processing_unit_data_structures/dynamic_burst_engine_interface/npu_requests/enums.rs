@@ -3,7 +3,7 @@
 
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::bit_32::NeuronVoxelDimensions;
-use crate::neuron_models::neuron_models::NeuronModelTypeAndQuantization;
+use crate::neural_processing_unit_data_structures::neuron_models::neuron_models::NeuronModelTypeAndQuantization;
 
 pub(crate) enum NPURequestBase {
 

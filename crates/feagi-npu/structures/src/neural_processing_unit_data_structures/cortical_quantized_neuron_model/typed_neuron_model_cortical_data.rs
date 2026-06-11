@@ -4,9 +4,9 @@ use feagi_structures::feagi_data::feagi_pdi::tag_device::{PDITagCPU, PDITagGener
 use feagi_structures::feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
 use feagi_structures::feagi_data::shared_quantization_sets::{FeagiGlobalQuantization, NeuronModelQuantization};
 use feagi_structures::feagi_data::SupportsUintOps;
-use crate::neuron_models::base_traits_all_devices::{NeuronModelCorticalData};
-use crate::neural_processing_unit_data_structures::cortical_structure_configuration::CorticalConfigurationBase;
-use crate::neural_processing_unit_data_structures::cpu_wrappers::indexes_global::NPUCorticalAreaModelQuantizationIndex;
+use crate::neural_processing_unit_data_structures::neuron_models::base_traits_all_devices::{NeuronModelCorticalData};
+use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_types::cortical_area_layout::CorticalConfigurationBase;
+use crate::neural_processing_unit_data_structures::cpu_wrappers::indexes_burst_engine::NPUCorticalAreaModelQuantizationIndex;
 
 /// Holds all cortical level data
 pub trait TypedNeuronModelCorticalDataCollection<FGQ, NMQ, CCC, CMD>:
