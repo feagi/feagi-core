@@ -1,8 +1,8 @@
 use feagi_structures::feagi_data::shared_quantization_sets::FeagiGlobalQuantization;
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::calculate_struct_padding::calculate_byte_alignment_padding;
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_neuron::NPUNeuronIndexQuantizationLocal;
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::fcl_extensions::NPUPrimaryFCLCQuantizationLocalIndex;
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::packed_cortical_descriptor::PackedCorticalDescriptor;
+use crate::neural_processing_unit_data_structures::calculate_struct_padding::calculate_byte_alignment_padding;
+use crate::neural_processing_unit_data_structures::cpu_wrappers::indexes_global::NPUNeuronIndexQuantizationLocal;
+use crate::neural_processing_unit_data_structures::cpu_wrappers::fcl_extensions::NPUPrimaryFCLCQuantizationLocalIndex;
+use crate::neural_processing_unit_data_structures::packed_cortical_descriptor::PackedCorticalDescriptor;
 
 #[repr(C)]
 pub struct FCLCToFCLMappingTableCPU<FGQ: FeagiGlobalQuantization>

@@ -4,7 +4,7 @@
 use feagi_structures::feagi_data::feagi_pdi::PDIElement;
 use feagi_structures::feagi_data::feagi_pdi::tag_device::PDITagGenericDevice;
 use feagi_structures::feagi_data::shared_quantization_sets::{NeuronModelQuantization, FeagiGlobalQuantization, FeagiGlobalQuantizationLevel, CorticalPotentialQuantizationLevel};
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cortical_structure_configuration::CorticalConfigurationBase;
+use crate::neural_processing_unit_data_structures::cortical_structure_configuration::CorticalConfigurationBase;
 
 /// Root trait for all cortical data implementations, essentially any cortical level data shared
 /// by all neurons in a cortical area of a given neuron model. This should be extended with only

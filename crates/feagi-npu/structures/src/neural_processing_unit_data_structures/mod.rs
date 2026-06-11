@@ -9,6 +9,10 @@ pub mod cortical_quantized;
 
 pub mod burst_engine_cluster;
 pub mod dynamic_burst_engine_interface;
+mod calculate_struct_padding;
+pub mod packed_cortical_descriptor;
+pub mod cpu_wrappers;
+pub mod cortical_structure_configuration;
 // differentiators
 // 0 is alive [1 bit]
 // 1 neuron membrane quant [3 bit]

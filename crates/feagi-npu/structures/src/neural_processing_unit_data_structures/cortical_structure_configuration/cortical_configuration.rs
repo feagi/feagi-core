@@ -2,8 +2,8 @@ use feagi_structures::feagi_data::feagi_pdi::PDIElement;
 use feagi_structures::feagi_data::feagi_pdi::tag_device::{PDITagCPU, PDITagGenericDevice};
 use feagi_structures::feagi_data::quantizable_spatial::index::SpatialIndexDimensions4D;
 use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, CorticalPotentialQuantizationLevel, FeagiGlobalQuantization, FeagiGlobalQuantizationLevel};
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_neuron::NPUNeuronMembranePotential;
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_spatial::{NPUCorticalAreaDimensions, NPUNeuronIndexCorticalLocal};
+use crate::neural_processing_unit_data_structures::cpu_wrappers::indexes_global::NPUNeuronMembranePotential;
+use crate::neural_processing_unit_data_structures::cpu_wrappers::cortical_spatial::{NPUCorticalAreaDimensions, NPUNeuronIndexCorticalLocal};
 
 
 /// Base trait for Cortical configuration, which is simply general details about a cortical area

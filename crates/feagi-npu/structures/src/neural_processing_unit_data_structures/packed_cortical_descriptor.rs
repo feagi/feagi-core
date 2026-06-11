@@ -1,4 +1,4 @@
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cortical_structure_configuration::CorticalConfigurationType;
+use crate::neural_processing_unit_data_structures::cortical_structure_configuration::CorticalConfigurationType;
 use crate::neuron_models::neuron_models::NeuronModelTypeAndQuantization;
 
 /// Is used as a tag to identify what classes a cortical area belongs in, and more pertinently, 

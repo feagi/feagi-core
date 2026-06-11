@@ -2,7 +2,7 @@ use feagi_structures::feagi_data::feagi_pdi::{PDICollection};
 use feagi_structures::feagi_data::feagi_pdi::tag_device::PDITagGenericDevice;
 use feagi_structures::feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
 use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantizationLevel, FeagiGlobalQuantization};
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::cpu_wrappers::cortical_neuron::{NPUNeuronIndexGlobal, NPUNeuronIndexQuantizationLocal};
+use crate::neural_processing_unit_data_structures::cpu_wrappers::indexes_global::{NPUNeuronIndexGlobal, NPUNeuronIndexQuantizationLocal};
 
 /// Uses binary search in an internal table to convert the global index to a quant local one,
 /// assuming the indexes are ordered. It also returns the type of the quant as a flag.

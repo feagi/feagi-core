@@ -1,4 +1,4 @@
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_structures::packed_cortical_descriptor::PackedCorticalDescriptor;
+use crate::neural_processing_unit_data_structures::packed_cortical_descriptor::PackedCorticalDescriptor;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Default)]
