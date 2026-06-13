@@ -6,7 +6,7 @@
 //! bumps the relevant `SCHEMA_VERSION` and the crate major (ADR-006).
 //!
 //! v1 contracts: [`DatasetManifest`], [`IRSample`], [`RunSpec`], [`Scorecard`],
-//! [`EvaluationSpec`], [`PredictionRecord`], [`RunSummary`]. (`RunEvent` and plugin-axis
+//! [`EvaluationSpec`], [`PredictionRecord`], [`RunSummary`], [`RunEvent`]. (Plugin-axis
 //! descriptors arrive with later engine/UI wiring.)
 
 pub mod common;
@@ -15,6 +15,7 @@ pub mod evaluation_spec;
 pub mod ir_sample;
 pub mod metric_stats;
 pub mod prediction_record;
+pub mod run_event;
 pub mod run_spec;
 pub mod run_summary;
 pub mod scorecard;
@@ -29,6 +30,7 @@ pub use evaluation_spec::EvaluationSpec;
 pub use ir_sample::{CoordinateFrame, IRSample, Payload, TypedTarget};
 pub use metric_stats::MetricStat;
 pub use prediction_record::{PredictionRecord, TypedPrediction};
+pub use run_event::{MetricScope, RunEvent, RunEventKind};
 pub use run_spec::{
     CoderBinding, ExecutionMode, PinnedBinding, RewardPolicyBinding, RunSpec, SamplerBinding,
 };

@@ -279,6 +279,34 @@ Trade-offs:
 - Migrate `Trainer.tsx` tabs to Adapter-driven panels; route run control through Control API (aligns with ADR-004 M2).
 - Remove hardcoded IP/port from trainer UI as part of M2.
 
+#### Task template registry (generalized Step 1 model)
+
+The UI label "task preset" maps to **`TaskTemplate`**: a named, versioned bundle that pre-fills `RunConfig` draft axes (paradigm channels, `agent_topology`, `executor_mode`, default plugin refs, `dataset_constraints`, `ui_panels`). Step 1 is a **single-select dropdown** (grouped, with disabled preview entries) calling `list_task_templates(experiment_context)`; a detail panel below shows description, channels, and availability reason. One template active per protocol — not parallel. Step 2 catalog queries use `dataset_constraints`; Step 3 calls `check_dataset_compatibility`; Step 4 mounts plugin-contributed panels from `ui_panels[]` (ADR-005). New scenarios add registry entries + plugins, not wizard forks.
+
+#### Desktop Trainer UI design record (2026-06)
+
+The feagi-desktop plugin (`/trainer`) implements ADR-005 as a **single-focus wizard** (six steps: setup → dataset → compatibility → bindings → run → results), not a fixed CSV/Image/Video tab strip. Full step definitions and chrome (`ActiveExperimentWidget`, precondition strip, browse-vs-run-ready gating on `experimentRunSessionId`) are in `FEAGI_TRAINER_ARCHITECTURE_AND_DESIGN.md` Section 7.4.
+
+**Browse vs run-ready:** the window always opens; without an active experiment session the user may configure and browse the Experience Catalog but cannot validate bindings or start a protocol. This matches modern "configure offline, run when environment is live" without blocking exploration.
+
+**Dataset default:** Experience Catalog tab first; local package and import-file (legacy CSV) as alternates. Resolves `dataset_asset_id` per Experience Capture ADR-006; compatibility preflight per ADR-009 soft rules.
+
+**Composer campaign model (host):** one `trainer_protocol` (Train/Validate/Test phases) may contain multiple `trainer_run` records and terminal Scorecards on `feagi_sessions.scorecards[]` — designed, not yet persisted in Composer.
+
+#### Gaps vs best-in-class ML experiment UIs (backlog)
+
+Cross-reference: architecture doc Section 7.6. Summary for ADR-005 scope:
+
+| Gap | ADR-005 implication |
+|---|---|
+| No run comparison view | Results panel is single-run; needs multi-select + compare API |
+| No metric time-series charts | `RunEvent` stream supports partial metrics; UI renders tables only |
+| No plugin-contributed panels yet | Fixed wizard forms; UI-contribution contract still required (Phase 2 L3) |
+| No experiment training history dashboard | Scorecards exist per session; no aggregated list UI |
+| Misleading gradient/optimizer UI | **Non-goal** — must not add fake LR/loss panels; use plasticity + affect language |
+
+Highest-priority UI closes: metric charts on Run step, experiment history, run comparison (Phase 2–4 L3).
+
 ---
 
 ## ADR-006: Rust Implementation and feagi-core / feagi-desktop Crate Reuse
@@ -427,6 +455,15 @@ Trade-offs:
 - `check_dataset_compatibility` is part of the Control API (advisory/soft per ADR-009) and serves Experience Capture preflight (design Section 6.2).
 - Read-only first slice (unblocked now): a Scorecard viewer/importer needs only the existing `Scorecard` contract (incl. `metric_stats`) — no Control API — and can ship ahead of the run-control bridge.
 
+#### Resolved during desktop wiring (2026-06-10)
+
+The first desktop slices landed the event-bridge plumbing (`TauriRunEventSink` + `RunEventEmitter`, the `trainer-run-event`/`trainer-controller-log` event names, the `TrainerRunSlot`/`spawn_run` driver, the `start/cancel/status` commands, and the React `useTrainerRun` hook + reducer). Driving a concrete live run (the deferred "rollout slice") surfaced the following decisions:
+
+- **Events/cancel-aware execution entry point (gap closed in the open crate).** `RunConfig::execute_remote` drives `run_rollout` and therefore neither streams `RunEvent`s nor honors a `CancelToken` — it is CLI-only and cannot satisfy this ADR's stream/cancel contract. Add an additive `RunConfig::execute_remote_with_events(manifest, samples, &RemoteConnection, &AgentIdentity, &mut dyn RunEventSink, &CancelToken) -> (RunSummary, Scorecard)` that performs the same plugin assembly via `run_rollout_with_events`. Refactor `execute_remote` to delegate to it (with `NoopEventSink` + a fresh token) so there is a single assembly path. New `AgentIdentity { manufacturer, agent_name, agent_version, auth_token }` removes the hardcoded `"feagi-trainer-cli"` so the host supplies agent naming.
+- **The host owns all FEAGI I/O, including read-only control-plane metadata; the library stays pure ZMQ.** The wall-clock step model in `RemoteFeagiRuntime` needs the live burst frequency. The desktop host resolves it at run start via FEAGI REST (`GET /v1/burst_engine/stats`, base from `feagi_network_config`), asserts `active && frequency_hz > 0` (fail fast — no fallback), and passes it into `RemoteConnection`. REST is host-side metadata only; the crate opens no REST/HTTP and remains ZMQ-only for the data plane.
+- **Endpoints/agent identity from config only.** ZMQ registration endpoint + REST base come from `feagi_network_config`; agent name comes from a new `trainer_agent_name` config field. No literals enter the trainer path or run provenance.
+- **A desktop run is bound to an authenticated experiment session** (`AppState.ExperimentRunState` + access token), which is also the prerequisite for scorecard persistence (see ADR-012).
+
 ---
 
 ## ADR-012: Genome Scorecards, Dataset Assets, and Competition Extensibility (local-first)
@@ -502,6 +539,12 @@ Trade-offs:
 - Publishing is user-triggered only; enforce the public-genome prerequisite at publish time and reject otherwise. Scorecards default to `visibility: local`.
 - Keep CPU as the verification baseline (GPU fingerprint recorded; not verification-grade) per ADR-003.
 - Do not build leaderboard/competition logic now; only ensure schema completeness for it.
+
+#### Persistence is a host policy, not a library responsibility (clarified 2026-06-10)
+
+ADR-001 already scopes the Trainer to *generating* scorecards. Making this explicit for the storage path: **`feagi-trainer` returns the `Scorecard` value and performs no persistence** (no filesystem, no network) — `execute_remote_with_events` (ADR-011) hands the `Scorecard` back to the caller. The phrase "generated and stored locally automatically" above describes a **host policy**; each agent embedding the library decides where the returned scorecard goes.
+
+For the **FEAGI Trainer app in feagi-desktop**, the host policy is to persist the scorecard **server-side via Composer**, attached to the **`feagi_sessions` run record** of the active experiment (a scorecard is the result of one run; an experiment aggregates them by querying its sessions). This requires a Composer addition (`feagi_sessions.scorecards` field + an authenticated, owner-only `attach_scorecard` endpoint, excluded from experiment-share copies like `hey_feagi_chat`). A standalone/unauthenticated run has no session to attach to and is rejected. Other hosts (headless/CI) are free to choose a local artifact store; the library contract is unchanged either way.
 
 ---
 
@@ -713,7 +756,7 @@ Avoid building each layer horizontally. Land one **complete vertical slice** end
 **Phase 1 — Vertical slice (MVP, maps to design doc Phase 1 + ADR-004 M1)**
 - L1: orchestrator + registry + `validate_run` + artifact store for one run lifecycle.
 - L2: AdapterPlugin (tabular CSV), scalar Encoder + class Decoder selectors, classification MetricPack, baseline RewardPolicy (Pain/Pleasure).
-- L3: minimal desktop plugin UI — import dataset, configure run, launch, observe `RunEvent` stream, view result; one plugin-contributed config panel to prove the UI-contribution contract.
+- L3: minimal desktop plugin UI — **six-step wizard** (setup → dataset [Catalog default] → compatibility → bindings → run → results); browse-only without experiment session; `ActiveExperimentWidget` + precondition strip; observe `RunEvent` stream; wireframe in `feagi-desktop/src/plugins/trainer/` pending backend; one plugin-contributed config panel to prove the UI-contribution contract.
 - L5 (M1): the IRIS path runs entirely through service APIs (no direct-WS).
 - **Scorecard (ADR-012)**: emit a `Scorecard` for the run's final connectome (pinned `connectome_hash`, local `dataset_asset_id`, `evaluation_protocol_version`) into the local artifact store; support local self-verification (re-run matches within tolerance).
 - Exit: IRIS train/test run is reproducible, provenance-complete, produces a verifiable Scorecard, and is viewed end-to-end in the UI.
@@ -728,7 +771,7 @@ Avoid building each layer horizontally. Land one **complete vertical slice** end
 
 **Phase 2 — Breadth and legacy cutover (design doc Phase 1/2 + ADR-004 M2)**
 - L2: add image-folder (MNIST) and COCO-like adapters; image Encoder path; stratified/curriculum SamplerPlugins.
-- L3: Adapter-driven panels replace the fixed CSV/Image/Video tabs; remove hardcoded `127.0.0.1:9050`.
+- L3: Adapter-driven panels replace the fixed CSV/Image/Video tabs; remove hardcoded `127.0.0.1:9050`. **UI gaps (ADR-005 / design §7.6):** live metric time-series on Run step; experiment training history; Composer `trainer_protocol` / `trainer_run` persistence; Experience Catalog API wired from desktop.
 - L5 (M2): legacy UI routes invoke new service-backed run APIs; compatibility bridge active.
 - Exit: MNIST + a COCO-like classification/gesture workflow run through the new stack; legacy UI is bridged.
 
@@ -738,7 +781,7 @@ Avoid building each layer horizontally. Land one **complete vertical slice** end
 - Exit: at least one segmentation and one pose benchmark run end-to-end.
 
 **Phase 4 — Research-grade ops and legacy removal (design doc Phase 3 + ADR-004 M3)**
-- L1/L3: run comparison enforcing `(evaluation_protocol_version, reward_policy_version)` comparability key; lineage/provenance visualization.
+- L1/L3: run comparison enforcing `(evaluation_protocol_version, reward_policy_version)` comparability key; lineage/provenance visualization; config diff between runs. **UI gaps:** side-by-side compare view; genome/connectome snapshot picker at run start (Gap-2 prerequisite).
 - L5 (M3): remove legacy direct-protocol paths after the parity checklist is met and the bridge-removal window closes.
 - Exit: legacy trainer removed; published-benchmark governance in place.
 

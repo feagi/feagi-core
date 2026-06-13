@@ -105,3 +105,39 @@ These worked examples show the design covers diverse training needs by varying o
 | 4b | Quadruped walk — gait demonstration | Imitation (2.3) + goal (2.5→2.1) | Co-agent | gait demonstration + ideal-IMU goal | goal-distance + demo alignment | Experience Capture |
 
 Common thread: the controller (when present) owns the robot's sensory/motor + physics; the Trainer co-agent adds reward/teaching/goal on disjoint cortical I/O and scores the outcome. For scenario 3 there is no controller, so the Trainer is the sole agent — this is the **dataset path built first**.
+
+---
+
+## 7. UI implications and gaps vs best-in-class (by paradigm)
+
+Modern ML tools (W&B, MLflow, Roboflow, Isaac Lab) set researcher expectations per paradigm. The Trainer desktop UI (ADR-005, architecture doc Section 7.4–7.6) must reflect **FEAGI semantics** (plasticity + affect, not gradients) while closing UX gaps where parity is reasonable.
+
+### 7.1 What researchers expect vs what we provide (v1)
+
+| Researcher expectation | Tabular / dataset path (2.1–2.2) v1 | Embodied / co-agent (2.3–2.4) | Unsupervised (2.5) |
+|---|---|---|---|
+| Train / val / test splits | Protocol phases on wizard Step 1; Test = benchmark Scorecard | Same protocol model; episodes per phase | Exposure-only phase; no reward UI |
+| Dataset registry | Experience Catalog default (Step 2); import CSV fallback | Experience Capture episodes | Catalog or live stream |
+| Live metrics during run | Table from `RunEvent`; **gap:** no time-series chart | **Gap:** episode reward curve, success rate | **Gap:** exposure progress only |
+| Hyperparameters / optimizer | **Non-goal** — use plasticity, reward magnitude, ticks/sample | Same; add goal/teaching bindings | N/A |
+| Run comparison | **Gap:** single-run Results step | **Gap:** compare rollouts / success rates | Deferred |
+| Embodiment context | Genome + embodiment in AppBar widget | **Gap:** co-agent status, controller health, disjoint I/O map | N/A |
+
+### 7.2 Paradigm-specific UI backlog
+
+| Paradigm | Wizard / UI surface (target) | Gap vs best-in-class |
+|---|---|---|
+| **2.1–2.2 Supervised (v1)** | Steps 1–6 as implemented in wireframe | Metric charts; multi-run compare; catalog API; connectome hash verification |
+| **2.3 Imitation** | Teaching channel bindings; demo preview from Capture | No demo timeline scrubber; no "show me the teaching injection" debug view |
+| **2.4 Embodied control** | Co-agent panel: episode list, telemetry predicate status, affect injection log | No Isaac-style episode replay; no parallel controller diagram; live co-agent path not built |
+| **2.5 Unsupervised exposure** | Exposure phase template (reward off, observe-only metrics) | Not a named wizard preset; no Hebbian-specific metric pack UI |
+
+### 7.3 Language and anti-patterns
+
+The UI must **not** label plasticity controls as "learning rate" or show loss curves that imply backprop. Prefer: **reward magnitude**, **protocol phase**, **affect channel**, **ticks per sample**, **Scorecard / evaluation protocol version**. This is an intentional divergence from PyTorch/Hugging Face — document it in onboarding copy on Step 1 (Training setup).
+
+### 7.4 Cross-reference
+
+- Desktop wizard flow and full gap table: `FEAGI_TRAINER_ARCHITECTURE_AND_DESIGN.md` Section 7.4–7.6
+- ADR-005 Implementation Notes: Desktop UI design record + ADR-scoped gap summary
+- Delivery phases: `FEAGI_TRAINER_ADR_SET.md` Appendix B (L3 items per phase)

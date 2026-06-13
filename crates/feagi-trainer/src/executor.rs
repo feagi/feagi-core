@@ -39,6 +39,8 @@ use crate::contracts::{
     BackendFingerprint, ContentHash, DatasetAssetId, IRSample, PredictionRecord, RunId, RunSpec,
     RunStatus, RunSummary, Scorecard, ScorecardId, ScorecardStatus, ScorecardVisibility,
 };
+use crate::contracts::{MetricScope, RunEvent, RunEventKind};
+use crate::control::{CancelToken, NoopEventSink, RunEventSink};
 use crate::error::TrainerError;
 use crate::plugins::{EpisodeOutcome, EpisodeTrajectory, EpisodicMetricPack};
 use crate::plugins::{MetricPackPlugin, MetricResult};
@@ -130,18 +132,80 @@ where
     RP: RewardPolicy,
     M: MetricPackPlugin,
 {
+    // Non-observed, non-cancellable convenience wrapper: drops events and never cancels, so all
+    // existing callers keep identical behaviour.
+    let mut sink = NoopEventSink;
+    run_rollout_with_events(
+        run_id,
+        samples,
+        runtime,
+        encoder,
+        encoder_profile,
+        decoder,
+        decoder_profile,
+        reward_policy,
+        metric_pack,
+        config,
+        &mut sink,
+        &CancelToken::new(),
+    )
+}
+
+/// Same closed-loop rollout as [`run_rollout`], but streams [`RunEvent`]s through `events` and
+/// honours cooperative cancellation via `cancel` (ADR-011).
+///
+/// A `Progress` event is emitted after each sample is recorded (`repeat_index = 0`,
+/// `repeat_total = 1`), and one final `MetricUpdate { scope: Aggregate }` is emitted after
+/// scoring. The lifecycle events (`Running` / `Completed` / `Failed` / `ScorecardReady`) are owned
+/// by the [`RunControl`](crate::control::RunControl) layer, not this function.
+///
+/// Cancellation is checked at the top of each sample iteration; if requested the loop stops
+/// immediately with [`TrainerError::Cancelled`] and does not partially score.
+///
+/// # Errors
+/// Returns the first [`TrainerError`] raised by any stage, or [`TrainerError::Cancelled`] if a
+/// stop was requested mid-rollout.
+#[allow(clippy::too_many_arguments)]
+pub fn run_rollout_with_events<R, E, D, RP, M>(
+    run_id: &RunId,
+    samples: &[IRSample],
+    runtime: &mut R,
+    encoder: &mut E,
+    encoder_profile: &EncoderBindingProfile,
+    decoder: &mut D,
+    decoder_profile: &DecoderBindingProfile,
+    reward_policy: &RP,
+    metric_pack: &M,
+    config: &ExecutorConfig,
+    events: &mut dyn RunEventSink,
+    cancel: &CancelToken,
+) -> Result<RolloutOutcome, TrainerError>
+where
+    R: FeagiRuntime,
+    E: EncoderPlugin<Frame = R::SensoryFrame>,
+    D: DecoderPlugin<Frame = R::MotorFrame>,
+    RP: RewardPolicy,
+    M: MetricPackPlugin,
+{
     if config.ticks_per_sample == 0 {
         return Err(TrainerError::Config(
             "ExecutorConfig.ticks_per_sample must be non-zero".to_string(),
         ));
     }
 
+    let total_samples = samples.len() as u64;
     let mut predictions: Vec<PredictionRecord> = Vec::with_capacity(samples.len());
     // The labeled subset that participates in scoring + reward (aligned by construction).
     let mut scored_predictions = Vec::new();
     let mut scored_targets = Vec::new();
 
-    for sample in samples {
+    for (index, sample) in samples.iter().enumerate() {
+        if cancel.is_cancelled() {
+            return Err(TrainerError::Cancelled(format!(
+                "stopped after {index} of {total_samples} samples"
+            )));
+        }
+
         let frame = encoder.encode(sample, encoder_profile)?;
         runtime.submit_sensory(frame)?;
         runtime.step(config.ticks_per_sample)?;
@@ -165,15 +229,33 @@ where
             timestamp: None,
             metadata: BTreeMap::new(),
         });
+
+        events.emit(RunEvent::new(
+            run_id.clone(),
+            RunEventKind::Progress {
+                samples_done: (index as u64) + 1,
+                samples_total: total_samples,
+                repeat_index: 0,
+                repeat_total: 1,
+            },
+        ));
     }
 
     let metric_result = metric_pack.evaluate(&scored_predictions, &scored_targets)?;
+
+    events.emit(RunEvent::new(
+        run_id.clone(),
+        RunEventKind::MetricUpdate {
+            scope: MetricScope::Aggregate,
+            metrics: metric_result.metrics.clone(),
+        },
+    ));
 
     let summary = RunSummary {
         schema_version: RUN_SUMMARY_SCHEMA_VERSION,
         run_id: run_id.clone(),
         status: RunStatus::Completed,
-        total_samples: samples.len() as u64,
+        total_samples,
         evaluated_samples: scored_predictions.len() as u64,
         metrics: metric_result.metrics.clone(),
         started_at: None,
@@ -679,6 +761,98 @@ mod tests {
         assert_eq!(outcome.summary.total_samples, 2);
         assert_eq!(outcome.summary.evaluated_samples, 1);
         assert_eq!(runtime.submitted_rewards().len(), 1);
+    }
+
+    #[test]
+    fn rollout_with_events_streams_progress_then_aggregate_metrics() {
+        use crate::control::CollectingEventSink;
+
+        let samples = vec![
+            one_hot_sample(0, 0, 3),
+            one_hot_sample(1, 1, 3),
+            one_hot_sample(2, 2, 3),
+        ];
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut encoder = PassthroughEncoder;
+        let mut decoder = ArgmaxDecoder;
+        let reward = PainPleasureReward::new(0.8).unwrap();
+        let metric = ClassificationMetricPack::new();
+        let mut sink = CollectingEventSink::default();
+
+        run_rollout_with_events(
+            &RunId("run-evt".to_string()),
+            &samples,
+            &mut runtime,
+            &mut encoder,
+            &encoder_profile(),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &config(),
+            &mut sink,
+            &CancelToken::new(),
+        )
+        .expect("rollout");
+
+        // One Progress per sample, in order, then exactly one aggregate MetricUpdate last.
+        let progress: Vec<_> = sink
+            .events
+            .iter()
+            .filter_map(|e| match &e.kind {
+                RunEventKind::Progress { samples_done, .. } => Some(*samples_done),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(progress, vec![1, 2, 3]);
+
+        match sink.events.last().map(|e| &e.kind) {
+            Some(RunEventKind::MetricUpdate { scope, metrics }) => {
+                assert_eq!(*scope, MetricScope::Aggregate);
+                assert!((metrics["accuracy"] - 1.0).abs() < 1e-12);
+            }
+            other => panic!("expected trailing aggregate MetricUpdate, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rollout_with_events_stops_on_cancellation() {
+        use crate::control::CollectingEventSink;
+
+        let samples = vec![
+            one_hot_sample(0, 0, 3),
+            one_hot_sample(1, 1, 3),
+            one_hot_sample(2, 2, 3),
+        ];
+        let mut runtime = StubFeagiRuntime::identity();
+        let mut encoder = PassthroughEncoder;
+        let mut decoder = ArgmaxDecoder;
+        let reward = PainPleasureReward::new(0.8).unwrap();
+        let metric = ClassificationMetricPack::new();
+        let mut sink = CollectingEventSink::default();
+        // Pre-cancel: the very first iteration's guard trips before any work happens.
+        let cancel = CancelToken::new();
+        cancel.cancel();
+
+        let result = run_rollout_with_events(
+            &RunId("run-cancel".to_string()),
+            &samples,
+            &mut runtime,
+            &mut encoder,
+            &encoder_profile(),
+            &mut decoder,
+            &decoder_profile(),
+            &reward,
+            &metric,
+            &config(),
+            &mut sink,
+            &cancel,
+        );
+
+        assert!(matches!(result, Err(TrainerError::Cancelled(_))));
+        // No samples were stepped or scored before the stop.
+        assert_eq!(runtime.burst_count(), 0);
+        assert!(sink.events.is_empty());
     }
 
     #[test]

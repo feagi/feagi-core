@@ -37,4 +37,8 @@ pub enum TrainerError {
     /// Communication with a live FEAGI runtime failed (transport/protocol error).
     #[error("runtime error: {0}")]
     Runtime(String),
+
+    /// The run was cooperatively cancelled via its control token before completing.
+    #[error("run cancelled: {0}")]
+    Cancelled(String),
 }

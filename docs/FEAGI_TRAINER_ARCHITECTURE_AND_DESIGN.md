@@ -354,6 +354,67 @@ All contracts must include `schema_version`.
 3. Inspect sample-level disagreements.
 4. Export benchmark summary.
 
+### 7.4 Desktop Trainer UI (feagi-desktop plugin)
+
+The closed **FEAGI Trainer** app (`feagi-desktop`, route `/trainer`) is a secondary Tauri window. It consumes the Control API and `RunEvent` stream only (ADR-005, ADR-011); it never opens a FEAGI socket for benchmark runs.
+
+**Navigation model:** a **single-focus wizard** (not one scroll-everything page) with six steps:
+
+1. **Training setup** — **`TaskTemplate`** single-select dropdown from `list_task_templates(experiment_context)` (grouped by modality family; disabled options for preview/unavailable entries with reason in detail panel); selection pre-fills one `RunConfig` draft (not parallel). Protocol template (Train → Validate → Test or subset); sampler seed and optional multi-seed repeats. CSV import is a **dataset source** on Step 2 for tabular templates. Wireframe mock: `feagi-desktop/src/plugins/trainer/taskTemplates.ts`.
+2. **Dataset source** — default **Experience Catalog** tab; alternate **local package** and **import file** (pre-existing CSV) tabs. Catalog selection resolves producer-assigned `dataset_asset_id` / version / `content_hash` (ADR-012, Experience Capture ADR-006).
+3. **Compatibility** — Trainer-authoritative preflight (`check_dataset_compatibility`); structural blocks vs advisory warnings (Experience Capture ADR-009 soft compatibility).
+4. **Brain bindings** — encoder/decoder cortical areas, reward magnitude, ticks/sample; Advanced holds plugin ids and provenance fields.
+5. **Run** — phase-aware live view driven by `RunEvent` (progress, interim/aggregate metrics, cancel).
+6. **Results** — per-phase Scorecards, primary benchmark on Test phase, provenance accordion, export affordances.
+
+**Experiment gating (browse vs run-ready):** the window **always opens**. When no active `feagi_sessions` run exists (`experimentRunSessionId` / desktop `ExperimentRunState`), the UI stays in **browse/configure** mode: setup and dataset steps remain editable; Validate, Start, and live binding probes are disabled with guidance and CTAs (Launch / Restart experiment). When the experiment stops while the Trainer is open, the UI degrades gracefully (cancel in-flight protocol, gray run actions, preserve draft config and completed scorecards). Runs and Scorecard upload require an authenticated experiment session (ADR-011/ADR-012).
+
+**Persistent context chrome:**
+
+- **ActiveExperimentWidget** (AppBar): embodiment thumbnail, genome title, session running indicator; popover with session/experiment ids and launch actions.
+- **Precondition strip:** session, FEAGI burst, selected dataset, connectome hash status.
+
+**Composer persistence (host policy, not crate):** a long-running training campaign on one experiment session is modeled as **`trainer_protocol`** (ordered Train/Validate/Test phases on one dataset) containing multiple **`trainer_run`** records (one crate execution per phase), each linking to a terminal **Scorecard** on `feagi_sessions.scorecards[]`. Progress snapshots for long runs are host-owned (desktop → Composer PATCH), not part of the open crate.
+
+Wireframe implementation lives in `feagi-desktop/src/plugins/trainer/` (UI-only/mock phase until backend wiring).
+
+### 7.5 Alignment with modern ML / MLOps workflows
+
+The Trainer UI is **not** a gradient-descent studio (no loss curves, LR schedules, or optimizer panels — FEAGI learns via plasticity and affect channels; see `FEAGI_TRAINER_TRAINING_PARADIGMS.md`). It **is** aligned with modern **experiment tracking and benchmark** practice:
+
+| Modern pattern | Trainer equivalent |
+|---|---|
+| Experiment-centric runs | Bind to live `experiment_id` + `session_id`; embodiment + genome visible in chrome |
+| Dataset registry / catalog | Experience Catalog as default source; import file for legacy CSV |
+| Train / val / test protocol | Explicit phase templates; Test phase = primary benchmark Scorecard |
+| Preflight before execution | Compatibility step; `validate_run` / `check_dataset_compatibility` |
+| Reproducibility & lineage | Scorecard pins dataset hash, protocol, connectome; session-scoped results |
+| Configure → validate → run → artifacts | Six-step wizard; Run step is config-free |
+| Progressive disclosure | Advanced collapsed; browse-only without live brain |
+
+Researchers from PyTorch / Hugging Face / W&B should find the **data → protocol → run → metrics** path familiar; the **optimization** surface is intentionally different and must not be mimicked misleadingly.
+
+### 7.6 Gaps vs best-in-class (explicit backlog)
+
+The following gaps were identified during desktop UI design review (2026-06). They are **product/UI backlog items** for feagi-desktop + Composer unless noted as crate scope. They do **not** block the Phase 1 vertical slice (tabular IRIS + Scorecard + session bind) but affect parity with tools researchers expect (MLflow, W&B, ClearML, Roboflow, Label Studio export paths).
+
+| Gap | Best-in-class expectation | Current design / implementation | Target phase | Owner |
+|---|---|---|---|---|
+| **Run comparison** | Side-by-side metrics across runs/experiments; diff configs | Results step shows one protocol only; no compare view | Phase 4 (L3) | feagi-desktop + Composer query API |
+| **Live metric time series** | Charts during training (accuracy vs step), not just latest table | `RunEvent` `metric_update(partial)` rendered as table; no chart component | Phase 2 (L3) | feagi-desktop UI |
+| **Experiment training history** | Dashboard of all protocols/runs on an experiment | Scorecards on `feagi_sessions`; no aggregated history UI | Phase 2 (L3) | Composer + feagi-desktop |
+| **Config diff / run lineage viz** | Visual diff between RunConfigs or Scorecard provenance | Provenance accordion text-only | Phase 4 (L3) | feagi-desktop |
+| **Genome/connectome snapshot UX** | Verified brain hash at run start/end; snapshot picker | `connectome_hash` placeholder; widget shows genome title only | Phase 1–2 (L4 + desktop) | feagi-core + desktop |
+| **`trainer_protocol` / `trainer_run` records** | Durable multi-phase campaign with progress | Single run + scorecard attach; protocol model designed, not in Composer | Phase 2 (Composer) | nrs-composer |
+| **Experience Catalog API** | Search, resolve, mount package by `dataset_asset_id` | UI designed; Composer Dataset object Phase 4 (E2E plan) | Phase 3–4 | Composer + desktop commands |
+| **Plugin-contributed UI panels** | Adapter/metric panels from registry (ADR-005 §4) | Fixed wizard forms | Phase 2 (L3) | feagi-desktop + UI-contribution contract |
+| **Collaboration / publish** | Share run, comment, public benchmark | Publish disabled; ADR-012 visibility lifecycle | Post-MVP | Composer |
+| **Embodied / co-agent run UI** | Episode rewards, telemetry predicates, co-agent status | Paradigms 2.4 designed; not in wizard v1 | Phase 1d / 5 | feagi-desktop + crate |
+| **Hyperparameter search / AutoML** | Grid search, sweeps | Out of scope (not FEAGI learning model) | N/A — non-goal | — |
+| **Notebook/script-first entry** | Primary UX is code | RunConfig JSON import/export; headless CLI exists | Partial (CLI); optional export UX Phase 2 | feagi-trainer CLI + desktop |
+
+**Highest-impact closes for “modern AI” feel without betraying FEAGI semantics:** (1) run comparison, (2) metric time-series during Run, (3) experiment training history — all listed in Phase 2–4 of Section 9.
+
 ## 8. Non-Functional Requirements
 
 ### Reliability
@@ -401,6 +462,7 @@ All contracts must include `schema_version`.
 - Video adapter with frame-window policies.
 - Additional metric packs (detection, sequence).
 - Better sampler policies (stratified/curriculum).
+- **UI (Section 7.6):** Experience Catalog wired to Composer; live metric charts on Run step; experiment training history view; `trainer_protocol` / `trainer_run` persistence in Composer.
 
 ### Phase 3 (Research-Grade Operations)
 
@@ -408,6 +470,7 @@ All contracts must include `schema_version`.
 - Collaborative benchmark templates.
 - Optional distributed run execution.
 - External integrations for experiment tracking.
+- **UI (Section 7.6):** plugin-contributed config/result panels (ADR-005); embodied co-agent run surfaces (ADR-014).
 
 ## 10. Risks and Mitigations
 
@@ -428,6 +491,8 @@ All contracts must include `schema_version`.
 4. Benchmark publishing model (local-only vs shareable signed manifests).
 5. Compatibility-query surface for upstream producers: a distinct `check_dataset_compatibility` endpoint vs a generalization of `validate_dataset` to accept an unregistered manifest (Section 6.2; consumed by Experience Capture preflight).
 6. Shared dataset-identity contracts placement: keep in `feagi-trainer` (Experience Capture depends on it) vs extract a `feagi-dataset-contracts` crate consumed by both (Section 4.1).
+7. **`trainer_protocol` embedding:** nested under `feagi_sessions` vs top-level Composer collection for query scale (Section 7.4).
+8. **Catalog default scope** on Dataset step: "My datasets" vs "Public catalog" (Section 7.4).
 
 ## 12. Immediate Next Step
 

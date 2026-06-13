@@ -189,6 +189,24 @@ pub struct RemoteConnection {
     pub burst_frequency_hz: f64,
 }
 
+/// Agent registration identity presented to FEAGI by the remote runtime.
+///
+/// Supplied by the host (the agent embedding the library) rather than hardcoded, so each host
+/// registers under its own name/token. Not part of run provenance — purely transport identity,
+/// resolved at execution time alongside [`RemoteConnection`].
+#[cfg(feature = "remote-runtime")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentIdentity {
+    /// Agent descriptor manufacturer field.
+    pub manufacturer: String,
+    /// Agent descriptor name field.
+    pub agent_name: String,
+    /// Agent descriptor version field.
+    pub agent_version: u32,
+    /// Authentication token presented at registration.
+    pub auth_token: [u8; 32],
+}
+
 #[cfg(feature = "remote-runtime")]
 impl RunConfig {
     /// Executes the closed-loop rollout against a live FEAGI and assembles the [`Scorecard`].
@@ -207,17 +225,64 @@ impl RunConfig {
         samples: &[IRSample],
         connection: &RemoteConnection,
     ) -> Result<(crate::contracts::RunSummary, crate::contracts::Scorecard), TrainerError> {
+        // CLI convenience: the same assembly as the observed path, but events are dropped and the
+        // run is never cancelled. Keeps a single assembly path (DRY) so the CLI and the desktop
+        // host (ADR-011) cannot diverge.
+        let identity = AgentIdentity {
+            manufacturer: "feagi-trainer".to_string(),
+            agent_name: "feagi-trainer-cli".to_string(),
+            agent_version: 1,
+            auth_token: [0u8; 32],
+        };
+        let mut sink = crate::control::NoopEventSink;
+        self.execute_remote_with_events(
+            manifest,
+            samples,
+            connection,
+            &identity,
+            &mut sink,
+            &crate::control::CancelToken::new(),
+        )
+    }
+
+    /// Executes the closed-loop rollout against a live FEAGI, streaming each [`RunEvent`] through
+    /// `events` and honouring cooperative cancellation via `cancel` (ADR-011 Control API).
+    ///
+    /// Identical assembly to [`execute_remote`] but built on
+    /// [`run_rollout_with_events`](crate::executor::run_rollout_with_events): the host supplies the
+    /// event sink (e.g. a Tauri re-emitter), the cancel token (wired to a UI stop), and the
+    /// [`AgentIdentity`] (so registration is not hardcoded). On success the returned summary
+    /// carries the produced `scorecard_id` and the `Scorecard` is returned to the caller; this
+    /// function performs **no persistence** — where the scorecard is stored is a host policy
+    /// (ADR-012).
+    ///
+    /// The runtime is always deregistered before returning, even if the rollout failed or was
+    /// cancelled; the rollout error is surfaced first.
+    ///
+    /// # Errors
+    /// Returns [`TrainerError::Unsupported`] if the run spec is not `Remote`,
+    /// [`TrainerError::Config`] for a non-positive/non-finite burst frequency, and propagates any
+    /// connection, transport, pipeline, or [`TrainerError::Cancelled`] error otherwise.
+    pub fn execute_remote_with_events(
+        &self,
+        manifest: &DatasetManifest,
+        samples: &[IRSample],
+        connection: &RemoteConnection,
+        identity: &AgentIdentity,
+        events: &mut dyn crate::control::RunEventSink,
+        cancel: &crate::control::CancelToken,
+    ) -> Result<(crate::contracts::RunSummary, crate::contracts::Scorecard), TrainerError> {
         use crate::binding::{
             ClassDecoder, PainPleasureReward, PopulationEncoder, RemoteFeagiRuntime,
             RemoteRuntimeConfig,
         };
         use crate::contracts::ExecutionMode;
-        use crate::executor::{assemble_scorecard, run_rollout};
+        use crate::executor::{assemble_scorecard, run_rollout_with_events};
         use std::time::Duration;
 
         if self.run_spec.execution_mode != ExecutionMode::Remote {
             return Err(TrainerError::Unsupported(format!(
-                "the CLI can only execute Remote runs, got {:?}",
+                "remote execution requires a Remote run spec, got {:?}",
                 self.run_spec.execution_mode
             )));
         }
@@ -233,10 +298,10 @@ impl RunConfig {
         let burst_period = Duration::from_secs_f64(1.0 / connection.burst_frequency_hz);
         let runtime_config = RemoteRuntimeConfig {
             registration_endpoint: connection.registration_endpoint.clone(),
-            manufacturer: "feagi-trainer".to_string(),
-            agent_name: "feagi-trainer-cli".to_string(),
-            agent_version: 1,
-            auth_token: [0u8; 32],
+            manufacturer: identity.manufacturer.clone(),
+            agent_name: identity.agent_name.clone(),
+            agent_version: identity.agent_version,
+            auth_token: identity.auth_token,
             burst_period,
             registration_poll_interval: burst_period,
             registration_timeout: burst_period * 200,
@@ -250,7 +315,7 @@ impl RunConfig {
         let reward = PainPleasureReward::new(self.reward_magnitude)?;
         let metric = ClassificationMetricPack::new();
 
-        let rollout = run_rollout(
+        let rollout = run_rollout_with_events(
             &self.run_spec.run_id,
             samples,
             &mut runtime,
@@ -261,6 +326,8 @@ impl RunConfig {
             &reward,
             &metric,
             &self.executor,
+            events,
+            cancel,
         );
 
         // Always deregister, even if the rollout failed; surface the rollout error first.
@@ -454,5 +521,73 @@ mod tests {
         assert_eq!(provenance.backend_fingerprint.descriptor, "stub-cpu");
         assert_eq!(provenance.status, ScorecardStatus::SelfReported);
         assert_eq!(provenance.visibility, ScorecardVisibility::Local);
+    }
+
+    // The full streaming path needs a live FEAGI (covered by tests/remote_runtime_live.rs). These
+    // exercise the pre-connection validation gates, which return before any transport is opened.
+    #[cfg(feature = "remote-runtime")]
+    fn agent_identity() -> AgentIdentity {
+        AgentIdentity {
+            manufacturer: "feagi-trainer".to_string(),
+            agent_name: "feagi-trainer-test".to_string(),
+            agent_version: 1,
+            auth_token: [0u8; 32],
+        }
+    }
+
+    #[cfg(feature = "remote-runtime")]
+    fn planned() -> (RunConfig, DatasetManifest, Vec<IRSample>) {
+        let config = run_config();
+        let source = DatasetSource {
+            uri: "mem://one_hot.csv".to_string(),
+            bytes: CSV.as_bytes().to_vec(),
+        };
+        let (manifest, samples) = config.plan(&source).expect("plan");
+        (config, manifest, samples)
+    }
+
+    #[cfg(feature = "remote-runtime")]
+    #[test]
+    fn execute_remote_with_events_rejects_non_remote_spec() {
+        let (mut config, manifest, samples) = planned();
+        config.run_spec.execution_mode = ExecutionMode::Embedded;
+        let connection = RemoteConnection {
+            registration_endpoint: "tcp://example.test:30001".to_string(),
+            burst_frequency_hz: 10.0,
+        };
+        let mut sink = crate::control::NoopEventSink;
+        let err = config
+            .execute_remote_with_events(
+                &manifest,
+                &samples,
+                &connection,
+                &agent_identity(),
+                &mut sink,
+                &crate::control::CancelToken::new(),
+            )
+            .unwrap_err();
+        assert!(matches!(err, TrainerError::Unsupported(_)));
+    }
+
+    #[cfg(feature = "remote-runtime")]
+    #[test]
+    fn execute_remote_with_events_rejects_nonpositive_burst() {
+        let (config, manifest, samples) = planned();
+        let connection = RemoteConnection {
+            registration_endpoint: "tcp://example.test:30001".to_string(),
+            burst_frequency_hz: 0.0,
+        };
+        let mut sink = crate::control::NoopEventSink;
+        let err = config
+            .execute_remote_with_events(
+                &manifest,
+                &samples,
+                &connection,
+                &agent_identity(),
+                &mut sink,
+                &crate::control::CancelToken::new(),
+            )
+            .unwrap_err();
+        assert!(matches!(err, TrainerError::Config(_)));
     }
 }

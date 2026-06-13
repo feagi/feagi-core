@@ -13,6 +13,7 @@
 pub mod adapters;
 pub mod binding;
 pub mod contracts;
+pub mod control;
 pub mod error;
 pub mod executor;
 pub mod metrics;

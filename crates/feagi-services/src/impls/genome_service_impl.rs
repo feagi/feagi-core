@@ -4019,15 +4019,12 @@ impl GenomeServiceImpl {
                 coding_type,
                 coding_options,
                 parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
-                dev_count: area
-                    .properties
-                    .get("dev_count")
-                    .and_then(|v| {
-                        v.as_u64()
-                            .map(|n| n as usize)
-                            .or_else(|| v.as_f64().map(|n| n as usize))
-                            .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
-                    }),
+                dev_count: area.properties.get("dev_count").and_then(|v| {
+                    v.as_u64()
+                        .map(|n| n as usize)
+                        .or_else(|| v.as_f64().map(|n| n as usize))
+                        .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+                }),
                 cortical_dimensions_per_device: area
                     .properties
                     .get("cortical_dimensions_per_device")
@@ -4221,15 +4218,12 @@ impl GenomeServiceImpl {
             coding_options,
             parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
             // Extract dev_count and cortical_dimensions_per_device from properties for IPU/OPU
-            dev_count: area
-                .properties
-                .get("dev_count")
-                .and_then(|v| {
-                    v.as_u64()
-                        .map(|n| n as usize)
-                        .or_else(|| v.as_f64().map(|n| n as usize))
-                        .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
-                }),
+            dev_count: area.properties.get("dev_count").and_then(|v| {
+                v.as_u64()
+                    .map(|n| n as usize)
+                    .or_else(|| v.as_f64().map(|n| n as usize))
+                    .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+            }),
             cortical_dimensions_per_device: area
                 .properties
                 .get("cortical_dimensions_per_device")
@@ -4423,15 +4417,12 @@ impl GenomeServiceImpl {
             coding_options,
             parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
             // Extract dev_count and cortical_dimensions_per_device from properties for IPU/OPU
-            dev_count: area
-                .properties
-                .get("dev_count")
-                .and_then(|v| {
-                    v.as_u64()
-                        .map(|n| n as usize)
-                        .or_else(|| v.as_f64().map(|n| n as usize))
-                        .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
-                }),
+            dev_count: area.properties.get("dev_count").and_then(|v| {
+                v.as_u64()
+                    .map(|n| n as usize)
+                    .or_else(|| v.as_f64().map(|n| n as usize))
+                    .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+            }),
             cortical_dimensions_per_device: area
                 .properties
                 .get("cortical_dimensions_per_device")
