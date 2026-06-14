@@ -85,6 +85,13 @@ pub struct Scorecard {
     pub connectome_hash: ConnectomeHash,
     /// Optional lineage reference to the source genome version.
     pub genome_version_id: Option<GenomeVersionId>,
+    /// Genome schema version the pinned `connectome_hash` / `genome_version_id` were authored
+    /// under. Lifted verbatim from [`RunSpec::genome_schema_version`]; see that field for the
+    /// as-authored vs as-executed policy. A hash is only unambiguous when paired with the
+    /// schema version it was computed under, since the genome's serialized form (and thus its
+    /// signature hashes) evolves with the schema. Optional + additive (ADR-006).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub genome_schema_version: Option<u32>,
     /// Stable asset id of the dataset scored against (resolves locally now — ADR-012).
     pub dataset_asset_id: DatasetAssetId,
     /// Human-facing dataset version string the score is bound to.
@@ -130,6 +137,7 @@ mod tests {
             scorecard_id: ScorecardId("sc-0001".to_string()),
             connectome_hash: ConnectomeHash("sha256:connectome".to_string()),
             genome_version_id: None,
+            genome_schema_version: Some(3),
             dataset_asset_id: DatasetAssetId("local:iris".to_string()),
             dataset_version: "1.0.0".to_string(),
             dataset_content_hash: ContentHash("sha256:abc".to_string()),
@@ -172,6 +180,19 @@ mod tests {
         let json = serde_json::to_string(&card).expect("serialize");
         let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(card, restored);
+    }
+
+    #[test]
+    fn genome_schema_version_is_omitted_and_tolerated_when_absent() {
+        // Additive evolution (ADR-006): a scorecard whose genome schema version is unknown must
+        // not emit the field, and an older wire form lacking it must still deserialize.
+        let mut card = iris_scorecard();
+        assert_eq!(card.genome_schema_version, Some(3));
+        card.genome_schema_version = None;
+        let json = serde_json::to_string(&card).expect("serialize");
+        assert!(!json.contains("genome_schema_version"));
+        let restored: Scorecard = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.genome_schema_version, None);
     }
 
     #[test]

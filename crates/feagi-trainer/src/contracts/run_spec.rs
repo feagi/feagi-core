@@ -115,6 +115,26 @@ pub struct RunSpec {
     pub connectome_hash: ConnectomeHash,
     /// Optional source-genome lineage reference.
     pub genome_version_id: Option<GenomeVersionId>,
+    /// Genome schema version the pinned identity (`connectome_hash` / `genome_version_id`)
+    /// was authored under.
+    ///
+    /// The genome is a *versioned* structure: its serialized form — and therefore its
+    /// signature hashes — changes across schema versions and across load-time migration
+    /// (`vN -> vLatest`). A bare hash is only unambiguous when paired with the schema version
+    /// it was computed under, so it is recorded here alongside the pinned identity.
+    ///
+    /// As-authored vs as-executed policy: this records the **as-authored** genome schema
+    /// version — the durable artifact a verifier reloads — sourced from the genome metadata's
+    /// `genome_schema_version` and authoritatively resolved by the genome library's
+    /// `detect_schema_version` (never by branching on the raw field). The **as-executed**
+    /// schema version (after any migration the runtime applied at load time) is identifiable
+    /// via `BackendFingerprint::feagi_core_version`; when the two imply different schema
+    /// versions, migration occurred and the runtime executed a migrated structure.
+    ///
+    /// Optional + additive (ADR-006): genomes/run specs that pre-date this field still
+    /// deserialize, and single runs that cannot resolve it omit it from the wire form.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub genome_schema_version: Option<u32>,
     /// FEAGI execution mode.
     pub execution_mode: ExecutionMode,
     /// Execution backend (CPU baseline; GPU fingerprinted only).
@@ -171,6 +191,7 @@ mod tests {
             evaluation_protocol_version: EvaluationProtocolVersion("clf-v1".to_string()),
             connectome_hash: ConnectomeHash("sha256:connectome".to_string()),
             genome_version_id: None,
+            genome_schema_version: Some(3),
             execution_mode: ExecutionMode::Embedded,
             backend: BackendKind::Cpu,
             quantization: None,
@@ -188,5 +209,27 @@ mod tests {
         let json = serde_json::to_string(&spec).expect("serialize");
         let restored: RunSpec = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(spec, restored);
+    }
+
+    #[test]
+    fn genome_schema_version_round_trips() {
+        let spec = iris_run_spec();
+        assert_eq!(spec.genome_schema_version, Some(3));
+        let json = serde_json::to_string(&spec).expect("serialize");
+        assert!(json.contains("genome_schema_version"));
+        let restored: RunSpec = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.genome_schema_version, Some(3));
+    }
+
+    #[test]
+    fn genome_schema_version_is_omitted_and_tolerated_when_absent() {
+        // Additive evolution (ADR-006): a spec that cannot resolve the genome schema version
+        // must not emit the field, and an older wire form lacking it must still deserialize.
+        let mut spec = iris_run_spec();
+        spec.genome_schema_version = None;
+        let json = serde_json::to_string(&spec).expect("serialize");
+        assert!(!json.contains("genome_schema_version"));
+        let restored: RunSpec = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(restored.genome_schema_version, None);
     }
 }

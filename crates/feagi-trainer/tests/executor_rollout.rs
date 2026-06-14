@@ -158,6 +158,7 @@ fn run_spec() -> RunSpec {
         evaluation_protocol_version: EvaluationProtocolVersion("clf-v1".to_string()),
         connectome_hash: ConnectomeHash("sha256:connectome".to_string()),
         genome_version_id: None,
+        genome_schema_version: Some(3),
         execution_mode: ExecutionMode::Remote,
         backend: BackendKind::Cpu,
         quantization: None,

@@ -313,6 +313,7 @@ fn assemble_scorecard_inner(
         scorecard_id: provenance.scorecard_id,
         connectome_hash: run_spec.connectome_hash.clone(),
         genome_version_id: run_spec.genome_version_id.clone(),
+        genome_schema_version: run_spec.genome_schema_version,
         dataset_asset_id: provenance.dataset_asset_id,
         dataset_version: provenance.dataset_version,
         dataset_content_hash: provenance.dataset_content_hash,
@@ -927,6 +928,7 @@ mod tests {
             evaluation_protocol_version: EvaluationProtocolVersion("clf-v1".to_string()),
             connectome_hash: ConnectomeHash("sha256:connectome".to_string()),
             genome_version_id: None,
+            genome_schema_version: Some(3),
             execution_mode: ExecutionMode::Remote,
             backend: BackendKind::Cpu,
             quantization: None,
@@ -1119,6 +1121,8 @@ mod tests {
         let card = assemble_scorecard(&run_spec, &metrics, provenance);
 
         assert_eq!(card.connectome_hash, run_spec.connectome_hash);
+        assert_eq!(card.genome_version_id, run_spec.genome_version_id);
+        assert_eq!(card.genome_schema_version, run_spec.genome_schema_version);
         assert_eq!(card.metric_pack, run_spec.metric_pack);
         assert_eq!(card.split_id, run_spec.split_id);
         assert_eq!(
