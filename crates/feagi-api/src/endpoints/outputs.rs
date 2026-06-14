@@ -130,6 +130,41 @@ pub struct MotorTapAgent {
     pub subscribed_cortical_ids: Vec<String>,
 }
 
+/// Read-only spike-cost / activity aggregate for a burst's tap snapshot.
+///
+/// Additive convenience derived from the same per-area data already returned in `areas`,
+/// so benchmark/diagnostic clients (encoder/substrate experiments) can read spike-cost and
+/// activity-intensity summaries without re-deriving them. Mirrors
+/// [`feagi_npu_burst_engine::BurstActivitySummary`].
+#[derive(Serialize, Clone, Debug, utoipa::ToSchema)]
+pub struct ActivitySummary {
+    /// Number of areas that fired at least one neuron this burst (after any filter).
+    pub active_area_count: usize,
+    /// Total fired neurons across the (filtered) areas this burst.
+    pub total_fired_neurons: usize,
+    /// Largest single-area fired-neuron count this burst.
+    pub peak_area_fired_neurons: usize,
+    /// Mean fired neurons per active area (0.0 when none fired).
+    pub mean_area_fired_neurons: f64,
+    /// Mean potential across captured firing samples (0.0 when none).
+    pub mean_sample_potential: f64,
+    /// Peak potential across captured firing samples (0.0 when none).
+    pub peak_sample_potential: f32,
+}
+
+impl From<feagi_npu_burst_engine::BurstActivitySummary> for ActivitySummary {
+    fn from(s: feagi_npu_burst_engine::BurstActivitySummary) -> Self {
+        ActivitySummary {
+            active_area_count: s.active_area_count,
+            total_fired_neurons: s.total_fired_neurons,
+            peak_area_fired_neurons: s.peak_area_fired_neurons,
+            mean_area_fired_neurons: s.mean_area_fired_neurons,
+            mean_sample_potential: s.mean_sample_potential,
+            peak_sample_potential: s.peak_sample_potential,
+        }
+    }
+}
+
 /// Response payload for `GET /v1/output/motor_snapshot/last`.
 #[derive(Serialize, Clone, Debug, utoipa::ToSchema)]
 pub struct MotorSnapshotResponse {
@@ -144,6 +179,8 @@ pub struct MotorSnapshotResponse {
     pub total_areas: usize,
     /// Total firing neurons across all motor areas this burst.
     pub total_neurons: usize,
+    /// Read-only spike-cost / activity-intensity aggregate over the (filtered) areas.
+    pub activity_summary: ActivitySummary,
     /// Per-area activity, ordered as captured by the burst loop.
     pub areas: Vec<MotorTapArea>,
     /// Per-agent publish summary. Empty when no agents have published since FEAGI start.
@@ -180,8 +217,24 @@ pub async fn get_motor_snapshot_last(
     let agent_filter = query.get("agent_id").cloned();
     let area_filter = query.get("cortical_id").cloned();
 
-    let mut areas: Vec<MotorTapArea> = snap
-        .areas
+    // Filter raw tap areas first so the activity summary and the returned areas stay
+    // consistent under the optional `cortical_id` filter.
+    let mut raw_areas = snap.areas;
+    if let Some(ref cid) = area_filter {
+        if !cid.is_empty() {
+            raw_areas.retain(|a| a.cortical_id == *cid);
+        }
+    }
+
+    let activity_summary: ActivitySummary =
+        feagi_npu_burst_engine::BurstActivitySummary::from_areas(
+            snap.burst_num,
+            snap.timestamp_ms,
+            &raw_areas,
+        )
+        .into();
+
+    let areas: Vec<MotorTapArea> = raw_areas
         .into_iter()
         .map(|a| MotorTapArea {
             cortical_id: a.cortical_id,
@@ -199,12 +252,6 @@ pub async fn get_motor_snapshot_last(
                 .collect(),
         })
         .collect();
-
-    if let Some(ref cid) = area_filter {
-        if !cid.is_empty() {
-            areas.retain(|a| a.cortical_id == *cid);
-        }
-    }
 
     let total_areas = areas.len();
     let total_neurons: usize = areas.iter().map(|a| a.neuron_count).sum();
@@ -235,7 +282,75 @@ pub async fn get_motor_snapshot_last(
         has_data,
         total_areas,
         total_neurons,
+        activity_summary,
         areas,
         agents,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use feagi_npu_burst_engine::{BurstActivitySummary, TapAreaActivity, TapSample};
+
+    fn area(cortical_id: &str, neuron_count: usize, potentials: &[f32]) -> TapAreaActivity {
+        TapAreaActivity {
+            cortical_id: cortical_id.to_string(),
+            cortical_idx: 0,
+            neuron_count,
+            samples: potentials
+                .iter()
+                .map(|&p| TapSample {
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                    potential: p,
+                })
+                .collect(),
+        }
+    }
+
+    /// The API `ActivitySummary` must mirror the core `BurstActivitySummary` field-for-field
+    /// so the read-side spike-cost projection stays a faithful copy of the burst-engine source.
+    #[test]
+    fn activity_summary_from_core_preserves_fields() {
+        let core = BurstActivitySummary {
+            burst_num: 7,
+            timestamp_ms: 123,
+            active_area_count: 2,
+            total_fired_neurons: 5,
+            peak_area_fired_neurons: 3,
+            mean_area_fired_neurons: 2.5,
+            mean_sample_potential: 0.4,
+            peak_sample_potential: 0.9,
+        };
+        let api: ActivitySummary = core.clone().into();
+        assert_eq!(api.active_area_count, core.active_area_count);
+        assert_eq!(api.total_fired_neurons, core.total_fired_neurons);
+        assert_eq!(api.peak_area_fired_neurons, core.peak_area_fired_neurons);
+        assert_eq!(api.mean_area_fired_neurons, core.mean_area_fired_neurons);
+        assert_eq!(api.mean_sample_potential, core.mean_sample_potential);
+        assert_eq!(api.peak_sample_potential, core.peak_sample_potential);
+    }
+
+    /// Filtering raw tap areas before summarizing must scope spike-cost to the selected area,
+    /// matching the `cortical_id` filter applied to the returned `areas`.
+    #[test]
+    fn summary_respects_cortical_id_filter() {
+        let raw = vec![
+            area("AAAA", 2, &[0.2, 0.8]),
+            area("BBBB", 3, &[0.5, 0.5, 0.5]),
+        ];
+
+        let filtered: Vec<TapAreaActivity> = raw
+            .iter()
+            .filter(|a| a.cortical_id == "BBBB")
+            .cloned()
+            .collect();
+        let summary: ActivitySummary = BurstActivitySummary::from_areas(1, 0, &filtered).into();
+
+        assert_eq!(summary.active_area_count, 1);
+        assert_eq!(summary.total_fired_neurons, 3);
+        assert_eq!(summary.peak_area_fired_neurons, 3);
+    }
 }
