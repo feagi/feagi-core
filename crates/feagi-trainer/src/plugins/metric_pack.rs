@@ -38,6 +38,27 @@ pub struct MetricResult {
     pub confusion: Option<ConfusionMatrix>,
 }
 
+impl MetricResult {
+    /// Merges this result's metric values into a scorecard-bound metrics map.
+    ///
+    /// This is the wiring used to combine an orthogonal pack (e.g. the spike-cost pack, whose
+    /// keys are `cost.`-namespaced) into the same `Scorecard::metrics` map as a primary pack.
+    /// A key collision is an explicit error rather than a silent overwrite, so two packs can
+    /// never quietly clobber each other's metrics. The confusion matrix is intentionally not
+    /// merged (it has no scalar representation).
+    pub fn merge_into(&self, target: &mut BTreeMap<String, f64>) -> Result<(), TrainerError> {
+        for (key, value) in &self.metrics {
+            if target.contains_key(key) {
+                return Err(TrainerError::Evaluation(format!(
+                    "metric key '{key}' already present; refusing to overwrite on merge"
+                )));
+            }
+            target.insert(key.clone(), *value);
+        }
+        Ok(())
+    }
+}
+
 /// Scores predictions against targets for a task family.
 pub trait MetricPackPlugin {
     /// Identifies this metric pack (axis provenance).

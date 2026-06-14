@@ -16,8 +16,10 @@ pub mod adapter;
 pub mod episodic_metric;
 pub mod metric_pack;
 pub mod sampler;
+pub mod spike_cost_metric;
 
 pub use adapter::{AdapterPlugin, DatasetSource, ValidationReport};
 pub use episodic_metric::{EpisodeOutcome, EpisodeTrajectory, EpisodicMetricPack};
 pub use metric_pack::{ClassMetrics, ConfusionMatrix, MetricPackPlugin, MetricResult};
 pub use sampler::SamplerPlugin;
+pub use spike_cost_metric::{SpikeCostMetricPack, SpikeCostObservation};
