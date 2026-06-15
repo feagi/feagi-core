@@ -1,4 +1,4 @@
-use feagi_structures::feagi_data::shared_quantization_sets::FeagiGlobalQuantization;
+use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantization;
 
 #[repr(C)]
 pub(crate) struct NPUSynapseMappingOneToOneCPU<FGQ>

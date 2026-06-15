@@ -1,3 +1,4 @@
+use feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantization;
 use feagi_data::quantizable_collections::dim_3d::spatial_shared_traits::{
     QuantizableSpatialCollection3DBase, QuantizableSpatialCollection3DIterWithCoordinate,
 };
@@ -8,7 +9,7 @@ use feagi_data::quantizable_collections::shared_traits::{
 };
 use feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
 use feagi_data::quantizable_spatial::wrappers::QuantizedSpatialWrapperBase;
-use feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, FeagiGlobalQuantization};
+use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use crate::neuron_voxels::collections::shared_traits::{CPUNeuronVoxelCollection, CPUNeuronVoxelCollectionSparse, NeuronVoxelCollection, NeuronVoxelCollectionSparse};
 use crate::neuron_voxels::voxel_collection_generic_descriptors::*;
 

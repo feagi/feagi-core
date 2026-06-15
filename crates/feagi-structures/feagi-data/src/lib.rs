@@ -14,9 +14,9 @@ mod core_numerical_types;
 pub mod percentages;
 pub mod quantizable_linear;
 pub mod quantizable_spatial;
-pub mod shared_quantization_sets;
 pub mod quantizable_collections;
 pub mod common_const_labels;
+pub mod quantization_levels;
 
 pub use core_numerical_types::{SupportsBasicCoreMathOps, SupportsUintOps};
 pub use paste;

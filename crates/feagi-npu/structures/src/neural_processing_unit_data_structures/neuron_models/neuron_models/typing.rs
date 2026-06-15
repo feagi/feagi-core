@@ -1,4 +1,3 @@
-use crate::neural_processing_unit_data_structures::packed_cortical_descriptor::PackedCorticalDescriptor;
 use crate::neural_processing_unit_data_structures::neuron_models::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantizationLevel;
 
 
@@ -32,20 +31,6 @@ impl NeuronModelTypeAndQuantization
                     FeagiStandardModelQuantizationLevel::NEURON_MODEL_BIT_IDENTIFIER & (quant as u8)
                 }
         }
-    }
-}
-
-impl From<PackedCorticalDescriptor> for NeuronModelTypeAndQuantization
-{
-    fn from(value: PackedCorticalDescriptor) -> Self {
-        let model_bits: u8 = value.into() & Self::MODEL_TYPE_BITMASK;
-        let quant_bits: u8 = value.into() & NeuronModelQuantizationBitConversion::NEURON_MODEL_QUANT_LEVEL_BITMASK;
-
-        // TODO proper logic later!
-        NeuronModelTypeAndQuantization::FeagiStandard(
-            FeagiStandardModelQuantizationLevel::Standard32bit
-        )
-
     }
 }
 

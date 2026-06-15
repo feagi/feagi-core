@@ -1,1 +1,0 @@
-mod global_index_to_quant_typed_index;

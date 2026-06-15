@@ -1,105 +1,68 @@
 use core::marker::PhantomData;
-use feagi_structures::feagi_data::feagi_pdi::PDIElement;
-use feagi_structures::feagi_data::feagi_pdi::tag_device::{PDITagCPU, PDITagGenericDevice};
-use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, FeagiGlobalQuantization};
-use crate::neural_processing_unit_data_structures::cpu_wrappers::indexes_burst_engine::NPUNeuronMembranePotential;
-use crate::neural_processing_unit_data_structures::cpu_wrappers::indexes_spatial_cortical_area::NPUNeuronIndexCorticalLocal;
-use crate::neural_processing_unit_data_structures::neuron_models::base_traits_cpu::{NeuronModelProcessorCPU};
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_types::cortical_area_layout::{CorticalConfigurationBase};
-use crate::neural_processing_unit_data_structures::neuron_models::base_traits_all_devices::NeuronModelProcessor;
+use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantization;
+use feagi_structures::feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use crate::neural_processing_unit_data_structures::burst_engine::descriptor_flags::cortical_area_layout::CorticalLayoutDimensionalCPU;
+use crate::neural_processing_unit_data_structures::wrappers::{NPUWrappedNeuronCorticalLocalIndex, NPUWrappedNeuronMembranePotential};
+use crate::neural_processing_unit_data_structures::burst_engine::common_traits::neuron_model_traits::neuron_model_processor::{NeuronModelProcessor, NeuronModelProcessorCPU};
 use crate::neural_processing_unit_data_structures::neuron_models::neuron_models::feagi_standard::data::{FeagiStandardModelCorticalDataCPU, FeagiStandardModelNeuronDataCPU};
 use crate::neural_processing_unit_data_structures::neuron_models::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
 use crate::npu_descriptors::NPUGlobalBurstCounter;
 
-pub struct FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB>
+pub struct FeagiStandardModelProcessorCPU<FGQ, NMQ>
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization, // fsm quant impl
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>
 {
     // No actual members
-    _p: PhantomData<(FGQ, NMQ, CCB)>,
+    _p: PhantomData<(FGQ, NMQ)>,
 }
 
 //region Tag Traits
 
-impl<FGQ, NMQ, CCB> PDIElement for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB>
-where
-    FGQ: FeagiGlobalQuantization,
-    NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant> {}
 
-impl<FGQ, NMQ, CCB> PDITagGenericDevice for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB>
-where
-    FGQ: FeagiGlobalQuantization,
-    NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant> {}
-
-impl<FGQ, NMQ, CCB> PDITagCPU for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB>
-where
-    FGQ: FeagiGlobalQuantization,
-    NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant> {}
 
 //endregion
 
-impl<FGQ, NMQ, CCB> NeuronModelProcessor<
+impl<FGQ, NMQ> NeuronModelProcessor<
     FGQ,
     NMQ,
-    CCB,
-    FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>,
-    FeagiStandardModelNeuronDataCPU<FGQ, NMQ>,
-> for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB>
+    FeagiStandardModelCorticalDataCPU<NMQ>,
+    FeagiStandardModelNeuronDataCPU<NMQ>,
+> for FeagiStandardModelProcessorCPU<FGQ, NMQ>
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
 {
-    const MODEL_NEEDS_TO_BE_INFORMED_OF_BURST_INDEX_ROLLOVER: bool = false;
 }
 
-impl<FGQ, NMQ, CCB> NeuronModelProcessorCPU<
+impl<FGQ, NMQ> NeuronModelProcessorCPU<
     FGQ,
     NMQ,
-    CCB,
-    FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>,
-    FeagiStandardModelNeuronDataCPU<FGQ, NMQ>> for FeagiStandardModelProcessorCPU<FGQ, NMQ, CCB>
+    FeagiStandardModelCorticalDataCPU<NMQ>,
+    FeagiStandardModelNeuronDataCPU<NMQ>
+> for FeagiStandardModelProcessorCPU<FGQ, NMQ>
 where
     FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant> // TODO CPU trait!
 {
-    fn process_neuron_potential
-    (
-        &self,
-        incoming_neuron_potential:  &NPUNeuronMembranePotential<<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant>,
-        neuron_linear_index: &NPUNeuronIndexCorticalLocal<FGQ::NeuronIndexCountQuant>,
-        burst_index:  &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>,
-        cortical_area_configuration:  &CCB,
-        cortical_area_data: &FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>,
-        neuron_model_data: &mut FeagiStandardModelNeuronDataCPU<FGQ, NMQ>,
-        this_neuron_potential: &mut NPUNeuronMembranePotential<<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant>
-    )
-        -> bool
-    {
+    fn create_blank_cortical_area_of_cortical_configuration_dimensional(cortical_area_layout: &CorticalLayoutDimensionalCPU<FGQ, NMQ::CorticalPotentialQuant>) -> FeagiStandardModelCorticalDataCPU<NMQ> {
         todo!()
     }
 
-    /// If enabled via the const, this method will be called on all neurons of that
-    /// neuron model type right before the global burst index overflows and resets to 0. Use this
-    /// method to update any values that need to be updated in that case
-    fn prepare_cortical_data_for_burst_index_rollover(
-        &self,
-        cortical_area_data: &mut FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>)
-    {
+    fn create_blank_neuron_of_cortical_configuration_dimensional(neuron_linear_index: &NPUWrappedNeuronCorticalLocalIndex<FGQ::NeuronIndexCountQuant>, burst_index: &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>, cortical_area_layout: &CorticalLayoutDimensionalCPU<FGQ, NMQ::CorticalPotentialQuant>, cortical_area_data: &FeagiStandardModelCorticalDataCPU<NMQ>) -> FeagiStandardModelNeuronDataCPU<NMQ> {
         todo!()
     }
 
-    fn prepare_neuron_data_for_burst_index_rollover(
-        &self,
-        neuron_linear_index: &NPUNeuronIndexCorticalLocal<FGQ::NeuronIndexCountQuant>,
-        neuron_model_data: &mut FeagiStandardModelNeuronDataCPU<FGQ, NMQ>)
-    {
+    fn process_neuron_potential_for_dimensional_cortical_configuration(
+        incoming_potential: &NPUWrappedNeuronMembranePotential<<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant>,
+        neuron_linear_index: &NPUWrappedNeuronCorticalLocalIndex<FGQ::NeuronIndexCountQuant>,
+        burst_index: &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>,
+        burst_index_of_last_activity: &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>,
+        cortical_layout_dimensional: &CorticalLayoutDimensionalCPU<FGQ, NMQ::CorticalPotentialQuant>,
+        cortical_area_data: &FeagiStandardModelCorticalDataCPU<NMQ>,
+        neuron_model_data: &mut FeagiStandardModelNeuronDataCPU<NMQ>,
+        this_neuron_potential: &mut NPUWrappedNeuronMembranePotential<<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant>)
+        -> bool {
         todo!()
     }
 }

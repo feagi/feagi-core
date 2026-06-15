@@ -1,5 +1,5 @@
-use feagi_data::quantizable_spatial::index::SpatialIndexCoordinate3D;
-use feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, FeagiGlobalQuantization};
+use feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantization;
+use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use crate::neuron_voxels::voxel_collection_generic_descriptors::*;
 
 pub trait NeuronVoxelCollection<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> 

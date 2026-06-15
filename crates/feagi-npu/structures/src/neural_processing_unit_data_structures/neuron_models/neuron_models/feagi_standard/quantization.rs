@@ -1,5 +1,6 @@
+use feagi_structures::feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantizationFloat32;
 use feagi_structures::feagi_data::quantizable_linear::base_types::{QuantizedDecimalTrait, QuantizedIndexCountTrait};
-use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantizationFloat32, NeuronModelQuantization};
+use feagi_structures::feagi_data::quantization_levels::extendable_quantizations::NeuronModelQuantization;
 use crate::neural_processing_unit_data_structures::neuron_models::neuron_models::typing::NeuronModelQuantizationBitConversion;
 
 #[repr(u8)]
@@ -13,6 +14,7 @@ impl NeuronModelQuantizationBitConversion for FeagiStandardModelQuantizationLeve
     // Feagi Standard shall be 0 0 0
     const NEURON_MODEL_BIT_IDENTIFIER: u8 = 0;
 }
+
 
 /// The quantization parameters for this neuron model
 pub trait FeagiStandardModelQuantization:

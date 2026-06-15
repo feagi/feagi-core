@@ -1,1 +1,0 @@
-mod typed_neuron_model_cortical_data;

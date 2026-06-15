@@ -1,78 +1,46 @@
 use std::marker::PhantomData;
-use feagi_structures::feagi_data::feagi_pdi::PDIElement;
-use feagi_structures::feagi_data::feagi_pdi::tag_device::{PDITagCPU, PDITagGenericDevice};
-use feagi_structures::feagi_data::quantizable_linear::base_types::{QuantizedDecimalTrait, QuantizedElementBase};
-use feagi_structures::feagi_data::shared_quantization_sets::{CorticalPotentialQuantization, FeagiGlobalQuantization};
-use crate::neural_processing_unit_data_structures::burst_engine_cluster::burst_engines::data_types::cortical_area_layout::CorticalConfigurationBase;
-use crate::neural_processing_unit_data_structures::neuron_models::base_traits_all_devices::{NeuronModelCorticalData, NeuronModelNeuronData};
-use crate::neural_processing_unit_data_structures::neuron_models::base_traits_cpu::{NeuronModelCorticalDataCPU, NeuronModelNeuronDataCPU};
+use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantization;
+use feagi_structures::feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use crate::neural_processing_unit_data_structures::burst_engine::descriptor_flags::cortical_area_layout::CorticalLayoutDimensionalCPU;
+use crate::neural_processing_unit_data_structures::wrappers::NPUWrappedNeuronCorticalLocalIndex;
+use crate::neural_processing_unit_data_structures::burst_engine::common_traits::neuron_model_traits::neuron_model_cortical_data::{NeuronModelCorticalData, NeuronModelCorticalDataCPU};
+use crate::neural_processing_unit_data_structures::burst_engine::common_traits::neuron_model_traits::neuron_model_neuron_data::{NeuronModelNeuronData, NeuronModelNeuronDataCPU};
 use crate::neural_processing_unit_data_structures::neuron_models::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
 use crate::npu_descriptors::NPUGlobalBurstCounter;
-use crate::neural_processing_unit_data_structures::cpu_wrappers::indexes_spatial_cortical_area::NPUNeuronIndexCorticalLocal;
 
 #[repr(C)]
-pub struct FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>
+pub struct FeagiStandardModelCorticalDataCPU<NMQ>
 where
-    FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>
 {
     pub excitability: NMQ::CorticalExcitabilityQuant,
     pub refractory_period_limit: NMQ::CorticalRefractoryPeriodLimitQuant,
     pub fire_threshold_limit: NMQ::CorticalFireThresholdLimit,
     pub consecutive_fire_limit: NMQ::CorticalConsecutiveFireLimit,
-    _p: PhantomData<(FGQ, NMQ, CCB)>,
+    _p: PhantomData<( NMQ)>,
 }
 
-//region Tags
 
-impl<FGQ, NMQ, CCB> PDITagGenericDevice for FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>
+
+
+impl<NMQ> NeuronModelCorticalData<NMQ> for FeagiStandardModelCorticalDataCPU<NMQ>
 where
-    FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
 {
+    const MODEL_NEEDS_TO_BE_INFORMED_OF_BURST_INDEX_ROLLOVER: bool = true;
+    const MODEL_SUPPORTS_CORTICAL_LAYOUT_DIMENSIONAL: bool = true;
 }
 
-impl<FGQ, NMQ, CCB> PDITagCPU for FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>
+impl<NMQ> NeuronModelCorticalDataCPU<NMQ> for FeagiStandardModelCorticalDataCPU<NMQ>
 where
-    FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
 {
+
 }
 
-impl<FGQ, NMQ, CCB> PDIElement for FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>
+impl<NMQ> FeagiStandardModelCorticalDataCPU<NMQ>
 where
-    FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
-{
-}
-
-//endregion
-
-impl<FGQ, NMQ, CCB> NeuronModelCorticalData<FGQ, NMQ, CCB> for FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>
-where
-    FGQ: FeagiGlobalQuantization,
-    NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
-{
-}
-
-impl<FGQ, NMQ, CCB> NeuronModelCorticalDataCPU<FGQ, NMQ, CCB> for FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>
-where
-    FGQ: FeagiGlobalQuantization,
-    NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
-{
-}
-
-impl<FGQ, NMQ, CCB> FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>
-where
-    FGQ: FeagiGlobalQuantization,
-    NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
 {
     pub fn new(
         excitability: NMQ::CorticalExcitabilityQuant,
@@ -90,86 +58,39 @@ where
     }
 }
 
-// TODO needs padding!
-#[repr(C)]
-pub struct FeagiStandardModelNeuronDataCPU<FGQ, NMQ>
+
+pub struct FeagiStandardModelNeuronDataCPU<NMQ>
 where
-    FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
 {
     pub neuron_fire_threshold: <NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant,
     pub neuron_leak_coefficient: NMQ::NeuronLeakCoefficientQuant,
     pub neuron_refractory_countdown: NMQ::NeuronRefractoryCountdownQuant,
     pub neuron_consecutive_fire_countdown: NMQ::NeuronConsecutiveFireCountdownQuant,
-    pub neuron_burst_index_of_last_fire: FGQ::GlobalBurstIndexQuant,
-    _p: PhantomData<(FGQ, NMQ)>,
+    _p: PhantomData<(NMQ)>,
 }
 
-impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> PDITagGenericDevice for FeagiStandardModelNeuronDataCPU<FGQ, NMQ> {}
-
-impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> PDITagCPU for FeagiStandardModelNeuronDataCPU<FGQ, NMQ> {}
-
-impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> PDIElement for FeagiStandardModelNeuronDataCPU<FGQ, NMQ> {}
-
-impl<FGQ, NMQ, CCB> NeuronModelNeuronData<
-    FGQ,
-    NMQ,
-    CCB,
-    FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>,
-> for FeagiStandardModelNeuronDataCPU<FGQ, NMQ>
+impl<NMQ> FeagiStandardModelNeuronDataCPU<NMQ>
 where
-    FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
+{
+
+
+}
+
+impl<NMQ> NeuronModelNeuronData<
+    NMQ,
+> for FeagiStandardModelNeuronDataCPU<NMQ>
+where
+    NMQ: FeagiStandardModelQuantization,
 {
 }
 
-impl<FGQ, NMQ, CCB> NeuronModelNeuronDataCPU<
-    FGQ,
+impl<NMQ> NeuronModelNeuronDataCPU<
     NMQ,
-    CCB,
-    FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>,
-> for FeagiStandardModelNeuronDataCPU<FGQ, NMQ>
+> for FeagiStandardModelNeuronDataCPU<NMQ>
 where
-    FGQ: FeagiGlobalQuantization,
     NMQ: FeagiStandardModelQuantization,
-    CCB: CorticalConfigurationBase<FGQ, NMQ::CorticalPotentialQuant>,
 {
-    fn create_blank_neuron(
-        _neuron_linear_index: &NPUNeuronIndexCorticalLocal<FGQ::NeuronIndexCountQuant>,
-        burst_index: &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>,
-        _cortical_area_configuration: &CCB,
-        cortical_area_data: &FeagiStandardModelCorticalDataCPU<FGQ, NMQ, CCB>,
-    ) -> Self {
-        Self::new(
-            burst_index.const_unwrap(),
-            <<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant as QuantizedDecimalTrait>::from_f32(
-                cortical_area_data.fire_threshold_limit.to_f32(),
-            ),
-            <NMQ::NeuronLeakCoefficientQuant as QuantizedElementBase>::QUANT_ZERO,
-            <NMQ::NeuronRefractoryCountdownQuant as QuantizedElementBase>::QUANT_ZERO,
-            <NMQ::NeuronConsecutiveFireCountdownQuant as QuantizedElementBase>::QUANT_ZERO,
-        )
-    }
-}
-
-impl<FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization> FeagiStandardModelNeuronDataCPU<FGQ, NMQ> {
-    pub fn new(
-        neuron_burst_index_of_last_fire: FGQ::GlobalBurstIndexQuant,
-        neuron_fire_threshold: <NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant,
-        neuron_leak_coefficient: NMQ::NeuronLeakCoefficientQuant,
-        neuron_refractory_countdown: NMQ::NeuronRefractoryCountdownQuant,
-        neuron_consecutive_fire_countdown: NMQ::NeuronConsecutiveFireCountdownQuant
-    ) -> Self {
-        Self {
-            neuron_burst_index_of_last_fire,
-            neuron_fire_threshold,
-            neuron_leak_coefficient,
-            neuron_refractory_countdown,
-            neuron_consecutive_fire_countdown,
-            _p: PhantomData,
-        }
-    }
-
 
 }
