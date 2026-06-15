@@ -1,11 +1,10 @@
 use feagi_structures::feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantization;
 use feagi_structures::feagi_data::quantization_levels::extendable_quantizations::NeuronModelQuantization;
-use crate::neural_processing_unit_data_structures::burst_engine::descriptor_flags::cortical_area_layout::CorticalLayoutDimensionalCPU;
-use crate::neural_processing_unit_data_structures::wrappers::{NPUWrappedNeuronCorticalLocalIndex, NPUWrappedNeuronMembranePotential};
+use crate::neural_processing_unit_data_structures::wrappers::{NPUWrappedBurstEngineBurstIndex, NPUWrappedNeuronCorticalLocalIndex, NPUWrappedNeuronMembranePotential};
 use crate::neural_processing_unit_data_structures::burst_engine::common_traits::neuron_model_traits::neuron_model_cortical_data::{NeuronModelCorticalData, NeuronModelCorticalDataCPU};
 use crate::neural_processing_unit_data_structures::burst_engine::common_traits::neuron_model_traits::neuron_model_neuron_data::{NeuronModelNeuronData, NeuronModelNeuronDataCPU};
-use crate::npu_descriptors::NPUGlobalBurstCounter;
+use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::npu_data::npu_structured::burst_engine_global::CorticalLayoutDimensionalCPU;
 
 /// Root base trait for defining neuron firing and other dynamics. Does NOT store actual data,
 pub trait NeuronModelProcessorBase<FGQ, NMQ, NMCD, NMND>:
@@ -61,25 +60,6 @@ where
     NMND: NeuronModelNeuronDataCPU<NMQ>
 {
     
-    // TODO creation may need to be removed, it doesnt belong here
-
-    //region Dimensional Layout
-
-    /// Creates / inits a neuron in a dimensional cortical area
-    fn create_blank_cortical_area_of_cortical_configuration_dimensional(
-        cortical_area_layout: &CorticalLayoutDimensionalCPU<FGQ, NMQ::CorticalPotentialQuant>,
-    ) -> NMCD;
-
-    /// Creates / inits a neuron in a dimensional cortical area
-    fn create_blank_neuron_of_cortical_configuration_dimensional(
-        neuron_linear_index: &NPUWrappedNeuronCorticalLocalIndex<FGQ::NeuronIndexCountQuant>,
-        burst_index: &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>,
-        cortical_area_layout: &CorticalLayoutDimensionalCPU<FGQ, NMQ::CorticalPotentialQuant>,
-        cortical_area_data: &NMCD,
-    ) -> NMND;
-
-    //endregion
-    
     /// If enabled via the const, this method will be called on all neurons of that
     /// neuron model type right before the global burst index overflows and resets to 0. Use this
     /// method to update any values that need to be updated in that case
@@ -123,8 +103,8 @@ where
     (
         incoming_potential: &NPUWrappedNeuronMembranePotential<<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant>,
         neuron_linear_index: &NPUWrappedNeuronCorticalLocalIndex<FGQ::NeuronIndexCountQuant>,
-        burst_index: &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>,
-        cortical_layout_dimensional: &CorticalLayoutDimensionalCPU<FGQ, NMQ::CorticalPotentialQuant>,
+        burst_index: &NPUWrappedBurstEngineBurstIndex<FGQ::GlobalBurstIndexQuant>,
+        cortical_layout_dimensional: &CorticalLayoutDimensionalCPU<FGQ>,
         cortical_area_data: &NMCD,
         neuron_model_data: &mut NMND,
         this_neuron_potential: &mut NPUWrappedNeuronMembranePotential<<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant>
@@ -150,10 +130,10 @@ where
     (
         incoming_potential: &NPUWrappedNeuronMembranePotential<<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant>,
         neuron_linear_index: &NPUWrappedNeuronCorticalLocalIndex<FGQ::NeuronIndexCountQuant>,
-        burst_index: &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>,
-        burst_index_of_last_activity: &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>,
-        burst_index_of_last_firing: &NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>,
-        cortical_layout_dimensional: &CorticalLayoutDimensionalCPU<FGQ, NMQ::CorticalPotentialQuant>,
+        burst_index: &NPUWrappedBurstEngineBurstIndex<FGQ::GlobalBurstIndexQuant>,
+        burst_index_of_last_activity: &NPUWrappedBurstEngineBurstIndex<FGQ::GlobalBurstIndexQuant>,
+        burst_index_of_last_firing: &NPUWrappedBurstEngineBurstIndex<FGQ::GlobalBurstIndexQuant>,
+        cortical_layout_dimensional: &CorticalLayoutDimensionalCPU<FGQ>,
         cortical_area_data: &NMCD,
         neuron_model_data: &mut NMND,
         this_neuron_potential: &mut NPUWrappedNeuronMembranePotential<<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant>

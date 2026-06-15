@@ -6,5 +6,4 @@
 
 mod npu_descriptors;
 pub mod neural_processing_unit_data_structures;
-pub mod to_do;
 pub mod dynamic_burst_engine_interface;

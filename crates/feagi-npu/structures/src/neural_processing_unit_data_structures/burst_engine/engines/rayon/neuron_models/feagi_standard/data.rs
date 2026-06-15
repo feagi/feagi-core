@@ -1,12 +1,8 @@
 use std::marker::PhantomData;
-use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantization;
 use feagi_structures::feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
-use crate::neural_processing_unit_data_structures::burst_engine::descriptor_flags::cortical_area_layout::CorticalLayoutDimensionalCPU;
-use crate::neural_processing_unit_data_structures::wrappers::NPUWrappedNeuronCorticalLocalIndex;
 use crate::neural_processing_unit_data_structures::burst_engine::common_traits::neuron_model_traits::neuron_model_cortical_data::{NeuronModelCorticalData, NeuronModelCorticalDataCPU};
 use crate::neural_processing_unit_data_structures::burst_engine::common_traits::neuron_model_traits::neuron_model_neuron_data::{NeuronModelNeuronData, NeuronModelNeuronDataCPU};
-use crate::neural_processing_unit_data_structures::neuron_models::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
-use crate::npu_descriptors::NPUGlobalBurstCounter;
+use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
 
 #[repr(C)]
 pub struct FeagiStandardModelCorticalDataCPU<NMQ>

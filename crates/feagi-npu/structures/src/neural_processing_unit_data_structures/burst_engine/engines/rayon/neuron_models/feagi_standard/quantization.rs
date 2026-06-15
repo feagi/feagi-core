@@ -1,7 +1,7 @@
 use feagi_structures::feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantizationFloat32;
 use feagi_structures::feagi_data::quantizable_linear::base_types::{QuantizedDecimalTrait, QuantizedIndexCountTrait};
 use feagi_structures::feagi_data::quantization_levels::extendable_quantizations::NeuronModelQuantization;
-use crate::neural_processing_unit_data_structures::neuron_models::neuron_models::typing::NeuronModelQuantizationBitConversion;
+use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::model_type_and_quantization::NeuronModelQuantizationBitConversion;
 
 #[repr(u8)]
 #[derive(Default, Copy, Clone)]

@@ -6,7 +6,6 @@ mod synapse_mappings;
 //mod cortical_area_header;
 
 pub mod wrappers;
-pub mod neuron_models;
 pub mod burst_engine;
 // differentiators
 // 0 is alive [1 bit]

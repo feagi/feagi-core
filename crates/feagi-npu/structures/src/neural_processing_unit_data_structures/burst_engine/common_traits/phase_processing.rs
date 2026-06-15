@@ -4,107 +4,93 @@ use crate::neural_processing_unit_data_structures::burst_engine::common_traits::
 
 /// Base trait for all Burst Engine Phase Processors, which is effectively a passable
 /// function for manipulating NPU data to go from one phase to another
-pub trait BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {
-    fn process_phase(current_phase: &BurstEngineJustCompletedPhase, data: &mut BED)
-        -> BurstEngineJustCompletedPhase;
+
 }
 
 
-pub trait BurstEnginePhaseBurstCounterIndexIncrement<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhaseBurstCounterIndexIncrement<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}
 
 
-pub trait BurstEnginePhaseNeuronModelUpdatedForBurstIndexRollover<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhaseNeuronModelUpdatedForBurstIndexRollover<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}
 
 
-pub trait BurstEnginePhaseSynapseModelUpdatedForBurstIndexRollover<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhaseSynapseModelUpdatedForBurstIndexRollover<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}
 
 
-pub trait BurstEnginePhaseFCLConsolidation<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhaseFCLConsolidation<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}
 
 
-pub trait BurstEnginePhaseNeuronDynamics<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhaseNeuronDynamics<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}
 
 
-pub trait BurstEnginePhaseUpdateFiringNeuronBitfield<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhaseUpdateFiringNeuronBitfield<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}
 
 
-pub trait BurstEnginePhaseCountFiringNeuronsPerCorticalArea<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhaseCountFiringNeuronsPerCorticalArea<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}
 
 
-pub trait BurstEnginePhasePreSynapseDataExchange<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhasePreSynapseDataExchange<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}
 
 
-pub trait BurstEnginePhaseFiringNeuronConsolidation<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhaseFiringNeuronConsolidation<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}
 
 
-pub trait BurstEnginePhaseSynapseDynamics<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhaseSynapseDynamics<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}
 
 
-pub trait BurstEnginePhasePostSynapseDataExchange<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhasePostSynapseDataExchange<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}
 
 
-pub trait BurstEnginePhaseFCLCConsolidation<FGQ, BED>:
-BurstEnginePhaseProcessor<FGQ, BED>
+pub trait BurstEnginePhaseFCLCConsolidation<FGQ>:
+BurstEnginePhaseProcessor<FGQ>
 where
     FGQ: FeagiGlobalQuantization,
-    BED: BurstEngineData<FGQ>,
 {}

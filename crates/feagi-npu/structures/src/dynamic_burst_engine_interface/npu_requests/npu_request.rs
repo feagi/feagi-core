@@ -2,7 +2,7 @@ use feagi_structures::feagi_data::create_quantized_index_count_wrapper;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::bit_32::NeuronVoxelDimensions;
 use crate::dynamic_burst_engine_interface::npu_requests::enums::{NPURequestBase, NPURequestCorticalArea};
-use crate::neural_processing_unit_data_structures::neuron_models::neuron_models::NeuronModelTypeAndQuantization;
+use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::NeuronModelTypeAndQuantization;
 // TODO switch to Feagi Error instead of option!
 
 create_quantized_index_count_wrapper!(NPURequestID, u32);

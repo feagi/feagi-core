@@ -21,4 +21,4 @@ create_quantized_index_count_wrapper!(NPUWrappedNeuronNeuronModelMPQuantIndex);
 // TODO belongs here?
 
 
-create_quantized_index_count_wrapper!(NPUWrappedCorticalLayoutLayoutIndex);
+create_quantized_index_count_wrapper!(NPUWrappedCorticalLayoutIndex);
