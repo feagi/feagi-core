@@ -1,3 +1,0 @@
-mod sensory_neurons_ram;
-mod sensory_neuron_traits;
-pub use sensory_neurons_ram::SensoryNeuronStorageResizableRam;

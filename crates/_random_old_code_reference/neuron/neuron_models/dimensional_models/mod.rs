@@ -1,7 +1,0 @@
-pub mod dimensional_neuron_data_traits;
-pub mod dimensional_cortical_configuration_traits;
-#[cfg(feature = "alloc")]
-pub mod dimensional_cortical_area_generator_traits;
-
-pub(crate) mod feagi_standard;
-mod dimensional_cortical_area_resizer_traits;

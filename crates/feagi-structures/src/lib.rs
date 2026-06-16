@@ -6,7 +6,6 @@ mod templates;
 mod feagi_json;
 mod feagi_common_error;
 pub mod genomic;
-pub mod wgpu_temp;
 pub mod useful_structs;
 pub mod neuron_voxels;
 pub mod neuron_descriptors;

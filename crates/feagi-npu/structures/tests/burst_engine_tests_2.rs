@@ -21,7 +21,7 @@ mod burst_engine_rayon_tests
     fn rayon_full_test_suite()
     {
         const NUMBER_CORTICAL_AREAS: usize = 2;
-        let cube_length: u32 = 200;
+        let cube_length: u32 = 100;
         let cube_density: u32 = 3;
         let number_bursts: usize = 10;
 

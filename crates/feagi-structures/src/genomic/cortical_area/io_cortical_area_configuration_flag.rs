@@ -3,7 +3,6 @@ use crate::genomic::cortical_area::CorticalID;
 use crate::genomic::FeagiStructuresGenomicError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
 
 pub type IOCorticalAreaConfigurationFlagBitmask = u16; // 16 Total bits
 
@@ -115,14 +114,11 @@ impl IOCorticalAreaConfigurationFlag {
                 }
                 Ok(IOCorticalAreaConfigurationFlag::Misc(frame_handling_enum))
             }
-            _ => Err(FeagiStructuresGenomicError::CorticalAreaError {
-                context: "invalid IO cortical configuration variant",
-            }),
             11 => {
                 if positioning != 0 {
-                    return Err(FeagiDataError::ConstError(
-                        "PoseEstimation variant does not support positioning parameter",
-                    ));
+                    return Err(FeagiStructuresGenomicError::CorticalAreaError {
+                        context: "PoseEstimation variant does not support positioning parameter",
+                    });
                 }
                 let pose_schema_bits =
                     (value >> bit_indexes::POSE_SCHEMA_START) & bit_indexes::POSE_SCHEMA_MASK;
@@ -135,14 +131,20 @@ impl IOCorticalAreaConfigurationFlag {
                     5 => PoseSchema::Arthropod,
                     6 => PoseSchema::Object6DoF,
                     7 => PoseSchema::Custom,
-                    _ => return Err(FeagiDataError::ConstError("Invalid PoseSchema bits")),
+                    _ => {
+                        return Err(FeagiStructuresGenomicError::CorticalAreaError {
+                            context: "invalid PoseSchema bits in IO cortical configuration flag",
+                        });
+                    }
                 };
                 Ok(IOCorticalAreaConfigurationFlag::PoseEstimation(
                     frame_handling_enum,
                     pose_schema,
                 ))
             }
-            _ => Err(FeagiDataError::ConstError("Invalid variant type!")),
+            _ => Err(FeagiStructuresGenomicError::CorticalAreaError {
+                context: "invalid IO cortical configuration variant",
+            }),
         }
     }
 
@@ -409,7 +411,7 @@ impl PoseSchema {
         }
     }
 
-    pub const fn try_from_bits(bits: u16) -> Result<Self, FeagiDataError> {
+    pub const fn try_from_bits(bits: u16) -> Result<Self, FeagiStructuresGenomicError> {
         match bits {
             0 => Ok(PoseSchema::HumanBody),
             1 => Ok(PoseSchema::HumanHand),
@@ -419,20 +421,24 @@ impl PoseSchema {
             5 => Ok(PoseSchema::Arthropod),
             6 => Ok(PoseSchema::Object6DoF),
             7 => Ok(PoseSchema::Custom),
-            _ => Err(FeagiDataError::ConstError("Invalid PoseSchema bits")),
+            _ => Err(FeagiStructuresGenomicError::CorticalAreaError {
+                context: "invalid PoseSchema bits in IO cortical configuration flag",
+            }),
         }
     }
 
     pub fn try_from_serde_map(
         map: &serde_json::Map<String, serde_json::Value>,
-    ) -> Result<PoseSchema, FeagiDataError> {
+    ) -> Result<PoseSchema, FeagiStructuresGenomicError> {
         let val = map
             .get("pose_schema")
-            .ok_or(FeagiDataError::DeserializationError(
-                "Unable to extract pose_schema!".to_string(),
-            ))?;
-        let output: PoseSchema = serde_json::from_value(val.clone()).map_err(|_err| {
-            FeagiDataError::DeserializationError("Unable to extract pose_schema!".to_string())
+            .ok_or(FeagiStructuresGenomicError::CorticalAreaError {
+                context: "missing or invalid pose_schema in serde map",
+            })?;
+        let output: PoseSchema = serde_json::from_value(val.clone()).map_err(|_| {
+            FeagiStructuresGenomicError::CorticalAreaError {
+                context: "missing or invalid pose_schema in serde map",
+            }
         })?;
         Ok(output)
     }
