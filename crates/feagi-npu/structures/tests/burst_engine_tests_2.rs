@@ -15,6 +15,7 @@ mod burst_engine_rayon_tests
     use feagi_structures::feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
     use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantizationStandard;
     use feagi_structures::feagi_data::SupportsUintOps;
+    use std::time::Instant;
 
     #[test]
     fn rayon_full_test_suite()
@@ -128,6 +129,7 @@ mod burst_engine_rayon_tests
 
         }
 
+        let burst_timer_start = Instant::now();
 
         // run bursts
 
@@ -143,6 +145,13 @@ mod burst_engine_rayon_tests
             _ = SynapseDynamicsNoPreCondenseRayon::process_phase(&mut engine_data);
 
         }
+
+        let total_burst_millisecondss = burst_timer_start.elapsed().as_millis();
+        let average_millisecondss_per_burst = total_burst_millisecondss as f64 / number_bursts as f64;
+        println!(
+            "Rayon burst engine: {} bursts in {} milliseconds (avg {:.2} millisecondss/burst)",
+            number_bursts, total_burst_millisecondss, average_millisecondss_per_burst
+        );
     }
 }
 
