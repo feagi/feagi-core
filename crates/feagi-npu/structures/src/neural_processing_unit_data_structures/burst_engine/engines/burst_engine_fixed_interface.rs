@@ -1,12 +1,12 @@
 use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantization;
-use crate::npu_descriptors::NPUGlobalBurstCounter;
+use crate::neural_processing_unit_data_structures::wrappers::NPUWrappedBurstEngineBurstIndex;
 
 pub trait BurstEngineFixedInterface<FGD: FeagiGlobalQuantization>
 {
 
     /// Runs a given number of bursts. Stops right after neuron dynamics sim but before consolidation of
     /// firing neurons, as this is the best time for outside interference
-    fn run_bursts(&mut self, number_bursts: NPUGlobalBurstCounter<FGD::GlobalBurstIndexQuant>) -> usize; // number microseconds
+    fn run_bursts(&mut self, number_bursts: NPUWrappedBurstEngineBurstIndex<FGD::GlobalBurstIndexQuant>) -> usize; // number microseconds
 
     fn inject_sensor_data(&mut self);
     

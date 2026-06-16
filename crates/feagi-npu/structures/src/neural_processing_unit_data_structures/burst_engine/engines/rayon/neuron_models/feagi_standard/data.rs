@@ -4,7 +4,7 @@ use crate::neural_processing_unit_data_structures::burst_engine::common_traits::
 use crate::neural_processing_unit_data_structures::burst_engine::common_traits::neuron_model_traits::neuron_model_neuron_data::{NeuronModelNeuronData, NeuronModelNeuronDataCPU};
 use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
 
-#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct FeagiStandardModelCorticalDataCPU<NMQ>
 where
     NMQ: FeagiStandardModelQuantization,
@@ -15,8 +15,6 @@ where
     pub consecutive_fire_limit: NMQ::CorticalConsecutiveFireLimit,
     _p: PhantomData<( NMQ)>,
 }
-
-
 
 
 impl<NMQ> NeuronModelCorticalData<NMQ> for FeagiStandardModelCorticalDataCPU<NMQ>
@@ -55,6 +53,7 @@ where
 }
 
 
+#[derive(Debug, Copy, Clone)]
 pub struct FeagiStandardModelNeuronDataCPU<NMQ>
 where
     NMQ: FeagiStandardModelQuantization,
@@ -70,8 +69,21 @@ impl<NMQ> FeagiStandardModelNeuronDataCPU<NMQ>
 where
     NMQ: FeagiStandardModelQuantization,
 {
-
-
+    pub fn new(
+        neuron_fire_threshold: <NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant,
+        neuron_leak_coefficient: NMQ::NeuronLeakCoefficientQuant,
+        neuron_refractory_countdown: NMQ::NeuronRefractoryCountdownQuant,
+        neuron_consecutive_fire_countdown: NMQ::NeuronConsecutiveFireCountdownQuant,
+    ) -> Self
+    {
+        Self {
+            neuron_fire_threshold,
+            neuron_leak_coefficient,
+            neuron_refractory_countdown,
+            neuron_consecutive_fire_countdown,
+            _p: PhantomData,
+        }
+    }
 }
 
 impl<NMQ> NeuronModelNeuronData<

@@ -65,7 +65,8 @@ where
         neuron_model_data: &mut FeagiStandardModelNeuronDataCPU<NMQ>,
         this_neuron_potential: &mut NPUWrappedNeuronMembranePotential<<NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant>
     ) -> bool {
-        todo!()
+        *this_neuron_potential += *incoming_potential;
+        return true;
     }
 }
 

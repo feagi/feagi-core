@@ -1,12 +1,14 @@
+use feagi_structures::feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
 use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantization;
-use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::npu_data::npu_structured::burst_engine_global::{BurstEngineNeuronIndexWithQuant, CorticalContextLookup, CorticalLayouts, FCLMappingsToFCLC, NeuronHistory};
+use feagi_structures::feagi_data::SupportsUintOps;
+use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::npu_data::npu_structured::burst_engine_global::{BurstEngineNeuronIndexWithQuant, CorticalContextLookup, CorticalLayouts, FCLMappingsToFCLC, NeuronHistory, SynapseDef, SynapseRangeMappingFromNeuron};
 use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::npu_data::npu_structured::grouped_by_mp_quant::{EngineNeuronIndexOffsetsToMPQuantNeuronIndex, MPQuantBasePostSynapticPotentials, MPQuantNeuronFCLValues, MPQuantNeuronMembranePotentialValues};
 use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::data::{FeagiStandardModelCorticalDataCPU, FeagiStandardModelNeuronDataCPU};
 use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::quantization::FeagiStandardModelStandard32BitQuant;
 use crate::neural_processing_unit_data_structures::wrappers::{NPUWrappedBurstEngineBurstIndex, NPUWrappedCorticalAreaBurstEngineIndex};
 
 
-pub(crate) struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
+pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
 {
     //region Global Metadata, Converters and Flags
 
@@ -47,10 +49,8 @@ pub(crate) struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
         Vec<BurstEngineNeuronIndexWithQuant<FGQ>>,
     
     
-    // By Engine Cortical Index
-    /// For a given cortical area, has index offsets and indexes to other relevant data
-    /// for that cortical area
-    pub cortical_context_lookups: Vec<CorticalContextLookup<FGQ>>,
+    
+
     
     
     //endregion
@@ -60,6 +60,10 @@ pub(crate) struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
 
     //region Indexed By Cortical Area
 
+    // By Engine Cortical Index
+    /// For a given cortical area, has index offsets and indexes to other relevant data
+    /// for that cortical area
+    pub cortical_context_lookups: Vec<CorticalContextLookup<FGQ>>,
 
     // By Cortical Layout Indexes
     /// Grouped by type of cortical layout, stores a vector of all the different values for the
@@ -78,8 +82,9 @@ pub(crate) struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
     // TODO have proper grouping!
     pub neuron_model_cortical_data: Vec<FeagiStandardModelCorticalDataCPU<FeagiStandardModelStandard32BitQuant>>,
 
+    pub synapses_ranges_from_neurons: Vec<SynapseRangeMappingFromNeuron<FGQ>>,
 
-
+    pub synapse_def: Vec<SynapseDef>,
 
     //endregion
 
@@ -109,8 +114,6 @@ pub(crate) struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
 
     // TODO have proper grouping!
     pub neuron_model_neuron_data: Vec<FeagiStandardModelNeuronDataCPU<FeagiStandardModelStandard32BitQuant>>,
-
-
     
     // By Burst Engine Index
     //neuron_downstream_synapse_mapping_ranges: X,
@@ -118,24 +121,40 @@ pub(crate) struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
 
     //endregion
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    //region Indexed by Synapse
+    
+    
+    
+    //endregion
+    
 }
+
+
+impl<FGQ: FeagiGlobalQuantization> BurstEngineDataRayon<FGQ>
+{
+    pub fn new() -> Self {
+        Self {
+            burst_index: NPUWrappedBurstEngineBurstIndex::QUANT_MAX / NPUWrappedBurstEngineBurstIndex::wrap(  FGQ::GlobalBurstIndexQuant::from_usize_unchecked(2)),
+            did_burst_index_overflow: false,
+            engine_neuron_index_offsets_to_mp_quant_neuron_index: EngineNeuronIndexOffsetsToMPQuantNeuronIndex { float_32: Default::default() },
+            neuron_history: vec![],
+            percent_neurons_firing_this_burst: vec![],
+            consolidated_neurons_with_fcl: vec![],
+            cortical_context_lookups: vec![],
+            cortical_layouts: CorticalLayouts { dimensional: vec![] },
+            base_postsynaptic_potentials: MPQuantBasePostSynapticPotentials { float_32: vec![] },
+            neuron_model_cortical_data: vec![],
+            synapses_ranges_from_neurons: vec![],
+            synapse_def: vec![],
+            fcl_mappings_to_FCLC: vec![],
+            neuron_fcls: MPQuantNeuronFCLValues { float_32: vec![] },
+            neuron_potentials: MPQuantNeuronMembranePotentialValues { float_32: vec![] },
+            neuron_engine_cortical_indexes: vec![],
+            neuron_model_neuron_data: vec![],
+        }
+    }
+}
+
 
 
 

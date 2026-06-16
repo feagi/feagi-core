@@ -6,6 +6,7 @@ use crate::neural_processing_unit_data_structures::wrappers::{NPUWrappedBurstEng
 
 create_quantized_index_count_wrapper!(NPUWrappedNeuronHistoryIndex);
 create_quantized_index_count_wrapper!(NPUWrappedCorticalContextLookupIndex);
+create_quantized_index_count_wrapper!(NPUWrappedEngineSynapseIndexLength);
 
 
 /// Stores a burst engine level neuron index with the quant flag, for trivial conversion to
@@ -55,11 +56,22 @@ where
     pub dimensions: NPUWrappedCorticalAreaDimensions<FGQ::NeuronIndexCountQuant>,
 }
 
+impl<FGQ> CorticalLayoutDimensionalCPU<FGQ>
+where
+    FGQ: FeagiGlobalQuantization,
+{
+    pub fn new(dimensions: NPUWrappedCorticalAreaDimensions<FGQ::NeuronIndexCountQuant>) -> Self {
+        Self { dimensions }
+    }
+}
+
 impl<FGQ> CorticalLayoutBase<FGQ> for CorticalLayoutDimensionalCPU<FGQ>
 where FGQ: FeagiGlobalQuantization, {}
 
 impl<FGQ> CorticalLayoutDimensional<FGQ> for CorticalLayoutDimensionalCPU<FGQ>
 where FGQ: FeagiGlobalQuantization, {}
+
+
 
 // TODO other types?
 
@@ -73,8 +85,22 @@ pub struct CorticalContextLookup<FGQ: FeagiGlobalQuantization>
     // NOTE: For byte alignment reasons, put neuron stuff first, as neuron quantization >= cortical area quantization
     /// Subtract the this from a neurons mp quant index to the get the cortical area local index
     pub mp_quant_to_local_neuron_index_offset: NPUWrappedNeuronCorticalLocalIndex<FGQ::NeuronIndexCountQuant>,
-    pub neuron_history_index: NPUWrappedNeuronHistoryIndex<FGQ::NeuronIndexCountQuant>, // Only valid if the neuron model needs history. Otherwise this will just be 0
+    pub mp_quant_to_neuron_history_index_offset: NPUWrappedNeuronHistoryIndex<FGQ::NeuronIndexCountQuant>, // Only valid if the neuron model needs history. Otherwise this will just be 0
+
     pub cortical_layout_index: NPUWrappedCorticalLayoutIndex<FGQ::CorticalAreaIndexCountQuant>, // Neuron Flags will disclose what type of layout
     pub neuron_model_cortical_data_index: NPUWrappedNeuronNeuronModelMPQuantIndex<FGQ::CorticalAreaIndexCountQuant>,
     // NOTE: Base psp potential is a separate array with 1-1 cortical engine index lookup, we don't need it here
+}
+
+
+pub struct SynapseRangeMappingFromNeuron<FGQ: FeagiGlobalQuantization>
+{
+    pub synapse_start_index: NPUWrappedEngineSynapseIndexLength<FGQ::SynapseIndexCountQuant>,
+    pub synapse_start_length: NPUWrappedEngineSynapseIndexLength<FGQ::SynapseIndexCountQuant>,
+    pub source_neuron_index: NPUWrappedNeuronIndexBurstEngineIndex<FGQ::NeuronIndexCountQuant>,
+    //pub source_neuron_quant_descriptor: NeuronModelQuantDescriptorsCPU // TODO
+}
+
+pub struct SynapseDef {
+    weight: f32
 }

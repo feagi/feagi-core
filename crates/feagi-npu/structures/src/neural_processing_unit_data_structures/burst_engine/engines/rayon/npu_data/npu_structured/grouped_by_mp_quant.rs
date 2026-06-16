@@ -9,11 +9,11 @@ use crate::neural_processing_unit_data_structures::wrappers::{NPUWrappedNeuronIn
 pub struct EngineNeuronIndexOffsetsToMPQuantNeuronIndex<FGQ: FeagiGlobalQuantization>
 {
     // NOTE: f32 will ALWAYS be zero!
-    float_32: NPUWrappedNeuronIndexBurstEngineIndex<FGQ::NeuronIndexCountQuant>,
+    pub float_32: NPUWrappedNeuronIndexBurstEngineIndex<FGQ::NeuronIndexCountQuant>,
     //float_8_down_offset: NPUWrappedNeuronIndexBurstEngineIndex<FGQ::NeuronIndexCountQuant>,
-
     // TODO other quants!
 }
+
 
 pub struct MPQuantNeuronFCLValues
 {

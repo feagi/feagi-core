@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantization;
 use crate::neural_processing_unit_data_structures::burst_engine::engines::burst_engine_fixed_interface::BurstEngineFixedInterface;
-use crate::npu_descriptors::NPUGlobalBurstCounter;
+use crate::neural_processing_unit_data_structures::wrappers::NPUWrappedBurstEngineBurstIndex;
 
 pub(crate) struct BurstEngineCpuRayon<FGQ: FeagiGlobalQuantization> {
     // tables
@@ -18,7 +18,7 @@ impl<FGQ: FeagiGlobalQuantization> BurstEngineCpuRayon<FGQ>
 
 impl<FGQ: FeagiGlobalQuantization> BurstEngineFixedInterface<FGQ> for BurstEngineCpuRayon<FGQ>
 {
-    fn run_bursts(&mut self, number_bursts: NPUGlobalBurstCounter<FGQ::GlobalBurstIndexQuant>) -> usize {
+    fn run_bursts(&mut self, number_bursts: NPUWrappedBurstEngineBurstIndex<FGQ::GlobalBurstIndexQuant>) -> usize {
         return 0
     }
 
