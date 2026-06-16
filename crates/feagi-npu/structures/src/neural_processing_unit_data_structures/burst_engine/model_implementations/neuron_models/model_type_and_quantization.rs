@@ -1,4 +1,4 @@
-use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantizationLevel;
+use crate::neural_processing_unit_data_structures::burst_engine::model_implementations::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantizationLevel;
 
 
 

@@ -3,8 +3,8 @@ use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization
 use feagi_structures::feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use crate::neural_processing_unit_data_structures::wrappers::{NPUWrappedBurstEngineBurstIndex, NPUWrappedNeuronCorticalLocalIndex, NPUWrappedNeuronMembranePotential};
 use crate::neural_processing_unit_data_structures::burst_engine::common_traits::neuron_model_traits::neuron_model_processor::{NeuronModelProcessor, NeuronModelProcessorBase, NeuronModelProcessorBaseCPU, NeuronModelProcessorWithBurstHistoryCPU, NeuronModelProcessorWithHistory};
-use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::data::{FeagiStandardModelCorticalDataCPU, FeagiStandardModelNeuronDataCPU};
-use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
+use crate::neural_processing_unit_data_structures::burst_engine::model_implementations::neuron_models::feagi_standard::data::{FeagiStandardModelCorticalDataCPU, FeagiStandardModelNeuronDataCPU};
+use crate::neural_processing_unit_data_structures::burst_engine::model_implementations::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
 use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::npu_data::npu_structured::burst_engine_global::CorticalLayoutDimensionalCPU;
 
 pub struct FeagiStandardModelProcessorCPU<FGQ, NMQ>
@@ -16,11 +16,6 @@ where
     _p: PhantomData<(FGQ, NMQ)>,
 }
 
-//region Tag Traits
-
-
-
-//endregion
 
 impl<FGQ, NMQ> NeuronModelProcessorBase<FGQ, NMQ, FeagiStandardModelCorticalDataCPU<NMQ>, FeagiStandardModelNeuronDataCPU<NMQ>> for FeagiStandardModelProcessorCPU<FGQ, NMQ> where FGQ: FeagiGlobalQuantization, NMQ: FeagiStandardModelQuantization, {}
 

@@ -7,12 +7,11 @@ use crate::neural_processing_unit_data_structures::wrappers::NPUWrappedNeuronMem
 
 /// Root base trait for defining synapse firing and alteration of
 /// transmitting neuron potentials between neurons. Does NOT store actual data,
-pub trait SynapseModelProcessor<FGQ, SMQ, SMABD, SMSD, CPQIn, CPQOut>:
+pub trait SynapseModelProcessorBase<FGQ, SMQ, SMABD, CPQIn, CPQOut>:
 where
     FGQ: FeagiGlobalQuantization,
     SMQ: SynapseModelQuantization,
     SMABD: SynapseModelAxonBundleData<SMQ>,
-    SMSD: SynapseModelSynapseData<SMQ>,
     CPQIn: CorticalPotentialQuantization,
     CPQOut: CorticalPotentialQuantization
 {
@@ -23,8 +22,54 @@ where
 }
 
 
-pub trait SynapseModelProcessorCPU<FGQ, SMQ, SMABD, SMSD, CPQIn, CPQOut>:
-SynapseModelProcessor<FGQ, SMQ, SMABD, SMSD, CPQIn, CPQOut>
+pub trait SynapseModelProcessorAxonBundleOnly<FGQ, SMQ, SMABD, CPQIn, CPQOut>:
+SynapseModelProcessorBase<FGQ, SMQ, SMABD, CPQIn, CPQOut>
+where
+    FGQ: FeagiGlobalQuantization,
+    SMQ: SynapseModelQuantization,
+    SMABD: SynapseModelAxonBundleData<SMQ>,
+    CPQIn: CorticalPotentialQuantization,
+    CPQOut: CorticalPotentialQuantization
+{
+    // Method for Executing synapse (using only axon bundle level data)
+}
+
+pub trait SynapseModelProcessorWithPerSynapse<FGQ, SMQ, SMABD, SMSD, CPQIn, CPQOut>:
+SynapseModelProcessorBase<FGQ, SMQ, SMABD, CPQIn, CPQOut>
+where
+    FGQ: FeagiGlobalQuantization,
+    SMQ: SynapseModelQuantization,
+    SMABD: SynapseModelAxonBundleData<SMQ>,
+    SMSD: SynapseModelSynapseData<SMQ>,
+    CPQIn: CorticalPotentialQuantization,
+    CPQOut: CorticalPotentialQuantization
+{
+    // Method for Executing synapse (also with per synapse level mutable data)
+}
+
+
+// region CPU implementation
+
+pub trait SynapseModelProcessorAxonBundleOnlyCPU<FGQ, SMQ, SMABD, CPQIn, CPQOut>:
+SynapseModelProcessorAxonBundleOnly<FGQ, SMQ, SMABD, CPQIn, CPQOut>
+where
+    FGQ: FeagiGlobalQuantization,
+    SMQ: SynapseModelQuantization,
+    SMABD: SynapseModelAxonBundleData<SMQ>,
+    CPQIn: CorticalPotentialQuantization,
+    CPQOut: CorticalPotentialQuantization
+{
+    // TODO custom Context
+
+    fn process_neuron_potential_through_bundle(
+        outgoing_potential: &NPUWrappedNeuronMembranePotential<CPQIn::NeuronPotentialQuant>,
+        axon_bundle_data: &SMABD,
+        potential_write_target: &mut NPUWrappedNeuronMembranePotential<CPQOut::NeuronPotentialQuant>
+    );
+}
+
+pub trait SynapseModelProcessorWithPerSynapseCPU<FGQ, SMQ, SMABD, SMSD, CPQIn, CPQOut>:
+SynapseModelProcessorWithPerSynapse<FGQ, SMQ, SMABD, SMSD, CPQIn, CPQOut>
 where
     FGQ: FeagiGlobalQuantization,
     SMQ: SynapseModelQuantization,
@@ -35,23 +80,13 @@ where
 {
     // TODO custom Context
 
-    // TODO seperate per synapse per axon
-
-    fn process_neuron_potential_through_bundle_simple(
-        outgoing_potential: &NPUWrappedNeuronMembranePotential<CPQIn::NeuronPotentialQuant>,
-        axon_bundle_data: &SMABD,
-        potential_write_target: &mut NPUWrappedNeuronMembranePotential<CPQOut::NeuronPotentialQuant>
-    );
-
-    fn process_neuron_potential_through_synapse_simple(
+    fn process_neuron_potential_through_synapse(
         outgoing_potential: &NPUWrappedNeuronMembranePotential<CPQIn::NeuronPotentialQuant>,
         axon_bundle_data: &SMABD,
         synapse_data: &mut SMSD,
         potential_write_target: &mut NPUWrappedNeuronMembranePotential<CPQOut::NeuronPotentialQuant>
     );
-
-
-
-
-
 }
+
+//endregion
+

@@ -5,8 +5,8 @@
 #[cfg(test)]
 mod burst_engine_rayon_tests
 {
-    use feagi_npu_structures::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::data::{FeagiStandardModelCorticalDataCPU, FeagiStandardModelNeuronDataCPU};
-    use feagi_npu_structures::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::quantization::{FeagiStandardModelQuantization, FeagiStandardModelStandard32BitQuant};
+    use feagi_npu_structures::neural_processing_unit_data_structures::burst_engine::model_implementations::neuron_models::feagi_standard::data::{FeagiStandardModelCorticalDataCPU, FeagiStandardModelNeuronDataCPU};
+    use feagi_npu_structures::neural_processing_unit_data_structures::burst_engine::model_implementations::neuron_models::feagi_standard::quantization::{FeagiStandardModelQuantization, FeagiStandardModelStandard32BitQuant};
     use feagi_npu_structures::neural_processing_unit_data_structures::burst_engine::engines::rayon::npu_data::BurstEngineDataRayon;
     use feagi_npu_structures::neural_processing_unit_data_structures::burst_engine::engines::rayon::npu_data::npu_structured::burst_engine_global::{CorticalContextLookup, CorticalLayoutDimensionalCPU, NPUWrappedEngineSynapseIndexLength, NPUWrappedNeuronHistoryIndex, NeuronHistory, SynapseRangeMappingFromNeuron};
     use feagi_npu_structures::neural_processing_unit_data_structures::burst_engine::engines::rayon::phase_processors::{BurstEnginePhaseBurstCounterIndexIncrementRayon, BurstEnginePhaseProcessorCPU, NeuronDynamicsNoPreCondenseRayon, SynapseDynamicsNoPreCondenseRayon};

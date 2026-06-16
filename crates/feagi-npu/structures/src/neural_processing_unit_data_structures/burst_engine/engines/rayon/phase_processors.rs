@@ -5,7 +5,7 @@ use feagi_structures::feagi_data::SupportsUintOps;
 use crate::neural_processing_unit_data_structures::burst_engine::BurstEngineJustCompletedPhase;
 use crate::neural_processing_unit_data_structures::burst_engine::common_traits::neuron_model_traits::neuron_model_processor::NeuronModelProcessorWithBurstHistoryCPU;
 use crate::neural_processing_unit_data_structures::burst_engine::common_traits::phase_processing::{BurstEnginePhaseBurstCounterIndexIncrement, BurstEnginePhaseProcessor};
-use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::processor::FeagiStandardModelProcessorCPU;
+use crate::neural_processing_unit_data_structures::burst_engine::model_implementations::neuron_models::feagi_standard::processor::FeagiStandardModelProcessorCPU;
 use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::npu_data::BurstEngineDataRayon;
 use crate::neural_processing_unit_data_structures::wrappers::{NPUWrappedBurstEngineBurstIndex, NPUWrappedNeuronCorticalLocalIndex, NPUWrappedNeuronMPQuantIndex, NPUWrappedNeuronMembranePotential};
 

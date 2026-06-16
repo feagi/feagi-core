@@ -3,8 +3,8 @@ use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization
 use feagi_structures::feagi_data::SupportsUintOps;
 use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::npu_data::npu_structured::burst_engine_global::{BurstEngineNeuronIndexWithQuant, CorticalContextLookup, CorticalLayouts, FCLMappingsToFCLC, NeuronHistory, SynapseDef, SynapseRangeMappingFromNeuron};
 use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::npu_data::npu_structured::grouped_by_mp_quant::{EngineNeuronIndexOffsetsToMPQuantNeuronIndex, MPQuantBasePostSynapticPotentials, MPQuantNeuronFCLValues, MPQuantNeuronMembranePotentialValues};
-use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::data::{FeagiStandardModelCorticalDataCPU, FeagiStandardModelNeuronDataCPU};
-use crate::neural_processing_unit_data_structures::burst_engine::engines::rayon::neuron_models::feagi_standard::quantization::FeagiStandardModelStandard32BitQuant;
+use crate::neural_processing_unit_data_structures::burst_engine::model_implementations::neuron_models::feagi_standard::data::{FeagiStandardModelCorticalDataCPU, FeagiStandardModelNeuronDataCPU};
+use crate::neural_processing_unit_data_structures::burst_engine::model_implementations::neuron_models::feagi_standard::quantization::FeagiStandardModelStandard32BitQuant;
 use crate::neural_processing_unit_data_structures::wrappers::{NPUWrappedBurstEngineBurstIndex, NPUWrappedCorticalAreaBurstEngineIndex};
 
 
