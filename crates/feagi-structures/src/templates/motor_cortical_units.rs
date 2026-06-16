@@ -15,7 +15,7 @@ macro_rules! motor_cortical_units {
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage(frame_change_handling, percentage_neuron_positioning), relative_position: [-20, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage(frame_change_handling, percentage_neuron_positioning), relative_position: [-20, 0, -10], channel_dimensions_default: [1, 1, 9], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -127,6 +127,22 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "Pose estimation output - XY plane encodes joint location, Z depth encodes joint ID. PSP magnitude encodes confidence."]
+                PoseEstimation => {
+                    friendly_name: "Pose Estimation",
+                    accepted_wrapped_io_data_type: PoseEstimationData,
+                    cortical_id_unit_reference: *b"pos",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        pose_schema: PoseSchema,
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaConfigurationFlag::PoseEstimation(frame_change_handling, pose_schema), relative_position: [-200, 60, 0], channel_dimensions_default: [64, 64, 17], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 256])
+                    }
+                },
+
                 #[doc = "Image Processing configuration - dynamically control brightness, contrast, and per pixel diff thresholding"]
                 DynamicImageProcessing => {
                     friendly_name: "Image Enhancements",
@@ -142,6 +158,22 @@ macro_rules! motor_cortical_units {
                         1 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]), // contrast
                         2 => (IOCorticalAreaConfigurationFlag::Percentage2D(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -30], channel_dimensions_default: [2, 1, 10], channel_dimensions_min: [2, 1, 1], channel_dimensions_max: [2, 1, 1024]), // per pixel diff
                         3 => (IOCorticalAreaConfigurationFlag::Percentage2D(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -30], channel_dimensions_default: [2, 1, 10], channel_dimensions_min: [2, 1, 1], channel_dimensions_max: [2, 1, 1024]) // image diff
+                    }
+                },
+
+                #[doc = "Spatial pointer output - decodes activity into one normalized XYZ percentage tuple."]
+                SpatialPointer => {
+                    friendly_name: "Spatial Pointer",
+                    accepted_wrapped_io_data_type: SpatialPointer3D,
+                    cortical_id_unit_reference: *b"ptr",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    allowed_frame_change_handling: [Absolute, Incremental],
+                    cortical_area_properties: {
+                        0 => ($crate::genomic::cortical_area::io_cortical_area_configuration_flag::spatial_pointer_io_flag(frame_change_handling, percentage_neuron_positioning), relative_position: [210, 0, -30], channel_dimensions_default: [64, 64, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 4096])
                     }
                 },
 

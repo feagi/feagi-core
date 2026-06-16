@@ -10,17 +10,18 @@ use crate::data_types::{
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
     decode_signed_percentage_from_fractional_exponential_neurons,
     decode_signed_percentage_from_linear_neurons,
+    decode_signed_percentage_from_linear_neurons_along_z,
     decode_unsigned_percentage_from_fractional_exponential_neurons,
     decode_unsigned_percentage_from_linear_neurons,
 };
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_genome_definitions::::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelDimensions, NeuronDepth,
 };
-use feagi_genome_definitions::::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
-use feagi_genome_definitions::::CorticalID;
-use feagi_potential_voxels::::coord_potential::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
@@ -42,6 +43,10 @@ pub struct PercentageNeuronVoxelXYZPDecoder {
 
 impl PercentageNeuronVoxelXYZPDecoder {
     /// Create a new boxed decoder with the specified configuration.
+    ///
+    /// For signed **1D linear** percentages, X is one column per channel and **Z** encodes sign:
+    /// `z = 0` → +1, `z = depth - 1` → -1. Other signed modes keep two X columns per scalar
+    /// (even X = positive lobe, odd X = negative lobe).
     #[allow(dead_code)]
     pub fn new_box(
         cortical_read_target: CorticalID,
@@ -53,20 +58,25 @@ impl PercentageNeuronVoxelXYZPDecoder {
     ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
         let number_pairs_per_channel = number_percentages.as_u32();
-        // For signed percentages, X is split into positive/negative columns:
-        // even X = positive, odd X = negative (see decode loop).
+        let along_z_signed_d1_linear = is_signed
+            && number_percentages == PercentageChannelDimensionality::D1
+            && interpolation == PercentageNeuronPositioning::Linear;
         let per_channel_width = if is_signed {
-            WIDTH_PER_UNSIGNED_PERCENTAGE * number_pairs_per_channel * 2
+            if along_z_signed_d1_linear {
+                WIDTH_PER_UNSIGNED_PERCENTAGE * number_pairs_per_channel
+            } else {
+                WIDTH_PER_UNSIGNED_PERCENTAGE * number_pairs_per_channel * 2
+            }
         } else {
             WIDTH_PER_UNSIGNED_PERCENTAGE * number_pairs_per_channel
         };
         let total_width = *number_channels * per_channel_width;
         let scratch_size = *number_channels as usize * number_pairs_per_channel as usize;
 
-        let z_depth_scratch_space_negative = if is_signed {
+        let z_depth_scratch_space_negative = if is_signed && !along_z_signed_d1_linear {
             vec![Vec::new(); scratch_size]
         } else {
-            Vec::new() // empty
+            Vec::new()
         };
 
         let decoder = PercentageNeuronVoxelXYZPDecoder {
@@ -83,6 +93,14 @@ impl PercentageNeuronVoxelXYZPDecoder {
             z_depth_scratch_space_negative,
         };
         Ok(Box::new(decoder))
+    }
+
+    /// Signed 1D linear: one cortical X index per channel; Z carries -1..+1.
+    #[inline]
+    fn signed_d1_linear_uses_along_z_layout(&self) -> bool {
+        self.is_signed
+            && self.number_percentages == PercentageChannelDimensionality::D1
+            && self.interpolation == PercentageNeuronPositioning::Linear
     }
 
     /// Clear all scratch spaces
@@ -229,18 +247,28 @@ impl PercentageNeuronVoxelXYZPDecoder {
         changed_flag: &mut bool,
     ) -> Result<(), FeagiDataError> {
         // Check if any data was collected
-        let has_data = (0..number_pairs).any(|i| {
-            !self
-                .z_depth_scratch_space
-                .get(base_index + i)
-                .unwrap()
-                .is_empty()
-                || !self
-                    .z_depth_scratch_space_negative
+        let has_data = if self.signed_d1_linear_uses_along_z_layout() {
+            (0..number_pairs).any(|i| {
+                !self
+                    .z_depth_scratch_space
                     .get(base_index + i)
                     .unwrap()
                     .is_empty()
-        });
+            })
+        } else {
+            (0..number_pairs).any(|i| {
+                !self
+                    .z_depth_scratch_space
+                    .get(base_index + i)
+                    .unwrap()
+                    .is_empty()
+                    || !self
+                        .z_depth_scratch_space_negative
+                        .get(base_index + i)
+                        .unwrap()
+                        .is_empty()
+            })
+        };
 
         if !has_data {
             return Ok(());
@@ -252,9 +280,20 @@ impl PercentageNeuronVoxelXYZPDecoder {
             PercentageChannelDimensionality::D1 => {
                 let signed_percentage: &mut SignedPercentage =
                     pipeline.get_preprocessed_cached_value_mut().try_into()?;
-                let z_pos = self.z_depth_scratch_space.get(base_index).unwrap();
-                let z_neg = self.z_depth_scratch_space_negative.get(base_index).unwrap();
-                self.decode_signed(z_pos, z_neg, signed_percentage);
+                if self.signed_d1_linear_uses_along_z_layout() {
+                    let z_col = self.z_depth_scratch_space.get(base_index).unwrap();
+                    if !z_col.is_empty() {
+                        decode_signed_percentage_from_linear_neurons_along_z(
+                            z_col,
+                            self.channel_dimensions.depth,
+                            signed_percentage,
+                        );
+                    }
+                } else {
+                    let z_pos = self.z_depth_scratch_space.get(base_index).unwrap();
+                    let z_neg = self.z_depth_scratch_space_negative.get(base_index).unwrap();
+                    self.decode_signed(z_pos, z_neg, signed_percentage);
+                }
             }
             PercentageChannelDimensionality::D2 => {
                 let signed_2d: &mut SignedPercentage2D =
@@ -391,49 +430,73 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
         match self.is_signed {
             false => {
                 for neuron in neuron_array.iter() {
-                    if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0
+                    if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0
                     {
                         continue;
                     }
-                    if neuron.coordinate.x >= max_possible_x_index
-                        || neuron.coordinate.z >= z_depth
+                    if neuron.neuron_voxel_coordinate.x >= max_possible_x_index
+                        || neuron.neuron_voxel_coordinate.z >= z_depth
                     {
                         continue;
                     }
 
                     if let Some(z_row_vector) = self
                         .z_depth_scratch_space
-                        .get_mut(neuron.coordinate.x as usize)
+                        .get_mut(neuron.neuron_voxel_coordinate.x as usize)
                     {
-                        z_row_vector.push(neuron.coordinate.z);
+                        z_row_vector.push(neuron.neuron_voxel_coordinate.z);
                     }
                 }
             }
             true => {
-                for neuron in neuron_array.iter() {
-                    if neuron.coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0
-                    {
-                        continue;
-                    }
-                    if neuron.coordinate.z >= z_depth {
-                        continue;
-                    }
+                if self.signed_d1_linear_uses_along_z_layout() {
+                    let max_x = number_of_channels;
+                    for neuron in neuron_array.iter() {
+                        if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y
+                            || neuron.potential == 0.0
+                        {
+                            continue;
+                        }
+                        if neuron.neuron_voxel_coordinate.x >= max_x
+                            || neuron.neuron_voxel_coordinate.z >= z_depth
+                        {
+                            continue;
+                        }
 
-                    // For signed: even X = positive, odd X = negative
-                    // Map X coordinate to channel index
-                    let channel_index = (neuron.coordinate.x / 2) as usize;
-                    if channel_index >= number_of_channels as usize {
-                        continue;
+                        if let Some(z_row_vector) = self
+                            .z_depth_scratch_space
+                            .get_mut(neuron.neuron_voxel_coordinate.x as usize)
+                        {
+                            z_row_vector.push(neuron.neuron_voxel_coordinate.z);
+                        }
                     }
+                } else {
+                    for neuron in neuron_array.iter() {
+                        if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y
+                            || neuron.potential == 0.0
+                        {
+                            continue;
+                        }
+                        if neuron.neuron_voxel_coordinate.z >= z_depth {
+                            continue;
+                        }
 
-                    let z_row_vector = if neuron.coordinate.x % 2 == 0 {
-                        self.z_depth_scratch_space.get_mut(channel_index)
-                    } else {
-                        self.z_depth_scratch_space_negative.get_mut(channel_index)
-                    };
+                        // For signed: even X = positive, odd X = negative
+                        // Map X coordinate to channel index
+                        let channel_index = (neuron.neuron_voxel_coordinate.x / 2) as usize;
+                        if channel_index >= number_of_channels as usize {
+                            continue;
+                        }
 
-                    if let Some(v) = z_row_vector {
-                        v.push(neuron.coordinate.z);
+                        let z_row_vector = if neuron.neuron_voxel_coordinate.x % 2 == 0 {
+                            self.z_depth_scratch_space.get_mut(channel_index)
+                        } else {
+                            self.z_depth_scratch_space_negative.get_mut(channel_index)
+                        };
+
+                        if let Some(v) = z_row_vector {
+                            v.push(neuron.neuron_voxel_coordinate.z);
+                        }
                     }
                 }
             }

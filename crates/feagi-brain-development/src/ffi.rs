@@ -307,7 +307,12 @@ fn py_match_vectors_batch(
 ///   -1 = wildcard "*"
 ///   -2 = skip "?"
 ///   -3 = exclude "!"
+///   -10 = direction positive "?+" (all coords > src)
+///   -11 = direction negative "?-" (all coords < src)
+///   -12 = direction positive inclusive "?+=" (all coords >= src)
+///   -13 = direction negative inclusive "?-=" (all coords <= src)
 ///   >= 0 = exact value
+/// Note: Offset and Range patterns require string-based genome encoding.
 #[pyfunction]
 fn py_match_patterns(
     src_coordinate: (i32, i32, i32),

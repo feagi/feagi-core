@@ -1,16 +1,17 @@
+use crate::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
+use crate::genomic::cortical_area::descriptors::CorticalUnitIndex;
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
+    FrameChangeHandling, PercentageNeuronPositioning, PoseSchema,
+};
+use crate::genomic::cortical_area::{
+    CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag,
+};
+use crate::genomic::sensory_cortical_unit::UnitTopology;
+use crate::motor_cortical_units;
 use paste;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use feagi_data::quantizable_linear::wrappers::QuantizedElementWrapperBase;
-use crate::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
-use crate::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
-use crate::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
-use crate::genomic::cortical_area::descriptors::*;
-use crate::genomic::cortical_area::{CorticalAreaType, CorticalID};
-use crate::genomic::FeagiStructuresGenomicError;
-use crate::genomic::sensory_cortical_unit::UnitTopology;
-use crate::motor_cortical_units;
 
 // Helper macro to handle optional allowed_frame_change_handling
 #[macro_export]
@@ -286,8 +287,22 @@ impl MotorCorticalUnit {
                     group_index,
                 )[0]
             }
+            MotorCorticalUnit::PoseEstimation => {
+                Self::get_cortical_ids_array_for_pose_estimation_with_parameters(
+                    fh,
+                    PoseSchema::HumanBody,
+                    group_index,
+                )[0]
+            }
             MotorCorticalUnit::DynamicImageProcessing => {
                 Self::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
+                    fh,
+                    pos,
+                    group_index,
+                )[0]
+            }
+            MotorCorticalUnit::SpatialPointer => {
+                Self::get_cortical_ids_array_for_spatial_pointer_with_parameters(
                     fh,
                     pos,
                     group_index,

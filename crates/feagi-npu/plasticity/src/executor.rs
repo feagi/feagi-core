@@ -47,6 +47,7 @@ pub trait PlasticityExecutor: Send + Sync {
     /// * `temporal_depth` - Number of historical timesteps to consider
     /// * `upstream_areas` - Cortical indices of areas that project to this memory area
     /// * `lifecycle_config` - Optional lifecycle configuration for memory neurons
+    /// * `mp_learning_enabled` - Whether to capture membrane potentials in replay frames
     fn register_memory_area(
         &self,
         area_idx: u32,
@@ -54,6 +55,7 @@ pub trait PlasticityExecutor: Send + Sync {
         temporal_depth: u32,
         upstream_areas: Vec<u32>,
         lifecycle_config: Option<crate::MemoryNeuronLifecycleConfig>,
+        mp_learning_enabled: bool,
     );
 
     /// Start the executor (for async implementations)
@@ -250,6 +252,7 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
         temporal_depth: u32,
         upstream_areas: Vec<u32>,
         lifecycle_config: Option<crate::MemoryNeuronLifecycleConfig>,
+        mp_learning_enabled: bool,
     ) {
         if let Some(service) = self.service.lock().unwrap().as_mut() {
             service.register_memory_area(
@@ -258,6 +261,7 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
                 temporal_depth,
                 upstream_areas,
                 lifecycle_config,
+                mp_learning_enabled,
             );
         }
     }
@@ -340,6 +344,7 @@ impl PlasticityExecutor for SyncPlasticityExecutor {
         _temporal_depth: u32,
         _upstream_areas: Vec<u32>,
         _lifecycle_config: Option<crate::MemoryNeuronLifecycleConfig>,
+        _mp_learning_enabled: bool,
     ) {
         unimplemented!("SyncPlasticityExecutor not yet implemented");
     }

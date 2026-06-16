@@ -78,6 +78,7 @@ fn test_memory_replay_fires_twin_next_burst() {
             offset: 0,
             upstream_area_idx,
             coords: vec![(0, 0, 0), (1, 0, 0)],
+            membrane_potentials: None,
         }],
     );
 
@@ -130,6 +131,7 @@ fn test_memory_replay_respects_offsets() {
             offset: 2,
             upstream_area_idx,
             coords: vec![(0, 0, 0)],
+            membrane_potentials: None,
         }],
     );
 

@@ -1,10 +1,11 @@
 use crate::data_types::descriptors::{
-    ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
+    ImageFrameProperties, MiscDataDimensions, PoseEstimationProperties,
+    SegmentedImageFrameProperties,
 };
 use crate::data_types::{
     GazeProperties, ImageFilteringSettings, ImageFrame, MiscData, Percentage, Percentage2D,
-    Percentage3D, Percentage4D, RawIMU, SegmentedImageFrame, SignedPercentage, SignedPercentage2D,
-    SignedPercentage3D, SignedPercentage4D,
+    Percentage3D, Percentage4D, PoseEstimationData, RawIMU, SegmentedImageFrame, SignedPercentage,
+    SignedPercentage2D, SignedPercentage3D, SignedPercentage4D,
 };
 use crate::wrapped_io_data::WrappedIOData;
 use feagi_structures::FeagiDataError;
@@ -47,6 +48,7 @@ pub enum WrappedIOType {
     MiscData(Option<MiscDataDimensions>),
     GazeProperties,
     ImageFilteringSettings,
+    PoseEstimationData(Option<PoseEstimationProperties>),
 }
 
 // NOTE: Due to some variations in some of the types, this isn't practical to turn into a macro.
@@ -149,6 +151,17 @@ impl WrappedIOType {
             WrappedIOType::ImageFilteringSettings => Ok(WrappedIOData::ImageFilteringSettings(
                 ImageFilteringSettings::default(),
             )),
+            WrappedIOType::PoseEstimationData(pose_properties) => {
+                if pose_properties.is_none() {
+                    return Err(FeagiDataError::BadParameters(
+                        "PoseEstimation properties is None! Cannot create default Wrapped Data!"
+                            .into(),
+                    ));
+                }
+                Ok(WrappedIOData::PoseEstimationData(PoseEstimationData::new(
+                    &pose_properties.unwrap(),
+                )?))
+            }
         }
     }
 }
@@ -191,6 +204,13 @@ impl std::fmt::Display for WrappedIOType {
             WrappedIOType::ImageFilteringSettings => {
                 write!(f, "IOTypeVariant(ImageFilteringSettings)")
             }
+            WrappedIOType::PoseEstimationData(properties) => {
+                let s: String = match properties {
+                    Some(p) => p.to_string(),
+                    None => "No Requirements".to_string(),
+                };
+                write!(f, "PoseEstimationData({})", s)
+            }
         }
     }
 }
@@ -219,6 +239,9 @@ impl From<WrappedIOData> for WrappedIOType {
             }
             WrappedIOData::GazeProperties(_) => WrappedIOType::GazeProperties,
             WrappedIOData::ImageFilteringSettings(_) => WrappedIOType::ImageFilteringSettings,
+            WrappedIOData::PoseEstimationData(ref data) => {
+                WrappedIOType::PoseEstimationData(Some(*data.get_properties()))
+            }
         }
     }
 }
@@ -247,6 +270,9 @@ impl From<&WrappedIOData> for WrappedIOType {
             }
             WrappedIOData::GazeProperties(_) => WrappedIOType::GazeProperties,
             WrappedIOData::ImageFilteringSettings(_) => WrappedIOType::ImageFilteringSettings,
+            WrappedIOData::PoseEstimationData(data) => {
+                WrappedIOType::PoseEstimationData(Some(*data.get_properties()))
+            }
         }
     }
 }

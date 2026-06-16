@@ -1,6 +1,6 @@
 # ============================================================================
 # UMBRELLA CRATE: feagi
-#
+# 
 # This is the primary crate that users import. It re-exports all components
 # with feature flags for selective compilation.
 # All workspace members are also published individually for selective use.
@@ -8,7 +8,7 @@
 
 [package]
 name = "feagi"
-version = "0.0.11"
+version = "0.0.12"
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
@@ -178,7 +178,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.11"
+version = "0.0.12"
 edition = "2021"
 rust-version = "1.75"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]

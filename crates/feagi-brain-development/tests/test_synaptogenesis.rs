@@ -5,7 +5,7 @@
 Synaptogenesis Integration Tests
 
 Tests the synaptogenesis process through ConnectomeManager, covering:
-- Core morphology applications (projector, block_to_block, vectors, patterns, expander)
+- Core morphology applications (projector, centered_projector, block_to_block, vectors, patterns, expander)
 - Integration path (apply_cortical_mapping -> apply_cortical_mapping_for_pair -> apply_single_morphology_rule)
 - Edge cases (empty areas, no neurons, dimensions mismatch)
 - Parameter validation (weight, psp, synapse_attractivity)
@@ -169,6 +169,181 @@ fn test_projector_morphology_basic() {
     );
 
     println!("✅ Test 1: Projector morphology basic - PASSED");
+}
+
+#[test]
+fn test_centered_projector_drops_out_of_bounds() {
+    let mut manager = create_test_manager();
+
+    // Source larger than destination so peripheral source voxels are dropped.
+    let (src_area, src_id) = create_test_area("src_cpr", 5, 5, 1, 0);
+    manager
+        .add_cortical_area(src_area)
+        .expect("Failed to add source area");
+    let (dst_area, dst_id) = create_test_area("dst_cpr", 3, 3, 1, 1);
+    manager
+        .add_cortical_area(dst_area)
+        .expect("Failed to add destination area");
+
+    let src_neurons = create_grid_neurons(&mut manager, &src_id, 5, 5, 1);
+    create_grid_neurons(&mut manager, &dst_id, 3, 3, 1);
+
+    let rule = json!({
+        "morphology_id": "centered_projector",
+        "postSynapticCurrent_multiplier": 1.0,
+        "synapse_attractivity": 100
+    });
+
+    manager
+        .update_cortical_mapping(&src_id, &dst_id, vec![rule])
+        .expect("Failed to update cortical mapping");
+
+    let synapse_count = manager
+        .regenerate_synapses_for_mapping(&src_id, &dst_id)
+        .expect("Failed to apply cortical mapping");
+
+    // Only centered 3x3 source region maps into 3x3 destination => 9 synapses.
+    assert_eq!(
+        synapse_count, 9,
+        "Centered projector should map only in-bounds centered voxels"
+    );
+
+    let Some(npu_arc) = manager.get_npu() else {
+        panic!("Test manager must have an attached NPU");
+    };
+    let mut npu_guard = npu_arc.lock().unwrap();
+
+    let src_center_nid = src_neurons[(2 * 5 + 2) as usize] as u32; // (2,2,0)
+    let src_corner_nid = src_neurons[0] as u32; // (0,0,0)
+
+    match *npu_guard {
+        DynamicNPU::F32(ref mut npu) => {
+            let center_outgoing = npu.get_outgoing_synapses(src_center_nid);
+            assert_eq!(
+                center_outgoing.len(),
+                1,
+                "Center source voxel should map to exactly one destination voxel"
+            );
+            let center_target_coords = npu
+                .get_neuron_coordinates(center_outgoing[0].0)
+                .expect("Destination neuron coordinates should exist");
+            assert_eq!(
+                center_target_coords,
+                (1, 1, 0),
+                "Source center should map to destination center"
+            );
+
+            let corner_outgoing = npu.get_outgoing_synapses(src_corner_nid);
+            assert!(
+                corner_outgoing.is_empty(),
+                "Out-of-bounds mapped source voxels should be dropped"
+            );
+        }
+        DynamicNPU::INT8(ref mut npu) => {
+            let center_outgoing = npu.get_outgoing_synapses(src_center_nid);
+            assert_eq!(
+                center_outgoing.len(),
+                1,
+                "Center source voxel should map to exactly one destination voxel"
+            );
+            let center_target_coords = npu
+                .get_neuron_coordinates(center_outgoing[0].0)
+                .expect("Destination neuron coordinates should exist");
+            assert_eq!(
+                center_target_coords,
+                (1, 1, 0),
+                "Source center should map to destination center"
+            );
+
+            let corner_outgoing = npu.get_outgoing_synapses(src_corner_nid);
+            assert!(
+                corner_outgoing.is_empty(),
+                "Out-of-bounds mapped source voxels should be dropped"
+            );
+        }
+    }
+}
+
+#[test]
+fn test_centered_projector_even_dimensions_use_lower_center_anchor() {
+    let mut manager = create_test_manager();
+
+    // Even-sized areas validate the lower-center anchor contract:
+    // src center at (1,1,0) in 4x4x1 maps to dst center at (2,2,0) in 6x6x1.
+    let (src_area, src_id) = create_test_area("src_cpe", 4, 4, 1, 0);
+    manager
+        .add_cortical_area(src_area)
+        .expect("Failed to add source area");
+    let (dst_area, dst_id) = create_test_area("dst_cpe", 6, 6, 1, 1);
+    manager
+        .add_cortical_area(dst_area)
+        .expect("Failed to add destination area");
+
+    let src_neurons = create_grid_neurons(&mut manager, &src_id, 4, 4, 1);
+    create_grid_neurons(&mut manager, &dst_id, 6, 6, 1);
+
+    let rule = json!({
+        "morphology_id": "centered_projector",
+        "postSynapticCurrent_multiplier": 1.0,
+        "synapse_attractivity": 100
+    });
+
+    manager
+        .update_cortical_mapping(&src_id, &dst_id, vec![rule])
+        .expect("Failed to update cortical mapping");
+
+    let synapse_count = manager
+        .regenerate_synapses_for_mapping(&src_id, &dst_id)
+        .expect("Failed to apply cortical mapping");
+    assert_eq!(
+        synapse_count, 16,
+        "All 4x4 source voxels should map in-bounds into 6x6 destination"
+    );
+
+    let Some(npu_arc) = manager.get_npu() else {
+        panic!("Test manager must have an attached NPU");
+    };
+    let mut npu_guard = npu_arc.lock().unwrap();
+
+    let src_lower_center_nid = src_neurons[5] as u32; // (1,1,0)
+    let src_upper_center_nid = src_neurons[(2 * 4 + 2) as usize] as u32; // (2,2,0)
+
+    match *npu_guard {
+        DynamicNPU::F32(ref mut npu) => {
+            let lower_center_outgoing = npu.get_outgoing_synapses(src_lower_center_nid);
+            assert_eq!(lower_center_outgoing.len(), 1);
+            assert_eq!(
+                npu.get_neuron_coordinates(lower_center_outgoing[0].0),
+                Some((2, 2, 0)),
+                "Lower-center source voxel should map to lower-center destination voxel"
+            );
+
+            let upper_center_outgoing = npu.get_outgoing_synapses(src_upper_center_nid);
+            assert_eq!(upper_center_outgoing.len(), 1);
+            assert_eq!(
+                npu.get_neuron_coordinates(upper_center_outgoing[0].0),
+                Some((3, 3, 0)),
+                "Adjacent upper-center source voxel should preserve +1 offset from center"
+            );
+        }
+        DynamicNPU::INT8(ref mut npu) => {
+            let lower_center_outgoing = npu.get_outgoing_synapses(src_lower_center_nid);
+            assert_eq!(lower_center_outgoing.len(), 1);
+            assert_eq!(
+                npu.get_neuron_coordinates(lower_center_outgoing[0].0),
+                Some((2, 2, 0)),
+                "Lower-center source voxel should map to lower-center destination voxel"
+            );
+
+            let upper_center_outgoing = npu.get_outgoing_synapses(src_upper_center_nid);
+            assert_eq!(upper_center_outgoing.len(), 1);
+            assert_eq!(
+                npu.get_neuron_coordinates(upper_center_outgoing[0].0),
+                Some((3, 3, 0)),
+                "Adjacent upper-center source voxel should preserve +1 offset from center"
+            );
+        }
+    }
 }
 
 #[test]

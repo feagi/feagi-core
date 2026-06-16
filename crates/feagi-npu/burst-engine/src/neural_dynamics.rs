@@ -596,13 +596,21 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
 
             let &(neuron_id, _idx) = &batch_indices[i];
 
-            // Check threshold_limit (SIMD-friendly: T::MAX = no limit, direct comparison)
+            // Check threshold_limit against MP at threshold-crossing time (before reset).
+            // `update_neurons_lif_batch` resets MP to 0 for firing candidates, so we must
+            // evaluate constraints using pre-reset MP to preserve scalar-path semantics.
             let threshold_limit = batch_threshold_limits[i];
-            let mp = batch_mp[i];
+            let mp_before_reset = batch_mp_before_update[i].saturating_add(batch_candidates[i]);
             // SIMD-friendly: uniform comparison (no branching for "no limit" case)
             // If threshold_limit == T::MAX, MP will always be < MAX (unless MP is also MAX, which is unlikely)
-            if mp >= threshold_limit && mp.to_f32() != threshold_limit.to_f32() {
+            if mp_before_reset.ge(threshold_limit)
+                && mp_before_reset.to_f32() != threshold_limit.to_f32()
+            {
                 fired_mask[i] = false; // Blocked by threshold_limit
+                                       // Match scalar path: blocked firings become no-fire path and leak is applied.
+                let mut mp_after_leak = mp_before_reset;
+                apply_leak(&mut mp_after_leak, batch_leaks[i]);
+                batch_mp[i] = mp_after_leak;
                 continue;
             }
 
@@ -620,6 +628,10 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             // If consecutive_fire_limit == u16::MAX, count will always be < MAX
             if consecutive_fire_count >= consecutive_fire_limit {
                 fired_mask[i] = false; // Blocked by consecutive_fire_limit
+                                       // Match scalar path: blocked firings become no-fire path and leak is applied.
+                let mut mp_after_leak = mp_before_reset;
+                apply_leak(&mut mp_after_leak, batch_leaks[i]);
+                batch_mp[i] = mp_after_leak;
                 continue;
             }
 
@@ -628,12 +640,20 @@ fn process_candidates_with_simd_batching<T: NeuralValue>(
             if excitability < 0.999 {
                 if excitability <= 0.0 {
                     fired_mask[i] = false; // Never fire
+                                           // Match scalar path: blocked firings become no-fire path and leak is applied.
+                    let mut mp_after_leak = mp_before_reset;
+                    apply_leak(&mut mp_after_leak, batch_leaks[i]);
+                    batch_mp[i] = mp_after_leak;
                     continue;
                 }
                 // Probabilistic: use deterministic random (needs neuron_id, so sequential)
                 let random_val = excitability_random(neuron_id.0, burst_count);
                 if random_val >= excitability {
                     fired_mask[i] = false; // Blocked by excitability
+                                           // Match scalar path: blocked firings become no-fire path and leak is applied.
+                    let mut mp_after_leak = mp_before_reset;
+                    apply_leak(&mut mp_after_leak, batch_leaks[i]);
+                    batch_mp[i] = mp_after_leak;
                     continue;
                 }
             }
@@ -822,11 +842,11 @@ fn process_single_neuron<T: NeuralValue>(
 
     // Firing window: threshold <= MP <= threshold_limit
     // SIMD-friendly encoding: threshold_limit == T::MAX means no upper bound
-    // Note: direct comparisons rely on NeuralValue + PartialOrd.
-    let above_min = current_potential >= threshold;
+    // Note: using ge() and not lt() to implement <= (since le() doesn't exist in trait)
+    let above_min = current_potential.ge(threshold);
     // SIMD-friendly: uniform comparison (no branching for "no limit" case)
     // If threshold_limit == T::MAX, MP will always be < MAX (unless MP is also MAX, which is unlikely)
-    let below_max = current_potential < threshold_limit
+    let below_max = !current_potential.ge(threshold_limit)
         || current_potential.to_f32() == threshold_limit.to_f32();
 
     if above_min && below_max {
@@ -910,7 +930,7 @@ fn process_single_neuron<T: NeuralValue>(
                 );
             }
             // Reset membrane potential
-            neuron_array.membrane_potentials_mut()[idx] = T::ZERO;
+            neuron_array.membrane_potentials_mut()[idx] = T::zero();
 
             // Increment consecutive fire count (saturating to prevent overflow)
             let old_count = neuron_array.consecutive_fire_counts()[idx];
@@ -1454,6 +1474,54 @@ mod tests {
 
         assert_eq!(result.neurons_processed, 10);
         assert_eq!(result.neurons_fired, 10);
+    }
+
+    #[test]
+    fn test_simd_threshold_limit_blocks_firing_and_preserves_mp() {
+        let neuron_count = 10_000; // Triggers SIMD path (threshold is 10_000)
+        let mut neurons = StdNeuronArray::new(neuron_count + 16);
+        let mut empty_sparse = empty_assoc_sparse();
+
+        let mut fcl = FireCandidateList::new();
+        for _ in 0..neuron_count {
+            let id = neurons
+                .add_neuron(
+                    1.0,  // threshold
+                    1.5,  // threshold_limit (cap)
+                    0.0,  // leak_coefficient (keep MP unchanged on no-fire)
+                    0.0,  // resting_potential
+                    0,    // neuron_type
+                    0,    // refractory_period
+                    1.0,  // excitability
+                    0,    // consecutive_fire_limit
+                    0,    // snooze_period
+                    true, // mp_charge_accumulation
+                    1,    // cortical_area
+                    0, 0, 0,
+                )
+                .unwrap();
+            fcl.add_candidate(NeuronId(id as u32), 2.0); // MP crosses threshold but exceeds limit
+        }
+
+        let result = process_neural_dynamics(
+            &fcl,
+            None,
+            None,
+            None,
+            &mut empty_sparse,
+            None,
+            &mut neurons,
+            0,
+        )
+        .unwrap();
+
+        assert_eq!(result.neurons_fired, 0);
+        assert_eq!(result.fire_queue.total_neurons(), 0);
+
+        // Blocked-by-limit neurons must keep MP at 2.0 (with leak=0.0).
+        for idx in 0..neuron_count {
+            assert!((neurons.membrane_potentials[idx].to_f32() - 2.0).abs() < 1e-6);
+        }
     }
 
     #[test]

@@ -12,6 +12,7 @@ use crate::data_types::{
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
     encode_signed_percentage_to_fractional_exponential_neuron_z_indexes,
     encode_signed_percentage_to_linear_neuron_z_index,
+    encode_signed_percentage_to_linear_neuron_z_index_along_z,
     encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes,
     encode_unsigned_percentage_to_linear_neuron_z_index,
 };
@@ -83,7 +84,18 @@ impl PercentageNeuronVoxelXYZPEncoder {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
         let num_dims = number_percentages.as_u32();
-        let channel_width = if is_signed { num_dims * 2 } else { num_dims };
+        let along_z_signed_d1_linear = is_signed
+            && number_percentages == PercentageChannelDimensionality::D1
+            && interpolation == PercentageNeuronPositioning::Linear;
+        let channel_width = if is_signed {
+            if along_z_signed_d1_linear {
+                num_dims
+            } else {
+                num_dims * 2
+            }
+        } else {
+            num_dims
+        };
         let num_channels = *number_channels as usize;
 
         let encoder = PercentageNeuronVoxelXYZPEncoder {
@@ -102,10 +114,21 @@ impl PercentageNeuronVoxelXYZPEncoder {
         Ok(Box::new(encoder))
     }
 
+    #[inline]
+    fn signed_d1_linear_uses_along_z_layout(&self) -> bool {
+        self.is_signed
+            && self.number_percentages == PercentageChannelDimensionality::D1
+            && self.interpolation == PercentageNeuronPositioning::Linear
+    }
+
     fn channel_width(&self) -> u32 {
         let num_dims = self.number_percentages.as_u32();
         if self.is_signed {
-            num_dims * 2
+            if self.signed_d1_linear_uses_along_z_layout() {
+                num_dims
+            } else {
+                num_dims * 2
+            }
         } else {
             num_dims
         }
@@ -149,6 +172,7 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
         let interpolation = self.interpolation;
         let is_signed = self.is_signed;
         let channel_width = self.channel_width();
+        let signed_d1_linear_along_z = self.signed_d1_linear_uses_along_z_layout();
 
         // TODO make parallel
 
@@ -166,7 +190,16 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                         let data = pipeline.get_postprocessed_sensor_value();
                         if is_signed {
                             let p: SignedPercentage = data.try_into()?;
-                            encode_signed(interpolation, &p, z_depth, z_depth_float, s, s_neg);
+                            if signed_d1_linear_along_z {
+                                encode_signed_percentage_to_linear_neuron_z_index_along_z(
+                                    &p,
+                                    z_depth_float,
+                                    s,
+                                );
+                                s_neg.clear();
+                            } else {
+                                encode_signed(interpolation, &p, z_depth, z_depth_float, s, s_neg);
+                            }
                         } else {
                             let p: Percentage = data.try_into()?;
                             encode_unsigned(interpolation, &p, z_depth, z_depth_float, s);
@@ -188,7 +221,7 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
                     for z in s {
                         neuron_array_target.push_raw(c * channel_width, Y, *z, 1.0);
                     }
-                    if is_signed {
+                    if is_signed && !signed_d1_linear_along_z {
                         for z in s_neg {
                             neuron_array_target.push_raw(c * channel_width + 1, Y, *z, 1.0);
                         }

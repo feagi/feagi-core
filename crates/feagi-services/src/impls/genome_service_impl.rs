@@ -29,7 +29,7 @@ use feagi_genome_definitions::::{
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use parking_lot::RwLock;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tracing::{info, trace, warn};
 
@@ -61,6 +61,7 @@ fn signage_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static s
         | IOCorticalAreaConfigurationFlag::Percentage4D(..) => "Percentage Unsigned",
         IOCorticalAreaConfigurationFlag::CartesianPlane(..) => "Cartesian Plane",
         IOCorticalAreaConfigurationFlag::Misc(..) => "Misc",
+        IOCorticalAreaConfigurationFlag::PoseEstimation(..) => "Pose Estimation",
         IOCorticalAreaConfigurationFlag::Boolean => "Boolean",
     }
 }
@@ -107,6 +108,7 @@ fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static 
         IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
         IOCorticalAreaConfigurationFlag::CartesianPlane(frame)
         | IOCorticalAreaConfigurationFlag::Misc(frame)
+        | IOCorticalAreaConfigurationFlag::PoseEstimation(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage2D(frame, _)
         | IOCorticalAreaConfigurationFlag::Percentage3D(frame, _)
@@ -118,6 +120,39 @@ fn behavior_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static 
             frame_handling_label(*frame)
         }
     }
+}
+
+fn resolve_non_overlapping_position(
+    requested_position: (i32, i32, i32),
+    area_width: usize,
+    occupied_positions: &mut HashSet<(i32, i32, i32)>,
+) -> ServiceResult<(i32, i32, i32)> {
+    if !occupied_positions.contains(&requested_position) {
+        occupied_positions.insert(requested_position);
+        return Ok(requested_position);
+    }
+
+    let width_for_gap = area_width.max(1);
+    let gap = width_for_gap.div_ceil(5).max(1); // ceil(20% of width)
+    let step_usize = width_for_gap.saturating_add(gap);
+    let step = i32::try_from(step_usize).map_err(|_| {
+        ServiceError::InvalidInput(format!(
+            "Unable to place cortical area: width {} creates horizontal step {} outside i32 range",
+            area_width, step_usize
+        ))
+    })?;
+
+    let mut candidate = requested_position;
+    while occupied_positions.contains(&candidate) {
+        candidate.0 = candidate.0.checked_add(step).ok_or_else(|| {
+            ServiceError::InvalidInput(format!(
+                "Unable to place cortical area: overflow while shifting x from {} by {}",
+                candidate.0, step
+            ))
+        })?;
+    }
+    occupied_positions.insert(candidate);
+    Ok(candidate)
 }
 
 fn coding_type_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'static str {
@@ -134,6 +169,7 @@ fn coding_type_label_from_flag(flag: &IOCorticalAreaConfigurationFlag) -> &'stat
         }
         IOCorticalAreaConfigurationFlag::CartesianPlane(..)
         | IOCorticalAreaConfigurationFlag::Misc(..)
+        | IOCorticalAreaConfigurationFlag::PoseEstimation(..)
         | IOCorticalAreaConfigurationFlag::Boolean => "Not Applicable",
     }
 }
@@ -579,13 +615,21 @@ impl GenomeService for GenomeServiceImpl {
         // Keep exported region metadata aligned with the live connectome state.
         // Region edits (e.g. rename/reposition) are applied through ConnectomeManager
         // and may not be reflected in the cached RuntimeGenome snapshot unless synced.
-        let runtime_brain_regions = {
+        // get_all_regions() embeds parent_region_id from the hierarchy's parent_map
+        // into each BrainRegion.properties so the saved JSON preserves the tree.
+        let (runtime_brain_regions, root_region_id) = {
             let manager = self.connectome.read();
             let hierarchy = manager.get_brain_region_hierarchy();
-            hierarchy.get_all_regions()
+            (
+                hierarchy.get_all_regions(),
+                hierarchy.get_root_id().cloned(),
+            )
         };
         if !runtime_brain_regions.is_empty() {
             genome.brain_regions = runtime_brain_regions;
+        }
+        if let Some(root_id) = root_region_id {
+            genome.metadata.brain_regions_root = Some(root_id);
         }
 
         // Use the full RuntimeGenome saver (produces flat format v3.0)
@@ -718,6 +762,17 @@ impl GenomeService for GenomeServiceImpl {
 
         // IO areas (IPU/OPU) must always be in root region; get root ID for default
         let root_region_id = self.connectome.read().get_root_region_id();
+        let mut occupied_positions: HashSet<(i32, i32, i32)> = {
+            let genome_lock = self.current_genome.read();
+            let genome = genome_lock
+                .as_ref()
+                .ok_or_else(|| ServiceError::Backend("No genome loaded".to_string()))?;
+            genome
+                .cortical_areas
+                .values()
+                .map(|area| (area.position.x, area.position.y, area.position.z))
+                .collect()
+        };
 
         // Step 1: Build CorticalArea structures
         let mut areas_to_add = Vec::new();
@@ -731,6 +786,27 @@ impl GenomeService for GenomeServiceImpl {
                 ServiceError::InvalidInput(format!("Failed to determine cortical area type: {}", e))
             })?;
 
+            let requested_position = param.position;
+            let resolved_position = resolve_non_overlapping_position(
+                requested_position,
+                param.dimensions.0,
+                &mut occupied_positions,
+            )?;
+            if resolved_position != requested_position {
+                info!(
+                    target: "feagi-services",
+                    "Adjusted cortical area position to avoid overlap: id={} requested=({},{},{}) resolved=({},{},{}) width={} gap_rule=20pct",
+                    param.cortical_id,
+                    requested_position.0,
+                    requested_position.1,
+                    requested_position.2,
+                    resolved_position.0,
+                    resolved_position.1,
+                    resolved_position.2,
+                    param.dimensions.0
+                );
+            }
+
             // Create CorticalArea
             let mut area = CorticalArea::new(
                 cortical_id_typed,
@@ -741,7 +817,7 @@ impl GenomeService for GenomeServiceImpl {
                     param.dimensions.1 as u32,
                     param.dimensions.2 as u32,
                 )?,
-                param.position.into(), // Convert (i32, i32, i32) to GenomeCoordinate3D
+                resolved_position.into(), // Convert (i32, i32, i32) to GenomeCoordinate3D
                 area_type,
             )?;
 
@@ -1368,6 +1444,14 @@ impl GenomeServiceImpl {
                                 }
                             }
                         }
+                        "mp_learning_enabled" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "mp_learning_enabled".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
 
                         // Membrane potential / runtime flags
                         "mp_charge_accumulation" | "neuron_mp_charge_accumulation" => {
@@ -1678,6 +1762,14 @@ impl GenomeServiceImpl {
                                         serde_json::json!(v as u32),
                                     );
                                 }
+                            }
+                        }
+                        "mp_learning_enabled" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "mp_learning_enabled".to_string(),
+                                    serde_json::json!(v),
+                                );
                             }
                         }
                         "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
@@ -2036,6 +2128,7 @@ impl GenomeServiceImpl {
                         | "longterm_mem_threshold"
                         | "neuron_longterm_mem_threshold"
                         | "temporal_depth"
+                        | "mp_learning_enabled"
                 )
             });
 
@@ -2106,6 +2199,7 @@ impl GenomeServiceImpl {
                                     mem_props.temporal_depth,
                                     upstream_non_memory,
                                     Some(lifecycle_config),
+                                    mem_props.mp_learning_enabled,
                                 );
                             } else {
                                 warn!(target: "feagi-services", "[GENOME-UPDATE] Failed to lock PlasticityExecutor for memory-area update");
@@ -2325,6 +2419,24 @@ impl GenomeServiceImpl {
                 }
                 let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
                 IOCorticalAreaConfigurationFlag::Misc(new_frame)
+            }
+            IOCorticalAreaConfigurationFlag::PoseEstimation(frame, schema) => {
+                if let Some(signage) = requested_signage {
+                    if !signage.trim().eq_ignore_ascii_case("not applicable") {
+                        return Err(ServiceError::InvalidInput(
+                            "coding_signage not supported for PoseEstimation".to_string(),
+                        ));
+                    }
+                }
+                if let Some(coding_type) = requested_type {
+                    if !coding_type.trim().eq_ignore_ascii_case("not applicable") {
+                        return Err(ServiceError::InvalidInput(
+                            "coding_type not supported for PoseEstimation".to_string(),
+                        ));
+                    }
+                }
+                let new_frame = requested_behavior.and_then(parse_frame).unwrap_or(frame);
+                IOCorticalAreaConfigurationFlag::PoseEstimation(new_frame, schema)
             }
             IOCorticalAreaConfigurationFlag::Boolean => {
                 if let Some(signage) = requested_signage {
@@ -3753,12 +3865,13 @@ impl GenomeServiceImpl {
             } else {
                 None
             };
-            let unit_id = if is_io_area {
+            // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see connectome_service_impl).
+            let subunit_id = if is_io_area {
                 Some(cortical_bytes[6])
             } else {
                 None
             };
-            let group_id = if is_io_area {
+            let cortical_unit_index = if is_io_area {
                 Some(cortical_bytes[7])
             } else {
                 None
@@ -3848,12 +3961,17 @@ impl GenomeServiceImpl {
                     use feagi_evolutionary::extract_memory_properties;
                     extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
                 },
+                mp_learning_enabled: {
+                    use feagi_evolutionary::extract_memory_properties;
+                    extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
+                },
                 properties: HashMap::new(),
                 cortical_subtype,
                 encoding_type,
                 encoding_format,
-                unit_id,
-                group_id,
+                unit_id: cortical_unit_index,
+                subunit_id,
+                group_id: cortical_unit_index,
                 coding_signage,
                 coding_behavior,
                 coding_type,
@@ -3943,12 +4061,13 @@ impl GenomeServiceImpl {
         } else {
             None
         };
-        let unit_id = if is_io_area {
+        // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see connectome_service_impl).
+        let subunit_id = if is_io_area {
             Some(cortical_bytes[6])
         } else {
             None
         };
-        let group_id = if is_io_area {
+        let cortical_unit_index = if is_io_area {
             Some(cortical_bytes[7])
         } else {
             None
@@ -4038,12 +4157,17 @@ impl GenomeServiceImpl {
                 use feagi_evolutionary::extract_memory_properties;
                 extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
             },
+            mp_learning_enabled: {
+                use feagi_evolutionary::extract_memory_properties;
+                extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
+            },
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,
             encoding_format,
-            unit_id,
-            group_id,
+            unit_id: cortical_unit_index,
+            subunit_id,
+            group_id: cortical_unit_index,
             coding_signage,
             coding_behavior,
             coding_type,
@@ -4134,12 +4258,13 @@ impl GenomeServiceImpl {
         } else {
             None
         };
-        let unit_id = if is_io_area {
+        // Byte 6 = CorticalSubUnitIndex, byte 7 = CorticalUnitIndex (see connectome_service_impl).
+        let subunit_id = if is_io_area {
             Some(cortical_bytes[6])
         } else {
             None
         };
-        let group_id = if is_io_area {
+        let cortical_unit_index = if is_io_area {
             Some(cortical_bytes[7])
         } else {
             None
@@ -4229,12 +4354,17 @@ impl GenomeServiceImpl {
                 use feagi_evolutionary::extract_memory_properties;
                 extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
             },
+            mp_learning_enabled: {
+                use feagi_evolutionary::extract_memory_properties;
+                extract_memory_properties(&area.properties).map(|p| p.mp_learning_enabled)
+            },
             properties: HashMap::new(),
             cortical_subtype,
             encoding_type,
             encoding_format,
-            unit_id,
-            group_id,
+            unit_id: cortical_unit_index,
+            subunit_id,
+            group_id: cortical_unit_index,
             coding_signage,
             coding_behavior,
             coding_type,

@@ -2294,6 +2294,7 @@ impl ConnectomeManager {
                                 mem_props.temporal_depth,
                                 upstream_non_memory,
                                 Some(lifecycle_config),
+                                mem_props.mp_learning_enabled,
                             );
                         } else {
                             warn!(target: "feagi-bdu", "Failed to lock PlasticityExecutor");
@@ -2886,6 +2887,53 @@ impl ConnectomeManager {
                 }
             }
 
+            // Handle conditional gate (transistor synapse) configuration if present.
+            // The gate_source_area field specifies a cortical area whose firing activity
+            // gates propagation through all synapses created by this mapping rule.
+            if let Some(gate_area_str) = rule
+                .as_object()
+                .and_then(|obj| obj.get("gate_source_area"))
+                .and_then(|v| v.as_str())
+            {
+                let gate_area_id = CorticalID::try_from_base_64(gate_area_str).map_err(|_| {
+                    crate::types::BduError::Internal(format!(
+                        "Invalid gate_source_area '{}' on mapping {} -> {}",
+                        gate_area_str, src_area_id, dst_area_id
+                    ))
+                })?;
+                let gate_cortical_idx =
+                    self.cortical_id_to_idx.get(&gate_area_id).ok_or_else(|| {
+                        crate::types::BduError::Internal(format!(
+                            "Unknown gate_source_area '{}' on mapping {} -> {}",
+                            gate_area_str, src_area_id, dst_area_id
+                        ))
+                    })?;
+
+                let mut npu_lock = npu_arc.lock().map_err(|_| {
+                    crate::types::BduError::Internal(
+                        "Failed to acquire NPU lock for gate registration".to_string(),
+                    )
+                })?;
+                if let Err(e) = npu_lock.register_gate_mapping(
+                    src_cortical_idx,
+                    dst_cortical_idx,
+                    *gate_cortical_idx,
+                ) {
+                    tracing::error!(
+                        target: "feagi-bdu",
+                        "Gate mapping registration failed for {} -> {} (gate={}): {}",
+                        src_area_id,
+                        dst_area_id,
+                        gate_area_str,
+                        e
+                    );
+                    return Err(crate::types::BduError::Internal(format!(
+                        "Gate registration failed: {}",
+                        e
+                    )));
+                }
+            }
+
             // Apply the morphology rule
             let synapse_count = match self.apply_single_morphology_rule(
                 src_area_id,
@@ -3004,6 +3052,48 @@ impl ConnectomeManager {
                 )?;
                 // Ensure the propagation engine sees the newly created synapses immediately
                 npu.rebuild_synapse_index();
+                Ok(count as usize)
+            }
+            "centered_projector" => {
+                let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Source area not found: {}",
+                        src_area_id
+                    ))
+                })?;
+                let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!(
+                        "Destination area not found: {}",
+                        dst_area_id
+                    ))
+                })?;
+
+                let src_dimensions = (
+                    src_area.dimensions.width as usize,
+                    src_area.dimensions.height as usize,
+                    src_area.dimensions.depth as usize,
+                );
+                let dst_dimensions = (
+                    dst_area.dimensions.width as usize,
+                    dst_area.dimensions.height as usize,
+                    dst_area.dimensions.depth as usize,
+                );
+
+                let count = crate::connectivity::core_morphologies::apply_centered_projector_morphology_with_dimensions(
+                    npu,
+                    src_idx,
+                    dst_idx,
+                    src_dimensions,
+                    dst_dimensions,
+                    weight,
+                    psp,
+                    synapse_attractivity,
+                    synapse_type,
+                    delay_bursts,
+                )?;
+                if count > 0 {
+                    npu.rebuild_synapse_index();
+                }
                 Ok(count as usize)
             }
             "episodic_memory" => {
@@ -3596,6 +3686,32 @@ impl ConnectomeManager {
                                 EvoPatternElement::Wildcard => Ok(RulePatternElement::Wildcard),
                                 EvoPatternElement::Skip => Ok(RulePatternElement::Skip),
                                 EvoPatternElement::Exclude => Ok(RulePatternElement::Exclude),
+                                EvoPatternElement::DirectionPositive => {
+                                    Ok(RulePatternElement::DirectionExclusive(
+                                        crate::connectivity::rules::patterns::Direction::Positive,
+                                    ))
+                                }
+                                EvoPatternElement::DirectionNegative => {
+                                    Ok(RulePatternElement::DirectionExclusive(
+                                        crate::connectivity::rules::patterns::Direction::Negative,
+                                    ))
+                                }
+                                EvoPatternElement::DirectionPositiveInclusive => {
+                                    Ok(RulePatternElement::DirectionInclusive(
+                                        crate::connectivity::rules::patterns::Direction::Positive,
+                                    ))
+                                }
+                                EvoPatternElement::DirectionNegativeInclusive => {
+                                    Ok(RulePatternElement::DirectionInclusive(
+                                        crate::connectivity::rules::patterns::Direction::Negative,
+                                    ))
+                                }
+                                EvoPatternElement::Offset(off) => {
+                                    Ok(RulePatternElement::Offset(*off))
+                                }
+                                EvoPatternElement::Range(lo, hi) => {
+                                    Ok(RulePatternElement::Range(*lo, *hi))
+                                }
                             }
                         };
 

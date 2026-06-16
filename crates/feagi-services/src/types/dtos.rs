@@ -129,6 +129,13 @@ pub struct CorticalAreaInfo {
     /// Omitted for non-memory areas.
     #[serde(rename = "temporal_depth", skip_serializing_if = "Option::is_none")]
     pub temporal_depth: Option<u32>,
+    /// Whether membrane potential learning is enabled for this memory area.
+    /// Omitted for non-memory areas.
+    #[serde(
+        rename = "mp_learning_enabled",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub mp_learning_enabled: Option<bool>,
     pub properties: HashMap<String, serde_json::Value>,
 
     // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)
@@ -144,11 +151,19 @@ pub struct CorticalAreaInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoding_format: Option<String>,
 
-    /// Unit ID (0, 1, 2, ...) - only for IPU/OPU
+    /// Cortical unit index (`CorticalUnitIndex`): byte 7 of the 8-byte cortical ID —
+    /// which instance of this I/O cortical unit type (aligns with motor/sensory grouping
+    /// on the wire and with Brain Visualizer `unit_id`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unit_id: Option<u8>,
 
-    /// Group ID (0, 1, 2, ...) - only for IPU/OPU
+    /// Cortical sub-unit index (`CorticalSubUnitIndex`): byte 6 — which cortical area
+    /// inside a multi-area unit (e.g. vision segments). Matches Brain Visualizer `subunit_id`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subunit_id: Option<u8>,
+
+    /// Same as [`Self::unit_id`] (CorticalUnitIndex, byte 7). Kept for clients that
+    /// already read `group_id` from older API responses.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_id: Option<u8>,
 
