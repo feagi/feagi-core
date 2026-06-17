@@ -344,7 +344,7 @@ impl PlasticityService {
                     current_timestep
                 );
             } else {
-                tracing::info!(target: "plasticity",
+                tracing::debug!(target: "plasticity",
                     "[PLASTICITY] ✓ Burst {} - Monitoring {} memory area(s)",
                     current_timestep,
                     memory_areas_snapshot.len()
