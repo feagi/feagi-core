@@ -1,0 +1,49 @@
+[package]
+name = "feagi-common-spatial"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Basic standard for coordinate systems that support quantization in FEAGI"
+
+[features]
+
+default = [
+    "std",
+    "support_64bit_indexing",
+]
+
+# ========================= Toggleable Features ========================= #
+# Features that add certain libraries/crates that extend the functionality
+# and performance of the FEAGI application
+# In order of other features here, external crate features, feagi crate features
+
+support_64bit_indexing = []
+support_64bit_values = []
+
+std = [
+    "alloc",
+]
+alloc = [
+
+]
+
+[dependencies]
+# Only use these 2 sibling crates, nothing else from FeAGI!
+feagi-common-quantizable = {path = "../feagi-common-quantizable"}
+feagi-logging-and-errors = {path = "../feagi-common-logging-and-errors" }
+# DO NOT ADD ANY OTHER SIBLING FEAGI CEATES!
+# DO NOT ADD ANY OTHER SIBLING FEAGI CEATES!
+# DO NOT ADD ANY OTHER SIBLING FEAGI CEATES!
+
+
+
+
+
+
+
+
+

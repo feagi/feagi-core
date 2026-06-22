@@ -11,7 +11,7 @@ description = "Sensorimotor System - Data processing, caching, and neuron voxel 
 
 [dependencies]
 ndarray = { workspace = true, features = ["rayon"] }
-feagi-structures = { version = "0.0.12", path = "../feagi-structures" }
+feagi-structures = { version = "0.0.12", path = "../feagi-common" }
 feagi-serialization = { version = "0.0.12", path = "../feagi-serialization" }
 image = {workspace = true}
 rayon = { workspace = true}

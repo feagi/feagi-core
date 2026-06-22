@@ -1,0 +1,56 @@
+[package]
+name = "feagi-npu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Contains the logic for the neural processing unit and their interfacing"
+
+
+[features]
+
+default = [
+    "std",
+    "use-rayon"
+]
+
+# ========================= Toggleable Features ========================= #
+# Features that add certain libraries/crates that extend the functionality
+# and performance of the FEAGI application
+# In order of Directly activated crates, other features here, external crate features, feagi crate features
+
+# Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
+use-rayon = [
+    "rayon",
+    "std",
+]
+
+
+std = [
+    "alloc",
+    "serde/std", "serde_json/std", "ahash/std"
+]
+
+alloc = [
+    "serde", "serde_json",
+    "serde/alloc", "serde/derive", "serde_json/alloc", "ahash/serde",
+]
+
+
+
+[dependencies]
+
+# External crates
+paste = { workspace = true}
+ahash = { workspace = true}
+serde = { workspace = true, optional = true}
+serde_json = { workspace = true, optional = true}
+rayon = { workspace = true, optional = true}
+
+
+[lints]
+workspace = true

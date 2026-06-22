@@ -1,9 +1,15 @@
 # ============================================================================
-# UMBRELLA CRATE: feagi
-# 
-# This is the primary crate that users import. It re-exports all components
-# with feature flags for selective compilation.
-# All workspace members are also published individually for selective use.
+#              Combo Library Crate and Workspace Cargo File
+# ============================================================================
+
+# NOTE: We make use of cfg compile flags to targets specific systems.
+# See https://doc.rust-lang.org/reference/conditional-compilation.html#r-cfg.conditional
+# TODO While embedded is under cfg target_os "none", but we need features to differentiate between embedded hardwares
+
+
+
+# ============================================================================
+#                          LIBRARY CONFIGURATION
 # ============================================================================
 
 [package]
@@ -18,163 +24,180 @@ readme = "README.md"
 keywords = ["neuroscience", "ai", "neural-network", "brain", "agi"]
 categories = ["science", "simulation"]
 
+[lints]
+workspace = true
+
 [features]
+default = ["default-config-feagi-server"]
 
-# TODO change me
-default = ["common-config-feagi-server"]
+# ========================= Common Configuration Sets ========================= #
+# Common classes of FEAGI Applications using the crates of this library
 
-# TODO when we get other crates more solid, move from the platform-std features to the default-X ones!
-
-default-win-x86 = []
-default-win-arm = []
-default-mac-x86 = []
-default-mac-arm = []
-default-linux-x86 = []
-default-linux-arm = []
-default-wasm = []
-default-embedded-generic = [] # break this into more types later
-
-# Common Configurations (Common compile feature sets)
-common-config-feagi-server = [
-    "platform-std",
+# Default features for compiling the FEAGI Server
+default-config-feagi-server = [
+    #"feagi-agent/agent-server",
+    "agent-transport-zmq",
+    "agent-transport-websocket-std",
+    "agent-transport-shm",
+    "agent-transport-bluetooth",
     "agent-server",
-    "agent-transport-zmq",
-    "agent-transport-websocket-std",
-    "agent-transport-shm",
-    "agent-transport-bluetooth",
+    "use-rayon",
+    "std",
 ]
-common-config-feagi-client = [
-    "platform-std",
+
+# Default features for a FEAGI Agent (an embodiement, like a robot or game avatar) with std support (AKA not embedded).
+# Note the transport protocol method will need to be specified!
+default-config-feagi-agent-std = [
+    #"agent-transport-zmq",
+    #"agent-transport-websocket-std",
+    #"agent-transport-shm",
+    #"agent-transport-bluetooth",
+    #"agent-client-asynchelper-tokio"
     "agent-client",
-    "agent-transport-zmq",
+    "use-rayon",
+    "std",
+]
+
+# Default features for a FEAGI Agent (an embodiement, like a robot or game avatar) without std (AKA embedded).
+# Note the transport protocol method will need to be specified!
+default-config-feagi-agent-no-std = [
+    #"agent-client",
+    #"agent-transport-zmq",
+    #"agent-transport-websocket-std",
+    #"agent-transport-shm",
+    #"agent-transport-bluetooth",
+    #"agent-client-asynchelper-tokio"
+]
+
+# Default features for a FEAGI Genome Editor (mainly Brain Visualizer)
+default-config-feagi-editor = [
+    #"agent-client",
     "agent-transport-websocket-std",
-    "agent-transport-shm",
-    "agent-transport-bluetooth",
-    "agent-client-asynchelper-tokio"
+    "use-rayon",
+    "std",
 ]
 
-# Platform targets
-platform-std = [
-    "feagi-agent/platform-std",
-    "feagi-state-manager/std",
-    "feagi-npu-burst-engine/default",
-]
-platform-no-std = [
-    "feagi-agent/platform-no-std",
-    #"feagi-state-manager/no-std",
-]
-platform-wasm = [
-    "feagi-agent/platform-wasm",
-    "feagi-state-manager/wasm",
+# Compiles all feagi crates, mainly for creating wrappers in other languages. Does not include optional features!
+default-config-feagi-language-lib = [
+    # TODO
 ]
 
-# Feagi Agents
-# STD implementations
-agent-server = ["feagi-agent/agent-server"]
-agent-client = ["feagi-agent/agent-client"]
-agent-client-asynchelper-tokio = ["feagi-agent/agent-client-asynchelper-tokio"]
-agent-transport-zmq = ["feagi-agent/agent-client"]
-agent-transport-websocket-std = ["feagi-agent/agent-transport-websocket-std"]
-agent-transport-shm = ["feagi-agent/agent-transport-shm"]
-agent-transport-bluetooth = ["feagi-agent/agent-transport-bluetooth"]
-# WASM cannot be mixed with STD implementations
-agent-transport-websocket-wasm = ["feagi-agent/agent-transport-websocket-wasm"]
+# ========================= Toggleable Features ========================= #
+# Features that add certain libraries/crates that extend the functionality
+# and performance of the FEAGI application
+# In order of other features here, feagi crate features
 
-# Feagi Brain
-#brain_burst_engine = ["feagi-npu-burst-engine"]
-#brain_plasticity = ["feagi-npu-plasticity"]
-#brain_development_unit = ["feagi-brain-development"]
 
+# TODO These features should activate subcrate features
+
+# Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
+use-rayon = [
+    "std",
+    "feagi-common/use-rayon"
+]
+
+# Allows conversion of some FEAGI structs to / from NDArrays.
+use-ndarray = [
+
+]
+
+use-image = []
+
+
+
+# Specifies this is a client of a FEAGI server
+agent-client = []
+
+# Specifies this is a server running FEAGI
+agent-server = []
+
+# Transport types that can be used by the compiled program.
+agent-transport-zmq = [
+    #"feagi-agent/agent-client"
+]
+agent-transport-websocket-std = [
+    "std",
+    #"feagi-agent/agent-transport-websocket-std"
+]
+agent-transport-shm = [
+    #"feagi-agent/agent-transport-shm"
+]
+agent-transport-bluetooth = [
+    #"feagi-agent/agent-transport-bluetooth"
+]
+
+# Use the Rust Standard Library. Needs to be disabled by some compile targets. Enables alloc.
+std = [
+    "alloc",
+    "feagi-common/std"
+]
+
+# Allow the use of allocation (such as with vectors, hashmaps). Needs to be disabled by some compile targets.
+alloc = [
+    "feagi-common/alloc"
+]
+
+# TODO do we need wasm specifically? we may need a feature for wasm anyways due to wasm_sync of rayon and others
 
 
 [dependencies]
-# Foundation (vendored into feagi-core when published)
-feagi-evolutionary = {  path = "crates/feagi-evolutionary" }
-feagi-npu-neural = {  path = "crates/feagi-npu/neural" }
-serde_json = "1.0"
-feagi-structures = {  path = "crates/feagi-structures" }
-feagi-serialization = {  path = "crates/feagi-serialization" }
-ndarray = { workspace = true }
+feagi-common = {path = "crates/feagi-common"}
 
-# Infrastructure (vendored)
-feagi-state-manager = {  path = "crates/feagi-state-manager", optional = true }
 
-# Algorithms (vendored)
-feagi-npu-burst-engine = {  path = "crates/feagi-npu/burst-engine", optional = true }
-feagi-brain-development = {  path = "crates/feagi-brain-development", optional = true }
-feagi-sensorimotor = {  path = "crates/feagi-sensorimotor", optional = true }
-feagi-npu-plasticity = {  path = "crates/feagi-npu/plasticity", optional = true }
-
-# I/O (vendored)
-feagi-io = {  path = "crates/feagi-io", optional = true }
-feagi-agent = {  path = "crates/feagi-agent", optional = true }
-feagi-services = {  path = "crates/feagi-services", optional = true }
-
-# Async runtime is now a feature of feagi-data-structures
-
-[dev-dependencies]
-# For integration tests that need GenomeService
-feagi-services = {  path = "crates/feagi-services" }
-ahash = { workspace = true }
-feagi-config = {  path = "crates/feagi-config" }
-parking_lot = "0.12"
-tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros"] }
-# Optional crates needed by root integration tests
-feagi-sensorimotor = {  path = "crates/feagi-sensorimotor" }
-feagi-brain-development = {  path = "crates/feagi-brain-development" }
-feagi-npu-plasticity = {  path = "crates/feagi-npu/plasticity" }
-feagi-io = {  path = "crates/feagi-io" }
-feagi-agent = {  path = "crates/feagi-agent" }
 
 
 
 # ============================================================================
-# WORKSPACE CONFIGURATION
+#                             WORKSPACE CONFIGURATION
 # ============================================================================
 
 [workspace]
 resolver = "2"
 members = [
-    # === Feagi Structures ===
-    "crates/feagi-structures", # Unifying "core" data structures crates. Uses features to expose various commonly used structs, traits, and other common implementations. TODO rename to feagi-common or something similar
+    # === Common Root Crate ===
+    "crates/feagi-common", # Unifying "core" data structures crates. Uses features to expose various commonly used structs, traits, and other common implementations.
+    "crates/feagi-common/feagi-common-logging-and-errors", # Base FEAGI Error and logging macros and trait definitions
+    "crates/feagi-common/feagi-common-logging-and-errors/feagi-logging-and-errors-derive", # derive crate
+    "crates/feagi-common/feagi-common-quantizable", # Base trait definitions for quantizing numbers
+    "crates/feagi-common/feagi-common-spatial", # Base trait definitions for quantizing spatial data
 
-    "crates/feagi-structures/feagi-data", # Base data types used often in feagi, notably quantizable data types. Use features to target various hardware specific data types. As this crate is depended on by sibling crates, this must have NO dependencies!
-    "crates/feagi-structures/feagi-data/feagi-pdi", # Base ECS traits / Derive Macros
-    "crates/feagi-structures/feagi-data/feagi-logging-and-errors", # Base FEAGI Error and logging macros and trait definitions
-    "crates/feagi-structures/feagi-data/feagi-logging-and-errors/feagi-logging-and-errors-derive", # derive crate
-    "crates/feagi-structures/feagi-data/feagi-bitpacking", # Common bitpacking macros and structs
+
+
+    "crates/_random_old_code_reference/feagi-data", # Base data types used often in feagi, notably quantizable data types. Use features to target various hardware specific data types. As this crate is depended on by sibling crates, this must have NO dependencies!
+
+
+    "crates/_random_old_code_reference/feagi-bitpacking", # Common bitpacking macros and structs
+
+    # === Neuron Processing Unit ===
+    "crates/feagi-npu",
+
+    # === Algorithm Layer ===
+    #"crates/feagi-agent", # Agent library (Rust client library)
 
     #"crates/feagi-structures/feagi-genome-definitions", # Holds structs and definitions of various genome identifiers or common definitions used acrosss crates, such as CorticalID. Also holds definitions for cortical units
 
+    #"crates/feagi-config",             # Configuration loader (TOML + overrides)
 
 
-    "crates/feagi-config",             # Configuration loader (TOML + overrides)
-
-    # === NPU Subsystem (Neural Processing Unit) ===
-    "crates/feagi-npu/neural",         # Neural computation: types + algorithms + models (no_std)
-    "crates/feagi-npu/structures",     # Data structures for storing neuron / synapse data and traits to interface with them
-    "crates/feagi-npu/burst-engine",   # NPU execution & inference
     
     # === Platform HALs ===
-    "crates/feagi-hal",                # Hardware Abstraction Layer (HAL) - platform abstraction + implementations (ESP32, Arduino, etc.)
+    #"crates/feagi-hal",                # Hardware Abstraction Layer (HAL) - platform abstraction + implementations (ESP32, Arduino, etc.)
     
     # === Infrastructure Layer (Cross-Cutting) ===
-    "crates/feagi-state-manager",      # Runtime state management
-    "crates/feagi-evolutionary",                # Genome I/O and evolution (genotype)
-    "crates/feagi-services",           # Service layer (stable application boundary)
-    "crates/feagi-api",                # REST API layer (HTTP + ZMQ transports)
-    "crates/feagi-observability",      # Unified observability (logging, telemetry, profiling)
+    #"crates/feagi-state-manager",      # Runtime state management
+    #"crates/feagi-evolutionary",                # Genome I/O and evolution (genotype)
+    #"crates/feagi-services",           # Service layer (stable application boundary)
+    #"crates/feagi-api",                # REST API layer (HTTP + ZMQ transports)
+    #"crates/feagi-observability",      # Unified observability (logging, telemetry, profiling)
     
     # === Algorithm Layer ===
-    "crates/feagi-brain-development",                # Neurogenesis (brain development)
-    "crates/feagi-npu/plasticity",     # Synaptic learning (STDP, memory)
+    #"crates/feagi-brain-development",                # Neurogenesis (brain development)
     
     # === Agent Layer ===
-    "crates/feagi-io",                 # I/O System (ZMQ/UDP transport)
-    "crates/feagi-agent",              # Agent library (Rust client library)
-    "crates/feagi-sensorimotor",  # Sensorimotor System - data processing & encoding (sensory & motor)
-    "crates/feagi-serialization", # Data serialization formats
-    "crates/feagi-structures",    # Core data structures
+    #"crates/feagi-io",                 # I/O System (ZMQ/UDP transport)
+    #"crates/feagi-agent",              # Agent library (Rust client library)
+    #"crates/feagi-sensorimotor",  # Sensorimotor System - data processing & encoding (sensory & motor)
+    #"crates/feagi-serialization", # Data serialization formats
 ]
 
 [workspace.package]
@@ -188,44 +211,30 @@ homepage = "https://feagi.org"
 documentation = "https://docs.rs/feagi"
 
 
-[workspace.dependencies]
-# Core dependencies (shared across crates)
+[workspace.dependencies] # Contains dependencies that several crates use
+rayon = {version = "1.12.0", default-features = false}
+ndarray = { version = "0.17.2", default-features = false}
+serde = { version = "1.0.228", default-features = false}
+serde_json = { version = "1.0.150", default-features = false}
+paste = { version =  "1.0.15" , default-features = false}
+ahash = { version = "0.8.12", default-features = false, features = ["std", "serde", "compile-time-rng"] }  # Fast non-cryptographic hashing (no runtime-rng for WASM)
+
+
+# TODO update and review below
+image = { version = "0.25.10" } # TODO this shouldnt be here, this should be in the feagi sensiomotor specifically
 proc-macro2 = "1.0.106"
 quote = "1.0.45"
 syn = { version = "2.0.117", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.149"
 thiserror = "1.0.50" # TODO migrate away from this and use our own error trait!
-rayon = "1.11"
-ndarray = { version = "0.17.1", features = ["rayon"] }
-ahash = { version = "0.8", default-features = false, features = ["std", "serde", "compile-time-rng"] }  # Fast non-cryptographic hashing (no runtime-rng for WASM)
+
 tracing = "0.1"  # Structured logging and diagnostics # TODO shouldnt this only be in the error subcrate?
 defmt = {version = "1.1.0"} # only used in embedded contexts # TODO shouldnt this only be in the error subcrate?
 half = {version = "2.7.1", default-features = false}
-uuid = { version = "1.11", features = ["v7", "serde", "js"] }  # js feature for WASM support
-paste = "1.0.15" # pasting macro
-bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU buffers, TODO change this!
-
-# Additional dependencies from feagi-data-processing
-image = "0.25.10"
-
-# GPU acceleration (WGPU - cross-platform native GPU library)
-wgpu = "0.19" # TODO EXTREMELY OLD!
-pollster = "0.3"  # Async/await executor for GPU operations
+uuid = { version = "1.11", features = ["v7", "serde", "js"] }  # js feature for WASM supporto
 
 
-#### Workspace Crates (do not define subcrates!)
-
-# FEAGI data crates (now internal to workspace)
-feagi-structures = {  path = "crates/feagi-structures" }
-
-
-feagi-serialization = {  path = "crates/feagi-serialization" }
-
-# Workspace-internal crates
-feagi-npu-neural = {  path = "crates/feagi-npu/neural" }
-feagi-observability = {  path = "crates/feagi-observability" }
-
+[workspace.lints.rust]
+# TODO for Phase 2
 
 
 
@@ -238,6 +247,13 @@ panic = "abort"      # Smaller binary, no unwinding
 [profile.dev]
 opt-level = 1        # Some optimization in dev for reasonable performance
 
+[profile.benchmark]
+inherits = "release"
+lto = true
+codegen-units = 1
+opt-level = 3
+debug = true
+
 [profile.test]
 opt-level = 0
 debug = true
@@ -245,6 +261,8 @@ debug = true
 # ============================================================================
 # BINARY TOOLS
 # ============================================================================
+
+# TODO review these
 
 [[bin]]
 name = "migrate_genome"

@@ -1,0 +1,7 @@
+mod vector_dense;
+mod hashmap_sparse;
+pub mod spatial_shared_traits;
+
+pub use vector_dense::QuantizableSpatialCollection3DVectorDense;
+pub use hashmap_sparse::QuantizableSpatialCollection3DHashmapSparse;
+// TODO sparse vector implementation with pagination?

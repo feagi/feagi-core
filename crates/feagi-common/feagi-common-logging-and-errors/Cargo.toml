@@ -1,0 +1,49 @@
+[package]
+name = "feagi-common-logging-and-errors"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Logging and Error system that can work in std and no-std (embedded) contexts"
+
+
+[features]
+default = [
+    "std"
+]
+
+# ========================= Toggleable Features ========================= #
+# Features that add certain libraries/crates that extend the functionality
+# and performance of the FEAGI application
+# In order of Directly activated crates, other features here, external crate features, feagi crate features
+
+std = [
+    "tracing"
+]
+
+embedded = [
+    "defmt"
+]
+
+[dependencies]
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+tracing = {workspace = true, optional = true}
+defmt = {workspace = true, optional = true}
+feagi-logging-and-errors-derive = { path = "feagi-logging-and-errors-derive" } # this is a child crate
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
+# DO NOT ADD ANY SIBLING FEAGI CEATES!
