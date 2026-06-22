@@ -91,6 +91,85 @@ pub struct SensorInputTap {
     pub areas: Vec<AreaActivity>,
 }
 
+/// Read-only aggregate activity statistics derived from a single burst's tap snapshot.
+///
+/// This is a *pure projection* of data the taps already capture: it is computed on the
+/// read side (REST/diagnostics) from an existing [`AreaActivity`] slice and introduces no
+/// new work on the burst hot path and no change to firing behaviour. It exists so encoder/
+/// substrate benchmarking can read spike-cost and timing summaries without each consumer
+/// re-deriving them. Only quantities unambiguously present in the tap data are reported;
+/// notions that require area capacity (e.g. fired/total occupancy) are intentionally not
+/// invented here.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BurstActivitySummary {
+    /// Burst counter of the snapshot these statistics were derived from.
+    pub burst_num: u64,
+    /// Wall-clock millisecond timestamp of the snapshot.
+    pub timestamp_ms: i64,
+    /// Number of captured cortical areas that fired at least one neuron this burst.
+    pub active_area_count: usize,
+    /// Total fired neurons across all captured areas (sum of `AreaActivity::neuron_count`).
+    pub total_fired_neurons: usize,
+    /// Largest single-area fired-neuron count this burst.
+    pub peak_area_fired_neurons: usize,
+    /// Mean fired neurons per active area (`0.0` when no area fired).
+    pub mean_area_fired_neurons: f64,
+    /// Mean potential across all captured firing samples (`0.0` when there are none).
+    pub mean_sample_potential: f64,
+    /// Peak potential across all captured firing samples (`0.0` when there are none).
+    pub peak_sample_potential: f32,
+}
+
+impl BurstActivitySummary {
+    /// Derives the summary from a burst's captured per-area activity.
+    ///
+    /// `areas` is the unfiltered per-area activity slice from a [`MotorOutputTap`] or
+    /// [`SensorInputTap`] snapshot. An area counts as active when its `neuron_count > 0`.
+    pub fn from_areas(burst_num: u64, timestamp_ms: i64, areas: &[AreaActivity]) -> Self {
+        let mut active_area_count = 0usize;
+        let mut total_fired_neurons = 0usize;
+        let mut peak_area_fired_neurons = 0usize;
+        let mut potential_sum = 0.0f64;
+        let mut sample_count = 0usize;
+        let mut peak_sample_potential = 0.0f32;
+
+        for area in areas {
+            if area.neuron_count > 0 {
+                active_area_count += 1;
+            }
+            total_fired_neurons += area.neuron_count;
+            peak_area_fired_neurons = peak_area_fired_neurons.max(area.neuron_count);
+            for sample in &area.samples {
+                potential_sum += sample.potential as f64;
+                sample_count += 1;
+                peak_sample_potential = peak_sample_potential.max(sample.potential);
+            }
+        }
+
+        let mean_area_fired_neurons = if active_area_count > 0 {
+            total_fired_neurons as f64 / active_area_count as f64
+        } else {
+            0.0
+        };
+        let mean_sample_potential = if sample_count > 0 {
+            potential_sum / sample_count as f64
+        } else {
+            0.0
+        };
+
+        Self {
+            burst_num,
+            timestamp_ms,
+            active_area_count,
+            total_fired_neurons,
+            peak_area_fired_neurons,
+            mean_area_fired_neurons,
+            mean_sample_potential,
+            peak_sample_potential,
+        }
+    }
+}
+
 /// Combined runtime taps available globally.
 pub struct BurstTaps {
     pub motor: RwLock<MotorOutputTap>,
@@ -116,6 +195,18 @@ impl BurstTaps {
     /// Read the latest sensor snapshot (clones into the caller).
     pub fn sensor_snapshot(&self) -> SensorInputTap {
         self.sensor.read().clone()
+    }
+
+    /// Derives the read-only activity summary for the latest motor snapshot.
+    pub fn motor_activity_summary(&self) -> BurstActivitySummary {
+        let motor = self.motor.read();
+        BurstActivitySummary::from_areas(motor.burst_num, motor.timestamp_ms, &motor.areas)
+    }
+
+    /// Derives the read-only activity summary for the latest sensor snapshot.
+    pub fn sensor_activity_summary(&self) -> BurstActivitySummary {
+        let sensor = self.sensor.read();
+        BurstActivitySummary::from_areas(sensor.burst_num, sensor.timestamp_ms, &sensor.areas)
     }
 }
 
@@ -213,5 +304,62 @@ mod tests {
         assert_eq!(snap.burst_num, 17);
         assert_eq!(snap.areas.len(), 1);
         assert_eq!(snap.areas[0].samples.len(), 2);
+    }
+
+    fn area(cortical_id: &str, neuron_count: usize, potentials: &[f32]) -> AreaActivity {
+        AreaActivity {
+            cortical_id: cortical_id.to_string(),
+            cortical_idx: 0,
+            neuron_count,
+            samples: potentials
+                .iter()
+                .enumerate()
+                .map(|(i, &p)| TapSample {
+                    x: i as u32,
+                    y: 0,
+                    z: 0,
+                    potential: p,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn activity_summary_empty_is_zeroed() {
+        let summary = BurstActivitySummary::from_areas(9, 1_700_000_000_000, &[]);
+        assert_eq!(summary.burst_num, 9);
+        assert_eq!(summary.active_area_count, 0);
+        assert_eq!(summary.total_fired_neurons, 0);
+        assert_eq!(summary.peak_area_fired_neurons, 0);
+        assert_eq!(summary.mean_area_fired_neurons, 0.0);
+        assert_eq!(summary.mean_sample_potential, 0.0);
+        assert_eq!(summary.peak_sample_potential, 0.0);
+    }
+
+    #[test]
+    fn activity_summary_aggregates_counts_and_potentials() {
+        let areas = vec![
+            area("aaaaAA==", 3, &[0.2, 0.4, 0.6]),
+            area("bbbbAA==", 1, &[1.0]),
+        ];
+        let summary = BurstActivitySummary::from_areas(5, 42, &areas);
+
+        assert_eq!(summary.active_area_count, 2);
+        assert_eq!(summary.total_fired_neurons, 4);
+        assert_eq!(summary.peak_area_fired_neurons, 3);
+        assert_eq!(summary.mean_area_fired_neurons, 2.0);
+        // (0.2 + 0.4 + 0.6 + 1.0) / 4 = 0.55 (f32 inputs -> f32-grade tolerance)
+        assert!((summary.mean_sample_potential - 0.55).abs() < 1e-6);
+        assert_eq!(summary.peak_sample_potential, 1.0);
+    }
+
+    #[test]
+    fn activity_summary_ignores_silent_areas_in_active_count() {
+        let areas = vec![area("aaaaAA==", 0, &[]), area("bbbbAA==", 2, &[0.5, 0.5])];
+        let summary = BurstActivitySummary::from_areas(1, 1, &areas);
+
+        assert_eq!(summary.active_area_count, 1);
+        assert_eq!(summary.total_fired_neurons, 2);
+        assert_eq!(summary.mean_area_fired_neurons, 2.0);
     }
 }

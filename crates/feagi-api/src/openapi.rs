@@ -433,6 +433,7 @@ use crate::{
             crate::v1::OutputConfigRequest,
             crate::v1::OutputConfigResponse,
             crate::endpoints::outputs::MotorSnapshotResponse,
+            crate::endpoints::outputs::ActivitySummary,
             crate::endpoints::outputs::MotorTapArea,
             crate::endpoints::outputs::MotorTapSample,
             crate::endpoints::outputs::MotorTapAgent,

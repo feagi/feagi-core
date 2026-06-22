@@ -130,8 +130,8 @@ pub use npu::*;
 pub use parameter_update_queue::{ParameterUpdate, ParameterUpdateQueue};
 pub use rate_modulated_leak::{RateModulatedLeakConfig, RateModulatedLeakRegistry};
 pub use runtime_taps::{
-    AgentPublishStats, AreaActivity as TapAreaActivity, BurstTaps, MotorOutputTap, SensorInputTap,
-    TapSample,
+    AgentPublishStats, AreaActivity as TapAreaActivity, BurstActivitySummary, BurstTaps,
+    MotorOutputTap, SensorInputTap, TapSample,
 };
 pub use sensory::*;
 // pub use sleep::*;

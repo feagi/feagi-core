@@ -1272,10 +1272,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
             coding_options,
             parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
             // Extract dev_count and cortical_dimensions_per_device from properties for IPU/OPU
-            dev_count: area
-                .properties
-                .get("dev_count")
-                .and_then(|v| v.as_u64().map(|n| n as usize)),
+            dev_count: area.properties.get("dev_count").and_then(|v| {
+                v.as_u64()
+                    .map(|n| n as usize)
+                    .or_else(|| v.as_f64().map(|n| n as usize))
+                    .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+            }),
             cortical_dimensions_per_device: {
                 // Try to get from properties first
                 let from_properties = area
@@ -1296,11 +1298,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
                 // If not in properties, compute from dimensions and dev_count for IPU/OPU areas
                 if from_properties.is_none() {
-                    if let Some(dev_count) = area
-                        .properties
-                        .get("dev_count")
-                        .and_then(|v| v.as_u64().map(|n| n as usize))
-                    {
+                    if let Some(dev_count) = area.properties.get("dev_count").and_then(|v| {
+                        v.as_u64()
+                            .map(|n| n as usize)
+                            .or_else(|| v.as_f64().map(|n| n as usize))
+                            .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+                    }) {
                         let total_width = area.dimensions.width as usize;
                         let height = area.dimensions.height as usize;
                         let depth = area.dimensions.depth as usize;
