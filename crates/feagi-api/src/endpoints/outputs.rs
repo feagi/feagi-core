@@ -337,7 +337,7 @@ mod tests {
     /// matching the `cortical_id` filter applied to the returned `areas`.
     #[test]
     fn summary_respects_cortical_id_filter() {
-        let raw = vec![
+        let raw = [
             area("AAAA", 2, &[0.2, 0.8]),
             area("BBBB", 3, &[0.5, 0.5, 0.5]),
         ];
