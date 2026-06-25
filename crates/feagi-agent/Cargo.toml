@@ -39,7 +39,7 @@ tracing = { workspace = true }
 # FEAGI internal crates (core)
 feagi-io = { version = "0.0.12", path = "../feagi-io" }
 feagi-serialization = { version = "0.0.12", path = "../feagi-serialization" }
-feagi-structures = { version = "0.0.12", path = "../feagi-common" }
+feagi-structures = { version = "0.0.12", path = "../_crates_being_removed_replaced/feagi-common" }
 feagi-sensorimotor = { version = "0.0.12", path = "../feagi-sensorimotor" }
 base64 = "0.22.1"
 

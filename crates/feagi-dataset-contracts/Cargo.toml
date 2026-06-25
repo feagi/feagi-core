@@ -1,0 +1,17 @@
+[package]
+name = "feagi-dataset-contracts"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Shared, dependency-light data contracts for FEAGI dataset/experience interchange (Apache-2.0)"
+
+[lib]
+name = "feagi_dataset_contracts"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

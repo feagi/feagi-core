@@ -59,7 +59,6 @@ use feagi_services::impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     SystemServiceImpl,
 };
-#[cfg(feature = "feagi-agent")]
 use feagi_services::types::CreateCorticalAreaParams;
 #[cfg(feature = "feagi-agent")]
 use feagi_services::RuntimeService;
@@ -2331,6 +2330,122 @@ async fn test_create_and_get_cortical_area() {
     // Fresh manager: created area not present
     assert_eq!(status2, StatusCode::OK);
     assert!(response2.as_object().map(|o| o.is_empty()).unwrap_or(false));
+}
+
+#[tokio::test]
+async fn test_io_dev_count_scales_x_and_per_device_stays_independent() {
+    let state = build_test_state();
+    let cortical_id = general_purpose::STANDARD.encode(*b"cDIMTEST");
+    state
+        .genome_service
+        .create_cortical_areas(vec![CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: "io-dim-test".to_string(),
+            dimensions: (1, 1, 1),
+            position: (0, 0, 0),
+            area_type: "Custom".to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(1),
+            postsynaptic_current: None,
+            plasticity_constant: None,
+            degeneration: None,
+            psp_uniform_distribution: None,
+            firing_threshold_increment: None,
+            firing_threshold_limit: None,
+            consecutive_fire_count: None,
+            snooze_period: None,
+            refractory_period: None,
+            leak_coefficient: None,
+            leak_variability: None,
+            burst_engine_active: None,
+            properties: None,
+        }])
+        .await
+        .expect("failed creating test area");
+
+    state
+        .genome_service
+        .update_cortical_area(
+            &cortical_id,
+            HashMap::from([
+                ("dev_count".to_string(), json!(3)),
+                (
+                    "cortical_dimensions_per_device".to_string(),
+                    json!([4, 5, 7]),
+                ),
+            ]),
+        )
+        .await
+        .expect("failed seeding per-device baseline");
+
+    let updated_float_dev_count = state
+        .genome_service
+        .update_cortical_area(
+            &cortical_id,
+            HashMap::from([("dev_count".to_string(), json!(2.0))]),
+        )
+        .await
+        .expect("failed updating float dev_count");
+    assert_eq!(
+        updated_float_dev_count.dimensions,
+        (8, 5, 7),
+        "float dev_count values should be parsed and scale only X"
+    );
+    assert_eq!(
+        updated_float_dev_count.cortical_dimensions_per_device,
+        Some((4, 5, 7)),
+        "float dev_count updates must not change per-device dimensions"
+    );
+
+    let updated_dev_count = state
+        .genome_service
+        .update_cortical_area(
+            &cortical_id,
+            HashMap::from([
+                ("dev_count".to_string(), json!(5)),
+                ("cortical_dimensions".to_string(), json!([12, 5, 7])),
+            ]),
+        )
+        .await
+        .expect("failed updating dev_count");
+    assert_eq!(
+        updated_dev_count.dimensions,
+        (20, 5, 7),
+        "dev_count must scale only X from per-device dimensions"
+    );
+    assert_eq!(
+        updated_dev_count.cortical_dimensions_per_device,
+        Some((4, 5, 7)),
+        "changing dev_count must not rewrite per-device dimensions"
+    );
+
+    let updated_per_device = state
+        .genome_service
+        .update_cortical_area(
+            &cortical_id,
+            HashMap::from([(
+                "cortical_dimensions_per_device".to_string(),
+                json!([6, 5, 7]),
+            )]),
+        )
+        .await
+        .expect("failed updating per-device dimensions");
+    assert_eq!(
+        updated_per_device.dimensions,
+        (30, 5, 7),
+        "per-device update must preserve Y/Z and apply dev_count on X only"
+    );
+    assert_eq!(
+        updated_per_device.dev_count,
+        Some(5),
+        "per-device update must not change dev_count"
+    );
+    assert_eq!(
+        updated_per_device.cortical_dimensions_per_device,
+        Some((6, 5, 7)),
+        "per-device dimensions should be stored and returned verbatim"
+    );
 }
 
 #[tokio::test]

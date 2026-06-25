@@ -141,7 +141,7 @@ alloc = [
 
 
 [dependencies]
-feagi-common = {path = "crates/feagi-common"}
+feagi-common = {path = "crates/_crates_being_removed_replaced/feagi-common" }
 
 
 
@@ -155,11 +155,11 @@ feagi-common = {path = "crates/feagi-common"}
 resolver = "2"
 members = [
     # === Common Root Crate ===
-    "crates/feagi-common", # Unifying "core" data structures crates. Uses features to expose various commonly used structs, traits, and other common implementations.
-    "crates/feagi-common/feagi-common-logging-and-errors", # Base FEAGI Error and logging macros and trait definitions
-    "crates/feagi-common/feagi-common-logging-and-errors/feagi-logging-and-errors-derive", # derive crate
-    "crates/feagi-common/feagi-common-quantizable", # Base trait definitions for quantizing numbers
-    "crates/feagi-common/feagi-common-spatial", # Base trait definitions for quantizing spatial data
+    "crates/_crates_being_removed_replaced/feagi-common", # Unifying "core" data structures crates. Uses features to expose various commonly used structs, traits, and other common implementations.
+    "crates/feagi-logging-and-errors", # Base FEAGI Error and logging macros and trait definitions
+    "crates/feagi-logging-and-errors/feagi-logging-and-errors-derive", # derive crate
+    "crates/_crates_being_removed_replaced/feagi-common/feagi-common-quantizable", # Base trait definitions for quantizing numbers
+    "crates/_crates_being_removed_replaced/feagi-common/feagi-common-spatial", # Base trait definitions for quantizing spatial data
 
 
 
@@ -169,7 +169,7 @@ members = [
     "crates/_random_old_code_reference/feagi-bitpacking", # Common bitpacking macros and structs
 
     # === Neuron Processing Unit ===
-    "crates/feagi-npu",
+    "crates/feagi-npu", "crates/feagi-data", "crates/feagi-genomic/feagi-genomic-context", "crates/feagi-genomic/feagi-genomic-data", "crates/feagi-genomic",
 
     # === Algorithm Layer ===
     #"crates/feagi-agent", # Agent library (Rust client library)

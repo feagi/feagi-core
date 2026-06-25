@@ -32,7 +32,7 @@ defmt = []
 [dependencies]
 # DO NOT ADD ANY SIBLING FEAGI CEATES!
 # These are child subcrates
-feagi-logging-and-errors = {path = "../../feagi-common/feagi-common-logging-and-errors" }
+feagi-logging-and-errors = {path = "../../feagi-logging-and-errors" }
 feagi-bitpacking = {path = "../feagi-bitpacking" }
 # Note: The official F8 crate is bad. Don't use it!
 # DO NOT ADD ANY SIBLING FEAGI CEATES!

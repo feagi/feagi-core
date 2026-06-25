@@ -3136,56 +3136,93 @@ impl GenomeServiceImpl {
             let old_dims = area.dimensions;
             let old_dens = area.neurons_per_voxel();
 
-            // Apply dimensional changes
-            // CRITICAL: For IPU/OPU areas, cortical_dimensions_per_device must be multiplied by dev_count
-            let is_per_device = changes.contains_key("cortical_dimensions_per_device");
-
-            if let Some(dims) = changes
-                .get("dimensions")
-                .or_else(|| changes.get("cortical_dimensions"))
-                .or_else(|| changes.get("cortical_dimensions_per_device"))
-            {
-                let (width, height, depth) = if let Some(arr) = dims.as_array() {
-                    // Handle array format: [width, height, depth]
+            // Apply dimensional changes.
+            // For IO areas, dev_count scales the X axis only:
+            // total = [per_device_x * dev_count, per_device_y, per_device_z].
+            let parse_triplet = |value: &serde_json::Value| -> Option<(usize, usize, usize)> {
+                if let Some(arr) = value.as_array() {
                     if arr.len() >= 3 {
-                        (
+                        return Some((
                             arr[0].as_u64().unwrap_or(1) as usize,
                             arr[1].as_u64().unwrap_or(1) as usize,
                             arr[2].as_u64().unwrap_or(1) as usize,
-                        )
-                    } else {
-                        (1, 1, 1)
+                        ));
                     }
-                } else if let Some(obj) = dims.as_object() {
-                    // Handle object format: {"x": width, "y": height, "z": depth}
+                    return None;
+                }
+                value.as_object().map(|obj| {
                     (
                         obj.get("x").and_then(|v| v.as_u64()).unwrap_or(1) as usize,
                         obj.get("y").and_then(|v| v.as_u64()).unwrap_or(1) as usize,
                         obj.get("z").and_then(|v| v.as_u64()).unwrap_or(1) as usize,
                     )
-                } else {
-                    (1, 1, 1)
-                };
+                })
+            };
+            let parse_dev_count = |value: &serde_json::Value| -> Option<usize> {
+                value
+                    .as_u64()
+                    .map(|n| n as usize)
+                    .or_else(|| value.as_f64().map(|n| n as usize))
+                    .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
+                    .map(|n| n.max(1))
+            };
 
-                // If this is per-device dimensions, multiply depth by dev_count to get total dimensions
-                let final_depth = if is_per_device {
-                    // Get dev_count from changes or from existing area properties
-                    let dev_count = changes
-                        .get("dev_count")
-                        .and_then(|v| v.as_u64())
-                        .or_else(|| area.properties.get("dev_count").and_then(|v| v.as_u64()))
-                        .unwrap_or(1) as usize;
+            let has_per_device_update = changes.contains_key("cortical_dimensions_per_device");
+            let has_dev_count_update = changes.contains_key("dev_count");
+            if has_per_device_update || has_dev_count_update {
+                let existing_dev_count = area
+                    .properties
+                    .get("dev_count")
+                    .and_then(parse_dev_count)
+                    .unwrap_or(1);
+                let effective_dev_count = changes
+                    .get("dev_count")
+                    .and_then(parse_dev_count)
+                    .unwrap_or(existing_dev_count);
 
-                    info!("[STRUCTURAL-REBUILD] Per-device dimensions: [{}, {}, {}] × dev_count={} → total depth={}",
-                          width, height, depth, dev_count, depth * dev_count);
+                let per_device_dims = changes
+                    .get("cortical_dimensions_per_device")
+                    .and_then(parse_triplet)
+                    .or_else(|| {
+                        area.properties
+                            .get("cortical_dimensions_per_device")
+                            .and_then(parse_triplet)
+                    })
+                    .unwrap_or_else(|| {
+                        let current = area.dimensions;
+                        let per_x = (current.width as usize)
+                            .checked_div(existing_dev_count)
+                            .unwrap_or(current.width as usize);
+                        (
+                            per_x.max(1),
+                            current.height as usize,
+                            current.depth as usize,
+                        )
+                    });
 
-                    depth * dev_count
-                } else {
-                    depth
-                };
-
+                let total_width = per_device_dims.0.saturating_mul(effective_dev_count);
+                area.dimensions = CorticalAreaDimensions::new(
+                    total_width as u32,
+                    per_device_dims.1 as u32,
+                    per_device_dims.2 as u32,
+                )?;
+                info!(
+                    "[STRUCTURAL-REBUILD] Per-device dimensions: [{}, {}, {}] × dev_count={} → total dimensions=[{}, {}, {}]",
+                    per_device_dims.0,
+                    per_device_dims.1,
+                    per_device_dims.2,
+                    effective_dev_count,
+                    total_width,
+                    per_device_dims.1,
+                    per_device_dims.2
+                );
+            } else if let Some(dims) = changes
+                .get("dimensions")
+                .or_else(|| changes.get("cortical_dimensions"))
+            {
+                let (width, height, depth) = parse_triplet(dims).unwrap_or((1, 1, 1));
                 area.dimensions =
-                    CorticalAreaDimensions::new(width as u32, height as u32, final_depth as u32)?;
+                    CorticalAreaDimensions::new(width as u32, height as u32, depth as u32)?;
             }
 
             // Apply density changes
@@ -3206,8 +3243,13 @@ impl GenomeServiceImpl {
 
             // Store dev_count and cortical_dimensions_per_device in properties for IPU/OPU areas
             if let Some(dev_count) = changes.get("dev_count") {
-                area.properties
-                    .insert("dev_count".to_string(), dev_count.clone());
+                if let Some(parsed_dev_count) = parse_dev_count(dev_count) {
+                    area.properties
+                        .insert("dev_count".to_string(), serde_json::json!(parsed_dev_count));
+                } else {
+                    area.properties
+                        .insert("dev_count".to_string(), dev_count.clone());
+                }
             }
             if let Some(per_device_dims) = changes.get("cortical_dimensions_per_device") {
                 area.properties.insert(
@@ -3977,10 +4019,12 @@ impl GenomeServiceImpl {
                 coding_type,
                 coding_options,
                 parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
-                dev_count: area
-                    .properties
-                    .get("dev_count")
-                    .and_then(|v| v.as_u64().map(|n| n as usize)),
+                dev_count: area.properties.get("dev_count").and_then(|v| {
+                    v.as_u64()
+                        .map(|n| n as usize)
+                        .or_else(|| v.as_f64().map(|n| n as usize))
+                        .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+                }),
                 cortical_dimensions_per_device: area
                     .properties
                     .get("cortical_dimensions_per_device")
@@ -4174,10 +4218,12 @@ impl GenomeServiceImpl {
             coding_options,
             parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
             // Extract dev_count and cortical_dimensions_per_device from properties for IPU/OPU
-            dev_count: area
-                .properties
-                .get("dev_count")
-                .and_then(|v| v.as_u64().map(|n| n as usize)),
+            dev_count: area.properties.get("dev_count").and_then(|v| {
+                v.as_u64()
+                    .map(|n| n as usize)
+                    .or_else(|| v.as_f64().map(|n| n as usize))
+                    .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+            }),
             cortical_dimensions_per_device: area
                 .properties
                 .get("cortical_dimensions_per_device")
@@ -4371,10 +4417,12 @@ impl GenomeServiceImpl {
             coding_options,
             parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
             // Extract dev_count and cortical_dimensions_per_device from properties for IPU/OPU
-            dev_count: area
-                .properties
-                .get("dev_count")
-                .and_then(|v| v.as_u64().map(|n| n as usize)),
+            dev_count: area.properties.get("dev_count").and_then(|v| {
+                v.as_u64()
+                    .map(|n| n as usize)
+                    .or_else(|| v.as_f64().map(|n| n as usize))
+                    .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+            }),
             cortical_dimensions_per_device: area
                 .properties
                 .get("cortical_dimensions_per_device")
