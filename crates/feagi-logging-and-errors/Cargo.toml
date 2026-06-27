@@ -1,5 +1,5 @@
 [package]
-name = "feagi-common-logging-and-errors"
+name = "feagi-logging-and-errors"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,7 +7,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Logging and Error system that can work in std and no-std (embedded) contexts"
+description = "Logging and Error system that can work in std and no-std (embedded/wasm) contexts"
 
 
 [features]
@@ -26,6 +26,10 @@ std = [
 
 embedded = [
     "defmt"
+]
+
+wasm = [
+
 ]
 
 [dependencies]

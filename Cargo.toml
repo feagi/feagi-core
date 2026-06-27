@@ -58,9 +58,9 @@ default-config-feagi-agent-std = [
     "std",
 ]
 
-# Default features for a FEAGI Agent (an embodiement, like a robot or game avatar) without std (AKA embedded).
+# Default features for a FEAGI Agent (an embodiement, like a robot or game avatar) without std.
 # Note the transport protocol method will need to be specified!
-default-config-feagi-agent-no-std = [
+default-config-feagi-agent-embedded = [
     #"agent-client",
     #"agent-transport-zmq",
     #"agent-transport-websocket-std",
@@ -93,7 +93,6 @@ default-config-feagi-language-lib = [
 # Allows use of mutlithreading to accomplish large parallel tasks faster. Requires std.
 use-rayon = [
     "std",
-    "feagi-common/use-rayon"
 ]
 
 # Allows conversion of some FEAGI structs to / from NDArrays.
@@ -129,19 +128,19 @@ agent-transport-bluetooth = [
 # Use the Rust Standard Library. Needs to be disabled by some compile targets. Enables alloc.
 std = [
     "alloc",
-    "feagi-common/std"
 ]
 
 # Allow the use of allocation (such as with vectors, hashmaps). Needs to be disabled by some compile targets.
 alloc = [
-    "feagi-common/alloc"
+
 ]
 
 # TODO do we need wasm specifically? we may need a feature for wasm anyways due to wasm_sync of rayon and others
 
 
 [dependencies]
-feagi-common = {path = "crates/_crates_being_removed_replaced/feagi-common" }
+feagi-logging-and-errors = {path = "crates/feagi-logging-and-errors"}
+feagi-data = {path = "crates/feagi-data"}
 
 
 
@@ -154,22 +153,25 @@ feagi-common = {path = "crates/_crates_being_removed_replaced/feagi-common" }
 [workspace]
 resolver = "2"
 members = [
-    # === Common Root Crate ===
-    "crates/_crates_being_removed_replaced/feagi-common", # Unifying "core" data structures crates. Uses features to expose various commonly used structs, traits, and other common implementations.
-    "crates/feagi-logging-and-errors", # Base FEAGI Error and logging macros and trait definitions
-    "crates/feagi-logging-and-errors/feagi-logging-and-errors-derive", # derive crate
-    "crates/_crates_being_removed_replaced/feagi-common/feagi-common-quantizable", # Base trait definitions for quantizing numbers
-    "crates/_crates_being_removed_replaced/feagi-common/feagi-common-spatial", # Base trait definitions for quantizing spatial data
+    # === Errors and Logs ===
+    "crates/feagi-logging-and-errors", # Base FEAGI Error and logging macros and trait definitions, Since everything depends on this, this is effectively the root!
+    "crates/feagi-logging-and-errors/feagi-logging-and-errors-derive", # derive crate for logging and errors
 
+    # === Base Data Types ===
+    "crates/feagi-data", # Holds common data structures that are the backbone of many data operations of FEAGI
 
+    # === Genome ===
+    "crates/feagi-genomic", # Crate that holds genomic subcrates
+    "crates/feagi-genomic/feagi-genomic-context", # Contains Identifiers and enums to identify specific genome structures
+    "crates/feagi-genomic/feagi-genomic-data", # Structures to describe the state of genome structures, used as high level connectome abstractions
 
-    "crates/_random_old_code_reference/feagi-data", # Base data types used often in feagi, notably quantizable data types. Use features to target various hardware specific data types. As this crate is depended on by sibling crates, this must have NO dependencies!
+    # === Neuron Processing ===
+    "crates/feagi-npu", # Crate that holds NPU Subcrates
+    "crates/feagi-npu/feagi-npu-common", # Common structs and functions used by other NPU subcrates
+    "crates/feagi-npu/feagi-npu-models", # Definitions for the neuron and synapse biological simulation models
+    "crates/feagi-npu/feagi-npu-engines", # Defines executing the connectome, burst to burst, on various hardware backends
+    "crates/feagi-npu/feagi-npu-dynamics", # Systems for modifying the connectome at runtime and validating changes
 
-
-    "crates/_random_old_code_reference/feagi-bitpacking", # Common bitpacking macros and structs
-
-    # === Neuron Processing Unit ===
-    "crates/feagi-npu", "crates/feagi-data", "crates/feagi-genomic/feagi-genomic-context", "crates/feagi-genomic/feagi-genomic-data", "crates/feagi-genomic",
 
     # === Algorithm Layer ===
     #"crates/feagi-agent", # Agent library (Rust client library)
@@ -217,7 +219,7 @@ ndarray = { version = "0.17.2", default-features = false}
 serde = { version = "1.0.228", default-features = false}
 serde_json = { version = "1.0.150", default-features = false}
 paste = { version =  "1.0.15" , default-features = false}
-ahash = { version = "0.8.12", default-features = false, features = ["std", "serde", "compile-time-rng"] }  # Fast non-cryptographic hashing (no runtime-rng for WASM)
+ahash = { version = "0.8.12", default-features = false, features = ["std", "serde", "compile-time-rng"] }  # Fast non-cryptographic hashing (no runtime-rng for WASM) # TODO remove features
 
 
 # TODO update and review below
