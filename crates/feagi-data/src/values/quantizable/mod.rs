@@ -3,15 +3,16 @@
 //! with there being a tradeoff between memory usage and precision/representable range.
 
 mod quantization_levels;
+mod base_traits;
 mod decimal;
 mod index_count;
 mod signed_integer;
 mod unsigned_integer;
 
-pub mod shared_traits;
 pub mod custom_data_types;
 
 pub use quantization_levels::QuantizationLevel;
+pub use base_traits::QuantizedElementBase;
 pub use decimal::QuantizedDecimalTrait;
 pub use index_count::QuantizedIndexCountTrait;
 pub use signed_integer::QuantizedSignedIntegerTrait;

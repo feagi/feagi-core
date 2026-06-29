@@ -11,7 +11,7 @@ pub struct FeagiDimensionsErrKey {
 }
 
 generate_feagi_error!{
-    FeagiSpatialError,
+    FeagiValueError,
     keys: {
         InvalidCoordinate: FeagiInvalidCoordErrKey,
         InvalidDimensions: FeagiDimensionsErrKey

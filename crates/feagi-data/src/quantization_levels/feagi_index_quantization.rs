@@ -3,7 +3,6 @@
 //! collections of those items but at an increased memory cost
 
 use crate::values::quantizable::QuantizedIndexCountTrait;
-use crate::values::quantizable::shared_traits::SupportsUintOps;
 
 /// Global Indexing across an instance of FEAGI, primarily NPU. Controlled by NPU primarily
 pub trait FeagiGlobalQuantization {

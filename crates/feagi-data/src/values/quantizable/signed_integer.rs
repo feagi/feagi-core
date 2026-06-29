@@ -1,4 +1,4 @@
-use crate::values::quantizable::shared_traits::QuantizedElementBase;
+use crate::values::quantizable::QuantizedElementBase;
 
 /// Trait designed to hold Sint data values in a quantized form
 pub trait QuantizedSignedIntegerTrait: QuantizedElementBase

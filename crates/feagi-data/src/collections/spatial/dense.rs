@@ -1,7 +1,3 @@
-use crate::collections::linear::dense::QuantizedDenseVector;
-use crate::values::quantizable::QuantizedIndexCountTrait;
-use crate::values::spatial::index_quantizable::base::QuantizedIndexDimension3D;
-
 macro_rules! create_spatial_quantized_dense_vector {
     (
         $(#[$meta:meta])*
@@ -29,6 +25,8 @@ macro_rules! create_spatial_quantized_dense_vector {
             // TODO with iter
 
             // TODO getters, setters, also with slices, with checks, iterators
+
+            // TODO Read from greater slice (borrowed ref)
         }
     }
 }

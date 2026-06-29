@@ -1,12 +1,10 @@
 use half::f16;
 use crate::values::quantizable::custom_data_types::StorageF8;
 use crate::values::quantizable::QuantizationLevel;
-use crate::values::quantizable::shared_traits::SupportsBasicCoreMathOps;
 
 /// Common base for all quantizable types
 #[doc(hidden)]
 pub trait QuantizedElementBase:
-SupportsBasicCoreMathOps
 {
     const QUANTIZATION_LEVEL: QuantizationLevel;
     const QUANT_ZERO: Self;

@@ -2,6 +2,10 @@ use core::marker::PhantomData;
 use crate::values::quantizable::QuantizedIndexCountTrait;
 
 // TODO dense trait
+// TODO new with custom generator (iter)
+// TODO with iter
+// TODO getters, setters, also with slices, with checks, iterators
+
 
 pub struct QuantizedDenseVector<QI: QuantizedIndexCountTrait, V: Clone> {
     pub(crate) data: Vec<V>,
@@ -19,10 +23,7 @@ impl<QI: QuantizedIndexCountTrait, V: Clone> QuantizedDenseVector<QI, V>
             phantom_data: PhantomData
         }
     }
-
-    // TODO with iter
-
-    // TODO getters, setters, also with slices, with checks, iterators
+    
 }
 
 pub struct BitPackedVector<QI: QuantizedIndexCountTrait> {
