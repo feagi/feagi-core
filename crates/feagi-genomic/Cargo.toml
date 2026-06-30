@@ -10,6 +10,8 @@ homepage.workspace = true
 documentation.workspace = true
 
 [dependencies]
+feagi-genomic-context = {path = "feagi-genomic-context"}
+feagi-genomic-data = {path = "feagi-genomic-data"}
 
 [lints]
 workspace = true

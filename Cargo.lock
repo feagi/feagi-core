@@ -141,6 +141,10 @@ dependencies = [
 [[package]]
 name = "feagi-genomic"
 version = "0.0.12"
+dependencies = [
+ "feagi-genomic-context",
+ "feagi-genomic-data",
+]
 
 [[package]]
 name = "feagi-genomic-context"
@@ -173,6 +177,11 @@ name = "feagi-npu"
 version = "0.0.12"
 dependencies = [
  "ahash",
+ "feagi-data",
+ "feagi-genomic",
+ "feagi-npu-common",
+ "feagi-npu-engines",
+ "feagi-npu-models",
  "paste",
  "rayon",
  "serde",
@@ -197,7 +206,11 @@ version = "0.1.0"
 
 [[package]]
 name = "feagi-npu-engines"
-version = "0.1.0"
+version = "0.0.12"
+dependencies = [
+ "feagi-data",
+ "feagi-npu-common",
+]
 
 [[package]]
 name = "feagi-npu-models"

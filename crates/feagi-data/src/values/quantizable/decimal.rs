@@ -89,7 +89,13 @@ macro_rules! create_wrapped_quantized_decimal {
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedDecimalTrait>(Q);
         
         impl<Q: $crate::values::quantizable::QuantizedDecimalTrait> $struct_name<Q> {
+            pub fn to_f32(self) -> f32 {
+                self.0.to_f32()
+            }
             
+            pub fn from_f32(value: f32) -> Self {
+                Self(Q::from_f32(value))
+            }
         }
         
         // NOTE: Into<Q> for $struct_name<Q> is not needed!

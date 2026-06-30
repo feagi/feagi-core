@@ -3,7 +3,7 @@ use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization
 use crate::neural_processing_unit_data_structures::burst_engine::engines::burst_engine_fixed_interface::BurstEngineFixedInterface;
 use crate::neural_processing_unit_data_structures::wrappers::NPUWrappedBurstEngineBurstIndex;
 
-pub(crate) struct BurstEngineCpuRayon<FGQ: FeagiGlobalQuantization> {
+pub struct BurstEngineCpuRayon<FGQ: FeagiGlobalQuantization> {
     // tables
     // vars
     _p: PhantomData<FGQ>,

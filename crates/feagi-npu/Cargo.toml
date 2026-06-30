@@ -51,6 +51,11 @@ serde = { workspace = true, optional = true}
 serde_json = { workspace = true, optional = true}
 rayon = { workspace = true, optional = true}
 
+feagi-data = {path = "../feagi-data"}
+feagi-genomic = {path = "../feagi-genomic"}
+feagi-npu-common = {path = "feagi-npu-common"}
+feagi-npu-engines = {path = "feagi-npu-engines"}
+feagi-npu-models = {path = "feagi-npu-models"}
 
 [lints]
 workspace = true
