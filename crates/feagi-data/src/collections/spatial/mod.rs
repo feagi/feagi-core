@@ -1,1 +1,1 @@
-pub mod dense;
+pub mod contiguous;

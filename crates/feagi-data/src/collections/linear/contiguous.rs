@@ -7,14 +7,14 @@ use crate::values::quantizable::QuantizedIndexCountTrait;
 // TODO getters, setters, also with slices, with checks, iterators
 
 
-pub struct QuantizedDenseVector<QI: QuantizedIndexCountTrait, V: Clone> {
+pub struct QuantizedContiguousVector<QI: QuantizedIndexCountTrait, V: Clone> {
     pub(crate) data: Vec<V>,
     phantom_data: PhantomData<QI>
 }
 
-impl<QI: QuantizedIndexCountTrait, V: Clone> QuantizedDenseVector<QI, V>
+impl<QI: QuantizedIndexCountTrait, V: Clone> QuantizedContiguousVector<QI, V>
 {
-    pub fn new_uniform(number_values: QI, filling_value: V) -> QuantizedDenseVector<QI, V> {
+    pub fn new_uniform(number_values: QI, filling_value: V) -> QuantizedContiguousVector<QI, V> {
         // TODO ensure length isnt 0!
 
         let values = vec![filling_value; number_values.to_usize()];

@@ -49,12 +49,7 @@ where
 
 //region Sub Elements
 
-pub struct CorticalLayoutDimensionalCPU<FGQ>
-where
-    FGQ: FeagiGlobalQuantization,
-{
-    pub dimensions: NPUWrappedCorticalAreaDimensions<FGQ::NeuronIndexCountQuant>,
-}
+
 
 impl<FGQ> CorticalLayoutDimensionalCPU<FGQ>
 where

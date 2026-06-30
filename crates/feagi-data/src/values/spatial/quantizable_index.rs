@@ -15,7 +15,7 @@ macro_rules! create_coordinate {
         $(#[$meta])*
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
-            pub(crate) inner: [Q; $num_dimensions],
+            pub inner: [Q; $num_dimensions],
         }
 
         ::paste::paste! {
@@ -52,7 +52,7 @@ macro_rules! create_dimension {
         $(#[$meta])*
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
-            pub(crate) inner: [Q; $num_dimensions],
+            pub inner: [Q; $num_dimensions],
         }
 
         ::paste::paste! {

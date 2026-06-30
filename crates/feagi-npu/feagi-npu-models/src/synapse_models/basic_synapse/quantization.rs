@@ -1,5 +1,5 @@
-use feagi_structures::feagi_data::quantizable_linear::base_types::QuantizedDecimalTrait;
-use feagi_structures::feagi_data::quantization_levels::extendable_quantizations::SynapseModelQuantization;
+use feagi_data::quantization_levels::extendable_quantizations::SynapseModelQuantization;
+use feagi_data::values::quantizable::QuantizedDecimalTrait;
 
 #[repr(u8)]
 #[derive(Default, Copy, Clone)]

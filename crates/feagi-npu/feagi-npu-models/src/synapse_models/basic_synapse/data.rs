@@ -1,32 +1,29 @@
-use feagi_structures::feagi_data::create_quantized_decimal_wrapper;
-use crate::neural_processing_unit_data_structures::burst_engine::common_traits::synapse_model_traits::synapse_model_axon_bundle_data::{SynapseModelAxonBundleData, SynapseModelAxonBundleDataCPU};
-use crate::neural_processing_unit_data_structures::burst_engine::model_implementations::synapse_models::basic_synapse::quantization::BasicSynapseModelQuantization;
+use feagi_data::create_wrapped_quantized_decimal;
+use crate::synapse_models::basic_synapse::quantization::BasicSynapseModelQuantization;
+use crate::synapse_models::synapse_model_traits::synapse_model_data::SynapseModelAxonBundleData;
 
-create_quantized_decimal_wrapper!(NPUWrappedBasicSynapseMultiplier);
+create_wrapped_quantized_decimal!(
+    /// A multiplier synapse value, applies some scale to incoming signal
+   pub BasicSynapseMultiplier);
 
 #[derive(Debug, Copy, Clone)]
-pub struct BasicSynapseModelAxonBundleDataCPU<SMQ>
+pub struct BasicSynapseModelAxonBundleData<SMQ>
 where
     SMQ: BasicSynapseModelQuantization
 {
-    pub multiplier: NPUWrappedBasicSynapseMultiplier<SMQ::MultiplierQuant>,
+    pub multiplier: BasicSynapseMultiplier<SMQ::MultiplierQuant>,
 }
 
-impl<SMQ> SynapseModelAxonBundleData<SMQ> for BasicSynapseModelAxonBundleDataCPU<SMQ>
+impl<SMQ> SynapseModelAxonBundleData<SMQ> for BasicSynapseModelAxonBundleData<SMQ>
 where
     SMQ: BasicSynapseModelQuantization,
 {}
 
-impl<SMQ> SynapseModelAxonBundleDataCPU<SMQ> for BasicSynapseModelAxonBundleDataCPU<SMQ>
-where
-    SMQ: BasicSynapseModelQuantization
-{}
-
-impl<SMQ> BasicSynapseModelAxonBundleDataCPU<SMQ>
+impl<SMQ> BasicSynapseModelAxonBundleData<SMQ>
 where
     SMQ: BasicSynapseModelQuantization
 {
-    pub fn new(multiplier: NPUWrappedBasicSynapseMultiplier<SMQ::MultiplierQuant>) -> Self {
+    pub fn new(multiplier: BasicSynapseMultiplier<SMQ::MultiplierQuant>) -> Self {
         Self {
             multiplier,
         }

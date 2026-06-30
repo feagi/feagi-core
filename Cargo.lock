@@ -181,7 +181,15 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-common"
-version = "0.1.0"
+version = "0.0.12"
+dependencies = [
+ "ahash",
+ "feagi-data",
+ "paste",
+ "rayon",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "feagi-npu-dynamics"
@@ -196,6 +204,7 @@ name = "feagi-npu-models"
 version = "0.0.12"
 dependencies = [
  "feagi-data",
+ "feagi-npu-common",
 ]
 
 [[package]]

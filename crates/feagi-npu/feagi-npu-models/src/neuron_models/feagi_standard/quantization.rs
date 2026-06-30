@@ -3,16 +3,20 @@ use feagi_data::quantization_levels::extendable_quantizations::NeuronModelQuanti
 use feagi_data::values::quantizable::{QuantizedDecimalTrait, QuantizedIndexCountTrait};
 use crate::neuron_models::model_type_and_quantization::NeuronModelQuantizationBitConversion;
 
+// TODO some sort of way to go from this enum to the right type
+
+// where the first 5 bits are the model and the last 4 are the quantization level
+
 #[repr(u8)]
 #[derive(Default, Copy, Clone)]
 pub enum FeagiStandardModelQuantizationLevel {
     #[default]
-    Standard32bit = 0
+    Standard32bit = 0b0000_0000
 }
 
 impl NeuronModelQuantizationBitConversion for FeagiStandardModelQuantizationLevel {
-    // Feagi Standard shall be 0 0 0
-    const NEURON_MODEL_BIT_IDENTIFIER: u8 = 0;
+    // Feagi Standard shall be 0 0
+    const NEURON_MODEL_BIT_IDENTIFIER: u8 = 0b0000_0000;
 }
 
 
