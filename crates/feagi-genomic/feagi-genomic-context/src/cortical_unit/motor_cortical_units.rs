@@ -173,7 +173,7 @@ macro_rules! motor_cortical_units {
                     },
                     allowed_frame_change_handling: [Absolute, Incremental],
                     cortical_area_properties: {
-                        0 => ($crate::genomic::cortical_area::io_cortical_area_configuration_flag::spatial_pointer_io_flag(frame_change_handling, percentage_neuron_positioning), relative_position: [210, 0, -30], channel_dimensions_default: [64, 64, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 4096])
+                        0 => ($crate::cortical_area::io_cortical_area_configuration_flag::spatial_pointer_io_flag(frame_change_handling, percentage_neuron_positioning), relative_position: [210, 0, -30], channel_dimensions_default: [64, 64, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 4096])
                     }
                 },
 

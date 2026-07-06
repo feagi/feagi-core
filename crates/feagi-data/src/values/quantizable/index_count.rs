@@ -193,7 +193,15 @@ macro_rules! create_wrapped_quantized_index {
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait>(Q);
         
         impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> $struct_name<Q> {
-            
+            pub const fn const_new(value: Q) -> Self
+            {
+                Self(value)
+            }
+
+            pub const fn const_deref(self) -> Q
+            {
+                self.0
+            }
         }
         
         // NOTE: Into<Q> for $struct_name<Q> is not needed!
@@ -295,16 +303,5 @@ macro_rules! create_wrapped_quantized_index {
             }
         }
 
-        /*
-        impl<Q: QuantizedIndexCountTrait, A> Index<$struct_name<Q>> for Vec<A> {
-            type Output = A;
-        
-            fn index(&self, index: $struct_name<Q>) -> &Self::Output {
-                let u = index.0.to_usize();
-                &self[u]
-            }
-        }
-
-         */
     };
 }

@@ -7,7 +7,7 @@ use crate::feagi_genome_context_error::{FeagiCorticalConfigurationFlagErrKey, Fe
 pub type IOCorticalAreaConfigurationFlagBitmask = u16; // 16 Total bits
 
 /// Define the indexes of various bit flags
-pub mod bit_indexes {
+mod bit_indexes {
     // Bits 0-7 -> Enum variant discriminant
     pub const FRAME_CHANGE_HANDLING: usize = 8;
     pub const PERCENTAGE_NEURON_POSITIONING: usize = 9;
@@ -47,9 +47,11 @@ impl IOCorticalAreaConfigurationFlag {
             1 => FrameChangeHandling::Incremental,
             _ => {
                 return Err(
-                    FeagiCorticalConfigurationFlagErrKey::new(
-                        "invalid frame handling bit in IO cortical_area configuration flag"
-                    ).into()
+                    FeagiGenomeContextError::const_from_configuration_flag(
+                        FeagiCorticalConfigurationFlagErrKey::new(
+                            "invalid frame handling bit in IO cortical_area configuration flag"
+                        )
+                    )
                 );
             }
         };
@@ -59,9 +61,12 @@ impl IOCorticalAreaConfigurationFlag {
             1 => PercentageNeuronPositioning::Fractional,
             _ => {
                 return Err(
-                    FeagiCorticalConfigurationFlagErrKey::new(
-                        "invalid neuron positioning bit in IO cortical_area configuration flag"
-                    ).into());
+                    FeagiGenomeContextError::const_from_configuration_flag(
+                        FeagiCorticalConfigurationFlagErrKey::new(
+                            "invalid neuron positioning bit in IO cortical_area configuration flag"
+                        )
+                    )
+                );
             }
         };
 
@@ -102,9 +107,12 @@ impl IOCorticalAreaConfigurationFlag {
             9 => {
                 if positioning != 0 {
                     return Err(
-                        FeagiCorticalConfigurationFlagErrKey::new(
-                            "IO CartesianPlane configuration does not allow positioning"
-                        ).into());
+                        FeagiGenomeContextError::const_from_configuration_flag(
+                            FeagiCorticalConfigurationFlagErrKey::new(
+                                "IO CartesianPlane configuration does not allow positioning"
+                            )
+                        )
+                    );
                 }
                 Ok(IOCorticalAreaConfigurationFlag::CartesianPlane(
                     frame_handling_enum,
@@ -112,19 +120,27 @@ impl IOCorticalAreaConfigurationFlag {
             }
             10 => {
                 if positioning != 0 {
+
                     return Err(
-                        FeagiCorticalConfigurationFlagErrKey::new(
-                            "IO Misc configuration does not allow positioning"
-                        ).into());
+                        FeagiGenomeContextError::const_from_configuration_flag(
+                            FeagiCorticalConfigurationFlagErrKey::new(
+                                "IO CartesianPlane configuration does not allow positioning"
+                            )
+                        )
+                    );
                 }
                 Ok(IOCorticalAreaConfigurationFlag::Misc(frame_handling_enum))
             }
             11 => {
                 if positioning != 0 {
+
                     return Err(
-                        FeagiCorticalConfigurationFlagErrKey::new(
-                            "PoseEstimation variant does not support positioning parameter"
-                        ).into());
+                        FeagiGenomeContextError::const_from_configuration_flag(
+                            FeagiCorticalConfigurationFlagErrKey::new(
+                                "IO CartesianPlane configuration does not allow positioning"
+                            )
+                        )
+                    );
                 }
                 let pose_schema_bits =
                     (value >> bit_indexes::POSE_SCHEMA_START) & bit_indexes::POSE_SCHEMA_MASK;
@@ -138,10 +154,14 @@ impl IOCorticalAreaConfigurationFlag {
                     6 => PoseSchema::Object6DoF,
                     7 => PoseSchema::Custom,
                     _ => {
+
                         return Err(
-                            FeagiCorticalConfigurationFlagErrKey::new(
-                                "invalid PoseSchema bits in IO cortical_area configuration flag"
-                            ).into() );
+                            FeagiGenomeContextError::const_from_configuration_flag(
+                                FeagiCorticalConfigurationFlagErrKey::new(
+                                    "IO CartesianPlane configuration does not allow positioning"
+                                )
+                            )
+                        );
                     }
                 };
                 Ok(IOCorticalAreaConfigurationFlag::PoseEstimation(
@@ -150,9 +170,11 @@ impl IOCorticalAreaConfigurationFlag {
                 ))
             }
             _ => Err(
-                FeagiCorticalConfigurationFlagErrKey::new(
-                    "invalid IO cortical_area configuration variant"
-                ).into()
+                FeagiGenomeContextError::const_from_configuration_flag(
+                    FeagiCorticalConfigurationFlagErrKey::new(
+                        "invalid IO cortical_area configuration variant",
+                    ),
+                ),
             ),
         }
     }
@@ -224,8 +246,8 @@ impl IOCorticalAreaConfigurationFlag {
             cortical_unit_identifier[2],
             data_type_configuration_bytes[0],
             data_type_configuration_bytes[1],
-            cortical_sub_unit_index.const_unwrap(),
-            cortical_unit_index.const_unwrap(),
+            cortical_sub_unit_index.const_deref(),
+            cortical_unit_index.const_deref(),
         ];
 
         CorticalID {
@@ -306,15 +328,21 @@ impl PercentageNeuronPositioning {
         map: &serde_json::Map<String, serde_json::Value>,
     ) -> Result<PercentageNeuronPositioning, FeagiGenomeContextError> {
         let val = map.get("percentage_neuron_positioning").ok_or(
-            FeagiStructuresGenomicError::CorticalAreaError {
-                context: "missing or invalid percentage_neuron_positioning in serde map",
-            },
+
+            FeagiGenomeContextError::const_from_configuration_flag(
+                FeagiCorticalConfigurationFlagErrKey::new(
+                    "missing or invalid percentage_neuron_positioning in serde map"
+                )
+            )
         )?;
         let output: PercentageNeuronPositioning =
             serde_json::from_value(val.clone()).map_err(|_| {
-                FeagiStructuresGenomicError::CorticalAreaError {
-                    context: "missing or invalid percentage_neuron_positioning in serde map",
-                }
+
+                FeagiGenomeContextError::const_from_configuration_flag(
+                    FeagiCorticalConfigurationFlagErrKey::new(
+                        "missing or invalid percentage_neuron_positioning in serde map"
+                    )
+                )
             })?;
         Ok(output)
     }
@@ -369,13 +397,21 @@ impl FrameChangeHandling {
     ) -> Result<FrameChangeHandling, FeagiGenomeContextError> {
         let val = map
             .get("frame_change_handling")
-            .ok_or(FeagiStructuresGenomicError::CorticalAreaError {
-                context: "missing or invalid frame_change_handling in serde map",
-            })?;
+            .ok_or(
+
+                FeagiGenomeContextError::const_from_configuration_flag(
+                    FeagiCorticalConfigurationFlagErrKey::new(
+                        "missing or invalid frame_change_handling in serde map"
+                    )
+                )
+            )?;
         let output: FrameChangeHandling = serde_json::from_value(val.clone()).map_err(|_| {
-            FeagiStructuresGenomicError::CorticalAreaError {
-                context: "missing or invalid frame_change_handling in serde map",
-            }
+
+            FeagiGenomeContextError::const_from_configuration_flag(
+                FeagiCorticalConfigurationFlagErrKey::new(
+                    "missing or invalid frame_change_handling in serde map"
+                )
+            )
         })?;
         Ok(output)
     }
@@ -420,7 +456,7 @@ impl PoseSchema {
         }
     }
 
-    pub const fn try_from_bits(bits: u16) -> Result<Self, FeagiStructuresGenomicError> {
+    pub const fn try_from_bits(bits: u16) -> Result<Self, FeagiGenomeContextError> {
         match bits {
             0 => Ok(PoseSchema::HumanBody),
             1 => Ok(PoseSchema::HumanHand),
@@ -430,24 +466,35 @@ impl PoseSchema {
             5 => Ok(PoseSchema::Arthropod),
             6 => Ok(PoseSchema::Object6DoF),
             7 => Ok(PoseSchema::Custom),
-            _ => Err(FeagiStructuresGenomicError::CorticalAreaError {
-                context: "invalid PoseSchema bits in IO cortical_area configuration flag",
-            }),
+            _ => Err(
+
+                FeagiGenomeContextError::const_from_configuration_flag(
+                    FeagiCorticalConfigurationFlagErrKey::new(
+                        "invalid PoseSchema bits in IO cortical_area configuration flag"
+                    )
+                )),
         }
     }
 
     pub fn try_from_serde_map(
         map: &serde_json::Map<String, serde_json::Value>,
-    ) -> Result<PoseSchema, FeagiStructuresGenomicError> {
+    ) -> Result<PoseSchema, FeagiGenomeContextError> {
         let val = map
             .get("pose_schema")
-            .ok_or(FeagiStructuresGenomicError::CorticalAreaError {
-                context: "missing or invalid pose_schema in serde map",
-            })?;
+            .ok_or(
+
+                FeagiGenomeContextError::const_from_configuration_flag(
+                    FeagiCorticalConfigurationFlagErrKey::new(
+                        "missing or invalid pose_schema in serde map"
+                    )
+                ))?;
         let output: PoseSchema = serde_json::from_value(val.clone()).map_err(|_| {
-            FeagiStructuresGenomicError::CorticalAreaError {
-                context: "missing or invalid pose_schema in serde map",
-            }
+
+            FeagiGenomeContextError::const_from_configuration_flag(
+                FeagiCorticalConfigurationFlagErrKey::new(
+                    "missing or invalid pose_schema in serde map"
+                )
+            )
         })?;
         Ok(output)
     }

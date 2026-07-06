@@ -9,7 +9,7 @@ macro_rules! create_wrapped_index {
 ::paste::paste! {
         $(#[$meta])*
         $vis type $struct_name = [<$struct_name Generic>]< $quantization_level >;
-        $crate::create_wrapped_quantized_index!([<$struct_name Generic>]);
+        $crate::create_wrapped_quantized_index!($vis [<$struct_name Generic>]);
 }
     }
 }
@@ -26,7 +26,7 @@ macro_rules! create_wrapped_uint {
 ::paste::paste! {
         $(#[$meta])*
         $vis type $struct_name = [<$struct_name Generic>]< $quantization_level >;
-        $crate::create_wrapped_quantized_index!([<$struct_name Generic>]);
+        $crate::create_wrapped_quantized_index!($vis [<$struct_name Generic>]);
 }
     }
 }
