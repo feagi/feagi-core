@@ -46,7 +46,7 @@ pub struct HealthCheckResponse {
     /// Hash of brain regions (hierarchy, membership, and properties)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brain_regions_hash: Option<u64>,
-    /// Hash of cortical areas and properties (excluding mappings)
+    /// Hash of cortical_area areas and properties (excluding mappings)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_areas_hash: Option<u64>,
     /// Hash of brain geometry (area positions/dimensions and 2D coordinates)
@@ -55,7 +55,7 @@ pub struct HealthCheckResponse {
     /// Hash of morphology registry
     #[serde(skip_serializing_if = "Option::is_none")]
     pub morphologies_hash: Option<u64>,
-    /// Hash of cortical mappings
+    /// Hash of cortical_area mappings
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_mappings_hash: Option<u64>,
     /// Hash of agent data (ids, capabilities, connection properties)

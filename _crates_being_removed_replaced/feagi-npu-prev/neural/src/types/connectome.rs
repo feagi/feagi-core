@@ -263,7 +263,7 @@ impl ConnectomeSnapshot {
     /// Get human-readable summary of the connectome
     pub fn summary(&self) -> String {
         std::format!(
-            "Connectome v{}: {} neurons, {} synapses, {} cortical areas (burst: {})",
+            "Connectome v{}: {} neurons, {} synapses, {} cortical_area areas (burst: {})",
             self.version,
             self.neurons.count,
             self.synapses.count,

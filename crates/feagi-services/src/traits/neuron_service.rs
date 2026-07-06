@@ -16,7 +16,7 @@ use async_trait::async_trait;
 /// Neuron management service (transport-agnostic)
 #[async_trait]
 pub trait NeuronService: Send + Sync {
-    /// Create a neuron in a cortical area
+    /// Create a neuron in a cortical_area area
     ///
     /// # Arguments
     /// * `params` - Neuron creation parameters (cortical_id, coordinates, properties)
@@ -54,7 +54,7 @@ pub trait NeuronService: Send + Sync {
     ///
     async fn get_neuron(&self, neuron_id: u64) -> ServiceResult<NeuronInfo>;
 
-    /// Get neuron by coordinates in a cortical area
+    /// Get neuron by coordinates in a cortical_area area
     ///
     /// # Arguments
     /// * `cortical_id` - Cortical area identifier
@@ -73,7 +73,7 @@ pub trait NeuronService: Send + Sync {
         coordinates: (u32, u32, u32),
     ) -> ServiceResult<Option<NeuronInfo>>;
 
-    /// List all neurons in a cortical area
+    /// List all neurons in a cortical_area area
     ///
     /// # Arguments
     /// * `cortical_id` - Cortical area identifier
@@ -91,7 +91,7 @@ pub trait NeuronService: Send + Sync {
         limit: Option<usize>,
     ) -> ServiceResult<Vec<NeuronInfo>>;
 
-    /// Get the count of neurons in a cortical area
+    /// Get the count of neurons in a cortical_area area
     ///
     /// # Arguments
     /// * `cortical_id` - Cortical area identifier

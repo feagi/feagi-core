@@ -32,18 +32,18 @@ create_wrapped_quantized_index!(
 );
 
 create_wrapped_quantized_index!(
-    /// Index of a neuron relative to its parent cortical area
+    /// Index of a neuron relative to its parent cortical_area area
     pub NeuronCorticalIndex
 );
 
 
 create_wrapped_quantized_index!(
-    /// Index of a cortical area relative to the burst engine
+    /// Index of a cortical_area area relative to the burst engine
     pub CorticalEngineIndex
 );
 
 create_wrapped_quantized_index!(
-    /// Index of a cortical area relative to all cortical areas of that neuron model and
+    /// Index of a cortical_area area relative to all cortical_area areas of that neuron model and
     /// quantization within the burst engine
     pub CorticalQuantizedModelIndex
 );
@@ -56,7 +56,7 @@ create_wrapped_quantized_index!(
 );
 
 create_wrapped_quantized_index_coordinate!(
-    /// Represents a 4D coordinate of a neuron within a dimensional cortical area, with the
+    /// Represents a 4D coordinate of a neuron within a dimensional cortical_area area, with the
     /// 4th dimension being the density index
     pub DimensionCorticalAreaCoordinate,
     QuantizedIndexCoord4D,
@@ -64,7 +64,7 @@ create_wrapped_quantized_index_coordinate!(
 );
 
 create_wrapped_quantized_index_dimension!(
-    /// Represents the dimensions and density of a dimensional cortical area
+    /// Represents the dimensions and density of a dimensional cortical_area area
     pub DimensionalCorticalAreaDimensions,
     QuantizedIndexDimension4D,
     DimensionCorticalAreaCoordinate,

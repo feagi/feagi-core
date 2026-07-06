@@ -40,7 +40,7 @@ fn test_minimal_memory_corruption_debug() {
 #[test]
 #[allow(unused_variables, dead_code, unreachable_code)]
 fn test_serialize_deserialize_neuron_mapped_areas() {
-    // cortical area A
+    // cortical_area area A
     let cortical_id_a = CoreCorticalType::Power.to_cortical_id();
     let neuron_a_1 = NeuronVoxelXYZP::new(1, 2, 3, 0.5);
     let neuron_a_2 = NeuronVoxelXYZP::new(4, 5, 7, 0.2);
@@ -48,7 +48,7 @@ fn test_serialize_deserialize_neuron_mapped_areas() {
     neurons_a.push(&neuron_a_1);
     neurons_a.push(&neuron_a_2);
 
-    // cortical area b
+    // cortical_area area b
     let cortical_id_b = CoreCorticalType::Death.to_cortical_id();
     let neuron_b_1 = NeuronVoxelXYZP::new(8, 9, 10, 0.5);
     let neuron_b_2 = NeuronVoxelXYZP::new(11, 12, 13, 0.2);
@@ -58,7 +58,7 @@ fn test_serialize_deserialize_neuron_mapped_areas() {
 
     assert_eq!(neurons_a.len(), neurons_b.len());
 
-    // lets add cortical are C using arrays
+    // lets add cortical_area are C using arrays
     let cortical_id_c = CoreCorticalType::Fatigue.to_cortical_id();
     let neurons_c_x = array![1, 2, 3];
     let neurons_c_y = array![4, 5, 6];
@@ -72,7 +72,7 @@ fn test_serialize_deserialize_neuron_mapped_areas() {
     )
     .unwrap();
 
-    // cortical mappings
+    // cortical_area mappings
     let mut cortical_mappings = CorticalMappedXYZPNeuronVoxels::new();
     cortical_mappings.insert(cortical_id_a, neurons_a);
     cortical_mappings.insert(cortical_id_b, neurons_b);

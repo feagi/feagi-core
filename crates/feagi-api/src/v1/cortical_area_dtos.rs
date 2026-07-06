@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-/// Detailed cortical type information (Phase 5)
+/// Detailed cortical_area type information (Phase 5)
 ///
 /// Provides rich type information from the new CorticalAreaType system.
 /// This enables clients to understand data encoding, frame handling, and more.
@@ -76,7 +76,7 @@ pub struct CorticalAreaSummary {
     /// 3D coordinates in brain space
     pub coordinates_3d: Coordinates3D,
 
-    /// Dimensions of the cortical area
+    /// Dimensions of the cortical_area area
     pub cortical_dimensions: Dimensions3D,
 
     /// Number of neurons in this area
@@ -85,12 +85,12 @@ pub struct CorticalAreaSummary {
     /// Is this area visible in visualization?
     pub cortical_visibility: bool,
 
-    /// Phase 5: Detailed cortical type information (optional for backward compatibility)
+    /// Phase 5: Detailed cortical_area type information (optional for backward compatibility)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_type_info: Option<CorticalTypeInfo>,
 }
 
-/// Detailed cortical area information
+/// Detailed cortical_area area information
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[schema(example = json!({
     "cortical_id": "v1",
@@ -199,12 +199,12 @@ pub struct CorticalAreaDetail {
     /// Burst engine activation
     pub burst_engine_activation: bool,
 
-    /// Phase 5: Detailed cortical type information (optional for backward compatibility)
+    /// Phase 5: Detailed cortical_area type information (optional for backward compatibility)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_type_info: Option<CorticalTypeInfo>,
 }
 
-/// Create cortical area request
+/// Create cortical_area area request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateCorticalAreaRequest {
     /// Cortical area ID
@@ -243,7 +243,7 @@ pub struct CreateCorticalAreaRequest {
     pub plasticity_constant: f64,
 }
 
-/// Update cortical area request
+/// Update cortical_area area request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UpdateCorticalAreaRequest {
     /// Optional: New name
@@ -284,10 +284,10 @@ pub struct Dimensions3D {
     pub z: u32,
 }
 
-/// List cortical areas response
+/// List cortical_area areas response
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CorticalAreaListResponse {
-    /// List of cortical areas
+    /// List of cortical_area areas
     pub cortical_areas: Vec<CorticalAreaSummary>,
 
     /// Total count

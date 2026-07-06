@@ -130,7 +130,7 @@ impl AsyncPlasticityExecutor {
         }
     }
 
-    /// ST/LTM counts and upstream pattern cache size for a memory cortical index.
+    /// ST/LTM counts and upstream pattern cache size for a memory cortical_area index.
     pub fn memory_cortical_area_runtime_info(
         &self,
         cortical_idx: u32,
@@ -151,7 +151,7 @@ impl AsyncPlasticityExecutor {
             .and_then(|s| s.memory_neuron_detail(neuron_id))
     }
 
-    /// Active memory neuron ids for a cortical area (sorted), paginated: `(page, total)`.
+    /// Active memory neuron ids for a cortical_area area (sorted), paginated: `(page, total)`.
     pub fn paginated_memory_neuron_ids_in_area(
         &self,
         cortical_idx: u32,

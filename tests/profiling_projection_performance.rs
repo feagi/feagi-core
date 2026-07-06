@@ -98,7 +98,7 @@ fn run_profiling_test(with_projection: bool) -> PerformanceMetrics {
         let mut manager_lock = manager.write();
         manager_lock
             .ensure_core_cortical_areas()
-            .expect("Failed to ensure core cortical areas");
+            .expect("Failed to ensure core cortical_area areas");
     }
 
     println!("   ✓ Genome loaded");
@@ -196,7 +196,7 @@ fn create_test_genome(with_projection: bool) -> RuntimeGenome {
         GenomeCoordinate3D::new(0, 0, 0),
         power_id
             .as_cortical_type()
-            .expect("Power cortical ID should map to Core type"),
+            .expect("Power cortical_area ID should map to Core type"),
     )
     .expect("Failed to create power area");
 
@@ -205,9 +205,9 @@ fn create_test_genome(with_projection: bool) -> RuntimeGenome {
     // If testing with projection, add iic400 and mapping
     if with_projection {
         let iic400_base64 =
-            map_old_id_to_new("iic400").expect("Failed to map iic400 to new cortical ID");
+            map_old_id_to_new("iic400").expect("Failed to map iic400 to new cortical_area ID");
         let iic400_id =
-            CorticalID::try_from_base_64(&iic400_base64).expect("Invalid iic400 cortical ID");
+            CorticalID::try_from_base_64(&iic400_base64).expect("Invalid iic400 cortical_area ID");
         let iic400 = CorticalArea::new(
             iic400_id,
             3, // cortical_idx
@@ -217,7 +217,7 @@ fn create_test_genome(with_projection: bool) -> RuntimeGenome {
             GenomeCoordinate3D::new(10, 0, 0),
             iic400_id
                 .as_cortical_type()
-                .expect("iic400 cortical ID should map to IO type"),
+                .expect("iic400 cortical_area ID should map to IO type"),
         )
         .expect("Failed to create iic400 area");
 

@@ -17,8 +17,8 @@ use feagi_npu_neural::SynapseType;
 ///
 /// # Arguments
 /// * `npu` - Mutable reference to NPU (for querying neurons and creating synapses)
-/// * `src_area_id` - Source cortical area ID
-/// * `dst_area_id` - Destination cortical area ID
+/// * `src_area_id` - Source cortical_area area ID
+/// * `dst_area_id` - Destination cortical_area area ID
 /// * `transpose` - Optional axis transposition
 /// * `project_last_layer_of` - Optional axis to project from last layer
 /// * `weight` - Synapse weight (0-255)
@@ -67,8 +67,8 @@ pub fn apply_projector_morphology(
 ///
 /// # Arguments
 /// * `npu` - Mutable reference to NPU (for querying neurons and creating synapses)
-/// * `src_area_id` - Source cortical area ID
-/// * `dst_area_id` - Destination cortical area ID
+/// * `src_area_id` - Source cortical_area area ID
+/// * `dst_area_id` - Destination cortical_area area ID
 /// * `src_dimensions` - Source area dimensions (width, height, depth)
 /// * `dst_dimensions` - Destination area dimensions (width, height, depth)
 /// * `transpose` - Optional axis transposition

@@ -403,12 +403,12 @@ impl StateManager {
         self.hash_state.set_brain_regions_hash(value)
     }
 
-    /// Get cortical areas hash.
+    /// Get cortical_area areas hash.
     pub fn get_cortical_areas_hash(&self) -> u64 {
         self.hash_state.get_cortical_areas_hash()
     }
 
-    /// Set cortical areas hash.
+    /// Set cortical_area areas hash.
     pub fn set_cortical_areas_hash(&self, value: u64) {
         self.hash_state.set_cortical_areas_hash(value)
     }
@@ -433,12 +433,12 @@ impl StateManager {
         self.hash_state.set_morphologies_hash(value)
     }
 
-    /// Get cortical mappings hash.
+    /// Get cortical_area mappings hash.
     pub fn get_cortical_mappings_hash(&self) -> u64 {
         self.hash_state.get_cortical_mappings_hash()
     }
 
-    /// Set cortical mappings hash.
+    /// Set cortical_area mappings hash.
     pub fn set_cortical_mappings_hash(&self, value: u64) {
         self.hash_state.set_cortical_mappings_hash(value)
     }
@@ -481,78 +481,78 @@ impl StateManager {
 
     // ===== Cortical Area Locking =====
 
-    /// Try to lock a cortical area
+    /// Try to lock a cortical_area area
     pub fn try_lock_cortical_area(&self, cortical_area: u32) -> bool {
         self.cortical_locks.try_lock(cortical_area)
     }
 
-    /// Unlock a cortical area
+    /// Unlock a cortical_area area
     pub fn unlock_cortical_area(&self, cortical_area: u32) {
         self.cortical_locks.unlock(cortical_area)
     }
 
     // ===== FCL Cache =====
 
-    /// Get FCL window size for cortical area
+    /// Get FCL window size for cortical_area area
     pub fn get_fcl_window(&self, cortical_area: u32) -> usize {
         self.fcl_cache.get(cortical_area)
     }
 
-    /// Set FCL window size for cortical area
+    /// Set FCL window size for cortical_area area
     pub fn set_fcl_window(&self, cortical_area: u32, window_size: usize) {
         self.fcl_cache.set(cortical_area, window_size)
     }
 
     // ===== Cortical Area Stats =====
 
-    /// Initialize a cortical area stats entry with zeroed counts.
+    /// Initialize a cortical_area area stats entry with zeroed counts.
     pub fn init_cortical_area_stats(&self, cortical_id: &str) {
         self.cortical_area_stats.reset_area(cortical_id);
     }
 
-    /// Set neuron count for a cortical area.
+    /// Set neuron count for a cortical_area area.
     pub fn set_cortical_area_neuron_count(&self, cortical_id: &str, count: usize) {
         self.cortical_area_stats
             .set_neuron_count(cortical_id, count);
     }
 
-    /// Increment neuron count for a cortical area.
+    /// Increment neuron count for a cortical_area area.
     pub fn add_cortical_area_neuron_count(&self, cortical_id: &str, delta: usize) {
         self.cortical_area_stats
             .add_neuron_count(cortical_id, delta);
     }
 
-    /// Decrement neuron count for a cortical area.
+    /// Decrement neuron count for a cortical_area area.
     pub fn subtract_cortical_area_neuron_count(&self, cortical_id: &str, delta: usize) {
         self.cortical_area_stats
             .subtract_neuron_count(cortical_id, delta);
     }
 
-    /// Increment outgoing synapse count for a cortical area.
+    /// Increment outgoing synapse count for a cortical_area area.
     pub fn add_cortical_area_outgoing_synapses(&self, cortical_id: &str, delta: usize) {
         self.cortical_area_stats
             .add_outgoing_synapses(cortical_id, delta);
     }
 
-    /// Decrement outgoing synapse count for a cortical area.
+    /// Decrement outgoing synapse count for a cortical_area area.
     pub fn subtract_cortical_area_outgoing_synapses(&self, cortical_id: &str, delta: usize) {
         self.cortical_area_stats
             .subtract_outgoing_synapses(cortical_id, delta);
     }
 
-    /// Increment incoming synapse count for a cortical area.
+    /// Increment incoming synapse count for a cortical_area area.
     pub fn add_cortical_area_incoming_synapses(&self, cortical_id: &str, delta: usize) {
         self.cortical_area_stats
             .add_incoming_synapses(cortical_id, delta);
     }
 
-    /// Decrement incoming synapse count for a cortical area.
+    /// Decrement incoming synapse count for a cortical_area area.
     pub fn subtract_cortical_area_incoming_synapses(&self, cortical_id: &str, delta: usize) {
         self.cortical_area_stats
             .subtract_incoming_synapses(cortical_id, delta);
     }
 
-    /// Get cached cortical area stats, if present.
+    /// Get cached cortical_area area stats, if present.
     pub fn get_cortical_area_stats(&self, cortical_id: &str) -> Option<CorticalAreaStatsSnapshot> {
         self.cortical_area_stats.get_stats(cortical_id)
     }

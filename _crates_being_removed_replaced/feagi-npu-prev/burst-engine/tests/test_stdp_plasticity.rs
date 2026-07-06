@@ -12,7 +12,7 @@ use feagi_npu_runtime::StdRuntime;
 use feagi_genome_definitions::::CoreCorticalType;
 use std::sync::Arc;
 
-/// Create a minimal STDP test network with two cortical areas.
+/// Create a minimal STDP test network with two cortical_area areas.
 fn create_stdp_network() -> (
     RustNPU<StdRuntime, f32, CPUBackend>,
     Vec<NeuronId>,
@@ -29,7 +29,7 @@ fn create_stdp_network() -> (
     npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
     npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
-    // Register source/destination cortical areas.
+    // Register source/destination cortical_area areas.
     npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());
     npu.register_cortical_area(11, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
@@ -127,7 +127,7 @@ fn test_bidirectional_stdp_requires_consistent_neurons_across_window() {
     }
 }
 
-/// Assert that the given neuron fired in the specified burst for the cortical area.
+/// Assert that the given neuron fired in the specified burst for the cortical_area area.
 fn assert_neuron_fired(
     npu: &RustNPU<StdRuntime, f32, CPUBackend>,
     cortical_idx: u32,

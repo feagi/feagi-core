@@ -83,7 +83,7 @@ pub async fn get_cortical_area(
     Path(area_id): Path<String>,
 ) -> ApiResult<Json<CorticalArea>> {
     // Automatic span creation with context
-    info!("Fetching cortical area");
+    info!("Fetching cortical_area area");
     // ...
 }
 ```
@@ -709,7 +709,7 @@ use tracing::{info, instrument, Span};
 
 #[instrument(skip(self), fields(cortical_area_id = %area_id))]
 pub async fn get_cortical_area(&self, area_id: String) -> Result<CorticalArea> {
-    info!("Fetching cortical area");
+    info!("Fetching cortical_area area");
     // Automatic span with cortical_area_id field
     // Logs will include: [cortical_area_id="v1"]
 }

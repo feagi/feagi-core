@@ -342,7 +342,7 @@ response.headers_mut().insert(
 if is_past_sunset_date() {
     return Err(ApiError::Gone {
         message: "API v1 has been sunset. Please use v2.".into(),
-        replacement: "/api/v2/cortical-areas".into(),
+        replacement: "/api/v2/cortical_area-areas".into(),
     });
 }
 ```
@@ -400,7 +400,7 @@ use crate::security::AuthContext;
 use feagi_services::ConnectomeService;
 use std::sync::Arc;
 
-/// Get cortical area by ID (transport-agnostic)
+/// Get cortical_area area by ID (transport-agnostic)
 pub async fn get_cortical_area(
     cortical_id: String,
     auth_ctx: &AuthContext,  // ◄── Stub (always anonymous for now)
@@ -421,7 +421,7 @@ pub async fn get_cortical_area(
     Ok(api_dto)
 }
 
-/// Create cortical area
+/// Create cortical_area area
 pub async fn create_cortical_area(
     request: CreateCorticalAreaRequest,
     auth_ctx: &AuthContext,
@@ -445,7 +445,7 @@ pub async fn create_cortical_area(
     Ok(CorticalAreaV1::from_service(service_result))
 }
 
-/// List all cortical areas
+/// List all cortical_area areas
 pub async fn list_cortical_areas(
     auth_ctx: &AuthContext,
     connectome_service: Arc<dyn ConnectomeService + Send + Sync>,
@@ -490,10 +490,10 @@ use crate::security::AuthContext;
 
 pub fn create_http_router_v1(state: ApiState) -> Router {
     Router::new()
-        .route("/cortical-areas/:id", get(http_get_cortical_area))
-        .route("/cortical-areas", get(http_list_cortical_areas)
+        .route("/cortical_area-areas/:id", get(http_get_cortical_area))
+        .route("/cortical_area-areas", get(http_list_cortical_areas)
                                   .post(http_create_cortical_area))
-        .route("/cortical-areas/:id", delete(http_delete_cortical_area))
+        .route("/cortical_area-areas/:id", delete(http_delete_cortical_area))
         // ... more routes
         .with_state(state)
 }
@@ -551,7 +551,7 @@ pub async fn route_zmq_request(
     let auth_ctx = AuthContext::anonymous();
     
     match (request.method.as_str(), request.path.as_str()) {
-        ("GET", path) if path.starts_with("/api/v1/cortical-areas/") => {
+        ("GET", path) if path.starts_with("/api/v1/cortical_area-areas/") => {
             let cortical_id = extract_id_from_path(path);
             
             // Call unified endpoint (SAME AS HTTP!)
@@ -564,7 +564,7 @@ pub async fn route_zmq_request(
             ZmqResponse::from_result(result)
         }
         
-        ("GET", "/api/v1/cortical-areas") => {
+        ("GET", "/api/v1/cortical_area-areas") => {
             let result = endpoints::list_cortical_areas(
                 &auth_ctx,
                 state.connectome_service.clone()
@@ -573,7 +573,7 @@ pub async fn route_zmq_request(
             ZmqResponse::from_result(result)
         }
         
-        ("POST", "/api/v1/cortical-areas") => {
+        ("POST", "/api/v1/cortical_area-areas") => {
             let request: CreateCorticalAreaRequest = 
                 serde_json::from_str(&request.body)?;
             
@@ -856,7 +856,7 @@ GET    /analytics/connectivity?source={}&target={}  → Stats
 
 #[utoipa::path(
     get,
-    path = "/api/v1/cortical-areas/{cortical_id}",
+    path = "/api/v1/cortical_area-areas/{cortical_id}",
     params(
         ("cortical_id" = String, Path, description = "Cortical area ID")
     ),
@@ -967,7 +967,7 @@ async fn test_health_check_response_format() {
 
 #[tokio::test]
 async fn test_cortical_area_response_format() {
-    let rust_response = rust_api_client.get("/v1/cortical-areas/vis_l0").await;
+    let rust_response = rust_api_client.get("/v1/cortical_area-areas/vis_l0").await;
     let python_response = load_python_response_snapshot("cortical_area.json");
     
     assert_json_match!(rust_response, python_response);
@@ -1031,7 +1031,7 @@ pub struct HealthCheckResponseV1 {
     /// Total synapse count
     pub synapse_count: u64,
     
-    /// Number of cortical areas
+    /// Number of cortical_area areas
     pub cortical_area_count: usize,
     
     /// Genome is valid

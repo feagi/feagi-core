@@ -39,8 +39,8 @@ pub struct ProjectorParams {
 ///
 /// # Arguments
 ///
-/// * `src_area_id` - Source cortical area identifier
-/// * `dst_area_id` - Destination cortical area identifier
+/// * `src_area_id` - Source cortical_area area identifier
+/// * `dst_area_id` - Destination cortical_area area identifier
 /// * `src_neuron_id` - Source neuron identifier
 /// * `src_dimensions` - Source area dimensions (width, height, depth)
 /// * `dst_dimensions` - Destination area dimensions

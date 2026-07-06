@@ -112,7 +112,7 @@ impl GazeProperties {
         source_frame_resolution: ImageXYResolution,
         destination_segmented_center_cortical_dimensions: CorticalAreaDimensions,
     ) -> Result<CornerPoints, FeagiDataError> {
-        let modulation_normal: (f32, f32) = // Calculate ranges as per aspect ratio of cortical dimensions
+        let modulation_normal: (f32, f32) = // Calculate ranges as per aspect ratio of cortical_area dimensions
         {
 
             if destination_segmented_center_cortical_dimensions.width

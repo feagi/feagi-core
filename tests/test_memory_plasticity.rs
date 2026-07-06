@@ -63,7 +63,7 @@ fn create_single_neuron_area(npu: &Arc<TracingMutex<DynamicNPU>>, cortical_idx: 
         .expect("Failed to create neurons");
 }
 
-/// Create a cortical area with multiple neurons and return their IDs.
+/// Create a cortical_area area with multiple neurons and return their IDs.
 fn create_multi_neuron_area(
     npu: &Arc<TracingMutex<DynamicNPU>>,
     cortical_idx: u32,
@@ -150,7 +150,7 @@ fn cortical_id_by_name(genome: &feagi_evolutionary::RuntimeGenome, name: &str) -
         .iter()
         .find(|(_, area)| area.name == name)
         .map(|(id, _)| *id)
-        .unwrap_or_else(|| panic!("Missing cortical area named '{}'", name))
+        .unwrap_or_else(|| panic!("Missing cortical_area area named '{}'", name))
 }
 
 #[test]
@@ -188,16 +188,16 @@ fn test_associative_mem_genome_l1_l2_do_not_drive_m1_m2_firing() {
     let manager_read = manager.read();
     let l1_idx = manager_read
         .get_cortical_idx(&l1_id)
-        .expect("Missing l1 cortical idx");
+        .expect("Missing l1 cortical_area idx");
     let l2_idx = manager_read
         .get_cortical_idx(&l2_id)
-        .expect("Missing l2 cortical idx");
+        .expect("Missing l2 cortical_area idx");
     let m1_idx = manager_read
         .get_cortical_idx(&m1_id)
-        .expect("Missing m1 cortical idx");
+        .expect("Missing m1 cortical_area idx");
     let m2_idx = manager_read
         .get_cortical_idx(&m2_id)
-        .expect("Missing m2 cortical idx");
+        .expect("Missing m2 cortical_area idx");
     drop(manager_read);
 
     let mut npu_lock = npu.lock().unwrap();
@@ -290,23 +290,23 @@ fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
     let manager_read = manager.read();
     let l1_idx = manager_read
         .get_cortical_idx(&l1_id)
-        .expect("Missing l1 cortical idx");
+        .expect("Missing l1 cortical_area idx");
     let l2_idx = manager_read
         .get_cortical_idx(&l2_id)
-        .expect("Missing l2 cortical idx");
+        .expect("Missing l2 cortical_area idx");
     let m1_idx = manager_read
         .get_cortical_idx(&m1_id)
-        .expect("Missing m1 cortical idx");
+        .expect("Missing m1 cortical_area idx");
     let m2_idx = manager_read
         .get_cortical_idx(&m2_id)
-        .expect("Missing m2 cortical idx");
+        .expect("Missing m2 cortical_area idx");
 
     let m1_area = manager_read
         .get_cortical_area(&m1_id)
-        .expect("Missing m1 cortical area");
+        .expect("Missing m1 cortical_area area");
     let m2_area = manager_read
         .get_cortical_area(&m2_id)
-        .expect("Missing m2 cortical area");
+        .expect("Missing m2 cortical_area area");
 
     let m1_temporal_depth = m1_area
         .properties
@@ -448,7 +448,7 @@ fn test_associative_mem_genome_creates_memory_synapse_between_m1_m2() {
     let l2_twin_idx = manager
         .read()
         .get_cortical_idx(&l2_twin_id)
-        .expect("Missing l2 twin cortical idx");
+        .expect("Missing l2 twin cortical_area idx");
 
     let l1_only_burst = {
         let mut npu_lock = npu.lock().unwrap();
@@ -611,7 +611,7 @@ fn apply_plasticity_commands_with_manager(
                 let cortical_id = *manager
                     .read()
                     .get_cortical_id(*area_idx)
-                    .unwrap_or_else(|| panic!("Missing cortical ID for area {}", area_idx));
+                    .unwrap_or_else(|| panic!("Missing cortical_area ID for area {}", area_idx));
                 npu_lock.register_dynamic_neuron_mapping(*neuron_id, cortical_id);
                 memory_neuron_ids.insert(*area_idx, *neuron_id);
             }
@@ -1273,7 +1273,7 @@ fn test_memory_replay_injects_twin_area() {
 /// Memory neuron global ids must use the plasticity [`MemoryNeuronArray`], not dense [`NeuronArray`] indices.
 #[test]
 fn test_connectome_resolves_memory_neuron_cortical_idx_for_inspector_peers() {
-    let npu = build_npu("connectome-memory-cortical-idx-inspector");
+    let npu = build_npu("connectome-memory-cortical_area-idx-inspector");
     create_single_neuron_area(&npu, 7, "upstream");
 
     let cache = feagi_npu_plasticity::create_memory_stats_cache();

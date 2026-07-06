@@ -38,7 +38,7 @@ pub async fn put_plasticity_queue_depth(
     )])))
 }
 
-/// Get neuroplasticity status across all cortical areas including enabled state and queue depth.
+/// Get neuroplasticity status across all cortical_area areas including enabled state and queue depth.
 #[utoipa::path(
     get,
     path = "/v1/neuroplasticity/status",
@@ -61,7 +61,7 @@ pub async fn get_status(
     Ok(Json(response))
 }
 
-/// Get list of cortical areas currently undergoing plasticity transformation.
+/// Get list of cortical_area areas currently undergoing plasticity transformation.
 #[utoipa::path(
     get,
     path = "/v1/neuroplasticity/transforming",
@@ -95,7 +95,7 @@ pub async fn post_configure(
     )])))
 }
 
-/// Enable neuroplasticity for a specific cortical area.
+/// Enable neuroplasticity for a specific cortical_area area.
 #[utoipa::path(
     post,
     path = "/v1/neuroplasticity/enable/{area_id}",
@@ -119,7 +119,7 @@ pub async fn post_enable_area(
     )])))
 }
 
-/// Disable neuroplasticity for a specific cortical area.
+/// Disable neuroplasticity for a specific cortical_area area.
 #[utoipa::path(
     post,
     path = "/v1/neuroplasticity/disable/{area_id}",

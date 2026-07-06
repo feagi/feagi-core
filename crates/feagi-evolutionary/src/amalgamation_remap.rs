@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*!
-Remap **Custom** and **Memory** cortical IDs on an imported guest genome so they do not collide
+Remap **Custom** and **Memory** cortical_area IDs on an imported guest genome so they do not collide
 with the host connectome.
 
 Core (`___death`, `___power`, `___fatig`, `___pain_`, `___pleas`, `___fear_`, `___hope_`) and IPU/OPU identifiers are **not** remapped: they are
@@ -24,7 +24,7 @@ use std::collections::{HashMap, HashSet};
 
 const MAX_ID_ALLOC_ATTEMPTS: u32 = 100_000;
 
-/// Allocate a new cortical ID with the given first-byte prefix (`c` or `m`), distinct from
+/// Allocate a new cortical_area ID with the given first-byte prefix (`c` or `m`), distinct from
 /// `reserved` (inserts the chosen ID into `reserved`).
 fn allocate_unique_typed_id(
     prefix: u8,
@@ -43,7 +43,7 @@ fn allocate_unique_typed_id(
         }
     }
     Err(FeagiDataError::InternalError(
-        "Failed to allocate a unique cortical ID for amalgamation remapping".into(),
+        "Failed to allocate a unique cortical_area ID for amalgamation remapping".into(),
     ))
 }
 
@@ -86,8 +86,8 @@ fn remap_cortical_mapping_dst_keys(
     properties.insert("cortical_mapping_dst".to_string(), Value::Object(new_map));
 }
 
-/// Remap guest **Custom** and **Memory** cortical IDs to fresh values not present in
-/// `host_reserved_base64_ids` or elsewhere in this guest genome. Updates cortical area keys,
+/// Remap guest **Custom** and **Memory** cortical_area IDs to fresh values not present in
+/// `host_reserved_base64_ids` or elsewhere in this guest genome. Updates cortical_area area keys,
 /// `cortical_mapping_dst` destination keys, brain region membership, and region IO lists.
 ///
 /// Returns `(old_base64, new_base64)` pairs only for IDs that changed.

@@ -7,6 +7,8 @@ pub mod io_cortical_area_configuration_flag;
 
 pub mod descriptors;
 mod cortical_area_model_type;
+mod cortical_area_count;
+mod cortical_channel;
 
 //pub use cortical_area::CorticalArea;
 pub use cortical_area_type::{

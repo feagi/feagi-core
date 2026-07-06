@@ -77,7 +77,7 @@ impl fmt::Display for FeagiError {
         #[cfg(feature = "std")]
         match self {
             FeagiError::InvalidNeuronId(id) => write!(f, "Invalid neuron ID: {}", id),
-            FeagiError::InvalidCorticalAreaId(id) => write!(f, "Invalid cortical area ID: {}", id),
+            FeagiError::InvalidCorticalAreaId(id) => write!(f, "Invalid cortical_area area ID: {}", id),
             FeagiError::InvalidSynapseId(id) => write!(f, "Invalid synapse ID: {}", id),
             FeagiError::NeuronNotFound(id) => write!(f, "Neuron not found: {}", id),
             FeagiError::CorticalAreaNotFound(id) => write!(f, "Cortical area not found: {}", id),
@@ -91,7 +91,7 @@ impl fmt::Display for FeagiError {
             FeagiError::ComputationError(msg) => write!(f, "Computation error: {}", msg),
             FeagiError::MemoryAllocationError(msg) => write!(f, "Memory allocation error: {}", msg),
             FeagiError::InvalidBackend(msg) => write!(f, "Invalid backend: {}", msg),
-            FeagiError::InvalidArea(msg) => write!(f, "Invalid cortical area: {}", msg),
+            FeagiError::InvalidArea(msg) => write!(f, "Invalid cortical_area area: {}", msg),
             FeagiError::OutOfBounds {
                 x,
                 y,

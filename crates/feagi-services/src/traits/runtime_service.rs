@@ -121,7 +121,7 @@ pub trait RuntimeService: Send + Sync {
     ///
     async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>>;
 
-    /// Get Fire Candidate List snapshot with cortical area information
+    /// Get Fire Candidate List snapshot with cortical_area area information
     ///
     /// Returns the last FCL snapshot with cortical_idx for each neuron.
     /// This avoids the need to query cortical_area for each neuron separately.
@@ -133,7 +133,7 @@ pub trait RuntimeService: Send + Sync {
 
     /// Get Fire Queue sample for monitoring
     ///
-    /// Returns neurons that actually fired in the last burst, organized by cortical area
+    /// Returns neurons that actually fired in the last burst, organized by cortical_area area
     ///
     /// # Returns
     /// * `HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>` - Area data
@@ -144,14 +144,14 @@ pub trait RuntimeService: Send + Sync {
         std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
     >;
 
-    /// Get Fire Ledger window configurations for all cortical areas
+    /// Get Fire Ledger window configurations for all cortical_area areas
     ///
     /// # Returns
     /// * `Vec<(u32, usize)>` - (cortical_idx, window_size) pairs
     ///
     async fn get_fire_ledger_configs(&self) -> ServiceResult<Vec<(u32, usize)>>;
 
-    /// Configure Fire Ledger window size for a cortical area
+    /// Configure Fire Ledger window size for a cortical_area area
     ///
     /// # Arguments
     /// * `cortical_idx` - Cortical area index
@@ -182,7 +182,7 @@ pub trait RuntimeService: Send + Sync {
         consumer: Option<u32>,
     ) -> ServiceResult<()>;
 
-    /// Get FCL sample rate for a specific cortical area
+    /// Get FCL sample rate for a specific cortical_area area
     ///
     /// # Arguments
     /// * `area_id` - Cortical area ID (cortical_idx)
@@ -192,7 +192,7 @@ pub trait RuntimeService: Send + Sync {
     ///
     async fn get_area_fcl_sample_rate(&self, area_id: u32) -> ServiceResult<f64>;
 
-    /// Set FCL sample rate for a specific cortical area
+    /// Set FCL sample rate for a specific cortical_area area
     ///
     /// # Arguments
     /// * `area_id` - Cortical area ID (cortical_idx)
@@ -200,13 +200,13 @@ pub trait RuntimeService: Send + Sync {
     ///
     async fn set_area_fcl_sample_rate(&self, area_id: u32, sample_rate: f64) -> ServiceResult<()>;
 
-    /// Inject sensory data by cortical area ID and coordinates
+    /// Inject sensory data by cortical_area area ID and coordinates
     ///
-    /// Takes cortical ID (base64 string) and coordinates with potential values,
+    /// Takes cortical_area ID (base64 string) and coordinates with potential values,
     /// converts coordinates to neuron IDs, and injects them into FCL.
     ///
     /// # Arguments
-    /// * `cortical_id` - Base64 encoded cortical area ID
+    /// * `cortical_id` - Base64 encoded cortical_area area ID
     /// * `xyzp_data` - Vector of (x, y, z, potential) tuples
     ///
     /// # Returns
@@ -214,7 +214,7 @@ pub trait RuntimeService: Send + Sync {
     ///
     /// # Errors
     /// * `ServiceError::NotFound` - Cortical area not found
-    /// * `ServiceError::InvalidInput` - Invalid cortical ID format
+    /// * `ServiceError::InvalidInput` - Invalid cortical_area ID format
     ///
     async fn inject_sensory_by_coordinates(
         &self,
@@ -227,7 +227,7 @@ pub trait RuntimeService: Send + Sync {
     ///
     /// # Arguments
     /// * `agent_id` - Unique agent identifier
-    /// * `cortical_ids` - List of cortical IDs to subscribe to
+    /// * `cortical_ids` - List of cortical_area IDs to subscribe to
     /// * `rate_hz` - Motor publish rate (Hz)
     ///
     async fn register_motor_subscriptions(
@@ -259,7 +259,7 @@ pub trait RuntimeService: Send + Sync {
     /// Called when an agent is deregistered (e.g. descriptor replacement, timeout).
     fn unregister_visualization_subscriptions(&self, agent_id: &str);
 
-    /// Reset live neural state for cortical areas by **cortical index** (NPU internal index).
+    /// Reset live neural state for cortical_area areas by **cortical_area index** (NPU internal index).
     ///
     /// Clears membrane potentials, refractory state, consecutive fire counters, and removes
     /// matching neurons from the fire-candidate list for each area.

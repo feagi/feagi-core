@@ -26,10 +26,10 @@ use std::collections::HashMap;
 /// into the strongly-typed CorticalAreaType.
 ///
 /// # Arguments
-/// * `properties` - HashMap of genome properties for a cortical area
+/// * `properties` - HashMap of genome properties for a cortical_area area
 ///
 /// # Returns
-/// * `Ok(CorticalAreaType)` - Parsed cortical type
+/// * `Ok(CorticalAreaType)` - Parsed cortical_area type
 /// * `Err(EvoError)` - If required properties are missing or invalid
 pub fn parse_cortical_type(
     properties: &HashMap<String, serde_json::Value>,
@@ -67,7 +67,7 @@ pub fn parse_cortical_type(
     Ok(cortical_type)
 }
 
-/// Validate that a cortical type is compatible with genome properties
+/// Validate that a cortical_area type is compatible with genome properties
 ///
 /// This ensures that the parsed CorticalAreaType makes sense given
 /// other properties in the genome (e.g., dimensions, mappings).
@@ -83,7 +83,7 @@ pub fn validate_cortical_type(
     cortical_type: &CorticalAreaType,
     properties: &HashMap<String, serde_json::Value>,
 ) -> Result<(), String> {
-    // Validate based on cortical type
+    // Validate based on cortical_area type
     match cortical_type {
         CorticalAreaType::BrainInput(_) => {
             // IPU areas should have sensory-related properties

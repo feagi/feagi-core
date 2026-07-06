@@ -4,7 +4,7 @@
 /*!
 Connectome management service trait.
 
-Defines the stable interface for cortical area and brain region operations.
+Defines the stable interface for cortical_area area and brain region operations.
 
 Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
@@ -21,7 +21,7 @@ pub trait ConnectomeService: Send + Sync {
     // CORTICAL AREA OPERATIONS
     // ========================================================================
 
-    /// Create a cortical area
+    /// Create a cortical_area area
     ///
     /// ⚠️ INTERNAL USE ONLY - DO NOT CALL FROM API ENDPOINTS ⚠️
     ///
@@ -53,12 +53,12 @@ pub trait ConnectomeService: Send + Sync {
         params: CreateCorticalAreaParams,
     ) -> ServiceResult<CorticalAreaInfo>;
 
-    /// Update a cortical area
+    /// Update a cortical_area area
     ///
     /// ⚠️ DEPRECATED - Use GenomeService::update_cortical_area() instead ⚠️
     ///
     /// This method is blocked and returns NotImplemented.
-    /// All cortical area updates MUST go through GenomeService for proper
+    /// All cortical_area area updates MUST go through GenomeService for proper
     /// genome synchronization and change classification.
     ///
     /// # Arguments
@@ -76,7 +76,7 @@ pub trait ConnectomeService: Send + Sync {
         params: UpdateCorticalAreaParams,
     ) -> ServiceResult<CorticalAreaInfo>;
 
-    /// Delete a cortical area
+    /// Delete a cortical_area area
     ///
     /// ⚠️ ARCHITECTURE WARNING - Should use GenomeService ⚠️
     ///
@@ -94,50 +94,50 @@ pub trait ConnectomeService: Send + Sync {
     ///
     async fn delete_cortical_area(&self, cortical_id: &str) -> ServiceResult<()>;
 
-    /// Get cortical area information
+    /// Get cortical_area area information
     ///
     /// # Arguments
     /// * `cortical_id` - Cortical area identifier
     ///
     /// # Returns
-    /// * `CorticalAreaInfo` - Information about the cortical area
+    /// * `CorticalAreaInfo` - Information about the cortical_area area
     ///
     /// # Errors
     /// * `ServiceError::NotFound` - Cortical area not found
     ///
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo>;
 
-    /// List all cortical areas
+    /// List all cortical_area areas
     ///
     /// # Returns
-    /// * `Vec<CorticalAreaInfo>` - List of all cortical areas
+    /// * `Vec<CorticalAreaInfo>` - List of all cortical_area areas
     ///
     async fn list_cortical_areas(&self) -> ServiceResult<Vec<CorticalAreaInfo>>;
 
-    /// Get cortical area IDs
+    /// Get cortical_area area IDs
     ///
     /// # Returns
-    /// * `Vec<String>` - List of cortical area IDs
+    /// * `Vec<String>` - List of cortical_area area IDs
     ///
     async fn get_cortical_area_ids(&self) -> ServiceResult<Vec<String>>;
 
-    /// Check if a cortical area exists
+    /// Check if a cortical_area area exists
     ///
     /// # Arguments
     /// * `cortical_id` - Cortical area identifier
     ///
     /// # Returns
-    /// * `bool` - True if cortical area exists
+    /// * `bool` - True if cortical_area area exists
     ///
     async fn cortical_area_exists(&self, cortical_id: &str) -> ServiceResult<bool>;
 
-    /// Get cortical area properties as a flat HashMap
+    /// Get cortical_area area properties as a flat HashMap
     ///
     /// # Arguments
     /// * `cortical_id` - Cortical area identifier
     ///
     /// # Returns
-    /// * `HashMap<String, serde_json::Value>` - Flattened properties of the cortical area
+    /// * `HashMap<String, serde_json::Value>` - Flattened properties of the cortical_area area
     ///
     /// # Errors
     /// * `ServiceError::NotFound` - Cortical area not found
@@ -147,7 +147,7 @@ pub trait ConnectomeService: Send + Sync {
         cortical_id: &str,
     ) -> ServiceResult<std::collections::HashMap<String, serde_json::Value>>;
 
-    /// Get properties of all cortical areas
+    /// Get properties of all cortical_area areas
     ///
     /// # Returns
     /// * `Vec<HashMap<String, serde_json::Value>>` - List of property maps for all areas
@@ -319,7 +319,7 @@ pub trait ConnectomeService: Send + Sync {
 
     /// Rename a morphology definition.
     ///
-    /// Updates the morphology registry and all references in cortical mappings
+    /// Updates the morphology registry and all references in cortical_area mappings
     /// (cortical_mapping_dst rules) across the loaded genome.
     ///
     /// # Errors
@@ -333,11 +333,11 @@ pub trait ConnectomeService: Send + Sync {
     // CORTICAL MAPPING OPERATIONS
     // ========================================================================
 
-    /// Update cortical mapping between two cortical areas
+    /// Update cortical_area mapping between two cortical_area areas
     ///
     /// # Arguments
-    /// * `src_area_id` - Source cortical area ID
-    /// * `dst_area_id` - Destination cortical area ID
+    /// * `src_area_id` - Source cortical_area area ID
+    /// * `dst_area_id` - Destination cortical_area area ID
     /// * `mapping_data` - List of connection specifications
     ///
     /// # Returns

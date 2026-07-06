@@ -259,7 +259,7 @@ fn bench_synaptic_propagation_engine(c: &mut Criterion) {
         let mut engine = SynapticPropagationEngine::new();
         engine.build_synapse_index(&synapse_array);
 
-        // Set neuron mapping (all to same cortical area for simplicity)
+        // Set neuron mapping (all to same cortical_area area for simplicity)
         let mut neuron_mapping = AHashMap::new();
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         for i in 0..neuron_count {

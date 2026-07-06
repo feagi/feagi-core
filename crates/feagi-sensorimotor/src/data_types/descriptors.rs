@@ -544,12 +544,12 @@ define_xyz_mapping!(MiscDataDimensions, CorticalChannelDimensions);
 
 //region Pose Estimation
 
-/// Properties describing a pose estimation cortical area's spatial dimensions.
+/// Properties describing a pose estimation cortical_area area's spatial dimensions.
 ///
 /// `width` and `height` define the spatial resolution of the XY plane (joint location precision).
 /// `depth` is the number of joints (Z layers), e.g. 17 for COCO keypoints.
 ///
-/// The pose schema (HumanBody, HumanHand, Quadruped, etc.) is encoded in the cortical ID
+/// The pose schema (HumanBody, HumanHand, Quadruped, etc.) is encoded in the cortical_area ID
 /// bitmask and does not need to be stored here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PoseEstimationProperties {
@@ -587,7 +587,7 @@ impl Display for PoseEstimationProperties {
 
 //region Spatial Pointer
 
-/// Properties describing a SpatialPointer cortical area.
+/// Properties describing a SpatialPointer cortical_area area.
 ///
 /// `width`, `height`, and `depth` define the per-channel voxel grid the decoder reads.
 ///

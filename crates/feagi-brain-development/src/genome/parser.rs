@@ -87,7 +87,7 @@ pub struct RawGenome {
     pub physiology: Option<Value>,
 }
 
-/// Raw cortical area from blueprint
+/// Raw cortical_area area from blueprint
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RawCorticalArea {
     pub cortical_name: Option<String>,
@@ -180,7 +180,7 @@ impl GenomeParser {
             )));
         }
 
-        // Parse cortical areas from blueprint
+        // Parse cortical_area areas from blueprint
         let cortical_areas = Self::parse_cortical_areas(&raw.blueprint)?;
 
         // Parse brain regions
@@ -197,7 +197,7 @@ impl GenomeParser {
         })
     }
 
-    /// Parse cortical areas from blueprint
+    /// Parse cortical_area areas from blueprint
     fn parse_cortical_areas(
         blueprint: &HashMap<String, RawCorticalArea>,
     ) -> BduResult<Vec<CorticalArea>> {
@@ -249,7 +249,7 @@ impl GenomeParser {
             // Parse area type
             let area_type = Self::parse_area_type(raw_area.cortical_type.as_deref())?;
 
-            // Create cortical area
+            // Create cortical_area area
             let mut area = CorticalArea::new(
                 cortical_id.clone(),
                 0, // cortical_idx will be assigned by ConnectomeManager
@@ -370,7 +370,7 @@ impl GenomeParser {
                 region_type,
             )?;
 
-            // Add cortical areas to region
+            // Add cortical_area areas to region
             if let Some(areas) = &raw_region.areas {
                 for area_id in areas {
                     region.add_area(area_id.clone());

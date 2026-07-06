@@ -4,7 +4,7 @@
 /*!
 Genome Migration Tool
 
-Migrates old-format genomes (v2.1 with non-compliant cortical IDs) to new format.
+Migrates old-format genomes (v2.1 with non-compliant cortical_area IDs) to new format.
 
 Usage:
   cd feagi-core && cargo run --bin migrate_genome -- <input_genome.json> <output_genome.json>
@@ -71,11 +71,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Perform migration
-    println!("🔄 Migrating cortical IDs...");
+    println!("🔄 Migrating cortical_area IDs...");
     let migration_result = feagi_evolutionary::migrate_genome(&genome_json)?;
 
     println!(
-        "   ✅ Migrated {} cortical IDs",
+        "   ✅ Migrated {} cortical_area IDs",
         migration_result.cortical_ids_migrated
     );
     println!();
@@ -101,7 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!();
     }
 
-    // Update version to 2.2 (migrated with new cortical IDs)
+    // Update version to 2.2 (migrated with new cortical_area IDs)
     let mut migrated_genome = migration_result.genome;
     if let Some(genome_obj) = migrated_genome.as_object_mut() {
         genome_obj.insert("version".to_string(), serde_json::json!("2.2"));
@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        description.push_str(" [Migrated to new cortical ID format v2.2]");
+        description.push_str(" [Migrated to new cortical_area ID format v2.2]");
         genome_obj.insert(
             "genome_description".to_string(),
             serde_json::json!(description),

@@ -16,19 +16,19 @@ use crate::types::{BduError, BduResult};
 use feagi_genome_definitions::::CorticalID;
 use feagi_genome_definitions::::brain_region::BrainRegion;
 
-/// Genome / API property: cortical areas (base64) intended as region inputs (integration contract).
+/// Genome / API property: cortical_area areas (base64) intended as region inputs (integration contract).
 pub const DESIGNATED_INPUTS_KEY: &str = "designated_inputs";
-/// Genome / API property: cortical areas (base64) intended as region outputs.
+/// Genome / API property: cortical_area areas (base64) intended as region outputs.
 pub const DESIGNATED_OUTPUTS_KEY: &str = "designated_outputs";
 
-/// Parse a JSON array of base64 cortical ID strings from a region property.
+/// Parse a JSON array of base64 cortical_area ID strings from a region property.
 pub fn parse_designated_id_list(value: Option<&serde_json::Value>) -> BduResult<Vec<CorticalID>> {
     let Some(v) = value else {
         return Ok(Vec::new());
     };
     let arr = v.as_array().ok_or_else(|| {
         BduError::InvalidArea(
-            "designated_inputs/designated_outputs must be JSON arrays of cortical id strings"
+            "designated_inputs/designated_outputs must be JSON arrays of cortical_area id strings"
                 .to_string(),
         )
     })?;
@@ -36,12 +36,12 @@ pub fn parse_designated_id_list(value: Option<&serde_json::Value>) -> BduResult<
     for item in arr {
         let s = item.as_str().ok_or_else(|| {
             BduError::InvalidArea(
-                "designated_inputs/designated_outputs entries must be strings (base64 cortical ids)"
+                "designated_inputs/designated_outputs entries must be strings (base64 cortical_area ids)"
                     .to_string(),
             )
         })?;
         let id = CorticalID::try_from_base_64(s).map_err(|e| {
-            BduError::InvalidArea(format!("Invalid cortical id in designated list: {e}"))
+            BduError::InvalidArea(format!("Invalid cortical_area id in designated list: {e}"))
         })?;
         out.push(id);
     }
@@ -101,7 +101,7 @@ fn validate_no_overlap(inputs: &[CorticalID], outputs: &[CorticalID]) -> BduResu
     Ok(())
 }
 
-/// Every designated id must be a member of the region's cortical set.
+/// Every designated id must be a member of the region's cortical_area set.
 fn validate_membership(
     region: &BrainRegion,
     inputs: &[CorticalID],

@@ -46,3 +46,5 @@ impl QuantizedUnsignedIntegerTrait for u32 {
 
 impl QuantizedUnsignedIntegerTrait for u64 {
 }
+
+// TODO uint wrapper!

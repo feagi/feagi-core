@@ -298,7 +298,7 @@ fn test_register_memory_area_configures_fire_ledger() {
 
     let episodic = npu_guard
         .get_episodic_memory_fire_ledger_window_size(memory_area_idx)
-        .expect("episodic memory FireLedger should track the memory cortical area");
+        .expect("episodic memory FireLedger should track the memory cortical_area area");
     assert_eq!(episodic, temporal_depth as usize);
 }
 

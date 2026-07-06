@@ -37,7 +37,7 @@ pub struct CorticalAreaResetRequest {
     pub area_list: Vec<String>,
 }
 
-/// Per-area outcome for cortical reset.
+/// Per-area outcome for cortical_area reset.
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CorticalAreaResetItem {
     pub cortical_idx: u32,
@@ -121,7 +121,7 @@ fn default_memory_cortical_page_size() -> u32 {
 #[derive(Debug, Clone, Deserialize, IntoParams, ToSchema)]
 #[into_params(parameter_in = Query)]
 pub struct MemoryCorticalAreaQuery {
-    /// Base64 cortical area id for a memory area.
+    /// Base64 cortical_area area id for a memory area.
     pub cortical_id: String,
     /// 0-based page index for `memory_neuron_ids`.
     #[serde(default)]
@@ -131,7 +131,7 @@ pub struct MemoryCorticalAreaQuery {
     pub page_size: u32,
 }
 
-/// Genome memory parameters for the cortical area (from `extract_memory_properties`).
+/// Genome memory parameters for the cortical_area area (from `extract_memory_properties`).
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct MemoryCorticalAreaParamsResponse {
     pub temporal_depth: u32,
@@ -150,7 +150,7 @@ pub struct MemoryCorticalAreaResponse {
     pub short_term_neuron_count: usize,
     pub long_term_neuron_count: usize,
     pub memory_parameters: MemoryCorticalAreaParamsResponse,
-    /// Upstream cortical indices that feed pattern detection for this memory area.
+    /// Upstream cortical_area indices that feed pattern detection for this memory area.
     pub upstream_cortical_area_indices: Vec<u32>,
     pub upstream_cortical_area_count: usize,
     /// Distinct temporal patterns cached in the pattern detector for this area.
@@ -164,7 +164,7 @@ pub struct MemoryCorticalAreaResponse {
     pub has_more: bool,
 }
 
-/// Per-peer cortical id (base64 string or null), genome cortical **name**, cortical index, and voxel `(x,y,z)` for the given neuron id.
+/// Per-peer cortical_area id (base64 string or null), genome cortical_area **name**, cortical_area index, and voxel `(x,y,z)` for the given neuron id.
 pub(crate) fn peer_cortical_voxel_fields(
     mgr: &feagi_brain_development::ConnectomeManager,
     peer_id: u64,
@@ -197,7 +197,7 @@ pub(crate) fn peer_cortical_voxel_fields(
 }
 
 /// Build JSON arrays for NPU synapse tuples, aligned with `/v1/connectome/{cortical_area_id}/synapses`,
-/// plus peer cortical id, `target_cortical_name` / `source_cortical_name` (genome name), and voxel for the **target** (outgoing) or **source** (incoming) neuron.
+/// plus peer cortical_area id, `target_cortical_name` / `source_cortical_name` (genome name), and voxel for the **target** (outgoing) or **source** (incoming) neuron.
 pub(crate) fn synapse_details_for_neuron(
     mgr: &feagi_brain_development::ConnectomeManager,
     neuron_id: u32,
@@ -236,14 +236,14 @@ pub(crate) fn synapse_details_for_neuron(
     )
 }
 
-/// All neurons whose 3D coordinate within the cortical area matches the requested voxel, with live properties.
+/// All neurons whose 3D coordinate within the cortical_area area matches the requested voxel, with live properties.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct VoxelNeuronsResponse {
     pub cortical_id: String,
-    /// Genome / connectome human-readable name for this cortical area (same as `cortical_name` elsewhere).
+    /// Genome / connectome human-readable name for this cortical_area area (same as `cortical_name` elsewhere).
     pub cortical_name: String,
     pub cortical_idx: u32,
-    /// Queried voxel within the cortical volume (same values as `x`, `y`, `z`).
+    /// Queried voxel within the cortical_area volume (same values as `x`, `y`, `z`).
     pub voxel_coordinate: [u32; 3],
     pub x: u32,
     pub y: u32,
@@ -375,7 +375,7 @@ async fn resolve_voxel_neurons(
 // ENDPOINTS
 // ============================================================================
 
-/// List all IPU (Input Processing Unit) cortical area IDs. Returns IDs of all sensory cortical areas.
+/// List all IPU (Input Processing Unit) cortical_area area IDs. Returns IDs of all sensory cortical_area areas.
 #[utoipa::path(get, path = "/v1/cortical_area/ipu", tag = "cortical_area")]
 pub async fn get_ipu(State(state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     let connectome_service = state.connectome_service.as_ref();
@@ -395,7 +395,7 @@ pub async fn get_ipu(State(state): State<ApiState>) -> ApiResult<Json<Vec<String
     }
 }
 
-/// List all OPU (Output Processing Unit) cortical area IDs. Returns IDs of all motor cortical areas.
+/// List all OPU (Output Processing Unit) cortical_area area IDs. Returns IDs of all motor cortical_area areas.
 #[utoipa::path(get, path = "/v1/cortical_area/opu", tag = "cortical_area")]
 pub async fn get_opu(State(state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     let connectome_service = state.connectome_service.as_ref();
@@ -415,7 +415,7 @@ pub async fn get_opu(State(state): State<ApiState>) -> ApiResult<Json<Vec<String
     }
 }
 
-/// Get a list of all cortical area IDs across the entire genome (IPU, OPU, custom, memory, and core areas).
+/// Get a list of all cortical_area area IDs across the entire genome (IPU, OPU, custom, memory, and core areas).
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/cortical_area_id_list",
@@ -450,14 +450,14 @@ pub async fn get_cortical_area_id_list(
         Err(e) => {
             tracing::error!(target: "feagi-api", "❌ GET /v1/cortical_area/cortical_area_id_list - error: {}", e);
             Err(ApiError::internal(format!(
-                "Failed to get cortical IDs: {}",
+                "Failed to get cortical_area IDs: {}",
                 e
             )))
         }
     }
 }
 
-/// Get a list of all cortical area names (human-readable labels for all cortical areas).
+/// Get a list of all cortical_area area names (human-readable labels for all cortical_area areas).
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/cortical_area_name_list",
@@ -479,13 +479,13 @@ pub async fn get_cortical_area_name_list(
             }))
         }
         Err(e) => Err(ApiError::internal(format!(
-            "Failed to get cortical names: {}",
+            "Failed to get cortical_area names: {}",
             e
         ))),
     }
 }
 
-/// Get a map of cortical area IDs to their human-readable names. Returns {cortical_id: name} pairs.
+/// Get a map of cortical_area area IDs to their human-readable names. Returns {cortical_id: name} pairs.
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/cortical_id_name_mapping",
@@ -509,7 +509,7 @@ pub async fn get_cortical_id_name_mapping(
     Ok(Json(mapping))
 }
 
-/// Get available cortical area types: sensory, motor, memory, and custom.
+/// Get available cortical_area area types: sensory, motor, memory, and custom.
 #[utoipa::path(get, path = "/v1/cortical_area/cortical_types", tag = "cortical_area")]
 pub async fn get_cortical_types(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     Ok(Json(vec![
@@ -520,13 +520,13 @@ pub async fn get_cortical_types(State(_state): State<ApiState>) -> ApiResult<Jso
     ]))
 }
 
-/// Get detailed cortical connectivity mappings showing source-to-destination connections with mapping rules.
+/// Get detailed cortical_area connectivity mappings showing source-to-destination connections with mapping rules.
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/cortical_map_detailed",
     tag = "cortical_area",
     responses(
-        (status = 200, description = "Detailed cortical area mapping data", body = HashMap<String, serde_json::Value>),
+        (status = 200, description = "Detailed cortical_area area mapping data", body = HashMap<String, serde_json::Value>),
         (status = 500, description = "Internal server error")
     )
 )]
@@ -560,7 +560,7 @@ pub async fn get_cortical_map_detailed(
     }
 }
 
-/// Get 2D positions of all cortical areas for visualization. Returns {cortical_id: (x, y)} coordinates.
+/// Get 2D positions of all cortical_area areas for visualization. Returns {cortical_id: (x, y)} coordinates.
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/cortical_locations_2d",
@@ -585,7 +585,7 @@ pub async fn get_cortical_locations_2d(
     }
 }
 
-/// Get complete cortical area data including geometry, neural parameters, and metadata. Used by Brain Visualizer.
+/// Get complete cortical_area area data including geometry, neural parameters, and metadata. Used by Brain Visualizer.
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/cortical_area/geometry",
@@ -599,7 +599,7 @@ pub async fn get_cortical_area_geometry(
         Ok(areas) => {
             let geometry: HashMap<String, serde_json::Value> = areas.into_iter()
                 .map(|area| {
-                    // Return FULL cortical area data (matching Python format)
+                    // Return FULL cortical_area area data (matching Python format)
                     // This is what Brain Visualizer expects for genome loading
                     let coordinate_2d = area
                         .properties
@@ -654,7 +654,7 @@ pub async fn get_cortical_area_geometry(
     }
 }
 
-/// Get visibility status of all cortical areas. Returns {cortical_id: visibility_flag}.
+/// Get visibility status of all cortical_area areas. Returns {cortical_id: visibility_flag}.
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/cortical_visibility",
@@ -679,7 +679,7 @@ pub async fn get_cortical_visibility(
     }
 }
 
-/// Get the 2D location of a cortical area by its name. Request: {cortical_name: string}.
+/// Get the 2D location of a cortical_area area by its name. Request: {cortical_name: string}.
 #[utoipa::path(
     post,
     path = "/v1/cortical_area/cortical_name_location",
@@ -704,7 +704,7 @@ pub async fn post_cortical_name_location(
     }
 }
 
-/// Get detailed properties of a single cortical area by ID. Request: {cortical_id: string}.
+/// Get detailed properties of a single cortical_area area by ID. Request: {cortical_id: string}.
 #[utoipa::path(
     post,
     path = "/v1/cortical_area/cortical_area_properties",
@@ -737,7 +737,7 @@ pub async fn post_cortical_area_properties(
     }
 }
 
-/// Get properties for multiple cortical areas. Accepts array [\"id1\", \"id2\"] or object {cortical_id_list: [...]}.
+/// Get properties for multiple cortical_area areas. Accepts array [\"id1\", \"id2\"] or object {cortical_id_list: [...]}.
 #[utoipa::path(
     post,
     path = "/v1/cortical_area/multi/cortical_area_properties",
@@ -793,7 +793,7 @@ pub async fn post_multi_cortical_area_properties(
     Ok(Json(result))
 }
 
-/// Create IPU (sensory) or OPU (motor) cortical areas with proper topology and multi-unit support.
+/// Create IPU (sensory) or OPU (motor) cortical_area areas with proper topology and multi-unit support.
 #[utoipa::path(post, path = "/v1/cortical_area/cortical_area", tag = "cortical_area")]
 #[allow(unused_variables)] // In development - parameters will be used when implemented
 pub async fn post_cortical_area(
@@ -882,7 +882,7 @@ pub async fn post_cortical_area(
         });
 
     // BREAKING CHANGE (unreleased API):
-    // `data_type_config` is now per-subunit, because some cortical units have heterogeneous
+    // `data_type_config` is now per-subunit, because some cortical_area units have heterogeneous
     // subunits (e.g. Gaze: Percentage2D + Percentage).
     //
     // Request must provide:
@@ -936,7 +936,7 @@ pub async fn post_cortical_area(
 
     tracing::info!(
         target: "feagi-api",
-        "Creating cortical areas for {} with neurons_per_voxel={}, data_type_configs_by_subunit={:?}",
+        "Creating cortical_area areas for {} with neurons_per_voxel={}, data_type_configs_by_subunit={:?}",
         cortical_type_key,
         neurons_per_voxel,
         data_type_configs_by_subunit
@@ -944,7 +944,7 @@ pub async fn post_cortical_area(
 
     // Determine number of units and get topology
     let (num_units, unit_topology) = if cortical_type_str == "IPU" {
-        // Find the matching sensory cortical unit
+        // Find the matching sensory cortical_area unit
         let unit = SensoryCorticalUnit::list_all()
             .iter()
             .find(|u| {
@@ -961,7 +961,7 @@ pub async fn post_cortical_area(
             unit.get_unit_default_topology(),
         )
     } else if cortical_type_str == "OPU" {
-        // Find the matching motor cortical unit
+        // Find the matching motor cortical_area unit
         let unit = MotorCorticalUnit::list_all()
             .iter()
             .find(|u| {
@@ -982,7 +982,7 @@ pub async fn post_cortical_area(
     };
 
     tracing::info!(
-        "Creating {} units for cortical type: {}",
+        "Creating {} units for cortical_area type: {}",
         num_units,
         cortical_type_key
     );
@@ -1000,7 +1000,7 @@ pub async fn post_cortical_area(
                 ))
             })?;
 
-        // Split per-subunit data_type_config into two bytes for cortical ID
+        // Split per-subunit data_type_config into two bytes for cortical_area ID
         let config_byte_4 = (data_type_config & 0xFF) as u8; // Lower byte
         let config_byte_5 = ((data_type_config >> 8) & 0xFF) as u8; // Upper byte
 
@@ -1036,7 +1036,7 @@ pub async fn post_cortical_area(
                 (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2])
             };
 
-        // Construct proper 8-byte cortical ID
+        // Construct proper 8-byte cortical_area ID
         // Byte structure: [type(i/o), subtype[0], subtype[1], subtype[2], encoding_type, encoding_format, unit_idx, group_id]
         // Extract the 3-character subtype from cortical_type_key (e.g., "isvi" -> "svi")
         let subtype_bytes = if cortical_type_key.len() >= 4 {
@@ -1050,7 +1050,7 @@ pub async fn post_cortical_area(
             return Err(ApiError::invalid_input("Invalid cortical_type_key"));
         };
 
-        // Construct the 8-byte cortical ID
+        // Construct the 8-byte cortical_area ID
         let cortical_id_bytes = [
             if cortical_type_str == "IPU" {
                 b'i'
@@ -1118,7 +1118,7 @@ pub async fn post_cortical_area(
     }
 
     tracing::info!(
-        "Calling GenomeService to create {} cortical areas",
+        "Calling GenomeService to create {} cortical_area areas",
         creation_params.len()
     );
 
@@ -1127,17 +1127,17 @@ pub async fn post_cortical_area(
     let areas_details = genome_service
         .create_cortical_areas(creation_params)
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to create cortical areas: {}", e)))?;
+        .map_err(|e| ApiError::internal(format!("Failed to create cortical_area areas: {}", e)))?;
 
     tracing::info!(
-        "✅ Successfully created {} cortical areas via GenomeService",
+        "✅ Successfully created {} cortical_area areas via GenomeService",
         areas_details.len()
     );
 
     // Serialize as JSON
     let areas_json = serde_json::to_value(&areas_details).unwrap_or_default();
 
-    // Extract cortical IDs from created areas
+    // Extract cortical_area IDs from created areas
     let created_ids: Vec<String> = areas_details
         .iter()
         .map(|a| a.cortical_id.clone())
@@ -1148,7 +1148,7 @@ pub async fn post_cortical_area(
     let mut response = serde_json::Map::new();
     response.insert(
         "message".to_string(),
-        serde_json::Value::String(format!("Created {} cortical areas", created_ids.len())),
+        serde_json::Value::String(format!("Created {} cortical_area areas", created_ids.len())),
     );
     response.insert(
         "cortical_id".to_string(),
@@ -1167,7 +1167,7 @@ pub async fn post_cortical_area(
     Ok(Json(serde_json::Value::Object(response)))
 }
 
-/// Update properties of an existing cortical area (position, dimensions, neural parameters, etc.).
+/// Update properties of an existing cortical_area area (position, dimensions, neural parameters, etc.).
 #[utoipa::path(put, path = "/v1/cortical_area/cortical_area", tag = "cortical_area")]
 pub async fn put_cortical_area(
     State(state): State<ApiState>,
@@ -1218,7 +1218,7 @@ pub async fn put_cortical_area(
     }
 }
 
-/// Delete a cortical area by ID. Removes the area and all associated neurons and synapses.
+/// Delete a cortical_area area by ID. Removes the area and all associated neurons and synapses.
 #[utoipa::path(
     delete,
     path = "/v1/cortical_area/cortical_area",
@@ -1243,7 +1243,7 @@ pub async fn delete_cortical_area(
     }
 }
 
-/// Create a custom cortical area for internal processing with specified dimensions and position.
+/// Create a custom cortical_area area for internal processing with specified dimensions and position.
 #[utoipa::path(
     post,
     path = "/v1/cortical_area/custom_cortical_area",
@@ -1256,13 +1256,13 @@ pub async fn post_custom_cortical_area(
     use feagi_services::types::CreateCorticalAreaParams;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    // Helper: check whether BV is requesting a MEMORY cortical area (still routed through this endpoint).
+    // Helper: check whether BV is requesting a MEMORY cortical_area area (still routed through this endpoint).
     //
     // Brain Visualizer sends:
     //   sub_group_id: "MEMORY"
     //   cortical_group: "CUSTOM"
     //
-    // In feagi-core, the authoritative cortical type is derived from the CorticalID prefix byte:
+    // In feagi-core, the authoritative cortical_area type is derived from the CorticalID prefix byte:
     // - b'c' => Custom
     // - b'm' => Memory
     //
@@ -1321,7 +1321,7 @@ pub async fn post_custom_cortical_area(
         .map(|s| s.to_string())
         .ok_or_else(|| {
             ApiError::invalid_input(
-                "brain_region_id is required for custom and memory cortical areas",
+                "brain_region_id is required for custom and memory cortical_area areas",
             )
         })?;
 
@@ -1332,13 +1332,13 @@ pub async fn post_custom_cortical_area(
         .map(|s| s.to_string());
 
     tracing::info!(target: "feagi-api",
-        "Creating {} cortical area '{}' with dimensions: {}x{}x{}, position: ({}, {}, {})",
+        "Creating {} cortical_area area '{}' with dimensions: {}x{}x{}, position: ({}, {}, {})",
         if is_memory_area_requested { "memory" } else { "custom" },
         cortical_name, cortical_dimensions[0], cortical_dimensions[1], cortical_dimensions[2],
         coordinates_3d[0], coordinates_3d[1], coordinates_3d[2]
     );
 
-    // Generate unique cortical ID for custom cortical area
+    // Generate unique cortical_area ID for custom cortical_area area
     // Format: [b'c', 6 random alphanumeric bytes, group_counter]
     // Use timestamp + counter to ensure uniqueness
     let timestamp = SystemTime::now()
@@ -1346,14 +1346,14 @@ pub async fn post_custom_cortical_area(
         .unwrap()
         .as_millis() as u64;
 
-    // Create 8-byte cortical ID for custom/memory area
+    // Create 8-byte cortical_area ID for custom/memory area
     // Byte 0: 'c' for custom OR 'm' for memory (authoritative type discriminator)
     // Bytes 1-6: Derived from name (first 6 chars, padded with underscores)
     // Byte 7: Counter based on timestamp lower bits
     let mut cortical_id_bytes = [0u8; 8];
     cortical_id_bytes[0] = if is_memory_area_requested { b'm' } else { b'c' };
 
-    // Use the cortical name for bytes 1-6 (truncate or pad as needed)
+    // Use the cortical_area name for bytes 1-6 (truncate or pad as needed)
     let name_bytes = cortical_name.as_bytes();
     for i in 1..7 {
         cortical_id_bytes[i] = if i - 1 < name_bytes.len() {
@@ -1387,7 +1387,7 @@ pub async fn post_custom_cortical_area(
         serde_json::Value::String(brain_region_id.clone()),
     );
 
-    // Create cortical area parameters
+    // Create cortical_area area parameters
     let params = CreateCorticalAreaParams {
         cortical_id: cortical_id.clone(),
         name: cortical_name.to_string(),
@@ -1422,20 +1422,20 @@ pub async fn post_custom_cortical_area(
 
     let genome_service = state.genome_service.as_ref();
 
-    tracing::info!(target: "feagi-api", "Calling GenomeService to create custom cortical area");
+    tracing::info!(target: "feagi-api", "Calling GenomeService to create custom cortical_area area");
 
-    // Create the cortical area via GenomeService
+    // Create the cortical_area area via GenomeService
     let areas_details = genome_service
         .create_cortical_areas(vec![params])
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to create custom cortical area: {}", e)))?;
+        .map_err(|e| ApiError::internal(format!("Failed to create custom cortical_area area: {}", e)))?;
 
     let created_area = areas_details
         .first()
-        .ok_or_else(|| ApiError::internal("No cortical area was created"))?;
+        .ok_or_else(|| ApiError::internal("No cortical_area area was created"))?;
 
     tracing::info!(target: "feagi-api",
-        "✅ Successfully created custom cortical area '{}' with ID: {}",
+        "✅ Successfully created custom cortical_area area '{}' with ID: {}",
         cortical_name, created_area.cortical_id
     );
 
@@ -1443,7 +1443,7 @@ pub async fn post_custom_cortical_area(
     let mut response = HashMap::new();
     response.insert(
         "message".to_string(),
-        "Custom cortical area created successfully".to_string(),
+        "Custom cortical_area area created successfully".to_string(),
     );
     response.insert("cortical_id".to_string(), created_area.cortical_id.clone());
     response.insert("cortical_name".to_string(), cortical_name.to_string());
@@ -1451,7 +1451,7 @@ pub async fn post_custom_cortical_area(
     Ok(Json(response))
 }
 
-/// Clone an existing cortical area with all its properties and structure. (Not yet implemented)
+/// Clone an existing cortical_area area with all its properties and structure. (Not yet implemented)
 #[utoipa::path(post, path = "/v1/cortical_area/clone", tag = "cortical_area")]
 pub async fn post_clone(
     State(state): State<ApiState>,
@@ -1466,14 +1466,14 @@ pub async fn post_clone(
     let genome_service = state.genome_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
 
-    // Resolve + validate source cortical ID.
+    // Resolve + validate source cortical_area ID.
     let source_id = request.source_area_id.clone();
     let source_typed = CorticalID::try_from_base_64(&source_id)
         .map_err(|e| ApiError::invalid_input(e.to_string()))?;
     let src_first_byte = source_typed.as_bytes()[0];
     if src_first_byte != b'c' && src_first_byte != b'm' {
         return Err(ApiError::invalid_input(format!(
-            "Cloning is only supported for custom ('c') and memory ('m') cortical areas (got prefix byte: {})",
+            "Cloning is only supported for custom ('c') and memory ('m') cortical_area areas (got prefix byte: {})",
             src_first_byte
         )));
     }
@@ -1502,7 +1502,7 @@ pub async fn post_clone(
         })
         .ok_or_else(|| {
             ApiError::internal(format!(
-                "Source cortical area {} is missing parent_region_id; cannot determine region membership for clone",
+                "Source cortical_area area {} is missing parent_region_id; cannot determine region membership for clone",
                 source_id
             ))
         })?;
@@ -1523,7 +1523,7 @@ pub async fn post_clone(
         .and_then(|v| v.as_object())
         .cloned();
 
-    // Generate unique cortical ID for the clone.
+    // Generate unique cortical_area ID for the clone.
     //
     // Rules:
     // - Byte 0 keeps the source type discriminator (b'c' or b'm')
@@ -1554,7 +1554,7 @@ pub async fn post_clone(
 
     let new_area_id = general_purpose::STANDARD.encode(cortical_id_bytes);
 
-    // Clone properties, but do NOT carry over cortical mapping properties directly.
+    // Clone properties, but do NOT carry over cortical_area mapping properties directly.
     // Mappings must be created via update_cortical_mapping so synapses are regenerated.
     let mut cloned_properties = source_area.properties.clone();
     cloned_properties.remove("cortical_mapping_dst");
@@ -1603,7 +1603,7 @@ pub async fn post_clone(
     let created_areas = genome_service
         .create_cortical_areas(vec![params])
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to clone cortical area: {}", e)))?;
+        .map_err(|e| ApiError::internal(format!("Failed to clone cortical_area area: {}", e)))?;
 
     // DIAGNOSTIC: Log what coordinates were returned after creation
     if let Some(created_area) = created_areas.first() {
@@ -1613,7 +1613,7 @@ pub async fn post_clone(
         );
     }
 
-    // Optionally clone cortical mappings (AutoWiring).
+    // Optionally clone cortical_area mappings (AutoWiring).
     if request.clone_cortical_mapping {
         // 1) Outgoing mappings: source -> dst becomes new -> dst
         if let Some(dst_map) = outgoing_mapping_dst {
@@ -1653,7 +1653,7 @@ pub async fn post_clone(
         let all_areas = connectome_service
             .list_cortical_areas()
             .await
-            .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
+            .map_err(|e| ApiError::internal(format!("Failed to list cortical_area areas: {}", e)))?;
 
         for area in all_areas {
             // Skip the source area itself: source->* already handled by outgoing clone above.
@@ -1705,9 +1705,9 @@ pub async fn post_clone(
 /// Request payload for POST /v1/cortical_area/clone
 #[derive(Debug, Clone, serde::Deserialize, utoipa::ToSchema)]
 pub struct CloneCorticalAreaRequest {
-    /// Base64 cortical area ID to clone.
+    /// Base64 cortical_area area ID to clone.
     pub source_area_id: String,
-    /// New cortical area name (display name).
+    /// New cortical_area area name (display name).
     pub new_name: String,
     /// New 3D coordinates for placement.
     pub coordinates_3d: [i32; 3],
@@ -1719,11 +1719,11 @@ pub struct CloneCorticalAreaRequest {
     /// source area’s membership. If provided and mismatched, FEAGI rejects the request.
     #[serde(default)]
     pub parent_region_id: Option<String>,
-    /// If true, clones cortical mappings (incoming + outgoing) to reproduce wiring.
+    /// If true, clones cortical_area mappings (incoming + outgoing) to reproduce wiring.
     pub clone_cortical_mapping: bool,
 }
 
-/// Update properties of multiple cortical areas in a single request. (Not yet implemented)
+/// Update properties of multiple cortical_area areas in a single request. (Not yet implemented)
 #[utoipa::path(
     put,
     path = "/v1/cortical_area/multi/cortical_area",
@@ -1764,7 +1764,7 @@ pub async fn put_multi_cortical_area(
         shared_properties.remove(cortical_id);
     }
 
-    // Update each cortical area, using per-id properties when provided
+    // Update each cortical_area area, using per-id properties when provided
     for cortical_id in &cortical_ids {
         tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - updating area: {}", cortical_id);
         let mut properties = shared_properties.clone();
@@ -1783,7 +1783,7 @@ pub async fn put_multi_cortical_area(
             Err(e) => {
                 tracing::error!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - failed for {}: {}", cortical_id, e);
                 return Err(ApiError::internal(format!(
-                    "Failed to update cortical area {}: {}",
+                    "Failed to update cortical_area area {}: {}",
                     cortical_id, e
                 )));
             }
@@ -1793,13 +1793,13 @@ pub async fn put_multi_cortical_area(
     Ok(Json(HashMap::from([
         (
             "message".to_string(),
-            format!("Updated {} cortical areas", cortical_ids.len()),
+            format!("Updated {} cortical_area areas", cortical_ids.len()),
         ),
         ("cortical_ids".to_string(), cortical_ids.join(", ")),
     ])))
 }
 
-/// Delete multiple cortical areas by their IDs.
+/// Delete multiple cortical_area areas by their IDs.
 #[utoipa::path(
     delete,
     path = "/v1/cortical_area/multi/cortical_area",
@@ -1811,7 +1811,7 @@ pub async fn delete_multi_cortical_area(
 ) -> ApiResult<Json<HashMap<String, String>>> {
     if request.is_empty() {
         return Err(ApiError::invalid_input(
-            "Request must contain at least one cortical ID",
+            "Request must contain at least one cortical_area ID",
         ));
     }
 
@@ -1840,7 +1840,7 @@ pub async fn delete_multi_cortical_area(
                     e
                 );
                 return Err(ApiError::internal(format!(
-                    "Failed to delete cortical area {}: {}",
+                    "Failed to delete cortical_area area {}: {}",
                     cortical_id, e
                 )));
             }
@@ -1850,13 +1850,13 @@ pub async fn delete_multi_cortical_area(
     Ok(Json(HashMap::from([
         (
             "message".to_string(),
-            format!("Deleted {} cortical areas", request.len()),
+            format!("Deleted {} cortical_area areas", request.len()),
         ),
         ("cortical_ids".to_string(), request.join(", ")),
     ])))
 }
 
-/// Update the 2D visualization coordinates of a cortical area. (Not yet implemented)
+/// Update the 2D visualization coordinates of a cortical_area area. (Not yet implemented)
 #[utoipa::path(put, path = "/v1/cortical_area/coord_2d", tag = "cortical_area")]
 #[allow(unused_variables)] // In development
 pub async fn put_coord_2d(
@@ -1867,7 +1867,7 @@ pub async fn put_coord_2d(
     Err(ApiError::internal("Not yet implemented"))
 }
 
-/// Hide/show cortical areas in visualizations. (Not yet implemented)
+/// Hide/show cortical_area areas in visualizations. (Not yet implemented)
 #[utoipa::path(
     put,
     path = "/v1/cortical_area/suppress_cortical_visibility",
@@ -1878,11 +1878,11 @@ pub async fn put_suppress_cortical_visibility(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Suppress cortical visibility
+    // TODO: Suppress cortical_area visibility
     Err(ApiError::internal("Not yet implemented"))
 }
 
-/// Reset runtime neural state for one or more cortical areas (membrane potential, refractory
+/// Reset runtime neural state for one or more cortical_area areas (membrane potential, refractory
 /// counters, FCL candidates). Genome, connections, and parameters are unchanged.
 #[utoipa::path(
     put,
@@ -1905,7 +1905,7 @@ pub async fn put_reset(
 
     info!(
         target: "feagi-api",
-        "[RESET] Received reset request for {} cortical areas: {:?}",
+        "[RESET] Received reset request for {} cortical_area areas: {:?}",
         request.area_list.len(),
         request.area_list
     );
@@ -1920,7 +1920,7 @@ pub async fn put_reset(
         cortical_indices.push(area.cortical_idx);
         info!(
             target: "feagi-api",
-            "[RESET] Resolved cortical ID '{}' to index {}",
+            "[RESET] Resolved cortical_area ID '{}' to index {}",
             id,
             area.cortical_idx
         );
@@ -1976,7 +1976,7 @@ pub async fn get_visualization(
     Ok(Json(response))
 }
 
-/// Execute multiple cortical area operations (create, update, delete) in a single batch.
+/// Execute multiple cortical_area area operations (create, update, delete) in a single batch.
 #[utoipa::path(
     post,
     path = "/v1/cortical_area/batch_operations",
@@ -1991,19 +1991,19 @@ pub async fn post_batch_operations(
     Ok(Json(response))
 }
 
-/// Alias for /v1/cortical_area/ipu - list all IPU cortical area IDs.
+/// Alias for /v1/cortical_area/ipu - list all IPU cortical_area area IDs.
 #[utoipa::path(get, path = "/v1/cortical_area/ipu/list", tag = "cortical_area")]
 pub async fn get_ipu_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     get_ipu(State(state)).await
 }
 
-/// Alias for /v1/cortical_area/opu - list all OPU cortical area IDs.
+/// Alias for /v1/cortical_area/opu - list all OPU cortical_area area IDs.
 #[utoipa::path(get, path = "/v1/cortical_area/opu/list", tag = "cortical_area")]
 pub async fn get_opu_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     get_opu(State(state)).await
 }
 
-/// Update the 3D position of a cortical area. (Not yet implemented)
+/// Update the 3D position of a cortical_area area. (Not yet implemented)
 #[utoipa::path(put, path = "/v1/cortical_area/coordinates_3d", tag = "cortical_area")]
 pub async fn put_coordinates_3d(
     State(_state): State<ApiState>,
@@ -2015,7 +2015,7 @@ pub async fn put_coordinates_3d(
     )])))
 }
 
-/// Delete multiple cortical areas by their IDs in a single operation.
+/// Delete multiple cortical_area areas by their IDs in a single operation.
 #[utoipa::path(delete, path = "/v1/cortical_area/bulk_delete", tag = "cortical_area")]
 pub async fn delete_bulk(
     State(_state): State<ApiState>,
@@ -2026,7 +2026,7 @@ pub async fn delete_bulk(
     Ok(Json(response))
 }
 
-/// Resize a cortical area by changing its dimensions. (Not yet implemented)
+/// Resize a cortical_area area by changing its dimensions. (Not yet implemented)
 #[utoipa::path(post, path = "/v1/cortical_area/resize", tag = "cortical_area")]
 pub async fn post_resize(
     State(_state): State<ApiState>,
@@ -2038,7 +2038,7 @@ pub async fn post_resize(
     )])))
 }
 
-/// Move a cortical area to a new position. (Not yet implemented)
+/// Move a cortical_area area to a new position. (Not yet implemented)
 #[utoipa::path(post, path = "/v1/cortical_area/reposition", tag = "cortical_area")]
 pub async fn post_reposition(
     State(_state): State<ApiState>,
@@ -2050,7 +2050,7 @@ pub async fn post_reposition(
     )])))
 }
 
-/// List all neurons at a voxel `(x, y, z)` within a cortical area, with the same live property snapshot as `/v1/connectome/neuron_properties`.
+/// List all neurons at a voxel `(x, y, z)` within a cortical_area area, with the same live property snapshot as `/v1/connectome/neuron_properties`.
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/voxel_neurons",
@@ -2113,8 +2113,8 @@ pub async fn post_voxel_neurons(
     tag = "cortical_area",
     params(MemoryCorticalAreaQuery),
     responses(
-        (status = 200, description = "Memory cortical area details", body = MemoryCorticalAreaResponse),
-        (status = 400, description = "Invalid cortical id or not a memory area"),
+        (status = 200, description = "Memory cortical_area area details", body = MemoryCorticalAreaResponse),
+        (status = 400, description = "Invalid cortical_area id or not a memory area"),
         (status = 500, description = "Internal server error")
     )
 )]
@@ -2130,7 +2130,7 @@ pub async fn get_memory_cortical_area(
 
     let mem_props = extract_memory_properties(&area.properties).ok_or_else(|| {
         ApiError::invalid_input(
-            "cortical area is not a memory area (expected is_mem_type memory properties)",
+            "cortical_area area is not a memory area (expected is_mem_type memory properties)",
         )
     })?;
 
@@ -2215,7 +2215,7 @@ pub async fn get_ipu_types(
 ) -> ApiResult<Json<HashMap<String, CorticalTypeMetadata>>> {
     let mut types = HashMap::new();
 
-    // Dynamically generate metadata from feagi_data_structures templates
+    // Dynamically generate metadata from feagi_data_structures cortical_units
     for unit in SensoryCorticalUnit::list_all() {
         let id_ref = unit.get_cortical_id_unit_reference();
         let key = format!("i{}", std::str::from_utf8(&id_ref).unwrap_or("???"));
@@ -2296,7 +2296,7 @@ pub async fn get_opu_types(
 ) -> ApiResult<Json<HashMap<String, CorticalTypeMetadata>>> {
     let mut types = HashMap::new();
 
-    // Dynamically generate metadata from feagi_data_structures templates
+    // Dynamically generate metadata from feagi_data_structures cortical_units
     for unit in MotorCorticalUnit::list_all() {
         let id_ref = unit.get_cortical_id_unit_reference();
         let key = format!("o{}", std::str::from_utf8(&id_ref).unwrap_or("???"));
@@ -2352,7 +2352,7 @@ pub async fn get_opu_types(
     Ok(Json(types))
 }
 
-/// Get list of all cortical area indices (numerical indices used internally for indexing).
+/// Get list of all cortical_area area indices (numerical indices used internally for indexing).
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/cortical_area_index_list",
@@ -2371,7 +2371,7 @@ pub async fn get_cortical_area_index_list(
     Ok(Json(indices))
 }
 
-/// Get mapping from cortical area IDs to their internal indices. Returns {cortical_id: index}.
+/// Get mapping from cortical_area area IDs to their internal indices. Returns {cortical_id: index}.
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/cortical_idx_mapping",
@@ -2396,7 +2396,7 @@ pub async fn get_cortical_idx_mapping(
     Ok(Json(mapping))
 }
 
-/// Get restrictions on which cortical areas can connect to which (connection validation rules).
+/// Get restrictions on which cortical_area areas can connect to which (connection validation rules).
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/mapping_restrictions",
@@ -2409,7 +2409,7 @@ pub async fn get_mapping_restrictions_query(
     Ok(Json(HashMap::new()))
 }
 
-/// Get memory usage of a specific cortical area in bytes (calculated from neuron count).
+/// Get memory usage of a specific cortical_area area in bytes (calculated from neuron count).
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/{cortical_id}/memory_usage",
@@ -2437,7 +2437,7 @@ pub async fn get_memory_usage(
     Ok(Json(response))
 }
 
-/// Get the total number of neurons in a specific cortical area.
+/// Get the total number of neurons in a specific cortical_area area.
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/{cortical_id}/neuron_count",
@@ -2458,7 +2458,7 @@ pub async fn get_area_neuron_count(
     Ok(Json(area_info.neuron_count as i64))
 }
 
-/// Get available cortical type options for UI selection: Sensory, Motor, Custom, Memory.
+/// Get available cortical_area type options for UI selection: Sensory, Motor, Custom, Memory.
 #[utoipa::path(
     post,
     path = "/v1/cortical_area/cortical_type_options",
@@ -2475,7 +2475,7 @@ pub async fn post_cortical_type_options(
     ]))
 }
 
-/// Get mapping restrictions for specific cortical areas (POST version with request body).
+/// Get mapping restrictions for specific cortical_area areas (POST version with request body).
 #[utoipa::path(
     post,
     path = "/v1/cortical_area/mapping_restrictions",
@@ -2488,7 +2488,7 @@ pub async fn post_mapping_restrictions(
     Ok(Json(HashMap::new()))
 }
 
-/// Get mapping restrictions between two specific cortical areas (connection validation).
+/// Get mapping restrictions between two specific cortical_area areas (connection validation).
 #[utoipa::path(
     post,
     path = "/v1/cortical_area/mapping_restrictions_between_areas",
@@ -2501,7 +2501,7 @@ pub async fn post_mapping_restrictions_between_areas(
     Ok(Json(HashMap::new()))
 }
 
-/// Update 3D coordinates of a cortical area (alternative endpoint). (Not yet implemented)
+/// Update 3D coordinates of a cortical_area area (alternative endpoint). (Not yet implemented)
 #[utoipa::path(put, path = "/v1/cortical_area/coord_3d", tag = "cortical_area")]
 pub async fn put_coord_3d(
     State(_state): State<ApiState>,

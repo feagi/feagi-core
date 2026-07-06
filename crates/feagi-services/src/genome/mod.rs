@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*!
-Genome-related service utilities for cortical area updates.
+Genome-related service utilities for cortical_area area updates.
 
 This module contains the change classification and parameter update logic
-for efficient cortical area modifications without full brain rebuilds.
+for efficient cortical_area area modifications without full brain rebuilds.
 
 Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0

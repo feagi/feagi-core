@@ -13,7 +13,7 @@
 //! Key semantics:
 //! - Dense: tracked areas receive a frame every burst (explicit empty frames when silent).
 //! - Burst-aligned: windows are defined by timestep range, not "last N firing events".
-//! - Tracked-only: history is stored only for explicitly tracked cortical areas.
+//! - Tracked-only: history is stored only for explicitly tracked cortical_area areas.
 //! - Deterministic: no implicit defaults; errors are explicit.
 
 use ahash::AHashMap;
@@ -103,7 +103,7 @@ impl FireLedger {
         self.current_timestep
     }
 
-    /// Track a cortical area with an explicit window size.
+    /// Track a cortical_area area with an explicit window size.
     ///
     /// This is an exact setting (not max/merge). If multiple subsystems depend on the same area,
     /// the caller must pass the final resolved requirement.
@@ -144,7 +144,7 @@ impl FireLedger {
         self.tracked.remove(&cortical_idx).is_some()
     }
 
-    /// Get the tracked window size for a cortical area.
+    /// Get the tracked window size for a cortical_area area.
     pub fn get_tracked_window(&self, cortical_idx: u32) -> Result<usize, FireLedgerError> {
         self.tracked
             .get(&cortical_idx)

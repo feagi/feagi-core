@@ -22,7 +22,7 @@ burst_info!(
 
 api_info!("GET", "/v1/genome/file_name", status = 200);
 
-feagi_error!(cortical_area_id = "v1"; "Failed to load cortical area");
+feagi_error!(cortical_area_id = "v1"; "Failed to load cortical_area area");
 ```
 
 ### Errors

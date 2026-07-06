@@ -278,7 +278,7 @@ mod tests {
         );
 
         // This test verifies that the function correctly:
-        // 1. Extracts cortical type from CorticalID (as_cortical_type())
+        // 1. Extracts cortical_area type from CorticalID (as_cortical_type())
         // 2. Derives category from AreaType (get_cortical_group())
         // 3. Returns appropriate type information
     }

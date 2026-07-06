@@ -5,14 +5,14 @@
 Core data models for FEAGI BDU.
 
 This module contains the fundamental data structures that represent the
-brain's architecture, including cortical areas, brain regions, and their
+brain's architecture, including cortical_area areas, brain regions, and their
 hierarchical organization.
 
 ## Architecture
 
 Mirrors the Python BDU models while leveraging Rust's type system for safety:
 - `CorticalArea`: Individual processing areas (sensory, motor, memory)
-- `BrainRegion`: Hierarchical organization of cortical areas
+- `BrainRegion`: Hierarchical organization of cortical_area areas
 - `BrainRegionHierarchy`: Tree structure of brain regions
 
 ## Design Principles

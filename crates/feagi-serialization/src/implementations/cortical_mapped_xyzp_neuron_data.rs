@@ -1,4 +1,4 @@
-//! Serialization implementation for cortical-mapped neuron voxel xyzp data.
+//! Serialization implementation for cortical_area-mapped neuron voxel xyzp data.
 
 use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 use byteorder::{ByteOrder, LittleEndian};
@@ -12,11 +12,11 @@ use std::any::Any;
 /// Current version of the neuron XYZP serialization format.
 const BYTE_STRUCT_VERSION: u8 = 1;
 
-/// Bytes per cortical ID header: 8 (ID) + 4 (start index) + 4 (byte count).
+/// Bytes per cortical_area ID header: 8 (ID) + 4 (start index) + 4 (byte count).
 const NUMBER_BYTES_PER_CORTICAL_ID_HEADER: usize =
     CorticalID::NUMBER_OF_BYTES + size_of::<u32>() + size_of::<u32>();
 
-/// Bytes for cortical area count header.
+/// Bytes for cortical_area area count header.
 const NUMBER_BYTES_CORTICAL_COUNT_HEADER: usize = size_of::<u16>();
 
 impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
@@ -63,7 +63,7 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
             subheader_write_index + (number_cortical_areas * NUMBER_BYTES_PER_CORTICAL_ID_HEADER);
 
         for (cortical_id, neuron_data) in &self.mappings {
-            // Write cortical subheader
+            // Write cortical_area subheader
             let cortical_area_lookup_header_slice = &mut byte_destination
                 [subheader_write_index..subheader_write_index + CorticalID::NUMBER_OF_BYTES];
             let cortical_area_lookup_header_slice: &mut [u8; CorticalID::NUMBER_OF_BYTES] =

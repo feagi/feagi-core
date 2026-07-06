@@ -18,7 +18,7 @@ fn test_projector_psp_division_issue() {
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 20).unwrap();
 
-    // Register cortical areas (avoid area=1 for power injection)
+    // Register cortical_area areas (avoid area=1 for power injection)
     npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64()); // Area A
     npu.register_cortical_area(11, CoreCorticalType::Power.to_cortical_id().as_base_64()); // Area B
 

@@ -117,7 +117,7 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
     // Build property mapping
     let property_map = build_property_map();
 
-    // Extract cortical areas
+    // Extract cortical_area areas
     let cortical_areas = extract_cortical_areas(flat_blueprint)?;
 
     // Load visualization_voxel_granularity overrides (if present)
@@ -141,7 +141,7 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
     for cortical_id in &cortical_areas {
         let mut area_data = create_area_template();
 
-        // Process all flat keys for this cortical area
+        // Process all flat keys for this cortical_area area
         process_area_properties(cortical_id, flat_blueprint, &property_map, &mut area_data)?;
 
         // Apply visualization_voxel_granularity override if present
@@ -207,7 +207,7 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
     Ok(Value::Object(hierarchical))
 }
 
-/// Extract cortical area IDs from flat keys
+/// Extract cortical_area area IDs from flat keys
 fn extract_cortical_areas(
     flat_blueprint: &serde_json::Map<String, Value>,
 ) -> EvoResult<HashSet<String>> {
@@ -222,7 +222,7 @@ fn extract_cortical_areas(
     Ok(areas)
 }
 
-/// Parse cortical ID from flat key: "_____10c-AREA1-cx-property-type"
+/// Parse cortical_area ID from flat key: "_____10c-AREA1-cx-property-type"
 fn parse_cortical_id(key: &str) -> Option<String> {
     if !key.starts_with("_____10c-") {
         return None;
@@ -236,7 +236,7 @@ fn parse_cortical_id(key: &str) -> Option<String> {
     }
 }
 
-/// Process all properties for a cortical area
+/// Process all properties for a cortical_area area
 fn process_area_properties(
     cortical_id: &str,
     flat_blueprint: &serde_json::Map<String, Value>,
@@ -244,7 +244,7 @@ fn process_area_properties(
     area_data: &mut serde_json::Map<String, Value>,
 ) -> EvoResult<()> {
     for (flat_key, flat_value) in flat_blueprint.iter() {
-        // Check if this key belongs to our cortical area
+        // Check if this key belongs to our cortical_area area
         if let Some(key_area_id) = parse_cortical_id(flat_key) {
             if key_area_id != cortical_id {
                 continue;
@@ -322,7 +322,7 @@ fn process_coordinate_property(
     area_data: &mut serde_json::Map<String, Value>,
 ) -> EvoResult<()> {
     // Deterministic coordinate "jitter" for legacy flat genomes:
-    // If a 2D coordinate field is null, we assign a stable, per-cortical-id offset so
+    // If a 2D coordinate field is null, we assign a stable, per-cortical_area-id offset so
     // multiple areas don't overlap at (0,0). This is NOT random (Rust/RTOS compatible).
     const NULL_2D_JITTER_SPREAD: i32 = 30;
 

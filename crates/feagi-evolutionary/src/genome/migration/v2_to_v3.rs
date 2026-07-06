@@ -4,7 +4,7 @@
 //! v2 -> v3 migrator.
 //!
 //! Wraps the existing `crate::genome::migrator::migrate_genome` body
-//! verbatim. That function performs the cortical-ID renames that
+//! verbatim. That function performs the cortical_area-ID renames that
 //! distinguish v2 from v3 (legacy IDs like `iic000`, `_power`, `omot00`
 //! become template-compliant IDs like `svi0____`, `___power`, `mot0____`).
 //!
@@ -60,7 +60,7 @@ impl Migrator for V2ToV3Migrator {
 
         if result.cortical_ids_migrated > 0 {
             diag.record(format!(
-                "renamed {} cortical IDs to v3 template-compliant form",
+                "renamed {} cortical_area IDs to v3 template-compliant form",
                 result.cortical_ids_migrated
             ));
             // Record up to a small number of example renames so diagnostics

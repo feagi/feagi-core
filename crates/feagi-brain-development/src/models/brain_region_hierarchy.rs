@@ -285,9 +285,9 @@ impl BrainRegionHierarchy {
         self.parent_map.get(region_id)
     }
 
-    /// Find which brain region contains a given cortical area
+    /// Find which brain region contains a given cortical_area area
     ///
-    /// Searches all brain regions to find which one contains the specified cortical area.
+    /// Searches all brain regions to find which one contains the specified cortical_area area.
     /// This is used to populate `parent_region_id` in API responses for Brain Visualizer.
     ///
     /// # Arguments
@@ -347,7 +347,7 @@ impl BrainRegionHierarchy {
         descendants
     }
 
-    /// Get all cortical areas in a region and its descendants
+    /// Get all cortical_area areas in a region and its descendants
     pub fn get_all_areas_recursive(&self, region_id: &str) -> HashSet<String> {
         let mut areas = HashSet::new();
 
@@ -368,7 +368,7 @@ impl BrainRegionHierarchy {
         areas
     }
 
-    /// Update a cortical area ID across all brain regions.
+    /// Update a cortical_area area ID across all brain regions.
     pub fn rename_cortical_area_id(&mut self, old_id: &CorticalID, new_id: CorticalID) {
         for region in self.regions.values_mut() {
             if region.cortical_areas.remove(old_id) {

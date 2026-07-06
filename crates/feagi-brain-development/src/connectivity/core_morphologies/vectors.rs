@@ -68,7 +68,7 @@ pub fn apply_vectors_morphology_with_dimensions(
                     }
                     // NOTE: We intentionally do NOT skip creating a synapse when an
                     // outgoing synapse to the same target already exists. Separate
-                    // morphology rules within a cortical mapping (e.g. a `projector`
+                    // morphology rules within a cortical_area mapping (e.g. a `projector`
                     // and a `block_to_block` both declared for the same src->dst pair)
                     // are parallel connections whose weights/PSPs are additive at
                     // propagation time. Dropping the second synapse loses the caller's

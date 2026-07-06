@@ -55,7 +55,7 @@ pub struct TemporalPattern {
     /// Temporal depth used for this pattern
     pub temporal_depth: u32,
 
-    /// Upstream cortical area indices
+    /// Upstream cortical_area area indices
     pub upstream_areas: Vec<u32>,
 
     /// Neuron counts per timestep
@@ -316,7 +316,7 @@ impl BatchPatternDetector {
             .collect()
     }
 
-    /// Cached temporal-pattern count for the given memory cortical area index (0 if none).
+    /// Cached temporal-pattern count for the given memory cortical_area area index (0 if none).
     pub fn cached_pattern_count_for_area(&self, memory_area_idx: u32) -> usize {
         let detectors = self.detectors.lock().unwrap();
         detectors

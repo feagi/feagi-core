@@ -6,9 +6,9 @@ use crate::genomic::FeagiStructuresGenomicError;
 
 /// Brain region metadata (genome representation)
 ///
-/// A brain region is a hierarchical grouping of cortical areas that share
+/// A brain region is a hierarchical grouping of cortical_area areas that share
 /// functional or anatomical characteristics. Regions form a tree structure
-/// where each region can contain multiple cortical areas and sub-regions.
+/// where each region can contain multiple cortical_area areas and sub-regions.
 ///
 /// # Design Notes
 ///
@@ -28,7 +28,7 @@ pub struct BrainRegion {
     /// Functional/anatomical type
     pub region_type: RegionType,
 
-    /// Set of cortical area IDs contained in this region
+    /// Set of cortical_area area IDs contained in this region
     #[serde(default)]
     pub cortical_areas: HashSet<CorticalID>,
 
@@ -71,7 +71,7 @@ impl BrainRegion {
         })
     }
 
-    /// Create a region with initial cortical areas
+    /// Create a region with initial cortical_area areas
     pub fn with_areas(mut self, areas: impl IntoIterator<Item = CorticalID>) -> Self {
         self.cortical_areas.extend(areas);
         self
@@ -83,7 +83,7 @@ impl BrainRegion {
         self
     }
 
-    /// Add a cortical area to this region
+    /// Add a cortical_area area to this region
     ///
     /// Returns `true` if the area was newly added, `false` if it was already present
     ///
@@ -91,7 +91,7 @@ impl BrainRegion {
         self.cortical_areas.insert(area_id)
     }
 
-    /// Remove a cortical area from this region
+    /// Remove a cortical_area area from this region
     ///
     /// Returns `true` if the area was present and removed, `false` if it wasn't present
     ///
@@ -99,22 +99,22 @@ impl BrainRegion {
         self.cortical_areas.remove(area_id)
     }
 
-    /// Check if this region contains a specific cortical area
+    /// Check if this region contains a specific cortical_area area
     pub fn contains_area(&self, area_id: &CorticalID) -> bool {
         self.cortical_areas.contains(area_id)
     }
 
-    /// Get all cortical area IDs in this region
+    /// Get all cortical_area area IDs in this region
     pub fn get_all_areas(&self) -> Vec<&CorticalID> {
         self.cortical_areas.iter().collect()
     }
 
-    /// Get the number of cortical areas in this region
+    /// Get the number of cortical_area areas in this region
     pub fn area_count(&self) -> usize {
         self.cortical_areas.len()
     }
 
-    /// Clear all cortical areas from this region
+    /// Clear all cortical_area areas from this region
     pub fn clear_areas(&mut self) {
         self.cortical_areas.clear();
     }

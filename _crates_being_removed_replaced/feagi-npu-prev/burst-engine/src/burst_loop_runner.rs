@@ -36,7 +36,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 /// Type alias for fire queue sample data structure
 type FireQueueSample = ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
 
-/// Decoded sensory data: list of (cortical ID, XYZP list per cortical area)
+/// Decoded sensory data: list of (cortical_area ID, XYZP list per cortical_area area)
 type SensoryXyzpDecoded = Vec<(
     feagi_genome_definitions::::CorticalID,
     Vec<(u32, u32, u32, f32)>,
@@ -67,7 +67,7 @@ use feagi_potential_voxels::::coord_potential::CorticalMappedXYZPNeuronVoxels;
 
 /// Trait for visualization publishing (abstraction to avoid circular dependency with feagi-io)
 /// Any component that can publish visualization data implements this trait.
-/// Raw fire queue data for a single cortical area
+/// Raw fire queue data for a single cortical_area area
 /// This is the unencoded data that will be serialized by PNS
 #[derive(Debug, Clone)]
 pub struct RawFireQueueData {
@@ -832,7 +832,7 @@ impl BurstLoopRunner {
         cached.map(|arc| (*arc).clone())
     }
 
-    /// Get Fire Ledger window configurations for all cortical areas
+    /// Get Fire Ledger window configurations for all cortical_area areas
     pub fn get_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
         let lock_start = std::time::Instant::now();
         let thread_id = std::thread::current().id();
@@ -857,7 +857,7 @@ impl BurstLoopRunner {
         result
     }
 
-    /// Configure Fire Ledger window size for a specific cortical area
+    /// Configure Fire Ledger window size for a specific cortical_area area
     pub fn configure_fire_ledger_window(
         &mut self,
         cortical_idx: u32,
@@ -889,13 +889,13 @@ impl BurstLoopRunner {
         }
     }
 
-    /// Get FCL sample rate for a specific cortical area
+    /// Get FCL sample rate for a specific cortical_area area
     /// Note: Currently returns global rate as per-area rates not yet implemented
     pub fn get_area_fcl_sample_rate(&self, _area_id: u32) -> f64 {
         *self.fcl_sampler_frequency.lock().unwrap()
     }
 
-    /// Set FCL sample rate for a specific cortical area
+    /// Set FCL sample rate for a specific cortical_area area
     /// Note: Currently sets global rate as per-area rates not yet implemented
     pub fn set_area_fcl_sample_rate(&self, _area_id: u32, sample_rate: f64) {
         *self.fcl_sampler_frequency.lock().unwrap() = sample_rate;
@@ -908,7 +908,7 @@ impl BurstLoopRunner {
     }
 
     /// Refresh cortical_idx -> cortical_id mappings from ConnectomeManager
-    /// This should be called when cortical areas are created/updated
+    /// This should be called when cortical_area areas are created/updated
     /// CRITICAL: This eliminates NPU lock acquisitions that were causing 1-3s delays!
     pub fn refresh_cortical_id_mappings(&self, mappings: ahash::AHashMap<u32, String>) {
         *self.cached_cortical_id_mappings.lock().unwrap() = mappings;
@@ -924,7 +924,7 @@ impl BurstLoopRunner {
     }
 
     /// Refresh cortical_idx -> visualization_voxel_granularity mappings from ConnectomeManager
-    /// This should be called when cortical areas are created/updated
+    /// This should be called when cortical_area areas are created/updated
     pub fn refresh_visualization_granularities(
         &self,
         granularities: ahash::AHashMap<u32, (u32, u32, u32)>,
@@ -949,7 +949,7 @@ impl Drop for BurstLoopRunner {
 /// Aggregate fire queue data into visualization chunks for large-area rendering
 ///
 /// This function aggregates neuron firing data into coarser spatial chunks to reduce
-/// message size for very large cortical areas (>1M neurons). Each chunk represents
+/// message size for very large cortical_area areas (>1M neurons). Each chunk represents
 /// a spatial region and contains aggregated activity (average potential, count).
 ///
 /// # Arguments
@@ -1158,7 +1158,7 @@ fn encode_fire_data_to_xyzp(
     let buffer = byte_container.get_byte_ref().to_vec();
 
     debug!(
-        "[ENCODE-XYZP] ✅ Encoded {} cortical areas into FeagiByteContainer: {} bytes",
+        "[ENCODE-XYZP] ✅ Encoded {} cortical_area areas into FeagiByteContainer: {} bytes",
         cortical_mapped.mappings.len(),
         buffer.len()
     );
@@ -1177,7 +1177,7 @@ fn get_timestamp() -> String {
     dt.format("%Y-%m-%dT%H:%M:%S%.3f").to_string()
 }
 
-/// Decode sensory bytes (FeagiByteContainer) into cortical XYZP list.
+/// Decode sensory bytes (FeagiByteContainer) into cortical_area XYZP list.
 /// Transport-agnostic; same format whether source is ZMQ, WebSocket, or SHM.
 fn decode_sensory_bytes(bytes: &[u8]) -> Result<SensoryXyzpDecoded, String> {
     use feagi_potential_voxels::::coord_potential::CorticalMappedXYZPNeuronVoxels;
@@ -2275,7 +2275,7 @@ fn burst_loop(
                 }
             }
 
-            // Root-cause diagnostics for sustained overruns: identify hottest cortical areas.
+            // Root-cause diagnostics for sustained overruns: identify hottest cortical_area areas.
             // Throttled to every 25 bursts to avoid excessive log volume.
             if severity == "overrun"
                 && burst_num % 25 == 0
@@ -2605,7 +2605,7 @@ fn burst_loop(
                     // If this cortical_id is a MEMORY area, BV only needs the area to appear in the Type 11 stream.
                     // We emit a single point at (0,0,0) (memory areas are conceptually 1x1x1) so the client
                     // can trigger its jelly animation without requiring actual per-neuron coordinates.
-                    // Detect memory areas by decoding cortical ID bytes (deterministic; no hardcoded IDs).
+                    // Detect memory areas by decoding cortical_area ID bytes (deterministic; no hardcoded IDs).
                     // Memory areas may be encoded as custom IDs prefixed by `cmem...`.
                     let is_memory_area =
                         feagi_genome_definitions::::CorticalID::try_from_base_64(
@@ -2772,7 +2772,7 @@ fn burst_loop(
                 let subscriptions = motor_subscriptions.read();
                 let has_motor_subscriptions = !subscriptions.is_empty();
                 debug!(
-                    "[BURST-LOOP] 🎮 MOTOR: Fire snapshot has {} cortical areas (all active areas, motor subscriptions active={})",
+                    "[BURST-LOOP] 🎮 MOTOR: Fire snapshot has {} cortical_area areas (all active areas, motor subscriptions active={})",
                     (**fire_data_arc).len(),
                     has_motor_subscriptions
                 );

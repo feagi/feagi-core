@@ -410,7 +410,7 @@ where
         )
     }
 
-    /// Create neurons for a cortical area with optional z-offset (for batched creation)
+    /// Create neurons for a cortical_area area with optional z-offset (for batched creation)
     /// z_offset: Starting z-coordinate (allows creating neurons at specific depth layers)
     #[allow(clippy::too_many_arguments)]
     pub fn create_cortical_area_neurons_with_z_offset(
@@ -460,7 +460,7 @@ where
         )
     }
 
-    /// Create neurons for a cortical area with optional y and z offsets (for batched creation)
+    /// Create neurons for a cortical_area area with optional y and z offsets (for batched creation)
     /// y_offset: Starting y-coordinate (allows creating neurons at specific row ranges)
     /// z_offset: Starting z-coordinate (allows creating neurons at specific depth layers)
     #[allow(clippy::too_many_arguments)]
@@ -603,7 +603,7 @@ where
         );
     }
 
-    /// Remove a cortical area from the homeostat registry.
+    /// Remove a cortical_area area from the homeostat registry.
     pub fn remove_rate_modulated_leak(&mut self, cortical_idx: u32) {
         dispatch_mut!(self, remove_rate_modulated_leak(cortical_idx));
     }
@@ -803,7 +803,7 @@ where
         dispatch!(self, get_cortical_area_name(area_id))
     }
 
-    /// Resolve registered cortical name (typically `CorticalID::as_base_64()`) to runtime `cortical_idx`.
+    /// Resolve registered cortical_area name (typically `CorticalID::as_base_64()`) to runtime `cortical_idx`.
     pub fn get_cortical_area_id(&self, cortical_name: &str) -> Option<u32> {
         dispatch!(self, get_cortical_area_id(cortical_name))
     }
@@ -886,7 +886,7 @@ where
         )
     }
 
-    /// Reset membrane potentials to zero for all neurons in one cortical area (sparse vs whole brain).
+    /// Reset membrane potentials to zero for all neurons in one cortical_area area (sparse vs whole brain).
     pub fn reset_membrane_potentials_for_cortical_area(&mut self, cortical_area: u32) -> usize {
         dispatch_mut!(
             self,
@@ -894,7 +894,7 @@ where
         )
     }
 
-    /// Clear FCL entries and reset membrane / refractory / consecutive-fire state for one cortical area.
+    /// Clear FCL entries and reset membrane / refractory / consecutive-fire state for one cortical_area area.
     pub fn reset_cortical_area_runtime_state(&mut self, cortical_area: u32) -> usize {
         dispatch_mut!(self, reset_cortical_area_runtime_state(cortical_area))
     }
@@ -911,7 +911,7 @@ where
     }
 
     /// Update postsynaptic potential (PSP) for all existing outgoing synapses
-    /// from neurons in a given cortical area.
+    /// from neurons in a given cortical_area area.
     ///
     /// Returns number of synapses updated.
     pub fn update_cortical_area_postsynaptic_current(
@@ -1007,7 +1007,7 @@ where
         }
     }
 
-    /// Register a dynamic (non-storage-backed) neuron’s cortical mapping (needed for memory neurons).
+    /// Register a dynamic (non-storage-backed) neuron’s cortical_area mapping (needed for memory neurons).
     pub fn register_dynamic_neuron_mapping(
         &mut self,
         neuron_id: u32,
@@ -1046,7 +1046,7 @@ where
         }
     }
 
-    /// Register the twin cortical area mapping for memory replay.
+    /// Register the twin cortical_area area mapping for memory replay.
     pub fn register_memory_twin_mapping(
         &mut self,
         memory_area_idx: u32,

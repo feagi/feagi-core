@@ -34,12 +34,12 @@ impl HashState {
         self.brain_regions_hash.store(value, Ordering::Release);
     }
 
-    /// Get cortical areas hash.
+    /// Get cortical_area areas hash.
     pub fn get_cortical_areas_hash(&self) -> u64 {
         self.cortical_areas_hash.load(Ordering::Acquire)
     }
 
-    /// Set cortical areas hash.
+    /// Set cortical_area areas hash.
     pub fn set_cortical_areas_hash(&self, value: u64) {
         self.cortical_areas_hash.store(value, Ordering::Release);
     }
@@ -64,12 +64,12 @@ impl HashState {
         self.morphologies_hash.store(value, Ordering::Release);
     }
 
-    /// Get cortical mappings hash.
+    /// Get cortical_area mappings hash.
     pub fn get_cortical_mappings_hash(&self) -> u64 {
         self.cortical_mappings_hash.load(Ordering::Acquire)
     }
 
-    /// Set cortical mappings hash.
+    /// Set cortical_area mappings hash.
     pub fn set_cortical_mappings_hash(&self, value: u64) {
         self.cortical_mappings_hash.store(value, Ordering::Release);
     }

@@ -28,7 +28,7 @@ fn test_complete_genome_workflow() {
         "End-to-End Test Genome".to_string(),
     );
 
-    // Add a cortical area (use valid core ID)
+    // Add a cortical_area area (use valid core ID)
     let test_id = feagi_evolutionary::string_to_cortical_id("_power").expect("Valid ID");
     use feagi_genome_definitions::::{
         CorticalArea, CorticalAreaDimensions, CorticalAreaType, CustomCorticalType,
@@ -41,7 +41,7 @@ fn test_complete_genome_workflow() {
         (0, 0, 0).into(),
         CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
     )
-    .expect("Failed to create cortical area");
+    .expect("Failed to create cortical_area area");
 
     genome.cortical_areas.insert(test_id, area);
 
@@ -177,13 +177,13 @@ fn test_flat_dstmap_object_rules_preserved() {
     // - dstmap-d stores rules as objects (not legacy arrays)
     //
     // Historically, `converter_flat_full::process_dstmap` expected array rules and would drop
-    // object rules, resulting in "no cortical mapping" and zero synapses during synaptogenesis.
+    // object rules, resulting in "no cortical_area mapping" and zero synapses during synaptogenesis.
     let flat = json!({
         "genome_id": "flat_dstmap_object_rules_test",
         "genome_title": "Flat dstmap object-rules test",
         "version": "3.0",
         "blueprint": {
-            // src: vision_C (base64 cortical id)
+            // src: vision_C (base64 cortical_area id)
             "_____10c-aXN2aQkABAA=-cx-__name-t": "vision_C",
             "_____10c-aXN2aQkABAA=-cx-_group-t": "IPU",
             "_____10c-aXN2aQkABAA=-cx-___bbx-i": 8,
@@ -193,7 +193,7 @@ fn test_flat_dstmap_object_rules_preserved() {
             "_____10c-aXN2aQkABAA=-cx-rcordy-i": 0,
             "_____10c-aXN2aQkABAA=-cx-rcordz-i": 0,
             "_____10c-aXN2aQkABAA=-cx-dstmap-d": {
-                // dst: oimg Unit 0 (base64 cortical id)
+                // dst: oimg Unit 0 (base64 cortical_area id)
                 "b2ltZwkAAAA=": [
                     {
                         "morphology_id": "projector",

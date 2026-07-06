@@ -43,10 +43,10 @@ fn create_test_manager() -> ConnectomeManager {
     manager
 }
 
-/// Helper to create a cortical area with dimensions
+/// Helper to create a cortical_area area with dimensions
 ///
-/// Creates custom cortical areas using the same approach as other tests:
-/// Custom cortical IDs are 8 bytes starting with 'c' (e.g., b"csrc0000").
+/// Creates custom cortical_area areas using the same approach as other tests:
+/// Custom cortical_area IDs are 8 bytes starting with 'c' (e.g., b"csrc0000").
 fn create_test_area(
     name: &str,
     width: u32,
@@ -56,7 +56,7 @@ fn create_test_area(
 ) -> (CorticalArea, CorticalID) {
     use feagi_genome_definitions::::{CorticalAreaType, CustomCorticalType};
 
-    // Create custom cortical ID: 8 bytes starting with 'c', padded with nulls
+    // Create custom cortical_area ID: 8 bytes starting with 'c', padded with nulls
     // Format: 'c' + up to 7 characters from name, padded to 8 bytes
     let mut id_bytes = [0u8; 8];
     id_bytes[0] = b'c';
@@ -65,7 +65,7 @@ fn create_test_area(
     id_bytes[1..1 + copy_len].copy_from_slice(&name_bytes[..copy_len]);
 
     let cortical_id =
-        CorticalID::try_from_bytes(&id_bytes).expect("Failed to create custom cortical ID");
+        CorticalID::try_from_bytes(&id_bytes).expect("Failed to create custom cortical_area ID");
     let cortical_type = CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire);
 
     let area = CorticalArea::new(
@@ -76,7 +76,7 @@ fn create_test_area(
         (0, 0, 0).into(),
         cortical_type,
     )
-    .expect("Failed to create cortical area");
+    .expect("Failed to create cortical_area area");
     (area, cortical_id)
 }
 
@@ -144,15 +144,15 @@ fn test_projector_morphology_basic() {
         "synapse_attractivity": 100
     });
 
-    // Set up cortical mapping using update_cortical_mapping
+    // Set up cortical_area mapping using update_cortical_mapping
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
-    // Apply cortical mapping
+    // Apply cortical_area mapping
     let synapse_count = manager
         .regenerate_synapses_for_mapping(&src_id, &dst_id)
-        .expect("Failed to apply cortical mapping");
+        .expect("Failed to apply cortical_area mapping");
 
     println!(
         "Created {} synapses via projector morphology",
@@ -196,11 +196,11 @@ fn test_centered_projector_drops_out_of_bounds() {
 
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
     let synapse_count = manager
         .regenerate_synapses_for_mapping(&src_id, &dst_id)
-        .expect("Failed to apply cortical mapping");
+        .expect("Failed to apply cortical_area mapping");
 
     // Only centered 3x3 source region maps into 3x3 destination => 9 synapses.
     assert_eq!(
@@ -290,11 +290,11 @@ fn test_centered_projector_even_dimensions_use_lower_center_anchor() {
 
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
     let synapse_count = manager
         .regenerate_synapses_for_mapping(&src_id, &dst_id)
-        .expect("Failed to apply cortical mapping");
+        .expect("Failed to apply cortical_area mapping");
     assert_eq!(
         synapse_count, 16,
         "All 4x4 source voxels should map in-bounds into 6x6 destination"
@@ -373,11 +373,11 @@ fn test_transpose_morphologies_basic() {
 
         manager
             .update_cortical_mapping(&src_id, &dst_id, vec![rule])
-            .expect("Failed to update cortical mapping");
+            .expect("Failed to update cortical_area mapping");
 
         let synapse_count = manager
             .regenerate_synapses_for_mapping(&src_id, &dst_id)
-            .expect("Failed to apply cortical mapping");
+            .expect("Failed to apply cortical_area mapping");
 
         assert!(
             synapse_count > 0,
@@ -420,11 +420,11 @@ fn test_inhibitory_mapping_creates_inhibitory_synapses() {
 
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
     let synapse_count = manager
         .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical mapping");
+        .expect("Failed to apply cortical_area mapping");
 
     assert!(
         synapse_count > 0,
@@ -507,11 +507,11 @@ fn test_pattern_morphology_origin_to_all() {
 
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
     let synapse_count = manager
         .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical mapping");
+        .expect("Failed to apply cortical_area mapping");
 
     let expected_count = u32::try_from(dst_neurons.len()).expect("Neuron count overflow");
     assert_eq!(
@@ -572,11 +572,11 @@ fn test_first_to_last_morphology_maps_origin_to_destination_max() {
 
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
     let synapse_count = manager
         .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical mapping");
+        .expect("Failed to apply cortical_area mapping");
     assert_eq!(
         synapse_count, 1,
         "first_to_last should create exactly one synapse"
@@ -660,15 +660,15 @@ fn test_block_to_block_morphology_basic() {
         "synapse_attractivity": 100
     });
 
-    // Set up cortical mapping using update_cortical_mapping
+    // Set up cortical_area mapping using update_cortical_mapping
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
-    // Apply cortical mapping
+    // Apply cortical_area mapping
     let synapse_count = manager
         .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical mapping");
+        .expect("Failed to apply cortical_area mapping");
 
     println!(
         "Created {} synapses via block_to_block morphology",
@@ -773,12 +773,12 @@ fn test_synaptogenesis_empty_source_area() {
         "synapse_attractivity": 100
     });
 
-    // Set up cortical mapping using update_cortical_mapping
+    // Set up cortical_area mapping using update_cortical_mapping
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
-    // Apply cortical mapping (should return 0 synapses, not error)
+    // Apply cortical_area mapping (should return 0 synapses, not error)
     let synapse_count = manager
         .apply_cortical_mapping(&src_id)
         .expect("Should handle empty source area gracefully");
@@ -819,12 +819,12 @@ fn test_synaptogenesis_empty_destination_area() {
         "synapse_attractivity": 100
     });
 
-    // Set up cortical mapping using update_cortical_mapping
+    // Set up cortical_area mapping using update_cortical_mapping
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
-    // Apply cortical mapping (should return 0 synapses, not error)
+    // Apply cortical_area mapping (should return 0 synapses, not error)
     let synapse_count = manager
         .apply_cortical_mapping(&src_id)
         .expect("Should handle empty destination area gracefully");
@@ -867,14 +867,14 @@ fn test_synapse_attractivity_parameter() {
         "synapse_attractivity": 0
     });
 
-    // Set up cortical mapping using update_cortical_mapping
+    // Set up cortical_area mapping using update_cortical_mapping
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule_zero])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
     let synapse_count_zero = manager
         .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical mapping with 0% attractivity");
+        .expect("Failed to apply cortical_area mapping with 0% attractivity");
 
     assert_eq!(
         synapse_count_zero, 0,
@@ -921,15 +921,15 @@ fn test_multiple_morphology_rules() {
         "synapse_attractivity": 50
     });
 
-    // Set up cortical mapping with multiple rules using update_cortical_mapping
+    // Set up cortical_area mapping with multiple rules using update_cortical_mapping
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule1, rule2])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
-    // Apply cortical mapping
+    // Apply cortical_area mapping
     let synapse_count = manager
         .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical mapping with multiple rules");
+        .expect("Failed to apply cortical_area mapping with multiple rules");
 
     println!(
         "Created {} synapses via multiple morphology rules",
@@ -1001,11 +1001,11 @@ fn test_parallel_projector_and_block_to_block_preserves_both() {
 
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![projector_rule, block_to_block_rule])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
 
     let synapse_count = manager
         .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical mapping");
+        .expect("Failed to apply cortical_area mapping");
 
     // projector => 10 synapses (z=0..9), block_to_block => 1 additional synapse at z=0
     assert_eq!(
@@ -1155,10 +1155,10 @@ fn test_apply_cortical_mapping_delivers_spikes_to_target() {
 
     manager
         .update_cortical_mapping(&src_id, &dst_id, vec![rule])
-        .expect("Failed to update cortical mapping");
+        .expect("Failed to update cortical_area mapping");
     let synapse_count = manager
         .apply_cortical_mapping(&src_id)
-        .expect("Failed to apply cortical mapping");
+        .expect("Failed to apply cortical_area mapping");
     assert_eq!(
         synapse_count, 1,
         "projector should produce exactly one src->dst synapse for matching 1x1x1 dims"

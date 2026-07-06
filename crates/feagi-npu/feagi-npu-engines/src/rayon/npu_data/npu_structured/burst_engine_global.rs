@@ -73,18 +73,18 @@ where FGQ: FeagiGlobalQuantization, {}
 //endregion
 
 
-/// Contains indexes and offsets for various properties of a cortical area. Indexed by
+/// Contains indexes and offsets for various properties of a cortical_area area. Indexed by
 /// Engine Cortical Index
 pub struct CorticalContextLookup<FGQ: FeagiGlobalQuantization>
 {
-    // NOTE: For byte alignment reasons, put neuron stuff first, as neuron quantization >= cortical area quantization
-    /// Subtract the this from a neurons mp quant index to the get the cortical area local index
+    // NOTE: For byte alignment reasons, put neuron stuff first, as neuron quantization >= cortical_area area quantization
+    /// Subtract the this from a neurons mp quant index to the get the cortical_area area local index
     pub mp_quant_to_local_neuron_index_offset: NPUWrappedNeuronCorticalLocalIndex<FGQ::NeuronIndexCountQuant>,
     pub mp_quant_to_neuron_history_index_offset: NPUWrappedNeuronHistoryIndex<FGQ::NeuronIndexCountQuant>, // Only valid if the neuron model needs history. Otherwise this will just be 0
 
     pub cortical_layout_index: NPUWrappedCorticalLayoutIndex<FGQ::CorticalAreaIndexCountQuant>, // Neuron Flags will disclose what type of layout
     pub neuron_model_cortical_data_index: NPUWrappedNeuronNeuronModelMPQuantIndex<FGQ::CorticalAreaIndexCountQuant>,
-    // NOTE: Base psp potential is a separate array with 1-1 cortical engine index lookup, we don't need it here
+    // NOTE: Base psp potential is a separate array with 1-1 cortical_area engine index lookup, we don't need it here
 }
 
 

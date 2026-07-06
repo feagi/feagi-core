@@ -5,7 +5,7 @@
 Convert hierarchical genome format (RuntimeGenome) to flat genome format (3.0).
 
 The flat format uses keys like "_____10c-AREA1-cx-property-type" with all
-cortical IDs in base64 format. This is the inverse of converter_flat_full.rs.
+cortical_area IDs in base64 format. This is the inverse of converter_flat_full.rs.
 
 Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 /// Convert hierarchical genome (RuntimeGenome) to flat format (3.0)
 ///
 /// This produces the flat genome format compatible with the original essential_genome.json
-/// but with all cortical IDs in base64 format.
+/// but with all cortical_area IDs in base64 format.
 ///
 /// # Arguments
 ///
@@ -32,7 +32,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
     let mut flat_blueprint = serde_json::Map::new();
     let mut visualization_overrides = serde_json::Map::new();
 
-    // Convert each cortical area to flat format
+    // Convert each cortical_area area to flat format
     for (cortical_id, area) in &genome.cortical_areas {
         let cortical_id_base64 = cortical_id.as_base_64();
         convert_area_to_flat(&cortical_id_base64, area, &mut flat_blueprint)?;
@@ -147,7 +147,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
     // Hosts (empty for now)
     flat_genome.insert("hosts".to_string(), json!({}));
 
-    // Brain regions (with cortical IDs converted to base64).
+    // Brain regions (with cortical_area IDs converted to base64).
     // Always emit `brain_regions` (at least `{}`) so JSON round-trips and Python
     // `json.loads` never lose the key when the runtime map is empty (hub / Composer merge).
     let mut brain_regions_map = serde_json::Map::new();
@@ -160,7 +160,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
             serde_json::to_value(region).map_err(|e| crate::EvoError::JsonError(e.to_string()))?;
 
         if let Value::Object(mut props) = region_json {
-            // Convert cortical ID arrays to base64
+            // Convert cortical_area ID arrays to base64
             let keys_to_convert = vec!["areas", "inputs", "outputs", "cortical_areas"];
             for key in keys_to_convert {
                 if let Some(Value::Array(ids)) = props.get(key) {
@@ -192,7 +192,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
     Ok(Value::Object(flat_genome))
 }
 
-/// Convert a single cortical area to flat format keys
+/// Convert a single cortical_area area to flat format keys
 fn convert_area_to_flat(
     cortical_id_base64: &str,
     area: &feagi_genome_definitions::::CorticalArea,
@@ -557,7 +557,7 @@ mod tests {
             stats: GenomeStats::default(),
         };
 
-        // Create test areas with different cortical types
+        // Create test areas with different cortical_area types
         let opu_id = CorticalID::try_from_base_64("b2ltZwkAAAA=").unwrap();
         let opu_area = CorticalArea::new(
             opu_id,

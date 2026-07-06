@@ -30,7 +30,7 @@
 //! │  │    - Reads LatestOnlySharedSlot header + payload       │  │
 //! │  ├────────────────────────────────────────────────────────┤  │
 //! │  │ 2. Decoder (decoder.rs)                                │  │
-//! │  │    - Decodes Type 11 cortical format                   │  │
+//! │  │    - Decodes Type 11 cortical_area format                   │  │
 //! │  │    - Extracts (area_id, coordinates)                   │  │
 //! │  ├────────────────────────────────────────────────────────┤  │
 //! │  │ 3. Coordinate → NeuronID lookup (NPU spatial hash)     │  │

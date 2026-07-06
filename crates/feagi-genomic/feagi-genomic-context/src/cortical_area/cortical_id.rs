@@ -1,11 +1,11 @@
-use crate::genomic::cortical_area::cortical_area_type::{
-    CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType,
-};
-use crate::genomic::FeagiStructuresGenomicError;
-use base64::{engine::general_purpose, Engine as _};
+use base64::Engine;
+use base64::engine::general_purpose;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt::Display;
-use crate::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
+use crate::cortical_area::{CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType};
+use crate::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
+use crate::feagi_genome_context_error::{FeagiCorticalIDErrKey, FeagiGenomeContextError};
+
+// TODO remove base64!
 
 macro_rules! match_bytes_by_cortical_type {
     ($cortical_id_bytes: expr,
@@ -43,7 +43,7 @@ impl CorticalID {
 
     pub fn try_from_bytes(
         bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH],
-    ) -> Result<Self, FeagiStructuresGenomicError> {
+    ) -> Result<Self, FeagiGenomeContextError> {
         match_bytes_by_cortical_type!(bytes,
             custom => {
                 Ok(CorticalID {bytes: *bytes})
@@ -63,51 +63,37 @@ impl CorticalID {
                 Ok(CorticalID {bytes: *bytes})
             },
             invalid => {
-                Err(FeagiStructuresGenomicError::CorticalIdError {
-                    context: "cortical ID bytes do not match a valid cortical type prefix",
-                })
+                Err
+                (
+                    FeagiCorticalIDErrKey::new(
+                        "cortical_area ID bytes do not match a valid cortical_area type prefix"
+                    ).into()
+                )
             },
         )
     }
 
-    pub fn try_from_u64(u: u64) -> Result<Self, FeagiStructuresGenomicError> {
+    pub fn try_from_u64(u: u64) -> Result<Self, FeagiGenomeContextError> {
         let bytes = u.to_be_bytes();
         Self::try_from_bytes(&bytes)
     }
 
-    pub fn try_from_base_64(str: &str) -> Result<Self, FeagiStructuresGenomicError> {
+    pub fn try_from_base_64(str: &str) -> Result<Self, FeagiGenomeContextError> {
         let decoded = general_purpose::STANDARD.decode(str).map_err(|_| {
-            FeagiStructuresGenomicError::CorticalIdError {
-                context: "failed to decode cortical ID from base64",
-            }
+            FeagiCorticalIDErrKey::new(
+                "failed to decode cortical area ID from base64"
+            ).into()
         })?;
 
         if decoded.len() != Self::CORTICAL_ID_LENGTH {
-            return Err(FeagiStructuresGenomicError::CorticalIdError {
-                context: "cortical ID base64 payload has wrong length",
-            });
+            return Err(FeagiCorticalIDErrKey::new(
+                "Base 64 is wrong length for cortical ID"
+            ).into()
+            );
         }
 
         let mut bytes = [0u8; Self::CORTICAL_ID_LENGTH];
         bytes.copy_from_slice(&decoded);
-        Self::try_from_bytes(&bytes)
-    }
-
-    /// Parse legacy 6-char or 8-char ASCII cortical ID strings.
-    /// Normalizes uppercase first byte (C/M/I/O) to lowercase for compatibility with legacy genomes.
-    /// Any other invalid first byte (e.g. v, 0) is treated as custom cortical area ('c').
-    pub fn try_from_legacy_ascii(id_str: &str) -> Result<Self, FeagiStructuresGenomicError> {
-        let mut bytes = [b'_'; Self::CORTICAL_ID_LENGTH];
-        let len = id_str.len().min(8);
-        bytes[..len].copy_from_slice(&id_str.as_bytes()[..len]);
-        bytes[0] = match bytes[0] {
-            b'C' => b'c',
-            b'M' => b'm',
-            b'I' => b'i',
-            b'O' => b'o',
-            b'c' | b'm' | b'_' | b'i' | b'o' => bytes[0],
-            _ => b'c',
-        };
         Self::try_from_bytes(&bytes)
     }
     //endregion
@@ -118,19 +104,19 @@ impl CorticalID {
         bytes.copy_from_slice(&self.bytes)
     }
 
-    /// Extract IO data type configuration from cortical ID bytes
+    /// Extract IO data type configuration from cortical_area ID bytes
     ///
     /// Extracts the data type configuration flag from bytes 4-5 (u16, little-endian)
     /// and converts it to an IOCorticalAreaDataFlag.
     ///
-    /// This is used for both BrainInput and BrainOutput cortical areas.
+    /// This is used for both BrainInput and BrainOutput cortical_area areas.
     #[inline]
-    pub fn extract_io_data_flag(&self) -> Result<IOCorticalAreaConfigurationFlag, FeagiStructuresGenomicError> {
+    pub fn extract_io_data_flag(&self) -> Result<IOCorticalAreaConfigurationFlag, FeagiGenomeContextError> {
         let data_type_config = u16::from_le_bytes([self.bytes[4], self.bytes[5]]);
         IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(data_type_config)
     }
 
-    pub fn as_cortical_type(&self) -> Result<CorticalAreaType, FeagiStructuresGenomicError> {
+    pub fn as_cortical_type(&self) -> Result<CorticalAreaType, FeagiGenomeContextError> {
         match_bytes_by_cortical_type!(self.bytes,
             custom => {
                 // NOTE: Only 1 custom type currently
@@ -150,9 +136,9 @@ impl CorticalID {
                 Ok(CorticalAreaType::BrainOutput(self.extract_io_data_flag()?))
             },
             invalid => {
-                Err(FeagiStructuresGenomicError::CorticalIdError {
-                    context: "cortical ID does not encode a valid cortical area type",
-                })
+                Err(
+                FeagiCorticalIDErrKey::new("cortical_area ID does not encode a valid cortical_area area type").into()
+                )
             },
         )
     }
@@ -169,7 +155,7 @@ impl CorticalID {
         general_purpose::STANDARD.encode(self.bytes)
     }
 
-    /// Extract subtype from cortical ID (e.g., "isvi0___" → "svi")
+    /// Extract subtype from cortical_area ID (e.g., "isvi0___" → "svi")
     /// Returns None for CORE areas or if bytes are invalid UTF-8
     pub fn extract_subtype(&self) -> Option<String> {
         // For IPU/OPU areas, bytes 1-3 contain the subtype
@@ -189,7 +175,7 @@ impl CorticalID {
         }
     }
 
-    /// Extract unit ID from cortical ID (typically byte 4)
+    /// Extract unit ID from cortical_area ID (typically byte 4)
     /// Returns None for CORE/CUSTOM/MEMORY areas
     pub fn extract_unit_id(&self) -> Option<u8> {
         if self.bytes[0] == b'i' || self.bytes[0] == b'o' {
@@ -207,7 +193,7 @@ impl CorticalID {
         }
     }
 
-    /// Extract group ID from cortical ID (similar to unit ID, but may be in different byte)
+    /// Extract group ID from cortical_area ID (similar to unit ID, but may be in different byte)
     /// For now, returns the same as unit_id
     pub fn extract_group_id(&self) -> Option<u8> {
         self.extract_unit_id()
@@ -220,7 +206,7 @@ impl CorticalID {
     //endregion
 }
 
-impl Display for CorticalID {
+impl core::fmt::Display for CorticalID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Use base64 encoding for display instead of UTF-8 to avoid control characters
         write!(f, "{}", self.as_base_64())

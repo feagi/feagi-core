@@ -1,7 +1,7 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Synapse count tests for cortical areas.
+//! Synapse count tests for cortical_area areas.
 //!
 //! These tests validate incoming/outgoing synapse counts per area.
 
@@ -66,7 +66,7 @@ fn create_area_with_dimensions(
         (0, 0, 0).into(),
         area_type,
     )
-    .expect("Failed to create cortical area")
+    .expect("Failed to create cortical_area area")
 }
 
 fn add_area_neurons(manager: &mut ConnectomeManager, cortical_id: &CorticalID) {

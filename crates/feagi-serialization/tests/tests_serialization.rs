@@ -219,7 +219,7 @@ fn test_byte_container_progressive_memory_allocation() {
 
 #[test]
 fn test_byte_container_with_sensory_cortical_id() {
-    // Test serialization with sensory cortical unit IDs
+    // Test serialization with sensory cortical_area unit IDs
     let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
         FrameChangeHandling::Absolute,
         PercentageNeuronPositioning::Linear,
@@ -250,7 +250,7 @@ fn test_byte_container_with_sensory_cortical_id() {
 
 #[test]
 fn test_byte_container_with_segmented_vision() {
-    // Test with a more complex sensor that has multiple cortical areas
+    // Test with a more complex sensor that has multiple cortical_area areas
     let cortical_ids =
         SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
             FrameChangeHandling::Incremental,
@@ -301,7 +301,7 @@ fn test_empty_byte_container() {
 
 #[test]
 fn test_byte_container_multiple_core_types() {
-    // Test with multiple different core cortical types
+    // Test with multiple different core cortical_area types
     let power_id = CoreCorticalType::Power.to_cortical_id();
     let death_id = CoreCorticalType::Death.to_cortical_id();
 
@@ -309,14 +309,14 @@ fn test_byte_container_multiple_core_types() {
 
     let mut neurons = CorticalMappedXYZPNeuronVoxels::new();
 
-    // Add neurons for power cortical area
+    // Add neurons for power cortical_area area
     let mut power_array = NeuronVoxelXYZPSparseVectors::new();
     for i in 0..4 {
         power_array.push_raw(i % 2, i / 2, 0, 0.5);
     }
     neurons.insert(power_id, power_array);
 
-    // Add neurons for death cortical area
+    // Add neurons for death cortical_area area
     let mut death_array = NeuronVoxelXYZPSparseVectors::new();
     for i in 0..4 {
         death_array.push_raw(i % 2, i / 2, 1, 0.7);

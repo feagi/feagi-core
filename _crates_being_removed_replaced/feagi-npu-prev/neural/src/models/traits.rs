@@ -130,7 +130,7 @@ pub trait NeuronModel: Send + Sync {
 /// Trait for model-specific parameter structures
 ///
 /// All neuron models must define a parameter type that implements this trait.
-/// Parameters can be stored per-neuron or per-cortical-area depending on the model.
+/// Parameters can be stored per-neuron or per-cortical_area-area depending on the model.
 pub trait ModelParameters: Clone + Send + Sync + 'static {
     /// Validate that parameters are within acceptable ranges
     ///

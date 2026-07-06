@@ -55,11 +55,11 @@ let decoded = FeagiByteContainer::from_bytes(&bytes)?;
 use feagi_serialization::implementations::cortical_mapped_xyzp_neuron_data::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::genomic::cortical_area::CorticalID;
 
-// Create neuron data mapped to cortical areas
+// Create neuron data mapped to cortical_area areas
 let cortical_id = CorticalID::from_base_64("aXB1MDAw")?;
 let mut data = CorticalMappedXYZPNeuronVoxels::new();
 
-// Add voxels for a cortical area
+// Add voxels for a cortical_area area
 data.insert(cortical_id, vec![(10, 20, 5, 128)]);
 
 // Serialize efficiently

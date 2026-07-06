@@ -594,7 +594,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     Ok(ids) => ids,
                     Err(e) => {
                         warn!(
-                            "⚠️ [API] Failed to derive motor cortical IDs for '{}' group {}: {}",
+                            "⚠️ [API] Failed to derive motor cortical_area IDs for '{}' group {}: {}",
                             motor_unit_key, group_u8, e
                         );
                         continue;
@@ -675,7 +675,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         Ok(v) => v,
                         Err(e) => {
                             warn!(
-                                "⚠️ [API] Failed to check cortical area existence for '{}': {}",
+                                "⚠️ [API] Failed to check cortical_area area existence for '{}': {}",
                                 cortical_id_b64, e
                             );
                             continue;
@@ -727,7 +727,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                                 Ok(v) => v,
                                 Err(e) => {
                                     warn!(
-                                        "⚠️ [API] Failed to fetch existing cortical area '{}': {}",
+                                        "⚠️ [API] Failed to fetch existing cortical_area area '{}': {}",
                                         cortical_id_b64, e
                                     );
                                     continue;
@@ -764,12 +764,12 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                                 .await
                             {
                                 warn!(
-                                    "⚠️ [API] Failed to update cortical area '{}' dimensions/dev_count: {}",
+                                    "⚠️ [API] Failed to update cortical_area area '{}' dimensions/dev_count: {}",
                                     cortical_id_b64, e
                                 );
                             } else {
                                 info!(
-                                    "[API] Updated cortical area '{}' to {} channels (dimensions {:?})",
+                                    "[API] Updated cortical_area area '{}' to {} channels (dimensions {:?})",
                                     cortical_id_b64, device_count, expected_dimensions
                                 );
                             }
@@ -789,7 +789,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                                 .await
                             {
                                 warn!(
-                                    "⚠️ [API] Failed to auto-rename existing motor cortical area '{}': {}",
+                                    "⚠️ [API] Failed to auto-rename existing motor cortical_area area '{}': {}",
                                     cortical_id_b64, e
                                 );
                             }
@@ -946,7 +946,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                     Ok(ids) => ids,
                     Err(e) => {
                         warn!(
-                            "⚠️ [API] Failed to derive sensory cortical IDs for '{}' group {}: {}",
+                            "⚠️ [API] Failed to derive sensory cortical_area IDs for '{}' group {}: {}",
                             sensory_unit_key, group_u8, e
                         );
                         continue;
@@ -1007,7 +1007,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             }
                         }
 
-                        // Sort by cortical unit index so lower-index segmented assemblies stay left and
+                        // Sort by cortical_area unit index so lower-index segmented assemblies stay left and
                         // higher-index assemblies are shifted to the right with a fixed gap.
                         bounds_by_group.sort_by_key(|(grouped_u8, _, _)| *grouped_u8);
 
@@ -1113,7 +1113,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                         Ok(v) => v,
                         Err(e) => {
                             warn!(
-                                "⚠️ [API] Failed to check cortical area existence for '{}': {}",
+                                "⚠️ [API] Failed to check cortical_area area existence for '{}': {}",
                                 cortical_id_b64, e
                             );
                             continue;
@@ -1131,7 +1131,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                             Ok(v) => v,
                             Err(e) => {
                                 warn!(
-                                    "⚠️ [API] Failed to fetch existing cortical area '{}' for potential rename: {}",
+                                    "⚠️ [API] Failed to fetch existing cortical_area area '{}' for potential rename: {}",
                                     cortical_id_b64, e
                                 );
                                 continue;
@@ -1164,12 +1164,12 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                                 .await
                             {
                                 warn!(
-                                    "⚠️ [API] Failed to update sensory cortical area '{}' dimensions/dev_count: {}",
+                                    "⚠️ [API] Failed to update sensory cortical_area area '{}' dimensions/dev_count: {}",
                                     cortical_id_b64, e
                                 );
                             } else {
                                 info!(
-                                    "[API] Updated sensory cortical area '{}' to registration dimensions {:?} (dev_count {})",
+                                    "[API] Updated sensory cortical_area area '{}' to registration dimensions {:?} (dev_count {})",
                                     cortical_id_b64, expected_dimensions, device_count
                                 );
                             }
@@ -1191,7 +1191,7 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
                                 .await
                             {
                                 warn!(
-                                    "⚠️ [API] Failed to auto-rename existing sensory cortical area '{}': {}",
+                                    "⚠️ [API] Failed to auto-rename existing sensory cortical_area area '{}': {}",
                                     cortical_id_b64, e
                                 );
                             }
@@ -1285,13 +1285,13 @@ pub async fn auto_create_cortical_areas_from_device_registrations(
     }
 
     info!(
-        "🦀 [API] Auto-creating {} missing cortical areas from device registrations",
+        "🦀 [API] Auto-creating {} missing cortical_area areas from device registrations",
         to_create.len()
     );
 
     if let Err(e) = genome_service.create_cortical_areas(to_create).await {
         warn!(
-            "⚠️ [API] Failed to auto-create cortical areas from device registrations: {}",
+            "⚠️ [API] Failed to auto-create cortical_area areas from device registrations: {}",
             e
         );
     }
@@ -1360,7 +1360,7 @@ pub fn derive_motor_cortical_ids_from_device_registrations(
             })?;
             let unit_cortical_ids = motor_unit
                 .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(group, config)
-                .map_err(|e| format!("Failed to derive cortical IDs: {}", e))?;
+                .map_err(|e| format!("Failed to derive cortical_area IDs: {}", e))?;
             for cortical_id in unit_cortical_ids {
                 cortical_ids.insert(cortical_id.as_base_64());
             }
@@ -1433,7 +1433,7 @@ pub fn derive_sensory_cortical_ids_from_device_registrations(
             })?;
             let unit_cortical_ids = sensory_unit
                 .get_cortical_id_vector_from_index_and_serde_io_configuration_flags(group, config)
-                .map_err(|e| format!("Failed to derive cortical IDs: {}", e))?;
+                .map_err(|e| format!("Failed to derive cortical_area IDs: {}", e))?;
             for cortical_id in unit_cortical_ids {
                 cortical_ids.insert(cortical_id.as_base_64());
             }

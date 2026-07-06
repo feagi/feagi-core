@@ -157,7 +157,7 @@ pub struct SuccessResponse {
 /// Manual stimulation request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ManualStimulationRequest {
-    /// Map of cortical area IDs to lists of coordinates [[x, y, z], ...]
+    /// Map of cortical_area area IDs to lists of coordinates [[x, y, z], ...]
     pub stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
     /// Legacy optional field. Server applies authoritative force-fire semantics for manual
     /// stimulation (resolved neurons are always placed in the fire queue); this field may be ignored.

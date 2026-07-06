@@ -70,7 +70,7 @@ impl SynapticArrivalSchedule {
 
     /// Remove all pending PSP contributions whose **targets** are in `neuron_ids`.
     ///
-    /// Used when resetting a cortical area so delayed synaptic arrivals (see
+    /// Used when resetting a cortical_area area so delayed synaptic arrivals (see
     /// `docs/SYNAPTIC_DELAY_ARCHITECTURE.md`) and associative-memory buckets do not inject
     /// residual drive on later bursts. `neuron_ids` is typically every regular neuron in the
     /// area and/or memory neuron ids being cleared by plasticity.

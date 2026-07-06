@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::TrainerError;
 
-/// Bin spacing along the cortical column for population coding.
+/// Bin spacing along the cortical_area column for population coding.
 ///
 /// Maps to FEAGI's `PercentageNeuronPositioning` at selection time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,7 +30,7 @@ pub enum BinSpacing {
 pub enum EncodingScheme {
     /// Single spike at the bin matching the value (population/positional coding). Available.
     PopulationSingleSpike {
-        /// Number of bins along the cortical column (the `NeuronDepth`).
+        /// Number of bins along the cortical_area column (the `NeuronDepth`).
         bins: u32,
         /// Bin spacing.
         spacing: BinSpacing,
@@ -54,7 +54,7 @@ pub enum EncodingScheme {
 /// A resolved, available population-coding configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResolvedEncodingScheme {
-    /// Number of bins (the cortical column `NeuronDepth`).
+    /// Number of bins (the cortical_area column `NeuronDepth`).
     pub bins: u32,
     /// Bin spacing.
     pub spacing: BinSpacing,

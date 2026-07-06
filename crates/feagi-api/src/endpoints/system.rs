@@ -63,7 +63,7 @@ pub struct HealthCheckResponse {
     /// Hash of brain regions (hierarchy, membership, and properties)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brain_regions_hash: Option<u64>,
-    /// Hash of cortical areas and properties (excluding mappings)
+    /// Hash of cortical_area areas and properties (excluding mappings)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_areas_hash: Option<u64>,
     /// Hash of brain geometry (area positions/dimensions and 2D coordinates)
@@ -72,7 +72,7 @@ pub struct HealthCheckResponse {
     /// Hash of morphology registry
     #[serde(skip_serializing_if = "Option::is_none")]
     pub morphologies_hash: Option<u64>,
-    /// Hash of cortical mappings
+    /// Hash of cortical_area mappings
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_mappings_hash: Option<u64>,
     /// Hash of agent data (ids, capabilities, connection properties)
@@ -402,7 +402,7 @@ pub async fn set_cortical_area_visualization_skip_rate(
     })))
 }
 
-/// Get the threshold below which cortical areas are suppressed from visualization.
+/// Get the threshold below which cortical_area areas are suppressed from visualization.
 #[utoipa::path(
     get,
     path = "/v1/system/cortical_area_visualization_suppression_threshold",
@@ -420,7 +420,7 @@ pub async fn get_cortical_area_visualization_suppression_threshold(
     Ok(Json(0))
 }
 
-/// Set the threshold for suppressing low-activity cortical areas from visualization.
+/// Set the threshold for suppressing low-activity cortical_area areas from visualization.
 #[utoipa::path(
     put,
     path = "/v1/system/cortical_area_visualization_suppression_threshold",
@@ -575,7 +575,7 @@ pub async fn put_user_preferences(
     )])))
 }
 
-/// Get list of available cortical area types (Sensory, Motor, Custom, Memory, Core).
+/// Get list of available cortical_area area types (Sensory, Motor, Custom, Memory, Core).
 #[utoipa::path(
     get,
     path = "/v1/system/cortical_area_types",

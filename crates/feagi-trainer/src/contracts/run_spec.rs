@@ -48,7 +48,7 @@ pub struct SamplerBinding {
 ///
 /// Encoder/decoder plugins are thin binding *selectors* over FEAGI's existing coders; this
 /// records the concrete selection (the `WrappedIOType` identifier, the chosen coder, the
-/// target/source cortical area, and the frozen coder JSON properties) so the binding is
+/// target/source cortical_area area, and the frozen coder JSON properties) so the binding is
 /// reproducible without this crate depending on the coder library (choice locked in review).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CoderBinding {
@@ -56,7 +56,7 @@ pub struct CoderBinding {
     pub io_type: String,
     /// Concrete FEAGI coder selected for this side of the binding.
     pub coder_id: String,
-    /// Target (encoder) or source (decoder) cortical area id.
+    /// Target (encoder) or source (decoder) cortical_area area id.
     pub cortical_area_id: String,
     /// Frozen coder JSON properties (mirrors `JSON{Encoder,Decoder}Properties`).
     pub properties: serde_json::Value,

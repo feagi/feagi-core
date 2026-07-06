@@ -1,7 +1,7 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! @cursor:critical-path — per-cortical, opt-in homeostatic `leak_coefficient` (see `neural/docs/rate_modulated_leak.md`).
+//! @cursor:critical-path — per-cortical_area, opt-in homeostatic `leak_coefficient` (see `neural/docs/rate_modulated_leak.md`).
 
 use ahash::AHashMap;
 use serde::Deserialize;
@@ -89,7 +89,7 @@ impl RateModulatedLeakRegistry {
         self.areas.remove(&cortical_idx);
     }
 
-    /// Replace registration for a cortical area, or remove if `value` is not an enabled, valid object.
+    /// Replace registration for a cortical_area area, or remove if `value` is not an enabled, valid object.
     pub fn sync_cortical(
         &mut self,
         cortical_idx: u32,

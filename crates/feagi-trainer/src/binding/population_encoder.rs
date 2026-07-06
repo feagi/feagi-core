@@ -2,7 +2,7 @@
 //!
 //! Selects FEAGI's percentage coder (`CountInput` template) and applies it: each scalar
 //! feature in `[0,1]` is written as a `Percentage` and encoded into a single spike at the
-//! matching bin of an N-bin cortical column (population/positional coding). This implements
+//! matching bin of an N-bin cortical_area column (population/positional coding). This implements
 //! no spike-coding math — it configures and drives the native coder (ADR-006, Appendix B).
 //!
 //! Convention for the IRIS slice: the features map to one `CountInput` area at unit index 0
@@ -29,7 +29,7 @@ use crate::contracts::common::{PluginId, PluginRef};
 use crate::contracts::ir_sample::{IRSample, Payload};
 use crate::error::TrainerError;
 
-/// Sensory cortical unit index this encoder writes to for the IRIS slice.
+/// Sensory cortical_area unit index this encoder writes to for the IRIS slice.
 const IRIS_SENSORY_UNIT: u8 = 0;
 
 /// Stateless selector that encodes tabular features via FEAGI population coding.

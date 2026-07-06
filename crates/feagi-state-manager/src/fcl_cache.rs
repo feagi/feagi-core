@@ -3,7 +3,7 @@
 
 //! FCL (Fire Candidate List) window size cache
 //!
-//! Stores per-cortical-area FCL window sizes for the burst engine
+//! Stores per-cortical_area-area FCL window sizes for the burst engine
 
 #[cfg(feature = "std")]
 use ahash::AHashMap;

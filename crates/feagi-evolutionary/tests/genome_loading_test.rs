@@ -25,7 +25,7 @@ fn test_load_barebones_genome() {
     assert_eq!(genome.metadata.version, "2.0");
     assert!(!genome.metadata.genome_id.is_empty());
 
-    // Verify cortical areas (should have _death, _power, and _fatigue)
+    // Verify cortical_area areas (should have _death, _power, and _fatigue)
     assert!(
         genome.cortical_areas.len() >= 3,
         "Expected at least 3 cortical areas, got {}",

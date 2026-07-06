@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*!
-Asynchronous parameter update queue for cortical areas.
+Asynchronous parameter update queue for cortical_area areas.
 
 This queue allows non-blocking parameter updates that are applied between burst cycles,
 preventing lock contention and ensuring zero impact on burst timing even at ultra-high
@@ -27,7 +27,7 @@ pub struct ParameterUpdate {
     pub parameter_name: String,
     /// New value
     pub value: Value,
-    /// Optional cortical area dimensions (for spatial gradient updates)
+    /// Optional cortical_area area dimensions (for spatial gradient updates)
     pub dimensions: Option<(u32, u32, u32)>, // (width, height, depth)
     /// Optional neurons_per_voxel (for spatial gradient updates)
     pub neurons_per_voxel: Option<u32>,

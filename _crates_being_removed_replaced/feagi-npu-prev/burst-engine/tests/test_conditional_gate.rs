@@ -3,7 +3,7 @@
 //! Conditional gate (transistor synapse) integration tests.
 //!
 //! These tests verify that synapses belonging to a gated mapping produce zero
-//! contribution when the gate cortical area has no firing activity, and normal
+//! contribution when the gate cortical_area area has no firing activity, and normal
 //! contribution when the gate area fires.
 //!
 //! Network topology:
@@ -186,7 +186,7 @@ fn test_unregister_gate_restores_propagation() {
     );
 }
 
-/// Registering a gate on an invalid cortical area must return an error.
+/// Registering a gate on an invalid cortical_area area must return an error.
 #[test]
 fn test_register_gate_invalid_area_fails() {
     let (mut npu, _src, _dst, _gate) = create_gate_network();

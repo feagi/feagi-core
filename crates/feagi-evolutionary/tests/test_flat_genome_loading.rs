@@ -39,7 +39,7 @@ fn test_load_barebones_flat_genome() {
     assert!(!blueprint.is_empty(), "Blueprint should not be empty");
 
     println!(
-        "✅ Converted barebones genome: {} cortical areas",
+        "✅ Converted barebones genome: {} cortical_area areas",
         blueprint.len()
     );
 
@@ -55,7 +55,7 @@ fn test_load_barebones_flat_genome() {
         "Should have cortical areas"
     );
     println!(
-        "✅ Loaded as RuntimeGenome: {} cortical areas, {} morphologies",
+        "✅ Loaded as RuntimeGenome: {} cortical_area areas, {} morphologies",
         runtime_genome.cortical_areas.len(),
         runtime_genome.morphologies.count()
     );
@@ -85,7 +85,7 @@ fn test_load_all_flat_genomes() {
                             .and_then(|b| b.as_object())
                             .expect("Missing or invalid blueprint");
 
-                        println!("  ✅ Converted: {} cortical areas", blueprint.len());
+                        println!("  ✅ Converted: {} cortical_area areas", blueprint.len());
                     }
                     Err(e) => {
                         println!("  ❌ Conversion failed: {}", e);

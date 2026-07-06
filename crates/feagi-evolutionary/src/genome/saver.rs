@@ -36,7 +36,7 @@ impl GenomeSaver {
     ///
     /// # Arguments
     ///
-    /// * `cortical_areas` - Map of cortical areas
+    /// * `cortical_areas` - Map of cortical_area areas
     /// * `brain_regions` - Map of brain regions
     /// * `genome_id` - Optional genome ID (generates default if None)
     /// * `genome_title` - Optional genome title
@@ -156,7 +156,7 @@ mod tests {
         let mut cortical_areas = HashMap::new();
         let mut brain_regions = HashMap::new();
 
-        // Create a test cortical area (use valid core ID)
+        // Create a test cortical_area area (use valid core ID)
         use feagi_genome_definitions::::CoreCorticalType;
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(

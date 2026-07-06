@@ -72,7 +72,7 @@ impl JSONInputOutputDefinition {
                 unit.0.verify_valid_structure()?;
                 if unit_indexes.contains(&unit.0.cortical_unit_index) {
                     return Err(FeagiDataError::DeserializationError(
-                        "Duplicate cortical unit indexes found!".into(),
+                        "Duplicate cortical_area unit indexes found!".into(),
                     ));
                 }
                 unit_indexes.push(unit.0.cortical_unit_index);
@@ -84,7 +84,7 @@ impl JSONInputOutputDefinition {
                 unit.0.verify_valid_structure()?;
                 if unit_indexes.contains(&unit.0.cortical_unit_index) {
                     return Err(FeagiDataError::DeserializationError(
-                        "Duplicate cortical unit indexes found!".into(),
+                        "Duplicate cortical_area unit indexes found!".into(),
                     ));
                 }
                 unit_indexes.push(unit.0.cortical_unit_index);
@@ -146,7 +146,7 @@ impl Default for JSONInputOutputDefinition {
     }
 }
 
-/// Defines a cortical unit. Does not include a COder Property directly since the type can vary
+/// Defines a cortical_area unit. Does not include a COder Property directly since the type can vary
 /// between input and output
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct JSONUnitDefinition {
@@ -160,7 +160,7 @@ impl JSONUnitDefinition {
     pub fn verify_valid_structure(&self) -> Result<(), FeagiDataError> {
         if self.device_grouping.is_empty() {
             return Err(FeagiDataError::DeserializationError(
-                "Cannot have a cortical unit of 0 device grouping!".to_string(),
+                "Cannot have a cortical_area unit of 0 device grouping!".to_string(),
             ));
         }
         let number_channels = self.device_grouping.len() as u32;
@@ -184,7 +184,7 @@ impl JSONUnitDefinition {
     }
 }
 
-/// Defines a cortical unit's channel implementations
+/// Defines a cortical_area unit's channel implementations
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct JSONDeviceGrouping {
     pub(crate) friendly_name: Option<String>,
@@ -220,7 +220,7 @@ impl JSONEncoderProperties {
             JSONEncoderProperties::Boolean => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected one cortical id!".to_string(),
+                        "Expected one cortical_area id!".to_string(),
                     ));
                 }
                 BooleanNeuronVoxelXYZPEncoder::new_box(
@@ -231,7 +231,7 @@ impl JSONEncoderProperties {
             JSONEncoderProperties::CartesianPlane(image_frame) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected one cortical id!".to_string(),
+                        "Expected one cortical_area id!".to_string(),
                     ));
                 }
                 CartesianPlaneNeuronVoxelXYZPEncoder::new_box(
@@ -243,7 +243,7 @@ impl JSONEncoderProperties {
             JSONEncoderProperties::MiscData(misc_data_dimensions) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected one cortical id!".to_string(),
+                        "Expected one cortical_area id!".to_string(),
                     ));
                 }
                 MiscDataNeuronVoxelXYZPEncoder::new_box(
@@ -260,7 +260,7 @@ impl JSONEncoderProperties {
             ) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected one cortical id!".to_string(),
+                        "Expected one cortical_area id!".to_string(),
                     ));
                 }
                 PercentageNeuronVoxelXYZPEncoder::new_box(
@@ -275,11 +275,11 @@ impl JSONEncoderProperties {
             JSONEncoderProperties::SegmentedImageFrame(segmented_properties) => {
                 if cortical_ids.len() != 9 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected nine cortical ids!".to_string(),
+                        "Expected nine cortical_area ids!".to_string(),
                     ));
                 }
                 let cortical_ids: [CorticalID; 9] = (*cortical_ids).try_into().map_err(|_| {
-                    FeagiDataError::InternalError("Unable to get cortical ids!".to_string())
+                    FeagiDataError::InternalError("Unable to get cortical_area ids!".to_string())
                 })?;
                 SegmentedImageFrameNeuronVoxelXYZPEncoder::new_box(
                     cortical_ids,
@@ -387,7 +387,7 @@ impl JSONDecoderProperties {
             JSONDecoderProperties::CartesianPlane(image_frame_properties) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected one cortical id!".to_string(),
+                        "Expected one cortical_area id!".to_string(),
                     ));
                 }
                 crate::neuron_voxel_coding::xyzp::decoders::CartesianPlaneNeuronVoxelXYZPDecoder::new_box(
@@ -399,7 +399,7 @@ impl JSONDecoderProperties {
             JSONDecoderProperties::MiscData(misc_data_dimensions) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected one cortical id!".to_string(),
+                        "Expected one cortical_area id!".to_string(),
                     ));
                 }
                 MiscDataNeuronVoxelXYZPDecoder::new_box(
@@ -416,7 +416,7 @@ impl JSONDecoderProperties {
             ) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected one cortical id!".to_string(),
+                        "Expected one cortical_area id!".to_string(),
                     ));
                 }
                 PercentageNeuronVoxelXYZPDecoder::new_box(
@@ -431,7 +431,7 @@ impl JSONDecoderProperties {
             JSONDecoderProperties::PositionalServo(neuron_depth, percentage_neuron_positioning) => {
                 if cortical_ids.len() != 2 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected two cortical ids for PositionalServo!".to_string(),
+                        "Expected two cortical_area ids for PositionalServo!".to_string(),
                     ));
                 }
                 crate::neuron_voxel_coding::xyzp::decoders::PositionalServoNeuronVoxelXYZPDecoder::new_box(
@@ -449,7 +449,7 @@ impl JSONDecoderProperties {
             ) => {
                 if cortical_ids.len() != 2 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected two cortical ids!".to_string(),
+                        "Expected two cortical_area ids!".to_string(),
                     ));
                 }
                 GazePropertiesNeuronVoxelXYZPDecoder::new_box(
@@ -469,7 +469,7 @@ impl JSONDecoderProperties {
             ) => {
                 if cortical_ids.len() != 3 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected three cortical ids for ImageFilteringSettings!".to_string(),
+                        "Expected three cortical_area ids for ImageFilteringSettings!".to_string(),
                     ));
                 }
                 ImageFilteringSettingsNeuronVoxelXYZPDecoder::new_box(
@@ -486,7 +486,7 @@ impl JSONDecoderProperties {
             JSONDecoderProperties::PoseEstimation(pose_properties) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected one cortical id for PoseEstimation!".to_string(),
+                        "Expected one cortical_area id for PoseEstimation!".to_string(),
                     ));
                 }
                 PoseEstimationNeuronVoxelXYZPDecoder::new_box(
@@ -498,7 +498,7 @@ impl JSONDecoderProperties {
             JSONDecoderProperties::SpatialPointer(pointer_properties) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError(
-                        "Expected one cortical id for SpatialPointer!".to_string(),
+                        "Expected one cortical_area id for SpatialPointer!".to_string(),
                     ));
                 }
                 SpatialPointerNeuronVoxelXYZPDecoder::new_box(
@@ -603,7 +603,7 @@ impl JSONDecoderProperties {
                 // vector (SignedPercentage3D).
                 let cortical_id = cortical_ids.first().ok_or_else(|| {
                     FeagiDataError::InternalError(
-                        "Expected one cortical id for SpatialPointer!".to_string(),
+                        "Expected one cortical_area id for SpatialPointer!".to_string(),
                     )
                 })?;
                 match cortical_id.extract_io_data_flag()? {

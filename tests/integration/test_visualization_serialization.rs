@@ -4,10 +4,10 @@
 //! # Integration Test: Neurogenesis → Visualization Serialization
 //!
 //! End-to-end test verifying:
-//! - Genome loading creates cortical areas
+//! - Genome loading creates cortical_area areas
 //! - Areas are registered with NPU using base64 names
 //! - Fire queue can be serialized for visualization
-//! - All cortical types work correctly
+//! - All cortical_area types work correctly
 
 use feagi_bdu::{ConnectomeManager, Neuroembryogenesis};
 use feagi_npu_burst_engine::{RustNPU, DynamicNPU};
@@ -19,7 +19,7 @@ use feagi_npu_burst_engine::backend::CPUBackend;
 use std::sync::{Arc, Mutex};
 use parking_lot::RwLock;
 
-/// Create a minimal test genome with all cortical types
+/// Create a minimal test genome with all cortical_area types
 fn create_test_genome() -> RuntimeGenome {
     use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
     
@@ -95,7 +95,7 @@ fn test_neurogenesis_to_visualization_serialization() {
     neuroembryogenesis.develop_from_genome(&genome)
         .expect("Failed to develop from genome");
     
-    // Step 4: Verify cortical areas are registered in NPU
+    // Step 4: Verify cortical_area areas are registered in NPU
     let npu_lock = npu.lock().unwrap();
     let manager_read = manager.read();
     
@@ -113,7 +113,7 @@ fn test_neurogenesis_to_visualization_serialization() {
             
             // Verify we can decode it back to CorticalID
             let decoded_id = CorticalID::try_from_base_64(&area_name)
-                .expect("Failed to decode cortical ID from base64");
+                .expect("Failed to decode cortical_area ID from base64");
             
             assert_eq!(decoded_id, area.cortical_id,
                       "Decoded ID should match original");
@@ -149,7 +149,7 @@ fn test_neurogenesis_to_visualization_serialization() {
             
             // Verify serialization works (this is what visualization stream does)
             let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_area_name)
-                .expect("Failed to decode fire queue cortical ID");
+                .expect("Failed to decode fire queue cortical_area ID");
             
             assert_eq!(decoded_id, area.cortical_id,
                       "Fire queue serialization failed for area {}", area.cortical_id);
@@ -166,7 +166,7 @@ fn test_neurogenesis_to_visualization_serialization() {
             // Verify we can decode it back to CorticalID
             let base64_name = area_name.unwrap();
             let decoded_id = CorticalID::try_from_base_64(&base64_name)
-                .expect("Failed to decode cortical ID from base64");
+                .expect("Failed to decode cortical_area ID from base64");
             
             assert_eq!(decoded_id, area.cortical_id,
                       "Decoded ID should match original");
@@ -199,7 +199,7 @@ fn test_neurogenesis_to_visualization_serialization() {
             
             // Verify serialization works (this is what visualization stream does)
             let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_area_name)
-                .expect("Failed to decode fire queue cortical ID");
+                .expect("Failed to decode fire queue cortical_area ID");
             
             assert_eq!(decoded_id, area.cortical_id,
                       "Fire queue serialization failed for area {}", area.cortical_id);
@@ -209,7 +209,7 @@ fn test_neurogenesis_to_visualization_serialization() {
 
 #[test]
 fn test_all_cortical_types_in_visualization() {
-    // Test that all cortical types can be serialized correctly
+    // Test that all cortical_area types can be serialized correctly
     let cortical_types = vec![
         (b"___power", "CORE"),
         (b"iav000", "IPU"),
@@ -220,14 +220,14 @@ fn test_all_cortical_types_in_visualization() {
     
     for (bytes, type_name) in &cortical_types {
         let cortical_id = CorticalID::try_from_bytes(bytes)
-            .expect(&format!("Failed to create {} cortical ID", type_name));
+            .expect(&format!("Failed to create {} cortical_area ID", type_name));
         
         // Encode to base64 (as ConnectomeManager does)
         let base64_name = cortical_id.as_base_64();
         
         // Decode back (as visualization stream does)
         let decoded_id = CorticalID::try_from_base_64(&base64_name)
-            .expect(&format!("Failed to decode {} cortical ID", type_name));
+            .expect(&format!("Failed to decode {} cortical_area ID", type_name));
         
         assert_eq!(decoded_id, cortical_id,
                   "{} type round-trip failed", type_name);

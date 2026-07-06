@@ -60,7 +60,7 @@ pub fn decode_type_11_data(&self, buffer: PackedByteArray) -> Dictionary {
     let cortical_mapped: CorticalMappedXYZPNeuronVoxels = 
         container.try_to_structure()?;
     
-    // 4. Return Dictionary with per-cortical-area neuron data:
+    // 4. Return Dictionary with per-cortical_area-area neuron data:
     //    { "area_id": { "x_array": [...], "y_array": [...], 
     //                   "z_array": [...], "p_array": [...] } }
 }
@@ -261,7 +261,7 @@ As of the current implementation:
 // PlasticityCommand sent to burst engine
 PlasticityCommand::RegisterMemoryNeuron {
     neuron_id: NeuronId(12345),
-    area_idx: 42,  // Memory cortical area ID
+    area_idx: 42,  // Memory cortical_area area ID
     threshold: 1.5,
     membrane_potential: 0.0,
 }
@@ -411,7 +411,7 @@ RawFireQueueData {
 
 1. **Start FEAGI with memory cortical areas**:
    ```bash
-   # Ensure genome includes memory cortical areas (e.g., "mem_00")
+   # Ensure genome includes memory cortical_area areas (e.g., "mem_00")
    ```
 
 2. **Connect Brain Visualizer**:

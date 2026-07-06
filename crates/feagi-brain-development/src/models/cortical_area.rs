@@ -20,7 +20,7 @@ pub use feagi_genome_definitions::::{
 
 /// Extension trait providing business logic methods for CorticalArea
 pub trait CorticalAreaExt {
-    /// Create a cortical area with custom properties
+    /// Create a cortical_area area with custom properties
     fn with_properties(self, properties: HashMap<String, serde_json::Value>) -> Self;
 
     /// Add a single property (builder pattern)
@@ -74,7 +74,7 @@ pub trait CorticalAreaExt {
     /// Check if this is an output area
     fn is_output_area(&self) -> bool;
 
-    /// Get cortical group classification
+    /// Get cortical_area group classification
     fn get_cortical_group(&self) -> Option<String>;
 
     /// Get visible flag from properties (defaults to true)
@@ -89,7 +89,7 @@ pub trait CorticalAreaExt {
     /// Get postsynaptic_current from properties
     fn postsynaptic_current(&self) -> f32;
 
-    /// Get psp_uniform_distribution from properties (defaults to true for memory cortical areas,
+    /// Get psp_uniform_distribution from properties (defaults to true for memory cortical_area areas,
     /// false for other types when the key is absent)
     fn psp_uniform_distribution(&self) -> bool;
 
@@ -396,7 +396,7 @@ mod tests {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id
             .as_cortical_type()
-            .expect("Failed to get cortical type");
+            .expect("Failed to get cortical_area type");
         let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,
@@ -419,7 +419,7 @@ mod tests {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id
             .as_cortical_type()
-            .expect("Failed to get cortical type");
+            .expect("Failed to get cortical_area type");
         let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,
@@ -450,7 +450,7 @@ mod tests {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id
             .as_cortical_type()
-            .expect("Failed to get cortical type");
+            .expect("Failed to get cortical_area type");
         let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,

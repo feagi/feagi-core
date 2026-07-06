@@ -1,14 +1,14 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Optional tracing: pairwise chain latency and/or **all neurons that fire** in a traced cortical area.
+//! Optional tracing: pairwise chain latency and/or **all neurons that fire** in a traced cortical_area area.
 //!
 //! @npu-debug-instrumentation: remove or fold into observability API after root-cause.
 //!
 //! Enable with:
 //! - `FEAGI_NPU_TRACE_CHAIN_UPSTREAM=<u32>` and/or `FEAGI_NPU_TRACE_CHAIN_DOWNSTREAM=<u32>`
 //! - `FEAGI_NPU_TRACE_AREA_FIRE_IDS=1` — per burst, log every neuron id that fired in the same
-//!   cortical index as FCL/dynamics trace ([`crate::neural_dynamics::trace_fcl_cortical_idx_for_logging`]).
+//!   cortical_area index as FCL/dynamics trace ([`crate::neural_dynamics::trace_fcl_cortical_idx_for_logging`]).
 //!   Includes `deltas_bursts_since_last_self_fire` for each id (no coordinates; post-neurogenesis ids).
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -81,7 +81,7 @@ fn area_fire_ids_enabled() -> bool {
     })
 }
 
-/// One line per burst when any neuron in the traced cortical area fired: ids + burst deltas since
+/// One line per burst when any neuron in the traced cortical_area area fired: ids + burst deltas since
 /// each neuron's previous fire (same area trace as FCL / dynamics cortical_idx filter).
 pub(crate) fn emit_area_cortical_fire_detail(burst_count: u64, fire_queue: &FireQueue) {
     if !area_fire_ids_enabled() {

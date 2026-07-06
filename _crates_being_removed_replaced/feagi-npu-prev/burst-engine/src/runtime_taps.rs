@@ -23,7 +23,7 @@ use ahash::AHashMap;
 use parking_lot::RwLock;
 use std::sync::OnceLock;
 
-/// One sample of activity within a tap-captured cortical area:
+/// One sample of activity within a tap-captured cortical_area area:
 /// voxel coordinate plus normalised potential (0.0..=1.0).
 #[derive(Debug, Clone, Default)]
 pub struct TapSample {
@@ -33,12 +33,12 @@ pub struct TapSample {
     pub potential: f32,
 }
 
-/// Activity captured for a single cortical area within one burst.
+/// Activity captured for a single cortical_area area within one burst.
 #[derive(Debug, Clone, Default)]
 pub struct AreaActivity {
-    /// Base64 cortical ID (matches the public REST representation).
+    /// Base64 cortical_area ID (matches the public REST representation).
     pub cortical_id: String,
-    /// Internal NPU cortical index (useful for cross-referencing low-level traces).
+    /// Internal NPU cortical_area index (useful for cross-referencing low-level traces).
     pub cortical_idx: u32,
     /// Number of neurons that fired in this area for this burst.
     pub neuron_count: usize,
@@ -71,7 +71,7 @@ pub struct MotorOutputTap {
     pub burst_num: u64,
     /// Wall-clock millisecond timestamp for the area snapshot.
     pub timestamp_ms: i64,
-    /// Per-cortical-area activity in the motor pipeline. This is the unfiltered
+    /// Per-cortical_area-area activity in the motor pipeline. This is the unfiltered
     /// view (what the motor stage sees before per-agent subscription filtering).
     pub areas: Vec<AreaActivity>,
     /// Per-agent publish summaries keyed by agent_id. Entries are updated only
@@ -87,7 +87,7 @@ pub struct SensorInputTap {
     pub burst_num: u64,
     /// Wall-clock millisecond timestamp for the snapshot.
     pub timestamp_ms: i64,
-    /// Per-cortical-area decoded sensory input for the burst.
+    /// Per-cortical_area-area decoded sensory input for the burst.
     pub areas: Vec<AreaActivity>,
 }
 
@@ -106,7 +106,7 @@ pub struct BurstActivitySummary {
     pub burst_num: u64,
     /// Wall-clock millisecond timestamp of the snapshot.
     pub timestamp_ms: i64,
-    /// Number of captured cortical areas that fired at least one neuron this burst.
+    /// Number of captured cortical_area areas that fired at least one neuron this burst.
     pub active_area_count: usize,
     /// Total fired neurons across all captured areas (sum of `AreaActivity::neuron_count`).
     pub total_fired_neurons: usize,

@@ -23,7 +23,7 @@ use std::collections::HashMap;
 // TODO This seems completely unusued. Disabling this for now, we will rewrite it later
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorticalArea {
-    /// Unique typed cortical identifier
+    /// Unique typed cortical_area identifier
     pub cortical_id: CorticalID,
 
     /// Integer index assigned by ConnectomeManager
@@ -48,11 +48,11 @@ pub struct CorticalArea {
 }
 
 impl CorticalArea {
-    /// Create a new cortical area with validation
+    /// Create a new cortical_area area with validation
     ///
     /// # Arguments
     ///
-    /// * `cortical_id` - Unique typed cortical identifier
+    /// * `cortical_id` - Unique typed cortical_area identifier
     /// * `cortical_idx` - Integer index for fast lookups
     /// * `name` - Human-readable name
     /// * `dimensions` - 3D dimensions (width, height, depth)
@@ -74,7 +74,7 @@ impl CorticalArea {
         // Validate name
         if name.trim().is_empty() {
             return Err(FeagiStructuresGenomicError::CorticalAreaError {
-                context: "cortical area name cannot be empty",
+                context: "cortical_area area name cannot be empty",
             });
         }
 

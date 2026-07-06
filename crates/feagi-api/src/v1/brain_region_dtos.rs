@@ -31,7 +31,7 @@ pub struct BrainRegionSummary {
     /// Parent region ID (if any)
     pub parent_id: Option<String>,
 
-    /// List of cortical area IDs in this region
+    /// List of cortical_area area IDs in this region
     pub cortical_areas: Vec<String>,
 
     /// Number of child regions

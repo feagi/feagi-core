@@ -269,7 +269,7 @@ macro_rules! motor_unit_functions {
                     }
                     _ => {
                         return Err(FeagiDataError::InternalError(
-                            "Expected at least one cortical ID for Percentage motor unit".to_string()
+                            "Expected at least one cortical_area ID for Percentage motor unit".to_string()
                         ));
                     }
                 };
@@ -1098,7 +1098,7 @@ impl MotorDeviceCache {
             .get(&(motor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
-                "Unable to find {} of cortical unit index {} in registered motor's list!",
+                "Unable to find {} of cortical_area unit index {} in registered motor's list!",
                 motor_type, unit_index
             )));
         }
@@ -1116,7 +1116,7 @@ impl MotorDeviceCache {
             .get_mut(&(motor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
-                "Unable to find {} of cortical unit index {} in registered motor's list!",
+                "Unable to find {} of cortical_area unit index {} in registered motor's list!",
                 motor_type, unit_index
             )));
         }

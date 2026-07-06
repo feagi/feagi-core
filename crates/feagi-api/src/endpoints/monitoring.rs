@@ -177,7 +177,7 @@ fn default_duration() -> f32 {
     1.0
 }
 
-/// Monitor real-time neuron firing activity for a specific cortical area over a time window.
+/// Monitor real-time neuron firing activity for a specific cortical_area area over a time window.
 #[utoipa::path(
     get,
     path = "/v1/monitoring/cortical_activity",
@@ -200,7 +200,7 @@ pub async fn get_cortical_activity(
 
     info!(
         target: "feagi-api",
-        "Monitoring cortical activity for area={}, duration={}s",
+        "Monitoring cortical_area activity for area={}, duration={}s",
         params.area,
         params.duration
     );
@@ -208,7 +208,7 @@ pub async fn get_cortical_activity(
     let area = connectome_service
         .get_cortical_area(&params.area)
         .await
-        .map_err(|_| ApiError::not_found("cortical area", &params.area))?;
+        .map_err(|_| ApiError::not_found("cortical_area area", &params.area))?;
 
     let cortical_idx = area.cortical_idx;
     let area_name = area.name.clone();

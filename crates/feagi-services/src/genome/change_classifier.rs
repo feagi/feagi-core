@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*!
-Classification system for cortical area changes to enable intelligent update routing.
+Classification system for cortical_area area changes to enable intelligent update routing.
 
-This module determines whether cortical area changes require:
+This module determines whether cortical_area area changes require:
 - Neuron array updates only (parameter changes)
 - Metadata updates only (name changes)
 - Synapse rebuild (structural changes like dimensions/neuron density)
@@ -18,7 +18,7 @@ Licensed under the Apache License, Version 2.0
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
-/// Types of cortical area changes requiring different update strategies
+/// Types of cortical_area area changes requiring different update strategies
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChangeType {
     /// Direct neuron array updates (NO synapse rebuild)
@@ -40,14 +40,14 @@ pub enum ChangeType {
     Hybrid,
 }
 
-/// Classifies cortical area changes to route them to optimal update mechanisms
+/// Classifies cortical_area area changes to route them to optimal update mechanisms
 pub struct CorticalChangeClassifier;
 
 impl CorticalChangeClassifier {
     /// Properties requiring synapse rebuild (affect neuron topology/count/connections)
     ///
     /// CRITICAL: These changes require deleting and rebuilding synapses TO and FROM
-    /// the affected cortical area via localized neuroembryogenesis
+    /// the affected cortical_area area via localized neuroembryogenesis
     pub fn structural_changes() -> HashSet<&'static str> {
         [
             // Dimension changes → neuron count changes → synapse rebuild required
@@ -94,7 +94,7 @@ impl CorticalChangeClassifier {
             "position",
             // Visualization-only aggregation control (BV/UI-driven)
             "visualization_voxel_granularity",
-            // IO coding updates (cortical ID remap)
+            // IO coding updates (cortical_area ID remap)
             "coding_signage",
             "coding_behavior",
             "coding_type",

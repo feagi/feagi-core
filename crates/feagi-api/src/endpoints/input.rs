@@ -74,7 +74,7 @@ pub struct SensorTapSample {
     pub potential: f32,
 }
 
-/// Per-cortical-area sensory activity captured by the sensor tap.
+/// Per-cortical_area-area sensory activity captured by the sensor tap.
 #[derive(Serialize, Clone, Debug, utoipa::ToSchema)]
 pub struct SensorTapArea {
     pub cortical_id: String,
@@ -93,7 +93,7 @@ pub struct SensorSnapshotResponse {
     pub timestamp_ms: i64,
     /// Convenience flag for clients - true when at least one area was captured.
     pub has_data: bool,
-    /// Total cortical areas with sensory input this burst.
+    /// Total cortical_area areas with sensory input this burst.
     pub total_areas: usize,
     /// Total samples across all sensory areas this burst.
     pub total_neurons: usize,
@@ -105,13 +105,13 @@ pub struct SensorSnapshotResponse {
 ///
 /// This taps directly into the sensory ingestion pipeline, surfacing exactly
 /// what the burst loop consumed. Optional `cortical_id` query parameter
-/// filters the `areas` list to a single cortical area.
+/// filters the `areas` list to a single cortical_area area.
 #[utoipa::path(
     get,
     path = "/v1/input/sensor_snapshot/last",
     tag = "input",
     params(
-        ("cortical_id" = Option<String>, Query, description = "Filter areas by base64 cortical id")
+        ("cortical_id" = Option<String>, Query, description = "Filter areas by base64 cortical_area id")
     ),
     responses(
         (status = 200, description = "Latest sensory pipeline snapshot", body = SensorSnapshotResponse),

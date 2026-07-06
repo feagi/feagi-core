@@ -19,7 +19,7 @@
 //! the env-sourced `reward::{EnvironmentRewardPolicy, SurvivalReward}`, and the env-driving use
 //! of `motor_decoder`/`encoder::ObservationEncoder` belonged to the superseded "Topology C —
 //! Trainer drives the sim" model. The live embodied path is the parallel co-agent model
-//! (controller owns physics; Trainer injects training signals on disjoint cortical I/O). These
+//! (controller owns physics; Trainer injects training signals on disjoint cortical_area I/O). These
 //! items are retained for a possible trainer-owned, no-controller sim path only.
 
 pub mod class_decoder;

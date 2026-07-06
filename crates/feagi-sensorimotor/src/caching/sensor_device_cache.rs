@@ -353,7 +353,7 @@ macro_rules! sensor_unit_functions {
     // Raw IMU is a composite, multi-sub-area sensor unit. ONE cache entry per
     // (RawIMU, unit_index) holds the latest 3-axis signed-percentage values for
     // accelerometer, gyroscope, and magnetometer; the encoder spreads them
-    // across the 3 sub-cortical-areas at burst time. Cortical-area sub-index
+    // across the 3 sub-cortical_area-areas at burst time. Cortical-area sub-index
     // ordering (0=accel, 1=gyro, 2=mag) MUST match the template entry and
     // [`RawIMU::get_ordered_sub_components`].
     (@generate_functions
@@ -704,7 +704,7 @@ impl SensorDeviceCache {
 
         let previous_burst = self.previous_burst;
 
-        // TODO see if we can parallelize this to work on multiple cortical areas at once
+        // TODO see if we can parallelize this to work on multiple cortical_area areas at once
         // Iterate over all registered sensor stream caches and encode them
         // CRITICAL: Pass previous_burst (not time_of_burst) so encoder can check if channels were updated since last encoding
         for ((_sensor_type, _unit_index), stream_cache) in
@@ -1027,7 +1027,7 @@ impl SensorDeviceCache {
             .get(&(sensor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
-                "Unable to find {} of cortical unit index {} in registered sensor's list!",
+                "Unable to find {} of cortical_area unit index {} in registered sensor's list!",
                 sensor_type, unit_index
             )));
         }
@@ -1045,7 +1045,7 @@ impl SensorDeviceCache {
             .get_mut(&(sensor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
-                "Unable to find {} of cortical unit index {} in registered sensor's list!",
+                "Unable to find {} of cortical_area unit index {} in registered sensor's list!",
                 sensor_type, unit_index
             )));
         }

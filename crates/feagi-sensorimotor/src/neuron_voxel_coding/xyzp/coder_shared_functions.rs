@@ -43,7 +43,7 @@ pub(crate) fn decode_signed_percentage_from_linear_neurons(
 /// Linear signed percentage on a **single** X column per channel: `z = 0` decodes to **+1.0**,
 /// `z = z_max_depth - 1` decodes to **-1.0**, with averaging when multiple spikes are present.
 ///
-/// This layout matches motor cortical units such as one-wide signed `1×1×N` per device (e.g.
+/// This layout matches motor cortical_area units such as one-wide signed `1×1×N` per device (e.g.
 /// RotaryMotor with linear positioning).
 #[inline]
 pub(crate) fn decode_signed_percentage_from_linear_neurons_along_z(
@@ -106,7 +106,7 @@ pub(crate) fn encode_unsigned_percentage_to_linear_neuron_z_index(
     // Linear inverted mapping: val=1.0 -> idx 0, val=0.0 -> idx z_len-1.
     // The raw `floor((1 - val) * z_len)` yields `z_len` for val=0.0, which is
     // one past the last valid neuron and would silently fail to fire any neuron
-    // in the live cortical area. Clamp to `z_len - 1` so the boundary case
+    // in the live cortical_area area. Clamp to `z_len - 1` so the boundary case
     // still produces a real spike. Discretization implies a residual error of
     // up to `1 / z_len` on the val=0.0 boundary at decode time.
     neuron_indexes_along_z.clear();
@@ -147,7 +147,7 @@ pub(crate) fn encode_signed_percentage_to_linear_neuron_z_index(
     // Linear inverted mapping per lobe: |val|=1.0 -> idx 0, |val|->0+ -> idx z_len-1.
     // Two distinct historical bugs are fixed here:
     //   1) `floor((1 - |val|) * z_len)` yielded `z_len` for |val| -> 0+, one past
-    //      the last valid neuron, so the live cortical area silently failed to fire.
+    //      the last valid neuron, so the live cortical_area area silently failed to fire.
     //      Clamp to `z_len - 1`.
     //   2) The negative branch used `(-1.0 - (-val)) * z_len`, which collapses every
     //      negative value to a (saturating-cast) `0` regardless of magnitude. The
@@ -871,7 +871,7 @@ mod tests {
     /// Regression: the unsigned linear encoder must never produce a z index that
     /// is past `z_len - 1`. The pre-fix implementation returned `z_len` for
     /// val=0.0, which would silently fail to fire any neuron in the live
-    /// cortical area, yielding an asymmetric IPU (fires at val=1.0, silent at
+    /// cortical_area area, yielding an asymmetric IPU (fires at val=1.0, silent at
     /// val=0.0).
     #[test]
     fn unsigned_linear_encoder_never_exceeds_max_z_index() {

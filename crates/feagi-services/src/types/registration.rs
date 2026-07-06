@@ -25,7 +25,7 @@ pub struct TransportConfig {
     pub host: String,
 }
 
-/// Status of a cortical area during registration
+/// Status of a cortical_area area during registration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AreaStatus {
@@ -39,7 +39,7 @@ pub enum AreaStatus {
     Error,
 }
 
-/// Status information for a cortical area
+/// Status information for a cortical_area area
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorticalAreaStatus {
     pub area_name: String,

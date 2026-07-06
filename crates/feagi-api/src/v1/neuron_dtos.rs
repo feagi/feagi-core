@@ -26,7 +26,7 @@ pub struct NeuronInfoResponse {
     /// Cortical area this neuron belongs to
     pub cortical_area: String,
 
-    /// 3D coordinates within the cortical area [x, y, z]
+    /// 3D coordinates within the cortical_area area [x, y, z]
     pub coordinates: [u32; 3],
 
     /// Current membrane potential (mV)
@@ -48,7 +48,7 @@ pub struct CreateNeuronRequest {
     /// Cortical area ID
     pub cortical_area: String,
 
-    /// 3D coordinates within the cortical area [x, y, z]
+    /// 3D coordinates within the cortical_area area [x, y, z]
     pub coordinates: [u32; 3],
 }
 

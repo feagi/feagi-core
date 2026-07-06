@@ -30,7 +30,7 @@ use std::collections::HashSet;
 /// - Cortical type
 ///
 /// **Not yet supported**:
-/// - Complex cortical mappings (dstmap)
+/// - Complex cortical_area mappings (dstmap)
 /// - All neural parameters
 /// - 2D coordinates
 /// - Memory-specific properties
@@ -47,7 +47,7 @@ pub fn convert_flat_to_hierarchical(flat_genome: &Value) -> EvoResult<Value> {
         ));
     };
 
-    // Find all cortical areas
+    // Find all cortical_area areas
     let cortical_areas = extract_cortical_areas(flat_blueprint)?;
 
     // Build hierarchical blueprint
@@ -103,7 +103,7 @@ pub fn convert_flat_to_hierarchical(flat_genome: &Value) -> EvoResult<Value> {
     Ok(Value::Object(hierarchical))
 }
 
-/// Extract all cortical area IDs from flat blueprint
+/// Extract all cortical_area area IDs from flat blueprint
 fn extract_cortical_areas(
     flat_blueprint: &serde_json::Map<String, Value>,
 ) -> EvoResult<HashSet<String>> {
@@ -118,7 +118,7 @@ fn extract_cortical_areas(
     Ok(areas)
 }
 
-/// Parse cortical ID from flat key
+/// Parse cortical_area ID from flat key
 /// Format: "_____10c-AREA1-cx-property-type"
 fn parse_cortical_id(key: &str) -> Option<String> {
     if !key.starts_with("_____10c-") {

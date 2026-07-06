@@ -2,7 +2,7 @@
 //!
 //! `RawIMU` is the composite wrapped data type backing
 //! [`feagi_structures::genomic::SensoryCorticalUnit::RawIMU`]. A single Raw IMU
-//! cortical unit owns THREE sub-cortical-areas (accelerometer, gyroscope,
+//! cortical_area unit owns THREE sub-cortical_area-areas (accelerometer, gyroscope,
 //! magnetometer); this encoder is the analog of
 //! [`SegmentedImageFrameNeuronVoxelXYZPEncoder`](super::SegmentedImageFrameNeuronVoxelXYZPEncoder)
 //! for IMU data: one composite read from the per-channel pipeline cache, three
@@ -61,7 +61,7 @@ impl AxisTripletScratch {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub struct RawIMUNeuronVoxelXYZPEncoder {
-    /// Authoritative cortical-id targets in the canonical Raw IMU sub-area
+    /// Authoritative cortical_area-id targets in the canonical Raw IMU sub-area
     /// order: index 0 = accelerometer, 1 = gyroscope, 2 = magnetometer.
     cortical_write_targets: [CorticalID; RAW_IMU_SUBUNIT_COUNT],
     z_neuron_resolution: NeuronDepth,
@@ -206,7 +206,7 @@ impl NeuronVoxelXYZPEncoder for RawIMUNeuronVoxelXYZPEncoder {
                 Ok(())
             })?;
 
-        // Phase 2 — for each sub-area, ensure its cortical neuron array is
+        // Phase 2 — for each sub-area, ensure its cortical_area neuron array is
         // present-and-cleared, then fold every channel's scratch into it.
         const Y: u32 = 0;
         for sub_index in 0..RAW_IMU_SUBUNIT_COUNT {

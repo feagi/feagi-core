@@ -1144,7 +1144,7 @@ async fn test_auto_create_disabled_skips_creation() {
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
     assert!(areas.is_empty());
 }
 
@@ -1167,7 +1167,7 @@ async fn test_auto_create_enabled_creates_areas() {
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
     assert!(!areas.is_empty());
 }
 
@@ -1193,7 +1193,7 @@ async fn test_auto_create_creates_all_limb_cortical_areas() {
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
     let motor_areas: Vec<_> = areas
         .iter()
         .filter(|a| a.area_type == "motor" || a.cortical_group == "OPU")
@@ -1246,7 +1246,7 @@ async fn test_auto_create_places_segmented_vision_groups_horizontally_by_unit_in
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
 
     let mut group0_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
     let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
@@ -1353,7 +1353,7 @@ async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
             CorticalUnitIndex::from(0u8),
             config,
         )
-        .expect("Generate segmented-vision cortical IDs for group 0");
+        .expect("Generate segmented-vision cortical_area IDs for group 0");
 
     let mut existing_params: Vec<CreateCorticalAreaParams> = Vec::new();
     for (subunit, cortical_id) in existing_ids.iter().enumerate() {
@@ -1403,7 +1403,7 @@ async fn test_auto_create_aligns_segmented_vision_yz_to_existing_scene_group() {
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
 
     let mut group0_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
     let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
@@ -1489,7 +1489,7 @@ async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existi
             CorticalUnitIndex::from(0u8),
             config,
         )
-        .expect("Generate segmented-vision cortical IDs for group 0");
+        .expect("Generate segmented-vision cortical_area IDs for group 0");
 
     state
         .genome_service
@@ -1529,7 +1529,7 @@ async fn test_auto_create_segmented_vision_falls_back_to_template_yz_when_existi
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
 
     let mut group1_by_subunit: HashMap<u8, (i32, i32, i32)> = HashMap::new();
     for area in &areas {
@@ -1587,7 +1587,7 @@ async fn test_auto_create_uses_registration_friendly_name_for_motor_areas() {
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
     assert!(
         areas
             .iter()
@@ -1615,7 +1615,7 @@ async fn test_auto_create_sets_firing_threshold_for_simple_vision() {
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
     let vision_area = areas
         .iter()
         .find(|area| {
@@ -1658,7 +1658,7 @@ async fn test_auto_create_sets_firing_threshold_for_segmented_vision() {
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
 
     let segmented_vision_areas: Vec<_> = areas
         .iter()
@@ -1710,7 +1710,7 @@ async fn test_auto_create_supports_sensory_only_registrations() {
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
     assert!(
         areas.iter().any(|area| area.name == "head_camera"),
         "Expected sensory-only registration to create sensory area with registration name"
@@ -1730,11 +1730,11 @@ async fn test_auto_create_updates_existing_sensory_area_dimensions_from_encoder_
     let state = build_test_state();
     let registrations = sample_sensory_device_registrations_with_large_vision_encoder();
     let sensory_ids = derive_sensory_cortical_ids_from_device_registrations(&registrations)
-        .expect("Failed deriving sensory cortical IDs");
+        .expect("Failed deriving sensory cortical_area IDs");
     let cortical_id = sensory_ids
         .into_iter()
         .next()
-        .expect("Expected a vision cortical ID");
+        .expect("Expected a vision cortical_area ID");
 
     // Pre-create an undersized sensory area to verify auto-create update logic expands it.
     state
@@ -1771,7 +1771,7 @@ async fn test_auto_create_updates_existing_sensory_area_dimensions_from_encoder_
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
     let resized = areas
         .iter()
         .find(|area| area.cortical_id == cortical_id)
@@ -1802,11 +1802,11 @@ async fn test_auto_create_preserves_existing_motor_area_position_while_reconcili
     let state = build_test_state();
     let registrations = sample_motor_device_registrations_with_io_flags();
     let motor_ids = derive_motor_cortical_ids_from_device_registrations(&registrations)
-        .expect("Failed deriving motor cortical IDs");
+        .expect("Failed deriving motor cortical_area IDs");
     let cortical_id = motor_ids
         .into_iter()
         .next()
-        .expect("Expected at least one motor cortical ID");
+        .expect("Expected at least one motor cortical_area ID");
     let preserved_position = (777, 888, 9);
 
     state
@@ -1843,7 +1843,7 @@ async fn test_auto_create_preserves_existing_motor_area_position_while_reconcili
         .connectome_service
         .list_cortical_areas()
         .await
-        .expect("Failed to list cortical areas");
+        .expect("Failed to list cortical_area areas");
     let reconciled = areas
         .iter()
         .find(|area| area.cortical_id == cortical_id)
@@ -2506,12 +2506,12 @@ async fn test_delete_multi_cortical_area_success() {
         .connectome_service
         .create_cortical_area(create_params_1)
         .await
-        .expect("Failed to create first cortical area for multi-delete test");
+        .expect("Failed to create first cortical_area area for multi-delete test");
     state
         .connectome_service
         .create_cortical_area(create_params_2)
         .await
-        .expect("Failed to create second cortical area for multi-delete test");
+        .expect("Failed to create second cortical_area area for multi-delete test");
 
     let response = delete_multi_cortical_area(
         ApiStateExtract(state.clone()),
@@ -2523,19 +2523,19 @@ async fn test_delete_multi_cortical_area_success() {
     let body = response.0;
     assert_eq!(
         body.get("message").map(String::as_str),
-        Some("Deleted 2 cortical areas")
+        Some("Deleted 2 cortical_area areas")
     );
 
     let area_1_exists = state
         .connectome_service
         .cortical_area_exists(&area_1)
         .await
-        .expect("Failed to check first cortical area existence");
+        .expect("Failed to check first cortical_area area existence");
     let area_2_exists = state
         .connectome_service
         .cortical_area_exists(&area_2)
         .await
-        .expect("Failed to check second cortical area existence");
+        .expect("Failed to check second cortical_area area existence");
 
     assert!(!area_1_exists);
     assert!(!area_2_exists);

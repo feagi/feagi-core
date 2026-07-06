@@ -20,7 +20,7 @@ type CoordinateMapValue = (String, u32, u32, u32);
 
 /// Spatial hash system using Morton encoding + Roaring bitmaps
 pub struct MortonSpatialHash {
-    /// Per-cortical-area bitmaps of occupied positions
+    /// Per-cortical_area-area bitmaps of occupied positions
     cortical_bitmaps: Arc<RwLock<AHashMap<String, RoaringBitmap>>>,
 
     /// Map Morton code -> list of neuron IDs at that position
@@ -57,7 +57,7 @@ impl MortonSpatialHash {
 
         let morton_code = morton_encode_3d(x, y, z);
 
-        // Add to cortical bitmap
+        // Add to cortical_area bitmap
         {
             let mut bitmaps = self.cortical_bitmaps.write().unwrap();
             bitmaps

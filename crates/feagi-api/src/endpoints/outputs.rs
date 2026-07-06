@@ -109,7 +109,7 @@ pub struct MotorTapSample {
     pub potential: f32,
 }
 
-/// Per-cortical-area activity captured by the motor tap.
+/// Per-cortical_area-area activity captured by the motor tap.
 #[derive(Serialize, Clone, Debug, utoipa::ToSchema)]
 pub struct MotorTapArea {
     pub cortical_id: String,
@@ -175,7 +175,7 @@ pub struct MotorSnapshotResponse {
     pub timestamp_ms: i64,
     /// Convenience flag for clients - true when at least one area was captured.
     pub has_data: bool,
-    /// Total motor cortical areas seen this burst (before per-agent filtering).
+    /// Total motor cortical_area areas seen this burst (before per-agent filtering).
     pub total_areas: usize,
     /// Total firing neurons across all motor areas this burst.
     pub total_neurons: usize,
@@ -202,7 +202,7 @@ pub struct MotorSnapshotResponse {
     tag = "outputs",
     params(
         ("agent_id" = Option<String>, Query, description = "Filter agents by id"),
-        ("cortical_id" = Option<String>, Query, description = "Filter motor areas to one cortical id (base64)")
+        ("cortical_id" = Option<String>, Query, description = "Filter motor areas to one cortical_area id (base64)")
     ),
     responses(
         (status = 200, description = "Latest motor pipeline snapshot", body = MotorSnapshotResponse),

@@ -62,7 +62,7 @@ impl fmt::Display for SingleVoxelDecodeResult {
     }
 }
 
-/// Dimensions of one channel's voxel block (from cortical area genome).
+/// Dimensions of one channel's voxel block (from cortical_area area genome).
 #[derive(Debug, Clone, Copy)]
 pub struct ChannelDimensions {
     pub x: u32,
@@ -76,10 +76,10 @@ impl ChannelDimensions {
     }
 }
 
-/// Decode a single voxel using encoding from cortical area (genome).
+/// Decode a single voxel using encoding from cortical_area area (genome).
 ///
-/// Used when cortical ID has no binary config (e.g. legacy ASCII IDs). Caller provides
-/// encoding from the cortical area. Uses the same formulas as the primary decode path.
+/// Used when cortical_area ID has no binary config (e.g. legacy ASCII IDs). Caller provides
+/// encoding from the cortical_area area. Uses the same formulas as the primary decode path.
 ///
 /// # Arguments
 /// * `encoding_type` - "linear" or "exponential" (fractional)
@@ -130,13 +130,13 @@ pub fn decode_single_voxel_from_encoding(
     }
 }
 
-/// Decode a single voxel (x, y, z) using cortical ID and channel dimensions.
+/// Decode a single voxel (x, y, z) using cortical_area ID and channel dimensions.
 ///
 /// Uses the exact same formulas as feagi-sensorimotor's batch decoders so that
 /// Brain Visualizer hover display matches what a robot/controller would process.
 ///
 /// # Arguments
-/// * `cortical_id` - The cortical area ID (base64 or parsed)
+/// * `cortical_id` - The cortical_area area ID (base64 or parsed)
 /// * `voxel_x`, `voxel_y`, `voxel_z` - Voxel coordinates
 /// * `channel_dims` - Dimensions per channel (from cortical_dimensions_per_device)
 /// * `device_count` - Number of devices/channels (0 = treat as 1)

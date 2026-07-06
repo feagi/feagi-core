@@ -1,5 +1,5 @@
 
-// TODO cortical area deletions, mapping deletions!
+// TODO cortical_area area deletions, mapping deletions!
 
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::bit_32::NeuronVoxelDimensions;

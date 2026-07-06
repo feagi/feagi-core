@@ -61,7 +61,7 @@ fn create_test_npu() -> RustNPU<StdRuntime, f32, CPUBackend> {
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 20).unwrap();
     // Register test areas 1-20 (avoiding area 1 being treated as Power auto-inject area)
-    // Use unique cortical IDs to avoid conflicts
+    // Use unique cortical_area IDs to avoid conflicts
     for area_id in 1..=20 {
         let cortical_type = if area_id % 2 == 0 {
             CoreCorticalType::Death
@@ -190,7 +190,7 @@ fn test_psp_update_rewrites_existing_outgoing_synapses() {
         "Target should NOT fire before PSP update"
     );
 
-    // Update PSP at the cortical-area level and ensure existing synapses are rewritten in-place.
+    // Update PSP at the cortical_area-area level and ensure existing synapses are rewritten in-place.
     let updated_synapses = npu.update_cortical_area_postsynaptic_current(10, 20.0);
     assert_eq!(
         updated_synapses, 1,

@@ -3,7 +3,7 @@
 
 //! WASM Connectome Service
 //!
-//! Extracts cortical area and brain region data from RuntimeGenome.
+//! Extracts cortical_area area and brain region data from RuntimeGenome.
 
 use async_trait::async_trait;
 use feagi_evolutionary::RuntimeGenome;
@@ -58,7 +58,7 @@ impl WasmConnectomeService {
             .and_then(|v| v.as_f64())
             .unwrap_or(0.1);
 
-        // Determine cortical group and area type from cortical_type
+        // Determine cortical_area group and area type from cortical_type
         // Extract area type string from properties or use default
         let area_type_str = area
             .properties
@@ -297,7 +297,7 @@ impl ConnectomeService for WasmConnectomeService {
 
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
         let cortical_id_parsed = CorticalID::try_from_base_64(cortical_id).map_err(|_| {
-            ServiceError::InvalidInput(format!("Invalid cortical ID format: {}", cortical_id))
+            ServiceError::InvalidInput(format!("Invalid cortical_area ID format: {}", cortical_id))
         })?;
         let area = self
             .genome
@@ -333,7 +333,7 @@ impl ConnectomeService for WasmConnectomeService {
 
     async fn cortical_area_exists(&self, cortical_id: &str) -> ServiceResult<bool> {
         let cortical_id_parsed = CorticalID::try_from_base_64(cortical_id).map_err(|_| {
-            ServiceError::InvalidInput(format!("Invalid cortical ID format: {}", cortical_id))
+            ServiceError::InvalidInput(format!("Invalid cortical_area ID format: {}", cortical_id))
         })?;
         Ok(self.genome.cortical_areas.contains_key(&cortical_id_parsed))
     }
@@ -343,7 +343,7 @@ impl ConnectomeService for WasmConnectomeService {
         cortical_id: &str,
     ) -> ServiceResult<std::collections::HashMap<String, serde_json::Value>> {
         let cortical_id_parsed = CorticalID::try_from_base_64(cortical_id).map_err(|_| {
-            ServiceError::InvalidInput(format!("Invalid cortical ID format: {}", cortical_id))
+            ServiceError::InvalidInput(format!("Invalid cortical_area ID format: {}", cortical_id))
         })?;
         let area = self
             .genome

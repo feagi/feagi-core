@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 /// GET /v1/region/regions_members
 ///
-/// Returns all brain regions with their member cortical areas
+/// Returns all brain regions with their member cortical_area areas
 ///
 /// Example response:
 /// ```json
@@ -598,7 +598,7 @@ pub async fn put_change_region_parent(
 }
 
 /// PUT /v1/region/change_cortical_area_region
-/// Change the region association of a cortical area
+/// Change the region association of a cortical_area area
 #[utoipa::path(
     put,
     path = "/v1/region/change_cortical_area_region",

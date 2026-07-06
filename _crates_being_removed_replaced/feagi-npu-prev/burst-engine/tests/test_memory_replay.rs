@@ -16,7 +16,7 @@ fn create_npu() -> RustNPU<StdRuntime, f32, CPUBackend> {
     RustNPU::new(runtime, backend, 100, 1000, 10).expect("Failed to create NPU")
 }
 
-/// Add a single neuron at the given cortical area and coordinates.
+/// Add a single neuron at the given cortical_area area and coordinates.
 fn add_neuron_at(
     npu: &mut RustNPU<StdRuntime, f32, CPUBackend>,
     cortical_idx: u32,

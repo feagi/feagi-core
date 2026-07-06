@@ -427,12 +427,12 @@ impl MemoryMappedState {
         new_count
     }
 
-    /// Get cortical area count (atomic read)
+    /// Get cortical_area area count (atomic read)
     pub fn get_cortical_area_count(&self) -> u32 {
         self.cortical_area_count.load(Ordering::Acquire)
     }
 
-    /// Set cortical area count (atomic write)
+    /// Set cortical_area area count (atomic write)
     pub fn set_cortical_area_count(&self, count: u32) {
         self.cortical_area_count.store(count, Ordering::Release);
         self.increment_version();

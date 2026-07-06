@@ -390,10 +390,10 @@ lazy_static::lazy_static! {
         .buckets(vec![0.1, 0.5, 1.0, 5.0, 10.0, 30.0, 60.0])
     ).unwrap();
     
-    /// Number of cortical areas in current genome
+    /// Number of cortical_area areas in current genome
     pub static ref CORTICAL_AREAS: Gauge = Gauge::new(
         "feagi_cortical_areas",
-        "Number of cortical areas"
+        "Number of cortical_area areas"
     ).unwrap();
 }
 

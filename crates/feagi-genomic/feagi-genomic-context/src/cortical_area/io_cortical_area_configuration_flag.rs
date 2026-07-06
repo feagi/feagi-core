@@ -1,8 +1,8 @@
-use crate::genomic::cortical_area::descriptors::{CorticalSubUnitIndex, CorticalUnitIndex};
-use crate::genomic::cortical_area::CorticalID;
-use crate::genomic::FeagiStructuresGenomicError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use crate::cortical_area::CorticalID;
+use crate::cortical_unit::{CorticalSubUnitIndex, CorticalUnitIndex};
+use crate::feagi_genome_context_error::{FeagiCorticalConfigurationFlagErrKey, FeagiGenomeContextError};
 
 pub type IOCorticalAreaConfigurationFlagBitmask = u16; // 16 Total bits
 
@@ -17,7 +17,7 @@ pub mod bit_indexes {
                                              // Bits 13-15 -> RESERVED
 }
 
-/// Different types of Input/Output cortical areas exist, and have their own nested configurations. This enum defines that
+/// Different types of Input/Output cortical_area areas exist, and have their own nested configurations. This enum defines that
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize)]
 pub enum IOCorticalAreaConfigurationFlag {
     Boolean,
@@ -37,7 +37,7 @@ pub enum IOCorticalAreaConfigurationFlag {
 impl IOCorticalAreaConfigurationFlag {
     pub const fn try_from_data_type_configuration_flag(
         value: IOCorticalAreaConfigurationFlagBitmask,
-    ) -> Result<Self, FeagiStructuresGenomicError> {
+    ) -> Result<Self, FeagiGenomeContextError> {
         let variant = value & 0xFF; // Bits 0-7
         let frame_handling = (value >> bit_indexes::FRAME_CHANGE_HANDLING) & 0x01;
         let positioning = (value >> bit_indexes::PERCENTAGE_NEURON_POSITIONING) & 0x01;
@@ -46,9 +46,11 @@ impl IOCorticalAreaConfigurationFlag {
             0 => FrameChangeHandling::Absolute,
             1 => FrameChangeHandling::Incremental,
             _ => {
-                return Err(FeagiStructuresGenomicError::CorticalAreaError {
-                    context: "invalid frame handling bit in IO cortical configuration flag",
-                });
+                return Err(
+                    FeagiCorticalConfigurationFlagErrKey::new(
+                        "invalid frame handling bit in IO cortical_area configuration flag"
+                    ).into()
+                );
             }
         };
 
@@ -56,9 +58,10 @@ impl IOCorticalAreaConfigurationFlag {
             0 => PercentageNeuronPositioning::Linear,
             1 => PercentageNeuronPositioning::Fractional,
             _ => {
-                return Err(FeagiStructuresGenomicError::CorticalAreaError {
-                    context: "invalid neuron positioning bit in IO cortical configuration flag",
-                });
+                return Err(
+                    FeagiCorticalConfigurationFlagErrKey::new(
+                        "invalid neuron positioning bit in IO cortical_area configuration flag"
+                    ).into());
             }
         };
 
@@ -98,9 +101,10 @@ impl IOCorticalAreaConfigurationFlag {
             )),
             9 => {
                 if positioning != 0 {
-                    return Err(FeagiStructuresGenomicError::CorticalAreaError {
-                        context: "IO CartesianPlane configuration does not allow positioning",
-                    });
+                    return Err(
+                        FeagiCorticalConfigurationFlagErrKey::new(
+                            "IO CartesianPlane configuration does not allow positioning"
+                        ).into());
                 }
                 Ok(IOCorticalAreaConfigurationFlag::CartesianPlane(
                     frame_handling_enum,
@@ -108,17 +112,19 @@ impl IOCorticalAreaConfigurationFlag {
             }
             10 => {
                 if positioning != 0 {
-                    return Err(FeagiStructuresGenomicError::CorticalAreaError {
-                        context: "IO Misc configuration does not allow positioning",
-                    });
+                    return Err(
+                        FeagiCorticalConfigurationFlagErrKey::new(
+                            "IO Misc configuration does not allow positioning"
+                        ).into());
                 }
                 Ok(IOCorticalAreaConfigurationFlag::Misc(frame_handling_enum))
             }
             11 => {
                 if positioning != 0 {
-                    return Err(FeagiStructuresGenomicError::CorticalAreaError {
-                        context: "PoseEstimation variant does not support positioning parameter",
-                    });
+                    return Err(
+                        FeagiCorticalConfigurationFlagErrKey::new(
+                            "PoseEstimation variant does not support positioning parameter"
+                        ).into());
                 }
                 let pose_schema_bits =
                     (value >> bit_indexes::POSE_SCHEMA_START) & bit_indexes::POSE_SCHEMA_MASK;
@@ -132,9 +138,10 @@ impl IOCorticalAreaConfigurationFlag {
                     6 => PoseSchema::Object6DoF,
                     7 => PoseSchema::Custom,
                     _ => {
-                        return Err(FeagiStructuresGenomicError::CorticalAreaError {
-                            context: "invalid PoseSchema bits in IO cortical configuration flag",
-                        });
+                        return Err(
+                            FeagiCorticalConfigurationFlagErrKey::new(
+                                "invalid PoseSchema bits in IO cortical_area configuration flag"
+                            ).into() );
                     }
                 };
                 Ok(IOCorticalAreaConfigurationFlag::PoseEstimation(
@@ -142,9 +149,11 @@ impl IOCorticalAreaConfigurationFlag {
                     pose_schema,
                 ))
             }
-            _ => Err(FeagiStructuresGenomicError::CorticalAreaError {
-                context: "invalid IO cortical configuration variant",
-            }),
+            _ => Err(
+                FeagiCorticalConfigurationFlagErrKey::new(
+                    "invalid IO cortical_area configuration variant"
+                ).into()
+            ),
         }
     }
 
@@ -238,7 +247,7 @@ impl From<IOCorticalAreaConfigurationFlag> for IOCorticalAreaConfigurationFlagBi
 }
 
 impl TryFrom<IOCorticalAreaConfigurationFlagBitmask> for IOCorticalAreaConfigurationFlag {
-    type Error = FeagiStructuresGenomicError;
+    type Error = FeagiGenomeContextError;
 
     fn try_from(value: IOCorticalAreaConfigurationFlagBitmask) -> Result<Self, Self::Error> {
         IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(value)
@@ -295,7 +304,7 @@ pub enum PercentageNeuronPositioning {
 impl PercentageNeuronPositioning {
     pub fn try_from_serde_map(
         map: &serde_json::Map<String, serde_json::Value>,
-    ) -> Result<PercentageNeuronPositioning, FeagiStructuresGenomicError> {
+    ) -> Result<PercentageNeuronPositioning, FeagiGenomeContextError> {
         let val = map.get("percentage_neuron_positioning").ok_or(
             FeagiStructuresGenomicError::CorticalAreaError {
                 context: "missing or invalid percentage_neuron_positioning in serde map",
@@ -320,7 +329,7 @@ impl fmt::Display for PercentageNeuronPositioning {
     }
 }
 
-/// Returns the area configuration flag for a SpatialPointer cortical area.
+/// Returns the area configuration flag for a SpatialPointer cortical_area area.
 ///
 /// SpatialPointer encodes its decode mechanism in the area's data type so the genome is
 /// self-describing for consumers:
@@ -357,7 +366,7 @@ pub enum FrameChangeHandling {
 impl FrameChangeHandling {
     pub fn try_from_serde_map(
         map: &serde_json::Map<String, serde_json::Value>,
-    ) -> Result<FrameChangeHandling, FeagiStructuresGenomicError> {
+    ) -> Result<FrameChangeHandling, FeagiGenomeContextError> {
         let val = map
             .get("frame_change_handling")
             .ok_or(FeagiStructuresGenomicError::CorticalAreaError {
@@ -381,7 +390,7 @@ impl fmt::Display for FrameChangeHandling {
     }
 }
 
-/// Pose estimation schema encoded in the cortical ID (bits 10-12, 3 bits = 8 values).
+/// Pose estimation schema encoded in the cortical_area ID (bits 10-12, 3 bits = 8 values).
 /// The super class identifies the joint topology; combined with Z depth it uniquely
 /// determines the sub-class (e.g. HumanBody + Z=17 = COCO-17).
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
@@ -422,7 +431,7 @@ impl PoseSchema {
             6 => Ok(PoseSchema::Object6DoF),
             7 => Ok(PoseSchema::Custom),
             _ => Err(FeagiStructuresGenomicError::CorticalAreaError {
-                context: "invalid PoseSchema bits in IO cortical configuration flag",
+                context: "invalid PoseSchema bits in IO cortical_area configuration flag",
             }),
         }
     }

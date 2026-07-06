@@ -83,7 +83,7 @@ pub async fn post_mapping_properties(
 
     let connectome_service = state.connectome_service.as_ref();
 
-    // Get source cortical area
+    // Get source cortical_area area
     let src_area_info = connectome_service
         .get_cortical_area(src_area)
         .await
@@ -323,7 +323,7 @@ pub async fn put_mapping_properties(
 
     info!(
         target: "feagi-api",
-        "PUT cortical mapping: {} -> {} with {} connections",
+        "PUT cortical_area mapping: {} -> {} with {} connections",
         src_area,
         dst_area,
         mapping_string.len()
@@ -332,7 +332,7 @@ pub async fn put_mapping_properties(
 
     let connectome_service = state.connectome_service.as_ref();
 
-    // Update the cortical mapping (this modifies ConnectomeManager and regenerates synapses)
+    // Update the cortical_area mapping (this modifies ConnectomeManager and regenerates synapses)
     let synapse_count = connectome_service
         .update_cortical_mapping(
             src_area.to_string(),
@@ -343,7 +343,7 @@ pub async fn put_mapping_properties(
         .map_err(|e| match e {
             feagi_services::types::ServiceError::InvalidInput(msg) => ApiError::invalid_input(msg),
             feagi_services::types::ServiceError::Conflict(msg) => ApiError::conflict(msg),
-            _ => ApiError::internal(format!("Failed to update cortical mapping: {}", e)),
+            _ => ApiError::internal(format!("Failed to update cortical_area mapping: {}", e)),
         })?;
 
     info!(target: "feagi-api", "Cortical mapping updated successfully: {} synapses created", synapse_count);
@@ -368,14 +368,14 @@ pub async fn put_mapping_properties(
 }
 
 /// GET /v1/cortical_mapping/mapping
-/// Get specific cortical mapping between two areas
+/// Get specific cortical_area mapping between two areas
 #[utoipa::path(
     get,
     path = "/v1/cortical_mapping/mapping",
     tag = "cortical_mapping",
     params(
-        ("src_cortical_area" = String, Query, description = "Source cortical area ID"),
-        ("dst_cortical_area" = String, Query, description = "Destination cortical area ID")
+        ("src_cortical_area" = String, Query, description = "Source cortical_area area ID"),
+        ("dst_cortical_area" = String, Query, description = "Destination cortical_area area ID")
     ),
     responses(
         (status = 200, description = "Mapping properties", body = HashMap<String, serde_json::Value>)
@@ -395,7 +395,7 @@ pub async fn get_mapping(
     // Get mapping properties directly (avoid recursion)
     let connectome_service = state.connectome_service.as_ref();
 
-    // Get source cortical area
+    // Get source cortical_area area
     let src_area_info = connectome_service
         .get_cortical_area(src_area)
         .await
@@ -429,7 +429,7 @@ pub async fn get_mapping(
 }
 
 /// GET /v1/cortical_mapping/mapping_list
-/// Get list of all cortical mappings
+/// Get list of all cortical_area mappings
 #[utoipa::path(
     get,
     path = "/v1/cortical_mapping/mapping_list",
@@ -469,7 +469,7 @@ pub async fn get_mapping_list(State(state): State<ApiState>) -> ApiResult<Json<V
 
 /// DELETE /v1/cortical_mapping/mapping
 ///
-/// Delete the cortical mapping between two areas. This clears the rule data on the source
+/// Delete the cortical_area mapping between two areas. This clears the rule data on the source
 /// area, prunes all synapses from `src_cortical_area` to `dst_cortical_area`, and persists
 /// the change to the RuntimeGenome. Equivalent to `PUT /v1/cortical_mapping/mapping_properties`
 /// with `mapping_string=[]`, but exposes a clean DELETE semantic for clients that need to
@@ -483,8 +483,8 @@ pub async fn get_mapping_list(State(state): State<ApiState>) -> ApiResult<Json<V
     path = "/v1/cortical_mapping/mapping",
     tag = "cortical_mapping",
     params(
-        ("src_cortical_area" = String, Query, description = "Source cortical area ID"),
-        ("dst_cortical_area" = String, Query, description = "Destination cortical area ID")
+        ("src_cortical_area" = String, Query, description = "Source cortical_area area ID"),
+        ("dst_cortical_area" = String, Query, description = "Destination cortical_area area ID")
     ),
     responses(
         (status = 200, description = "Mapping deleted", body = HashMap<String, serde_json::Value>),
@@ -510,7 +510,7 @@ pub async fn delete_mapping(
 
     info!(
         target: "feagi-api",
-        "DELETE cortical mapping: {} -> {}",
+        "DELETE cortical_area mapping: {} -> {}",
         src_area,
         dst_area
     );
@@ -528,7 +528,7 @@ pub async fn delete_mapping(
         .map_err(|e| match e {
             feagi_services::types::ServiceError::InvalidInput(msg) => ApiError::invalid_input(msg),
             feagi_services::types::ServiceError::Conflict(msg) => ApiError::conflict(msg),
-            _ => ApiError::internal(format!("Failed to delete cortical mapping: {}", e)),
+            _ => ApiError::internal(format!("Failed to delete cortical_area mapping: {}", e)),
         })?;
 
     info!(
@@ -558,7 +558,7 @@ pub async fn delete_mapping(
 }
 
 /// POST /v1/cortical_mapping/batch_update
-/// Batch update multiple cortical mappings
+/// Batch update multiple cortical_area mappings
 #[utoipa::path(
     post,
     path = "/v1/cortical_mapping/batch_update",

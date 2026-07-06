@@ -325,7 +325,7 @@ pub async fn get_file_name(
     )])))
 }
 
-/// Get list of available circuit templates from the circuit library.
+/// Get list of available circuit cortical_units from the circuit library.
 #[utoipa::path(get, path = "/v1/genome/circuits", tag = "genome")]
 pub async fn get_circuits(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     // TODO: Get available circuit library
@@ -395,7 +395,7 @@ pub async fn post_amalgamation_destination(
 
     // 1) Create a new brain region to host the imported circuit.
     // Note: ConnectomeServiceImpl shares the same RuntimeGenome Arc with GenomeServiceImpl, so
-    // persisting the region into the RuntimeGenome is required for subsequent cortical-area creation.
+    // persisting the region into the RuntimeGenome is required for subsequent cortical_area-area creation.
     let connectome_service = state.connectome_service.as_ref();
 
     let mut region_properties: HashMap<String, serde_json::Value> = HashMap::new();
@@ -426,9 +426,9 @@ pub async fn post_amalgamation_destination(
             ApiError::internal(format!("Failed to create amalgamation brain region: {}", e))
         })?;
 
-    // 2) Import cortical areas into that region.
+    // 2) Import cortical_area areas into that region.
     //
-    // - Guest **Custom** and **Memory** cortical IDs are remapped to fresh IDs that do not
+    // - Guest **Custom** and **Memory** cortical_area IDs are remapped to fresh IDs that do not
     //   collide with the host (or with each other), and `cortical_mapping_dst` keys / brain
     //   region membership are updated accordingly. This preserves the full guest circuit instead
     //   of skipping shared template custom areas.
@@ -446,7 +446,7 @@ pub async fn post_amalgamation_destination(
     let host_cortical_ids: std::collections::HashSet<String> = connectome_service
         .get_cortical_area_ids()
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to list cortical area IDs: {}", e)))?
+        .map_err(|e| ApiError::internal(format!("Failed to list cortical_area area IDs: {}", e)))?
         .into_iter()
         .collect();
 
@@ -457,7 +457,7 @@ pub async fn post_amalgamation_destination(
         )
         .map_err(|e| {
             ApiError::internal(format!(
-                "Amalgamation guest cortical ID remapping failed: {}",
+                "Amalgamation guest cortical_area ID remapping failed: {}",
                 e
             ))
         })?;
@@ -466,7 +466,7 @@ pub async fn post_amalgamation_destination(
     if guest_custom_memory_id_remap_count > 0 {
         tracing::info!(
             target: "feagi-api",
-            "🧬 [AMALGAMATION] Remapped {} guest Custom/Memory cortical IDs before import",
+            "🧬 [AMALGAMATION] Remapped {} guest Custom/Memory cortical_area IDs before import",
             guest_custom_memory_id_remap_count
         );
     }
@@ -488,7 +488,7 @@ pub async fn post_amalgamation_destination(
             .await
             .map_err(|e| {
                 ApiError::internal(format!(
-                    "Failed to check existing cortical area {}: {}",
+                    "Failed to check existing cortical_area area {}: {}",
                     cortical_id, e
                 ))
             })?;
@@ -506,7 +506,7 @@ pub async fn post_amalgamation_destination(
         // IPU/OPU areas MUST go to root region, all others go to the amalgamation region
         let area_type = area.cortical_id.as_cortical_type().map_err(|e| {
             ApiError::internal(format!(
-                "Failed to get cortical area type for {}: {}",
+                "Failed to get cortical_area area type for {}: {}",
                 cortical_id, e
             ))
         })?;
@@ -625,10 +625,10 @@ pub async fn post_amalgamation_destination(
         genome_service
             .create_cortical_areas(to_create)
             .await
-            .map_err(|e| ApiError::internal(format!("Failed to import cortical areas: {}", e)))?;
+            .map_err(|e| ApiError::internal(format!("Failed to import cortical_area areas: {}", e)))?;
     }
 
-    // 3) Import morphologies used by the imported areas' cortical mappings.
+    // 3) Import morphologies used by the imported areas' cortical_area mappings.
     //
     // Collect all morphology IDs referenced in the cortical_mapping_dst of imported areas,
     // then import those morphologies from the imported genome into the current genome.
@@ -735,7 +735,7 @@ pub async fn post_amalgamation_destination(
         );
     }
 
-    // 4) Import cortical mappings from the guest genome.
+    // 4) Import cortical_area mappings from the guest genome.
     //
     // **Source** must be a newly created area (in `imported_area_ids`). Sources that were skipped
     // due to ID collision never have their outgoing mappings applied here.
@@ -785,7 +785,7 @@ pub async fn post_amalgamation_destination(
                 continue;
             };
 
-            // Import the cortical mapping
+            // Import the cortical_area mapping
             match connectome_service
                 .update_cortical_mapping(
                     src_area_id.clone(),
@@ -821,7 +821,7 @@ pub async fn post_amalgamation_destination(
     if imported_mapping_count > 0 {
         tracing::info!(
             target: "feagi-api",
-            "🧬 [AMALGAMATION] Successfully imported {} cortical mappings (skipped {} external/missing mappings)",
+            "🧬 [AMALGAMATION] Successfully imported {} cortical_area mappings (skipped {} external/missing mappings)",
             imported_mapping_count,
             skipped_mapping_count
         );
@@ -855,7 +855,7 @@ pub async fn post_amalgamation_destination(
         }
         tracing::info!(
             target: "feagi-api",
-            "🧬 [AMALGAMATION] No cortical mappings to import from guest (new areas: nonempty_dst={} empty_dst={} missing_dst={}; imported_new_areas={}; skipped_existing_areas={}). \
+            "🧬 [AMALGAMATION] No cortical_area mappings to import from guest (new areas: nonempty_dst={} empty_dst={} missing_dst={}; imported_new_areas={}; skipped_existing_areas={}). \
              Areas skipped due to host ID collision do not replay guest wiring. \
              For synapses on newly created areas, guest blueprint needs non-empty dstmap (cortical_mapping_dst) on those sources.",
             nonempty_dst_on_new,
@@ -937,7 +937,7 @@ pub async fn post_amalgamation_destination(
         .map(|ids| ids.len())
         .map_err(|e| {
             ApiError::internal(format!(
-                "Failed to count cortical areas after amalgamation: {}",
+                "Failed to count cortical_area areas after amalgamation: {}",
                 e
             ))
         })?;
@@ -1137,7 +1137,7 @@ async fn load_default_genome(
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     tracing::info!(target: "feagi-api", "🔄 Loading {} genome from embedded Rust genomes", genome_name);
     tracing::debug!(target: "feagi-api", "   State components available: genome_service=true, runtime_service=true");
-    // Load genome from embedded Rust templates (no file I/O!)
+    // Load genome from embedded Rust cortical_units (no file I/O!)
     let genome_json = match genome_name {
         "barebones" => feagi_evolutionary::BAREBONES_GENOME_JSON,
         "essential" => feagi_evolutionary::ESSENTIAL_GENOME_JSON,
@@ -1161,7 +1161,7 @@ async fn load_default_genome(
     tracing::info!(target: "feagi-api","Calling prioritized genome transition loader...");
     let genome_info = load_genome_with_priority(&state, params, "default_genome_endpoint").await?;
 
-    tracing::info!(target: "feagi-api","Successfully loaded {} genome: {} cortical areas, {} brain regions",
+    tracing::info!(target: "feagi-api","Successfully loaded {} genome: {} cortical_area areas, {} brain regions",
                genome_name, genome_info.cortical_area_count, genome_info.brain_region_count);
 
     // Return response matching Python format
@@ -1525,8 +1525,8 @@ pub async fn post_clone(
     )])))
 }
 
-/// Reset genome to its default state, clearing all cortical areas and brain regions.
-/// Use before loading a new genome when "cortical area already exists" errors occur.
+/// Reset genome to its default state, clearing all cortical_area areas and brain regions.
+/// Use before loading a new genome when "cortical_area area already exists" errors occur.
 #[utoipa::path(
     post,
     path = "/v1/genome/reset",
@@ -1690,7 +1690,7 @@ pub async fn get_amalgamation_history_exact(
     Ok(Json(out))
 }
 
-/// Get metadata about all available cortical types including supported encodings and configurations.
+/// Get metadata about all available cortical_area types including supported encodings and configurations.
 #[utoipa::path(get, path = "/v1/genome/cortical_template", tag = "genome")]
 pub async fn get_cortical_template(
     State(_state): State<ApiState>,
@@ -1764,9 +1764,9 @@ pub async fn get_cortical_template(
         //   with different IOCorticalAreaConfigurationFlag variants (Percentage2D vs Percentage).
         //
         // We derive supported types by:
-        // - generating canonical cortical IDs from the MotorCorticalUnit template for each
+        // - generating canonical cortical_area IDs from the MotorCorticalUnit template for each
         //   (frame_change_handling, percentage_neuron_positioning) combination
-        // - extracting the IO configuration flag from each cortical ID
+        // - extracting the IO configuration flag from each cortical_area ID
         // - grouping supported_data_types per subunit index
         use feagi_genome_definitions::::descriptors::CorticalUnitIndex;
         use serde_json::{Map, Value};
@@ -1997,7 +1997,7 @@ pub async fn get_cortical_template(
     Ok(Json(templates))
 }
 
-/// Get list of available embedded default genome templates (barebones, essential, test, vision).
+/// Get list of available embedded default genome cortical_units (barebones, essential, test, vision).
 #[utoipa::path(get, path = "/v1/genome/defaults/files", tag = "genome")]
 pub async fn get_defaults_files(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     Ok(Json(vec![

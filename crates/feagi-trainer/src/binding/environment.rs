@@ -3,7 +3,7 @@
 //! PARKED (ADR-014/ADR-015): this seam was the engine for the superseded "Topology C — Trainer
 //! drives the sim" model. The live embodied path is now the **parallel co-agent** model: the
 //! embodiment controller owns the robot's sensory/motor + physics, and the Trainer is a separate
-//! FEAGI agent injecting training signals on disjoint cortical I/O — it does **not** drive the
+//! FEAGI agent injecting training signals on disjoint cortical_area I/O — it does **not** drive the
 //! environment. This module is retained only for a possible *trainer-owned, no-controller* sim
 //! path and is not on the live embodied path. Do not wire it into `RunConfig`/CLI without a
 //! decision reopening that use case. The episodic-control metric pack + `EpisodeTrajectory`

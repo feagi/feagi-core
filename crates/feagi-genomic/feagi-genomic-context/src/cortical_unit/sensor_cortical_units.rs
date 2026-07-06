@@ -106,7 +106,7 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
-                #[doc = "Miscellaneous sensor that does not fit existing templates."]
+                #[doc = "Miscellaneous sensor that does not fit existing cortical_units."]
                 MiscData => {
                     friendly_name: "Miscellaneous Sensor",
                     accepted_wrapped_io_data_type: MiscData,

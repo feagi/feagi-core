@@ -3,12 +3,12 @@ use crate::wrapped_values::DimensionalCorticalAreaDimensions;
 
 #[repr(C)]
 pub struct CorticalAreaDescriptor(u8);
-// bits 0, 1, 2 are for cortical layout
+// bits 0, 1, 2 are for cortical_area layout
 // bit 3 is unused,
 // bit 4 is if the neuron model uses burst index history
 // bit 5 is if post synaptic potential is driven by membrane potential
 // bit 6 is if post synaptic potential should be uniform
-// bit 7 is if cortical area is alive
+// bit 7 is if cortical_area area is alive
 
 
 impl CorticalAreaDescriptor {
@@ -55,7 +55,7 @@ impl CorticalAreaDescriptor {
 
 //region Cortical Layout
 
-/// Represents what type of cortical layout is being used in a cortical area, within 3 bits
+/// Represents what type of cortical_area layout is being used in a cortical_area area, within 3 bits
 /// (limiting to only 8 options)
 #[repr(u8)]
 #[derive(Copy, Clone, Default)]
@@ -66,8 +66,8 @@ pub enum CorticalAreaLayoutType {
 }
 
 
-/// Base trait for Cortical Area Layouts, which describes how the neurons of a cortical area are
-/// laid out and any other specific cortical parameters for that layout
+/// Base trait for Cortical Area Layouts, which describes how the neurons of a cortical_area area are
+/// laid out and any other specific cortical_area parameters for that layout
 pub trait CorticalAreaLayoutDataBase<FGQ>:
 where
     FGQ: FeagiGlobalQuantization,
@@ -81,7 +81,7 @@ where
     // NOTE: Do NOT use the base directly, use the one of the derived types (and the device)
 }
 
-/// Describes a cortical area of neurons arranged in voxels with depth as 4d XYZD dimensions
+/// Describes a cortical_area area of neurons arranged in voxels with depth as 4d XYZD dimensions
 pub struct CorticalAreaLayoutDataDimensional<FGQ>
 where
     FGQ: FeagiGlobalQuantization,

@@ -17,6 +17,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "base64"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -149,10 +155,23 @@ dependencies = [
 [[package]]
 name = "feagi-genomic-context"
 version = "0.0.12"
+dependencies = [
+ "ahash",
+ "base64",
+ "feagi-data",
+ "feagi-logging-and-errors",
+ "paste",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "feagi-genomic-data"
 version = "0.0.12"
+dependencies = [
+ "feagi-data",
+ "feagi-logging-and-errors",
+]
 
 [[package]]
 name = "feagi-logging-and-errors"

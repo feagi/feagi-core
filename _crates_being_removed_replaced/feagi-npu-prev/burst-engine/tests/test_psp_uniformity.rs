@@ -20,7 +20,7 @@ fn test_psp_uniformity_false_divides_psp() {
     let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 100, 100, 5).expect("Failed to create NPU");
 
-    // Register two cortical areas (use valid cortical types)
+    // Register two cortical_area areas (use valid cortical_area types)
     let area_a = CoreCorticalType::Power.to_cortical_id();
     let area_b = CoreCorticalType::Death.to_cortical_id();
 
@@ -112,7 +112,7 @@ fn test_psp_uniformity_true_applies_full_psp() {
     let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 100, 100, 5).expect("Failed to create NPU");
 
-    // Register two cortical areas (use valid cortical types)
+    // Register two cortical_area areas (use valid cortical_area types)
     let area_a = CoreCorticalType::Power.to_cortical_id();
     let area_b = CoreCorticalType::Death.to_cortical_id();
 
@@ -202,7 +202,7 @@ fn test_psp_uniformity_default_is_false() {
     let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 100, 100, 5).expect("Failed to create NPU");
 
-    // Register cortical area (using valid CoreCorticalType)
+    // Register cortical_area area (using valid CoreCorticalType)
     let area_a = CoreCorticalType::Power.to_cortical_id();
     npu.register_cortical_area(2, area_a.as_base_64());
 

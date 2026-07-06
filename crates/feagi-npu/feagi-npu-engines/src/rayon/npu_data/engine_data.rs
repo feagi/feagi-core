@@ -29,14 +29,14 @@ pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
     // region Global Indexed Neuron / Cortical Data
 
     // By Neuron model with activity history (not really an index)
-    /// For all neurons whose cortical areas define that this value is needed for their neuron
+    /// For all neurons whose cortical_area areas define that this value is needed for their neuron
     /// model, the last burst index that the neuron received an input and the last index that it
     /// fired at
     pub neuron_history: Vec<NeuronHistory<FGQ>>,
 
 
-    // By cortical area checking neuron activity index (not really an index)
-    /// Per cortical area that needs to store the percentage of neurons that fired that burst
+    // By cortical_area area checking neuron activity index (not really an index)
+    /// Per cortical_area area that needs to store the percentage of neurons that fired that burst
     /// (needed for some downstream synapse types)
     pub percent_neurons_firing_this_burst: Vec<u8>, // TODO percentage type!
 
@@ -61,13 +61,13 @@ pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
     //region Indexed By Cortical Area
 
     // By Engine Cortical Index
-    /// For a given cortical area, has index offsets and indexes to other relevant data
-    /// for that cortical area
+    /// For a given cortical_area area, has index offsets and indexes to other relevant data
+    /// for that cortical_area area
     pub cortical_context_lookups: Vec<CorticalContextLookup<FGQ>>,
 
     // By Cortical Layout Indexes
-    /// Grouped by type of cortical layout, stores a vector of all the different values for the
-    /// different possible cortical layouts, to describe how neurons are layed out
+    /// Grouped by type of cortical_area layout, stores a vector of all the different values for the
+    /// different possible cortical_area layouts, to describe how neurons are layed out
     /// (dimensional or otherwise)
     /// Does NOT contain the base post synaptic potential!
     pub cortical_layouts: CorticalLayouts<FGQ>,
@@ -104,9 +104,9 @@ pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
     pub neuron_fcls: MPQuantNeuronFCLValues,
     /// Grouped by the quantization of the membrane potential, the neuron potential of all neurons
     pub neuron_potentials: MPQuantNeuronMembranePotentialValues,
-    // TODO should we include flags here? or keep it for the cortical?
+    // TODO should we include flags here? or keep it for the cortical_area?
     // TODO we should have different quant groups?
-    ///  for each engine/?mp_quant neuron index, get the engine cortical index
+    ///  for each engine/?mp_quant neuron index, get the engine cortical_area index
     pub neuron_engine_cortical_indexes: Vec<NPUWrappedCorticalAreaBurstEngineIndex<FGQ::CorticalAreaIndexCountQuant>>,
 
 

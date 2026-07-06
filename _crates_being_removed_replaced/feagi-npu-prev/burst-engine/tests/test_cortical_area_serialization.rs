@@ -3,10 +3,10 @@
 
 //! # Cortical Area Registration & Serialization Tests
 //!
-//! Tests the round-trip serialization of cortical areas:
+//! Tests the round-trip serialization of cortical_area areas:
 //! - Registration with base64-encoded names
 //! - Retrieval and decoding back to CorticalID
-//! - All cortical types (CORE, IPU, OPU, CUSTOM, MEMORY)
+//! - All cortical_area types (CORE, IPU, OPU, CUSTOM, MEMORY)
 
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::RustNPU;
@@ -28,7 +28,7 @@ fn create_test_npu() -> RustNPU<StdRuntime, f32, CPUBackend> {
 fn test_core_area_roundtrip() {
     let mut npu = create_test_npu();
 
-    // Create CORE cortical ID (starts with '_')
+    // Create CORE cortical_area ID (starts with '_')
     let cortical_id = CorticalID::try_from_bytes(b"___power").unwrap();
     let base64_name = cortical_id.as_base_64();
 
@@ -51,7 +51,7 @@ fn test_core_area_roundtrip() {
 fn test_ipu_area_roundtrip() {
     let mut npu = create_test_npu();
 
-    // Create IPU cortical ID (starts with 'i')
+    // Create IPU cortical_area ID (starts with 'i')
     let mut bytes = [0u8; 8];
     bytes[..6].copy_from_slice(b"iav000");
     let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();
@@ -75,7 +75,7 @@ fn test_ipu_area_roundtrip() {
 fn test_opu_area_roundtrip() {
     let mut npu = create_test_npu();
 
-    // Create OPU cortical ID (starts with 'o')
+    // Create OPU cortical_area ID (starts with 'o')
     let mut bytes = [0u8; 8];
     bytes[..6].copy_from_slice(b"omot00");
     let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();
@@ -99,7 +99,7 @@ fn test_opu_area_roundtrip() {
 fn test_custom_area_roundtrip() {
     let mut npu = create_test_npu();
 
-    // Create CUSTOM cortical ID (starts with 'c')
+    // Create CUSTOM cortical_area ID (starts with 'c')
     let mut bytes = [0u8; 8];
     bytes[..7].copy_from_slice(b"cust000");
     let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();
@@ -123,7 +123,7 @@ fn test_custom_area_roundtrip() {
 fn test_memory_area_roundtrip() {
     let mut npu = create_test_npu();
 
-    // Create MEMORY cortical ID (starts with 'm')
+    // Create MEMORY cortical_area ID (starts with 'm')
     let mut bytes = [0u8; 8];
     bytes[..7].copy_from_slice(b"memo000");
     let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();

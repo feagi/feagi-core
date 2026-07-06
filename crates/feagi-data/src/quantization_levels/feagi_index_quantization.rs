@@ -21,7 +21,7 @@ pub trait FeagiGlobalQuantization {
     /// Indexing of synapses within the NPU
     type SynapseIndexCountQuant: QuantizedIndexCountTrait;
 
-    /// Indexing of cortical areas within the NPU. Note that indexes are not stable outside the NPU!
+    /// Indexing of cortical_area areas within the NPU. Note that indexes are not stable outside the NPU!
     type CorticalAreaIndexCountQuant: QuantizedIndexCountTrait;
 
     /// Indexing of axon bundles within the NPU. Note that indexes are not stable outside the NPU!

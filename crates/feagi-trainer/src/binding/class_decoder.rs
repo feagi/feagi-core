@@ -26,7 +26,7 @@ use crate::contracts::common::{PluginId, PluginRef};
 use crate::contracts::prediction_record::TypedPrediction;
 use crate::error::TrainerError;
 
-/// Motor cortical unit index this decoder reads from for the IRIS slice.
+/// Motor cortical_area unit index this decoder reads from for the IRIS slice.
 const IRIS_MOTOR_UNIT: u8 = 0;
 
 /// Stateless selector that decodes a class index from per-class channel activations.

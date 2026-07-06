@@ -81,7 +81,7 @@ fn test_genome_end_to_end(genome_path: &str, genome_name: &str) {
 
     let blueprint = hierarchical.get("blueprint").unwrap().as_object().unwrap();
     println!(
-        "✅ Step 2: Converted to hierarchical: {} cortical areas",
+        "✅ Step 2: Converted to hierarchical: {} cortical_area areas",
         blueprint.len()
     );
 

@@ -18,7 +18,7 @@ use std::collections::HashMap;
 // IO CODING DTOs
 // ============================================================================
 
-/// IO coding options for IPU/OPU cortical areas.
+/// IO coding options for IPU/OPU cortical_area areas.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IOCodingOptions {
     pub signage_options: Vec<String>,
@@ -52,7 +52,7 @@ pub struct CreateNeuronParams {
 // CORTICAL AREA DTOs
 // ============================================================================
 
-/// Information about a cortical area
+/// Information about a cortical_area area
 /// This structure matches the Python FEAGI API for full compatibility
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorticalAreaInfo {
@@ -67,7 +67,7 @@ pub struct CorticalAreaInfo {
     pub position: (i32, i32, i32),
     pub area_type: String,      // "Sensory", "Motor", "Memory", "Custom"
     pub cortical_group: String, // "IPU", "OPU", "CORE", "CUSTOM", "MEMORY" - uppercase classification
-    /// Explicit cortical type classification: "sensory", "motor", "memory", "custom", "core"
+    /// Explicit cortical_area type classification: "sensory", "motor", "memory", "custom", "core"
     /// This field provides a clear, standardized type indicator that BV can rely on
     /// instead of parsing cortical_group or other heuristics.
     pub cortical_type: String,
@@ -125,7 +125,7 @@ pub struct CorticalAreaInfo {
     pub lifespan_growth_rate: f64,
     #[serde(rename = "neuron_longterm_mem_threshold")]
     pub longterm_mem_threshold: u32,
-    /// Memory pattern detection lookback depth for memory cortical areas.
+    /// Memory pattern detection lookback depth for memory cortical_area areas.
     /// Omitted for non-memory areas.
     #[serde(rename = "temporal_depth", skip_serializing_if = "Option::is_none")]
     pub temporal_depth: Option<u32>,
@@ -138,8 +138,8 @@ pub struct CorticalAreaInfo {
     pub mp_learning_enabled: Option<bool>,
     pub properties: HashMap<String, serde_json::Value>,
 
-    // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)
-    /// 4-character cortical subtype (e.g., "isvi", "imot", "ibat") - only for IPU/OPU
+    // IPU/OPU-specific decoded cortical_area ID fields (optional, only populated for IPU/OPU)
+    /// 4-character cortical_area subtype (e.g., "isvi", "imot", "ibat") - only for IPU/OPU
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_subtype: Option<String>,
 
@@ -151,13 +151,13 @@ pub struct CorticalAreaInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoding_format: Option<String>,
 
-    /// Cortical unit index (`CorticalUnitIndex`): byte 7 of the 8-byte cortical ID —
-    /// which instance of this I/O cortical unit type (aligns with motor/sensory grouping
+    /// Cortical unit index (`CorticalUnitIndex`): byte 7 of the 8-byte cortical_area ID —
+    /// which instance of this I/O cortical_area unit type (aligns with motor/sensory grouping
     /// on the wire and with Brain Visualizer `unit_id`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unit_id: Option<u8>,
 
-    /// Cortical sub-unit index (`CorticalSubUnitIndex`): byte 6 — which cortical area
+    /// Cortical sub-unit index (`CorticalSubUnitIndex`): byte 6 — which cortical_area area
     /// inside a multi-area unit (e.g. vision segments). Matches Brain Visualizer `subunit_id`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subunit_id: Option<u8>,
@@ -179,12 +179,12 @@ pub struct CorticalAreaInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coding_type: Option<String>,
 
-    /// Allowed IO coding options for this cortical unit.
+    /// Allowed IO coding options for this cortical_area unit.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coding_options: Option<IOCodingOptions>,
 
-    /// Parent brain region ID (UUID string) - which brain region this cortical area belongs to
-    /// This is required by Brain Visualizer to correctly place cortical areas in the 3D scene
+    /// Parent brain region ID (UUID string) - which brain region this cortical_area area belongs to
+    /// This is required by Brain Visualizer to correctly place cortical_area areas in the 3D scene
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_region_id: Option<String>,
 
@@ -201,14 +201,14 @@ pub struct CorticalAreaInfo {
 
     /// Visualization voxel granularity for large-area rendering (x, y, z)
     /// This defines the voxel chunk size used for aggregation when rendering
-    /// very large cortical areas (>1M neurons). BV uses this to render spatial patterns
+    /// very large cortical_area areas (>1M neurons). BV uses this to render spatial patterns
     /// at a coarser resolution to maintain performance.
     /// Example: For 512×512×22 area, granularity might be (16, 16, 16) → 32×32×2 = 2,048 chunks
     /// Default is (1, 1, 1) - always serialized so BV knows the value
     pub visualization_voxel_granularity: Option<(u32, u32, u32)>,
 }
 
-/// Parameters for creating a cortical area
+/// Parameters for creating a cortical_area area
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateCorticalAreaParams {
     pub cortical_id: String,
@@ -234,7 +234,7 @@ pub struct CreateCorticalAreaParams {
     pub properties: Option<HashMap<String, serde_json::Value>>,
 }
 
-/// Parameters for updating a cortical area
+/// Parameters for updating a cortical_area area
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateCorticalAreaParams {
     pub name: Option<String>,
@@ -352,7 +352,7 @@ pub struct CreateSynapseParams {
 // ANALYTICS DTOs
 // ============================================================================
 
-/// Statistics for a cortical area
+/// Statistics for a cortical_area area
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorticalAreaStats {
     pub cortical_id: String,

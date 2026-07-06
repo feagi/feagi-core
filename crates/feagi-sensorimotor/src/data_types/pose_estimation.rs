@@ -5,7 +5,7 @@ use feagi_structures::FeagiDataError;
 ///
 /// Represents one keypoint in a skeleton after centroid extraction from neuron activations.
 /// The `x` and `y` are normalized to [0.0, 1.0] representing the position within the
-/// cortical area's XY plane. `confidence` is derived from the mean PSP magnitude of
+/// cortical_area area's XY plane. `confidence` is derived from the mean PSP magnitude of
 /// contributing neurons, also normalized to [0.0, 1.0].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct JointPosition {
@@ -20,7 +20,7 @@ pub struct JointPosition {
 /// `None` means no valid detection for that joint in this frame (neurons were either
 /// silent or too spatially scattered to form a coherent cluster).
 ///
-/// The pose schema (HumanBody, HumanHand, etc.) is encoded in the cortical ID itself
+/// The pose schema (HumanBody, HumanHand, etc.) is encoded in the cortical_area ID itself
 /// and does not need to be stored in this data structure.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PoseEstimationData {

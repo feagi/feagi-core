@@ -31,7 +31,7 @@ pub enum EvoError {
     #[error("Internal error: {0}")]
     Internal(String),
 
-    #[error("Invalid cortical area: {0}")]
+    #[error("Invalid cortical_area area: {0}")]
     InvalidArea(String),
 
     #[error("Invalid brain region: {0}")]

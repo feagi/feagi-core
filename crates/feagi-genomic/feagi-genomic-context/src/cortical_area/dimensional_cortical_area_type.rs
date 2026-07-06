@@ -1,5 +1,5 @@
 
-// TODO methods to convert cortical area type to this
+// TODO methods to convert cortical_area area type to this
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]

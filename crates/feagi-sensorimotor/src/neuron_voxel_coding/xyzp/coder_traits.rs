@@ -15,7 +15,7 @@ pub trait NeuronVoxelXYZPEncoder: Debug + Sync + Send {
     #[allow(dead_code)]
     fn get_as_properties(&self) -> JSONEncoderProperties;
 
-    /// Writes data to NeuronXYZPVoxelArray(s) of the relevant cortical area(s), where each element in pipelines is the channel. Assumes write_target been cleared of neuron data
+    /// Writes data to NeuronXYZPVoxelArray(s) of the relevant cortical_area area(s), where each element in pipelines is the channel. Assumes write_target been cleared of neuron data
     fn write_neuron_data_multi_channel_from_processed_cache(
         &mut self,
         pipelines: &[SensoryPipelineStageRunner],

@@ -81,7 +81,7 @@ pub use connectome_manager::{BrainRegionIoRegistry, ConnectomeConfig, Connectome
 // Re-export neuroembryogenesis
 pub use neuroembryogenesis::{DevelopmentProgress, DevelopmentStage, Neuroembryogenesis};
 
-// Re-export cortical type utilities (Phase 3)
+// Re-export cortical_area type utilities (Phase 3)
 pub use cortical_type_utils::{
     describe_cortical_type, get_io_data_type, uses_absolute_frames, uses_cartesian_encoding,
     uses_incremental_frames, uses_percentage_encoding, validate_connectivity,

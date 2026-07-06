@@ -190,7 +190,7 @@ impl RuntimeService for WasmRuntimeService {
         _cortical_indices: &[u32],
     ) -> ServiceResult<Vec<(u32, usize)>> {
         Err(ServiceError::NotImplemented(
-            "WASM mode cortical reset not yet implemented".to_string(),
+            "WASM mode cortical_area reset not yet implemented".to_string(),
         ))
     }
 }

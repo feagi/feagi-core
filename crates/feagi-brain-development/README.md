@@ -22,7 +22,7 @@ feagi-brain-development = "2.0"
 ```rust
 use feagi_brain_development::connectivity::synaptogenesis::apply_synaptogenesis_rules;
 
-// Create new cortical areas and connections during development
+// Create new cortical_area areas and connections during development
 ```
 
 ## Use Cases

@@ -1,5 +1,6 @@
 use crate::values::quantizable::QuantizedElementBase;
 
+
 // TODO serde serialization / deserialization? is it a good idea?
 
 /// Trait designed to hold index and/or count values in a quantized form

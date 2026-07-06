@@ -248,7 +248,7 @@ impl TokioEmbodimentAgent {
 
     /// Send current device registrations over command/control after successful registration.
     ///
-    /// FEAGI server uses this configuration payload to auto-create missing cortical areas.
+    /// FEAGI server uses this configuration payload to auto-create missing cortical_area areas.
     /// This call waits for a heartbeat acknowledgment to ensure FEAGI ingested the payload
     /// before the agent starts streaming sensory data.
     fn send_agent_configuration_details(&mut self) -> Result<(), FeagiAgentError> {

@@ -175,7 +175,7 @@ fn decoder_argmaxes_strongest_class_channel() {
     }
     let encoded = cache.get_sensor_cache().get_neurons().clone();
 
-    // Transplant the encoder's neurons into the OPU cortical area the decoder reads.
+    // Transplant the encoder's neurons into the OPU cortical_area area the decoder reads.
     let mut motor = CorticalMappedXYZPNeuronVoxels::new();
     {
         let source = encoded

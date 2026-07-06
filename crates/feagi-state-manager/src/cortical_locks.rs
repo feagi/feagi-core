@@ -3,7 +3,7 @@
 
 //! Cortical area locking for concurrent operations
 //!
-//! Allows locking specific cortical areas for neurogenesis or plasticity
+//! Allows locking specific cortical_area areas for neurogenesis or plasticity
 //! operations without blocking the entire brain.
 
 #[cfg(feature = "std")]
@@ -41,19 +41,19 @@ impl CorticalLockManager {
         }
     }
 
-    /// Try to lock a cortical area (returns true if successful)
+    /// Try to lock a cortical_area area (returns true if successful)
     pub fn try_lock(&self, cortical_area: u32) -> bool {
         let mut locked = self.locked_areas.lock();
         locked.insert(cortical_area)
     }
 
-    /// Unlock a cortical area
+    /// Unlock a cortical_area area
     pub fn unlock(&self, cortical_area: u32) {
         let mut locked = self.locked_areas.lock();
         locked.remove(&cortical_area);
     }
 
-    /// Check if a cortical area is locked
+    /// Check if a cortical_area area is locked
     pub fn is_locked(&self, cortical_area: u32) -> bool {
         let locked = self.locked_areas.lock();
         locked.contains(&cortical_area)

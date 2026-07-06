@@ -18,7 +18,7 @@ use async_trait::async_trait;
 pub trait GenomeService: Send + Sync {
     /// Load a genome from JSON
     ///
-    /// Parses genome JSON and creates cortical areas and brain regions in the connectome.
+    /// Parses genome JSON and creates cortical_area areas and brain regions in the connectome.
     ///
     /// # Arguments
     /// * `params` - Load parameters (JSON string)
@@ -34,7 +34,7 @@ pub trait GenomeService: Send + Sync {
 
     /// Save the current connectome as a genome JSON
     ///
-    /// Serializes the current brain state (cortical areas, brain regions) to genome format.
+    /// Serializes the current brain state (cortical_area areas, brain regions) to genome format.
     ///
     /// # Arguments
     /// * `params` - Save parameters (optional genome_id and title)
@@ -70,16 +70,16 @@ pub trait GenomeService: Send + Sync {
     ///
     async fn validate_genome(&self, json_str: String) -> ServiceResult<bool>;
 
-    /// Reset the connectome (clear all cortical areas and brain regions)
+    /// Reset the connectome (clear all cortical_area areas and brain regions)
     ///
     /// # Errors
     /// * `ServiceError::Backend` - Failed to reset connectome
     ///
     async fn reset_connectome(&self) -> ServiceResult<()>;
 
-    /// Update a cortical area with intelligent routing for optimal performance
+    /// Update a cortical_area area with intelligent routing for optimal performance
     ///
-    /// ARCHITECTURE: This is the proper entry point for cortical area updates.
+    /// ARCHITECTURE: This is the proper entry point for cortical_area area updates.
     /// It updates the genome FIRST (source of truth), then syncs to NPU/ConnectomeManager.
     ///
     /// PERFORMANCE OPTIMIZATION: Intelligently routes updates based on change type:
@@ -105,9 +105,9 @@ pub trait GenomeService: Send + Sync {
         changes: std::collections::HashMap<String, serde_json::Value>,
     ) -> ServiceResult<CorticalAreaInfo>;
 
-    /// Create new cortical areas and add them to the genome
+    /// Create new cortical_area areas and add them to the genome
     ///
-    /// ARCHITECTURE: This is the proper entry point for creating new cortical areas.
+    /// ARCHITECTURE: This is the proper entry point for creating new cortical_area areas.
     /// It follows the correct flow:
     /// 1. Updates runtime genome (source of truth)
     /// 2. Calls neuroembryogenesis to create structures in ConnectomeManager
@@ -115,7 +115,7 @@ pub trait GenomeService: Send + Sync {
     /// 4. Returns created area information
     ///
     /// # Arguments
-    /// * `params` - Vector of cortical area creation parameters
+    /// * `params` - Vector of cortical_area area creation parameters
     ///
     /// # Returns
     /// * `Vec<CorticalAreaInfo>` - Information about all created areas

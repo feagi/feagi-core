@@ -405,7 +405,7 @@ pub async fn post_morphology_properties(
     Ok(Json(result))
 }
 
-/// Get all cortical area pairs that use a specific morphology.
+/// Get all cortical_area area pairs that use a specific morphology.
 #[utoipa::path(
     post,
     path = "/v1/morphology/morphology_usage",
@@ -429,7 +429,7 @@ pub async fn post_morphology_usage(
 
     let connectome_service = state.connectome_service.as_ref();
 
-    // Get all cortical areas
+    // Get all cortical_area areas
     let areas = connectome_service
         .list_cortical_areas()
         .await

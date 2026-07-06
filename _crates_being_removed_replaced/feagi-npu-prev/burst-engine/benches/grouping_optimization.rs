@@ -4,7 +4,7 @@
 //! Synaptic Grouping Optimization Benchmark
 //!
 //! Purpose:
-//! - Compare different strategies for grouping synaptic contributions by cortical area
+//! - Compare different strategies for grouping synaptic contributions by cortical_area area
 //! - Identify the best performing approach for production use
 //!
 //! Strategies Tested:
@@ -133,7 +133,7 @@ fn group_presized(
     contributions: Vec<(NeuronId, CorticalID, SynapticContribution)>,
     estimated_area_count: usize,
 ) -> PropagationResult {
-    // Pre-allocate HashMap with expected number of cortical areas
+    // Pre-allocate HashMap with expected number of cortical_area areas
     let mut result: PropagationResult = AHashMap::with_capacity(estimated_area_count);
     let estimated_size = contributions.len() / estimated_area_count;
 
@@ -179,7 +179,7 @@ fn group_parallel(
 fn group_sort_group(
     mut contributions: Vec<(NeuronId, CorticalID, SynapticContribution)>,
 ) -> PropagationResult {
-    // Sort by cortical area (parallel sort)
+    // Sort by cortical_area area (parallel sort)
     // CorticalID doesn't implement Ord, so we use a custom comparator with the internal bytes
     contributions.par_sort_unstable_by(|(_, a, _), (_, b, _)| a.as_bytes().cmp(b.as_bytes()));
 
@@ -218,7 +218,7 @@ fn bench_grouping_small(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(2));
 
     let synapse_count = 100_000; // 100K synapses (fast case from logs)
-    let area_count = 50; // Typical cortical area count
+    let area_count = 50; // Typical cortical_area area count
 
     group.throughput(Throughput::Elements(synapse_count as u64));
 

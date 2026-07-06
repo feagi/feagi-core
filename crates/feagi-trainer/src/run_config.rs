@@ -1,7 +1,7 @@
 //! Run configuration bundle + plugin resolution for the CLI (plan Phase 1e).
 //!
 //! A [`RunSpec`] alone cannot drive a run: it is immutable provenance and intentionally omits
-//! the dataset bytes, the encoder/decoder *binding profiles* (cortical-area ids, bins), the
+//! the dataset bytes, the encoder/decoder *binding profiles* (cortical_area-area ids, bins), the
 //! transport endpoints (kept out of provenance — see [`ExecutionMode::Remote`]), and the
 //! locally-unknowable scorecard fields (backend descriptor, `feagi-core` version). [`RunConfig`]
 //! is the operator-supplied bundle that closes those gaps so `main.rs` can load one file and

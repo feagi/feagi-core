@@ -74,7 +74,7 @@ pub fn validate_genome(genome: &RuntimeGenome) -> ValidationResult {
     // Validate metadata
     validate_metadata(genome, &mut result);
 
-    // Validate cortical areas
+    // Validate cortical_area areas
     validate_cortical_areas(genome, &mut result);
 
     // Validate morphologies
@@ -232,17 +232,17 @@ fn validate_metadata(genome: &RuntimeGenome, result: &mut ValidationResult) {
     }
 }
 
-/// Validate cortical areas
+/// Validate cortical_area areas
 fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult) {
     if genome.cortical_areas.is_empty() {
-        result.add_warning("Genome has no cortical areas defined".to_string());
+        result.add_warning("Genome has no cortical_area areas defined".to_string());
         return;
     }
 
     for (cortical_id, area) in &genome.cortical_areas {
         let cortical_id_display = cortical_id.to_string();
 
-        // CRITICAL: Validate cortical ID format and compliance with feagi-data-processing templates
+        // CRITICAL: Validate cortical_area ID format and compliance with feagi-data-processing cortical_units
         validate_cortical_id_format(cortical_id, &cortical_id_display, result);
 
         // Validate dimensions - AUTO-FIX zeros to 1
@@ -286,7 +286,7 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
     }
 }
 
-/// Validate cortical ID format and compliance with feagi-data-processing templates
+/// Validate cortical_area ID format and compliance with feagi-data-processing cortical_units
 fn validate_cortical_id_format(
     _cortical_id: &CorticalID,
     display: &str,
@@ -297,7 +297,7 @@ fn validate_cortical_id_format(
     // Accept both formats for backward compatibility
     if display.len() != 8 && display.len() != 12 {
         result.add_error(format!(
-            "Invalid cortical ID length: '{}' is {} characters (must be 8 or 12)",
+            "Invalid cortical_area ID length: '{}' is {} characters (must be 8 or 12)",
             display,
             display.len()
         ));
@@ -316,7 +316,7 @@ fn validate_cortical_id_format(
         // Just check that it's properly padded
         if !display.chars().all(|c| c.is_alphanumeric() || c == '_') {
             result.add_warning(format!(
-                "Custom cortical ID '{}' contains non-alphanumeric characters",
+                "Custom cortical_area ID '{}' contains non-alphanumeric characters",
                 display
             ));
         }
@@ -344,7 +344,7 @@ fn validate_core_area_id(display: &str, result: &mut ValidationResult) {
 
     if !valid_core_ids.contains(&display.to_string()) {
         result.add_error(format!(
-            "Invalid CORE cortical ID: '{}' - must be one of: {:?}",
+            "Invalid CORE cortical_area ID: '{}' - must be one of: {:?}",
             display, valid_core_ids
         ));
     }
@@ -352,13 +352,13 @@ fn validate_core_area_id(display: &str, result: &mut ValidationResult) {
 
 /// Validate IPU/OPU area IDs (should follow template system)
 fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
-    // IO cortical IDs have format: [i/o][3-char-unit][4-config-bytes]
+    // IO cortical_area IDs have format: [i/o][3-char-unit][4-config-bytes]
     // For IPU: 'i' + 3-char prefix (e.g., "isvi____")
     // For OPU: 'o' + 3-char prefix (e.g., "omot____")
     let first_char = display.chars().next().unwrap_or('_');
     let unit_prefix = &display[1..4]; // Skip first char (i/o), get 3-char unit identifier
 
-    // Known valid IPU prefixes from feagi-data-processing templates
+    // Known valid IPU prefixes from feagi-data-processing cortical_units
     const VALID_IPU_PREFIXES: &[&str] = &[
         "svi", // SegmentedVision (9 areas: isvi____ variants)
         "aud", // Audio
@@ -367,7 +367,7 @@ fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
         "vis", // Vision (generic)
     ];
 
-    // Known valid OPU prefixes from feagi-data-processing templates
+    // Known valid OPU prefixes from feagi-data-processing cortical_units
     const VALID_OPU_PREFIXES: &[&str] = &[
         "mot", // Motor (omot____ variants)
         "voc", // Vocal
@@ -384,7 +384,7 @@ fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
         if display.starts_with("iic") || display.starts_with("omot") || display.starts_with("ogaz")
         {
             result.add_error(format!(
-                "INVALID OLD-FORMAT cortical ID: '{}' - not compliant with feagi-data-processing templates. \
+                "INVALID OLD-FORMAT cortical_area ID: '{}' - not compliant with feagi-data-processing cortical_units. \
                 Valid IPU format: 'i' + unit_prefix (e.g., 'isvi____'). \
                 Valid OPU format: 'o' + unit_prefix (e.g., 'omot____'). \
                 Valid IPU units: {:?}, Valid OPU units: {:?}. \
@@ -393,7 +393,7 @@ fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
             ));
         } else {
             result.add_warning(format!(
-                "Unknown cortical ID: '{}' (first char: '{}', unit: '{}') - may not follow feagi-data-processing template system. \
+                "Unknown cortical_area ID: '{}' (first char: '{}', unit: '{}') - may not follow feagi-data-processing template system. \
                 Valid IPU format: 'i' + {:?}. Valid OPU format: 'o' + {:?}",
                 display, first_char, unit_prefix, VALID_IPU_PREFIXES, VALID_OPU_PREFIXES
             ));
@@ -592,7 +592,7 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
     let morphology_ids: HashSet<String> =
         genome.morphologies.morphology_ids().into_iter().collect();
 
-    // Check if cortical areas reference morphologies in their properties
+    // Check if cortical_area areas reference morphologies in their properties
     for (cortical_id, area) in &genome.cortical_areas {
         let cortical_id_display = cortical_id.to_string();
         if let Some(Value::Object(dstmap)) = area.properties.get("dstmap") {
@@ -635,11 +635,11 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
 
     // Validate brain region references
     for (region_id, region) in &genome.brain_regions {
-        // Check if cortical areas in region exist
+        // Check if cortical_area areas in region exist
         for cortical_id in &region.cortical_areas {
             if !genome.cortical_areas.contains_key(cortical_id) {
                 result.add_error(format!(
-                    "Brain region '{}' references non-existent cortical area '{}'",
+                    "Brain region '{}' references non-existent cortical_area area '{}'",
                     region_id, cortical_id
                 ));
             }
@@ -696,7 +696,7 @@ mod tests {
 
         let result = validate_genome(&genome);
 
-        // Should have warnings about empty cortical areas and morphologies
+        // Should have warnings about empty cortical_area areas and morphologies
         assert!(!result.warnings.is_empty());
         println!("Warnings: {:?}", result.warnings);
     }
@@ -725,7 +725,7 @@ mod tests {
             stats: GenomeStats::default(),
         };
 
-        // Add a valid cortical area (use CoreCorticalType::Power)
+        // Add a valid cortical_area area (use CoreCorticalType::Power)
         use feagi_genome_definitions::::CustomCorticalType;
         use feagi_genome_definitions::::{
             CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalAreaType,
@@ -739,7 +739,7 @@ mod tests {
             (0, 0, 0).into(),
             CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
         )
-        .expect("Failed to create cortical area");
+        .expect("Failed to create cortical_area area");
 
         genome.cortical_areas.insert(test_id, area);
 

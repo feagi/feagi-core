@@ -35,7 +35,7 @@ impl NeuronService for NeuronServiceImpl {
 
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(&params.cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
 
         let mut manager = self.connectome.write();
 
@@ -199,7 +199,7 @@ impl NeuronService for NeuronServiceImpl {
         // Verify area exists
         if !manager.has_cortical_area(
             &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
         ) {
             return Err(ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
@@ -210,7 +210,7 @@ impl NeuronService for NeuronServiceImpl {
         // Get all neurons in the area and find one at coordinates
         let neurons = manager.get_neurons_in_area(
             &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
         );
 
         for neuron_id in neurons {
@@ -242,14 +242,14 @@ impl NeuronService for NeuronServiceImpl {
         let manager = self.connectome.read();
         let neuron_ids = manager.get_neurons_in_area(
             &CorticalID::try_from_base_64(cortical_id)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?,
         );
 
         let neurons: Vec<NeuronInfo> = neuron_ids
             .iter()
             .take(limit.unwrap_or(usize::MAX))
             .map(|&id| {
-                // Get coordinates and cortical idx
+                // Get coordinates and cortical_area idx
                 let coordinates = manager.get_neuron_coordinates(id);
                 let cortical_idx = manager.get_neuron_cortical_idx(id);
 
@@ -273,7 +273,7 @@ impl NeuronService for NeuronServiceImpl {
 
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical_area ID: {}", e)))?;
 
         let count = self
             .connectome

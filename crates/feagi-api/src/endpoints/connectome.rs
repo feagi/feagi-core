@@ -48,7 +48,7 @@ pub struct MemoryNeuronDetailResponse {
     path = "/v1/connectome/cortical_areas/list/detailed",
     tag = "connectome",
     responses(
-        (status = 200, description = "Detailed cortical areas list", body = HashMap<String, serde_json::Value>),
+        (status = 200, description = "Detailed cortical_area areas list", body = HashMap<String, serde_json::Value>),
         (status = 500, description = "Internal server error")
     )
 )]
@@ -59,7 +59,7 @@ pub async fn get_cortical_areas_list_detailed(
     match connectome_service.list_cortical_areas().await {
         Ok(areas) => {
             tracing::info!(target: "feagi-api",
-                "[DETAILED-LIST] Returning {} cortical areas", areas.len()
+                "[DETAILED-LIST] Returning {} cortical_area areas", areas.len()
             );
 
             let detailed: HashMap<String, serde_json::Value> = areas
@@ -105,7 +105,7 @@ pub async fn get_properties_dimensions(
 pub async fn get_properties_mappings(
     State(_state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
-    // TODO: Get all cortical mappings
+    // TODO: Get all cortical_area mappings
     Ok(Json(HashMap::new()))
 }
 
@@ -445,7 +445,7 @@ pub async fn get_area_synapses(
 
     let cortical_idx = area_info.cortical_idx;
 
-    // Get all neurons in this cortical area
+    // Get all neurons in this cortical_area area
     let neurons = neuron_service
         .list_neurons_in_area(&area_id, None)
         .await
@@ -597,10 +597,10 @@ pub async fn get_cortical_info(
     Ok(Json(response))
 }
 
-/// GET /v1/connectome/stats/cortical/cumulative/{cortical_area}
+/// GET /v1/connectome/stats/cortical_area/cumulative/{cortical_area}
 #[utoipa::path(
     get,
-    path = "/v1/connectome/stats/cortical/cumulative/{cortical_area}",
+    path = "/v1/connectome/stats/cortical_area/cumulative/{cortical_area}",
     tag = "connectome"
 )]
 pub async fn get_stats_cortical_cumulative(
@@ -655,11 +655,11 @@ pub async fn get_neuron_properties_query(
 pub struct NeuronPropertiesAtQuery {
     /// Cortical area ID (base64 string)
     pub cortical_id: String,
-    /// X coordinate within the cortical area
+    /// X coordinate within the cortical_area area
     pub x: u32,
-    /// Y coordinate within the cortical area
+    /// Y coordinate within the cortical_area area
     pub y: u32,
-    /// Z coordinate within the cortical area
+    /// Z coordinate within the cortical_area area
     pub z: u32,
 }
 
@@ -792,10 +792,10 @@ pub async fn get_download_connectome(
     Ok(Json(json_value))
 }
 
-/// GET /v1/connectome/download-cortical-area/{cortical_area}
+/// GET /v1/connectome/download-cortical_area-area/{cortical_area}
 #[utoipa::path(
     get,
-    path = "/v1/connectome/download-cortical-area/{cortical_area}",
+    path = "/v1/connectome/download-cortical_area-area/{cortical_area}",
     tag = "connectome"
 )]
 pub async fn get_download_cortical_area(
@@ -830,8 +830,8 @@ pub async fn post_upload_connectome(
     )])))
 }
 
-/// POST /v1/connectome/upload-cortical-area
-#[utoipa::path(post, path = "/v1/connectome/upload-cortical-area", tag = "connectome")]
+/// POST /v1/connectome/upload-cortical_area-area
+#[utoipa::path(post, path = "/v1/connectome/upload-cortical_area-area", tag = "connectome")]
 pub async fn post_upload_cortical_area(
     State(_state): State<ApiState>,
     Json(_data): Json<HashMap<String, serde_json::Value>>,
@@ -848,7 +848,7 @@ pub async fn post_upload_cortical_area(
     path = "/v1/connectome/cortical_area/list/types",
     tag = "connectome",
     responses(
-        (status = 200, description = "List of cortical types with their cortical IDs and group IDs", body = HashMap<String, serde_json::Value>),
+        (status = 200, description = "List of cortical_area types with their cortical_area IDs and group IDs", body = HashMap<String, serde_json::Value>),
         (status = 500, description = "Internal server error")
     )
 )]
@@ -862,9 +862,9 @@ pub async fn get_cortical_area_list_types(
     let areas = connectome_service
         .list_cortical_areas()
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
+        .map_err(|e| ApiError::internal(format!("Failed to list cortical_area areas: {}", e)))?;
 
-    // Helper function to map cortical subtype to human-readable title
+    // Helper function to map cortical_area subtype to human-readable title
     fn get_cortical_type_title(subtype: &str) -> String {
         match subtype {
             "svi" => "segmented vision".to_string(),
@@ -888,11 +888,11 @@ pub async fn get_cortical_area_list_types(
         }
     }
 
-    // Group areas by cortical subtype
+    // Group areas by cortical_area subtype
     let mut type_map: HashMap<String, (String, Vec<String>, HashSet<u8>)> = HashMap::new();
 
     for area in areas {
-        // Parse cortical ID from base64
+        // Parse cortical_area ID from base64
         use feagi_genome_definitions::::CorticalID;
         if let Ok(cortical_id_typed) = CorticalID::try_from_base_64(&area.cortical_id) {
             // Extract subtype and group_id using CorticalID methods
@@ -902,7 +902,7 @@ pub async fn get_cortical_area_list_types(
                     (title, Vec::new(), HashSet::new())
                 });
 
-                // Add cortical ID in base64 format
+                // Add cortical_area ID in base64 format
                 entry.1.push(area.cortical_id.clone());
 
                 // Add group_id if available

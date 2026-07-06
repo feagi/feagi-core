@@ -82,7 +82,7 @@ impl FireCandidateList {
         self.cache_dirty.set(true);
     }
 
-    /// Remove one candidate from the FCL (e.g. when clearing runtime state for a cortical area).
+    /// Remove one candidate from the FCL (e.g. when clearing runtime state for a cortical_area area).
     #[inline]
     pub fn remove_candidate(&mut self, neuron_id: NeuronId) -> Option<f32> {
         let r = self.candidates.remove(&neuron_id.0);

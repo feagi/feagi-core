@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*!
-Genome migration utilities for converting old-format cortical IDs to new format.
+Genome migration utilities for converting old-format cortical_area IDs to new format.
 
-This module provides tools to migrate genomes from v2.1 with non-compliant cortical IDs
+This module provides tools to migrate genomes from v2.1 with non-compliant cortical_area IDs
 (e.g., iic100, omot00, _power) to the new feagi-data-processing template-compliant format
 (e.g., svi1____, mot0____, ___power).
 
-CRITICAL: Uses CoreCorticalType and templates from feagi-data-processing as single source of truth.
+CRITICAL: Uses CoreCorticalType and cortical_units from feagi-data-processing as single source of truth.
 
 Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
@@ -29,7 +29,7 @@ fn is_legacy_io_shorthand(id: &str) -> bool {
 pub struct MigrationResult {
     /// Migrated genome JSON
     pub genome: Value,
-    /// Number of cortical IDs migrated
+    /// Number of cortical_area IDs migrated
     pub cortical_ids_migrated: usize,
     /// Mapping from old ID to new ID
     pub id_mapping: HashMap<String, String>,
@@ -37,10 +37,10 @@ pub struct MigrationResult {
     pub warnings: Vec<String>,
 }
 
-/// Migrate a genome from old cortical ID format to new format
+/// Migrate a genome from old cortical_area ID format to new format
 ///
 /// This function:
-/// 1. Detects old-format cortical IDs (iic*, omot*, ogaz*, _power, etc.)
+/// 1. Detects old-format cortical_area IDs (iic*, omot*, ogaz*, _power, etc.)
 /// 2. Maps them to new template-compliant IDs using feagi-data-processing types
 /// 3. Updates all references (blueprint, brain_regions, cortical_mapping_dst)
 /// 4. Returns the migrated genome and migration statistics
@@ -61,7 +61,7 @@ pub fn migrate_genome(genome_json: &Value) -> EvoResult<MigrationResult> {
     // Step 1: Build ID mapping from old to new format
     build_id_mapping(genome_json, &mut result)?;
 
-    // Step 2: Migrate blueprint (cortical area definitions)
+    // Step 2: Migrate blueprint (cortical_area area definitions)
     migrate_blueprint(&mut result)?;
 
     // Step 3: Migrate brain_regions
@@ -139,9 +139,9 @@ fn migrate_morphology_ids(result: &mut MigrationResult) -> EvoResult<()> {
     Ok(())
 }
 
-/// Build mapping from old cortical IDs to new template-compliant IDs
+/// Build mapping from old cortical_area IDs to new template-compliant IDs
 fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoResult<()> {
-    // Extract cortical IDs from blueprint
+    // Extract cortical_area IDs from blueprint
     let blueprint = genome_json
         .get("blueprint")
         .and_then(|v| v.as_object())
@@ -150,7 +150,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
     // Check if genome is in flat format (keys like "_____10c-iic000-cx-...")
     let is_flat = blueprint.keys().any(|k| k.starts_with("_____10c-"));
 
-    // Collect unique cortical IDs found in the genome blueprint.
+    // Collect unique cortical_area IDs found in the genome blueprint.
     use std::collections::{BTreeSet, HashSet};
     let mut seen_ids: HashSet<String> = HashSet::new();
     let mut cortical_ids: BTreeSet<String> = BTreeSet::new(); // deterministic ordering
@@ -169,7 +169,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
         }
     }
 
-    // Collect cortical IDs from brain_regions (areas, inputs, outputs, designated IO)
+    // Collect cortical_area IDs from brain_regions (areas, inputs, outputs, designated IO)
     if let Some(brain_regions) = genome_json.get("brain_regions").and_then(|v| v.as_object()) {
         for region in brain_regions.values() {
             if let Some(region_obj) = region.as_object() {
@@ -209,7 +209,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
         }
     }
 
-    // Collect cortical IDs from cortical_mapping_dst keys in each blueprint area
+    // Collect cortical_area IDs from cortical_mapping_dst keys in each blueprint area
     for area_data in blueprint.values() {
         if let Some(area_obj) = area_data.as_object() {
             if let Some(Value::Object(dstmap)) = area_obj.get("cortical_mapping_dst") {
@@ -220,7 +220,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
         }
     }
 
-    // Collect already-used base64 cortical IDs to avoid collisions when allocating MiscData group IDs.
+    // Collect already-used base64 cortical_area IDs to avoid collisions when allocating MiscData group IDs.
     let mut used_base64: HashSet<String> = HashSet::new();
     for id in cortical_ids.iter() {
         if feagi_genome_definitions::::CorticalID::try_from_base_64(id).is_ok() {
@@ -232,11 +232,11 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
     let mut legacy_io_shorthands: Vec<String> = Vec::new();
 
     for id in cortical_ids.iter() {
-        // Special-case: legacy base64 cortical IDs that are *syntactically valid* but represent
+        // Special-case: legacy base64 cortical_area IDs that are *syntactically valid* but represent
         // an old/unsupported vision family ("imis") that should be migrated to SegmentedVision ("isvi").
         //
         // We only apply this when we can deterministically infer the intended SegmentedVision tile
-        // from the cortical area's name (vision_LL/LM/LR/ML/C/MR/TL/TM/TR). This avoids guessing.
+        // from the cortical_area area's name (vision_LL/LM/LR/ML/C/MR/TL/TM/TR). This avoids guessing.
         {
             use feagi_genome_definitions::::descriptors::CorticalUnitIndex;
             use feagi_genome_definitions::::io_cortical_area_configuration_flag::FrameChangeHandling;
@@ -287,21 +287,21 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                                 result.id_mapping.insert(id.clone(), new_id.clone());
                                 result.cortical_ids_migrated += 1;
                                 result.warnings.push(format!(
-                                    "Legacy base64 vision cortical ID '{}' (subtype=mis, name='{}') migrated to SegmentedVision(tile_index={}, group=0) → '{}'",
+                                    "Legacy base64 vision cortical_area ID '{}' (subtype=mis, name='{}') migrated to SegmentedVision(tile_index={}, group=0) → '{}'",
                                     id, name, idx, new_id
                                 ));
                                 continue;
                             }
 
                             result.warnings.push(format!(
-                                "Legacy base64 vision cortical ID '{}' (subtype=mis, name='{}') could not be migrated to SegmentedVision(tile_index={}, group=0) because target ID '{}' already exists in the genome",
+                                "Legacy base64 vision cortical_area ID '{}' (subtype=mis, name='{}') could not be migrated to SegmentedVision(tile_index={}, group=0) because target ID '{}' already exists in the genome",
                                 id, name, idx, new_id
                             ));
                         }
                     }
 
                     // Option 2 (requested): legacy base64 vision-related IPU ("vision_ipu") should
-                    // migrate to a supported MiscData IPU cortical ID with a unique group ID.
+                    // migrate to a supported MiscData IPU cortical_area ID with a unique group ID.
                     if name == "vision_ipu" {
                         // Allocate the smallest available MiscData IPU group deterministically.
                         for group_u16 in 0u16..=u8::MAX as u16 {
@@ -321,7 +321,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                             result.id_mapping.insert(id.clone(), new_id.clone());
                             result.cortical_ids_migrated += 1;
                             result.warnings.push(format!(
-                                "Legacy base64 vision cortical ID '{}' (subtype=mis, name='{}') migrated to MiscData IPU(group={}) → '{}'",
+                                "Legacy base64 vision cortical_area ID '{}' (subtype=mis, name='{}') migrated to MiscData IPU(group={}) → '{}'",
                                 id, name, group_u8, new_id
                             ));
                             break;
@@ -330,7 +330,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                         // If we didn't insert a mapping, we ran out of group IDs.
                         if !result.id_mapping.contains_key(id) {
                             return Err(EvoError::InvalidGenome(
-                                "Unable to allocate unique MiscData IPU group ID for legacy base64 vision cortical IDs".to_string(),
+                                "Unable to allocate unique MiscData IPU group ID for legacy base64 vision cortical_area IDs".to_string(),
                             ));
                         }
 
@@ -380,7 +380,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
         }
 
         result.warnings.push(format!(
-            "Cannot auto-migrate cortical ID: '{}' - no mapping defined",
+            "Cannot auto-migrate cortical_area ID: '{}' - no mapping defined",
             id
         ));
     }
@@ -401,7 +401,7 @@ fn extract_legacy_io_subtype(id: &str) -> Option<&str> {
     }
 }
 
-/// Convert legacy IPU/OPU shorthand to custom cortical area when no supported IO match exists.
+/// Convert legacy IPU/OPU shorthand to custom cortical_area area when no supported IO match exists.
 /// Preserves i/o in byte 1 so that i___id and o___id produce distinct custom IDs.
 fn legacy_io_to_custom_base64(old_id: &str) -> EvoResult<String> {
     use feagi_genome_definitions::::CorticalID;
@@ -493,7 +493,7 @@ fn apply_legacy_io_shorthand_migration(
         // Gyroscope 'gyq' were superseded by RawIMU 'rim' and SmartIMU 'sim',
         // which carry sub-area structure that legacy single-area IDs cannot
         // represent). We refuse to auto-migrate to a custom or any other area;
-        // the migrated genome will contain no cortical area for these IDs.
+        // the migrated genome will contain no cortical_area area for these IDs.
         if let Some(subtype) = extract_legacy_io_subtype(old_id) {
             if is_input && (subtype == "acc" || subtype == "gyq") {
                 result.warnings.push(format!(
@@ -575,7 +575,7 @@ fn apply_legacy_io_shorthand_migration(
     Ok(())
 }
 
-/// Extract cortical ID from flat genome key
+/// Extract cortical_area ID from flat genome key
 /// Example: "_____10c-iic000-cx-..." → "iic000"
 fn extract_cortical_id_from_flat_key(key: &str) -> Option<String> {
     if !key.starts_with("_____10c-") {
@@ -590,7 +590,7 @@ fn extract_cortical_id_from_flat_key(key: &str) -> Option<String> {
     }
 }
 
-/// Check if a cortical ID needs migration
+/// Check if a cortical_area ID needs migration
 fn needs_migration(id: &str) -> bool {
     // Old IPU formats
     if id.starts_with("iic") {
@@ -621,7 +621,7 @@ fn needs_migration(id: &str) -> bool {
     false
 }
 
-/// Map old cortical ID to new template-compliant ID
+/// Map old cortical_area ID to new template-compliant ID
 ///
 /// Mapping rules:
 /// - iic000 → Proper 8-byte SegmentedVision ID (index 0, Absolute frame handling, group 0)
@@ -770,7 +770,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
     None
 }
 
-/// Migrate blueprint section (rename cortical area keys or flat keys)
+/// Migrate blueprint section (rename cortical_area area keys or flat keys)
 fn migrate_blueprint(result: &mut MigrationResult) -> EvoResult<()> {
     let genome = result
         .genome
@@ -793,7 +793,7 @@ fn migrate_blueprint(result: &mut MigrationResult) -> EvoResult<()> {
         for (old_key, value) in old_blueprint.iter() {
             if let Some(cortical_id) = extract_cortical_id_from_flat_key(old_key) {
                 if let Some(new_id) = result.id_mapping.get(&cortical_id) {
-                    // Replace cortical ID in flat key
+                    // Replace cortical_area ID in flat key
                     let new_key =
                         old_key.replace(&format!("-{}-", cortical_id), &format!("-{}-", new_id));
                     new_blueprint.insert(new_key, value.clone());
@@ -805,7 +805,7 @@ fn migrate_blueprint(result: &mut MigrationResult) -> EvoResult<()> {
             }
         }
     } else {
-        // Hierarchical format: Direct cortical IDs as keys
+        // Hierarchical format: Direct cortical_area IDs as keys
         for (old_id, area_data) in old_blueprint.iter() {
             let new_id = result.id_mapping.get(old_id).unwrap_or(old_id);
             new_blueprint.insert(new_id.clone(), area_data.clone());
@@ -817,7 +817,7 @@ fn migrate_blueprint(result: &mut MigrationResult) -> EvoResult<()> {
     Ok(())
 }
 
-/// Migrate brain_regions section (update cortical area references)
+/// Migrate brain_regions section (update cortical_area area references)
 fn migrate_brain_regions(result: &mut MigrationResult) -> EvoResult<()> {
     let genome = result
         .genome
@@ -916,7 +916,7 @@ fn migrate_brain_regions(result: &mut MigrationResult) -> EvoResult<()> {
     Ok(())
 }
 
-/// Migrate cortical_mapping_dst references in all cortical areas
+/// Migrate cortical_mapping_dst references in all cortical_area areas
 fn migrate_cortical_mappings(result: &mut MigrationResult) -> EvoResult<()> {
     let genome = result
         .genome

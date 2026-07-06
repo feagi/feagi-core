@@ -416,9 +416,9 @@ impl RuntimeService for RuntimeServiceImpl {
         xyzp_data: &[(u32, u32, u32, f32)],
         mode: ManualStimulationMode,
     ) -> ServiceResult<usize> {
-        // Parse cortical ID from base64 string
+        // Parse cortical_area ID from base64 string
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id).map_err(|e| {
-            ServiceError::InvalidInput(format!("Invalid cortical ID format: {}", e))
+            ServiceError::InvalidInput(format!("Invalid cortical_area ID format: {}", e))
         })?;
 
         // Get NPU from burst runner
@@ -500,7 +500,7 @@ impl RuntimeService for RuntimeServiceImpl {
                     if memory_neuron_count > 0 {
                         info!(
                             target: "feagi-services",
-                            "Reset {} memory neurons in cortical area {}",
+                            "Reset {} memory neurons in cortical_area area {}",
                             memory_neuron_count,
                             idx
                         );

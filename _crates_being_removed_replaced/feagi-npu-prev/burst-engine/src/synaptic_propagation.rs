@@ -32,7 +32,7 @@
 //! ## Rust Optimization Strategy
 //! 1. **Gather Phase**: Build synapse list (minimal Python loop overhead)
 //! 2. **SIMD Phase**: Vectorized math (weight × PSP × sign)
-//! 3. **Grouping Phase**: Sort/split by cortical area (np.argsort overhead removed)
+//! 3. **Grouping Phase**: Sort/split by cortical_area area (np.argsort overhead removed)
 //!
 //! ## Performance Target
 //! - Python: ~165ms for 12K neurons
@@ -62,7 +62,7 @@ const MEMORY_NEURON_ID_START: u32 = 50_000_000;
 /// **Anti-spam:** at least one of:
 /// - `FEAGI_NPU_TRACE_SRC=<u32>` — source neuron id
 /// - `FEAGI_NPU_TRACE_DST=<u32>` — target neuron id
-/// - `FEAGI_NPU_TRACE_CORTICAL_ID=<base64>` — target neuron's cortical area id (e.g. genome key)
+/// - `FEAGI_NPU_TRACE_CORTICAL_ID=<base64>` — target neuron's cortical_area area id (e.g. genome key)
 ///
 /// Per-synapse lines require `FEAGI_NPU_TRACE_SYNAPSE_VERBOSE=1`. Otherwise one summary line per
 /// propagation call counts matching edges (avoids log flooding).
@@ -76,7 +76,7 @@ struct SynapseTraceCfg {
     enabled: bool,
     src_filter: Option<u32>,
     dst_filter: Option<u32>,
-    /// Filter by postsynaptic cortical id (matches `neuron_to_area` for target neuron).
+    /// Filter by postsynaptic cortical_area id (matches `neuron_to_area` for target neuron).
     dst_cortical_id_filter: Option<CorticalID>,
     /// When false, emit a single `[SYNAPSE]` summary count instead of per-edge lines.
     synapse_verbose: bool,
@@ -107,7 +107,7 @@ fn synapse_trace_cfg() -> &'static SynapseTraceCfg {
                 Err(e) => {
                     tracing::warn!(
                         target: "feagi-npu-trace",
-                        "FEAGI_NPU_TRACE_CORTICAL_ID is invalid ({}); cortical id filter disabled",
+                        "FEAGI_NPU_TRACE_CORTICAL_ID is invalid ({}); cortical_area id filter disabled",
                         e
                     );
                     None
@@ -152,14 +152,14 @@ fn power_cortical_id() -> &'static CorticalID {
         // "_power" is special-cased and stored as base64 in the genome parser.
         // See feagi-evolutionary parser docs; this value is stable.
         CorticalID::try_from_base_64("X19fcG93ZXI=")
-            .expect("Power cortical ID base64 must be valid")
+            .expect("Power cortical_area ID base64 must be valid")
     })
 }
 
 /// Synapse lookup index: maps source neuron → list of synapse indices
 pub type SynapseIndex = AHashMap<NeuronId, Vec<usize>>;
 
-/// Propagation result: cortical area → list of (target_neuron, contribution)
+/// Propagation result: cortical_area area → list of (target_neuron, contribution)
 pub type PropagationResult = AHashMap<CorticalID, Vec<(NeuronId, SynapticContribution)>>;
 
 /// PSP contributions and associative-memory PSP sums split by synaptic delay (whole bursts).
@@ -199,7 +199,7 @@ pub struct SynapticPropagationEngine {
     /// When true: Full PSP value is applied to each synapse
     pub area_psp_uniform_distribution: AHashMap<CorticalID, bool>,
     /// Cortical Area -> configured baseline PSP for that source area.
-    /// Used to restore per-synapse PSP on cortical runtime reset.
+    /// Used to restore per-synapse PSP on cortical_area runtime reset.
     pub area_postsynaptic_current: AHashMap<CorticalID, f32>,
     /// Cortical Area -> degeneration coefficient (PSP decrement per source fire)
     /// Values <= 0 are treated as disabled and removed from the map.
@@ -275,32 +275,32 @@ impl SynapticPropagationEngine {
         }
     }
 
-    /// Set the neuron-to-cortical-area mapping
+    /// Set the neuron-to-cortical_area-area mapping
     pub fn set_neuron_mapping(&mut self, mapping: AHashMap<NeuronId, CorticalID>) {
         self.neuron_to_area = mapping;
     }
 
-    /// Set the mp_driven_psp flags for cortical areas
+    /// Set the mp_driven_psp flags for cortical_area areas
     /// When enabled for an area, PSP will be dynamically set from source neuron's membrane potential
     pub fn set_mp_driven_psp_flags(&mut self, flags: AHashMap<CorticalID, bool>) {
         self.area_mp_driven_psp = flags;
     }
 
-    /// Update mp_driven_psp flag for a single cortical area (in-place).
+    /// Update mp_driven_psp flag for a single cortical_area area (in-place).
     ///
     /// This avoids rebuilding/replacing the entire flags map when toggling one area.
     pub fn set_mp_driven_psp_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
         self.area_mp_driven_psp.insert(cortical_id, enabled);
     }
 
-    /// Set the psp_uniform_distribution flags for cortical areas
+    /// Set the psp_uniform_distribution flags for cortical_area areas
     /// When false (default): PSP value is divided among all outgoing synapses from the source neuron
     /// When true: Full PSP value is applied to each outgoing synapse
     pub fn set_psp_uniform_distribution_flags(&mut self, flags: AHashMap<CorticalID, bool>) {
         self.area_psp_uniform_distribution = flags;
     }
 
-    /// Update psp_uniform_distribution flag for a single cortical area (in-place).
+    /// Update psp_uniform_distribution flag for a single cortical_area area (in-place).
     ///
     /// This avoids rebuilding/replacing the entire flags map when toggling one area.
     pub fn set_psp_uniform_distribution_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
@@ -308,20 +308,20 @@ impl SynapticPropagationEngine {
             .insert(cortical_id, enabled);
     }
 
-    /// Set configured baseline PSP values for cortical areas.
+    /// Set configured baseline PSP values for cortical_area areas.
     ///
     /// Values <= 0 are retained as-is to preserve explicit user intent.
     pub fn set_postsynaptic_current_flags(&mut self, flags: AHashMap<CorticalID, f32>) {
         self.area_postsynaptic_current = flags;
     }
 
-    /// Set configured baseline PSP for one cortical area.
+    /// Set configured baseline PSP for one cortical_area area.
     pub fn set_postsynaptic_current_flag(&mut self, cortical_id: CorticalID, postsynaptic: f32) {
         self.area_postsynaptic_current
             .insert(cortical_id, postsynaptic);
     }
 
-    /// Set degeneration coefficients for cortical areas.
+    /// Set degeneration coefficients for cortical_area areas.
     ///
     /// Coefficients <= 0 disable degeneration for that area and are omitted.
     pub fn set_degeneration_flags(&mut self, mut flags: AHashMap<CorticalID, f32>) {
@@ -329,7 +329,7 @@ impl SynapticPropagationEngine {
         self.area_degeneration = flags;
     }
 
-    /// Set degeneration coefficient for a single cortical area (in-place).
+    /// Set degeneration coefficient for a single cortical_area area (in-place).
     ///
     /// Coefficients <= 0 disable degeneration for that area.
     pub fn set_degeneration_flag(&mut self, cortical_id: CorticalID, degeneration: f32) {
@@ -382,7 +382,7 @@ impl SynapticPropagationEngine {
     /// - `fired_neurons`: List of neurons that fired this burst
     /// - `synapse_storage`: Synapse array (weights, PSPs, types)
     /// - `neuron_membrane_potentials`: Source neuron → firing-time membrane potential (`f32`)
-    ///   Used when `mp_driven_psp` is enabled for the source cortical area
+    ///   Used when `mp_driven_psp` is enabled for the source cortical_area area
     ///
     /// # Performance Notes
     /// - Uses Rayon for parallel processing
@@ -645,7 +645,7 @@ impl SynapticPropagationEngine {
                 // Get target neuron from SoA
                 let target_neuron = NeuronId(synapse_storage.target_neurons()[syn_idx]);
 
-                // Get target cortical area (single lookup, can't optimize further - each synapse has unique target)
+                // Get target cortical_area area (single lookup, can't optimize further - each synapse has unique target)
                 let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
 
                 // Get source neuron
@@ -660,7 +660,7 @@ impl SynapticPropagationEngine {
                     return None;
                 }
 
-                // Logging: exclude power sources unless tracing a destination cortical area (then
+                // Logging: exclude power sources unless tracing a destination cortical_area area (then
                 // power→area drive is often relevant).
                 let has_focus = trace_cfg.src_filter.is_some()
                     || trace_cfg.dst_filter.is_some()
@@ -839,7 +839,7 @@ impl SynapticPropagationEngine {
             .map(|start| start.elapsed().as_secs_f64() * 1000.0)
             .unwrap_or(0.0);
 
-        // PHASE 3: GROUP - Group by delay then cortical area
+        // PHASE 3: GROUP - Group by delay then cortical_area area
         let group_start = profile_enabled.then(std::time::Instant::now);
         let fcl_by_delay = fold_contributions_by_delay(contributions);
         let contrib_count: usize = fcl_by_delay

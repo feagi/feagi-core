@@ -13,7 +13,7 @@ use feagi_npu_neural::excitability_random;
 
 use crate::fire_structures::{FiringNeuron, FIRE_KIND_EPISODIC_MEMORY, FIRE_KIND_STDP_ELIGIBLE};
 
-/// Configurable LIF-style parameters for associative memory neurons (per memory cortical area).
+/// Configurable LIF-style parameters for associative memory neurons (per memory cortical_area area).
 #[derive(Debug, Clone)]
 pub struct MemoryAssociativeLifParams {
     pub threshold: f32,
@@ -55,7 +55,7 @@ impl MemoryAssociativeLifState {
     }
 }
 
-/// Per-cortical-area defaults keyed by `cortical_idx` (memory areas).
+/// Per-cortical_area-area defaults keyed by `cortical_idx` (memory areas).
 pub type MemoryAssociativeLifParamsByArea = AHashMap<u32, MemoryAssociativeLifParams>;
 
 /// Sparse map: global memory neuron id → associative LIF state.
@@ -184,7 +184,7 @@ pub fn ensure_sparse_state_for_associative_input(
     }
 }
 
-/// Resolve parameters for a memory cortical area.
+/// Resolve parameters for a memory cortical_area area.
 pub fn resolve_memory_lif_params(
     cortical_idx: u32,
     by_area: &MemoryAssociativeLifParamsByArea,

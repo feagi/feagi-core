@@ -52,7 +52,7 @@ macro_rules! motor_cortical_units {
                 },
 
 
-                #[doc = "Miscellaneous motor that does not fit existing templates."]
+                #[doc = "Miscellaneous motor that does not fit existing cortical_units."]
                 MiscData => {
                     friendly_name: "Miscellaneous Motor",
                     accepted_wrapped_io_data_type: MiscData,

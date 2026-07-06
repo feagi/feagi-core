@@ -827,7 +827,7 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_cortical_info),
         )
         .route(
-            "/connectome/stats/cortical/cumulative/:cortical_area",
+            "/connectome/stats/cortical_area/cumulative/:cortical_area",
             get(connectome::get_stats_cortical_cumulative),
         )
         .route(
@@ -864,7 +864,7 @@ fn create_v1_router() -> Router<ApiState> {
             get(connectome::get_download_connectome),
         )
         .route(
-            "/connectome/download-cortical-area/:cortical_area",
+            "/connectome/download-cortical_area-area/:cortical_area",
             get(connectome::get_download_cortical_area),
         )
         .route(
@@ -872,7 +872,7 @@ fn create_v1_router() -> Router<ApiState> {
             axum::routing::post(connectome::post_upload_connectome),
         )
         .route(
-            "/connectome/upload-cortical-area",
+            "/connectome/upload-cortical_area-area",
             axum::routing::post(connectome::post_upload_cortical_area),
         )
         // ===== BURST_ENGINE MODULE (14 endpoints) =====
@@ -1351,7 +1351,7 @@ async fn root_redirect() -> Redirect {
 }
 
 // Custom Swagger UI with FEAGI branding and dark/light themes
-// Embedded from templates/custom-swagger-ui.html at compile time
+// Embedded from cortical_units/custom-swagger-ui.html at compile time
 async fn custom_swagger_ui() -> Html<&'static str> {
     const CUSTOM_SWAGGER_HTML: &str = include_str!("../../../templates/custom-swagger-ui.html");
     Html(CUSTOM_SWAGGER_HTML)

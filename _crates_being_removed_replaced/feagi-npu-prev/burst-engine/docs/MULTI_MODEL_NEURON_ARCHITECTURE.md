@@ -228,7 +228,7 @@ impl NeuronIdManager {
         }
     }
     
-    /// Batch deallocate cortical area (efficient bulk operation)
+    /// Batch deallocate cortical_area area (efficient bulk operation)
     pub fn deallocate_cortical_area(&mut self, neuron_ids: &[u32]) {
         for &id in neuron_ids {
             self.deallocate_neuron_id(id);

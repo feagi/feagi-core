@@ -10,7 +10,7 @@ use tracing::debug;
 /// Check if a genome JSON contains any form of plasticity
 ///
 /// This function checks for:
-/// 1. Memory cortical areas (identified by `memory-b` flag = true)
+/// 1. Memory cortical_area areas (identified by `memory-b` flag = true)
 /// 2. STDP connections (identified by `plasticity_flag` = true in morphologies)
 ///
 /// # Arguments
@@ -32,7 +32,7 @@ pub fn genome_has_plasticity(genome_json: &Value) -> bool {
     has_memory || has_stdp
 }
 
-/// Check if genome has memory cortical areas
+/// Check if genome has memory cortical_area areas
 ///
 /// Memory areas are identified by the `memory-b` property set to `true` in the blueprint.
 /// The `_group` field may still be "CUSTOM", so we rely on the `memory-b` flag.
@@ -89,7 +89,7 @@ fn has_stdp_connections(genome_json: &Value) -> bool {
     false
 }
 
-/// Memory-specific cortical area properties
+/// Memory-specific cortical_area area properties
 #[derive(Debug, Clone)]
 pub struct MemoryAreaProperties {
     /// Number of timesteps to consider for temporal pattern detection
@@ -118,13 +118,13 @@ impl Default for MemoryAreaProperties {
     }
 }
 
-/// Extract memory-specific properties from a cortical area's properties HashMap
+/// Extract memory-specific properties from a cortical_area area's properties HashMap
 ///
 /// Returns `Some(MemoryAreaProperties)` if the area is a memory area (`is_mem_type` = true),
 /// otherwise returns `None`.
 ///
 /// # Arguments
-/// * `properties` - The cortical area properties HashMap
+/// * `properties` - The cortical_area area properties HashMap
 ///
 pub fn extract_memory_properties(
     properties: &HashMap<String, Value>,

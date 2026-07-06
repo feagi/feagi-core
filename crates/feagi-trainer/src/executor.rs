@@ -386,7 +386,7 @@ fn scale_action(
 ///
 /// PARKED (ADR-014/ADR-015): this is the executor for the superseded "Topology C — Trainer drives
 /// the sim" model. The live embodied path is the parallel co-agent model (the controller owns
-/// physics; the Trainer injects training signals on disjoint cortical I/O). Retained only for a
+/// physics; the Trainer injects training signals on disjoint cortical_area I/O). Retained only for a
 /// possible trainer-owned, no-controller sim path; not wired into `RunConfig`/CLI.
 ///
 /// Per step the loop encodes the environment observation, submits it, steps FEAGI, collects +

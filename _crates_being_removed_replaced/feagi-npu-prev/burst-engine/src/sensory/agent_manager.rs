@@ -405,7 +405,7 @@ fn agent_polling_loop(
                 }
             };
 
-            // Iterate over cortical areas
+            // Iterate over cortical_area areas
             for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
                 // OPTIMIZATION: Use CorticalID directly - no string allocation!
 

@@ -28,7 +28,7 @@ mod burst_engine_rayon_tests
         let mut engine_data: BurstEngineDataRayon<FeagiGlobalQuantizationStandard> = BurstEngineDataRayon::new();
 
 
-        // append cortical areas manually
+        // append cortical_area areas manually
 
         let mut neuron_index: NPUWrappedNeuronIndexBurstEngineIndex<u32> = NPUWrappedNeuronIndexBurstEngineIndex::QUANT_ZERO;
         let number_neurons_cortical_area: u32 = cube_length * cube_length * cube_length * cube_density;

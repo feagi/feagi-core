@@ -29,7 +29,7 @@ pub struct GenomeInfoResponse {
     /// Genome version
     pub version: Option<String>,
 
-    /// Number of cortical areas
+    /// Number of cortical_area areas
     pub cortical_area_count: usize,
 
     /// Number of brain regions

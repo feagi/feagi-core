@@ -21,13 +21,13 @@ pub struct FCLResponse {
     /// Global FCL (all neuron IDs across areas)
     pub global_fcl: Vec<u64>,
 
-    /// FCL organized by cortical area
+    /// FCL organized by cortical_area area
     pub cortical_areas: HashMap<String, Vec<u64>>,
 
     /// Default fire ledger window size
     pub default_window_size: u32,
 
-    /// Number of cortical areas with active neurons
+    /// Number of cortical_area areas with active neurons
     pub active_cortical_count: usize,
 }
 
@@ -40,7 +40,7 @@ pub struct FireQueueResponse {
     /// Total neurons that fired
     pub total_fired: usize,
 
-    /// Fired neurons organized by cortical area
+    /// Fired neurons organized by cortical_area area
     pub cortical_areas: HashMap<String, Vec<u64>>,
 }
 

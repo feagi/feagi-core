@@ -69,7 +69,7 @@ fn collect_region_branch_ids(
     Ok(out)
 }
 
-/// Collect cortical IDs (base64) assigned to any region in `branch_region_ids`.
+/// Collect cortical_area IDs (base64) assigned to any region in `branch_region_ids`.
 fn cortical_ids_in_branch(genome: &RuntimeGenome, branch_region_ids: &[String]) -> HashSet<String> {
     let mut ids = HashSet::new();
     for rid in branch_region_ids {

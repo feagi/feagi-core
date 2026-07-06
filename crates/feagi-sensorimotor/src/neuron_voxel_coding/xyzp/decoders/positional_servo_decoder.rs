@@ -1,4 +1,4 @@
-//! Decoder for PositionalServo with both absolute and incremental cortical areas.
+//! Decoder for PositionalServo with both absolute and incremental cortical_area areas.
 
 use crate::configuration::jsonable::JSONDecoderProperties;
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
@@ -15,9 +15,9 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
-/// Decoder for PositionalServo with absolute and incremental cortical areas.
+/// Decoder for PositionalServo with absolute and incremental cortical_area areas.
 ///
-/// PositionalServo has two cortical areas:
+/// PositionalServo has two cortical_area areas:
 /// - Area 0 (absolute): 1x1xZ - each channel has 1 neuron width for absolute position
 /// - Area 1 (incremental): 2x1xZ - each channel has 2 neuron widths (forward/backward)
 ///

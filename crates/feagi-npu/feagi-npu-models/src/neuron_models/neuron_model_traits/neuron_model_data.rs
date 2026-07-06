@@ -1,8 +1,8 @@
 use feagi_data::quantization_levels::extendable_quantizations::NeuronModelQuantization;
 
-/// Root trait for all cortical data implementations, essentially any cortical level data shared
-/// by all neurons in a cortical area of a given neuron model. This should be extended with only
-/// the cortical level data
+/// Root trait for all cortical_area data implementations, essentially any cortical_area level data shared
+/// by all neurons in a cortical_area area of a given neuron model. This should be extended with only
+/// the cortical_area level data
 pub trait NeuronModelCorticalData<NMQ>
 where
     NMQ: NeuronModelQuantization,
@@ -11,12 +11,12 @@ where
     /// about to overflow. Otherwise, set to false
     const MODEL_NEEDS_TO_BE_INFORMED_OF_BURST_INDEX_ROLLOVER: bool;
     
-    /// Set to true if the neuron model can run under Dimensional type cortical areas
+    /// Set to true if the neuron model can run under Dimensional type cortical_area areas
     const MODEL_SUPPORTS_CORTICAL_LAYOUT_DIMENSIONAL: bool;
     
-    // TODO other cortical configuration types
+    // TODO other cortical_area configuration types
 
-    // Implement any cortical level data
+    // Implement any cortical_area level data
 
     // No methods!
     

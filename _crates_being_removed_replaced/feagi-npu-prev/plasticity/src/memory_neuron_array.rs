@@ -308,7 +308,7 @@ impl MemoryNeuronArray {
         converted_indices
     }
 
-    /// Get all active neuron IDs for a cortical area
+    /// Get all active neuron IDs for a cortical_area area
     pub fn get_active_neurons_by_area(&self, cortical_area_id: u32) -> Vec<u32> {
         if let Some(indices) = self.area_neuron_indices.get(&cortical_area_id) {
             indices
@@ -411,7 +411,7 @@ impl MemoryNeuronArray {
         }
     }
 
-    /// Get cortical area ID at index
+    /// Get cortical_area area ID at index
     pub fn get_cortical_area_id(&self, neuron_idx: usize) -> Option<u32> {
         if self.is_valid_index(neuron_idx) {
             Some(self.cortical_area_ids[neuron_idx])
@@ -531,7 +531,7 @@ impl MemoryNeuronArray {
     }
 
     /// Reset array state (for testing)
-    /// Deactivate all memory neurons in a specific cortical area
+    /// Deactivate all memory neurons in a specific cortical_area area
     pub fn reset_cortical_area(&mut self, cortical_area_id: u32) -> usize {
         let Some(neuron_indices) = self.area_neuron_indices.get(&cortical_area_id) else {
             return 0;

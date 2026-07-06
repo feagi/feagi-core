@@ -43,7 +43,7 @@ pub enum WrappedIOType {
     ImageFrame(Option<ImageFrameProperties>),
     SegmentedImageFrame(Option<SegmentedImageFrameProperties>),
     /// Composite Raw IMU reading (accelerometer + gyroscope + magnetometer),
-    /// each a 3-axis signed percentage. Spans 3 sub-cortical-areas.
+    /// each a 3-axis signed percentage. Spans 3 sub-cortical_area-areas.
     RawIMU,
     MiscData(Option<MiscDataDimensions>),
     GazeProperties,

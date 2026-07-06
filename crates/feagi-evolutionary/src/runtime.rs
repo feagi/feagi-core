@@ -366,7 +366,7 @@ pub struct GenomeSignatures {
 /// Genome statistics
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GenomeStats {
-    /// Innate cortical area count
+    /// Innate cortical_area area count
     pub innate_cortical_area_count: usize,
 
     /// Innate neuron count

@@ -27,10 +27,10 @@
 ```rust
 use feagi-data-structures::genomic::cortical_area::{CorticalID, CorticalType};
 
-// Create a cortical ID
+// Create a cortical_area ID
 let cortical_id = CorticalID::from_base_64("aXB1MDAw")?;
 
-// Get the cortical type
+// Get the cortical_area type
 let cortical_type = cortical_id.cortical_type();
 ```
 

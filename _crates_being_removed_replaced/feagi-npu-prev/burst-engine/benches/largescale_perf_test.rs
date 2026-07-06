@@ -115,7 +115,7 @@ fn bench_largescale_propagation(c: &mut Criterion) {
         // Create a valid CorticalID (custom type: starts with 'c' = 0x63)
         // Format: [type_byte][7 more bytes] where type_byte must match a valid pattern
         let mut area_bytes = [0u8; 8];
-        area_bytes[0] = b'c'; // 'c' = custom cortical area type
+        area_bytes[0] = b'c'; // 'c' = custom cortical_area area type
         area_bytes[1] = 1;
         let area_id = CorticalID::try_from_bytes(&area_bytes).expect("Failed to create CorticalID");
         for i in 0..neuron_count {

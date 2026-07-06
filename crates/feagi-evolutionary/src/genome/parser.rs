@@ -101,7 +101,7 @@ pub struct RawGenome {
     pub brain_regions_root: Option<String>,
 }
 
-/// Raw cortical area from blueprint
+/// Raw cortical_area area from blueprint
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RawCorticalArea {
     pub cortical_name: Option<String>,
@@ -176,7 +176,7 @@ pub struct RawBrainRegion {
 
 /// Convert cortical_mapping_dst keys from old format to base64
 ///
-/// This ensures all destination cortical IDs in dstmap are stored in the new base64 format.
+/// This ensures all destination cortical_area IDs in dstmap are stored in the new base64 format.
 fn convert_dstmap_keys_to_base64(dstmap: &Value) -> Value {
     if let Some(dstmap_obj) = dstmap.as_object() {
         let mut converted = serde_json::Map::new();
@@ -310,7 +310,7 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
 pub struct GenomeParser;
 
 impl GenomeParser {
-    /// Normalize cortical ID list properties (inputs, outputs, designated_*) to base64 strings.
+    /// Normalize cortical_area ID list properties (inputs, outputs, designated_*) to base64 strings.
     fn normalize_brain_region_cortical_id_list_properties(region: &mut BrainRegion, keys: &[&str]) {
         for key in keys {
             let Some(val) = region.get_property(key) else {
@@ -371,7 +371,7 @@ impl GenomeParser {
             )));
         }
 
-        // Parse cortical areas from blueprint
+        // Parse cortical_area areas from blueprint
         let cortical_areas = Self::parse_cortical_areas(&raw.blueprint)?;
 
         // Parse brain regions
@@ -388,7 +388,7 @@ impl GenomeParser {
         })
     }
 
-    /// Parse cortical areas from blueprint
+    /// Parse cortical_area areas from blueprint
     fn parse_cortical_areas(
         blueprint: &HashMap<String, RawCorticalArea>,
     ) -> EvoResult<Vec<CorticalArea>> {
@@ -449,15 +449,15 @@ impl GenomeParser {
                 GenomeCoordinate3D::new(0, 0, 0)
             };
 
-            // Determine cortical type from cortical_id
+            // Determine cortical_area type from cortical_id
             let cortical_type = cortical_id.as_cortical_type().map_err(|e| {
                 EvoError::InvalidArea(format!(
-                    "Failed to determine cortical type from ID {}: {}",
+                    "Failed to determine cortical_area type from ID {}: {}",
                     cortical_id_str, e
                 ))
             })?;
 
-            // Create cortical area with CorticalID object (zero-copy, type-safe)
+            // Create cortical_area area with CorticalID object (zero-copy, type-safe)
             let mut area = CorticalArea::new(
                 cortical_id,
                 0, // cortical_idx will be assigned by ConnectomeManager
@@ -683,7 +683,7 @@ impl GenomeParser {
                 }
             }
 
-            // Add cortical areas to region (using CorticalID directly)
+            // Add cortical_area areas to region (using CorticalID directly)
             if let Some(areas) = &raw_region.areas {
                 for area_id in areas {
                     // Convert area_id to CorticalID
@@ -817,7 +817,7 @@ mod tests {
 
     #[test]
     fn test_parse_minimal_genome() {
-        // Test backward compatibility: parsing v2.1 genome with old 6-byte cortical ID
+        // Test backward compatibility: parsing v2.1 genome with old 6-byte cortical_area ID
         // Parser should convert old format to base64 for storage
         let json = r#"{
             "version": "2.1",
@@ -860,7 +860,7 @@ mod tests {
 
     #[test]
     fn test_parse_multiple_areas() {
-        // Test parsing multiple cortical areas with old format IDs
+        // Test parsing multiple cortical_area areas with old format IDs
         let json = r#"{
             "version": "2.1",
             "blueprint": {
@@ -896,7 +896,7 @@ mod tests {
     #[test]
     fn test_string_to_cortical_id_legacy_power_shorthand() {
         // Older FEAGI genomes may encode the power core area as "___pwr" (6-char shorthand).
-        // Migration must map this deterministically to the core Power cortical ID.
+        // Migration must map this deterministically to the core Power cortical_area ID.
         use feagi_genome_definitions::::CoreCorticalType;
         let id = string_to_cortical_id("___pwr").unwrap();
         assert_eq!(
@@ -1019,7 +1019,7 @@ mod tests {
     #[test]
     fn test_cortical_type_new_population() {
         // Test that cortical_type_new field is populated during parsing (Phase 2)
-        // This tests that parsing works with valid cortical IDs and populates types correctly
+        // This tests that parsing works with valid cortical_area IDs and populates types correctly
         use feagi_genome_definitions::::CoreCorticalType;
         let power_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
         let json = format!(
@@ -1067,7 +1067,7 @@ mod tests {
                 area.cortical_id
             );
 
-            // Verify cortical group is consistent (avoid depending on feagi-brain-development)
+            // Verify cortical_area group is consistent (avoid depending on feagi-brain-development)
             if let Some(prop_group) = area
                 .properties
                 .get("cortical_group")

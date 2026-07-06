@@ -160,7 +160,7 @@ fn dynamics_trace_emit(neuron_id: u32, cortical_idx: u32) -> bool {
 }
 
 /// When set, [`process_burst`](crate::RustNPU::process_burst) logs one FCL aggregate line for this
-/// cortical index (phase 1, pre-dynamics) when dynamics tracing is enabled.
+/// cortical_area index (phase 1, pre-dynamics) when dynamics tracing is enabled.
 pub fn trace_fcl_cortical_idx_for_logging() -> Option<u32> {
     let cfg = dynamics_trace_cfg();
     if !cfg.enabled {
@@ -1567,7 +1567,7 @@ mod tests {
         let mut empty_sparse = empty_assoc_sparse();
 
         let memory_id = NeuronId(50_000_000);
-        let cortical_idx = 0u32; // valid in some deployments (0-based cortical indices)
+        let cortical_idx = 0u32; // valid in some deployments (0-based cortical_area indices)
 
         let mut fcl = FireCandidateList::new();
         fcl.add_candidate(memory_id, 1.5);

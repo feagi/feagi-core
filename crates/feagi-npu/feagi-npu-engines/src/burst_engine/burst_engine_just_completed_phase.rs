@@ -34,9 +34,9 @@ pub enum BurstEngineJustCompletedPhase
     /// neuron firing data before. Is required due to the following phase
     UpdateFiringNeuronBitfield,
 
-    /// Per cortical area that needs it, counts the number of firing neurons and updates the
+    /// Per cortical_area area that needs it, counts the number of firing neurons and updates the
     /// internal value of that area. This is important due to being required for some mappings
-    /// down stream of a cortical area
+    /// down stream of a cortical_area area
     CountFiringNeuronsPerCorticalArea,
 
     /// In this optional phase, if there is sensor / motor / visualization data to take in and out,

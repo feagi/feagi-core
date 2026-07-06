@@ -17,13 +17,13 @@ use std::time::Instant;
 
 /// Manages multiple sensory data streams with independent processing pipelines per channel.
 ///
-/// This structure maintains a collection of processing pipelines, one for each cortical channel,
+/// This structure maintains a collection of processing pipelines, one for each cortical_area channel,
 /// allowing different sensory inputs to be processed independently before being encoded into
 /// neuron voxel data. Each channel can have its own pipeline stages for data transformation.
 ///
 /// # Fields
 /// - `neuron_encoder`: Encoder that converts processed data into neuron voxel representations
-/// - `pipeline_runners`: Collection of pipeline runners, one per cortical channel
+/// - `pipeline_runners`: Collection of pipeline runners, one per cortical_area channel
 /// - `last_update_time`: Timestamp of the most recent update across all channels
 
 #[derive(Debug)]
@@ -121,7 +121,7 @@ impl SensoryCorticalUnitCache {
 
     //region Properties
 
-    /// Returns the total number of cortical channels managed by this cache system.
+    /// Returns the total number of cortical_area channels managed by this cache system.
     ///
     /// # Returns
     /// The count of channels as a `CorticalChannelCount`.

@@ -31,11 +31,11 @@ fn create_test_manager() -> ConnectomeManager {
 fn test_create_cortical_area() {
     let mut manager = create_test_manager();
 
-    // Create a cortical area
+    // Create a cortical_area area
     let cortical_id = CorticalID::try_from_base_64("cust000").unwrap();
     let cortical_type = cortical_id
         .as_cortical_type()
-        .expect("Failed to get cortical type");
+        .expect("Failed to get cortical_area type");
     let area = CorticalArea::new(
         cortical_id,
         0, // cortical_idx
@@ -44,18 +44,18 @@ fn test_create_cortical_area() {
         (0, 0, 0).into(), // position
         cortical_type,
     )
-    .expect("Failed to create cortical area");
+    .expect("Failed to create cortical_area area");
 
     // Add to manager
     manager
         .add_cortical_area(area)
-        .expect("Failed to add cortical area");
+        .expect("Failed to add cortical_area area");
 
     // Verify it exists
     assert!(manager.cortical_area_exists(&CorticalID::try_from_base_64("cust000").unwrap()));
     assert_eq!(manager.get_cortical_area_count(), 1);
 
-    println!("✅ Test 1: Create cortical area - PASSED");
+    println!("✅ Test 1: Create cortical_area area - PASSED");
 }
 
 // ============================================================================
@@ -70,7 +70,7 @@ fn test_create_and_query_neurons() {
     let cortical_id = CorticalID::try_from_base_64("cust000").unwrap();
     let cortical_type = cortical_id
         .as_cortical_type()
-        .expect("Failed to get cortical type");
+        .expect("Failed to get cortical_area type");
     let area = CorticalArea::new(
         cortical_id,
         0,
@@ -146,7 +146,7 @@ fn test_create_and_query_synapses() {
     let cortical_id = CorticalID::try_from_base_64("cust000").unwrap();
     let cortical_type = cortical_id
         .as_cortical_type()
-        .expect("Failed to get cortical type");
+        .expect("Failed to get cortical_area type");
     let area = CorticalArea::new(
         cortical_id,
         0,
@@ -248,7 +248,7 @@ fn test_batch_neuron_operations() {
     let cortical_id = CorticalID::try_from_base_64("cust000").unwrap();
     let cortical_type = cortical_id
         .as_cortical_type()
-        .expect("Failed to get cortical type");
+        .expect("Failed to get cortical_area type");
     let area = CorticalArea::new(
         cortical_id,
         0,
@@ -345,7 +345,7 @@ fn test_area_queries() {
             (0, 0, 0).into(),
             cortical_id
                 .as_cortical_type()
-                .expect("Failed to get cortical type"),
+                .expect("Failed to get cortical_area type"),
         )
         .unwrap_or_else(|_| panic!("Failed to create area {}", i));
 
@@ -393,7 +393,7 @@ fn test_update_operations() {
         (0, 0, 0).into(),
         cortical_id
             .as_cortical_type()
-            .expect("Failed to get cortical type"),
+            .expect("Failed to get cortical_area type"),
     )
     .expect("Failed to create area");
 
@@ -501,7 +501,7 @@ fn test_delete_operations() {
         (0, 0, 0).into(),
         cortical_id
             .as_cortical_type()
-            .expect("Failed to get cortical type"),
+            .expect("Failed to get cortical_area type"),
     )
     .expect("Failed to create area");
 

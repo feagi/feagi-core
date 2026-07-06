@@ -25,7 +25,7 @@ pub struct HealthCheckResponseV1 {
     /// TODO: Get from NPU when available
     pub synapse_count: usize,
 
-    /// Number of cortical areas
+    /// Number of cortical_area areas
     pub cortical_area_count: usize,
 
     /// Is the genome valid?

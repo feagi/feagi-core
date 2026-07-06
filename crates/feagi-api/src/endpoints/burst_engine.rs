@@ -105,11 +105,11 @@ pub async fn get_fcl(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
 
-    // Get all cortical areas to map cortical_idx -> cortical_id
+    // Get all cortical_area areas to map cortical_idx -> cortical_id
     let areas = connectome_service
         .list_cortical_areas()
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
+        .map_err(|e| ApiError::internal(format!("Failed to list cortical_area areas: {}", e)))?;
 
     // Build cortical_idx -> cortical_id mapping
     let mut idx_to_id: HashMap<u32, String> = HashMap::new();
@@ -117,7 +117,7 @@ pub async fn get_fcl(
         idx_to_id.insert(area.cortical_idx, area.cortical_id.clone());
     }
 
-    // Group FCL neurons by cortical area
+    // Group FCL neurons by cortical_area area
     // Use BTreeMap for consistent ordering in JSON output
     let mut cortical_areas: BTreeMap<String, Vec<u64>> = BTreeMap::new();
 
@@ -161,7 +161,7 @@ pub async fn get_fcl(
         serde_json::json!(active_cortical_count),
     );
 
-    debug!(target: "feagi-api", "GET /fcl - {} neurons across {} cortical areas (limited to 20/area)",
+    debug!(target: "feagi-api", "GET /fcl - {} neurons across {} cortical_area areas (limited to 20/area)",
            total_neurons, active_cortical_count);
 
     Ok(Json(response))
@@ -216,7 +216,7 @@ pub async fn get_fire_queue(
     let areas = connectome_service
         .list_cortical_areas()
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
+        .map_err(|e| ApiError::internal(format!("Failed to list cortical_area areas: {}", e)))?;
 
     let idx_to_id: HashMap<u32, String> = areas
         .iter()
@@ -427,7 +427,7 @@ pub async fn get_fire_ledger_default_window_size(
     Ok(Json(20))
 }
 
-/// Set the default fire history window size for all cortical areas.
+/// Set the default fire history window size for all cortical_area areas.
 #[utoipa::path(
     put,
     path = "/v1/burst_engine/fire_ledger/default_window_size",
@@ -461,7 +461,7 @@ pub async fn put_fire_ledger_default_window_size(
     Ok(Json(response))
 }
 
-/// Get fire history window configuration for all cortical areas.
+/// Get fire history window configuration for all cortical_area areas.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fire_ledger/areas_window_config",
@@ -489,7 +489,7 @@ pub async fn get_fire_ledger_areas_window_config(
     let cortical_areas_list = connectome_service
         .list_cortical_areas()
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
+        .map_err(|e| ApiError::internal(format!("Failed to list cortical_area areas: {}", e)))?;
 
     let idx_to_id: HashMap<u32, String> = cortical_areas_list
         .iter()
@@ -718,7 +718,7 @@ pub async fn post_fcl_sampler_config(
     Ok(Json(response))
 }
 
-/// Get FCL sample rate for a specific cortical area.
+/// Get FCL sample rate for a specific cortical_area area.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fcl_sampler/area/{area_id}/sample_rate",
@@ -748,7 +748,7 @@ pub async fn get_area_fcl_sample_rate(
     Ok(Json(response))
 }
 
-/// Set FCL sample rate for a specific cortical area.
+/// Set FCL sample rate for a specific cortical_area area.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/fcl_sampler/area/{area_id}/sample_rate",
@@ -994,7 +994,7 @@ pub async fn put_config(
 // FIRE LEDGER ENDPOINTS
 // ============================================================================
 
-/// Get fire ledger window size for a specific cortical area.
+/// Get fire ledger window size for a specific cortical_area area.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fire_ledger/area/{area_id}/window_size",
@@ -1031,7 +1031,7 @@ pub async fn get_fire_ledger_area_window_size(
     ))
 }
 
-/// Set fire ledger window size for a specific cortical area.
+/// Set fire ledger window size for a specific cortical_area area.
 #[utoipa::path(
     put,
     path = "/v1/burst_engine/fire_ledger/area/{area_id}/window_size",
@@ -1074,7 +1074,7 @@ pub async fn put_fire_ledger_area_window_size(
     Ok(Json(response))
 }
 
-/// Get fire ledger historical data for a specific cortical area.
+/// Get fire ledger historical data for a specific cortical_area area.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fire_ledger/area/{area_id}/history",

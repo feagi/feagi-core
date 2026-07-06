@@ -118,7 +118,7 @@ pub enum PlasticityCommand {
         neuron_id: u32,
     },
 
-    /// Reset (delete) all memory neurons and their synapses in a cortical area
+    /// Reset (delete) all memory neurons and their synapses in a cortical_area area
     ResetMemoryNeuronsInArea { cortical_idx: u32 },
 }
 
@@ -142,7 +142,7 @@ pub struct MemoryAreaConfig {
     pub mp_learning_enabled: bool,
 }
 
-/// Runtime counts for a memory cortical area (plasticity layer).
+/// Runtime counts for a memory cortical_area area (plasticity layer).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryCorticalAreaRuntimeInfo {
     pub short_term_neuron_count: usize,
@@ -964,7 +964,7 @@ impl PlasticityService {
         }
 
         // Ensure FireLedger tracks upstream areas for the requested temporal depth (STDP ledger).
-        // Also track the memory cortical area on the episodic memory FireLedger (pattern-injection fires).
+        // Also track the memory cortical_area area on the episodic memory FireLedger (pattern-injection fires).
         if let Ok(mut npu) = self.npu.lock() {
             let desired = temporal_depth as usize;
             let existing_configs = npu.get_all_fire_ledger_configs();
@@ -1162,7 +1162,7 @@ impl PlasticityService {
         Arc::clone(&self.memory_neuron_array)
     }
 
-    /// Reset (delete) all memory neurons and their synapses in a cortical area.
+    /// Reset (delete) all memory neurons and their synapses in a cortical_area area.
     ///
     /// Returns the number of memory neurons deleted.
     pub fn reset_memory_neurons_in_area(&self, cortical_idx: u32) -> usize {
@@ -1173,7 +1173,7 @@ impl PlasticityService {
 
         tracing::info!(
             target: "plasticity",
-            "[PLASTICITY] Resetting {} memory neurons in cortical area {}",
+            "[PLASTICITY] Resetting {} memory neurons in cortical_area area {}",
             memory_neuron_ids.len(),
             cortical_idx
         );
@@ -1211,7 +1211,7 @@ impl PlasticityService {
         reset_count
     }
 
-    /// ST/LTM counts and pattern-detector cache size for a memory cortical area index.
+    /// ST/LTM counts and pattern-detector cache size for a memory cortical_area area index.
     pub fn memory_cortical_area_runtime_info(
         &self,
         cortical_idx: u32,

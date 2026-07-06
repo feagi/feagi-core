@@ -74,7 +74,7 @@ fn remote_runtime_registers_and_drives_a_live_feagi() {
     let mut runtime =
         RemoteFeagiRuntime::connect_and_register(config).expect("registration with live FEAGI");
 
-    // Affect areas (___pleas etc.) are core cortical areas present in every genome, so reward
+    // Affect areas (___pleas etc.) are core cortical_area areas present in every genome, so reward
     // stimulation can be exercised without knowing the loaded IPU/OPU layout.
     runtime
         .submit_reward(&[RewardSignal {
@@ -90,7 +90,7 @@ fn remote_runtime_registers_and_drives_a_live_feagi() {
     // explicit error from the transport layer is not.
     match runtime.collect_motor() {
         Ok(frame) => eprintln!(
-            "collected motor frame with {} cortical area(s)",
+            "collected motor frame with {} cortical_area area(s)",
             frame.len()
         ),
         Err(error) => eprintln!("no motor frame collected (acceptable for smoke test): {error}"),

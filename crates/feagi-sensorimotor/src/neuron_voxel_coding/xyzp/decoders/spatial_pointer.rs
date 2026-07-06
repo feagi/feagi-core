@@ -16,10 +16,10 @@ use feagi_structures::FeagiDataError;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-/// Decodes one cortical area's activity into a normalized XYZ spatial pointer.
+/// Decodes one cortical_area area's activity into a normalized XYZ spatial pointer.
 ///
 /// The decoder supports two mechanisms, selected by the owning area's
-/// `FrameChangeHandling` (derived from the cortical ID, not duplicated in properties):
+/// `FrameChangeHandling` (derived from the cortical_area ID, not duplicated in properties):
 ///
 /// - `Absolute`: emits the PSP-weighted centroid of all active voxels as one unsigned
 ///   `Percentage3D` tuple (x/y/z in [0, 1] over the channel-local grid). For depth=1, z=0.
@@ -111,7 +111,7 @@ impl SpatialPointerNeuronVoxelXYZPDecoder {
         properties: SpatialPointerProperties,
         number_of_channels: CorticalChannelCount,
     ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
-        // The decode mechanism is encoded in the cortical ID rather than duplicated in
+        // The decode mechanism is encoded in the cortical_area ID rather than duplicated in
         // the decoder properties, keeping a single source of truth for the area's mode.
         // Absolute areas are flagged Percentage3D (unsigned position); Incremental areas
         // are flagged SignedPercentage3D (signed motion).
@@ -121,7 +121,7 @@ impl SpatialPointerNeuronVoxelXYZPDecoder {
             other => {
                 return Err(FeagiDataError::InternalError(format!(
                     "SpatialPointer decoder expected a Percentage3D or SignedPercentage3D \
-                     cortical area flag, got {}",
+                     cortical_area area flag, got {}",
                     other
                 )));
             }
@@ -472,7 +472,7 @@ mod tests {
     };
     use std::time::{Duration, Instant};
 
-    /// Builds the SpatialPointer cortical ID for the given frame-change mode, matching how
+    /// Builds the SpatialPointer cortical_area ID for the given frame-change mode, matching how
     /// the genome encodes the area's mechanism: Absolute -> `Percentage3D` (unsigned
     /// position), Incremental -> `SignedPercentage3D` (signed motion).
     fn pointer_cortical_id(frame: FrameChangeHandling) -> CorticalID {

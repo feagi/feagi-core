@@ -4,7 +4,7 @@
 //! Tests for spatial gradient implementation of firing thresholds
 //!
 //! These tests verify that firing thresholds can be spatially varied across
-//! a cortical area using the increment_x, increment_y, and increment_z parameters.
+//! a cortical_area area using the increment_x, increment_y, and increment_z parameters.
 
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::RustNPU;
@@ -18,7 +18,7 @@ fn test_firing_threshold_spatial_gradient_3d() {
         RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 1000, 10, 1)
             .unwrap();
 
-    // Create a 3x3x2 cortical area (18 voxels, 1 neuron per voxel = 18 neurons)
+    // Create a 3x3x2 cortical_area area (18 voxels, 1 neuron per voxel = 18 neurons)
     // Base threshold = 10.0
     // X increment = 1.0 (threshold increases by 1.0 for each X position)
     // Y increment = 2.0 (threshold increases by 2.0 for each Y position)

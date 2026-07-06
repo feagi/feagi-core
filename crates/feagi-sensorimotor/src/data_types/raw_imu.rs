@@ -6,8 +6,8 @@
 //! has normalized the raw physical units against its configured ranges.
 //!
 //! This composite is the wrapped-data counterpart of
-//! [`SensoryCorticalUnit::RawIMU`], which is registered as a SINGLE cortical
-//! unit owning THREE sub-cortical-areas (one per sub-component). The matching
+//! [`SensoryCorticalUnit::RawIMU`], which is registered as a SINGLE cortical_area
+//! unit owning THREE sub-cortical_area-areas (one per sub-component). The matching
 //! [`RawIMUNeuronVoxelXYZPEncoder`] is responsible for spreading this composite
 //! across those three sub-areas at neuron-encoding time.
 //!
@@ -23,7 +23,7 @@
 use super::{SignedPercentage, SignedPercentage3D};
 use feagi_structures::FeagiDataError;
 
-/// Number of sub-cortical-areas backing a Raw IMU reading: accel, gyro, mag.
+/// Number of sub-cortical_area-areas backing a Raw IMU reading: accel, gyro, mag.
 pub const RAW_IMU_SUBUNIT_COUNT: usize = 3;
 
 /// Stable index of the accelerometer sub-area within Raw IMU ordered slots.
@@ -36,7 +36,7 @@ pub const RAW_IMU_INDEX_MAGNETOMETER: usize = 2;
 /// Composite Raw IMU reading: three independent 3-axis signed percentages.
 ///
 /// Each sub-component carries a `SignedPercentage3D` (axes a/b/c, each in
-/// `[-1.0, 1.0]`). The cortical-area dimension contract for each sub-area is
+/// `[-1.0, 1.0]`). The cortical_area-area dimension contract for each sub-area is
 /// `[3, 1, z]` (3 channels = 3 axes, height 1, configurable Z resolution).
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct RawIMU {
@@ -152,7 +152,7 @@ mod tests {
     }
 
     /// Sub-component ordering is contractual: accel(0), gyro(1), mag(2). The
-    /// encoder's per-subarea cortical ID array depends on this order.
+    /// encoder's per-subarea cortical_area ID array depends on this order.
     #[test]
     fn ordered_sub_components_yield_accel_gyro_mag() {
         let accel: SignedPercentage3D = (0.1, 0.2, 0.3).try_into().unwrap();

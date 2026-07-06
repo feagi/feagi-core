@@ -26,7 +26,7 @@
 //! - `blueprint[id].per_voxel_neuron_cnt` (u64): if present and == 0,
 //!   replaced with 1.
 //!
-//! Missing fields are not added here; `parse_physiology` and the cortical
+//! Missing fields are not added here; `parse_physiology` and the cortical_area
 //! area parser already fill defaults during JSON→`RuntimeGenome`. Adding
 //! defaults here would change the on-wire genome shape, which is out of
 //! scope for a normalizer.
@@ -178,7 +178,7 @@ fn canonicalize_precision(input: &str) -> Option<String> {
     }
 }
 
-/// Apply per-cortical-area corrections to the `blueprint` section if
+/// Apply per-cortical_area-area corrections to the `blueprint` section if
 /// present.
 fn normalize_blueprint(genome: &mut Value, diag: &mut NormalizationDiagnostics) {
     let blueprint = match genome.get_mut("blueprint").and_then(Value::as_object_mut) {

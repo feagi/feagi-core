@@ -103,7 +103,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
 
         // IMPORTANT:
         // FEAGI motor packets for gaze may arrive partially (e.g. only eccentricity OR only modulation),
-        // especially during area activation / warm-up. Treat missing cortical IDs as "no update"
+        // especially during area activation / warm-up. Treat missing cortical_area IDs as "no update"
         // instead of panicking.
         if eccentricity_neuron_array.is_none() && modularity_neuron_array.is_none() {
             return Ok(());
@@ -282,7 +282,7 @@ mod tests {
     /// Ensures partial gaze packets do not panic.
     #[test]
     fn gaze_decoder_does_not_panic_on_partial_gaze_packet() {
-        // This regression test ensures that when only ONE of the gaze cortical IDs
+        // This regression test ensures that when only ONE of the gaze cortical_area IDs
         // is present in the motor packet (common during activation/warm-up),
         // the decoder returns Ok(()) instead of panicking via unwrap().
 

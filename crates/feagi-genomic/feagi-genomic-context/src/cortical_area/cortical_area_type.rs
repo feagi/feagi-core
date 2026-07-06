@@ -1,10 +1,7 @@
-use crate::genomic::cortical_area::cortical_id::CorticalID;
-use crate::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
-use crate::genomic::FeagiStructuresGenomicError;
 use serde::{Deserialize, Serialize};
-use std::fmt;
-
-// Describes the method data is encoded within a cortical area
+use crate::cortical_area::CorticalID;
+use crate::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
+use crate::feagi_genome_context_error::{FeagiCorticalTypeErrKey, FeagiGenomeContextError};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize)]
 pub enum CorticalAreaType {
@@ -15,8 +12,8 @@ pub enum CorticalAreaType {
     BrainOutput(IOCorticalAreaConfigurationFlag),
 }
 
-impl fmt::Display for CorticalAreaType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for CorticalAreaType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             CorticalAreaType::Core(c) => write!(f, "Core({})", c),
             CorticalAreaType::Custom(c) => write!(f, "Custom({})", c),
@@ -28,7 +25,7 @@ impl fmt::Display for CorticalAreaType {
 }
 
 //region Core
-/// Core cortical area types for fundamental brain functions.
+/// Core cortical_area area types for fundamental brain functions.
 ///
 /// Represents essential processing regions that manage the agent's power,
 /// termination states, and fatigue monitoring.
@@ -45,14 +42,16 @@ pub enum CoreCorticalType {
 impl CoreCorticalType {
     pub(crate) fn try_from_cortical_id_bytes_type_unchecked(
         cortical_id_bytes: &[u8; CorticalID::NUMBER_OF_BYTES],
-    ) -> Result<CoreCorticalType, FeagiStructuresGenomicError> {
+    ) -> Result<CoreCorticalType, FeagiGenomeContextError> {
         match cortical_id_bytes {
             b"___death" => Ok(CoreCorticalType::Death),
             b"___power" => Ok(CoreCorticalType::Power),
             b"___fatig" => Ok(CoreCorticalType::Fatigue),
-            _ => Err(FeagiStructuresGenomicError::CorticalAreaError {
-                context: "cortical ID bytes do not match a known core cortical type",
-            }),
+            _ => Err(
+                FeagiCorticalTypeErrKey::new(
+                    "cortical_area ID bytes do not match a known core cortical_area type"
+                ).into()
+            ),
         }
     }
 
@@ -71,8 +70,8 @@ impl CoreCorticalType {
     }
 }
 
-impl fmt::Display for CoreCorticalType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for CoreCorticalType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let ch = match self {
             CoreCorticalType::Death => "Death",
             CoreCorticalType::Power => "Power",
@@ -91,8 +90,8 @@ pub enum CustomCorticalType {
     LeakyIntegrateFire,
 }
 
-impl fmt::Display for CustomCorticalType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for CustomCorticalType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::LeakyIntegrateFire => write!(f, "Leaky IntegrateFire"),
         }
@@ -109,8 +108,8 @@ pub enum MemoryCorticalType {
     Memory,
 }
 
-impl fmt::Display for MemoryCorticalType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl core::fmt::Display for MemoryCorticalType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Memory => write!(f, "Memory"),
         }

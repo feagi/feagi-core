@@ -63,7 +63,7 @@ use feagi_npu_runtime::StdRuntime;
 /// Type alias for fire queue sample data structure
 type FireQueueSample = AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
 
-/// Key for a cortical mapping A→B (cortical_idx indices).
+/// Key for a cortical_area mapping A→B (cortical_idx indices).
 type CorticalMappingKey = (u32, u32);
 
 /// Boxed predicate for memory-neuron plasticity filters (stored on the NPU).
@@ -131,7 +131,7 @@ fn should_emit_throttled_warning(last_emitted_ms: &AtomicU64, interval_ms: u64) 
     true
 }
 
-/// Plasticity mode for a cortical mapping A→B.
+/// Plasticity mode for a cortical_area mapping A→B.
 ///
 /// Drives the burst-engine plasticity loop:
 /// - `Off`: no weight updates, no eligibility tracking.
@@ -149,7 +149,7 @@ pub enum PlasticityMode {
     RStdp,
 }
 
-/// STDP / R-STDP parameters for a plastic cortical mapping A→B.
+/// STDP / R-STDP parameters for a plastic cortical_area mapping A→B.
 ///
 /// Note: New synapse weight from LTP uses `delta_plus_u8()` cast to `f32`; PSP is float-valued.
 ///
@@ -182,11 +182,11 @@ pub struct StdpMappingParams {
     /// full reset each burst). For R-STDP, typical values are 5-50 bursts depending on the
     /// task's reward latency. Ignored when `plasticity_mode == Off`.
     pub eligibility_decay_bursts: u32,
-    /// Source cortical area whose firing density contributes positively to `R(t)`. `None`
+    /// Source cortical_area area whose firing density contributes positively to `R(t)`. `None`
     /// means no positive reward channel. For R-STDP this is typically a fixed-wiring
     /// "pleasure detector" sub-circuit.
     pub reward_source_area: Option<u32>,
-    /// Source cortical area whose firing density contributes negatively to `R(t)` (punishment).
+    /// Source cortical_area area whose firing density contributes negatively to `R(t)` (punishment).
     /// `None` means no negative reward channel.
     pub punishment_source_area: Option<u32>,
     /// Upper bound applied to `w_ij` after a positive (potentiating) commit in the unified
@@ -377,11 +377,11 @@ pub struct RustNPU<
     /// Long-term memory predicate (wired by plasticity from memory neuron state). Reciprocal
     /// associative edges are not synthesized in STDP; register a second mapping for B→A if needed.
     memory_neuron_longterm_predicate: std::sync::RwLock<Option<MemoryNeuronPredicate>>,
-    /// @cursor:critical-path — only allocated when at least one cortical area enables rate-modulated leak.
+    /// @cursor:critical-path — only allocated when at least one cortical_area area enables rate-modulated leak.
     rate_modulated_leak: std::sync::Mutex<RateModulatedLeakRegistry>,
 
     /// Conditional gate configurations: maps (src_cortical_idx, dst_cortical_idx) to
-    /// the gate cortical area index. Used to check the fire queue each burst and compute
+    /// the gate cortical_area area index. Used to check the fire queue each burst and compute
     /// which gates are closed before propagation.
     gate_configs: std::sync::RwLock<AHashMap<CorticalMappingKey, u32>>,
 }
@@ -818,7 +818,7 @@ impl<
         let neuron_id = NeuronId(neuron_idx as u32);
 
         // CRITICAL: Add to propagation engine's neuron-to-area mapping
-        // Get the cortical ID from the area_id_to_name mapping
+        // Get the cortical_area ID from the area_id_to_name mapping
         let area_name = self
             .area_id_to_name
             .read()
@@ -826,7 +826,7 @@ impl<
             .get(&cortical_area)
             .ok_or_else(|| {
                 FeagiError::ComputationError(format!(
-                    "No cortical area registered for index {}",
+                    "No cortical_area area registered for index {}",
                     cortical_area
                 ))
             })?
@@ -945,7 +945,7 @@ impl<
                 let reserve_time = prop_start.elapsed();
 
                 let insert_start = Instant::now();
-                // Get the cortical ID from the area_id_to_name mapping
+                // Get the cortical_area ID from the area_id_to_name mapping
                 // cortical_areas[i] is a numeric index, we need to look up the actual CorticalID string
                 let area_name_map = self.area_id_to_name.read().unwrap();
                 for (i, neuron_id) in neuron_ids.iter().enumerate() {
@@ -964,7 +964,7 @@ impl<
                         }
                     } else {
                         tracing::error!(
-                            "No cortical area registered for index {}",
+                            "No cortical_area area registered for index {}",
                             cortical_areas[i]
                         );
                     }
@@ -1011,7 +1011,7 @@ impl<
         }
     }
 
-    /// Create neurons for a cortical area with uniform properties
+    /// Create neurons for a cortical_area area with uniform properties
     ///
     /// This is the CORRECT architecture - Python passes only scalars, Rust generates everything
     ///
@@ -1084,7 +1084,7 @@ impl<
         )
     }
 
-    /// Create neurons for a cortical area with optional z-offset (for batched creation)
+    /// Create neurons for a cortical_area area with optional z-offset (for batched creation)
     /// z_offset: Starting z-coordinate (allows creating neurons at specific depth layers)
     /// y_offset: Starting y-coordinate (allows creating neurons at specific row ranges)
     /// This enables batched neuron creation that releases the NPU lock between batches
@@ -1136,7 +1136,7 @@ impl<
         )
     }
 
-    /// Create neurons for a cortical area with optional y and z offsets (for batched creation)
+    /// Create neurons for a cortical_area area with optional y and z offsets (for batched creation)
     /// y_offset: Starting y-coordinate (allows creating neurons at specific row ranges)
     /// z_offset: Starting z-coordinate (allows creating neurons at specific depth layers)
     /// This enables fine-grained batched neuron creation that releases the NPU lock frequently
@@ -1173,7 +1173,7 @@ impl<
         // Performance diagnostic - only visible with --debug flag
         debug!(
             cortical_idx,
-            total_neurons, "[NEUROGENESIS] Creating neurons for cortical area"
+            total_neurons, "[NEUROGENESIS] Creating neurons for cortical_area area"
         );
 
         if total_neurons == 0 {
@@ -1440,7 +1440,7 @@ impl<
 
     /// Batch remove all synapses from specified source neurons (SIMD-optimized)
     ///
-    /// Performance: 50-100x faster than individual deletions for cortical mapping removal
+    /// Performance: 50-100x faster than individual deletions for cortical_area mapping removal
     /// Returns: number of synapses deleted
     pub fn remove_synapses_from_sources(&mut self, sources: Vec<NeuronId>) -> usize {
         let source_ids: Vec<u32> = sources.iter().map(|n| n.0).collect();
@@ -1501,7 +1501,7 @@ impl<
 
     /// Efficiently remove synapses from a set of source neurons to a set of target neurons.
     ///
-    /// This is intended for cortical mapping updates/removals where synapses must be pruned
+    /// This is intended for cortical_area mapping updates/removals where synapses must be pruned
     /// deterministically without destroying other outgoing synapses from the same source area.
     ///
     /// Implementation detail:
@@ -1589,7 +1589,7 @@ impl<
             .build_synapse_index(&*synapse_storage_read);
     }
 
-    /// Set neuron to cortical area mapping for propagation engine
+    /// Set neuron to cortical_area area mapping for propagation engine
     pub fn set_neuron_mapping(&mut self, mapping: AHashMap<NeuronId, CorticalID>) {
         self.propagation_engine
             .write()
@@ -1597,7 +1597,7 @@ impl<
             .set_neuron_mapping(mapping);
     }
 
-    /// Set mp_driven_psp flags for cortical areas
+    /// Set mp_driven_psp flags for cortical_area areas
     /// When enabled for an area, synaptic PSP will be dynamically set from source neuron's membrane potential
     pub fn set_mp_driven_psp_flags(&mut self, flags: AHashMap<CorticalID, bool>) {
         self.propagation_engine
@@ -1606,7 +1606,7 @@ impl<
             .set_mp_driven_psp_flags(flags);
     }
 
-    /// Set mp_driven_psp for a single cortical area (in-place).
+    /// Set mp_driven_psp for a single cortical_area area (in-place).
     pub fn set_mp_driven_psp_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
         self.propagation_engine
             .write()
@@ -1614,7 +1614,7 @@ impl<
             .set_mp_driven_psp_flag(cortical_id, enabled);
     }
 
-    /// Set psp_uniform_distribution flags for cortical areas
+    /// Set psp_uniform_distribution flags for cortical_area areas
     /// When false (default): PSP value is divided among all outgoing synapses from the source neuron
     /// When true: Full PSP value is applied to each outgoing synapse
     pub fn set_psp_uniform_distribution_flags(&mut self, flags: AHashMap<CorticalID, bool>) {
@@ -1624,7 +1624,7 @@ impl<
             .set_psp_uniform_distribution_flags(flags);
     }
 
-    /// Set psp_uniform_distribution for a single cortical area (in-place).
+    /// Set psp_uniform_distribution for a single cortical_area area (in-place).
     pub fn set_psp_uniform_distribution_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
         self.propagation_engine
             .write()
@@ -1632,7 +1632,7 @@ impl<
             .set_psp_uniform_distribution_flag(cortical_id, enabled);
     }
 
-    /// Set configured baseline PSP values for cortical areas.
+    /// Set configured baseline PSP values for cortical_area areas.
     ///
     /// These values are used when restoring an area's outgoing synapses on reset.
     pub fn set_postsynaptic_current_flags(&mut self, flags: AHashMap<CorticalID, f32>) {
@@ -1642,7 +1642,7 @@ impl<
             .set_postsynaptic_current_flags(flags);
     }
 
-    /// Set configured baseline PSP for one cortical area.
+    /// Set configured baseline PSP for one cortical_area area.
     pub fn set_postsynaptic_current_flag(&mut self, cortical_id: CorticalID, postsynaptic: f32) {
         self.propagation_engine
             .write()
@@ -1650,7 +1650,7 @@ impl<
             .set_postsynaptic_current_flag(cortical_id, postsynaptic);
     }
 
-    /// Set degeneration coefficients for cortical areas.
+    /// Set degeneration coefficients for cortical_area areas.
     ///
     /// Coefficients <= 0 are treated as disabled.
     pub fn set_degeneration_flags(&mut self, flags: AHashMap<CorticalID, f32>) {
@@ -1660,7 +1660,7 @@ impl<
             .set_degeneration_flags(flags);
     }
 
-    /// Set degeneration coefficient for a single cortical area (in-place).
+    /// Set degeneration coefficient for a single cortical_area area (in-place).
     ///
     /// Coefficients <= 0 disable degeneration for that area.
     pub fn set_degeneration_flag(&mut self, cortical_id: CorticalID, degeneration: f32) {
@@ -1812,7 +1812,7 @@ impl<
     ///
     /// Determinism/strictness:
     /// - Memory neurons are resolved via `memory_candidate_cortical_idx` (they are not in `neuron_storage`).
-    /// - Regular neurons are resolved via `neuron_storage` cortical area mapping.
+    /// - Regular neurons are resolved via `neuron_storage` cortical_area area mapping.
     /// - If any neuron cannot be resolved, this returns an error (no silent fallback to core areas).
     pub fn get_last_fcl_snapshot_with_cortical_idx(
         &self,
@@ -1837,7 +1837,7 @@ impl<
                     .get_cortical_area(neuron_id.0 as usize)
                     .ok_or_else(|| {
                         FeagiError::RuntimeError(format!(
-                            "Unresolvable neuron cortical area in FCL snapshot: neuron_id={}",
+                            "Unresolvable neuron cortical_area area in FCL snapshot: neuron_id={}",
                             neuron_id.0
                         ))
                     })?
@@ -1897,7 +1897,7 @@ impl<
         ));
     }
 
-    /// Stage regular cortical-area neurons for guaranteed inclusion in the next burst fire queue.
+    /// Stage regular cortical_area-area neurons for guaranteed inclusion in the next burst fire queue.
     ///
     /// Uses real neuron storage indices. Entries are merged into the fire queue after Phase 2,
     /// bypassing LIF, refractory, and excitability so manual stimulation is authoritative.
@@ -1942,7 +1942,7 @@ impl<
         injected_count
     }
 
-    /// Register a dynamic (non-storage-backed) neuron’s cortical mapping for synaptic propagation.
+    /// Register a dynamic (non-storage-backed) neuron’s cortical_area mapping for synaptic propagation.
     ///
     /// Required for memory neuron IDs (50_000_000+) so propagation can resolve source/destination areas.
     pub fn register_dynamic_neuron_mapping(&mut self, neuron_id: u32, cortical_id: CorticalID) {
@@ -1954,7 +1954,7 @@ impl<
 
     /// Register replay frames for a memory neuron.
     ///
-    /// The replay frames are used to drive the twin cortical area when the memory neuron fires.
+    /// The replay frames are used to drive the twin cortical_area area when the memory neuron fires.
     pub fn register_memory_replay_frames(
         &mut self,
         neuron_id: u32,
@@ -1973,7 +1973,7 @@ impl<
         replay_frames.get(&neuron_id).cloned()
     }
 
-    /// Register the twin cortical area for replay from a memory area and upstream area.
+    /// Register the twin cortical_area area for replay from a memory area and upstream area.
     pub fn register_memory_twin_mapping(
         &mut self,
         memory_area_idx: u32,
@@ -2222,7 +2222,7 @@ impl<
             );
         }
         // Resolve memory neuron candidates sourced via synaptic propagation.
-        // Memory neurons can be targets of associative synapses; ensure they have cortical metadata.
+        // Memory neurons can be targets of associative synapses; ensure they have cortical_area metadata.
         let mut unresolved_memory_candidates = 0usize;
         let mut resolved_memory_candidates = 0usize;
         let memory_candidates: Vec<NeuronId> = fire_structures
@@ -2289,7 +2289,7 @@ impl<
                     fcl_potential_sum = sum,
                     fcl_potential_min = min_p,
                     fcl_potential_max = max_p,
-                    "FCL phase1 (pre-dynamics) aggregate for traced cortical area"
+                    "FCL phase1 (pre-dynamics) aggregate for traced cortical_area area"
                 );
             } else {
                 tracing::debug!(
@@ -2297,7 +2297,7 @@ impl<
                     burst = burst_count,
                     cortical_idx = area_idx,
                     fcl_candidates_in_area = 0,
-                    "FCL phase1 (pre-dynamics): no candidates in traced cortical area"
+                    "FCL phase1 (pre-dynamics): no candidates in traced cortical_area area"
                 );
             }
         }
@@ -2357,7 +2357,7 @@ impl<
                 burst = burst_count,
                 cortical_idx = area_idx,
                 fired_in_area = fired_n,
-                "phase2 fire queue: neurons fired in traced cortical area"
+                "phase2 fire queue: neurons fired in traced cortical_area area"
             );
         }
 
@@ -2567,7 +2567,7 @@ impl<
 
     // Removed duplicate - using atomic version at line 147
 
-    /// Register a cortical area name for visualization encoding
+    /// Register a cortical_area area name for visualization encoding
     /// This mapping is populated during neuroembryogenesis
     ///
     /// ARCHITECTURE: For core areas (0=_death, 1=_power, 2=_fatigue, 3=_pain, 4=_pleasure, 5=_fear, 6=_hope), automatically creates
@@ -2700,13 +2700,13 @@ impl<
         }
     }
 
-    /// Get the cortical area name for a given area_id
+    /// Get the cortical_area area name for a given area_id
     /// Returns None if the area_id is not registered
     pub fn get_cortical_area_name(&self, area_id: u32) -> Option<String> {
         self.area_id_to_name.read().unwrap().get(&area_id).cloned()
     }
 
-    /// Get the cortical area ID for a given cortical name
+    /// Get the cortical_area area ID for a given cortical_area name
     /// Returns None if the name is not registered
     pub fn get_cortical_area_id(&self, cortical_name: &str) -> Option<u32> {
         let area_map = self.area_id_to_name.read().unwrap();
@@ -2792,7 +2792,7 @@ impl<
         Some(neuron_storage.neuron_types()[idx])
     }
 
-    /// Synaptic propagation: PSP scales with source neuron MP when enabled for this cortical area.
+    /// Synaptic propagation: PSP scales with source neuron MP when enabled for this cortical_area area.
     pub fn get_mp_driven_psp_for_cortical(&self, cortical_id: &CorticalID) -> bool {
         self.propagation_engine
             .read()
@@ -2824,12 +2824,12 @@ impl<
         )
     }
 
-    /// Get the number of registered cortical areas
+    /// Get the number of registered cortical_area areas
     pub fn get_registered_cortical_area_count(&self) -> usize {
         self.area_id_to_name.read().unwrap().len()
     }
 
-    /// Get all registered cortical areas as (idx, name) pairs
+    /// Get all registered cortical_area areas as (idx, name) pairs
     pub fn get_all_cortical_areas(&self) -> Vec<(u32, String)> {
         self.area_id_to_name
             .read()
@@ -2846,7 +2846,7 @@ impl<
         neuron_storage.count() > 0 && neuron_storage.valid_mask().iter().any(|&valid| valid)
     }
 
-    /// Find neuron ID at specific X,Y,Z coordinates within a cortical area
+    /// Find neuron ID at specific X,Y,Z coordinates within a cortical_area area
     /// Returns None if no neuron exists at that position
     pub fn get_neuron_at_coordinates(
         &self,
@@ -2871,7 +2871,7 @@ impl<
         None
     }
 
-    /// Inject sensory neurons using cortical area CorticalID and XYZ coordinates
+    /// Inject sensory neurons using cortical_area area CorticalID and XYZ coordinates
     /// This is the high-level API for sensory injection from agents
     /// OPTIMIZATION: Takes CorticalID directly to avoid string conversion in hot path
     pub fn inject_sensory_xyzp_by_id(
@@ -2893,7 +2893,7 @@ impl<
                     Some(id) => id,
                     None => {
                         error!(
-                            "[NPU] Unknown cortical area: '{}' (base64: {})",
+                            "[NPU] Unknown cortical_area area: '{}' (base64: {})",
                             cortical_id_str, cortical_id_base64
                         );
                         // Only log available areas on error (not every call!)
@@ -2905,7 +2905,7 @@ impl<
                             .cloned()
                             .collect();
                         error!(
-                            "[NPU] Available cortical areas ({} total): {:?}",
+                            "[NPU] Available cortical_area areas ({} total): {:?}",
                             available_areas.len(),
                             available_areas
                         );
@@ -3032,7 +3032,7 @@ impl<
                 Some(id) => id,
                 None => {
                     error!(
-                        "[NPU] Unknown cortical area: '{}' (base64: {})",
+                        "[NPU] Unknown cortical_area area: '{}' (base64: {})",
                         cortical_id_str, cortical_id_base64
                     );
                     return 0;
@@ -3149,20 +3149,20 @@ impl<
         fire_structures.pending_sensory_injections.clear();
     }
 
-    /// Inject sensory neurons using cortical area name (backward compatibility)
+    /// Inject sensory neurons using cortical_area area name (backward compatibility)
     /// For hot paths, use inject_sensory_xyzp_by_id() to avoid string allocations
     pub fn inject_sensory_xyzp(
         &mut self,
         cortical_name: &str,
         xyzp_data: &[(u32, u32, u32, f32)],
     ) -> usize {
-        // Find cortical area ID
+        // Find cortical_area area ID
         let cortical_area = match self.get_cortical_area_id(cortical_name) {
             Some(id) => id,
             None => {
-                error!("[NPU] ❌ Unknown cortical area: '{}'", cortical_name);
+                error!("[NPU] ❌ Unknown cortical_area area: '{}'", cortical_name);
                 error!(
-                    "[NPU] ❌ Available cortical areas: {:?}",
+                    "[NPU] ❌ Available cortical_area areas: {:?}",
                     self.area_id_to_name
                         .read()
                         .unwrap()
@@ -3411,7 +3411,7 @@ impl<
     }
     END COMMENTED OUT */
 
-    /// Get all neuron positions for a cortical area (for fast batch lookups)
+    /// Get all neuron positions for a cortical_area area (for fast batch lookups)
     /// Returns Vec<(neuron_id, x, y, z)>
     pub fn get_neuron_positions_in_cortical_area(
         &self,
@@ -3502,7 +3502,7 @@ impl<
         true
     }
 
-    /// Update excitability for all neurons in a cortical area (for bulk parameter changes)
+    /// Update excitability for all neurons in a cortical_area area (for bulk parameter changes)
     /// Returns number of neurons updated
     pub fn update_cortical_area_excitability(
         &mut self,
@@ -3528,7 +3528,7 @@ impl<
         updated_count
     }
 
-    /// Update refractory period for all neurons in a cortical area (bulk parameter change)
+    /// Update refractory period for all neurons in a cortical_area area (bulk parameter change)
     pub fn update_cortical_area_refractory_period(
         &mut self,
         cortical_area: u32,
@@ -3583,7 +3583,7 @@ impl<
         updated_count
     }
 
-    /// Update threshold for all neurons in a cortical area (bulk parameter change)
+    /// Update threshold for all neurons in a cortical_area area (bulk parameter change)
     pub fn update_cortical_area_threshold(&mut self, cortical_area: u32, threshold: f32) -> usize {
         let mut updated_count = 0;
 
@@ -3603,7 +3603,7 @@ impl<
         updated_count
     }
 
-    /// Update firing threshold limit (upper bound) for all neurons in a cortical area.
+    /// Update firing threshold limit (upper bound) for all neurons in a cortical_area area.
     ///
     /// Semantics:
     /// - limit == 0.0: no upper bound (neuron fires if MP >= threshold)
@@ -3638,7 +3638,7 @@ impl<
         updated_count
     }
 
-    /// Update thresholds with spatial gradient for all neurons in a cortical area.
+    /// Update thresholds with spatial gradient for all neurons in a cortical_area area.
     ///
     /// Applies position-based threshold calculation WITHOUT rebuilding neurons:
     /// `threshold = base + (x * inc_x) + (y * inc_y) + (z * inc_z)`
@@ -3697,7 +3697,7 @@ impl<
         updated_count
     }
 
-    /// Update leak coefficient for all neurons in a cortical area (bulk parameter change)
+    /// Update leak coefficient for all neurons in a cortical_area area (bulk parameter change)
     pub fn update_cortical_area_leak(&mut self, cortical_area: u32, leak: f32) -> usize {
         let mut updated_count = 0;
 
@@ -3717,7 +3717,7 @@ impl<
         updated_count
     }
 
-    /// (Re)register or clear rate-modulated leak for a cortical area. See `neural/docs/rate_modulated_leak.md`.
+    /// (Re)register or clear rate-modulated leak for a cortical_area area. See `neural/docs/rate_modulated_leak.md`.
     pub fn sync_rate_modulated_leak_from_cortical_property(
         &mut self,
         cortical_idx: u32,
@@ -3730,14 +3730,14 @@ impl<
         }
     }
 
-    /// Remove a cortical area from the rate-modulated leak homeostat.
+    /// Remove a cortical_area area from the rate-modulated leak homeostat.
     pub fn remove_rate_modulated_leak(&mut self, cortical_idx: u32) {
         if let Ok(mut g) = self.rate_modulated_leak.lock() {
             g.remove(cortical_idx);
         }
     }
 
-    /// Update consecutive fire limit for all neurons in a cortical area (bulk parameter change)
+    /// Update consecutive fire limit for all neurons in a cortical_area area (bulk parameter change)
     pub fn update_cortical_area_consecutive_fire_limit(
         &mut self,
         cortical_area: u32,
@@ -3763,7 +3763,7 @@ impl<
         updated_count
     }
 
-    /// Update snooze period (extended refractory) for all neurons in a cortical area (bulk parameter change)
+    /// Update snooze period (extended refractory) for all neurons in a cortical_area area (bulk parameter change)
     pub fn update_cortical_area_snooze_period(
         &mut self,
         cortical_area: u32,
@@ -4057,7 +4057,7 @@ impl<
         updated_count
     }
 
-    /// Reset membrane potential to zero for all valid neurons in a cortical area.
+    /// Reset membrane potential to zero for all valid neurons in a cortical_area area.
     ///
     /// Does not change `mp_charge_accumulation` flags. Intended when turning off accumulation
     /// for an area (or clearing stale sub-threshold charge) without scanning the whole brain.
@@ -4077,7 +4077,7 @@ impl<
         reset_count
     }
 
-    /// Clear live neural state for one cortical area: strip FCL candidates, zero membrane
+    /// Clear live neural state for one cortical_area area: strip FCL candidates, zero membrane
     /// potentials, and reset refractory / consecutive-fire counters for neurons in that area.
     ///
     /// Also clears [`FireStructures::last_fcl_snapshot`] entries and staged injections for those
@@ -4085,7 +4085,7 @@ impl<
     ///
     /// Clears [`FireStructures::synaptic_arrival_schedule`] entries targeting neurons in this area
     /// (delayed PSP buckets) and drops pending memory-replay injections whose twin target is this
-    /// cortical index, so recursive self-connections cannot leave residual drive across bursts.
+    /// cortical_area index, so recursive self-connections cannot leave residual drive across bursts.
     ///
     /// Returns the number of neurons updated in storage (same as membrane reset count).
     pub fn reset_cortical_area_runtime_state(&mut self, cortical_area: u32) -> usize {
@@ -4134,7 +4134,7 @@ impl<
             if current_removed > 0 || previous_removed > 0 {
                 tracing::debug!(
                     target: "feagi-npu",
-                    "Reset cortical area {}: removed {} from current_fire_queue, {} from previous_fire_queue",
+                    "Reset cortical_area area {}: removed {} from current_fire_queue, {} from previous_fire_queue",
                     cortical_area,
                     current_removed,
                     previous_removed
@@ -4167,7 +4167,7 @@ impl<
         if restored_synapses > 0 {
             tracing::debug!(
                 target: "feagi-npu",
-                "Reset cortical area {} restored outgoing PSP on {} synapses",
+                "Reset cortical_area area {} restored outgoing PSP on {} synapses",
                 cortical_area,
                 restored_synapses
             );
@@ -4175,7 +4175,7 @@ impl<
         reset_count
     }
 
-    /// Restore all outgoing synapse PSP values for a cortical area from the configured baseline.
+    /// Restore all outgoing synapse PSP values for a cortical_area area from the configured baseline.
     ///
     /// Returns number of synapses updated, or 0 when no baseline is available.
     fn restore_cortical_area_postsynaptic_current_from_config(
@@ -4201,7 +4201,7 @@ impl<
     /// Remove delayed PSP schedule entries and associative-memory buckets for the given neuron ids.
     ///
     /// Used when clearing memory neurons (ids outside [`NeuronStorage`]) so pending arrivals do not
-    /// inject into the next burst. Regular cortical reset uses [`Self::reset_cortical_area_runtime_state`].
+    /// inject into the next burst. Regular cortical_area reset uses [`Self::reset_cortical_area_runtime_state`].
     pub fn scrub_synaptic_arrival_schedule_for_neuron_targets(
         &mut self,
         neuron_ids: &AHashSet<u32>,
@@ -4214,7 +4214,7 @@ impl<
             .remove_pending_for_neuron_targets(neuron_ids);
     }
 
-    /// Update MP charge accumulation for all neurons in a cortical area.
+    /// Update MP charge accumulation for all neurons in a cortical_area area.
     ///
     /// When `mp_charge_accumulation` is set to `false`, membrane potentials for that area are
     /// cleared in the same pass so prior accumulated sub-threshold charge does not linger.
@@ -4246,13 +4246,13 @@ impl<
     }
 
     /// Update postsynaptic potential (PSP) for all **existing outgoing synapses**
-    /// from neurons in the specified cortical area.
+    /// from neurons in the specified cortical_area area.
     ///
     /// @cursor:critical-path
     ///
     /// ## Why this exists
     /// Synaptic propagation uses the PSP stored per-synapse in `SynapseStorage::postsynaptic_potentials`.
-    /// When a cortical area's `postsynaptic_current` is changed at runtime, the NPU must update the
+    /// When a cortical_area area's `postsynaptic_current` is changed at runtime, the NPU must update the
     /// existing synapses' PSP values to ensure firing influences downstream neurons deterministically.
     ///
     /// ## Returns
@@ -4271,7 +4271,7 @@ impl<
             }
         }
 
-        // Phase 1: Gather source neuron IDs for this cortical area.
+        // Phase 1: Gather source neuron IDs for this cortical_area area.
         // NeuronId == array index by design in this NPU (see process_single_neuron).
         let source_neuron_ids: Vec<u32> = {
             let neuron_storage = self.neuron_storage.read().unwrap();
@@ -4321,7 +4321,7 @@ impl<
         updated
     }
 
-    /// Update PSP stored in STDP mapping params for mappings sourced by a cortical area.
+    /// Update PSP stored in STDP mapping params for mappings sourced by a cortical_area area.
     ///
     /// Returns number of mappings updated.
     pub fn update_stdp_mapping_psp_for_source(
@@ -4445,7 +4445,7 @@ impl<
         }
     }
 
-    /// Rebuild power neuron cache by scanning cortical area 1 once.
+    /// Rebuild power neuron cache by scanning cortical_area area 1 once.
     pub fn rebuild_power_neuron_cache(&mut self) {
         use std::sync::atomic::Ordering;
         let neuron_storage = self.neuron_storage.read().unwrap();
@@ -4467,10 +4467,10 @@ impl<
             .get_coordinates(neuron_id as usize)
     }
 
-    /// Get cortical area index for a neuron.
+    /// Get cortical_area area index for a neuron.
     ///
     /// Returns `None` if the neuron index is out of range or the slot is not valid (e.g. deleted);
-    /// callers must not assume index `0` means "missing" because `0` can be a real cortical index.
+    /// callers must not assume index `0` means "missing" because `0` can be a real cortical_area index.
     pub fn get_neuron_cortical_area(&self, neuron_id: u32) -> Option<u32> {
         self.neuron_storage
             .read()
@@ -4478,7 +4478,7 @@ impl<
             .get_cortical_area(neuron_id as usize)
     }
 
-    /// Get all neuron IDs in a specific cortical area
+    /// Get all neuron IDs in a specific cortical_area area
     pub fn get_neurons_in_cortical_area(&self, cortical_idx: u32) -> Vec<u32> {
         self.neuron_storage
             .read()
@@ -4489,13 +4489,13 @@ impl<
             .collect()
     }
 
-    /// Pre-populate the cortical area neuron index cache for all areas
+    /// Pre-populate the cortical_area area neuron index cache for all areas
     ///
     /// This eliminates expensive O(n) scans on first access to get_neurons_in_cortical_area.
     /// NOTE: Currently cache is built lazily on first access. To optimize, add prepopulate
     /// method to NeuronStorage trait and call it here after neurons are loaded.
     ///
-    /// Get number of neurons in a specific cortical area
+    /// Get number of neurons in a specific cortical_area area
     pub fn get_cortical_area_neuron_count(&self, cortical_area: u32) -> usize {
         self.neuron_storage
             .read()
@@ -4601,7 +4601,7 @@ impl<
         self.rebuild_stdp_mapping_index();
     }
 
-    /// Register or update STDP / R-STDP parameters for a plastic cortical mapping A→B.
+    /// Register or update STDP / R-STDP parameters for a plastic cortical_area mapping A→B.
     ///
     /// Rebuilds the per-mapping synapse index so any synapses already present between A and B
     /// are immediately picked up by the plasticity loop. Without this rebuild, registering a
@@ -4680,7 +4680,7 @@ impl<
         Ok(())
     }
 
-    /// Unregister STDP parameters for a cortical mapping A→B.
+    /// Unregister STDP parameters for a cortical_area mapping A→B.
     pub fn unregister_stdp_mapping(
         &mut self,
         src_cortical_idx: u32,
@@ -4690,7 +4690,7 @@ impl<
         self.stdp_mappings.write().unwrap().remove(&key).is_some()
     }
 
-    /// Register a conditional gate on a cortical mapping A→B.
+    /// Register a conditional gate on a cortical_area mapping A→B.
     ///
     /// When registered, all synapses from `src_cortical_idx` to `dst_cortical_idx` will
     /// produce zero contribution during propagation if `gate_cortical_idx` has no neuron
@@ -4709,7 +4709,7 @@ impl<
             .get_cortical_area_name(src_cortical_idx)
             .ok_or_else(|| {
                 FeagiError::RuntimeError(format!(
-                    "Gate registration: unknown source cortical area idx {}",
+                    "Gate registration: unknown source cortical_area area idx {}",
                     src_cortical_idx
                 ))
             })?;
@@ -4717,7 +4717,7 @@ impl<
             .get_cortical_area_name(dst_cortical_idx)
             .ok_or_else(|| {
                 FeagiError::RuntimeError(format!(
-                    "Gate registration: unknown destination cortical area idx {}",
+                    "Gate registration: unknown destination cortical_area area idx {}",
                     dst_cortical_idx
                 ))
             })?;
@@ -4725,7 +4725,7 @@ impl<
             .get_cortical_area_name(gate_cortical_idx)
             .ok_or_else(|| {
                 FeagiError::RuntimeError(format!(
-                    "Gate registration: unknown gate cortical area idx {}",
+                    "Gate registration: unknown gate cortical_area area idx {}",
                     gate_cortical_idx
                 ))
             })?;
@@ -4762,7 +4762,7 @@ impl<
         Ok(())
     }
 
-    /// Remove the conditional gate from a cortical mapping A→B.
+    /// Remove the conditional gate from a cortical_area mapping A→B.
     pub fn unregister_gate_mapping(
         &mut self,
         src_cortical_idx: u32,
@@ -4835,7 +4835,7 @@ impl<
         *self.stdp_mapping_index.write().unwrap() = index;
     }
 
-    /// Whether `target` neuron id lies in cortical area `dst_area` (numeric index).
+    /// Whether `target` neuron id lies in cortical_area area `dst_area` (numeric index).
     ///
     /// Dense LIF neurons use [`NeuronStorage`]; memory neuron ids (`50_000_000+`) are not array
     /// indices and must be resolved via [`SynapticPropagationEngine::neuron_to_area`] so
@@ -5541,7 +5541,7 @@ fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>>(
     let mut fatigue_count = 0;
 
     if fatigue_active {
-        // Scan all neurons for _fatigue cortical area (cortical_idx = 2)
+        // Scan all neurons for _fatigue cortical_area area (cortical_idx = 2)
         for array_idx in 0..neuron_storage.count() {
             let neuron_id = array_idx as u32;
             if array_idx < neuron_storage.count() && neuron_storage.valid_mask()[array_idx] {
@@ -5597,7 +5597,7 @@ impl<
             .map_err(|e| FeagiError::RuntimeError(format!("FireLedger query failed: {e}")))
     }
 
-    /// Get the tracked FireLedger window size for a cortical area.
+    /// Get the tracked FireLedger window size for a cortical_area area.
     pub fn get_fire_ledger_window_size(&self, cortical_idx: u32) -> Result<usize> {
         self.fire_structures
             .lock()
@@ -5607,7 +5607,7 @@ impl<
             .map_err(|e| FeagiError::RuntimeError(format!("FireLedger query failed: {e}")))
     }
 
-    /// Track a cortical area in the FireLedger with an explicit window size.
+    /// Track a cortical_area area in the FireLedger with an explicit window size.
     pub fn configure_fire_ledger_window(
         &mut self,
         cortical_idx: u32,
@@ -5659,7 +5659,7 @@ impl<
             .map_err(|e| FeagiError::RuntimeError(format!("FireLedger MP query failed: {e}")))
     }
 
-    /// Track a cortical area on the episodic memory FireLedger (pattern-injection fires only).
+    /// Track a cortical_area area on the episodic memory FireLedger (pattern-injection fires only).
     pub fn configure_episodic_memory_fire_ledger_window(
         &mut self,
         cortical_idx: u32,
@@ -5712,7 +5712,7 @@ impl<
             .get_tracked_windows()
     }
 
-    /// Set associative sparse LIF defaults for a memory cortical area (`cortical_idx`).
+    /// Set associative sparse LIF defaults for a memory cortical_area area (`cortical_idx`).
     ///
     /// See `plasticity/docs/memory-episodic-associative-design.md` §10.
     pub fn set_memory_associative_lif_params(
@@ -7059,7 +7059,7 @@ mod tests {
         .unwrap();
         npu.rebuild_synapse_index();
 
-        // Enable mp_driven_psp on the source cortical ID.
+        // Enable mp_driven_psp on the source cortical_area ID.
         let mut flags = ahash::AHashMap::new();
         flags.insert(cortical_id, true);
         npu.set_mp_driven_psp_flags(flags);
@@ -7747,12 +7747,12 @@ macro_rules! dispatch {
 //         dispatch!(self, inject_sensory_with_potentials(neurons))
 //     }
 //
-//     /// Register cortical area
+//     /// Register cortical_area area
 //     pub fn register_cortical_area(&mut self, area_id: u32, cortical_name: String) {
 //         dispatch!(self, register_cortical_area(area_id, cortical_name))
 //     }
 //
-//     /// Get cortical area name
+//     /// Get cortical_area area name
 //     pub fn get_cortical_area_name(&self, area_id: u32) -> Option<String> {
 //         dispatch!(self, get_cortical_area_name(area_id))
 //     }
@@ -7762,12 +7762,12 @@ macro_rules! dispatch {
 //         dispatch!(self, is_genome_loaded())
 //     }
 //
-//     /// Get all cortical areas
+//     /// Get all cortical_area areas
 //     pub fn get_all_cortical_areas(&self) -> Vec<(u32, String)> {
 //         dispatch!(self, get_all_cortical_areas())
 //     }
 //
-//     /// Get registered cortical area count
+//     /// Get registered cortical_area area count
 //     pub fn get_registered_cortical_area_count(&self) -> usize {
 //         dispatch!(self, get_registered_cortical_area_count())
 //     }
@@ -7816,37 +7816,37 @@ macro_rules! dispatch {
 //         dispatch_mut!(self, force_sample_fire_queue())
 //     }
 //
-//     /// Update cortical area threshold (returns count of neurons updated)
+//     /// Update cortical_area area threshold (returns count of neurons updated)
 //     pub fn update_cortical_area_threshold(&mut self, cortical_idx: u32, threshold: f32) -> usize {
 //         dispatch_mut!(self, update_cortical_area_threshold(cortical_idx, threshold))
 //     }
 //
-//     /// Update cortical area refractory period (returns count of neurons updated)
+//     /// Update cortical_area area refractory period (returns count of neurons updated)
 //     pub fn update_cortical_area_refractory_period(&mut self, cortical_idx: u32, period: u16) -> usize {
 //         dispatch_mut!(self, update_cortical_area_refractory_period(cortical_idx, period))
 //     }
 //
-//     /// Update cortical area leak coefficient (returns count of neurons updated)
+//     /// Update cortical_area area leak coefficient (returns count of neurons updated)
 //     pub fn update_cortical_area_leak(&mut self, cortical_idx: u32, leak: f32) -> usize {
 //         dispatch_mut!(self, update_cortical_area_leak(cortical_idx, leak))
 //     }
 //
-//     /// Update cortical area consecutive fire limit (returns count of neurons updated)
+//     /// Update cortical_area area consecutive fire limit (returns count of neurons updated)
 //     pub fn update_cortical_area_consecutive_fire_limit(&mut self, cortical_idx: u32, limit: u16) -> usize {
 //         dispatch_mut!(self, update_cortical_area_consecutive_fire_limit(cortical_idx, limit))
 //     }
 //
-//     /// Update cortical area snooze period (returns count of neurons updated)
+//     /// Update cortical_area area snooze period (returns count of neurons updated)
 //     pub fn update_cortical_area_snooze_period(&mut self, cortical_idx: u32, snooze: u16) -> usize {
 //         dispatch_mut!(self, update_cortical_area_snooze_period(cortical_idx, snooze))
 //     }
 //
-//     /// Update cortical area excitability (returns count of neurons updated)
+//     /// Update cortical_area area excitability (returns count of neurons updated)
 //     pub fn update_cortical_area_excitability(&mut self, cortical_idx: u32, excitability: f32) -> usize {
 //         dispatch_mut!(self, update_cortical_area_excitability(cortical_idx, excitability))
 //     }
 //
-//     /// Update cortical area MP charge accumulation (returns count of neurons updated)
+//     /// Update cortical_area area MP charge accumulation (returns count of neurons updated)
 //     pub fn update_cortical_area_mp_charge_accumulation(&mut self, cortical_idx: u32, accumulation: bool) -> usize {
 //         dispatch_mut!(self, update_cortical_area_mp_charge_accumulation(cortical_idx, accumulation))
 //     }
@@ -7856,7 +7856,7 @@ macro_rules! dispatch {
 //         dispatch_mut!(self, rebuild_synapse_index())
 //     }
 //
-//     /// Create cortical area neurons (3D grid with defaults)
+//     /// Create cortical_area area neurons (3D grid with defaults)
 //     pub fn create_cortical_area_neurons(
 //         &mut self,
 //         cortical_idx: u32,
@@ -8075,12 +8075,12 @@ macro_rules! dispatch {
 //         dispatch!(self, get_outgoing_synapses(source_neuron_id))
 //     }
 //
-//     /// Get neurons in cortical area
+//     /// Get neurons in cortical_area area
 //     pub fn get_neurons_in_cortical_area(&self, cortical_area_id: u32) -> Vec<u32> {
 //         dispatch!(self, get_neurons_in_cortical_area(cortical_area_id))
 //     }
 //
-//     /// Get neuron cortical area
+//     /// Get neuron cortical_area area
 //     pub fn get_neuron_cortical_area(&self, neuron_id: u32) -> u32 {
 //         dispatch!(self, get_neuron_cortical_area(neuron_id))
 //     }

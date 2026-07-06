@@ -2,14 +2,9 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use paste;
-use crate::data_wrappers::quantizable::wrapper_traits::QuantizedElementWrapperBase;
-use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
-    FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning, PoseSchema,
-};
-use crate::genomic::cortical_area::{CorticalAreaType, CorticalID};
-use crate::genomic::cortical_area::descriptors::CorticalUnitIndex;
-use crate::genomic::FeagiStructuresGenomicError;
-use crate::genomic::sensory_cortical_unit::UnitTopology;
+use crate::cortical_area::CorticalID;
+use crate::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, PercentageNeuronPositioning, PoseSchema};
+use crate::cortical_unit::CorticalUnitIndex;
 use crate::motor_cortical_units;
 
 
@@ -56,20 +51,20 @@ macro_rules! define_motor_cortical_units_enum {
         impl MotorCorticalUnit {
             $(
                 paste::paste! {
-                    #[doc = "Get cortical area types array for " $friendly_name "."]
+                    #[doc = "Get cortical_area area types array for " $friendly_name "."]
                     pub const fn [<get_cortical_area_types_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type),*) -> [CorticalAreaType; $number_cortical_areas] {
-                        // Keep parameterized API stable even for unit templates that don't consume every parameter.
+                        // Keep parameterized API stable even for unit cortical_units that don't consume every parameter.
                         $(let _ = &$param_name;)*
                         [
                             $(CorticalAreaType::BrainOutput($io_cortical_area_configuration_flag_expr)),*
                         ]
                     }
 
-                    #[doc = "Get cortical IDs array for " $friendly_name "."]
+                    #[doc = "Get cortical_area IDs array for " $friendly_name "."]
                     pub const fn [<get_cortical_ids_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type,)* cortical_unit_index: CorticalUnitIndex) -> [CorticalID; $number_cortical_areas] {
-                        // Keep parameterized API stable even for unit templates that don't consume every parameter.
+                        // Keep parameterized API stable even for unit cortical_units that don't consume every parameter.
                         $(let _ = &$param_name;)*
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
@@ -89,7 +84,7 @@ macro_rules! define_motor_cortical_units_enum {
                 }
             }
 
-            /// Get the accepted wrapped IO data type for this motor cortical unit.
+            /// Get the accepted wrapped IO data type for this motor cortical_area unit.
             /// Returns the string name of the data type (e.g., "MiscData", "SignedPercentageData").
             pub const fn get_accepted_wrapped_io_data_type(&self) -> &'static str {
                 match self {
@@ -99,7 +94,7 @@ macro_rules! define_motor_cortical_units_enum {
                 }
             }
 
-            /// Parse a motor cortical unit from its snake_case name
+            /// Parse a motor cortical_area unit from its snake_case name
             ///
             /// # Arguments
             /// * `name` - The snake_case name (e.g., "positional_servo", "led_matrix")
@@ -118,7 +113,7 @@ macro_rules! define_motor_cortical_units_enum {
 
             // TODO from_snake_case_name_const
 
-            /// Returns all available motor cortical unit types.
+            /// Returns all available motor cortical_area unit types.
             /// This is useful for enumerating all possible motor types in the system.
             pub const fn list_all() -> &'static [MotorCorticalUnit] {
                 &[
@@ -128,7 +123,7 @@ macro_rules! define_motor_cortical_units_enum {
                 ]
             }
 
-            /// Returns the friendly (human-readable) name for this motor cortical unit type.
+            /// Returns the friendly (human-readable) name for this motor cortical_area unit type.
             pub const fn get_friendly_name(&self) -> &'static str {
                 match self {
                     $(
@@ -137,7 +132,7 @@ macro_rules! define_motor_cortical_units_enum {
                 }
             }
 
-            /// Returns the 3-byte cortical ID unit reference for this type.
+            /// Returns the 3-byte cortical_area ID unit reference for this type.
             pub const fn get_cortical_id_unit_reference(&self) -> [u8; 3] {
                 match self {
                     $(
@@ -146,7 +141,7 @@ macro_rules! define_motor_cortical_units_enum {
                 }
             }
 
-            /// Returns the number of cortical areas this type creates.
+            /// Returns the number of cortical_area areas this type creates.
             pub const fn get_number_cortical_areas(&self) -> usize {
                 match self {
                     $(
@@ -155,7 +150,7 @@ macro_rules! define_motor_cortical_units_enum {
                 }
             }
 
-            /// Returns the default topology for all units of this cortical type.
+            /// Returns the default topology for all units of this cortical_area type.
             pub fn get_unit_default_topology(&self) -> HashMap<CorticalSubUnitIndex, UnitTopology> {
                 match self {
                     $(
@@ -178,7 +173,7 @@ macro_rules! define_motor_cortical_units_enum {
                 }
             }
 
-            /// Returns the allowed FrameChangeHandling values for this motor cortical unit.
+            /// Returns the allowed FrameChangeHandling values for this motor cortical_area unit.
             /// If None, all FrameChangeHandling values are allowed.
             /// If Some, only the specified values are allowed.
             pub fn get_allowed_frame_change_handling(&self) -> Option<&'static [FrameChangeHandling]> {
@@ -242,9 +237,6 @@ impl MotorCorticalUnit {
 
     /// Get the default CorticalID for this unit with group index 0 (Absolute frame handling, Linear positioning).
     pub fn get_default_cortical_id_for_group(&self, group_index: CorticalUnitIndex) -> CorticalID {
-        use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
-            FrameChangeHandling, PercentageNeuronPositioning,
-        };
         let fh = FrameChangeHandling::Absolute;
         let pos = PercentageNeuronPositioning::Linear;
         match self {

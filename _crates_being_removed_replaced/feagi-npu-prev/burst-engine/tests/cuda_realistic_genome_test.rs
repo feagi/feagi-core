@@ -106,7 +106,7 @@ mod cuda_realistic_genome_tests {
         println!("   Creating synaptic connections:");
 
         // _power → Area A (PSP UNIFORMITY ENABLED)
-        // With PSP uniformity: Each synapse gets full cortical area PSP value (not divided)
+        // With PSP uniformity: Each synapse gets full cortical_area area PSP value (not divided)
         // Power area PSP = 5 → all synapses get PSP=5
         let power_psp = 5;
         for target_offset in 0..1000 {

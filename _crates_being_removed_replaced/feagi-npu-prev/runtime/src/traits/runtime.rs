@@ -249,18 +249,18 @@ pub trait NeuronStorage: Send + Sync {
 
     // === Query Methods ===
 
-    /// Get neuron at specific 3D coordinate in a cortical area
+    /// Get neuron at specific 3D coordinate in a cortical_area area
     fn get_neuron_at_coordinate(&self, cortical_area: u32, x: u32, y: u32, z: u32)
         -> Option<usize>;
 
-    /// Get all neuron indices in a cortical area
+    /// Get all neuron indices in a cortical_area area
     #[cfg(any(feature = "std", feature = "alloc"))]
     fn get_neurons_in_cortical_area(&self, cortical_area: u32) -> Vec<usize>;
 
-    /// Get count of neurons in a cortical area
+    /// Get count of neurons in a cortical_area area
     fn get_neuron_count(&self, cortical_area: u32) -> usize;
 
-    /// Get cortical area ID for a neuron
+    /// Get cortical_area area ID for a neuron
     fn get_cortical_area(&self, neuron_idx: usize) -> Option<u32>;
 
     /// Get 3D coordinates for a neuron

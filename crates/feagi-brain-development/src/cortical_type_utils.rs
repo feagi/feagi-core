@@ -24,7 +24,7 @@ use feagi_genome_definitions::::{
     CorticalArea, CorticalAreaType, IOCorticalAreaConfigurationFlag,
 };
 
-/// Extract detailed IOCorticalAreaDataFlag from a cortical area
+/// Extract detailed IOCorticalAreaDataFlag from a cortical_area area
 ///
 /// Returns None if:
 /// - cortical_type_new is not populated
@@ -141,7 +141,7 @@ pub fn uses_cartesian_encoding(area: &CorticalArea) -> bool {
     }
 }
 
-/// Get human-readable description of an area's cortical type
+/// Get human-readable description of an area's cortical_area type
 ///
 /// Provides detailed information for logging and diagnostics.
 pub fn describe_cortical_type(area: &CorticalArea) -> String {
@@ -189,14 +189,14 @@ pub fn validate_connectivity(
     // Phase 3: Basic validation - ensure both areas have types
     if src_area.cortical_id.as_cortical_type().is_err() {
         return Err(format!(
-            "Source area {} has invalid cortical type",
+            "Source area {} has invalid cortical_area type",
             src_area.cortical_id
         ));
     }
 
     if dst_area.cortical_id.as_cortical_type().is_err() {
         return Err(format!(
-            "Destination area {} has invalid cortical type",
+            "Destination area {} has invalid cortical_area type",
             dst_area.cortical_id
         ));
     }
@@ -243,7 +243,7 @@ mod tests {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id
             .as_cortical_type()
-            .expect("Failed to get cortical type");
+            .expect("Failed to get cortical_area type");
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -264,7 +264,7 @@ mod tests {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id
             .as_cortical_type()
-            .expect("Failed to get cortical type");
+            .expect("Failed to get cortical_area type");
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -285,7 +285,7 @@ mod tests {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id
             .as_cortical_type()
-            .expect("Failed to get cortical type");
+            .expect("Failed to get cortical_area type");
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -306,7 +306,7 @@ mod tests {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id
             .as_cortical_type()
-            .expect("Failed to get cortical type");
+            .expect("Failed to get cortical_area type");
         let area = CorticalArea::new(
             cortical_id,
             0,

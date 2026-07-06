@@ -1,16 +1,16 @@
 use crate::values::quantizable::QuantizedDecimalTrait;
 
 //region Cortical Potential Quantization
-/// Defines the quantization of the neuron potential for a specific cortical area. All cortical
-/// areas must have the neuron potential. This quantization is set per cortical area, and
-/// is controlled by the Neuron Model quantization state, although this cortical level neuron
+/// Defines the quantization of the neuron potential for a specific cortical_area area. All cortical_area
+/// areas must have the neuron potential. This quantization is set per cortical_area area, and
+/// is controlled by the Neuron Model quantization state, although this cortical_area level neuron
 /// potential quantization has discrete steps that must be followed.
 
 pub trait CorticalPotentialQuantization {
     const QUANTIZATION_LEVEL: CorticalPotentialQuantizationLevel;
 
     /// Defines the quantization of the membrane potential of a neuron, which all models must
-    /// include. This may vary between cortical areas, even of the same model. This also impacts
+    /// include. This may vary between cortical_area areas, even of the same model. This also impacts
     /// the FCL as well
     type NeuronPotentialQuant: QuantizedDecimalTrait;
 }

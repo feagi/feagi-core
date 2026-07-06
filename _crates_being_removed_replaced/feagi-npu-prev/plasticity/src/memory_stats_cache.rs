@@ -16,7 +16,7 @@ use std::sync::Arc;
 #[cfg(feature = "std")]
 use feagi_state_manager::StateManager;
 
-/// Statistics for a single memory cortical area
+/// Statistics for a single memory cortical_area area
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryAreaStats {
     /// Current number of active neurons in this memory area

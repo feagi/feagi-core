@@ -97,7 +97,7 @@ fn rt<E: Display>(error: E) -> TrainerError {
     TrainerError::Runtime(error.to_string())
 }
 
-/// Resolves the core affect cortical area that a reward channel stimulates.
+/// Resolves the core affect cortical_area area that a reward channel stimulates.
 fn affect_cortical_id(channel: AffectChannel) -> CorticalID {
     let core = match channel {
         AffectChannel::Pain => CoreCorticalType::Pain,

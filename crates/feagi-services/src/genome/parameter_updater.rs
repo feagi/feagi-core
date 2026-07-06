@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*!
-Direct neuron parameter update service for cortical areas.
+Direct neuron parameter update service for cortical_area areas.
 
 This module enables updating neuron properties directly in the NPU
 without requiring expensive full brain rebuilds or synapse regeneration,
@@ -37,9 +37,9 @@ impl CorticalParameterUpdater {
         Self { npu }
     }
 
-    /// Update neuron parameters for a cortical area via NPU batch updates
+    /// Update neuron parameters for a cortical_area area via NPU batch updates
     ///
-    /// ARCHITECTURE: NPU owns all neurons. This service tells NPU which cortical area
+    /// ARCHITECTURE: NPU owns all neurons. This service tells NPU which cortical_area area
     /// and what values to update. NPU does everything internally in batch.
     ///
     /// # Arguments
@@ -196,7 +196,7 @@ impl CorticalParameterUpdater {
                             );
                         } else if !accumulation {
                             info!(
-                                "✓ Synced mp_charge_accumulation=false to {} neurons in area {}; membrane potentials cleared for this cortical area",
+                                "✓ Synced mp_charge_accumulation=false to {} neurons in area {}; membrane potentials cleared for this cortical_area area",
                                 count, cortical_id
                             );
                         } else {
@@ -231,7 +231,7 @@ impl CorticalParameterUpdater {
         }
 
         info!(
-            "[FAST-UPDATE] Completed {}/{} parameter updates for cortical area {}",
+            "[FAST-UPDATE] Completed {}/{} parameter updates for cortical_area area {}",
             success_count,
             parameter_changes.len(),
             cortical_id

@@ -130,14 +130,14 @@ impl AgentService for AgentServiceImpl {
                     .collect()
             });
 
-            // Serialize cortical areas with proper error handling (don't panic!)
+            // Serialize cortical_area areas with proper error handling (don't panic!)
             let cortical_areas_json =
                 serde_json::to_value(&pns_response.cortical_areas).map_err(|e| {
                     error!(
-                        "❌ [AGENT-SERVICE] Failed to serialize cortical areas: {}",
+                        "❌ [AGENT-SERVICE] Failed to serialize cortical_area areas: {}",
                         e
                     );
-                    AgentError::Internal(format!("Failed to serialize cortical areas: {}", e))
+                    AgentError::Internal(format!("Failed to serialize cortical_area areas: {}", e))
                 })?;
 
             return Ok(AgentRegistrationResponse {
@@ -274,7 +274,7 @@ impl AgentService for AgentServiceImpl {
 
         // Add output capability (feagi-sensorimotor format)
         if let Some(ref motor) = agent.capabilities.motor {
-            // Convert motor capability to "output" format: array of cortical IDs
+            // Convert motor capability to "output" format: array of cortical_area IDs
             let output_areas: Vec<String> = motor.source_cortical_areas.clone();
             capabilities.insert(
                 "output".to_string(),
@@ -370,7 +370,7 @@ impl AgentService for AgentServiceImpl {
         // Default potential for manual stimulation (high enough to trigger firing)
         const DEFAULT_POTENTIAL: f32 = 100.0;
 
-        // First pass: validate all cortical areas and build injection data
+        // First pass: validate all cortical_area areas and build injection data
         let mut injection_requests: Vec<(String, Vec<(u32, u32, u32, f32)>)> = Vec::new();
 
         {
@@ -382,14 +382,14 @@ impl AgentService for AgentServiceImpl {
                     Ok(id) => id,
                     Err(e) => {
                         failed_areas.push(cortical_id.clone());
-                        warn!("Invalid cortical ID '{}': {}", cortical_id, e);
+                        warn!("Invalid cortical_area ID '{}': {}", cortical_id, e);
                         continue;
                     }
                 };
 
                 match manager.get_cortical_area(&cortical_id_typed) {
                     Some(_area) => {
-                        // Build xyzp_data for this cortical area (coordinates with potential)
+                        // Build xyzp_data for this cortical_area area (coordinates with potential)
                         let mut xyzp_data = Vec::new();
 
                         for coord in coordinates {
@@ -485,7 +485,7 @@ impl AgentService for AgentServiceImpl {
         if !failed_areas.is_empty() {
             result.insert(
                 "error".to_string(),
-                serde_json::json!(format!("Some cortical areas not found: {:?}", failed_areas)),
+                serde_json::json!(format!("Some cortical_area areas not found: {:?}", failed_areas)),
             );
         }
 

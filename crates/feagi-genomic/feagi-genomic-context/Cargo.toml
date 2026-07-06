@@ -8,8 +8,40 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation.workspace = true
+description = "IDs and Metadata used to identify and describe structures within FEAGI Genomes"
+
+[features]
+
+default = [
+    "std",
+]
+
+# ========================= Toggleable Features ========================= #
+# Features that add certain libraries/crates that extend the functionality
+# and performance of the FEAGI application
+# In order of Directly activated crates, other features here, external crate features, feagi crate features
+
+std = [
+    "alloc",
+    "serde/std", "serde_json/std", "ahash/std"
+]
+
+alloc = [
+    "serde", "serde_json",
+    "serde/alloc", "serde/derive", "serde_json/alloc", "ahash/serde",
+]
 
 [dependencies]
+feagi-logging-and-errors = {path = "../../feagi-logging-and-errors"}
+feagi-data = {path = "../../feagi-data"}
+
+# External crates
+paste = { workspace = true }
+ahash = { workspace = true}
+base64 = "0.22.1" # TODO remove this!
+serde = { workspace = true, optional = true}
+serde_json = { workspace = true, optional = true}
+
 
 [lints]
 workspace = true

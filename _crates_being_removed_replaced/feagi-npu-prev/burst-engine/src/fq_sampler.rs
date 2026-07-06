@@ -19,7 +19,7 @@
 //! - Rate-limited sampling (configurable Hz)
 //! - Deduplication (skip if burst already sampled)
 //! - Zero-copy when possible (references to Fire Queue data)
-//! - Organized by cortical area
+//! - Organized by cortical_area area
 
 use crate::fire_structures::FireQueue;
 use ahash::AHashMap;
@@ -36,7 +36,7 @@ pub enum SamplingMode {
     Unified,
 }
 
-/// Sampled area data for a single cortical area
+/// Sampled area data for a single cortical_area area
 #[derive(Debug, Clone)]
 pub struct SampledAreaData {
     /// Cortical area index
@@ -67,7 +67,7 @@ pub struct FQSampleResult {
     /// Timestep this sample represents
     pub timestep: u64,
 
-    /// Sampled data by cortical area
+    /// Sampled data by cortical_area area
     pub areas: AHashMap<u32, SampledAreaData>,
 
     /// Total number of neurons sampled

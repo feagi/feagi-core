@@ -66,12 +66,12 @@ pub fn new_shared_state() -> SharedAmalgamationState {
 
 /// Compute a circuit bounding-box size (x,y,z) from a parsed RuntimeGenome.
 ///
-/// Bounding box is computed over all cortical areas:
+/// Bounding box is computed over all cortical_area areas:
 /// - min corner = min(position)
 /// - max corner = max(position + dimensions)
 /// - size = max - min (per axis)
 ///
-/// If there are no cortical areas, size is [0,0,0].
+/// If there are no cortical_area areas, size is [0,0,0].
 pub fn compute_circuit_size_from_runtime_genome(
     genome: &feagi_evolutionary::RuntimeGenome,
 ) -> [i32; 3] {
@@ -150,7 +150,7 @@ mod tests {
             "genome_description": "",
             "version": "2.1",
             "blueprint": {
-                "X19fcG93ZXI=": { // "___power" base64 (core-ish, but valid cortical id)
+                "X19fcG93ZXI=": { // "___power" base64 (core-ish, but valid cortical_area id)
                     "cortical_name": "Area",
                     "block_boundaries": [2, 3, 4],
                     "relative_coordinate": [1, 1, 1],

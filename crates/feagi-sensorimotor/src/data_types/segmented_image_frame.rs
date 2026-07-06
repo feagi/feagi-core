@@ -209,7 +209,7 @@ impl SegmentedImageFrame {
     }
 
     pub fn get_image_internal_data(&self) -> [&Array3<u8>; 9] {
-        // return in same order as cortical IDs
+        // return in same order as cortical_area IDs
         [
             self.lower_left.get_internal_data(),
             self.lower_middle.get_internal_data(),
@@ -289,7 +289,7 @@ impl SegmentedImageFrame {
 
     #[allow(dead_code)]
     pub(crate) fn get_image_internal_data_mut(&mut self) -> [&mut Array3<u8>; 9] {
-        // return in same order as cortical IDs
+        // return in same order as cortical_area IDs
         [
             self.lower_left.get_internal_data_mut(),
             self.lower_middle.get_internal_data_mut(),

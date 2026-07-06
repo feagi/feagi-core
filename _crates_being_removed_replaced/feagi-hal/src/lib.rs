@@ -35,7 +35,7 @@
 //! ```
 //!
 //! ### SDK Users
-//! See `feagi-nano` crate for high-level SDK with NetworkBuilder, templates, etc.
+//! See `feagi-nano` crate for high-level SDK with NetworkBuilder, cortical_units, etc.
 //!
 //! ## Feature Flags
 //!

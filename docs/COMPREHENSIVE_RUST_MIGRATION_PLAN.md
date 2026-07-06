@@ -599,7 +599,7 @@ impl Neuroembryogenesis {
     ) -> Result<DevelopmentStats, BduError> {
         let start = std::time::Instant::now();
         
-        // Create cortical areas from genome
+        // Create cortical_area areas from genome
         let areas_created = self.create_cortical_areas(genome, connectome)?;
         
         // Apply connectivity rules
@@ -1035,7 +1035,7 @@ pub struct AddCorticalAreaRequest {
     // ... all fields
 }
 
-/// Add new cortical area
+/// Add new cortical_area area
 #[utoipa::path(
     post,
     path = "/v1/cortical_area",
@@ -1071,7 +1071,7 @@ pub async fn add_cortical_area(
     Ok(Json(()))
 }
 
-/// Get cortical area by ID
+/// Get cortical_area area by ID
 #[utoipa::path(
     get,
     path = "/v1/cortical_area/{id}",
@@ -1151,7 +1151,7 @@ async fn test_full_genome_loading_workflow() {
         .unwrap();
     assert_eq!(response.status(), 200);
     
-    // 2. Verify cortical areas created
+    // 2. Verify cortical_area areas created
     let response = app
         .get("/v1/cortical_area")
         .send()
@@ -1334,7 +1334,7 @@ use prometheus::{Registry, Counter, Histogram};
 // In API handlers
 #[instrument]
 pub async fn add_cortical_area(...) -> Result<...> {
-    info!("Adding cortical area: {}", area.cortical_id);
+    info!("Adding cortical_area area: {}", area.cortical_id);
     // ... implementation
 }
 ```

@@ -87,7 +87,7 @@ fn test_load_barebones_genome() {
     
     // Verify brain was developed
     let area_count = manager.get_cortical_area_count();
-    println!("Created {} cortical areas", area_count);
+    println!("Created {} cortical_area areas", area_count);
     assert!(area_count > 0, "Should have created at least one cortical area");
     
     // Verify neurons were created
@@ -126,14 +126,14 @@ fn test_load_essential_genome() {
     
     // Verify multiple areas created
     let area_count = manager.get_cortical_area_count();
-    println!("Created {} cortical areas", area_count);
+    println!("Created {} cortical_area areas", area_count);
     assert!(area_count >= 2, "Essential genome should have multiple areas");
     
     // Verify neuron creation
     let neuron_count = manager.get_neuron_count();
     println!("Created {} neurons", neuron_count);
     
-    // List all cortical area IDs
+    // List all cortical_area area IDs
     let area_ids = manager.get_all_cortical_ids();
     println!("Cortical areas: {:?}", area_ids);
     assert!(!area_ids.is_empty());
@@ -149,7 +149,7 @@ fn test_load_essential_genome() {
 fn test_incremental_brain_building() {
     let mut manager = create_test_manager();
     
-    // Step 1: Create first cortical area
+    // Step 1: Create first cortical_area area
     let area1 = CorticalArea::new(
         "area01".to_string(),
         "Visual V1".to_string(),
@@ -174,7 +174,7 @@ fn test_incremental_brain_building() {
     let neuron_count = manager.get_neuron_count();
     assert!(neuron_count > 0, "Should have created neurons");
     
-    // Step 3: Create second cortical area
+    // Step 3: Create second cortical_area area
     let area2 = CorticalArea::new(
         "area02".to_string(),
         "Motor M1".to_string(),
@@ -209,7 +209,7 @@ fn test_incremental_brain_building() {
 fn test_neuron_operations() {
     let mut manager = create_test_manager();
     
-    // Create a cortical area
+    // Create a cortical_area area
     let area = CorticalArea::new(
         "test01".to_string(),
         "Test Area".to_string(),
@@ -441,7 +441,7 @@ fn test_area_and_region_queries() {
     // Test get_all_cortical_ids
     let all_ids = manager.get_all_cortical_ids();
     assert_eq!(all_ids.len(), 3);
-    println!("All cortical IDs: {:?}", all_ids);
+    println!("All cortical_area IDs: {:?}", all_ids);
     
     // Test get_cortical_area_names
     let all_names = manager.get_cortical_area_names();

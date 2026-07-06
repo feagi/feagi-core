@@ -21,10 +21,10 @@ use utoipa::ToSchema;
     }
 }))]
 pub struct MappingInfo {
-    /// Source cortical area ID
+    /// Source cortical_area area ID
     pub src_cortical_area: String,
 
-    /// Destination cortical area ID
+    /// Destination cortical_area area ID
     pub dst_cortical_area: String,
 
     /// Mapping type (e.g., "one_to_one", "one_to_many", "topological")
@@ -37,10 +37,10 @@ pub struct MappingInfo {
 /// Create mapping request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateMappingRequest {
-    /// Source cortical area ID
+    /// Source cortical_area area ID
     pub src_cortical_area: String,
 
-    /// Destination cortical area ID
+    /// Destination cortical_area area ID
     pub dst_cortical_area: String,
 
     /// Mapping type
@@ -90,7 +90,7 @@ pub struct SynapseStats {
 /// Connectome statistics response
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ConnectomeStatsResponse {
-    /// Total number of cortical areas
+    /// Total number of cortical_area areas
     pub total_cortical_areas: usize,
 
     /// Total number of mappings

@@ -186,7 +186,7 @@ if let Some(ref plasticity_mgr) = burst_loop_runner.plasticity_manager {
 
 **Search Strategy**:
 ```bash
-# Find where cortical areas are created
+# Find where cortical_area areas are created
 grep -r "create.*cortical.*area" feagi-core/crates/
 grep -r "apply_genome" feagi-core/crates/
 grep -r "CorticalAreaType::Memory" feagi-core/crates/

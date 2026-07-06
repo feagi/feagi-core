@@ -3,10 +3,10 @@
 
 //! # Fire Queue Serialization Tests
 //!
-//! Tests serialization of fire queue data with all cortical types:
+//! Tests serialization of fire queue data with all cortical_area types:
 //! - Verifies RawFireQueueData can be serialized correctly
-//! - Tests cortical area name encoding/decoding
-//! - Ensures all cortical types work in visualization streams
+//! - Tests cortical_area area name encoding/decoding
+//! - Ensures all cortical_area types work in visualization streams
 
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::burst_loop_runner::RawFireQueueData;
@@ -45,7 +45,7 @@ fn test_fire_queue_core_area_serialization() {
         potentials: vec![1.0, 1.0, 1.0],
     };
 
-    // Verify we can decode the cortical ID from the name
+    // Verify we can decode the cortical_area ID from the name
     let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_id).unwrap();
     assert_eq!(decoded_id, cortical_id);
 }
@@ -76,7 +76,7 @@ fn test_fire_queue_ipu_area_serialization() {
         potentials: vec![0.8, 0.9],
     };
 
-    // Verify we can decode the cortical ID from the name
+    // Verify we can decode the cortical_area ID from the name
     let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_id).unwrap();
     assert_eq!(decoded_id, cortical_id);
 }
@@ -107,7 +107,7 @@ fn test_fire_queue_opu_area_serialization() {
         potentials: vec![0.7, 0.75, 0.8, 0.85],
     };
 
-    // Verify we can decode the cortical ID from the name
+    // Verify we can decode the cortical_area ID from the name
     let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_id).unwrap();
     assert_eq!(decoded_id, cortical_id);
 }
@@ -138,7 +138,7 @@ fn test_fire_queue_custom_area_serialization() {
         potentials: vec![0.6],
     };
 
-    // Verify we can decode the cortical ID from the name
+    // Verify we can decode the cortical_area ID from the name
     let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_id).unwrap();
     assert_eq!(decoded_id, cortical_id);
 }
@@ -169,7 +169,7 @@ fn test_fire_queue_memory_area_serialization() {
         potentials: vec![0.5, 0.55, 0.6],
     };
 
-    // Verify we can decode the cortical ID from the name
+    // Verify we can decode the cortical_area ID from the name
     let decoded_id = CorticalID::try_from_base_64(&fire_data.cortical_id).unwrap();
     assert_eq!(decoded_id, cortical_id);
 }

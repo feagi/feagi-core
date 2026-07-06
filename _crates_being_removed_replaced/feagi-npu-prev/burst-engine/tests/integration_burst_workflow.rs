@@ -34,10 +34,10 @@ fn create_simple_network() -> RustNPU<StdRuntime, f32, CPUBackend> {
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 20).unwrap();
 
-    // Register cortical areas for neuron→area mapping (required by propagation engine)
+    // Register cortical_area areas for neuron→area mapping (required by propagation engine)
     //
     // IMPORTANT:
-    // - Core cortical indices (0..=2) auto-create deterministic core neurons.
+    // - Core cortical_area indices (0..=2) auto-create deterministic core neurons.
     // - Power injection is deterministic and targets neuron ID 1 only.
     npu.register_cortical_area(0, CoreCorticalType::Death.to_cortical_id().as_base_64());
     npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());

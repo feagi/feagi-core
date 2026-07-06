@@ -28,7 +28,7 @@ pub struct SystemHealthResponse {
     /// Total neuron count
     pub neuron_count: usize,
 
-    /// Total cortical area count
+    /// Total cortical_area area count
     pub cortical_area_count: usize,
 
     /// Total burst count
@@ -72,10 +72,10 @@ pub struct CorticalAreaStatsResponse {
     "inhibitory_count": 25000
 }))]
 pub struct ConnectivityStatsResponse {
-    /// Source cortical area ID
+    /// Source cortical_area area ID
     pub source_area: String,
 
-    /// Target cortical area ID
+    /// Target cortical_area area ID
     pub target_area: String,
 
     /// Number of synapses
@@ -108,7 +108,7 @@ pub struct ConnectomeAnalyticsResponse {
     /// Total number of synapses
     pub total_synapses: usize,
 
-    /// Total number of cortical areas
+    /// Total number of cortical_area areas
     pub total_cortical_areas: usize,
 
     /// Number of populated areas

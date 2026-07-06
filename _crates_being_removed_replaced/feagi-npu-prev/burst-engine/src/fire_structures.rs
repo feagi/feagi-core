@@ -53,10 +53,10 @@ impl Default for FiringNeuron {
 }
 
 /// Fire Queue - neurons that fired in the current burst
-/// Organized by cortical area for efficient processing
+/// Organized by cortical_area area for efficient processing
 #[derive(Debug, Clone)]
 pub struct FireQueue {
-    /// Firing neurons grouped by cortical area
+    /// Firing neurons grouped by cortical_area area
     pub neurons_by_area: AHashMap<u32, Vec<FiringNeuron>>,
 
     /// Total number of neurons across all areas
@@ -90,7 +90,7 @@ impl FireQueue {
         self.total_count
     }
 
-    /// Get neurons for a specific cortical area
+    /// Get neurons for a specific cortical_area area
     pub fn get_area_neurons(&self, cortical_idx: u32) -> Option<&Vec<FiringNeuron>> {
         self.neurons_by_area.get(&cortical_idx)
     }
@@ -120,7 +120,7 @@ impl FireQueue {
         self.total_count == 0
     }
 
-    /// Remove all neurons from a specific cortical area
+    /// Remove all neurons from a specific cortical_area area
     /// Returns the number of neurons removed
     pub fn remove_cortical_area(&mut self, cortical_idx: u32) -> usize {
         if let Some(neurons) = self.neurons_by_area.remove(&cortical_idx) {

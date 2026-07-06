@@ -522,7 +522,7 @@ impl SleepManager {
         // TODO: Implement full memory compaction
         // 1. Move active neurons to front (updates positions)
         // 2. Update ALL synapse references (critical - cannot interrupt!)
-        // 3. Update cortical area neuron ID mappings
+        // 3. Update cortical_area area neuron ID mappings
 
         let duration = start.elapsed();
 

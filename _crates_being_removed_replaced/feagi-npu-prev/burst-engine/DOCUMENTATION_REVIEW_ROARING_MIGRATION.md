@@ -76,7 +76,7 @@ The documentation ecosystem had **zero stale references** to `Vec<u32>` implemen
 ```rust
 //! Architecture:
 //! - Zero-copy design: Directly archives Fire Queue data
-//! - Circular buffer per cortical area (configurable window size)
+//! - Circular buffer per cortical_area area (configurable window size)
 //! - Structure-of-Arrays for cache efficiency
 //! - Thread-safe via Rust ownership
 ```
@@ -85,7 +85,7 @@ The documentation ecosystem had **zero stale references** to `Vec<u32>` implemen
 ```rust
 //! Architecture:
 //! - Zero-copy design: Directly archives Fire Queue data
-//! - Circular buffer per cortical area (configurable window size)
+//! - Circular buffer per cortical_area area (configurable window size)
 //! - RoaringBitmap for compressed, efficient neuron set storage
 //! - Thread-safe via Rust ownership
 //!

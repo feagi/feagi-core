@@ -59,17 +59,17 @@ pub struct VisionCapability {
     pub dimensions: (usize, usize),
     /// Number of channels (1=grayscale, 3=RGB, 4=RGBA)
     pub channels: usize,
-    /// Target cortical area ID
+    /// Target cortical_area area ID
     pub target_cortical_area: String,
     /// Semantic unit identifier (preferred).
     ///
-    /// When set, the backend can derive cortical IDs without requiring agents to know
+    /// When set, the backend can derive cortical_area IDs without requiring agents to know
     /// internal 3-letter unit designators (e.g., "svi"/"seg").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unit: Option<SensoryUnit>,
     /// Cortical unit index (group) for the selected unit (preferred).
     ///
-    /// FEAGI encodes the group in the cortical ID. This keeps the wire contract
+    /// FEAGI encodes the group in the cortical_area ID. This keeps the wire contract
     /// language-agnostic and avoids leaking internal byte layouts to SDK users.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group: Option<u8>,
@@ -82,7 +82,7 @@ pub struct MotorCapability {
     pub modality: String,
     /// Number of motor outputs
     pub output_count: usize,
-    /// Source cortical area IDs
+    /// Source cortical_area area IDs
     pub source_cortical_areas: Vec<String>,
     /// Semantic unit identifier (preferred).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -92,7 +92,7 @@ pub struct MotorCapability {
     pub group: Option<u8>,
     /// Multiple semantic motor unit sources (preferred for multi-OPU agents).
     ///
-    /// This supports agents that subscribe to multiple motor cortical unit types
+    /// This supports agents that subscribe to multiple motor cortical_area unit types
     /// (e.g., object_segmentation + simple_vision_output + text_english_output).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_units: Option<Vec<MotorUnitSpec>>,
@@ -124,7 +124,7 @@ pub enum SensoryUnit {
     CountInput,
     Vision,
     SegmentedVision,
-    /// Composite linear-vector IMU: 3 sub-cortical-areas (accelerometer,
+    /// Composite linear-vector IMU: 3 sub-cortical_area-areas (accelerometer,
     /// gyroscope, magnetometer), each a 3-axis signed percentage.
     RawImu,
     /// Quaternion orientation IMU: a single 4-axis signed-percentage area.

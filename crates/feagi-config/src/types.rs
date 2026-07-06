@@ -131,7 +131,7 @@ pub struct AgentConfig {
     pub bind_host: String,
     /// Host/IP advertised to agents for connecting to ZMQ agent endpoints.
     pub advertised_host: String,
-    /// Enable auto-creation of missing IPU/OPU cortical areas during agent registration
+    /// Enable auto-creation of missing IPU/OPU cortical_area areas during agent registration
     pub auto_create_missing_cortical_areas: bool,
 }
 

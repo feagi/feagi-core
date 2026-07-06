@@ -44,7 +44,7 @@ impl NPURequest {
 }
 
 
-// TODO delete cortical area, add mappings!
+// TODO delete cortical_area area, add mappings!
 
 
 

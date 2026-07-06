@@ -95,7 +95,7 @@ impl PercentageNeuronVoxelXYZPDecoder {
         Ok(Box::new(decoder))
     }
 
-    /// Signed 1D linear: one cortical X index per channel; Z carries -1..+1.
+    /// Signed 1D linear: one cortical_area X index per channel; Z carries -1..+1.
     #[inline]
     fn signed_d1_linear_uses_along_z_layout(&self) -> bool {
         self.is_signed
