@@ -12,3 +12,5 @@ documentation.workspace = true
 [dependencies]
 feagi-data = {path = "../../feagi-data"}
 feagi-npu-common = {path = "../feagi-npu-common"}
+
+ahash = {workspace = true, features = ["std"]}

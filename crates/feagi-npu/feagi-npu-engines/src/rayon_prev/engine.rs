@@ -1,7 +1,5 @@
 use core::marker::PhantomData;
-use feagi_structures::feagi_data::quantization_levels::feagi_global_quantization::FeagiGlobalQuantization;
-use crate::neural_processing_unit_data_structures::burst_engine::engines::burst_engine_fixed_interface::BurstEngineFixedInterface;
-use crate::neural_processing_unit_data_structures::wrappers::NPUWrappedBurstEngineBurstIndex;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
 
 pub struct BurstEngineCpuRayon<FGQ: FeagiGlobalQuantization> {
     // tables
@@ -10,11 +8,14 @@ pub struct BurstEngineCpuRayon<FGQ: FeagiGlobalQuantization> {
 }
 
 
-
 impl<FGQ: FeagiGlobalQuantization> BurstEngineCpuRayon<FGQ>
 {
     
 }
+
+impl AsyncBurstEngineTrait
+
+/*
 
 impl<FGQ: FeagiGlobalQuantization> BurstEngineFixedInterface<FGQ> for BurstEngineCpuRayon<FGQ>
 {
@@ -41,3 +42,6 @@ impl<FGQ: FeagiGlobalQuantization> BurstEngineFixedInterface<FGQ> for BurstEngin
 
 
 
+
+
+ */

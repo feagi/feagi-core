@@ -36,6 +36,10 @@ create_wrapped_quantized_index!(
     pub NeuronCorticalIndex
 );
 
+create_wrapped_quantized_index!(
+    /// Index of a cortical_area area relative to global connectome across all engines
+    pub CorticalConnectomeIndex
+);
 
 create_wrapped_quantized_index!(
     /// Index of a cortical_area area relative to the burst engine
