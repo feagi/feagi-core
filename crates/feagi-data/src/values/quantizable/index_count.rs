@@ -3,6 +3,8 @@ use crate::values::quantizable::QuantizedElementBase;
 
 // TODO serde serialization / deserialization? is it a good idea?
 
+
+
 /// Trait designed to hold index and/or count values in a quantized form
 pub trait QuantizedIndexCountTrait:
 Copy
@@ -36,10 +38,14 @@ Copy
     
     // TODO to other quantizations
 
+    /// Converts to usize
     fn to_usize(self) -> usize;
 
     /// Converts to u32
     fn to_u32(self) -> u32;
+
+    /// Tries to convert from usize, does NOT check bounds!
+    fn from_usize(value: usize) -> Self;
 
     /// Tries to convert from u32, does NOT check bounds!
     fn from_u32(value: u32) -> Self;
@@ -63,6 +69,8 @@ impl QuantizedIndexCountTrait for u8 {
     fn to_u32(self) -> u32 {
         self as u32
     }
+
+    fn from_usize(value: usize) -> Self {value as u8}
 
     fn from_u32(value: u32) -> Self {
         value as u8
@@ -97,6 +105,8 @@ impl QuantizedIndexCountTrait for u16 {
     fn to_u32(self) -> u32 {
         self as u32
     }
+
+    fn from_usize(value: usize) -> Self {value as u16}
 
     fn from_u32(value: u32) -> Self {
         value as u16
@@ -133,6 +143,8 @@ impl QuantizedIndexCountTrait for u32 {
         self
     }
 
+    fn from_usize(value: usize) -> Self {value as u32}
+
     fn from_u32(value: u32) -> Self {
         value
     }
@@ -163,6 +175,8 @@ impl QuantizedIndexCountTrait for u64 {
         self as u32
     }
 
+    fn from_usize(value: usize) -> Self {value as u64}
+
     fn from_u32(value: u32) -> Self {
         value as u64
     }
@@ -179,6 +193,9 @@ impl QuantizedIndexCountTrait for u64 {
         }
     }
 }
+
+// Note: Specifically we will not support usize directly since it can vary in size depending on
+// backend, which could cause some issues
 
 /// Creates a wrapper for quantized indexes / counts
 #[macro_export]
@@ -202,6 +219,10 @@ macro_rules! create_wrapped_quantized_index {
             {
                 self.0
             }
+
+            pub fn from_usize_unchecked(u: usize) -> Self {
+                Self(Q::from_usize(u))
+            }
         }
         
         // NOTE: Into<Q> for $struct_name<Q> is not needed!
@@ -223,6 +244,17 @@ macro_rules! create_wrapped_quantized_index {
             fn from(value: &mut Q) -> Self {
                 // tRust me bro
                 unsafe { &mut *(value as *mut Q as *mut $struct_name<Q>) }
+            }
+        }
+
+        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> TryFrom<usize> for $struct_name<Q> {
+            type Error = $crate::values::feagi_data_value_error::FeagiValueError;
+
+            fn try_from(u: usize) -> Result<Self, Self::Error> {
+                if u > Q::QUANT_MAX_AS_USIZE {
+                    return Err($crate::values::feagi_data_value_error::FeagiInvalidQuantizationErrKey::new("Given usize exceeds current quantization bounds!").into())
+                }
+                Ok(Self(Q::from_usize(u)))
             }
         }
         

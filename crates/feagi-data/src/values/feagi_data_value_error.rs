@@ -1,6 +1,11 @@
 use feagi_logging_and_errors::{FeagiErrorKey, FeagiError, generate_feagi_error};
 
 #[derive(FeagiErrorKey)]
+pub struct FeagiInvalidQuantizationErrKey {
+    context: &'static str
+}
+
+#[derive(FeagiErrorKey)]
 pub struct FeagiInvalidCoordErrKey {
     context: &'static str
 }
@@ -13,6 +18,7 @@ pub struct FeagiDimensionsErrKey {
 generate_feagi_error!{
     FeagiValueError,
     keys: {
+        InvalidQuantization: FeagiInvalidQuantizationErrKey,
         InvalidCoordinate: FeagiInvalidCoordErrKey,
         InvalidDimensions: FeagiDimensionsErrKey
     },
