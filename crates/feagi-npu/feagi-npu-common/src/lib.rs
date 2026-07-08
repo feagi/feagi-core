@@ -1,7 +1,6 @@
 
-mod par_slice;
-
 pub mod wrapped_values;
 pub mod descriptors;
+mod par_vector;
 
-pub use par_slice::{ParSlice, ParSliceMut};
+pub use par_vector::{ParAccess, ParSlice, ParVector};

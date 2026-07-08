@@ -6,6 +6,11 @@ pub struct FeagiInvalidQuantizationErrKey {
 }
 
 #[derive(FeagiErrorKey)]
+pub struct FeagiInvalidIndexErrKey {
+    context: &'static str
+}
+
+#[derive(FeagiErrorKey)]
 pub struct FeagiInvalidCoordErrKey {
     context: &'static str
 }
@@ -19,6 +24,7 @@ generate_feagi_error!{
     FeagiValueError,
     keys: {
         InvalidQuantization: FeagiInvalidQuantizationErrKey,
+        InvalidIndex: FeagiInvalidIndexErrKey,
         InvalidCoordinate: FeagiInvalidCoordErrKey,
         InvalidDimensions: FeagiDimensionsErrKey
     },

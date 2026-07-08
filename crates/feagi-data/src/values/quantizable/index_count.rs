@@ -3,7 +3,8 @@ use crate::values::quantizable::QuantizedElementBase;
 
 // TODO serde serialization / deserialization? is it a good idea?
 
-
+// TODO have from/to other quantization levels besides u32
+// TODO have try_from support, with error reporting the invalid number as a 3 char string (const)
 
 /// Trait designed to hold index and/or count values in a quantized form
 pub trait QuantizedIndexCountTrait:
@@ -199,7 +200,7 @@ impl QuantizedIndexCountTrait for u64 {
 
 /// Creates a wrapper for quantized indexes / counts
 #[macro_export]
-macro_rules! create_wrapped_quantized_index {
+    macro_rules! create_wrapped_quantized_index {
     (
         $(#[$meta:meta])*
         $vis:vis $struct_name:ident
@@ -222,6 +223,14 @@ macro_rules! create_wrapped_quantized_index {
 
             pub fn from_usize_unchecked(u: usize) -> Self {
                 Self(Q::from_usize(u))
+            }
+
+            /// Bounds-checked conversion from usiz
+            pub fn try_from_usize(u: usize) -> Result<Self, $crate::values::feagi_data_value_error::FeagiValueError> {
+                if u > Q::QUANT_MAX_AS_USIZE {
+                    return Err($crate::values::feagi_data_value_error::FeagiInvalidQuantizationErrKey::new("Given usize exceeds current quantization bounds!").into())
+                }
+                Ok(Self(Q::from_usize(u)))
             }
         }
         
@@ -247,17 +256,6 @@ macro_rules! create_wrapped_quantized_index {
             }
         }
 
-        impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> TryFrom<usize> for $struct_name<Q> {
-            type Error = $crate::values::feagi_data_value_error::FeagiValueError;
-
-            fn try_from(u: usize) -> Result<Self, Self::Error> {
-                if u > Q::QUANT_MAX_AS_USIZE {
-                    return Err($crate::values::feagi_data_value_error::FeagiInvalidQuantizationErrKey::new("Given usize exceeds current quantization bounds!").into())
-                }
-                Ok(Self(Q::from_usize(u)))
-            }
-        }
-        
         impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> AsRef<Q> for $struct_name<Q> {
             fn as_ref(&self) -> &Q {
                 &self.0

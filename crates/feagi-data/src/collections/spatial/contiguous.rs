@@ -8,7 +8,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
     ) => {
         $(#[$meta])*
         $vis struct $struct_name<QI: $crate::values::quantizable::QuantizedIndexCountTrait, V: Clone> {
-            pub(crate) data: $crate::collections::linear::contiguous::QuantizedContiguousVector,
+            pub(crate) data: $crate::collections::linear::contiguous_data::QuantizedContiguousVector,
             pub(crate) dimensions: $dim_impl<QI>
         }
 
@@ -17,7 +17,7 @@ macro_rules! create_spatial_quantized_contiguous_vector {
             pub fn new_uniform(dimensions: $dim_impl<QI>, filling_value: V) -> $struct_name<QI, V> {
                 let linear = dimensions.max_linear_index();
                 Self {
-                    data: $crate::collections::linear::contiguous::QuantizedContiguousVector::new_uniform(linear, filling_value),
+                    data: $crate::collections::linear::contiguous_data::QuantizedContiguousVector::new_uniform(linear, filling_value),
                     dimensions
                 }
             }
@@ -41,7 +41,7 @@ macro_rules! create_spatial_bitpacked_vector {
     ) => {
         $(#[$meta])*
         $vis struct $struct_name<QI: $crate::values::quantizable::QuantizedIndexCountTrait> {
-            pub(crate) data: $crate::collections::linear::contiguous::BitPackedVector,
+            pub(crate) data: $crate::collections::linear::bitpacked::BitPackedVector,
             pub(crate) dimensions: $dim_impl<QI>
         }
 
@@ -55,7 +55,7 @@ macro_rules! create_spatial_bitpacked_vector {
                 else { vec![0; linear.to_usize()] };
 
                 Self {
-                    data: $crate::collections::linear::contiguous::BitPackedVector::new_uniform(linear, initial_state),
+                    data: $crate::collections::linear::bitpacked::BitPackedVector::new_uniform(linear, initial_state),
                     dimensions
                 }
             }
