@@ -1,7 +1,14 @@
-use feagi_data::{create_wrapped_contiguous_slice, create_wrapped_contiguous_slice_mut, create_wrapped_contiguous_vector, create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate, create_wrapped_quantized_index_dimension};
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinateAxis;
 use feagi_data::values::quantizable::QuantizedIndexCountTrait;
-use feagi_data::values::spatial::quantizable_index::{QuantizedIndexCoord4D, QuantizedIndexDimension4D};
+use feagi_data::values::spatial::quantizable_index::{
+    QuantizedIndexCoord4D, QuantizedIndexDimension4D,
+};
+use feagi_data::{
+    create_wrapped_contiguous_slice, create_wrapped_contiguous_slice_mut,
+    create_wrapped_contiguous_vector, create_wrapped_quantized_decimal,
+    create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate,
+    create_wrapped_quantized_index_dimension,
+};
 
 // TODO the following macro should be common througouh
 
@@ -33,55 +40,32 @@ macro_rules! make_index_and_linear_collections {
                 [<$name IndexedSliceMut>]
             );
         }
-
     };
 }
-
 
 create_wrapped_quantized_index!(
     /// The current burst index of a given engine
     pub BurstIndex
 );
 
-impl<Q: QuantizedIndexCountTrait> BurstIndex<Q> {
-    pub fn new_from_middle() -> Self {
-        Self(Q::QUANT_MAX / (Q::QUANT_ONE + Q::QUANT_ONE))
-    }
-}
-
-//region Connectome Level Indexing
 make_index_and_linear_collections!(CorticalConnectome);
-//endregion
 
-
-
-//region Engine Level Indexing
 make_index_and_linear_collections!(CorticalEngine);
 make_index_and_linear_collections!(NeuronEngine);
-//endregion
 
+make_index_and_linear_collections!(NeuronWord);
 
-//region Neuron History Enabled Level Indexing
 make_index_and_linear_collections!(NeuronWithHistory);
-//endregion
 
-
-//region MP Quantization + Engine Level Indexing
 make_index_and_linear_collections!(NeuronMP);
-//endregion
 
-
-
-//region Neuron Model + MP Quantization + Engine Level Indexing
 make_index_and_linear_collections!(CorticalModel);
 make_index_and_linear_collections!(NeuronModel);
-//endregion
 
-
-
-//region Cortical Local Level Indexing
 make_index_and_linear_collections!(NeuronCorticalLocal);
-//endregion
+
+
+
 
 
 

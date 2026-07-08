@@ -3,20 +3,7 @@ use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuanti
 use feagi_npu_common::wrapped_indexes::{BurstIndex, CorticalEngineIndexedVector, NeuronCorticalLocalIndex, NeuronMPIndex, NeuronMPIndexedVector, NeuronModelIndexedVector, NeuronWithHistoryIndex, NeuronWithHistoryIndexedVector};
 use feagi_npu_common::wrapped_values::NeuronMembranePotential;
 
-// TODO add other quantization levels
-/// Creates a set of vectors for each decimal quantized type
-macro_rules! decimal_wrapped_vector_quant_group {
-    ($(#[$meta:meta])*
-    $StructName:ident,
-    $WrappedQuantVector:ident,
-    $QuantizationIndex:ident) => {
-        $(#[$meta])*
-        struct $StructName<FGQ: FeagiGlobalQuantization>
-        {
-            pub float_32: $WrappedQuantVector <FGQ::$QuantizationIndex ,f32>,
-        }
-    };
-}
+
 
 
 pub struct RayonConnectomeData<FGQ: FeagiGlobalQuantization>

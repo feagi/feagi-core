@@ -1,5 +1,5 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
-use crate::blocking_engines::blocking_engine_interface::BlockingEngine;
+use crate::engines::blocking::blocking_engine::BlockingEngine;
 
 pub struct RayonBurstEngine<Q: FeagiGlobalQuantization> {
 
@@ -23,7 +23,7 @@ impl<Q: FeagiGlobalQuantization> BlockingEngine for RayonBurstEngine<Q> {
         todo!()
     }
 
-    fn run_neuron_processing(&mut self, force_update_visualization: bool) {
+    fn run_neuron_processing(&mut self, _force_update_visualization: bool) {
         todo!()
     }
 }

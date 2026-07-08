@@ -199,7 +199,6 @@ dependencies = [
  "feagi-data",
  "feagi-genomic",
  "feagi-npu-common",
- "feagi-npu-engines",
  "feagi-npu-models",
  "paste",
  "rayon",
@@ -222,15 +221,6 @@ dependencies = [
 [[package]]
 name = "feagi-npu-dynamics"
 version = "0.1.0"
-
-[[package]]
-name = "feagi-npu-engines"
-version = "0.0.12"
-dependencies = [
- "ahash",
- "feagi-data",
- "feagi-npu-common",
-]
 
 [[package]]
 name = "feagi-npu-models"

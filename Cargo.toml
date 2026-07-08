@@ -169,7 +169,6 @@ members = [
     "crates/feagi-npu", # Crate that holds NPU Subcrates
     "crates/feagi-npu/feagi-npu-common", # Common structs and functions used by other NPU subcrates
     "crates/feagi-npu/feagi-npu-models", # Definitions for the neuron and synapse biological simulation models
-    "crates/feagi-npu/feagi-npu-engines", # Defines executing the connectome, burst to burst, on various hardware backends
     "crates/feagi-npu/feagi-npu-dynamics", # Systems for modifying the connectome at runtime and validating changes
 
 

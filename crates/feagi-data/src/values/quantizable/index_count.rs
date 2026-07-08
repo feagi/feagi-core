@@ -53,9 +53,7 @@ Copy
 
     /// Tries to convert from u32, clamping if it goes out of range!
     fn from_u32_clamped(value: u32) -> Self;
-
-    /// Minimum number of bytes needed to hold this number of bits // TODO why is this here?
-    fn number_bits_to_number_bytes(number_bits: Self) -> Self;
+    
 }
 
 impl QuantizedIndexCountTrait for u8 {
@@ -83,14 +81,6 @@ impl QuantizedIndexCountTrait for u8 {
             return u8::MAX;
         }
         value as u8
-    }
-
-    fn number_bits_to_number_bytes(number_bits: Self) -> Self {
-        if number_bits % 8 != 0 {
-            1 + number_bits / 8
-        } else {
-            number_bits / 8
-        }
     }
 }
 
@@ -120,14 +110,6 @@ impl QuantizedIndexCountTrait for u16 {
         }
         value as u16
     }
-
-    fn number_bits_to_number_bytes(number_bits: Self) -> Self {
-        if number_bits % 8 != 0 {
-            1 + number_bits / 8
-        } else {
-            number_bits / 8
-        }
-    }
 }
 
 // lol, lmao even
@@ -153,14 +135,6 @@ impl QuantizedIndexCountTrait for u32 {
     fn from_u32_clamped(value: u32) -> Self {
         value
     }
-
-    fn number_bits_to_number_bytes(number_bits: Self) -> Self {
-        if number_bits % 8 != 0 {
-            1 + number_bits / 8
-        } else {
-            number_bits / 8
-        }
-    }
 }
 
 impl QuantizedIndexCountTrait for u64 {
@@ -184,14 +158,6 @@ impl QuantizedIndexCountTrait for u64 {
 
     fn from_u32_clamped(value: u32) -> Self {
         value as u64 // no way it can escape the clamp
-    }
-
-    fn number_bits_to_number_bytes(number_bits: Self) -> Self {
-        if number_bits % 8 != 0 {
-            1 + number_bits / 8
-        } else {
-            number_bits / 8
-        }
     }
 }
 
