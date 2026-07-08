@@ -1,4 +1,5 @@
-use std::marker::PhantomData;
+use core::marker::PhantomData;
+use core::ops::Index;
 use feagi_data::values::quantizable::QuantizedIndexCountTrait;
 
 pub struct ParSlice<QI: QuantizedIndexCountTrait, V> {
