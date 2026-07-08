@@ -1,7 +1,7 @@
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::extendable_quantizations::SynapseModelQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
-use feagi_npu_common::wrapped_values::NeuronMembranePotential;
+use feagi_npu_common::wrapped_indexes::NeuronMembranePotential;
 use crate::synapse_models::synapse_model_traits::synapse_model_data::{SynapseModelAxonBundleData, SynapseModelSynapseData};
 
 /// Root base trait for defining synapse firing and alteration of

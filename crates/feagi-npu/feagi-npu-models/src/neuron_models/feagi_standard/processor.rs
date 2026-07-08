@@ -3,7 +3,7 @@ use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPo
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
 use feagi_data::values::quantizable::{QuantizedDecimalTrait, QuantizedElementBase};
 use feagi_npu_common::descriptors::cortical_area_descriptors::CorticalAreaLayoutDataDimensional;
-use feagi_npu_common::wrapped_values::{BurstIndex, NeuronCorticalIndex, NeuronMembranePotential};
+use feagi_npu_common::wrapped_indexes::{BurstIndex, NeuronCorticalIndex, NeuronMembranePotential};
 use crate::neuron_models::feagi_standard::data::{ConsecutiveFireLimit, FeagiStandardModelCorticalData, FeagiStandardModelNeuronData};
 use crate::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
 use crate::neuron_models::neuron_model_traits::neuron_model_processor::{NeuronModelProcessorBase, NeuronModelProcessorWithHistory};

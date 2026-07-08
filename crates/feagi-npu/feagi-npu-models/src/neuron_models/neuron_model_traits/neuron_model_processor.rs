@@ -2,7 +2,7 @@ use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPo
 use feagi_data::quantization_levels::extendable_quantizations::NeuronModelQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
 use feagi_npu_common::descriptors::cortical_area_descriptors::CorticalAreaLayoutDataDimensional;
-use feagi_npu_common::wrapped_values::{BurstIndex, NeuronCorticalIndex, NeuronMembranePotential};
+use feagi_npu_common::wrapped_indexes::{BurstIndex, NeuronCorticalIndex, NeuronMembranePotential};
 use crate::neuron_models::neuron_model_traits::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
 
 /// Root base trait for defining neuron firing and other dynamics. Does NOT store actual data,

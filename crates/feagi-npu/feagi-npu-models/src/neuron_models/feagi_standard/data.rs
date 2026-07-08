@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
-use feagi_npu_common::wrapped_values::NeuronMembranePotential;
+use feagi_npu_common::wrapped_indexes::NeuronMembranePotential;
 use crate::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
 use crate::neuron_models::neuron_model_traits::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
 

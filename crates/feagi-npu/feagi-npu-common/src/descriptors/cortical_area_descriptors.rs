@@ -1,5 +1,5 @@
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
-use crate::wrapped_values::DimensionalCorticalAreaDimensions;
+use crate::wrapped_indexes::DimensionalCorticalAreaDimensions;
 
 #[repr(C)]
 pub struct CorticalAreaDescriptor(u8);

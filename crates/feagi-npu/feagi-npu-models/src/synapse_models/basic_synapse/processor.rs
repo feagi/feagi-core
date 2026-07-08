@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
-use feagi_npu_common::wrapped_values::NeuronMembranePotential;
+use feagi_npu_common::wrapped_indexes::NeuronMembranePotential;
 use crate::synapse_models::basic_synapse::data::BasicSynapseModelAxonBundleData;
 use crate::synapse_models::basic_synapse::quantization::BasicSynapseModelQuantization;
 use crate::synapse_models::synapse_model_traits::synapse_model_processor::{SynapseModelProcessorAxonBundleOnly, SynapseModelProcessorBase};

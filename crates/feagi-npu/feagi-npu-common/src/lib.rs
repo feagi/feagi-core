@@ -1,6 +1,5 @@
 
-pub mod wrapped_values;
+pub mod wrapped_indexes;
 pub mod descriptors;
-mod par_vector;
+pub mod wrapped_values;
 
-pub use par_vector::{ParAccess, ParSlice, ParVector};
