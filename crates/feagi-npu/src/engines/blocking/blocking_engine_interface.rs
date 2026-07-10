@@ -1,6 +1,6 @@
 use crate::engines::blocking::blocking_engine::BlockingEngine;
 use crate::engines::blocking::rayon::RayonBurstEngine;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Shorthand way to call through an enum a method implemented by all key members
 macro_rules! dispatch {
@@ -12,12 +12,12 @@ macro_rules! dispatch {
     };
 }
 
-pub enum BlockingEngineInterface<Q: FeagiGlobalQuantization> {
+pub enum BlockingEngineInterface<Q: FeagiIndexQuantization> {
     // TODO feature gate Rayon
     RayonInterface(RayonBurstEngine<Q>), // TODO other interfaces
 }
 
-impl<Q: FeagiGlobalQuantization> BlockingEngineInterface<Q> {
+impl<Q: FeagiIndexQuantization> BlockingEngineInterface<Q> {
     /// runs some number of bursts without foreign involvement
     pub fn run_complete_bursts(&mut self, number_bursts: usize, force_update_visualization: bool) {
         for _ in 0..(number_bursts - 1) {

@@ -1,12 +1,12 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::engines::blocking::blocking_engine::BlockingEngine;
 
-pub struct RayonBurstEngine<Q: FeagiGlobalQuantization> {
+pub struct RayonBurstEngine<Q: FeagiIndexQuantization> {
 
     _p: core::marker::PhantomData<Q>,
 }
 
-impl<Q: FeagiGlobalQuantization> BlockingEngine for RayonBurstEngine<Q> {
+impl<Q: FeagiIndexQuantization> BlockingEngine for RayonBurstEngine<Q> {
     fn exchange_agent_and_mp_data(&mut self) {
         todo!()
     }
@@ -28,6 +28,6 @@ impl<Q: FeagiGlobalQuantization> BlockingEngine for RayonBurstEngine<Q> {
     }
 }
 
-impl<Q: FeagiGlobalQuantization> RayonBurstEngine<Q> {
+impl<Q: FeagiIndexQuantization> RayonBurstEngine<Q> {
     
 }

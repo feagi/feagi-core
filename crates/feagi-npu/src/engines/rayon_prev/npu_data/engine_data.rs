@@ -8,12 +8,12 @@ use crate::neural_processing_unit_data_structures::burst_engine::model_implement
 use crate::neural_processing_unit_data_structures::wrappers::{NPUWrappedBurstEngineBurstIndex, NPUWrappedCorticalAreaBurstEngineIndex};
 
 
-pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
+pub struct BurstEngineDataRayon<FIQ: FeagiGlobalQuantization>
 {
     //region Global Metadata, Converters and Flags
 
     /// Defines the current burst index
-    pub burst_index: NPUWrappedBurstEngineBurstIndex<FGQ::GlobalBurstIndexQuant>,
+    pub burst_index: NPUWrappedBurstEngineBurstIndex<FIQ::GlobalBurstIndexQuant>,
 
 
     /// If the burst index just overflowed, set to true. All other times is false
@@ -23,7 +23,7 @@ pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
     /// Stores offsets needed to subtract from Engine Neuron indexes to MP Quant neuron indexes.
     /// You will need to have the quant / mp quant flag for this O(0) lookup.
     pub engine_neuron_index_offsets_to_mp_quant_neuron_index:
-        EngineNeuronIndexOffsetsToMPQuantNeuronIndex<FGQ>,
+        EngineNeuronIndexOffsetsToMPQuantNeuronIndex<FIQ>,
 
 
     // region Global Indexed Neuron / Cortical Data
@@ -32,7 +32,7 @@ pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
     /// For all neurons whose cortical_area areas define that this value is needed for their neuron
     /// model, the last burst index that the neuron received an input and the last index that it
     /// fired at
-    pub neuron_history: Vec<NeuronHistory<FGQ>>,
+    pub neuron_history: Vec<NeuronHistory<FIQ>>,
 
 
     // By cortical_area area checking neuron activity index (not really an index)
@@ -46,7 +46,7 @@ pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
     /// neuron indexes with the quant flag for rapid mp quant neuron lookups while still
     /// being able to be iterated on the global level
     pub consolidated_neurons_with_fcl:
-        Vec<BurstEngineNeuronIndexWithQuant<FGQ>>,
+        Vec<BurstEngineNeuronIndexWithQuant<FIQ>>,
     
     
     
@@ -63,14 +63,14 @@ pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
     // By Engine Cortical Index
     /// For a given cortical_area area, has index offsets and indexes to other relevant data
     /// for that cortical_area area
-    pub cortical_context_lookups: Vec<CorticalContextLookup<FGQ>>,
+    pub cortical_context_lookups: Vec<CorticalContextLookup<FIQ>>,
 
     // By Cortical Layout Indexes
     /// Grouped by type of cortical_area layout, stores a vector of all the different values for the
     /// different possible cortical_area layouts, to describe how neurons are layed out
     /// (dimensional or otherwise)
     /// Does NOT contain the base post synaptic potential!
-    pub cortical_layouts: CorticalLayouts<FGQ>,
+    pub cortical_layouts: CorticalLayouts<FIQ>,
 
     // By MP Quant Cortical Index
 
@@ -82,7 +82,7 @@ pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
     // TODO have proper grouping!
     pub neuron_model_cortical_data: Vec<FeagiStandardModelCorticalDataCPU<FeagiStandardModelStandard32BitQuant>>,
 
-    pub synapses_ranges_from_neurons: Vec<SynapseRangeMappingFromNeuron<FGQ>>,
+    pub synapses_ranges_from_neurons: Vec<SynapseRangeMappingFromNeuron<FIQ>>,
 
     pub synapse_def: Vec<SynapseDef>,
 
@@ -95,7 +95,7 @@ pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
 
     // By Neuron FCL FCLC Consolidation Index (Not really an index)
 
-    pub fcl_mappings_to_FCLC: Vec<FCLMappingsToFCLC<FGQ>>,
+    pub fcl_mappings_to_FCLC: Vec<FCLMappingsToFCLC<FIQ>>,
 
     // By Neurons with Synapse Range Index (Not really an index)
 
@@ -107,7 +107,7 @@ pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
     // TODO should we include flags here? or keep it for the cortical_area?
     // TODO we should have different quant groups?
     ///  for each engine/?mp_quant neuron index, get the engine cortical_area index
-    pub neuron_engine_cortical_indexes: Vec<NPUWrappedCorticalAreaBurstEngineIndex<FGQ::CorticalAreaIndexCountQuant>>,
+    pub neuron_engine_cortical_indexes: Vec<NPUWrappedCorticalAreaBurstEngineIndex<FIQ::CorticalAreaIndexCountQuant>>,
 
 
     // By Neuron Model grouped Index
@@ -130,11 +130,11 @@ pub struct BurstEngineDataRayon<FGQ: FeagiGlobalQuantization>
 }
 
 
-impl<FGQ: FeagiGlobalQuantization> BurstEngineDataRayon<FGQ>
+impl<FIQ: FeagiGlobalQuantization> BurstEngineDataRayon<FIQ>
 {
     pub fn new() -> Self {
         Self {
-            burst_index: NPUWrappedBurstEngineBurstIndex::QUANT_MAX / NPUWrappedBurstEngineBurstIndex::wrap(  FGQ::GlobalBurstIndexQuant::from_usize_unchecked(2)),
+            burst_index: NPUWrappedBurstEngineBurstIndex::QUANT_MAX / NPUWrappedBurstEngineBurstIndex::wrap(  FIQ::GlobalBurstIndexQuant::from_usize_unchecked(2)),
             did_burst_index_overflow: false,
             engine_neuron_index_offsets_to_mp_quant_neuron_index: EngineNeuronIndexOffsetsToMPQuantNeuronIndex { float_32: Default::default() },
             neuron_history: vec![],

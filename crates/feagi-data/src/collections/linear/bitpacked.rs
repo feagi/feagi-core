@@ -1,53 +1,694 @@
+use core::ops::{Index, IndexMut, Range};
 use crate::values::quantizable::QuantizedIndexCountTrait;
+use crate::values::feagi_data_value_error::{FeagiInvalidIndexErrKey, FeagiValueError};
 
+/// Generates read-only [`Index`] impls for every std range kind (`Range`,
+/// `RangeInclusive`, `RangeFrom`, `RangeTo`, `RangeFull`) so a bit-packed
+/// collection can be sub-sliced with a quantized *byte* range directly, yielding
+/// a `[u8]` slice.
+///
+/// `$qi` must be passed as a separate token (rather than reused from the generic
+/// list) so it shares the caller's macro hygiene context; the impl body
+/// delegates to the `self.data` backing store.
+macro_rules! impl_bitpacked_range_read {
+    ($self_ty:ty, $qi:ty, [$($generics:tt)*]) => {
+        impl<$($generics)*> Index<Range<$qi>> for $self_ty {
+            type Output = [u8];
+            fn index(&self, range: Range<$qi>) -> &Self::Output {
+                &self.data[range.start.to_usize()..range.end.to_usize()]
+            }
+        }
+
+        impl<$($generics)*> Index<core::ops::RangeInclusive<$qi>> for $self_ty {
+            type Output = [u8];
+            fn index(&self, range: core::ops::RangeInclusive<$qi>) -> &Self::Output {
+                &self.data[range.start().to_usize()..=range.end().to_usize()]
+            }
+        }
+
+        impl<$($generics)*> Index<core::ops::RangeFrom<$qi>> for $self_ty {
+            type Output = [u8];
+            fn index(&self, range: core::ops::RangeFrom<$qi>) -> &Self::Output {
+                &self.data[range.start.to_usize()..]
+            }
+        }
+
+        impl<$($generics)*> Index<core::ops::RangeTo<$qi>> for $self_ty {
+            type Output = [u8];
+            fn index(&self, range: core::ops::RangeTo<$qi>) -> &Self::Output {
+                &self.data[..range.end.to_usize()]
+            }
+        }
+
+        impl<$($generics)*> Index<core::ops::RangeFull> for $self_ty {
+            type Output = [u8];
+            fn index(&self, _range: core::ops::RangeFull) -> &Self::Output {
+                &self.data[..]
+            }
+        }
+    };
+}
+
+/// Companion to [`impl_bitpacked_range_read`] that additionally generates the
+/// [`IndexMut`] impls for the same set of *byte* range kinds. Only for
+/// collections whose `self.data` supports mutable slicing.
+macro_rules! impl_bitpacked_range_read_write {
+    ($self_ty:ty, $qi:ty, [$($generics:tt)*]) => {
+        impl_bitpacked_range_read!($self_ty, $qi, [$($generics)*]);
+
+        impl<$($generics)*> IndexMut<Range<$qi>> for $self_ty {
+            fn index_mut(&mut self, range: Range<$qi>) -> &mut Self::Output {
+                &mut self.data[range.start.to_usize()..range.end.to_usize()]
+            }
+        }
+
+        impl<$($generics)*> IndexMut<core::ops::RangeInclusive<$qi>> for $self_ty {
+            fn index_mut(&mut self, range: core::ops::RangeInclusive<$qi>) -> &mut Self::Output {
+                &mut self.data[range.start().to_usize()..=range.end().to_usize()]
+            }
+        }
+
+        impl<$($generics)*> IndexMut<core::ops::RangeFrom<$qi>> for $self_ty {
+            fn index_mut(&mut self, range: core::ops::RangeFrom<$qi>) -> &mut Self::Output {
+                &mut self.data[range.start.to_usize()..]
+            }
+        }
+
+        impl<$($generics)*> IndexMut<core::ops::RangeTo<$qi>> for $self_ty {
+            fn index_mut(&mut self, range: core::ops::RangeTo<$qi>) -> &mut Self::Output {
+                &mut self.data[..range.end.to_usize()]
+            }
+        }
+
+        impl<$($generics)*> IndexMut<core::ops::RangeFull> for $self_ty {
+            fn index_mut(&mut self, _range: core::ops::RangeFull) -> &mut Self::Output {
+                &mut self.data[..]
+            }
+        }
+    };
+}
+
+/// Returns the number of whole bytes required to hold `self` bits, i.e. the
+/// ceiling division of the bit count by 8. `0` bits require `0` bytes.
+fn number_bits_to_number_bytes(n: usize) -> usize {
+    if n % 8 == 0 {
+        n / 8
+    } else {
+        (n / 8) + 1
+    }
+}
+
+
+/// Shared, read-only behaviour for every bit-packed quantized collection in this
+/// module (the owned [`BitPackedVector`], the borrowed [`BitPackedSlice`] /
+/// [`BitPackedSliceMut`] views, and the fixed-size [`BitPackedArray`]).
+///
+/// Storage is a run of `u8` *bytes*, but the collection exposes two granularities:
+/// individual *bits* (booleans) via [`Self::get_bit`], and whole *bytes* via
+/// [`Self::get_byte`] plus the [`Index`] impls. Only byte access supports the
+/// (unsafe) parallel traits — parallel access to individual bits makes no sense
+/// because bits within a byte are not independently addressable.
+///
+/// Implementors only need to expose their backing storage via [`Self::as_bytes`]
+/// and their logical bit count via [`Self::number_bits`] (plus the [`Index`]
+/// impls required by the supertrait bounds); everything else is provided as
+/// default methods.
+///
+/// The [`Index<Range<QI>>`] supertrait lets callers index with a quantized
+/// *byte* range directly (`collection[start..end] -> &[u8]`) instead of
+/// converting to `usize` at every call site.
+pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>:
+    Index<QI, Output = u8> + Index<Range<QI>, Output = [u8]>
+{
+    /// Borrows the backing storage as a regular shared byte slice.
+    fn as_bytes(&self) -> &[u8];
+
+    /// Total number of addressable bits (booleans) held by this collection.
+    fn number_bits(&self) -> QI;
+
+    /// Number of bytes backing this collection.
+    fn number_bytes(&self) -> QI {
+        QI::from_usize(self.as_bytes().len())
+    }
+
+    /// Number of unused ("dangling") bits in the final byte, i.e. the bits of
+    /// the backing storage beyond [`Self::number_bits`].
+    fn number_dangling_bits(&self) -> u8 {
+        let capacity = self.as_bytes().len() * 8;
+        (capacity - self.number_bits().to_usize()) as u8
+    }
+
+    /// Returns `true` if there are no bits.
+    fn is_empty(&self) -> bool {
+        self.number_bits() == QI::QUANT_ZERO
+    }
+
+    /// Copies out the bit at `index`, or `None` if out of bounds.
+    fn get_bit(&self, index: QI) -> Option<bool> {
+        let bit = index.to_usize();
+        if bit >= self.number_bits().to_usize() {
+            return None;
+        }
+        let byte = self.as_bytes()[bit / 8];
+        Some((byte >> (bit % 8)) & 1 == 1)
+    }
+
+    /// Copies out the whole byte at `index`, or `None` if out of bounds.
+    fn get_byte(&self, index: QI) -> Option<u8> {
+        self.as_bytes().get(index.to_usize()).copied()
+    }
+
+    /// Borrows the whole collection as a [`BitPackedSlice`] view.
+    fn as_bit_packed_slice(&self) -> BitPackedSlice<'_, QI> {
+        BitPackedSlice::new(self.as_bytes(), self.number_bits())
+    }
+
+    /// Borrows a half-open *byte* sub-range as a [`BitPackedSlice`] view. The
+    /// resulting view treats every byte as full (its bit count is `bytes * 8`),
+    /// so any dangling bits of the original collection are not carried over.
+    ///
+    /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
+    /// start is greater than its end (rather than panicking like `self[range]`).
+    fn subslice_bytes(&self, range: Range<QI>) -> Result<BitPackedSlice<'_, QI>, FeagiValueError> {
+        match self.as_bytes().get(range.start.to_usize()..range.end.to_usize()) {
+            Some(slice) => {
+                let bits = QI::from_usize(slice.len() * 8);
+                Ok(BitPackedSlice::new(slice, bits))
+            }
+            None => Err(FeagiInvalidIndexErrKey::new("subslice byte range is out of bounds").into()),
+        }
+    }
+
+    /// Iterates over shared references to the bytes.
+    fn iter_bytes(&self) -> core::slice::Iter<'_, u8> {
+        self.as_bytes().iter()
+    }
+
+    /// Given a byte index, gets the index of the first bit of that byte
+    fn get_first_bit_index_from_byte_unchecked(&self, byte_index: QI) -> QI {
+        QI::from_usize((byte_index.to_usize()) << 3)
+    }
+
+    /// If the bit packed array is holding data of length not divisible by 8, eventually the last
+    /// byte will cover a range less than 8. This function will return less than 8 if thats the case
+    fn get_number_bits_remaining_from_byte_unchecked(&self, byte_index: QI) -> u8 {
+        let first_index = self.get_first_bit_index_from_byte_unchecked(byte_index);
+        let bits_remaining = (self.number_bits() - first_index).to_usize();
+        bits_remaining.min(8) as u8
+    }
+
+    /// Rayon parallel iterator over shared references to the bytes.
+    #[cfg(feature = "use-rayon")]
+    fn par_iter_bytes(&self) -> rayon::slice::Iter<'_, u8> {
+        use rayon::iter::IntoParallelRefIterator;
+        self.as_bytes().par_iter()
+    }
+}
+
+/// Shared, mutable behaviour for the bit-packed quantized collections that own
+/// or exclusively borrow their storage (the [`BitPackedVector`],
+/// [`BitPackedSliceMut`] view, and [`BitPackedArray`]).
+///
+/// Implementors only need to expose their backing storage via
+/// [`Self::as_mut_bytes`].
+pub trait BitPackedMutTrait<QI: QuantizedIndexCountTrait>:
+    BitPackedTrait<QI>
+    + IndexMut<QI, Output = u8>
+    + IndexMut<Range<QI>, Output = [u8]>
+{
+    /// Mutably borrows the backing storage as a regular byte slice.
+    fn as_mut_bytes(&mut self) -> &mut [u8];
+
+    /// Sets the bit at `index`, returning the previous value if the index was in
+    /// bounds (otherwise leaves the collection untouched).
+    fn set_bit(&mut self, index: QI, value: bool) -> Option<bool> {
+        let bit = index.to_usize();
+        if bit >= self.number_bits().to_usize() {
+            return None;
+        }
+        let byte = &mut self.as_mut_bytes()[bit / 8];
+        let previous = (*byte >> (bit % 8)) & 1 == 1;
+        if value {
+            *byte |= 1 << (bit % 8);
+        } else {
+            *byte &= !(1 << (bit % 8));
+        }
+        Some(previous)
+    }
+
+    /// Mutably borrows the whole byte at `index`, or `None` if out of bounds.
+    fn get_byte_mut(&mut self, index: QI) -> Option<&mut u8> {
+        self.as_mut_bytes().get_mut(index.to_usize())
+    }
+
+    /// Overwrites the whole byte at `index`, returning the previous value if the
+    /// index was in bounds (otherwise leaves the collection untouched).
+    fn set_byte(&mut self, index: QI, value: u8) -> Option<u8> {
+        match self.as_mut_bytes().get_mut(index.to_usize()) {
+            Some(slot) => {
+                let previous = *slot;
+                *slot = value;
+                Some(previous)
+            }
+            None => None,
+        }
+    }
+
+    /// Mutably borrows a half-open *byte* sub-range as a [`BitPackedSliceMut`]
+    /// view. The resulting view treats every byte as full (its bit count is
+    /// `bytes * 8`).
+    ///
+    /// Returns [`FeagiInvalidIndexErrKey`] if `range` is out of bounds or its
+    /// start is greater than its end (rather than panicking like `self[range]`).
+    fn subslice_bytes_mut(&mut self, range: Range<QI>) -> Result<BitPackedSliceMut<'_, QI>, FeagiValueError> {
+        match self.as_mut_bytes().get_mut(range.start.to_usize()..range.end.to_usize()) {
+            Some(slice) => {
+                let bits = QI::from_usize(slice.len() * 8);
+                Ok(BitPackedSliceMut::new(slice, bits))
+            }
+            None => Err(FeagiInvalidIndexErrKey::new("subslice byte range is out of bounds").into()),
+        }
+    }
+
+    /// Iterates over mutable references to the bytes.
+    fn iter_bytes_mut(&mut self) -> core::slice::IterMut<'_, u8> {
+        self.as_mut_bytes().iter_mut()
+    }
+
+    /// Rayon parallel iterator over mutable references to the bytes.
+    #[cfg(feature = "use-rayon")]
+    fn par_iter_bytes_mut(&mut self) -> rayon::slice::IterMut<'_, u8> {
+        use rayon::iter::IntoParallelRefMutIterator;
+        self.as_mut_bytes().par_iter_mut()
+    }
+}
+
+
+/// Unsafe, index-based parallel *read* access to the *bytes* of a bit-packed
+/// quantized collection.
+///
+/// This lets callers grab shared references to many (possibly disjoint) byte
+/// indices at once — e.g. from inside a rayon closure — while skipping repeated
+/// bounds checks. See [`BitPackedParMutTrait`] for the mutable counterpart that
+/// additionally allows disjoint parallel *writes* through a shared `&self`.
+///
+/// Only byte access is offered: individual bits within a byte are not
+/// independently addressable, so there is deliberately no parallel bit access.
+pub trait BitPackedParTrait<QI: QuantizedIndexCountTrait>:
+    BitPackedTrait<QI>
+{
+    /// Raw pointer to the first byte. Valid for reads of [`Self::number_bytes`]
+    /// bytes for as long as `self` is borrowed.
+    fn as_byte_ptr(&self) -> *const u8 {
+        self.as_bytes().as_ptr()
+    }
+
+    /// Returns a shared reference to the byte at `index`, without bounds
+    /// checking.
+    ///
+    /// # Safety
+    /// - `index` must be in bounds (`index < self.number_bytes()`).
+    unsafe fn get_byte_par(&self, index: QI) -> &u8 {
+        &*self.as_byte_ptr().add(index.to_usize())
+    }
+}
+
+/// Unsafe, index-based parallel *mutable* access to the *bytes* of a bit-packed
+/// quantized collection.
+///
+/// # Safety (implementors)
+/// This trait must only be implemented for collections whose backing storage is
+/// genuinely writable through a shared `&self` (i.e. the storage is owned, or is
+/// exclusively borrowed like a mutable slice). It must **never** be implemented
+/// for a shared/read-only view, since [`Self::get_byte_mut_par`] casts a
+/// `*const u8` to `*mut u8`; writing through such a pointer that aliases a shared
+/// borrow is undefined behaviour.
+pub unsafe trait BitPackedParMutTrait<QI: QuantizedIndexCountTrait>:
+    BitPackedParTrait<QI> + BitPackedMutTrait<QI>
+{
+    /// Raw mutable pointer to the first byte, derived from a shared `&self`.
+    ///
+    /// # Safety
+    /// The returned pointer aliases the collection's storage; writes through it
+    /// must only target byte indices not simultaneously accessed elsewhere.
+    unsafe fn as_mut_byte_ptr_par(&self) -> *mut u8 {
+        self.as_byte_ptr() as *mut u8
+    }
+
+    /// Returns a mutable reference to the byte at `index` through a shared
+    /// `&self`, enabling parallel mutation of disjoint bytes.
+    ///
+    /// # Safety
+    /// - `index` must be in bounds (`index < self.number_bytes()`).
+    /// - No other reference (shared or mutable) to the *same* byte may exist for
+    ///   the duration of the returned borrow. Concurrent callers must only ever
+    ///   target disjoint byte indices.
+    unsafe fn get_byte_mut_par(&self, index: QI) -> &mut u8 {
+        &mut *self.as_mut_byte_ptr_par().add(index.to_usize())
+    }
+}
+
+//region Vector
+
+/// An owned, heap-allocated run of bit-packed booleans.
 pub struct BitPackedVector<QI: QuantizedIndexCountTrait> {
     data: Vec<u8>, // length is number of bytes
     number_bits: QI,
-    number_dangling_bits: u8,
+}
+
+impl<QI: QuantizedIndexCountTrait> Clone for BitPackedVector<QI> {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            number_bits: self.number_bits,
+        }
+    }
 }
 
 impl<QI: QuantizedIndexCountTrait> BitPackedVector<QI> {
-    pub fn new_uniform(number_booleans: QI, initial_state: bool) -> BitPackedVector<QI> {
-        let length = Self::number_bits_to_number_bytes(number_booleans);
-        let values: Vec<u8> = if initial_state {
-            vec![255; length.to_usize()]
+    /// Builds a vector holding `number_bits` booleans, every one initialised to
+    /// `initial_state`. Any dangling bits in the final byte are kept zeroed.
+    pub fn new_uniform(number_bits: QI, initial_state: bool) -> BitPackedVector<QI> {
+        let number_bytes = QI::from_usize(number_bits_to_number_bytes(number_bits.to_usize()));
+        let mut data: Vec<u8> = if initial_state {
+            vec![0xFF; number_bytes.to_usize()]
         } else {
-            vec![0; length.to_usize()]
+            vec![0x00; number_bytes.to_usize()]
         };
 
-        Self {
-            data: values,
-            number_bits: length,
-            number_dangling_bits: (number_booleans.to_usize() % length.to_usize()) as u8,
-        }
+        Self { data, number_bits }
     }
 
-    pub fn number_bits_to_number_bytes(number_bits: QI) -> QI {
-        let the_stanley_parable_demo: QI = QI::QUANT_ONE
-            + QI::QUANT_ONE
-            + QI::QUANT_ONE
-            + QI::QUANT_ONE
-            + QI::QUANT_ONE
-            + QI::QUANT_ONE
-            + QI::QUANT_ONE
-            + QI::QUANT_ONE;
-
-        if number_bits % the_stanley_parable_demo != QI::QUANT_ONE {
-            QI::QUANT_ONE + number_bits / the_stanley_parable_demo
-        } else {
-            number_bits / the_stanley_parable_demo
-        }
+    /// Wraps an existing `Vec` without copying, treating every byte as full
+    /// (bit count is `data.len() * 8`, no dangling bits).
+    pub fn from_vec(data: Vec<u8>) -> BitPackedVector<QI> {
+        let number_bits = QI::from_usize(data.len() * 8);
+        Self { data, number_bits }
     }
 
-    pub fn get_number_bits(&self) -> QI {
+    /// Wraps an existing `Vec` without copying, using an explicit bit count.
+    /// `number_bits` must not exceed `data.len() * 8`.
+    pub fn from_vec_with_bits(data: Vec<u8>, number_bits: QI) -> BitPackedVector<QI> {
+        Self { data, number_bits }
+    }
+
+    /// Consumes the wrapper, returning the backing `Vec`.
+    pub fn into_vec(self) -> Vec<u8> {
+        self.data
+    }
+}
+
+impl<QI: QuantizedIndexCountTrait> BitPackedTrait<QI> for BitPackedVector<QI> {
+    fn as_bytes(&self) -> &[u8] {
+        &self.data
+    }
+
+    fn number_bits(&self) -> QI {
         self.number_bits
     }
+}
 
-    pub fn get_number_bytes(&self) -> QI {
-        QI::from_usize(self.data.len())
+impl<QI: QuantizedIndexCountTrait> BitPackedMutTrait<QI> for BitPackedVector<QI> {
+    fn as_mut_bytes(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
+}
+
+impl<QI: QuantizedIndexCountTrait> BitPackedParTrait<QI> for BitPackedVector<QI> {}
+
+// SAFETY: the backing `Vec` is owned exclusively by this wrapper, so its storage
+// is writable through a shared `&self` under the trait's disjoint-index contract.
+unsafe impl<QI: QuantizedIndexCountTrait> BitPackedParMutTrait<QI> for BitPackedVector<QI> {}
+
+impl<QI: QuantizedIndexCountTrait> Index<QI> for BitPackedVector<QI> {
+    type Output = u8;
+    fn index(&self, index: QI) -> &Self::Output {
+        &self.data[index.to_usize()]
+    }
+}
+
+impl<QI: QuantizedIndexCountTrait> IndexMut<QI> for BitPackedVector<QI> {
+    fn index_mut(&mut self, index: QI) -> &mut Self::Output {
+        &mut self.data[index.to_usize()]
+    }
+}
+
+impl_bitpacked_range_read_write!(
+    BitPackedVector<QI>, QI,
+    [QI: QuantizedIndexCountTrait]
+);
+
+impl<QI: QuantizedIndexCountTrait> From<Vec<u8>> for BitPackedVector<QI> {
+    fn from(value: Vec<u8>) -> Self {
+        Self::from_vec(value)
+    }
+}
+
+impl<QI: QuantizedIndexCountTrait> From<BitPackedVector<QI>> for Vec<u8> {
+    fn from(value: BitPackedVector<QI>) -> Self {
+        value.data
+    }
+}
+
+//endregion
+
+//region Slice
+
+/// A borrowed, read-only view over a run of bit-packed booleans.
+#[derive(Clone, Copy)]
+pub struct BitPackedSlice<'a, QI: QuantizedIndexCountTrait> {
+    pub(crate) data: &'a [u8],
+    number_bits: QI,
+}
+
+impl<'a, QI: QuantizedIndexCountTrait> BitPackedSlice<'a, QI> {
+    /// Wraps an existing shared byte slice with an explicit bit count.
+    /// `number_bits` must not exceed `data.len() * 8`.
+    pub fn new(data: &'a [u8], number_bits: QI) -> BitPackedSlice<'a, QI> {
+        Self { data, number_bits }
     }
 
-    pub fn get_number_dangling_bits(&self) -> u8 {
-        self.number_dangling_bits
+    /// Wraps an existing shared byte slice, treating every byte as full
+    /// (bit count is `data.len() * 8`, no dangling bits).
+    pub fn from_bytes(data: &'a [u8]) -> BitPackedSlice<'a, QI> {
+        let number_bits = QI::from_usize(data.len() * 8);
+        Self { data, number_bits }
     }
+
+    /// Returns the underlying shared byte slice, keeping the original lifetime.
+    pub fn into_bytes(self) -> &'a [u8] {
+        self.data
+    }
+}
+
+impl<'a, QI: QuantizedIndexCountTrait> BitPackedTrait<QI> for BitPackedSlice<'a, QI> {
+    fn as_bytes(&self) -> &[u8] {
+        self.data
+    }
+
+    fn number_bits(&self) -> QI {
+        self.number_bits
+    }
+}
+
+// Read-only parallel access only: this view may alias a shared borrow, so the
+// mutable `BitPackedParMutTrait` is intentionally NOT implemented.
+impl<'a, QI: QuantizedIndexCountTrait> BitPackedParTrait<QI> for BitPackedSlice<'a, QI> {}
+
+impl<'a, QI: QuantizedIndexCountTrait> Index<QI> for BitPackedSlice<'a, QI> {
+    type Output = u8;
+    fn index(&self, index: QI) -> &Self::Output {
+        &self.data[index.to_usize()]
+    }
+}
+
+impl_bitpacked_range_read!(
+    BitPackedSlice<'a, QI>, QI,
+    ['a, QI: QuantizedIndexCountTrait]
+);
+
+impl<'a, QI: QuantizedIndexCountTrait> From<&'a [u8]> for BitPackedSlice<'a, QI> {
+    fn from(value: &'a [u8]) -> Self {
+        Self::from_bytes(value)
+    }
+}
+
+//endregion
+
+//region Mut Slice
+
+/// A borrowed, mutable view over a run of bit-packed booleans.
+pub struct BitPackedSliceMut<'a, QI: QuantizedIndexCountTrait> {
+    pub(crate) data: &'a mut [u8],
+    number_bits: QI,
+}
+
+impl<'a, QI: QuantizedIndexCountTrait> BitPackedSliceMut<'a, QI> {
+    /// Wraps an existing mutable byte slice with an explicit bit count.
+    /// `number_bits` must not exceed `data.len() * 8`.
+    pub fn new(data: &'a mut [u8], number_bits: QI) -> BitPackedSliceMut<'a, QI> {
+        Self { data, number_bits }
+    }
+
+    /// Wraps an existing mutable byte slice, treating every byte as full
+    /// (bit count is `data.len() * 8`, no dangling bits).
+    pub fn from_bytes(data: &'a mut [u8]) -> BitPackedSliceMut<'a, QI> {
+        let number_bits = QI::from_usize(data.len() * 8);
+        Self { data, number_bits }
+    }
+
+    /// Returns the underlying mutable byte slice, keeping the original lifetime.
+    pub fn into_bytes_mut(self) -> &'a mut [u8] {
+        self.data
+    }
+
+    /// Creates a shorter-lived, exclusive re-borrow of this view.
+    pub fn reborrow(&mut self) -> BitPackedSliceMut<'_, QI> {
+        BitPackedSliceMut::new(self.data, self.number_bits)
+    }
+}
+
+impl<'a, QI: QuantizedIndexCountTrait> BitPackedTrait<QI> for BitPackedSliceMut<'a, QI> {
+    fn as_bytes(&self) -> &[u8] {
+        self.data
+    }
+
+    fn number_bits(&self) -> QI {
+        self.number_bits
+    }
+}
+
+impl<'a, QI: QuantizedIndexCountTrait> BitPackedMutTrait<QI> for BitPackedSliceMut<'a, QI> {
+    fn as_mut_bytes(&mut self) -> &mut [u8] {
+        self.data
+    }
+}
+
+impl<'a, QI: QuantizedIndexCountTrait> BitPackedParTrait<QI> for BitPackedSliceMut<'a, QI> {}
+
+// SAFETY: the backing slice is exclusively borrowed, so its storage is writable
+// through a shared `&self` under the trait's disjoint-index contract.
+unsafe impl<'a, QI: QuantizedIndexCountTrait> BitPackedParMutTrait<QI> for BitPackedSliceMut<'a, QI> {}
+
+impl<'a, QI: QuantizedIndexCountTrait> Index<QI> for BitPackedSliceMut<'a, QI> {
+    type Output = u8;
+    fn index(&self, index: QI) -> &Self::Output {
+        &self.data[index.to_usize()]
+    }
+}
+
+impl<'a, QI: QuantizedIndexCountTrait> IndexMut<QI> for BitPackedSliceMut<'a, QI> {
+    fn index_mut(&mut self, index: QI) -> &mut Self::Output {
+        &mut self.data[index.to_usize()]
+    }
+}
+
+impl_bitpacked_range_read_write!(
+    BitPackedSliceMut<'a, QI>, QI,
+    ['a, QI: QuantizedIndexCountTrait]
+);
+
+impl<'a, QI: QuantizedIndexCountTrait> From<&'a mut [u8]> for BitPackedSliceMut<'a, QI> {
+    fn from(value: &'a mut [u8]) -> Self {
+        Self::from_bytes(value)
+    }
+}
+
+//endregion
+
+//region Array
+
+/// An owned, stack-allocated run of bit-packed booleans backed by exactly `N`
+/// bytes.
+///
+/// The compile-time length `N` is the *byte* count as a `usize` const generic
+/// (Rust const generics must be an integer type, so `QI` is retained as the
+/// associated index/count type used by the shared trait methods). The logical
+/// bit count may be smaller than `N * 8` when there are dangling bits.
+#[derive(Clone, Copy)]
+pub struct BitPackedArray<QI: QuantizedIndexCountTrait, const N: usize> {
+    pub(crate) data: [u8; N],
+    number_bits: QI,
+}
+
+impl<QI: QuantizedIndexCountTrait, const N: usize> BitPackedArray<QI, N> {
+    /// Builds an array holding `number_bits` booleans, every one initialised to
+    /// `initial_state`. `number_bits` must not exceed `N * 8`. Any dangling bits
+    /// in the final byte are kept zeroed.
+    pub fn new_uniform(number_bits: QI, initial_state: bool) -> BitPackedArray<QI, N> {
+        let mut data: [u8; N] = if initial_state { [0xFF; N] } else { [0x00; N] };
+
+        Self { data, number_bits }
+    }
+
+    /// Wraps an existing array, treating every byte as full (bit count is
+    /// `N * 8`, no dangling bits).
+    pub fn from_array(data: [u8; N]) -> BitPackedArray<QI, N> {
+        let number_bits = QI::from_usize(N * 8);
+        Self { data, number_bits }
+    }
+
+    /// Wraps an existing array with an explicit bit count. `number_bits` must not
+    /// exceed `N * 8`.
+    pub fn from_array_with_bits(data: [u8; N], number_bits: QI) -> BitPackedArray<QI, N> {
+        Self { data, number_bits }
+    }
+
+    /// Consumes the wrapper, returning the backing array.
+    pub fn into_array(self) -> [u8; N] {
+        self.data
+    }
+}
+
+impl<QI: QuantizedIndexCountTrait, const N: usize> BitPackedTrait<QI> for BitPackedArray<QI, N> {
+    fn as_bytes(&self) -> &[u8] {
+        &self.data
+    }
+
+    fn number_bits(&self) -> QI {
+        self.number_bits
+    }
+}
+
+impl<QI: QuantizedIndexCountTrait, const N: usize> BitPackedMutTrait<QI> for BitPackedArray<QI, N> {
+    fn as_mut_bytes(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
+}
+
+impl<QI: QuantizedIndexCountTrait, const N: usize> BitPackedParTrait<QI> for BitPackedArray<QI, N> {}
+
+// SAFETY: the backing array is owned exclusively by this wrapper, so its storage
+// is writable through a shared `&self` under the trait's disjoint-index contract.
+unsafe impl<QI: QuantizedIndexCountTrait, const N: usize> BitPackedParMutTrait<QI> for BitPackedArray<QI, N> {}
+
+impl<QI: QuantizedIndexCountTrait, const N: usize> Index<QI> for BitPackedArray<QI, N> {
+    type Output = u8;
+    fn index(&self, index: QI) -> &Self::Output {
+        &self.data[index.to_usize()]
+    }
+}
+
+impl<QI: QuantizedIndexCountTrait, const N: usize> IndexMut<QI> for BitPackedArray<QI, N> {
+    fn index_mut(&mut self, index: QI) -> &mut Self::Output {
+        &mut self.data[index.to_usize()]
+    }
+}
+
+impl_bitpacked_range_read_write!(
+    BitPackedArray<QI, N>, QI,
+    [QI: QuantizedIndexCountTrait, const N: usize]
+);
+
+impl<QI: QuantizedIndexCountTrait, const N: usize> From<[u8; N]> for BitPackedArray<QI, N> {
+    fn from(value: [u8; N]) -> Self {
+        Self::from_array(value)
+    }
+}
+
+//endregion
+
+
+pub fn byte_index_to_first_bit_index(byte_index: usize) -> usize {
+    byte_index << 3
 }

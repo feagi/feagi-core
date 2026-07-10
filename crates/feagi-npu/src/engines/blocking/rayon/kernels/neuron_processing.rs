@@ -1,27 +1,164 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
-use feagi_data::values::quantizable::QuantizedIndexCountTrait;
 use crate::engines::blocking::rayon::data::engine_data::RayonEngineData;
+use crate::engines::blocking::rayon::data::sub_structure_data::CorticalNeuronOffsets;
+use feagi_data::collections::linear::bitpacked::{BitPackedMutTrait, BitPackedTrait};
+use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronVoxelDensityIndex};
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_data::values::quantizable::QuantizedIndexCountTrait;
+use feagi_npu_common::wrapped_indexes::{
+    CorticalEngineIndex, NeuronEngineByteIndex, NeuronEngineIndex, NeuronHistoryIndex,
+    NeuronMPIndex, NeuronPSPUniformIndex,
+};
+use rayon::prelude::*;
+use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinateAxis;
+use feagi_npu_common::descriptors::cortical_area_descriptors::{CorticalAreaLayoutDataDimensional, CorticalAreaLayoutType};
+use feagi_npu_models::neuron_models::feagi_standard::processor::FeagiStandardModelProcessor;
 
 /// Contains several methods of processing the neurons in the rayon burst engine
-pub enum RayonNeuronProcessing<FGQ: FeagiGlobalQuantization> {
+pub enum RayonNeuronProcessing {
     /// Updates visualizer data always as each loop processes neurons in batches of 8 and directly
     /// writes to the bitpacked u8, without need a separate loop to check for visualization
-    VisualizerInline
+    VisualizerInline,
 }
 
-impl<FGQ: FeagiGlobalQuantization> RayonNeuronProcessing<FGQ> {
-    
-    /// 
-    pub fn process_neurons(&self, data: &mut RayonEngineData<FGQ>)
-    {
+impl RayonNeuronProcessing {
+    ///
+    pub fn process_neurons<FIQ: FeagiIndexQuantization>(&self, data: &mut RayonEngineData<FIQ>) {
         match self {
             RayonNeuronProcessing::VisualizerInline => {
+                // We iterate over the bytes directly and write the results there
 
-                // Rayon doesnt need to consolidate FCL, work stealing is sufficient
-                
+                let number_engine_neurons =
+                    NeuronEngineIndex::from(data.bitpacked_neuron_activity.number_bits());
+                let burst_index = data.burst_index;
+
+                data.bitpacked_neuron_activity
+                    .par_iter_bytes_mut()
+                    .enumerate()
+                    .for_each(|(index_u, bit)| {
+                        // TODO offset check
+
+                        let neuron_byte_i: NeuronEngineByteIndex<FIQ::NeuronIndexCountQuant> =
+                            NeuronEngineByteIndex::from_usize_unchecked(index_u);
+                        let mut neuron_engine_i: NeuronEngineIndex<FIQ::NeuronIndexCountQuant> =
+                            NeuronEngineIndex::from_usize_unchecked(neuron_byte_i.to_usize() << 3);
+                        let num_neurons_in_byte =
+                            (number_engine_neurons.to_usize() - neuron_engine_i.to_usize()).min(8);
+
+                        // TODO to implement step for index wrappers
+
+                        unsafe {
+                            let mut new_activity: u8 = 0;
+                            // TODO should we reset the activity first?
+
+                            let cortical_engine_i: CorticalEngineIndex<
+                                FIQ::CorticalAreaIndexCountQuant,
+                            > = *data.neuron_cortical_mapping.get_par(neuron_byte_i);
+                            let cortical_descriptors =
+                                *data.cortical_descriptors.get_par(cortical_engine_i);
+
+                            if !cortical_descriptors.get_cortical_area_enabled() {
+                                // if cortical area is not enabled, just end here
+                                return;
+                            }
+
+                            let cortical_neuron_offsets: &CorticalNeuronOffsets<FIQ> =
+                                data.cortical_neuron_offsets.get_par(cortical_engine_i);
+
+                            for byte_neuron_i in 0..num_neurons_in_byte {
+
+                                let neuron_local_i: NeuronCorticalLocalIndex<
+                                    FIQ::NeuronIndexCountQuant,
+                                > = NeuronCorticalLocalIndex::from(
+                                    *neuron_engine_i.as_ref()
+                                        - cortical_neuron_offsets
+                                            .engine_to_local_neuron_index_offset,
+                                );
+                                let neuron_mp_i: NeuronMPIndex<FIQ::NeuronIndexCountQuant> =
+                                    NeuronMPIndex::from(
+                                        *neuron_engine_i.as_ref()
+                                            - cortical_neuron_offsets
+                                                .engine_to_mp_quant_neuron_index,
+                                    );
+                                let neuron_psp_uni_i: NeuronPSPUniformIndex<
+                                    FIQ::NeuronIndexCountQuant,
+                                > = NeuronPSPUniformIndex::from(
+                                    *neuron_engine_i.as_ref()
+                                        - cortical_neuron_offsets.engine_to_psp_uniformity_index,
+                                );
+                                let neuron_history_i: NeuronHistoryIndex<
+                                    FIQ::NeuronIndexCountQuant,
+                                > = NeuronHistoryIndex::from(
+                                    *neuron_engine_i.as_ref()
+                                        - cortical_neuron_offsets
+                                            .engine_to_neuron_history_index_offset,
+                                );
+
+
+
+
+                                // TODO we will need proper translation tables for engine index -> mp quant index
+                                let neuron_mp_i: NeuronMPIndex<FIQ::NeuronIndexCountQuant> =
+                                    NeuronMPIndex::from(*neuron_engine_i.as_ref());
+
+                                let fcl = data.neuron_fcl.float_32.get_mut_par(neuron_mp_i);
+                                if *fcl == 0.0 {
+                                    neuron_engine_i += NeuronEngineIndex::QUANT_ONE;
+                                    continue; // no need to check if the neuron isnt active
+                                }
+                                let mp = data.neuron_mp.float_32.get_mut_par(neuron_mp_i);
+
+                                // TODO data
+                                let cortical_layout = CorticalAreaLayoutDataDimensional {
+                                    dimensions: DimensionalCorticalArea4DDimensions::new(
+                                        NeuronVoxelCoordinateAxis::from_usize_unchecked(1),
+                                        NeuronVoxelCoordinateAxis::from_usize_unchecked(1),
+                                        NeuronVoxelCoordinateAxis::from_usize_unchecked(1),
+                                        NeuronVoxelDensityIndex::from_usize_unchecked(1)
+                                    )
+                                };
+
+                                let neuron_data = data.neuron_model_data_vecs.feagi_standard_data.standard_32_bit.get_mut_par()
+
+                                // TODO get actual flag for neuron model and quantization and run appropriate match
+
+                                // TODO why does the neuron processor trait only assume dimensional?
+
+                                // TODO instead of multiple processor traits, constrain the where clause on the function
+
+                                match cortical_descriptors.get_cortical_area_layout() {
+                                    CorticalAreaLayoutType::Dimensional => {
+                                        // TODO check history use
+
+                                        let history = data.neuron_history.get_mut_par(neuron_history_i);
+
+
+                                        FeagiStandardModelProcessor::process_neuron_potential_for_dimensional_cortical_configuration(
+                                            fcl,
+                                            &neuron_local_i,
+                                            &burst_index,
+                                            &history.burst_last_active,
+                                            &history.burst_last_fired,
+                                            &cortical_layout,
+
+                                        )
+
+                                    }
+                                    CorticalAreaLayoutType::Memory => {
+                                        panic!("not supported!")
+                                    }
+                                }
+
+
+                                neuron_engine_i += NeuronEngineIndex::QUANT_ONE;
+                            }
+                        }
+                    });
+
+                // Rayon doesn't need to consolidate FCL, work stealing is sufficient
+
                 // for each bit pack u8, start a new mut u8
                 // loop 0 - 8 get neuron engine index (start then increment)
-                
+
                 // // get mut neuron fcl mp
                 // // if fcl is zero, continue loop
                 // // get cortical area index
@@ -33,37 +170,28 @@ impl<FGQ: FeagiGlobalQuantization> RayonNeuronProcessing<FGQ> {
                 // // get mut neuron model data
                 // // get mut neuron potential
                 // // is_firing = feagi standard model firing
-                
+
                 // // neuron fcl mp = 0
                 // // update neuron history
                 // // update bit 0-8 for if fired
-                
-                // 
-                
+
+                //
+
                 increment_burst_counter(data);
             }
         }
     }
 }
 
-
-
-
-
-
-
-fn increment_burst_counter<FGQ: FeagiGlobalQuantization>(data: &mut RayonEngineData<FGQ>)
-{
-    if *data.burst_index.as_ref() == FGQ::GlobalBurstIndexQuant::QUANT_MAX {
+fn increment_burst_counter<FIQ: FeagiIndexQuantization>(data: &mut RayonEngineData<FIQ>) {
+    if *data.burst_index.as_ref() == FIQ::GlobalBurstIndexQuant::QUANT_MAX {
         // OVERFLOW!
 
-        *data.burst_index = FGQ::GlobalBurstIndexQuant::QUANT_MAX / FGQ::GlobalBurstIndexQuant::from_usize(2)
-        
-        // TODO call the right functions
+        *data.burst_index.as_mut() =
+            FIQ::GlobalBurstIndexQuant::QUANT_MAX / FIQ::GlobalBurstIndexQuant::from_usize(2)
+
+        // TODO call the right functions to handle overflow
+    } else {
+        *data.burst_index.as_mut() += FIQ::GlobalBurstIndexQuant::QUANT_MAX;
     }
-    else
-    {
-        *data.burst_index.as_mut() += FGQ::GlobalBurstIndexQuant::QUANT_MAX;
-    }
-    
 }

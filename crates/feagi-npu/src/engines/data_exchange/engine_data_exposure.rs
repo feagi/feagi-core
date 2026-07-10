@@ -1,5 +1,5 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
-pub trait ExposesClonedEngineData<FGQ: FeagiGlobalQuantization, DataType> {
+pub trait ExposesClonedEngineData<FIQ: FeagiIndexQuantization, DataType> {
 
 }

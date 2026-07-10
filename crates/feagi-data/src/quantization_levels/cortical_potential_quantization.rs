@@ -7,12 +7,12 @@ use crate::values::quantizable::QuantizedDecimalTrait;
 /// potential quantization has discrete steps that must be followed.
 
 pub trait CorticalPotentialQuantization {
-    const QUANTIZATION_LEVEL: CorticalPotentialQuantizationLevel;
+    const QUANTIZATION_LEVEL: CorticalMembranePotentialQuantizationLevel;
 
     /// Defines the quantization of the membrane potential of a neuron, which all models must
     /// include. This may vary between cortical_area areas, even of the same model. This also impacts
     /// the FCL as well
-    type NeuronPotentialQuant: QuantizedDecimalTrait;
+    type MembranePotentialQuant: QuantizedDecimalTrait;
 }
 
 //region Discrete Levels
@@ -20,22 +20,22 @@ pub trait CorticalPotentialQuantization {
 pub struct CorticalPotentialQuantizationFloat32;
 
 impl CorticalPotentialQuantization for CorticalPotentialQuantizationFloat32 {
-    const QUANTIZATION_LEVEL: CorticalPotentialQuantizationLevel = CorticalPotentialQuantizationLevel::Float32;
-    type NeuronPotentialQuant = f32;
+    const QUANTIZATION_LEVEL: CorticalMembranePotentialQuantizationLevel = CorticalMembranePotentialQuantizationLevel::Float32;
+    type MembranePotentialQuant = f32;
 }
 
 pub struct CorticalPotentialQuantizationFloat64;
 
 impl CorticalPotentialQuantization for CorticalPotentialQuantizationFloat64 {
-    const QUANTIZATION_LEVEL: CorticalPotentialQuantizationLevel = CorticalPotentialQuantizationLevel::Float64;
-    type NeuronPotentialQuant = f64;
+    const QUANTIZATION_LEVEL: CorticalMembranePotentialQuantizationLevel = CorticalMembranePotentialQuantizationLevel::Float64;
+    type MembranePotentialQuant = f64;
 }
 
 //endregion
 
 #[repr(u8)]
 #[derive(Default)]
-pub enum CorticalPotentialQuantizationLevel {
+pub enum CorticalMembranePotentialQuantizationLevel {
     #[default]
     Float32 = 0,
     Float64 = 5,

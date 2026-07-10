@@ -13,7 +13,7 @@ macro_rules! create_coordinate {
         $( ($index:tt, $field:ident) ),+ $(,)?
     ) => {
         $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
             pub inner: [Q; $num_dimensions],
         }
@@ -50,7 +50,7 @@ macro_rules! create_dimension {
         $( ($index:tt, $field:ident) ),+ $(,)?
     ) => {
         $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait> {
             pub inner: [Q; $num_dimensions],
         }
@@ -117,7 +117,7 @@ macro_rules! create_wrapped_quantized_index_coordinate {
         $( ($index:tt, $field_name:ident, $field_wrapped_quant_index:ident) ),+ $(,)?
     ) => {
         #[repr(transparent)]
-        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         $vis struct $wrapper_struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait>($quant_index_coord_to_wrap<Q>);
 
         ::paste::paste! {
@@ -156,7 +156,7 @@ macro_rules! create_wrapped_quantized_index_dimension {
         $( ($index:tt, $field_name:ident, $field_wrapped_quant_index:ident) ),+ $(,)?
     ) => {
         #[repr(transparent)]
-        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         $vis struct $wrapper_struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait>($quant_index_dim_to_wrap<Q>);
 
         ::paste::paste! {

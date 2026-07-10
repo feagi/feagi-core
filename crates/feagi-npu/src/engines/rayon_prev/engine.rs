@@ -1,14 +1,14 @@
 use core::marker::PhantomData;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
 
-pub struct BurstEngineCpuRayon<FGQ: FeagiGlobalQuantization> {
+pub struct BurstEngineCpuRayon<FIQ: FeagiGlobalQuantization> {
     // tables
     // vars
-    _p: PhantomData<FGQ>,
+    _p: PhantomData<FIQ>,
 }
 
 
-impl<FGQ: FeagiGlobalQuantization> BurstEngineCpuRayon<FGQ>
+impl<FIQ: FeagiGlobalQuantization> BurstEngineCpuRayon<FIQ>
 {
     
 }
@@ -17,9 +17,9 @@ impl AsyncBurstEngineTrait
 
 /*
 
-impl<FGQ: FeagiGlobalQuantization> BurstEngineFixedInterface<FGQ> for BurstEngineCpuRayon<FGQ>
+impl<FIQ: FeagiGlobalQuantization> BurstEngineFixedInterface<FIQ> for BurstEngineCpuRayon<FIQ>
 {
-    fn run_bursts(&mut self, number_bursts: NPUWrappedBurstEngineBurstIndex<FGQ::GlobalBurstIndexQuant>) -> usize {
+    fn run_bursts(&mut self, number_bursts: NPUWrappedBurstEngineBurstIndex<FIQ::GlobalBurstIndexQuant>) -> usize {
         return 0
     }
 

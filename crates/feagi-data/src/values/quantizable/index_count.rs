@@ -53,6 +53,7 @@ Copy
 
     /// Tries to convert from u32, clamping if it goes out of range!
     fn from_u32_clamped(value: u32) -> Self;
+
     
 }
 
@@ -166,7 +167,7 @@ impl QuantizedIndexCountTrait for u64 {
 
 /// Creates a wrapper for quantized indexes / counts
 #[macro_export]
-    macro_rules! create_wrapped_quantized_index {
+macro_rules! create_wrapped_quantized_index {
     (
         $(#[$meta:meta])*
         $vis:vis $struct_name:ident
@@ -177,6 +178,9 @@ impl QuantizedIndexCountTrait for u64 {
         $vis struct $struct_name<Q: $crate::values::quantizable::QuantizedIndexCountTrait>(Q);
         
         impl<Q: $crate::values::quantizable::QuantizedIndexCountTrait> $struct_name<Q> {
+            pub const QUANT_ZERO: Self = Self::const_new(Q::QUANT_ZERO);
+            pub const QUANT_ONE: Self = Self::const_new(Q::QUANT_ONE);
+            
             pub const fn const_new(value: Q) -> Self
             {
                 Self(value)
@@ -185,6 +189,10 @@ impl QuantizedIndexCountTrait for u64 {
             pub const fn const_deref(self) -> Q
             {
                 self.0
+            }
+            
+            pub fn new(v: Q) -> Self {
+                Self(v)
             }
 
             pub fn from_usize_unchecked(u: usize) -> Self {
@@ -197,6 +205,10 @@ impl QuantizedIndexCountTrait for u64 {
                     return Err($crate::values::feagi_data_value_error::FeagiInvalidQuantizationErrKey::new("Given usize exceeds current quantization bounds!").into())
                 }
                 Ok(Self(Q::from_usize(u)))
+            }
+            
+            pub fn to_usize(&self) -> usize {
+                self.0.to_usize()
             }
         }
         

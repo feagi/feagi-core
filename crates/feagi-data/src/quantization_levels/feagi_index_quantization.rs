@@ -1,12 +1,10 @@
-// TODO Rename to FeagiIndexQuantization!
 //! Sets the indexing of various data types, where higher quantizations can support bigger
 //! collections of those items but at an increased memory cost
 
 use crate::values::quantizable::QuantizedIndexCountTrait;
 
 /// Global Indexing across an instance of FEAGI, primarily NPU. Controlled by NPU primarily
-pub trait FeagiGlobalQuantization {
-
+pub trait FeagiIndexQuantization: Clone + Copy {
     const QUANTIZATION_LEVEL: FeagiGlobalQuantizationLevel;
 
     /// Defines the quantization of the NPU global burst index. This is not model configurable,
@@ -38,15 +36,14 @@ pub trait FeagiGlobalQuantization {
     // TODO per type indexing?
 }
 
-
 //region Discrete Levels
-
 
 /// The default quantization level for most deployments. Practical balance between speed and
 /// indexing size. The only level supported by some platforms
+#[derive(Clone, Copy)]
 pub struct FeagiGlobalQuantizationStandard;
 
-impl FeagiGlobalQuantization for FeagiGlobalQuantizationStandard {
+impl FeagiIndexQuantization for FeagiGlobalQuantizationStandard {
     const QUANTIZATION_LEVEL: FeagiGlobalQuantizationLevel = FeagiGlobalQuantizationLevel::Standard;
     type GlobalBurstIndexQuant = u32;
     type NeuronIndexCountQuant = u32;
@@ -56,9 +53,7 @@ impl FeagiGlobalQuantization for FeagiGlobalQuantizationStandard {
     type FireCandidateListCacheIndexCountQuant = u32;
 }
 
-
 //endregion
-
 
 #[repr(u8)]
 #[derive(Default)]

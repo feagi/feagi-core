@@ -12,20 +12,20 @@ create_quantized_index_count_wrapper!(NPUWrappedEngineSynapseIndexLength);
 /// Stores a burst engine level neuron index with the quant flag, for trivial conversion to
 /// the mp quant level. This is useful for arrays that should be iterated on the engine level but
 /// we need ot access the quant level neurons rapidly
-pub struct BurstEngineNeuronIndexWithQuant<FGQ: FeagiGlobalQuantization>
+pub struct BurstEngineNeuronIndexWithQuant<FIQ: FeagiGlobalQuantization>
 {
-    pub burst_index: NPUWrappedNeuronIndexBurstEngineIndex<FGQ::NeuronIndexCountQuant>,
+    pub burst_index: NPUWrappedNeuronIndexBurstEngineIndex<FIQ::NeuronIndexCountQuant>,
     pub quant_flag: NeuronModelQuantDescriptorsCPU
 }
 
 /// Exists for every neuron that has multiple inputs, defines the region of the FCLC to sum to
 /// get the fcl value (which is to be stored at the neuron index). MP quant typed so flag is given,
 /// although this array itself is burst engine global for processing reasons
-pub struct FCLMappingsToFCLC<FGQ: FeagiGlobalQuantization>
+pub struct FCLMappingsToFCLC<FIQ: FeagiGlobalQuantization>
 {
-    FCLC_start_index: NPUWrappedFCLCMPQuantIndex<FGQ::NeuronIndexCountQuant>,
-    FCLC_length: NPUWrappedFCLCMPQuantIndex<FGQ::NeuronIndexCountQuant>,
-    FCL_neuron_index: NPUWrappedNeuronMPQuantIndex<FGQ::NeuronIndexCountQuant>,
+    FCLC_start_index: NPUWrappedFCLCMPQuantIndex<FIQ::NeuronIndexCountQuant>,
+    FCLC_length: NPUWrappedFCLCMPQuantIndex<FIQ::NeuronIndexCountQuant>,
+    FCL_neuron_index: NPUWrappedNeuronMPQuantIndex<FIQ::NeuronIndexCountQuant>,
     neuron_mp_type_flag: NeuronModelQuantDescriptorsCPU // due to padding, we will always have some free bytes, so might as well...
 }
 
@@ -33,38 +33,38 @@ pub struct FCLMappingsToFCLC<FGQ: FeagiGlobalQuantization>
 
 /// Denotes the last time a specific neuron fired or had an input activity at all. As not all
 /// neuron models use this, has its own indexing
-pub struct NeuronHistory<FGQ: FeagiGlobalQuantization>
+pub struct NeuronHistory<FIQ: FeagiGlobalQuantization>
 {
-    pub burst_index_of_last_input: NPUWrappedBurstEngineBurstIndex<FGQ::GlobalBurstIndexQuant>,
-    pub burst_index_of_last_firing: NPUWrappedBurstEngineBurstIndex<FGQ::GlobalBurstIndexQuant>,
+    pub burst_index_of_last_input: NPUWrappedBurstEngineBurstIndex<FIQ::GlobalBurstIndexQuant>,
+    pub burst_index_of_last_firing: NPUWrappedBurstEngineBurstIndex<FIQ::GlobalBurstIndexQuant>,
 }
 
 ///
-pub struct CorticalLayouts<FGQ>
+pub struct CorticalLayouts<FIQ>
 where
-    FGQ: FeagiGlobalQuantization,
+    FIQ: FeagiGlobalQuantization,
 {
-    pub dimensional: Vec<CorticalLayoutDimensionalCPU<FGQ>>,
+    pub dimensional: Vec<CorticalLayoutDimensionalCPU<FIQ>>,
 }
 
 //region Sub Elements
 
 
 
-impl<FGQ> CorticalLayoutDimensionalCPU<FGQ>
+impl<FIQ> CorticalLayoutDimensionalCPU<FIQ>
 where
-    FGQ: FeagiGlobalQuantization,
+    FIQ: FeagiGlobalQuantization,
 {
-    pub fn new(dimensions: NPUWrappedCorticalAreaDimensions<FGQ::NeuronIndexCountQuant>) -> Self {
+    pub fn new(dimensions: NPUWrappedCorticalAreaDimensions<FIQ::NeuronIndexCountQuant>) -> Self {
         Self { dimensions }
     }
 }
 
-impl<FGQ> CorticalLayoutBase<FGQ> for CorticalLayoutDimensionalCPU<FGQ>
-where FGQ: FeagiGlobalQuantization, {}
+impl<FIQ> CorticalLayoutBase<FIQ> for CorticalLayoutDimensionalCPU<FIQ>
+where FIQ: FeagiGlobalQuantization, {}
 
-impl<FGQ> CorticalLayoutDimensional<FGQ> for CorticalLayoutDimensionalCPU<FGQ>
-where FGQ: FeagiGlobalQuantization, {}
+impl<FIQ> CorticalLayoutDimensional<FIQ> for CorticalLayoutDimensionalCPU<FIQ>
+where FIQ: FeagiGlobalQuantization, {}
 
 
 
@@ -75,24 +75,24 @@ where FGQ: FeagiGlobalQuantization, {}
 
 /// Contains indexes and offsets for various properties of a cortical_area area. Indexed by
 /// Engine Cortical Index
-pub struct CorticalContextLookup<FGQ: FeagiGlobalQuantization>
+pub struct CorticalContextLookup<FIQ: FeagiGlobalQuantization>
 {
     // NOTE: For byte alignment reasons, put neuron stuff first, as neuron quantization >= cortical_area area quantization
     /// Subtract the this from a neurons mp quant index to the get the cortical_area area local index
-    pub mp_quant_to_local_neuron_index_offset: NPUWrappedNeuronCorticalLocalIndex<FGQ::NeuronIndexCountQuant>,
-    pub mp_quant_to_neuron_history_index_offset: NPUWrappedNeuronHistoryIndex<FGQ::NeuronIndexCountQuant>, // Only valid if the neuron model needs history. Otherwise this will just be 0
+    pub mp_quant_to_local_neuron_index_offset: NPUWrappedNeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
+    pub mp_quant_to_neuron_history_index_offset: NPUWrappedNeuronHistoryIndex<FIQ::NeuronIndexCountQuant>, // Only valid if the neuron model needs history. Otherwise this will just be 0
 
-    pub cortical_layout_index: NPUWrappedCorticalLayoutIndex<FGQ::CorticalAreaIndexCountQuant>, // Neuron Flags will disclose what type of layout
-    pub neuron_model_cortical_data_index: NPUWrappedNeuronNeuronModelMPQuantIndex<FGQ::CorticalAreaIndexCountQuant>,
+    pub cortical_layout_index: NPUWrappedCorticalLayoutIndex<FIQ::CorticalAreaIndexCountQuant>, // Neuron Flags will disclose what type of layout
+    pub neuron_model_cortical_data_index: NPUWrappedNeuronNeuronModelMPQuantIndex<FIQ::CorticalAreaIndexCountQuant>,
     // NOTE: Base psp potential is a separate array with 1-1 cortical_area engine index lookup, we don't need it here
 }
 
 
-pub struct SynapseRangeMappingFromNeuron<FGQ: FeagiGlobalQuantization>
+pub struct SynapseRangeMappingFromNeuron<FIQ: FeagiGlobalQuantization>
 {
-    pub synapse_start_index: NPUWrappedEngineSynapseIndexLength<FGQ::SynapseIndexCountQuant>,
-    pub synapse_start_length: NPUWrappedEngineSynapseIndexLength<FGQ::SynapseIndexCountQuant>,
-    pub source_neuron_index: NPUWrappedNeuronIndexBurstEngineIndex<FGQ::NeuronIndexCountQuant>,
+    pub synapse_start_index: NPUWrappedEngineSynapseIndexLength<FIQ::SynapseIndexCountQuant>,
+    pub synapse_start_length: NPUWrappedEngineSynapseIndexLength<FIQ::SynapseIndexCountQuant>,
+    pub source_neuron_index: NPUWrappedNeuronIndexBurstEngineIndex<FIQ::NeuronIndexCountQuant>,
     //pub source_neuron_quant_descriptor: NeuronModelQuantDescriptorsCPU // TODO
 }
 

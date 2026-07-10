@@ -5,19 +5,19 @@ use crate::neuron_voxels::voxel_collection_generic_descriptors::*;
 use crate::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use crate::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
 
-pub struct NeuronVoxelCollectionSparseHashmapGeneric<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization>
+pub struct NeuronVoxelCollectionSparseHashmapGeneric<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization>
 (
     QuantizableSpatialCollection3DHashmapSparse<
-        FGQ::NeuronIndexCountQuant,
+        FIQ::NeuronIndexCountQuant,
         NeuronVoxelPotentialGeneric<
             CPQ::NeuronPotentialQuant
         >
     >
 );
 
-impl<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> NeuronVoxelCollectionSparseHashmapGeneric<FGQ, CPQ>
+impl<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> NeuronVoxelCollectionSparseHashmapGeneric<FIQ, CPQ>
 {
-    pub fn new(dimensions: NeuronVoxelDimensionsGeneric<FGQ::NeuronIndexCountQuant>) -> Self {
+    pub fn new(dimensions: NeuronVoxelDimensionsGeneric<FIQ::NeuronIndexCountQuant>) -> Self {
         Self(
             QuantizableSpatialCollection3DHashmapSparse::new(
                 dimensions.unwrap()
@@ -26,26 +26,26 @@ impl<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> NeuronVo
     }
 }
 
-impl<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> NeuronVoxelCollection<FGQ, CPQ> for NeuronVoxelCollectionSparseHashmapGeneric<FGQ, CPQ> {
-    fn get_voxel_dimensions(&self) -> &NeuronVoxelDimensionsGeneric<FGQ::NeuronIndexCountQuant> {
+impl<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> NeuronVoxelCollection<FIQ, CPQ> for NeuronVoxelCollectionSparseHashmapGeneric<FIQ, CPQ> {
+    fn get_voxel_dimensions(&self) -> &NeuronVoxelDimensionsGeneric<FIQ::NeuronIndexCountQuant> {
         NeuronVoxelDimensionsGeneric::wrap_ref(self.0.get_dimensions())
     }
 }
 
-impl<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> NeuronVoxelCollectionSparse<FGQ, CPQ> for NeuronVoxelCollectionSparseHashmapGeneric<FGQ, CPQ> {
+impl<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> NeuronVoxelCollectionSparse<FIQ, CPQ> for NeuronVoxelCollectionSparseHashmapGeneric<FIQ, CPQ> {
 
 }
 
-impl<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> CPUNeuronVoxelCollection<FGQ, CPQ> for NeuronVoxelCollectionSparseHashmapGeneric<FGQ, CPQ> {
-    fn try_get_potential_by_voxel_index(&self, voxel_index: NeuronVoxelLinearIndexGeneric<FGQ::NeuronIndexCountQuant>) -> Option<&NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>> {
+impl<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> CPUNeuronVoxelCollection<FIQ, CPQ> for NeuronVoxelCollectionSparseHashmapGeneric<FIQ, CPQ> {
+    fn try_get_potential_by_voxel_index(&self, voxel_index: NeuronVoxelLinearIndexGeneric<FIQ::NeuronIndexCountQuant>) -> Option<&NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>> {
         self.0.try_get_value(voxel_index.unwrap())
     }
 
-    fn try_get_potential_by_voxel_index_mut(&mut self, voxel_index: NeuronVoxelLinearIndexGeneric<FGQ::NeuronIndexCountQuant>) -> Option<&mut NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>> {
+    fn try_get_potential_by_voxel_index_mut(&mut self, voxel_index: NeuronVoxelLinearIndexGeneric<FIQ::NeuronIndexCountQuant>) -> Option<&mut NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>> {
         self.0.try_get_value_mut(voxel_index.unwrap())
     }
 
-    fn iter_with_voxel_index(&self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<FGQ::NeuronIndexCountQuant>, &NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>)>
+    fn iter_with_voxel_index(&self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<FIQ::NeuronIndexCountQuant>, &NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>)>
     {
         self.0
             .iter_with_index().map(|(i, v)|
@@ -53,7 +53,7 @@ impl<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> CPUNeuro
         )
     }
 
-    fn iter_mut_with_voxel_index(&mut self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<FGQ::NeuronIndexCountQuant>, &mut NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>)>
+    fn iter_mut_with_voxel_index(&mut self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<FIQ::NeuronIndexCountQuant>, &mut NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>)>
     {
         self.0
             .iter_mut_with_index().map(|(i, v)|
@@ -61,7 +61,7 @@ impl<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> CPUNeuro
         )
     }
 
-    fn iter_with_index_and_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<FGQ::NeuronIndexCountQuant>, NeuronVoxelCoordinateGeneric<FGQ::NeuronIndexCountQuant>, &NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>)>
+    fn iter_with_index_and_coordinate(&self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<FIQ::NeuronIndexCountQuant>, NeuronVoxelCoordinateGeneric<FIQ::NeuronIndexCountQuant>, &NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>)>
     {
         self.0
             .iter_with_index_and_coordinate().map(|(i, c, v)|
@@ -69,7 +69,7 @@ impl<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> CPUNeuro
         )
     }
 
-    fn iter_mut_with_index_and_coordinate(&mut self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<FGQ::NeuronIndexCountQuant>, NeuronVoxelCoordinateGeneric<FGQ::NeuronIndexCountQuant>, &mut NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>)>
+    fn iter_mut_with_index_and_coordinate(&mut self) -> impl Iterator<Item=(NeuronVoxelLinearIndexGeneric<FIQ::NeuronIndexCountQuant>, NeuronVoxelCoordinateGeneric<FIQ::NeuronIndexCountQuant>, &mut NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>)>
     {
         self.0
             .iter_mut_with_index_and_coordinate().map(|(i, c, v)|
@@ -78,10 +78,10 @@ impl<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> CPUNeuro
     }
 }
 
-impl<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> CPUNeuronVoxelCollectionSparse<FGQ, CPQ> for NeuronVoxelCollectionSparseHashmapGeneric<FGQ, CPQ> {
+impl<FIQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> CPUNeuronVoxelCollectionSparse<FIQ, CPQ> for NeuronVoxelCollectionSparseHashmapGeneric<FIQ, CPQ> {
     fn insert_potential_at_voxel_index(
         &mut self,
-        voxel_index: NeuronVoxelLinearIndexGeneric<FGQ::NeuronIndexCountQuant>,
+        voxel_index: NeuronVoxelLinearIndexGeneric<FIQ::NeuronIndexCountQuant>,
         potential: NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>)
         -> Option<NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>>
     {
@@ -90,7 +90,7 @@ impl<FGQ: FeagiGlobalQuantization,  CPQ: CorticalPotentialQuantization> CPUNeuro
 
     fn remove_potential_at_voxel_index(
         &mut self,
-        index: NeuronVoxelLinearIndexGeneric<FGQ::NeuronIndexCountQuant>)
+        index: NeuronVoxelLinearIndexGeneric<FIQ::NeuronIndexCountQuant>)
         -> Option<NeuronVoxelPotentialGeneric<CPQ::NeuronPotentialQuant>>
     {
         self.0.remove_value_at_index(index.unwrap())

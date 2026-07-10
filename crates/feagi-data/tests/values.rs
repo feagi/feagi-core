@@ -93,14 +93,6 @@ fn quantized_index_count_u32_conversions() {
     assert_eq!(<u16 as QuantizedIndexCountTrait>::from_u32_clamped(70_000), u16::MAX);
 }
 
-#[test]
-fn quantized_index_count_bits_to_bytes() {
-    assert_eq!(<u8 as QuantizedIndexCountTrait>::number_bits_to_number_bytes(0), 0);
-    assert_eq!(<u8 as QuantizedIndexCountTrait>::number_bits_to_number_bytes(7), 1);
-    assert_eq!(<u8 as QuantizedIndexCountTrait>::number_bits_to_number_bytes(8), 1);
-    assert_eq!(<u8 as QuantizedIndexCountTrait>::number_bits_to_number_bytes(9), 2);
-    assert_eq!(<u32 as QuantizedIndexCountTrait>::number_bits_to_number_bytes(33), 5);
-}
 
 //endregion
 

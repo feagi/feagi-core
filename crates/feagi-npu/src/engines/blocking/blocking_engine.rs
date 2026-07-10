@@ -1,4 +1,4 @@
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use crate::engines::blocking::rayon::RayonBurstEngine;
 
 

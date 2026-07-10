@@ -1,20 +1,19 @@
 use crate::neuron_models::neuron_model_traits::neuron_model_data::{
     NeuronModelCorticalData, NeuronModelNeuronData,
 };
+use feagi_data::neurons::{NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
-use feagi_data::quantization_levels::extendable_quantizations::NeuronModelQuantization;
-use feagi_data::quantization_levels::feagi_index_quantization::FeagiGlobalQuantization;
-use feagi_npu_common::descriptors::cortical_area_layout::CorticalAreaLayoutDataDimensional;
-use feagi_npu_common::wrapped_indexes::{BurstIndex, NeuronCorticalLocalIndex};
-use feagi_npu_common::wrapped_values::NeuronMembranePotential;
+use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
+use feagi_npu_common::descriptors::cortical_area_descriptors::CorticalAreaLayoutDataDimensional;
+use feagi_npu_common::wrapped_indexes::BurstIndex;
 
 /// Root base trait for defining neuron firing and other dynamics. Does NOT store actual data,
-pub trait NeuronModelProcessorBase<FGQ, NMQ, NMCD, NMND>
+pub trait NeuronModelProcessorBase<FIQ, CPQ, NMCD, NMND>
 where
-    FGQ: FeagiGlobalQuantization,
-    NMQ: NeuronModelQuantization,
-    NMCD: NeuronModelCorticalData<NMQ>,
-    NMND: NeuronModelNeuronData<NMQ>,
+    FIQ: FeagiIndexQuantization,
+    CPQ: CorticalPotentialQuantization,
+    NMCD: NeuronModelCorticalData<CPQ>,
+    NMND: NeuronModelNeuronData<CPQ>,
 {
     /// TODO neuron init func?
 
@@ -31,7 +30,7 @@ where
     /// method to update any values that need to be updated in that case
     fn prepare_neuron_data_for_burst_index_rollover(
         &self,
-        _neuron_linear_index: &NeuronCorticalLocalIndex<FGQ::NeuronIndexCountQuant>,
+        _neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
         _neuron_model_data: &mut NMND,
     ) {
         // by default nothing. Override me if you have something you need to do, but remember
@@ -39,53 +38,45 @@ where
     }
 }
 
-pub trait NeuronModelProcessorWithoutHistory<FGQ, NMQ, NMCD, NMND>:
-    NeuronModelProcessorBase<FGQ, NMQ, NMCD, NMND>
+pub trait NeuronModelProcessorWithoutHistory<FIQ, CPQ, NMCD, NMND>:
+    NeuronModelProcessorBase<FIQ, CPQ, NMCD, NMND>
 where
-    FGQ: FeagiGlobalQuantization,
-    NMQ: NeuronModelQuantization,
-    NMCD: NeuronModelCorticalData<NMQ>,
-    NMND: NeuronModelNeuronData<NMQ>,
+    FIQ: FeagiIndexQuantization,
+    CPQ: CorticalPotentialQuantization,
+    NMCD: NeuronModelCorticalData<CPQ>,
+    NMND: NeuronModelNeuronData<CPQ>,
 {
     /// Neuron received input potential. Process it, updating any internal states and update
     /// this neurons potential. Return true if it results in this neuron firing, otherwise
     /// return false
     fn process_neuron_potential_for_dimensional_cortical_configuration(
-        incoming_potential: &NeuronMembranePotential<
-            <NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant,
-        >,
-        neuron_linear_index: &NeuronCorticalLocalIndex<FGQ::NeuronIndexCountQuant>,
-        burst_index: &BurstIndex<FGQ::GlobalBurstIndexQuant>,
-        cortical_layout_dimensional: &CorticalAreaLayoutDataDimensional<FGQ>,
+        incoming_potential: &NeuronMembranePotential<CPQ::MembranePotentialQuant>,
+        neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
+        burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
+        cortical_layout_dimensional: &CorticalAreaLayoutDataDimensional<FIQ>,
         cortical_area_data: &NMCD,
         neuron_model_data: &mut NMND,
-        this_neuron_potential: &mut NeuronMembranePotential<
-            <NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant,
-        >,
+        this_neuron_potential: &mut NeuronMembranePotential<CPQ::MembranePotentialQuant>,
     ) -> bool;
 }
 
-pub trait NeuronModelProcessorWithHistory<FGQ, NMQ, NMCD, NMND>:
-    NeuronModelProcessorBase<FGQ, NMQ, NMCD, NMND>
+pub trait NeuronModelProcessorWithHistory<FIQ, CPQ, NMCD, NMND>:
+    NeuronModelProcessorBase<FIQ, CPQ, NMCD, NMND>
 where
-    FGQ: FeagiGlobalQuantization,
-    NMQ: NeuronModelQuantization,
-    NMCD: NeuronModelCorticalData<NMQ>,
-    NMND: NeuronModelNeuronData<NMQ>,
+    FIQ: FeagiIndexQuantization,
+    CPQ: CorticalPotentialQuantization,
+    NMCD: NeuronModelCorticalData<CPQ>,
+    NMND: NeuronModelNeuronData<CPQ>,
 {
     fn process_neuron_potential_for_dimensional_cortical_configuration(
-        incoming_potential: &NeuronMembranePotential<
-            <NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant,
-        >,
-        neuron_linear_index: &NeuronCorticalLocalIndex<FGQ::NeuronIndexCountQuant>,
-        burst_index: &BurstIndex<FGQ::GlobalBurstIndexQuant>,
-        burst_index_of_last_activity: &BurstIndex<FGQ::GlobalBurstIndexQuant>,
-        burst_index_of_last_firing: &BurstIndex<FGQ::GlobalBurstIndexQuant>,
-        cortical_layout_dimensional: &CorticalAreaLayoutDataDimensional<FGQ>,
+        incoming_potential: &NeuronMembranePotential<CPQ::MembranePotentialQuant>,
+        neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
+        burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
+        burst_index_of_last_activity: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
+        burst_index_of_last_firing: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
+        cortical_layout_dimensional: &CorticalAreaLayoutDataDimensional<FIQ>,
         cortical_area_data: &NMCD,
         neuron_model_data: &mut NMND,
-        this_neuron_potential: &mut NeuronMembranePotential<
-            <NMQ::CorticalPotentialQuant as CorticalPotentialQuantization>::NeuronPotentialQuant,
-        >,
+        this_neuron_potential: &mut NeuronMembranePotential<CPQ::MembranePotentialQuant>,
     ) -> bool;
 }

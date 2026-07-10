@@ -42,37 +42,37 @@ impl<T> ParallelSlicePtr<T> {
     }
 }
 
-pub trait BurstEnginePhaseProcessorCPU<FGQ>: BurstEnginePhaseProcessor<FGQ>
+pub trait BurstEnginePhaseProcessorCPU<FIQ>: BurstEnginePhaseProcessor<FIQ>
 where
-    FGQ: FeagiGlobalQuantization,
+    FIQ: FeagiGlobalQuantization,
 {
-    fn process_phase(data: &mut BurstEngineDataRayon<FGQ>) -> BurstEngineJustCompletedPhase;
+    fn process_phase(data: &mut BurstEngineDataRayon<FIQ>) -> BurstEngineJustCompletedPhase;
 }
 
 pub struct BurstEnginePhaseBurstCounterIndexIncrementRayon;
 
-impl<FGQ> BurstEnginePhaseProcessor<FGQ> for BurstEnginePhaseBurstCounterIndexIncrementRayon where
-    FGQ: FeagiGlobalQuantization
+impl<FIQ> BurstEnginePhaseProcessor<FIQ> for BurstEnginePhaseBurstCounterIndexIncrementRayon where
+    FIQ: FeagiGlobalQuantization
 {
 }
 
-impl<FGQ> BurstEnginePhaseBurstCounterIndexIncrement<FGQ>
+impl<FIQ> BurstEnginePhaseBurstCounterIndexIncrement<FIQ>
     for BurstEnginePhaseBurstCounterIndexIncrementRayon
 where
-    FGQ: FeagiGlobalQuantization,
+    FIQ: FeagiGlobalQuantization,
 {
 }
 
-impl<FGQ> BurstEnginePhaseProcessorCPU<FGQ> for BurstEnginePhaseBurstCounterIndexIncrementRayon
+impl<FIQ> BurstEnginePhaseProcessorCPU<FIQ> for BurstEnginePhaseBurstCounterIndexIncrementRayon
 where
-    FGQ: FeagiGlobalQuantization,
+    FIQ: FeagiGlobalQuantization,
 {
-    fn process_phase(data: &mut BurstEngineDataRayon<FGQ>) -> BurstEngineJustCompletedPhase {
+    fn process_phase(data: &mut BurstEngineDataRayon<FIQ>) -> BurstEngineJustCompletedPhase {
         if data.burst_index == NPUWrappedBurstEngineBurstIndex::QUANT_MAX {
             // overflow!
             data.burst_index = NPUWrappedBurstEngineBurstIndex::QUANT_MAX
                 / NPUWrappedBurstEngineBurstIndex::wrap(
-                    FGQ::GlobalBurstIndexQuant::from_usize_unchecked(2),
+                    FIQ::GlobalBurstIndexQuant::from_usize_unchecked(2),
                 );
             data.did_burst_index_overflow = true;
         } else {
@@ -92,21 +92,21 @@ where
 
 pub struct NeuronDynamicsNoPreCondenseRayon;
 
-impl<FGQ> BurstEnginePhaseProcessor<FGQ> for NeuronDynamicsNoPreCondenseRayon where
-    FGQ: FeagiGlobalQuantization
+impl<FIQ> BurstEnginePhaseProcessor<FIQ> for NeuronDynamicsNoPreCondenseRayon where
+    FIQ: FeagiGlobalQuantization
 {
 }
 
-impl<FGQ> BurstEnginePhaseBurstCounterIndexIncrement<FGQ> for NeuronDynamicsNoPreCondenseRayon where
-    FGQ: FeagiGlobalQuantization
+impl<FIQ> BurstEnginePhaseBurstCounterIndexIncrement<FIQ> for NeuronDynamicsNoPreCondenseRayon where
+    FIQ: FeagiGlobalQuantization
 {
 }
 
-impl<FGQ> BurstEnginePhaseProcessorCPU<FGQ> for NeuronDynamicsNoPreCondenseRayon
+impl<FIQ> BurstEnginePhaseProcessorCPU<FIQ> for NeuronDynamicsNoPreCondenseRayon
 where
-    FGQ: FeagiGlobalQuantization,
+    FIQ: FeagiGlobalQuantization,
 {
-    fn process_phase(data: &mut BurstEngineDataRayon<FGQ>) -> BurstEngineJustCompletedPhase {
+    fn process_phase(data: &mut BurstEngineDataRayon<FIQ>) -> BurstEngineJustCompletedPhase {
         let current_burst_index = data.burst_index;
 
         // Raw pointers are required because Rayon's for_each closure must be Fn, not FnMut
@@ -128,7 +128,7 @@ where
             }
 
             let neuron_mp_quant_index = NPUWrappedNeuronMPQuantIndex::wrap(
-                FGQ::NeuronIndexCountQuant::from_usize_unchecked(neuron_type_index_u),
+                FIQ::NeuronIndexCountQuant::from_usize_unchecked(neuron_type_index_u),
             );
             let neuron_mp_quant_index_usize = neuron_mp_quant_index.to_usize();
 
@@ -194,21 +194,21 @@ where
 
 pub struct SynapseDynamicsNoPreCondenseRayon;
 
-impl<FGQ> BurstEnginePhaseProcessor<FGQ> for SynapseDynamicsNoPreCondenseRayon where
-    FGQ: FeagiGlobalQuantization
+impl<FIQ> BurstEnginePhaseProcessor<FIQ> for SynapseDynamicsNoPreCondenseRayon where
+    FIQ: FeagiGlobalQuantization
 {
 }
 
-impl<FGQ> BurstEnginePhaseBurstCounterIndexIncrement<FGQ> for SynapseDynamicsNoPreCondenseRayon where
-    FGQ: FeagiGlobalQuantization
+impl<FIQ> BurstEnginePhaseBurstCounterIndexIncrement<FIQ> for SynapseDynamicsNoPreCondenseRayon where
+    FIQ: FeagiGlobalQuantization
 {
 }
 
-impl<FGQ> BurstEnginePhaseProcessorCPU<FGQ> for SynapseDynamicsNoPreCondenseRayon
+impl<FIQ> BurstEnginePhaseProcessorCPU<FIQ> for SynapseDynamicsNoPreCondenseRayon
 where
-    FGQ: FeagiGlobalQuantization,
+    FIQ: FeagiGlobalQuantization,
 {
-    fn process_phase(data: &mut BurstEngineDataRayon<FGQ>) -> BurstEngineJustCompletedPhase {
+    fn process_phase(data: &mut BurstEngineDataRayon<FIQ>) -> BurstEngineJustCompletedPhase {
         let current_burst_index = data.burst_index;
 
         // Raw pointers are required because Rayon's for_each closure must be Fn, not FnMut
@@ -234,7 +234,7 @@ where
                 }
 
                 let neuron_mp_quant_index = NPUWrappedNeuronMPQuantIndex::wrap(
-                    FGQ::NeuronIndexCountQuant::from_usize_unchecked(neuron_type_index_u),
+                    FIQ::NeuronIndexCountQuant::from_usize_unchecked(neuron_type_index_u),
                 );
                 let neuron_mp_quant_index_usize = neuron_mp_quant_index.to_usize();
 
