@@ -1,11 +1,11 @@
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
+use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialCPUQuantization;
 
 /// Root trait for all cortical_area data implementations, essentially any cortical_area level data shared
 /// by all neurons in a cortical_area area of a given neuron model. This should be extended with only
 /// the cortical_area level data
-pub trait NeuronModelCorticalData<CPQ>
+pub trait NeuronModelCorticalData<CPQ>: Clone + Copy
 where
-    CPQ: CorticalPotentialQuantization,
+    CPQ: CorticalPotentialCPUQuantization,
 {
     /// Set to true if the neuron model needs to be informed if the global burst index counter is
     /// about to overflow. Otherwise, set to false
@@ -23,9 +23,9 @@ where
 
 /// Root trait for all neuron data implementation, essentially per neuron data for a given
 /// neuron model. This should be extended with only the per neuron data
-pub trait NeuronModelNeuronData<CPQ>
+pub trait NeuronModelNeuronData<CPQ> : Clone + Copy
 where
-    CPQ: CorticalPotentialQuantization,
+    CPQ: CorticalPotentialCPUQuantization,
 {
     // As per CorticalAreasIndexQuantization, this takes in GlobalBurstIndexQuant,
     // and NeuronIndexCountQuant. These are not settable by the model and instead picked by

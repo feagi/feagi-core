@@ -10,7 +10,7 @@ use feagi_npu_common::wrapped_indexes::{
 };
 use rayon::prelude::*;
 use feagi_data::neuron_voxels::wrapped_values::NeuronVoxelCoordinateAxis;
-use feagi_npu_common::descriptors::cortical_area_descriptors::{CorticalAreaLayoutDataDimensional, CorticalAreaLayoutType};
+use feagi_npu_common::cortical_area_layout::CorticalAreaLayoutDataDimensional;
 use feagi_npu_models::neuron_models::feagi_standard::processor::FeagiStandardModelProcessor;
 
 /// Contains several methods of processing the neurons in the rayon burst engine
@@ -23,89 +23,115 @@ pub enum RayonNeuronProcessing {
 impl RayonNeuronProcessing {
     ///
     pub fn process_neurons<FIQ: FeagiIndexQuantization>(&self, data: &mut RayonEngineData<FIQ>) {
+
+        let number_engine_neurons =
+            NeuronEngineIndex::from(data.bitpacked_neuron_activity.number_addressable_bits());
+        let burst_index = data.burst_index;
+        
+        
         match self {
             RayonNeuronProcessing::VisualizerInline => {
                 // We iterate over the bytes directly and write the results there
-
-                let number_engine_neurons =
-                    NeuronEngineIndex::from(data.bitpacked_neuron_activity.number_bits());
-                let burst_index = data.burst_index;
-
+                
                 data.bitpacked_neuron_activity
                     .par_iter_bytes_mut()
                     .enumerate()
-                    .for_each(|(index_u, bit)| {
-                        // TODO offset check
+                    .for_each(|(index_u, neuron_bits)| {
+
 
                         let neuron_byte_i: NeuronEngineByteIndex<FIQ::NeuronIndexCountQuant> =
                             NeuronEngineByteIndex::from_usize_unchecked(index_u);
                         let mut neuron_engine_i: NeuronEngineIndex<FIQ::NeuronIndexCountQuant> =
                             NeuronEngineIndex::from_usize_unchecked(neuron_byte_i.to_usize() << 3);
+                        // At the tail end of cortical areas, there will likely be some spare bits
+                        // and thus not a full 8 bits allocated to neurons
                         let num_neurons_in_byte =
                             (number_engine_neurons.to_usize() - neuron_engine_i.to_usize()).min(8);
-
-                        // TODO to implement step for index wrappers
-
+                        
                         unsafe {
-                            let mut new_activity: u8 = 0;
                             // TODO should we reset the activity first?
 
                             let cortical_engine_i: CorticalEngineIndex<
                                 FIQ::CorticalAreaIndexCountQuant,
                             > = *data.neuron_cortical_mapping.get_par(neuron_byte_i);
-                            let cortical_descriptors =
-                                *data.cortical_descriptors.get_par(cortical_engine_i);
+                            
+                            let cortical_runtime_flags =
+                                *data.cortical_runtime_flags.get_par(cortical_engine_i);
 
-                            if !cortical_descriptors.get_cortical_area_enabled() {
-                                // if cortical area is not enabled, just end here
+                            if cortical_runtime_flags.get_cortical_area_paused()
+                            {
+                                // If paused, return without resetting or changing anything
                                 return;
                             }
-
+                            
+                            *neuron_bits = 0; // Reset neuron firing bits
+                            
                             let cortical_neuron_offsets: &CorticalNeuronOffsets<FIQ> =
                                 data.cortical_neuron_offsets.get_par(cortical_engine_i);
+                            
 
-                            for byte_neuron_i in 0..num_neurons_in_byte {
-
-                                let neuron_local_i: NeuronCorticalLocalIndex<
-                                    FIQ::NeuronIndexCountQuant,
-                                > = NeuronCorticalLocalIndex::from(
-                                    *neuron_engine_i.as_ref()
-                                        - cortical_neuron_offsets
-                                            .engine_to_local_neuron_index_offset,
-                                );
+                            for _ in 0..num_neurons_in_byte {
+                                
+                                // neuron_engine_i is the neuron engine level index
+                                
+                                let neuron_runtime_flags = data.neuron_runtime_flags.get_par(neuron_engine_i);
+                                
+                                if !neuron_runtime_flags.get_force_off() {
+                                    // If a neuron is disabled, do not
+                                    // run the neuron, just skip it
+                                    neuron_engine_i += NeuronEngineIndex::QUANT_ONE;
+                                    continue;
+                                }
+                                
                                 let neuron_mp_i: NeuronMPIndex<FIQ::NeuronIndexCountQuant> =
                                     NeuronMPIndex::from(
                                         *neuron_engine_i.as_ref()
                                             - cortical_neuron_offsets
                                                 .engine_to_mp_quant_neuron_index,
                                     );
+                                
+                                let fcl = data.neuron_fcl.float_32.get_mut_par(neuron_mp_i);
+                                if *fcl == 0.0 {
+                                    neuron_engine_i += NeuronEngineIndex::QUANT_ONE;
+                                    continue; // no need to check if the neuron isnt active
+                                }
+                                
+                                
+                                let neuron_local_i: NeuronCorticalLocalIndex<
+                                    FIQ::NeuronIndexCountQuant,
+                                > = NeuronCorticalLocalIndex::from(
+                                    *neuron_engine_i.as_ref()
+                                        - cortical_neuron_offsets
+                                        .engine_to_local_neuron_index_offset,
+                                );
+                                
+                                
+                                
+                                let mp = data.neuron_mp.float_32.get_mut_par(neuron_mp_i);
+                                
+                                
+
+
+
+
                                 let neuron_psp_uni_i: NeuronPSPUniformIndex<
                                     FIQ::NeuronIndexCountQuant,
                                 > = NeuronPSPUniformIndex::from(
                                     *neuron_engine_i.as_ref()
                                         - cortical_neuron_offsets.engine_to_psp_uniformity_index,
                                 );
+
+
+
                                 let neuron_history_i: NeuronHistoryIndex<
                                     FIQ::NeuronIndexCountQuant,
                                 > = NeuronHistoryIndex::from(
                                     *neuron_engine_i.as_ref()
                                         - cortical_neuron_offsets
-                                            .engine_to_neuron_history_index_offset,
+                                        .engine_to_neuron_history_index_offset,
                                 );
 
 
-
-
-                                // TODO we will need proper translation tables for engine index -> mp quant index
-                                let neuron_mp_i: NeuronMPIndex<FIQ::NeuronIndexCountQuant> =
-                                    NeuronMPIndex::from(*neuron_engine_i.as_ref());
-
-                                let fcl = data.neuron_fcl.float_32.get_mut_par(neuron_mp_i);
-                                if *fcl == 0.0 {
-                                    neuron_engine_i += NeuronEngineIndex::QUANT_ONE;
-                                    continue; // no need to check if the neuron isnt active
-                                }
-                                let mp = data.neuron_mp.float_32.get_mut_par(neuron_mp_i);
 
                                 // TODO data
                                 let cortical_layout = CorticalAreaLayoutDataDimensional {
@@ -183,6 +209,7 @@ impl RayonNeuronProcessing {
     }
 }
 
+
 fn increment_burst_counter<FIQ: FeagiIndexQuantization>(data: &mut RayonEngineData<FIQ>) {
     if *data.burst_index.as_ref() == FIQ::GlobalBurstIndexQuant::QUANT_MAX {
         // OVERFLOW!
@@ -195,3 +222,4 @@ fn increment_burst_counter<FIQ: FeagiIndexQuantization>(data: &mut RayonEngineDa
         *data.burst_index.as_mut() += FIQ::GlobalBurstIndexQuant::QUANT_MAX;
     }
 }
+

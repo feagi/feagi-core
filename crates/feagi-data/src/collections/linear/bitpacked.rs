@@ -110,7 +110,7 @@ fn number_bits_to_number_bytes(n: usize) -> usize {
 /// because bits within a byte are not independently addressable.
 ///
 /// Implementors only need to expose their backing storage via [`Self::as_bytes`]
-/// and their logical bit count via [`Self::number_bits`] (plus the [`Index`]
+/// and their logical bit count via [`Self::number_addressable_bits`] (plus the [`Index`]
 /// impls required by the supertrait bounds); everything else is provided as
 /// default methods.
 ///
@@ -124,7 +124,7 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>:
     fn as_bytes(&self) -> &[u8];
 
     /// Total number of addressable bits (booleans) held by this collection.
-    fn number_bits(&self) -> QI;
+    fn number_addressable_bits(&self) -> QI;
 
     /// Number of bytes backing this collection.
     fn number_bytes(&self) -> QI {
@@ -132,21 +132,21 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>:
     }
 
     /// Number of unused ("dangling") bits in the final byte, i.e. the bits of
-    /// the backing storage beyond [`Self::number_bits`].
+    /// the backing storage beyond [`Self::number_addressable_bits`].
     fn number_dangling_bits(&self) -> u8 {
         let capacity = self.as_bytes().len() * 8;
-        (capacity - self.number_bits().to_usize()) as u8
+        (capacity - self.number_addressable_bits().to_usize()) as u8
     }
 
     /// Returns `true` if there are no bits.
     fn is_empty(&self) -> bool {
-        self.number_bits() == QI::QUANT_ZERO
+        self.number_addressable_bits() == QI::QUANT_ZERO
     }
 
     /// Copies out the bit at `index`, or `None` if out of bounds.
     fn get_bit(&self, index: QI) -> Option<bool> {
         let bit = index.to_usize();
-        if bit >= self.number_bits().to_usize() {
+        if bit >= self.number_addressable_bits().to_usize() {
             return None;
         }
         let byte = self.as_bytes()[bit / 8];
@@ -160,7 +160,7 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>:
 
     /// Borrows the whole collection as a [`BitPackedSlice`] view.
     fn as_bit_packed_slice(&self) -> BitPackedSlice<'_, QI> {
-        BitPackedSlice::new(self.as_bytes(), self.number_bits())
+        BitPackedSlice::new(self.as_bytes(), self.number_addressable_bits())
     }
 
     /// Borrows a half-open *byte* sub-range as a [`BitPackedSlice`] view. The
@@ -193,7 +193,7 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>:
     /// byte will cover a range less than 8. This function will return less than 8 if thats the case
     fn get_number_bits_remaining_from_byte_unchecked(&self, byte_index: QI) -> u8 {
         let first_index = self.get_first_bit_index_from_byte_unchecked(byte_index);
-        let bits_remaining = (self.number_bits() - first_index).to_usize();
+        let bits_remaining = (self.number_addressable_bits() - first_index).to_usize();
         bits_remaining.min(8) as u8
     }
 
@@ -223,7 +223,7 @@ pub trait BitPackedMutTrait<QI: QuantizedIndexCountTrait>:
     /// bounds (otherwise leaves the collection untouched).
     fn set_bit(&mut self, index: QI, value: bool) -> Option<bool> {
         let bit = index.to_usize();
-        if bit >= self.number_bits().to_usize() {
+        if bit >= self.number_addressable_bits().to_usize() {
             return None;
         }
         let byte = &mut self.as_mut_bytes()[bit / 8];
@@ -403,7 +403,7 @@ impl<QI: QuantizedIndexCountTrait> BitPackedTrait<QI> for BitPackedVector<QI> {
         &self.data
     }
 
-    fn number_bits(&self) -> QI {
+    fn number_addressable_bits(&self) -> QI {
         self.number_bits
     }
 }
@@ -486,7 +486,7 @@ impl<'a, QI: QuantizedIndexCountTrait> BitPackedTrait<QI> for BitPackedSlice<'a,
         self.data
     }
 
-    fn number_bits(&self) -> QI {
+    fn number_addressable_bits(&self) -> QI {
         self.number_bits
     }
 }
@@ -553,7 +553,7 @@ impl<'a, QI: QuantizedIndexCountTrait> BitPackedTrait<QI> for BitPackedSliceMut<
         self.data
     }
 
-    fn number_bits(&self) -> QI {
+    fn number_addressable_bits(&self) -> QI {
         self.number_bits
     }
 }
@@ -645,7 +645,7 @@ impl<QI: QuantizedIndexCountTrait, const N: usize> BitPackedTrait<QI> for BitPac
         &self.data
     }
 
-    fn number_bits(&self) -> QI {
+    fn number_addressable_bits(&self) -> QI {
         self.number_bits
     }
 }

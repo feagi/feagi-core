@@ -219,7 +219,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-npu-dynamics"
+name = "feagi-npu-dynamic-allocator"
 version = "0.1.0"
 
 [[package]]

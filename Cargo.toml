@@ -152,54 +152,7 @@ feagi-data = {path = "crates/feagi-data"}
 
 [workspace]
 resolver = "2"
-members = [
-    # === Errors and Logs ===
-    "crates/feagi-logging-and-errors", # Base FEAGI Error and logging macros and trait definitions, Since everything depends on this, this is effectively the root!
-    "crates/feagi-logging-and-errors/feagi-logging-and-errors-derive", # derive crate for logging and errors
-
-    # === Base Data Types ===
-    "crates/feagi-data", # Holds common data structures that are the backbone of many data operations of FEAGI
-
-    # === Genome ===
-    "crates/feagi-genomic", # Crate that holds genomic subcrates
-    "crates/feagi-genomic/feagi-genomic-context", # Contains Identifiers and enums to identify specific genome structures
-    "crates/feagi-genomic/feagi-genomic-data", # Structures to describe the state of genome structures, used as high level connectome abstractions
-
-    # === Neuron Processing ===
-    "crates/feagi-npu", # Crate that holds NPU Subcrates
-    "crates/feagi-npu/feagi-npu-common", # Common structs and functions used by other NPU subcrates
-    "crates/feagi-npu/feagi-npu-models", # Definitions for the neuron and synapse biological simulation models
-    "crates/feagi-npu/feagi-npu-dynamics", # Systems for modifying the connectome at runtime and validating changes
-
-
-    # === Algorithm Layer ===
-    #"crates/feagi-agent", # Agent library (Rust client library)
-
-    #"crates/feagi-structures/feagi-genome-definitions", # Holds structs and definitions of various genome identifiers or common definitions used acrosss crates, such as CorticalID. Also holds definitions for cortical_area units
-
-    #"crates/feagi-config",             # Configuration loader (TOML + overrides)
-
-
-    
-    # === Platform HALs ===
-    #"crates/feagi-hal",                # Hardware Abstraction Layer (HAL) - platform abstraction + implementations (ESP32, Arduino, etc.)
-    
-    # === Infrastructure Layer (Cross-Cutting) ===
-    #"crates/feagi-state-manager",      # Runtime state management
-    #"crates/feagi-evolutionary",                # Genome I/O and evolution (genotype)
-    #"crates/feagi-services",           # Service layer (stable application boundary)
-    #"crates/feagi-api",                # REST API layer (HTTP + ZMQ transports)
-    #"crates/feagi-observability",      # Unified observability (logging, telemetry, profiling)
-    
-    # === Algorithm Layer ===
-    #"crates/feagi-brain-development",                # Neurogenesis (brain development)
-    
-    # === Agent Layer ===
-    #"crates/feagi-io",                 # I/O System (ZMQ/UDP transport)
-    #"crates/feagi-agent",              # Agent library (Rust client library)
-    #"crates/feagi-sensorimotor",  # Sensorimotor System - data processing & encoding (sensory & motor)
-    #"crates/feagi-serialization", # Data serialization formats
-]
+members = ["crates/feagi-logging-and-errors", "crates/feagi-logging-and-errors/feagi-logging-and-errors-derive", "crates/feagi-data", "crates/feagi-genomic", "crates/feagi-genomic/feagi-genomic-context", "crates/feagi-genomic/feagi-genomic-data", "crates/feagi-npu", "crates/feagi-npu/feagi-npu-common", "crates/feagi-npu/feagi-npu-models", "crates/feagi-npu/feagi-npu-dynamic-allocator"]
 
 [workspace.package]
 version = "0.0.12"
