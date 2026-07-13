@@ -8,4 +8,4 @@ mod sensor_cortical_units;
 pub mod motor_cortical_unit;
 pub mod sensor_cortical_unit;
 
-pub use indexes::{CorticalUnitIndex, CorticalSubUnitIndex};
+pub use indexes::{CorticalSubUnitIndex, CorticalUnitIndex};

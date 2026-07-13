@@ -1,4 +1,3 @@
-
 // TODO add equals, hash
 
 //region Internal macros

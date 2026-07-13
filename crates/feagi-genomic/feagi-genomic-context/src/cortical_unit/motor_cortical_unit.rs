@@ -1,14 +1,15 @@
+use crate::cortical_area::io_cortical_area_configuration_flag::{
+    FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning, PoseSchema,
+};
+use crate::cortical_area::{CorticalAreaType, CorticalID};
+use crate::cortical_unit::sensor_cortical_unit::UnitTopology;
+use crate::cortical_unit::{CorticalSubUnitIndex, CorticalUnitIndex};
+use crate::feagi_genome_context_error::FeagiGenomeContextError;
+use crate::motor_cortical_units;
+use paste;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use paste;
-use crate::cortical_area::{CorticalAreaType, CorticalID};
-use crate::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning, PoseSchema};
-use crate::cortical_unit::{CorticalSubUnitIndex, CorticalUnitIndex};
-use crate::cortical_unit::sensor_cortical_unit::UnitTopology;
-use crate::feagi_genome_context_error::FeagiGenomeContextError;
-use crate::motor_cortical_units;
-
 
 // Helper macro to handle optional allowed_frame_change_handling
 #[macro_export]
@@ -242,66 +243,23 @@ impl MotorCorticalUnit {
         let fh = FrameChangeHandling::Absolute;
         let pos = PercentageNeuronPositioning::Linear;
         match self {
-            MotorCorticalUnit::RotaryMotor => {
-                Self::get_cortical_ids_array_for_rotary_motor_with_parameters(fh, pos, group_index)
-                    [0]
-            }
+            MotorCorticalUnit::RotaryMotor => Self::get_cortical_ids_array_for_rotary_motor_with_parameters(fh, pos, group_index)[0],
             MotorCorticalUnit::PositionalServo => {
-                Self::get_cortical_ids_array_for_positional_servo_with_parameters(
-                    FrameChangeHandling::Absolute,
-                    pos,
-                    group_index,
-                )[0]
+                Self::get_cortical_ids_array_for_positional_servo_with_parameters(FrameChangeHandling::Absolute, pos, group_index)[0]
             }
-            MotorCorticalUnit::Gaze => {
-                Self::get_cortical_ids_array_for_gaze_with_parameters(fh, pos, group_index)[0]
-            }
-            MotorCorticalUnit::MiscData => {
-                Self::get_cortical_ids_array_for_misc_data_with_parameters(fh, group_index)[0]
-            }
-            MotorCorticalUnit::TextEnglishOutput => {
-                Self::get_cortical_ids_array_for_text_english_output_with_parameters(
-                    fh,
-                    group_index,
-                )[0]
-            }
-            MotorCorticalUnit::CountOutput => {
-                Self::get_cortical_ids_array_for_count_output_with_parameters(fh, pos, group_index)
-                    [0]
-            }
-            MotorCorticalUnit::ObjectSegmentation => {
-                Self::get_cortical_ids_array_for_object_segmentation_with_parameters(
-                    fh,
-                    group_index,
-                )[0]
-            }
-            MotorCorticalUnit::SimpleVisionOutput => {
-                Self::get_cortical_ids_array_for_simple_vision_output_with_parameters(
-                    fh,
-                    group_index,
-                )[0]
-            }
+            MotorCorticalUnit::Gaze => Self::get_cortical_ids_array_for_gaze_with_parameters(fh, pos, group_index)[0],
+            MotorCorticalUnit::MiscData => Self::get_cortical_ids_array_for_misc_data_with_parameters(fh, group_index)[0],
+            MotorCorticalUnit::TextEnglishOutput => Self::get_cortical_ids_array_for_text_english_output_with_parameters(fh, group_index)[0],
+            MotorCorticalUnit::CountOutput => Self::get_cortical_ids_array_for_count_output_with_parameters(fh, pos, group_index)[0],
+            MotorCorticalUnit::ObjectSegmentation => Self::get_cortical_ids_array_for_object_segmentation_with_parameters(fh, group_index)[0],
+            MotorCorticalUnit::SimpleVisionOutput => Self::get_cortical_ids_array_for_simple_vision_output_with_parameters(fh, group_index)[0],
             MotorCorticalUnit::PoseEstimation => {
-                Self::get_cortical_ids_array_for_pose_estimation_with_parameters(
-                    fh,
-                    PoseSchema::HumanBody,
-                    group_index,
-                )[0]
+                Self::get_cortical_ids_array_for_pose_estimation_with_parameters(fh, PoseSchema::HumanBody, group_index)[0]
             }
             MotorCorticalUnit::DynamicImageProcessing => {
-                Self::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(
-                    fh,
-                    pos,
-                    group_index,
-                )[0]
+                Self::get_cortical_ids_array_for_dynamic_image_processing_with_parameters(fh, pos, group_index)[0]
             }
-            MotorCorticalUnit::SpatialPointer => {
-                Self::get_cortical_ids_array_for_spatial_pointer_with_parameters(
-                    fh,
-                    pos,
-                    group_index,
-                )[0]
-            }
+            MotorCorticalUnit::SpatialPointer => Self::get_cortical_ids_array_for_spatial_pointer_with_parameters(fh, pos, group_index)[0],
         }
     }
 }

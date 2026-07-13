@@ -1,4 +1,3 @@
-
 // NOTE: Force Off and Force Fire directly impact firing in the NPU, but are not meant to be
 // controlled directly by the genome developer. Force Off takes priority and will stop any neuron
 // regardless of anything else, while Force Fire will allow neuron dynamics to play out as normal
@@ -15,25 +14,20 @@ impl NeuronRuntimeFlags {
     const BITMASK_NEURON_FORCE_OFF: u8 = 1 << 0;
     const BITMASK_FORCE_FIRE: u8 = 1 << 1;
     const BITMASK_KEEP_MP_CONSTANT: u8 = 1 << 2;
-    
+
     pub fn get_force_off(self) -> bool {
         (self.0 & Self::BITMASK_NEURON_FORCE_OFF) != 0
     }
-    
+
     pub fn get_force_fire(self) -> bool {
         (self.0 & Self::BITMASK_FORCE_FIRE) != 0
     }
-    
+
     pub fn get_keep_mp_constant(self) -> bool {
         (self.0 & Self::BITMASK_KEEP_MP_CONSTANT) != 0
     }
-    
-    pub fn new(
-        is_enabled: bool,
-        force_fire: bool,
-        keep_mp_constant: bool,
-    ) -> NeuronRuntimeFlags
-    {
+
+    pub fn new(is_enabled: bool, force_fire: bool, keep_mp_constant: bool) -> NeuronRuntimeFlags {
         let mut out = 0u8;
         if is_enabled {
             out |= Self::BITMASK_NEURON_FORCE_OFF;
@@ -47,7 +41,3 @@ impl NeuronRuntimeFlags {
         NeuronRuntimeFlags(out)
     }
 }
-
-
-
-

@@ -1,4 +1,3 @@
-
 // TODO methods to convert cortical_area area type to this
 
 #[repr(u8)]
@@ -7,5 +6,5 @@ pub enum DimensionCorticalAreaType {
     Sensor,
     Motor,
     Core,
-    Custom
+    Custom,
 }

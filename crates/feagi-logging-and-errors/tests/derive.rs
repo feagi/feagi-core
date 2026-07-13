@@ -48,11 +48,7 @@ fn error_enum_derive_wraps_error_keys() {
 
 #[test]
 fn error_enum_derive_wraps_nested_errors() {
-    let error = RuntimeError::Genome(GenomeError::MissingGenome(MissingGenomeKey::new(
-        "missing genome",
-        7,
-        3,
-    )));
+    let error = RuntimeError::Genome(GenomeError::MissingGenome(MissingGenomeKey::new("missing genome", 7, 3)));
 
     assert_eq!(error.context(), "missing genome");
     assert_eq!(error.to_string(), "missing genome");

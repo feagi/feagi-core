@@ -80,12 +80,7 @@ fn walk_estimates(dir: &Path) -> HashMap<String, Value> {
                 continue;
             }
             // Expect .../<bench...>/new/estimates.json
-            if path
-                .parent()
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-                != Some("new")
-            {
+            if path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()) != Some("new") {
                 continue;
             }
 
@@ -95,15 +90,8 @@ fn walk_estimates(dir: &Path) -> HashMap<String, Value> {
             };
 
             // Build ID: rel path without trailing /new/estimates.json, using '/' separators.
-            let rel_str = rel
-                .components()
-                .map(|c| c.as_os_str().to_string_lossy())
-                .collect::<Vec<_>>()
-                .join("/");
-            let id = rel_str
-                .strip_suffix("/new/estimates.json")
-                .unwrap_or(&rel_str)
-                .to_string();
+            let rel_str = rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
+            let id = rel_str.strip_suffix("/new/estimates.json").unwrap_or(&rel_str).to_string();
 
             out.insert(id, read_json(&path));
         }
@@ -121,23 +109,10 @@ fn main() {
     let (baseline_path, criterion_dir) = parse_args();
 
     let baseline = read_json(&baseline_path);
-    let suite = baseline
-        .get("suite")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown");
-    let stat = baseline
-        .get("stat")
-        .and_then(|v| v.as_str())
-        .unwrap_or("median");
-    let default_max_regression_ratio = baseline
-        .get("default_max_regression_ratio")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(1.5);
-    let benchmarks = baseline
-        .get("benchmarks")
-        .and_then(|v| v.as_array())
-        .unwrap_or(&Vec::new())
-        .clone();
+    let suite = baseline.get("suite").and_then(|v| v.as_str()).unwrap_or("unknown");
+    let stat = baseline.get("stat").and_then(|v| v.as_str()).unwrap_or("median");
+    let default_max_regression_ratio = baseline.get("default_max_regression_ratio").and_then(|v| v.as_f64()).unwrap_or(1.5);
+    let benchmarks = baseline.get("benchmarks").and_then(|v| v.as_array()).unwrap_or(&Vec::new()).clone();
 
     if default_max_regression_ratio <= 1.0 {
         eprintln!(
@@ -149,10 +124,7 @@ fn main() {
 
     let current = walk_estimates(&criterion_dir);
     if current.is_empty() {
-        eprintln!(
-            "No Criterion estimates found under {}",
-            criterion_dir.display()
-        );
+        eprintln!("No Criterion estimates found under {}", criterion_dir.display());
         process::exit(2);
     }
 
@@ -177,10 +149,7 @@ fn main() {
             continue;
         };
         let Some(baseline_ns) = b.get("baseline_ns").and_then(|v| v.as_f64()) else {
-            eprintln!(
-                "[perf_compare] INVALID baseline entry (missing baseline_ns): {}",
-                id
-            );
+            eprintln!("[perf_compare] INVALID baseline entry (missing baseline_ns): {}", id);
             failed += 1;
             continue;
         };
@@ -202,10 +171,7 @@ fn main() {
         };
 
         if baseline_ns <= 0.0 {
-            eprintln!(
-                "[perf_compare] INVALID baseline_ns for {}: {}",
-                id, baseline_ns
-            );
+            eprintln!("[perf_compare] INVALID baseline_ns for {}: {}", id, baseline_ns);
             failed += 1;
             continue;
         }
@@ -222,10 +188,7 @@ fn main() {
     }
 
     if failed > 0 {
-        eprintln!(
-            "[perf_compare] Regression detected: {} failing benchmark(s)",
-            failed
-        );
+        eprintln!("[perf_compare] Regression detected: {} failing benchmark(s)", failed);
         process::exit(1);
     }
 

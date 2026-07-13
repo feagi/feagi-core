@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialCPUQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_npu_common::wrapped_indexes::{CorticalModelIndexedVector, NeuronModelIndexedVector};
+use feagi_models::burst_index::{CorticalModelIndexedVector, NeuronModelIndexedVector};
 use feagi_npu_models::neuron_models::feagi_standard::data::{FeagiStandardModelCorticalData, FeagiStandardModelNeuronData};
 use feagi_npu_models::neuron_models::feagi_standard::quantization::FeagiStandardModelStandard32BitQuant;
 use feagi_npu_models::neuron_models::neuron_model_traits::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
@@ -16,7 +16,7 @@ pub struct NeuronModelDataContainer<FIQ: FeagiIndexQuantization> {
         FeagiStandardModelStandard32BitQuant,
         FeagiStandardModelCorticalData<FeagiStandardModelStandard32BitQuant>,
     >,
-    pub feagi_standard_float_32: ModelQuantTypedNeuronData
+    pub neuron_feagi_standard_float_32: ModelQuantTypedNeuronData
     <
         FIQ, 
         FeagiStandardModelStandard32BitQuant,
@@ -34,7 +34,7 @@ where
     NMCD: NeuronModelCorticalData<CPQ>,
 
 {
-    cortical_areas: CorticalModelIndexedVector<FIQ::CorticalAreaIndexCountQuant, NMCD>,
+    pub cortical_areas: CorticalModelIndexedVector<FIQ::CorticalAreaIndexCountQuant, NMCD>,
     _p: PhantomData<CPQ>,
 }
 
@@ -47,7 +47,7 @@ where
     NMND: NeuronModelNeuronData<CPQ>,
     
 {
-    neurons: NeuronModelIndexedVector<FIQ::NeuronIndexCountQuant, NMND>,
+    pub neurons: NeuronModelIndexedVector<FIQ::NeuronIndexCountQuant, NMND>,
     _p: PhantomData<CPQ>,
 }
 

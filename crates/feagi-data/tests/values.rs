@@ -8,13 +8,13 @@ use std::collections::HashSet;
 use feagi_data::values::percentage::PercentageUnsigned;
 use feagi_data::values::quantizable::custom_data_types::StorageF8;
 
-use feagi_data::values::quantizable::{QuantizationLevel, QuantizedDecimalTrait, QuantizedElementBase, QuantizedIndexCountTrait, QuantizedSignedIntegerTrait, QuantizedUnsignedIntegerTrait};
-use feagi_data::values::spatial::integer_signed::{
-    SignedCoordinate2D, SignedCoordinate3D, SignedCoordinate4D,
+use feagi_data::values::quantizable::{
+    QuantizationLevel, QuantizedDecimalTrait, QuantizedElementBase, QuantizedIndexCountTrait, QuantizedSignedIntegerTrait,
+    QuantizedUnsignedIntegerTrait,
 };
+use feagi_data::values::spatial::integer_signed::{SignedCoordinate2D, SignedCoordinate3D, SignedCoordinate4D};
 use feagi_data::values::spatial::quantizable_index::{
-    QuantizedIndexCoord2D, QuantizedIndexCoord3D, QuantizedIndexCoord4D,
-    QuantizedIndexDimension2D, QuantizedIndexDimension3D,
+    QuantizedIndexCoord2D, QuantizedIndexCoord3D, QuantizedIndexCoord4D, QuantizedIndexDimension2D, QuantizedIndexDimension3D,
 };
 
 // The wrapper macros are `#[macro_export]`ed, so they are reachable from the crate root.
@@ -49,10 +49,7 @@ fn quantization_level_minimum_for_usize() {
     assert_eq!(QuantizationLevel::minimum_quantization_needed_for_usize(65_534), Bit16);
     assert_eq!(QuantizationLevel::minimum_quantization_needed_for_usize(65_535), Bit32);
     assert_eq!(QuantizationLevel::minimum_quantization_needed_for_usize(1_000_000), Bit32);
-    assert_eq!(
-        QuantizationLevel::minimum_quantization_needed_for_usize(u32::MAX as usize),
-        Bit64
-    );
+    assert_eq!(QuantizationLevel::minimum_quantization_needed_for_usize(u32::MAX as usize), Bit64);
 }
 
 #[test]
@@ -92,7 +89,6 @@ fn quantized_index_count_u32_conversions() {
     assert_eq!(<u8 as QuantizedIndexCountTrait>::from_u32_clamped(100), 100u8);
     assert_eq!(<u16 as QuantizedIndexCountTrait>::from_u32_clamped(70_000), u16::MAX);
 }
-
 
 //endregion
 
@@ -158,11 +154,10 @@ fn supports_uint_ops() {
     assert_eq!(<u8>::QUANT_MAX, u8::MAX);
     assert_eq!(<u8>::QUANT_MAX_AS_USIZE, u8::MAX as usize);
 
-
     //endregion
 
     //region QuantizedUnsignedIntegerTrait (marker trait)
-    
+
     //endregion
 
     //region StorageF8 custom data type

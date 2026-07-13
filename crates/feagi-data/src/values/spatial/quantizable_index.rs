@@ -1,4 +1,3 @@
-
 // TODO check coordinate fit in dimension func in macro
 // TODO right now the linear / coordinate index uses integer division, which is rather slow. We may want to use iterators instead
 // TODO iter with coordinates within the dims
@@ -221,8 +220,6 @@ create_dimension!(
     (0, x), (1, y)
 );
 
-
-
 create_coordinate!(
     /// A 3D quantizable index coordinate
     pub QuantizedIndexCoord3D,
@@ -238,8 +235,6 @@ create_dimension!(
     (0, x), (1, y), (2, z)
 );
 
-
-
 create_coordinate!(
     /// A 4D quantizable index coordinate
     pub QuantizedIndexCoord4D,
@@ -254,5 +249,3 @@ create_dimension!(
     4,
     (0, x), (1, y), (2, z), (3, w)
 );
-
-

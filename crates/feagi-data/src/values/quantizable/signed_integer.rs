@@ -1,8 +1,7 @@
 use crate::values::quantizable::QuantizedElementBase;
 
 /// Trait designed to hold Sint data values in a quantized form
-pub trait QuantizedSignedIntegerTrait: QuantizedElementBase
-{
+pub trait QuantizedSignedIntegerTrait: QuantizedElementBase {
     fn is_negative(&self) -> bool;
     fn is_zero_or_negative(&self) -> bool;
 }

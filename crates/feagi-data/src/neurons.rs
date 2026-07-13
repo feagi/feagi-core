@@ -1,6 +1,10 @@
-use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate, create_wrapped_quantized_index_dimension};
 use crate::neuron_voxels::wrapped_values::NeuronVoxelCoordinateAxis;
+use crate::values::quantizable::QuantizedIndexCountTrait;
 use crate::values::spatial::quantizable_index::{QuantizedIndexCoord4D, QuantizedIndexDimension4D};
+use crate::{
+    create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate,
+    create_wrapped_quantized_index_dimension,
+};
 
 create_wrapped_quantized_decimal!(
     /// The membrane potential of a single neuron (NOT VOXEL)
@@ -11,6 +15,12 @@ create_wrapped_quantized_index!(
     /// Index of a neuron within a voxel. Most voxels only have 1 neuron, but some have more
     pub NeuronVoxelDensityIndex
 );
+
+impl<Q: QuantizedIndexCountTrait> Default for NeuronVoxelDensityIndex<Q> {
+    fn default() -> Self {
+        NeuronVoxelDensityIndex(Q::QUANT_ONE)
+    }
+}
 
 create_wrapped_quantized_index!(
     /// Index of a neuron relative to its parent cortical area

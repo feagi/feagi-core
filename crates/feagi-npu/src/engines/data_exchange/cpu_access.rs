@@ -2,7 +2,7 @@ use core::ops::Range;
 use core::marker::PhantomData;
 use ahash::HashMap;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
-use feagi_npu_common::wrapped_indexes::{CorticalConnectomeIndex, NeuronEngineIndex};
+use feagi_models::burst_index::{CorticalConnectomeIndex, NeuronEngineIndex};
 
 pub struct EngineDataReader<FIQ: FeagiIndexQuantization, DataType> {
     area_mappings: HashMap<

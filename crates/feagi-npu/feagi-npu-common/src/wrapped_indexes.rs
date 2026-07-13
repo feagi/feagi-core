@@ -1,9 +1,6 @@
-use feagi_data::{
-    create_wrapped_contiguous_slice, create_wrapped_contiguous_slice_mut,
-    create_wrapped_contiguous_vector, create_wrapped_quantized_index,
-};
+// TODO the following macro should be common throughout
 
-// TODO the following macro should be common througout
+use feagi_data::{create_wrapped_quantized_index, create_wrapped_contiguous_slice, create_wrapped_contiguous_slice_mut, create_wrapped_contiguous_vector};
 
 /// Given a name and level, creates a linear index type, and slice, slicemut, vector structs of it
 macro_rules! make_index_and_linear_collections {
@@ -40,11 +37,6 @@ macro_rules! make_index_and_linear_collections {
         }
     };
 }
-
-create_wrapped_quantized_index!(
-    /// The current burst index of a given engine
-    pub BurstIndex
-);
 
 // Neuron Indexing
 make_index_and_linear_collections!(

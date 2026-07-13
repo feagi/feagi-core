@@ -1,16 +1,15 @@
-use half::f16;
 use crate::values::quantizable::custom_data_types::StorageF8;
 use crate::values::quantizable::QuantizationLevel;
+use half::f16;
 
 /// Common base for all quantizable types
 #[doc(hidden)]
-pub trait QuantizedElementBase:
-{
+pub trait QuantizedElementBase {
     const QUANTIZATION_LEVEL: QuantizationLevel;
     const QUANT_ZERO: Self;
 }
 
-impl QuantizedElementBase for usize{
+impl QuantizedElementBase for usize {
     // Sizing can vary depending on build type
     #[cfg(target_pointer_width = "64")]
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit64;
@@ -41,8 +40,7 @@ impl QuantizedElementBase for u64 {
 
 // Lol no we are not doing u128 or i128
 
-
-impl QuantizedElementBase for isize{
+impl QuantizedElementBase for isize {
     // Sizing can vary depending on build type
     #[cfg(target_pointer_width = "64")]
     const QUANTIZATION_LEVEL: QuantizationLevel = QuantizationLevel::Bit64;

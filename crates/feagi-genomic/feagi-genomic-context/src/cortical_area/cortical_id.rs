@@ -1,9 +1,9 @@
-use base64::Engine;
-use base64::engine::general_purpose;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use crate::cortical_area::{CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType};
 use crate::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
+use crate::cortical_area::{CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType};
 use crate::feagi_genome_context_error::{FeagiCorticalIDErrKey, FeagiGenomeContextError};
+use base64::engine::general_purpose;
+use base64::Engine;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 // TODO remove base64!
 
@@ -41,9 +41,7 @@ impl CorticalID {
 
     //region Constructors
 
-    pub fn try_from_bytes(
-        bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH],
-    ) -> Result<Self, FeagiGenomeContextError> {
+    pub fn try_from_bytes(bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH]) -> Result<Self, FeagiGenomeContextError> {
         match_bytes_by_cortical_type!(bytes,
             custom => {
                 Ok(CorticalID {bytes: *bytes})
@@ -79,17 +77,12 @@ impl CorticalID {
     }
 
     pub fn try_from_base_64(str: &str) -> Result<Self, FeagiGenomeContextError> {
-        let decoded = general_purpose::STANDARD.decode(str).map_err(|_| {
-            FeagiCorticalIDErrKey::new(
-                "failed to decode cortical area ID from base64"
-            ).into()
-        })?;
+        let decoded = general_purpose::STANDARD
+            .decode(str)
+            .map_err(|_| FeagiCorticalIDErrKey::new("failed to decode cortical area ID from base64").into())?;
 
         if decoded.len() != Self::CORTICAL_ID_LENGTH {
-            return Err(FeagiCorticalIDErrKey::new(
-                "Base 64 is wrong length for cortical ID"
-            ).into()
-            );
+            return Err(FeagiCorticalIDErrKey::new("Base 64 is wrong length for cortical ID").into());
         }
 
         let mut bytes = [0u8; Self::CORTICAL_ID_LENGTH];
@@ -164,11 +157,7 @@ impl CorticalID {
             let subtype_bytes = &self.bytes[1..4];
             String::from_utf8(subtype_bytes.to_vec())
                 .ok()
-                .map(|s| {
-                    s.trim_end_matches('_')
-                        .trim_end_matches('\0')
-                        .to_lowercase()
-                })
+                .map(|s| s.trim_end_matches('_').trim_end_matches('\0').to_lowercase())
                 .filter(|s| !s.is_empty())
         } else {
             None
@@ -231,7 +220,6 @@ impl<'de> Deserialize<'de> for CorticalID {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        CorticalID::try_from_base_64(&s)
-            .map_err(|e| serde::de::Error::custom(format!("Invalid CorticalID: {}", e)))
+        CorticalID::try_from_base_64(&s).map_err(|e| serde::de::Error::custom(format!("Invalid CorticalID: {}", e)))
     }
 }

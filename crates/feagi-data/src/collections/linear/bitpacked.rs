@@ -1,6 +1,6 @@
-use core::ops::{Index, IndexMut, Range};
-use crate::values::quantizable::QuantizedIndexCountTrait;
 use crate::values::feagi_data_value_error::{FeagiInvalidIndexErrKey, FeagiValueError};
+use crate::values::quantizable::QuantizedIndexCountTrait;
+use core::ops::{Index, IndexMut, Range};
 
 /// Generates read-only [`Index`] impls for every std range kind (`Range`,
 /// `RangeInclusive`, `RangeFrom`, `RangeTo`, `RangeFull`) so a bit-packed
@@ -98,7 +98,6 @@ fn number_bits_to_number_bytes(n: usize) -> usize {
     }
 }
 
-
 /// Shared, read-only behaviour for every bit-packed quantized collection in this
 /// module (the owned [`BitPackedVector`], the borrowed [`BitPackedSlice`] /
 /// [`BitPackedSliceMut`] views, and the fixed-size [`BitPackedArray`]).
@@ -117,9 +116,7 @@ fn number_bits_to_number_bytes(n: usize) -> usize {
 /// The [`Index<Range<QI>>`] supertrait lets callers index with a quantized
 /// *byte* range directly (`collection[start..end] -> &[u8]`) instead of
 /// converting to `usize` at every call site.
-pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>:
-    Index<QI, Output = u8> + Index<Range<QI>, Output = [u8]>
-{
+pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>: Index<QI, Output = u8> + Index<Range<QI>, Output = [u8]> {
     /// Borrows the backing storage as a regular shared byte slice.
     fn as_bytes(&self) -> &[u8];
 
@@ -212,9 +209,7 @@ pub trait BitPackedTrait<QI: QuantizedIndexCountTrait>:
 /// Implementors only need to expose their backing storage via
 /// [`Self::as_mut_bytes`].
 pub trait BitPackedMutTrait<QI: QuantizedIndexCountTrait>:
-    BitPackedTrait<QI>
-    + IndexMut<QI, Output = u8>
-    + IndexMut<Range<QI>, Output = [u8]>
+    BitPackedTrait<QI> + IndexMut<QI, Output = u8> + IndexMut<Range<QI>, Output = [u8]>
 {
     /// Mutably borrows the backing storage as a regular byte slice.
     fn as_mut_bytes(&mut self) -> &mut [u8];
@@ -283,7 +278,6 @@ pub trait BitPackedMutTrait<QI: QuantizedIndexCountTrait>:
     }
 }
 
-
 /// Unsafe, index-based parallel *read* access to the *bytes* of a bit-packed
 /// quantized collection.
 ///
@@ -294,9 +288,7 @@ pub trait BitPackedMutTrait<QI: QuantizedIndexCountTrait>:
 ///
 /// Only byte access is offered: individual bits within a byte are not
 /// independently addressable, so there is deliberately no parallel bit access.
-pub trait BitPackedParTrait<QI: QuantizedIndexCountTrait>:
-    BitPackedTrait<QI>
-{
+pub trait BitPackedParTrait<QI: QuantizedIndexCountTrait>: BitPackedTrait<QI> {
     /// Raw pointer to the first byte. Valid for reads of [`Self::number_bytes`]
     /// bytes for as long as `self` is borrowed.
     fn as_byte_ptr(&self) -> *const u8 {
@@ -323,9 +315,7 @@ pub trait BitPackedParTrait<QI: QuantizedIndexCountTrait>:
 /// for a shared/read-only view, since [`Self::get_byte_mut_par`] casts a
 /// `*const u8` to `*mut u8`; writing through such a pointer that aliases a shared
 /// borrow is undefined behaviour.
-pub unsafe trait BitPackedParMutTrait<QI: QuantizedIndexCountTrait>:
-    BitPackedParTrait<QI> + BitPackedMutTrait<QI>
-{
+pub unsafe trait BitPackedParMutTrait<QI: QuantizedIndexCountTrait>: BitPackedParTrait<QI> + BitPackedMutTrait<QI> {
     /// Raw mutable pointer to the first byte, derived from a shared `&self`.
     ///
     /// # Safety
@@ -687,7 +677,6 @@ impl<QI: QuantizedIndexCountTrait, const N: usize> From<[u8; N]> for BitPackedAr
 }
 
 //endregion
-
 
 pub fn byte_index_to_first_bit_index(byte_index: usize) -> usize {
     byte_index << 3

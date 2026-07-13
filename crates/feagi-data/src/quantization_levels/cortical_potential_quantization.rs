@@ -9,9 +9,7 @@ pub enum CorticalMembranePotentialQuantizationLevel {
     Float32 = 0,
     Float64 = 1,
     // TODO f16, f8, uint8, sint8, f64
-    
 }
-
 
 impl CorticalMembranePotentialQuantizationLevel {
     /// Gets the enum from a byte without any checks. Invalid bytes will cause undefined behavior!
@@ -40,8 +38,7 @@ pub trait CorticalPotentialCPUQuantization: Clone + Copy {
 pub struct CorticalPotentialQuantizationCPUFloat32;
 
 impl CorticalPotentialCPUQuantization for CorticalPotentialQuantizationCPUFloat32 {
-    const QUANTIZATION_LEVEL: CorticalMembranePotentialQuantizationLevel =
-        CorticalMembranePotentialQuantizationLevel::Float32;
+    const QUANTIZATION_LEVEL: CorticalMembranePotentialQuantizationLevel = CorticalMembranePotentialQuantizationLevel::Float32;
     type MembranePotentialQuant = f32;
 }
 
@@ -49,8 +46,7 @@ impl CorticalPotentialCPUQuantization for CorticalPotentialQuantizationCPUFloat3
 pub struct CorticalPotentialQuantizationCPUFloat64;
 
 impl CorticalPotentialCPUQuantization for CorticalPotentialQuantizationCPUFloat64 {
-    const QUANTIZATION_LEVEL: CorticalMembranePotentialQuantizationLevel =
-        CorticalMembranePotentialQuantizationLevel::Float64;
+    const QUANTIZATION_LEVEL: CorticalMembranePotentialQuantizationLevel = CorticalMembranePotentialQuantizationLevel::Float64;
     type MembranePotentialQuant = f64;
 }
 

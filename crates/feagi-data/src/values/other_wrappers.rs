@@ -1,4 +1,3 @@
-
 #[macro_export]
 macro_rules! create_wrapped_index {
     (

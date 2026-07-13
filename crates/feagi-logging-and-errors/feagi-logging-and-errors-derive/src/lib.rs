@@ -38,10 +38,7 @@ fn expand_error_key(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream>
             }
         },
         _ => {
-            return Err(Error::new_spanned(
-                name,
-                "FeagiErrorKey can only be derived for structs",
-            ));
+            return Err(Error::new_spanned(name, "FeagiErrorKey can only be derived for structs"));
         }
     };
 
@@ -57,10 +54,7 @@ fn expand_error_key(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream>
         if ident == "context" {
             has_context = true;
             if !is_static_str(&field.ty) {
-                return Err(Error::new_spanned(
-                    field.ty,
-                    "the `context` field must have type `&'static str`",
-                ));
+                return Err(Error::new_spanned(field.ty, "the `context` field must have type `&'static str`"));
             }
         }
 
@@ -69,10 +63,7 @@ fn expand_error_key(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream>
     }
 
     if !has_context {
-        return Err(Error::new_spanned(
-            name,
-            "FeagiErrorKey requires a `context: &'static str` field",
-        ));
+        return Err(Error::new_spanned(name, "FeagiErrorKey requires a `context: &'static str` field"));
     }
 
     let opaque_debug_values = field_idents.iter().map(|ident| {
@@ -129,10 +120,7 @@ fn expand_error(input: DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let variants = match input.data {
         Data::Enum(data) => data.variants,
         _ => {
-            return Err(Error::new_spanned(
-                name,
-                "FeagiError can only be derived for enums",
-            ));
+            return Err(Error::new_spanned(name, "FeagiError can only be derived for enums"));
         }
     };
 

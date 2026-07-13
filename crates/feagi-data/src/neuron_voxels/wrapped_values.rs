@@ -1,6 +1,8 @@
-use crate::{create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate, create_wrapped_quantized_index_dimension};
 use crate::values::spatial::quantizable_index::{QuantizedIndexCoord3D, QuantizedIndexDimension3D};
-
+use crate::{
+    create_wrapped_quantized_decimal, create_wrapped_quantized_index, create_wrapped_quantized_index_coordinate,
+    create_wrapped_quantized_index_dimension,
+};
 
 create_wrapped_quantized_decimal!(
     /// Represents the Membrane Potential of the neuron(s) in a voxel. Most of the time, each

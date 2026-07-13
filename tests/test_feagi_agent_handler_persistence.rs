@@ -2,10 +2,7 @@ use feagi_agent::server::auth::DummyAuth;
 use feagi_agent::server::{AgentLivenessConfig, FeagiAgentHandler};
 
 fn build_handler() -> FeagiAgentHandler {
-    FeagiAgentHandler::new_with_liveness_config(
-        Box::new(DummyAuth {}),
-        AgentLivenessConfig::default(),
-    )
+    FeagiAgentHandler::new_with_liveness_config(Box::new(DummyAuth {}), AgentLivenessConfig::default())
 }
 
 #[test]

@@ -1,6 +1,25 @@
 [package]
 name = "feagi-npu-dynamic-allocator"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "Systems to dynamically edit the connectome and make/respond to requests. STD required."
+
+[features]
+# STD / Alloc is required for this crate
+
+# TODO maybe we should have an STD feature flag only to add as a compile time requirement check?
 
 [dependencies]
+paste = { workspace = true}
+feagi-data = {path = "../../feagi-data"}
+feagi-genomic = {path = "../../feagi-genomic"}
+
+
+[lints]
+workspace = true

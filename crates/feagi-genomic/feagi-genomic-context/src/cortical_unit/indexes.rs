@@ -9,4 +9,3 @@ create_wrapped_index!(
     /// Denotes the index for a cortical area within a cortical unit
     pub CorticalSubUnitIndex, u8
 );
-

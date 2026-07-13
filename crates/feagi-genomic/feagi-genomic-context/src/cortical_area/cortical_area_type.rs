@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use crate::cortical_area::CorticalID;
 use crate::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
+use crate::cortical_area::CorticalID;
 use crate::feagi_genome_context_error::{FeagiCorticalTypeErrKey, FeagiGenomeContextError};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize)]
 pub enum CorticalAreaType {
@@ -47,25 +47,15 @@ impl CoreCorticalType {
             b"___death" => Ok(CoreCorticalType::Death),
             b"___power" => Ok(CoreCorticalType::Power),
             b"___fatig" => Ok(CoreCorticalType::Fatigue),
-            _ => Err(
-                FeagiCorticalTypeErrKey::new(
-                    "cortical_area ID bytes do not match a known core cortical_area type"
-                ).into()
-            ),
+            _ => Err(FeagiCorticalTypeErrKey::new("cortical_area ID bytes do not match a known core cortical_area type").into()),
         }
     }
 
     pub fn to_cortical_id(&self) -> CorticalID {
         match self {
-            Self::Death => CorticalID {
-                bytes: *b"___death",
-            },
-            Self::Power => CorticalID {
-                bytes: *b"___power",
-            },
-            Self::Fatigue => CorticalID {
-                bytes: *b"___fatig",
-            },
+            Self::Death => CorticalID { bytes: *b"___death" },
+            Self::Power => CorticalID { bytes: *b"___power" },
+            Self::Fatigue => CorticalID { bytes: *b"___fatig" },
         }
     }
 }

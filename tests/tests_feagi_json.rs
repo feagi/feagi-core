@@ -14,17 +14,13 @@ fn test_json_structure_serialize_deserialize_simple() {
 
     // Serialize to bytes
     let mut sending_container = FeagiByteContainer::new_empty();
-    sending_container
-        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
-        .unwrap();
+    sending_container.overwrite_byte_data_with_single_struct_data(&json_structure, 0).unwrap();
     let bytes = sending_container.get_byte_ref().to_vec();
 
     // Deserialize back (pretend bytes were sent over network)
     let received_boxed = {
         let mut received_container = FeagiByteContainer::new_empty();
-        received_container
-            .try_write_data_by_ownership_to_container_and_verify(bytes)
-            .unwrap();
+        received_container.try_write_data_by_ownership_to_container_and_verify(bytes).unwrap();
         received_container
             .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
             .unwrap()
@@ -76,15 +72,11 @@ fn test_json_structure_serialize_deserialize_complex() {
 
     // Test serialization/deserialization
     let mut sending_container = FeagiByteContainer::new_empty();
-    sending_container
-        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
-        .unwrap();
+    sending_container.overwrite_byte_data_with_single_struct_data(&json_structure, 0).unwrap();
     let bytes = sending_container.get_byte_ref().to_vec();
     let received_boxed = {
         let mut received_container = FeagiByteContainer::new_empty();
-        received_container
-            .try_write_data_by_ownership_to_container_and_verify(bytes)
-            .unwrap();
+        received_container.try_write_data_by_ownership_to_container_and_verify(bytes).unwrap();
         received_container
             .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
             .unwrap()
@@ -104,15 +96,11 @@ fn test_json_structure_empty_object() {
     let json_structure = FeagiJSON::from_json_string(json_string.to_string()).unwrap();
 
     let mut sending_container = FeagiByteContainer::new_empty();
-    sending_container
-        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
-        .unwrap();
+    sending_container.overwrite_byte_data_with_single_struct_data(&json_structure, 0).unwrap();
     let bytes = sending_container.get_byte_ref().to_vec();
     let received_boxed = {
         let mut received_container = FeagiByteContainer::new_empty();
-        received_container
-            .try_write_data_by_ownership_to_container_and_verify(bytes)
-            .unwrap();
+        received_container.try_write_data_by_ownership_to_container_and_verify(bytes).unwrap();
         received_container
             .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
             .unwrap()
@@ -132,15 +120,11 @@ fn test_json_structure_array() {
     let json_structure = FeagiJSON::from_json_value(json_value.clone());
 
     let mut sending_container = FeagiByteContainer::new_empty();
-    sending_container
-        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
-        .unwrap();
+    sending_container.overwrite_byte_data_with_single_struct_data(&json_structure, 0).unwrap();
     let bytes = sending_container.get_byte_ref().to_vec();
     let received_boxed = {
         let mut received_container = FeagiByteContainer::new_empty();
-        received_container
-            .try_write_data_by_ownership_to_container_and_verify(bytes)
-            .unwrap();
+        received_container.try_write_data_by_ownership_to_container_and_verify(bytes).unwrap();
         received_container
             .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
             .unwrap()
@@ -169,15 +153,11 @@ fn test_json_structure_unicode() {
     let json_structure = FeagiJSON::from_json_value(json_value.clone());
 
     let mut sending_container = FeagiByteContainer::new_empty();
-    sending_container
-        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
-        .unwrap();
+    sending_container.overwrite_byte_data_with_single_struct_data(&json_structure, 0).unwrap();
     let bytes = sending_container.get_byte_ref().to_vec();
     let received_boxed = {
         let mut received_container = FeagiByteContainer::new_empty();
-        received_container
-            .try_write_data_by_ownership_to_container_and_verify(bytes)
-            .unwrap();
+        received_container.try_write_data_by_ownership_to_container_and_verify(bytes).unwrap();
         received_container
             .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
             .unwrap()
@@ -207,15 +187,11 @@ fn test_json_structure_max_bytes_consistency() {
     assert_eq!(size1, size2);
 
     let mut sending_container = FeagiByteContainer::new_empty();
-    sending_container
-        .overwrite_byte_data_with_single_struct_data(&json_structure, 0)
-        .unwrap();
+    sending_container.overwrite_byte_data_with_single_struct_data(&json_structure, 0).unwrap();
     let bytes = sending_container.get_byte_ref().to_vec();
     let received_boxed = {
         let mut received_container = FeagiByteContainer::new_empty();
-        received_container
-            .try_write_data_by_ownership_to_container_and_verify(bytes)
-            .unwrap();
+        received_container.try_write_data_by_ownership_to_container_and_verify(bytes).unwrap();
         received_container
             .try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::JSON)
             .unwrap()

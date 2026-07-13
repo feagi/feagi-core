@@ -718,4 +718,3 @@ macro_rules! create_wrapped_contiguous_array {
         }
     };
 }
-

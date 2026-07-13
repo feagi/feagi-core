@@ -1,11 +1,8 @@
-
-
 /// Allows for communication of quantization levels at runtime. Numerical value represents
 /// number of bytes used.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
-pub enum QuantizationLevel
-{
+pub enum QuantizationLevel {
     Bit8 = 1,
     Bit16 = 2,
     Bit32 = 4,

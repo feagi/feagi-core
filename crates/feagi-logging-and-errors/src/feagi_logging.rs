@@ -1,4 +1,3 @@
-
 #[allow(unused)]
 #[cfg(feature = "std")]
 #[doc(hidden)]
@@ -15,7 +14,7 @@ pub enum FeagiLogLevel {
     /// The failure to process some input, or something that risks a program crash
     Error,
     /// The program is crashing!
-    Panic
+    Panic,
 }
 
 #[macro_export]

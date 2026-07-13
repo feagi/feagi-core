@@ -1,4 +1,3 @@
-
 #[derive(Debug, Default)]
 pub enum CorticalAreaModelType {
     // Only option for non-interneuron areas, Basically LIF with some additions
@@ -9,5 +8,5 @@ pub enum CorticalAreaModelType {
     // Medium performance and accuracy
     Izhikevich,
     // Low performance but most biologically accurate
-    HodgkinHuxley
+    HodgkinHuxley,
 }

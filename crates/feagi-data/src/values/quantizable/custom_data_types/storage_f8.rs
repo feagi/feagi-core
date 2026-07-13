@@ -1,6 +1,5 @@
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
-
 /// A Crappy f8 implementation written by some LLM. Uses 1 sign bit, 4 exponent bits, and 3
 /// mantissa bits, meaning it has an effective range of -7 to 8, with the smallest positive number
 /// supported being ~0.001953. The main intent of this struct is storage, as it will
@@ -40,11 +39,7 @@ impl StorageF8 {
             return Self::ZERO;
         }
 
-        let sign = if value.is_sign_negative() {
-            Self::SIGN_MASK
-        } else {
-            0
-        };
+        let sign = if value.is_sign_negative() { Self::SIGN_MASK } else { 0 };
         let abs_value = value.abs();
 
         if abs_value.is_infinite() {

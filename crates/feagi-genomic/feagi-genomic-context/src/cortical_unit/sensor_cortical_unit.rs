@@ -1,12 +1,12 @@
+use crate::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning};
+use crate::cortical_area::{CorticalAreaType, CorticalID};
+use crate::cortical_unit::{CorticalSubUnitIndex, CorticalUnitIndex};
+use crate::feagi_genome_context_error::FeagiGenomeContextError;
 use crate::sensor_cortical_units;
 use paste;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use crate::cortical_area::{CorticalAreaType, CorticalID};
-use crate::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning};
-use crate::cortical_unit::{CorticalSubUnitIndex, CorticalUnitIndex};
-use crate::feagi_genome_context_error::FeagiGenomeContextError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)] // TODO move me!
 pub struct UnitTopology {
@@ -277,56 +277,20 @@ impl SensoryCorticalUnit {
         let fh = FrameChangeHandling::Absolute;
         let pos = PercentageNeuronPositioning::Linear;
         match self {
-            SensoryCorticalUnit::Infrared => {
-                Self::get_cortical_ids_array_for_infrared_with_parameters(fh, pos, group_index)[0]
-            }
-            SensoryCorticalUnit::Proximity => {
-                Self::get_cortical_ids_array_for_proximity_with_parameters(fh, pos, group_index)[0]
-            }
-            SensoryCorticalUnit::Shock => {
-                Self::get_cortical_ids_array_for_shock_with_parameters(fh, pos, group_index)[0]
-            }
-            SensoryCorticalUnit::Battery => {
-                Self::get_cortical_ids_array_for_battery_with_parameters(fh, pos, group_index)[0]
-            }
-            SensoryCorticalUnit::Servo => {
-                Self::get_cortical_ids_array_for_servo_with_parameters(fh, pos, group_index)[0]
-            }
-            SensoryCorticalUnit::AnalogGPIO => {
-                Self::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(
-                    fh,
-                    pos,
-                    group_index,
-                )[0]
-            }
-            SensoryCorticalUnit::DigitalGPIO => {
-                Self::get_cortical_ids_array_for_digital_g_p_i_o_with_parameters(group_index)[0]
-            }
-            SensoryCorticalUnit::MiscData => {
-                Self::get_cortical_ids_array_for_misc_data_with_parameters(fh, group_index)[0]
-            }
-            SensoryCorticalUnit::TextEnglishInput => {
-                Self::get_cortical_ids_array_for_text_english_input_with_parameters(fh, group_index)
-                    [0]
-            }
-            SensoryCorticalUnit::CountInput => {
-                Self::get_cortical_ids_array_for_count_input_with_parameters(fh, pos, group_index)
-                    [0]
-            }
-            SensoryCorticalUnit::Vision => {
-                Self::get_cortical_ids_array_for_vision_with_parameters(fh, group_index)[0]
-            }
-            SensoryCorticalUnit::SegmentedVision => {
-                Self::get_cortical_ids_array_for_segmented_vision_with_parameters(fh, group_index)
-                    [0]
-            }
-            SensoryCorticalUnit::Accelerometer => {
-                Self::get_cortical_ids_array_for_accelerometer_with_parameters(fh, pos, group_index)
-                    [0]
-            }
-            SensoryCorticalUnit::Gyroscope => {
-                Self::get_cortical_ids_array_for_gyroscope_with_parameters(fh, pos, group_index)[0]
-            }
+            SensoryCorticalUnit::Infrared => Self::get_cortical_ids_array_for_infrared_with_parameters(fh, pos, group_index)[0],
+            SensoryCorticalUnit::Proximity => Self::get_cortical_ids_array_for_proximity_with_parameters(fh, pos, group_index)[0],
+            SensoryCorticalUnit::Shock => Self::get_cortical_ids_array_for_shock_with_parameters(fh, pos, group_index)[0],
+            SensoryCorticalUnit::Battery => Self::get_cortical_ids_array_for_battery_with_parameters(fh, pos, group_index)[0],
+            SensoryCorticalUnit::Servo => Self::get_cortical_ids_array_for_servo_with_parameters(fh, pos, group_index)[0],
+            SensoryCorticalUnit::AnalogGPIO => Self::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(fh, pos, group_index)[0],
+            SensoryCorticalUnit::DigitalGPIO => Self::get_cortical_ids_array_for_digital_g_p_i_o_with_parameters(group_index)[0],
+            SensoryCorticalUnit::MiscData => Self::get_cortical_ids_array_for_misc_data_with_parameters(fh, group_index)[0],
+            SensoryCorticalUnit::TextEnglishInput => Self::get_cortical_ids_array_for_text_english_input_with_parameters(fh, group_index)[0],
+            SensoryCorticalUnit::CountInput => Self::get_cortical_ids_array_for_count_input_with_parameters(fh, pos, group_index)[0],
+            SensoryCorticalUnit::Vision => Self::get_cortical_ids_array_for_vision_with_parameters(fh, group_index)[0],
+            SensoryCorticalUnit::SegmentedVision => Self::get_cortical_ids_array_for_segmented_vision_with_parameters(fh, group_index)[0],
+            SensoryCorticalUnit::Accelerometer => Self::get_cortical_ids_array_for_accelerometer_with_parameters(fh, pos, group_index)[0],
+            SensoryCorticalUnit::Gyroscope => Self::get_cortical_ids_array_for_gyroscope_with_parameters(fh, pos, group_index)[0],
         }
     }
 }
