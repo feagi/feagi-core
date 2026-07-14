@@ -1,4 +1,4 @@
-use crate::synapse_models::basic_synapse::quantization::BasicSynapseModelQuantization;
+use crate::synapse_models::uniform_weight::quantization::BasicSynapseModelQuantization;
 use crate::synapse_models::synapse_model_traits::synapse_model_data::SynapseModelAxonBundleData;
 use feagi_data::create_wrapped_quantized_decimal;
 

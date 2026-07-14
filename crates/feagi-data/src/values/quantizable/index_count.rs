@@ -1,9 +1,51 @@
-use crate::values::quantizable::QuantizedElementBase;
+use crate::values::quantizable::{QuantizationLevelPacking, QuantizedElementBase};
 
 // TODO serde serialization / deserialization? is it a good idea?
 
 // TODO have from/to other quantization levels besides u32
 // TODO have try_from support, with error reporting the invalid number as a 3 char string (const)
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub enum IndexCountQuantizationLevel {
+    U8 = 0,
+    U16 = 1,
+    U32 = 2,
+    U64 = 3,
+    // we are NOT doing u128 lol
+    Usize = 4,
+    // We can support a max of 8
+}
+
+impl Into<u8> for IndexCountQuantizationLevel {
+    fn into(self) -> u8 {
+        self as u8
+    }
+}
+
+impl TryFrom<u8> for IndexCountQuantizationLevel {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(IndexCountQuantizationLevel::U8),
+            1 => Ok(IndexCountQuantizationLevel::U16),
+            2 => Ok(IndexCountQuantizationLevel::U32),
+            3 => Ok(IndexCountQuantizationLevel::U64),
+            4 => Ok(IndexCountQuantizationLevel::Usize),
+            _ => Err(()),
+        }
+    }
+}
+
+impl QuantizationLevelPacking for IndexCountQuantizationLevel {
+    const NUMBER_BITS: usize = 3;
+
+    unsafe fn from_packed_byte(byte: u8) -> Self {
+        core::mem::transmute(byte)
+    }
+}
+
 
 /// Trait designed to hold index and/or count values in a quantized form
 pub trait QuantizedIndexCountTrait:

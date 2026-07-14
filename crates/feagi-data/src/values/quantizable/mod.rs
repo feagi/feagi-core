@@ -5,15 +5,15 @@
 mod base_traits;
 mod decimal;
 mod index_count;
-mod quantization_levels;
+mod quantization_level_packing;
 mod signed_integer;
 mod unsigned_integer;
 
 pub mod custom_data_types;
 
 pub use base_traits::QuantizedElementBase;
-pub use decimal::QuantizedDecimalTrait;
-pub use index_count::QuantizedIndexCountTrait;
-pub use quantization_levels::QuantizationLevel;
-pub use signed_integer::QuantizedSignedIntegerTrait;
-pub use unsigned_integer::QuantizedUnsignedIntegerTrait;
+pub use decimal::{QuantizedDecimalTrait, DecimalQuantizationLevel};
+pub use index_count::{QuantizedIndexCountTrait, IndexCountQuantizationLevel};
+pub use signed_integer::{QuantizedSignedIntegerTrait, SignedIntegerQuantizationLevel};
+pub use unsigned_integer::{QuantizedUnsignedIntegerTrait, UnsignedIntegerQuantizationLevel};
+pub use quantization_level_packing::QuantizationLevelPacking;

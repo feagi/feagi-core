@@ -1,4 +1,4 @@
-use crate::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
+use crate::neuron_models::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
 use crate::neuron_models::neuron_model_traits::neuron_model_data::{NeuronModelCorticalData, NeuronModelNeuronData};
 use feagi_data::{create_wrapped_quantized_decimal, create_wrapped_quantized_index};
 // TODO percentages should be their own types
@@ -14,9 +14,9 @@ create_wrapped_quantized_decimal!(pub LeakCoefficient);
 create_wrapped_quantized_index!(pub RefractoryCountdown);
 create_wrapped_quantized_index!(pub ConsecutiveFireCountdown);
 #[derive(Debug, Copy, Clone)]
-pub struct FeagiStandardModelCorticalData<CPQ>
+pub struct FeagiAdvancedModelCorticalData<CPQ>
 where
-    CPQ: FeagiStandardModelQuantization,
+    CPQ: FeagiAdvancedModelQuantization,
 {
     pub excitability: CPQ::PercentageQuant,
 
@@ -32,26 +32,26 @@ where
     pub degeneracy_constant: CPQ::DegeneracyConstantQuant,
 }
 
-impl<CPQ> Default for FeagiStandardModelCorticalData<CPQ>
+impl<CPQ> Default for FeagiAdvancedModelCorticalData<CPQ>
 where
-    CPQ: FeagiStandardModelQuantization,
+    CPQ: FeagiAdvancedModelQuantization,
 {
     fn default() -> Self {
         todo!()
     }
 }
 
-impl<CPQ> NeuronModelCorticalData<CPQ> for FeagiStandardModelCorticalData<CPQ>
+impl<CPQ> NeuronModelCorticalData<CPQ> for FeagiAdvancedModelCorticalData<CPQ>
 where
-    CPQ: FeagiStandardModelQuantization,
+    CPQ: FeagiAdvancedModelQuantization,
 {
     const MODEL_NEEDS_TO_BE_INFORMED_OF_BURST_INDEX_ROLLOVER: bool = true;
     const MODEL_SUPPORTS_CORTICAL_LAYOUT_DIMENSIONAL: bool = true;
 }
 
-impl<CPQ> FeagiStandardModelCorticalData<CPQ>
+impl<CPQ> FeagiAdvancedModelCorticalData<CPQ>
 where
-    CPQ: FeagiStandardModelQuantization,
+    CPQ: FeagiAdvancedModelQuantization,
 {
     pub fn new(
         excitability: CPQ::PercentageQuant,
@@ -73,9 +73,9 @@ where
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct FeagiStandardModelNeuronData<CPQ>
+pub struct FeagiAdvancedModelNeuronData<CPQ>
 where
-    CPQ: FeagiStandardModelQuantization,
+    CPQ: FeagiAdvancedModelQuantization,
 {
     // TODO this is arguable a cortical level property except that fire threshold increment may be used. This is a prime example os something to move to an advanced model
     pub neuron_fire_threshold: CPQ::MembranePotentialQuant,
@@ -84,20 +84,20 @@ where
     pub neuron_consecutive_fire_countdown: CPQ::NeuronCountdownQuants,
 }
 
-impl<CPQ> Default for FeagiStandardModelNeuronData<CPQ>
+impl<CPQ> Default for FeagiAdvancedModelNeuronData<CPQ>
 where
-    CPQ: FeagiStandardModelQuantization,
+    CPQ: FeagiAdvancedModelQuantization,
 {
     fn default() -> Self {
         todo!()
     }
 }
 
-impl<CPQ> NeuronModelNeuronData<CPQ> for FeagiStandardModelNeuronData<CPQ> where CPQ: FeagiStandardModelQuantization {}
+impl<CPQ> NeuronModelNeuronData<CPQ> for FeagiAdvancedModelNeuronData<CPQ> where CPQ: FeagiAdvancedModelQuantization {}
 
-impl<CPQ> FeagiStandardModelNeuronData<CPQ>
+impl<CPQ> FeagiAdvancedModelNeuronData<CPQ>
 where
-    CPQ: FeagiStandardModelQuantization,
+    CPQ: FeagiAdvancedModelQuantization,
 {
     pub fn new(
         neuron_fire_threshold: CPQ::MembranePotentialQuant,

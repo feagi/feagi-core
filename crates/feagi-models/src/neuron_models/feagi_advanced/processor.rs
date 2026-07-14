@@ -1,28 +1,28 @@
 use crate::burst_index::BurstIndex;
 use crate::cortical_area_layout::{CorticalAreaLayoutDataDimensional, CorticalAreaLayoutDataMemory};
 use crate::neuron_history::NeuronHistoryFull;
-use crate::neuron_models::feagi_standard::data::{FeagiStandardModelCorticalData, FeagiStandardModelNeuronData};
-use crate::neuron_models::feagi_standard::quantization::FeagiStandardModelQuantization;
+use crate::neuron_models::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
+use crate::neuron_models::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
 use crate::neuron_models::neuron_model_traits::neuron_model_processor::NeuronModelProcessor;
 use core::marker::PhantomData;
 use feagi_data::neurons::{NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedElementBase;
 
-pub struct FeagiStandardModelProcessor<FIQ, CPQ>
+pub struct FeagiAdvancedModelProcessor<FIQ, CPQ>
 where
     FIQ: FeagiIndexQuantization,
-    CPQ: FeagiStandardModelQuantization, // fsm quant impl
+    CPQ: FeagiAdvancedModelQuantization, // fsm quant impl
 {
     // No actual members
     _p: PhantomData<(FIQ, CPQ)>,
 }
 
-impl<FIQ, CPQ> NeuronModelProcessor<FIQ, CPQ, FeagiStandardModelCorticalData<CPQ>, FeagiStandardModelNeuronData<CPQ>>
-    for FeagiStandardModelProcessor<FIQ, CPQ>
+impl<FIQ, CPQ> NeuronModelProcessor<FIQ, CPQ, FeagiAdvancedModelCorticalData<CPQ>, FeagiAdvancedModelNeuronData<CPQ>>
+    for FeagiAdvancedModelProcessor<FIQ, CPQ>
 where
     FIQ: FeagiIndexQuantization,
-    CPQ: FeagiStandardModelQuantization,
+    CPQ: FeagiAdvancedModelQuantization,
 {
     type UsedNeuronHistory = NeuronHistoryFull<FIQ>;
 
@@ -32,8 +32,8 @@ where
         burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
         dimensional_cortical_layout: CorticalAreaLayoutDataDimensional<FIQ>,
         neuron_history: &Self::UsedNeuronHistory,
-        cortical_area_data: &FeagiStandardModelCorticalData<CPQ>,
-        neuron_model_data: &mut FeagiStandardModelNeuronData<CPQ>,
+        cortical_area_data: &FeagiAdvancedModelCorticalData<CPQ>,
+        neuron_model_data: &mut FeagiAdvancedModelNeuronData<CPQ>,
         this_neuron_potential: &mut NeuronMembranePotential<CPQ::MembranePotentialQuant>,
     ) -> bool {
         // update neuron potential
@@ -55,8 +55,8 @@ where
         burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
         memory_cortical_layout: CorticalAreaLayoutDataMemory<FIQ>,
         neuron_history: &Self::UsedNeuronHistory,
-        cortical_area_data: &FeagiStandardModelCorticalData<CPQ>,
-        neuron_model_data: &mut FeagiStandardModelNeuronData<CPQ>,
+        cortical_area_data: &FeagiAdvancedModelCorticalData<CPQ>,
+        neuron_model_data: &mut FeagiAdvancedModelNeuronData<CPQ>,
         this_neuron_potential: &mut NeuronMembranePotential<CPQ::MembranePotentialQuant>,
     ) -> bool {
         panic!("not implemented yet");

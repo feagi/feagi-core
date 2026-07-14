@@ -1,0 +1,4 @@
+Decimal quantization supports up to 16 levels (4 bits)
+
+
+Limit of 32 neuron models supported + 8 quantization levels per each as per 8 bit limit

@@ -6,6 +6,13 @@ pub struct FeagiInvalidQuantizationErrKey {
 }
 
 #[derive(FeagiErrorKey)]
+pub struct FeagiHardwareNoLikeQuant { // :3
+    context: &'static str,
+    hardware_type: &'static str,
+    attempted_quant: &'static str,
+}
+
+#[derive(FeagiErrorKey)]
 pub struct FeagiInvalidIndexErrKey {
     context: &'static str,
 }

@@ -1,9 +1,9 @@
-use crate::synapse_models::basic_synapse::data::BasicSynapseModelAxonBundleData;
-use crate::synapse_models::basic_synapse::quantization::BasicSynapseModelQuantization;
+use crate::synapse_models::uniform_weight::data::BasicSynapseModelAxonBundleData;
+use crate::synapse_models::uniform_weight::quantization::BasicSynapseModelQuantization;
 use crate::synapse_models::synapse_model_traits::synapse_model_processor::{SynapseModelProcessorAxonBundleOnly, SynapseModelProcessorBase};
 use core::marker::PhantomData;
 use feagi_data::neurons::NeuronMembranePotential;
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialCPUQuantization;
+use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedDecimalTrait;
 
@@ -11,8 +11,8 @@ pub struct BasicSynapseModelProcessor<FIQ, SMQ, CPQIn, CPQOut>
 where
     FIQ: FeagiIndexQuantization,
     SMQ: BasicSynapseModelQuantization,
-    CPQIn: CorticalPotentialCPUQuantization,
-    CPQOut: CorticalPotentialCPUQuantization,
+    CPQIn: CorticalPotentialQuantization,
+    CPQOut: CorticalPotentialQuantization,
 {
     // No actual members
     _p: PhantomData<(FIQ, SMQ, CPQIn, CPQOut)>,
@@ -23,8 +23,8 @@ impl<FIQ, SMQ, CPQIn, CPQOut> SynapseModelProcessorBase<FIQ, SMQ, BasicSynapseMo
 where
     FIQ: FeagiIndexQuantization,
     SMQ: BasicSynapseModelQuantization,
-    CPQIn: CorticalPotentialCPUQuantization,
-    CPQOut: CorticalPotentialCPUQuantization,
+    CPQIn: CorticalPotentialQuantization,
+    CPQOut: CorticalPotentialQuantization,
 {
     type CustomContext = ();
 }
@@ -34,8 +34,8 @@ impl<FIQ, SMQ, CPQIn, CPQOut> SynapseModelProcessorAxonBundleOnly<FIQ, SMQ, Basi
 where
     FIQ: FeagiIndexQuantization,
     SMQ: BasicSynapseModelQuantization,
-    CPQIn: CorticalPotentialCPUQuantization,
-    CPQOut: CorticalPotentialCPUQuantization,
+    CPQIn: CorticalPotentialQuantization,
+    CPQOut: CorticalPotentialQuantization,
 {
     fn process_neuron_potential_through_bundle(
         outgoing_potential: &NeuronMembranePotential<CPQIn::MembranePotentialQuant>,

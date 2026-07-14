@@ -1,2 +1,2 @@
-pub mod basic_synapse;
+pub mod uniform_weight;
 pub mod synapse_model_traits;

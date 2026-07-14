@@ -9,7 +9,7 @@ use feagi_data::values::percentage::PercentageUnsigned;
 use feagi_data::values::quantizable::custom_data_types::StorageF8;
 
 use feagi_data::values::quantizable::{
-    QuantizationLevel, QuantizedDecimalTrait, QuantizedElementBase, QuantizedIndexCountTrait, QuantizedSignedIntegerTrait,
+    QuantizedDecimalTrait, QuantizedElementBase, QuantizedIndexCountTrait, QuantizedSignedIntegerTrait,
     QuantizedUnsignedIntegerTrait,
 };
 use feagi_data::values::spatial::integer_signed::{SignedCoordinate2D, SignedCoordinate3D, SignedCoordinate4D};
@@ -29,43 +29,7 @@ feagi_data::create_wrapped_quantized_decimal!(
     pub TestWrappedDecimal
 );
 
-//region QuantizationLevel
 
-#[test]
-fn quantization_level_byte_discriminants() {
-    assert_eq!(QuantizationLevel::Bit8 as u8, 1);
-    assert_eq!(QuantizationLevel::Bit16 as u8, 2);
-    assert_eq!(QuantizationLevel::Bit32 as u8, 4);
-    assert_eq!(QuantizationLevel::Bit64 as u8, 8);
-}
-
-#[test]
-fn quantization_level_minimum_for_usize() {
-    use QuantizationLevel::*;
-    assert_eq!(QuantizationLevel::minimum_quantization_needed_for_usize(0), Bit8);
-    assert_eq!(QuantizationLevel::minimum_quantization_needed_for_usize(254), Bit8);
-    // Boundaries use a strict `<`, so the max value of a level spills into the next one up.
-    assert_eq!(QuantizationLevel::minimum_quantization_needed_for_usize(255), Bit16);
-    assert_eq!(QuantizationLevel::minimum_quantization_needed_for_usize(65_534), Bit16);
-    assert_eq!(QuantizationLevel::minimum_quantization_needed_for_usize(65_535), Bit32);
-    assert_eq!(QuantizationLevel::minimum_quantization_needed_for_usize(1_000_000), Bit32);
-    assert_eq!(QuantizationLevel::minimum_quantization_needed_for_usize(u32::MAX as usize), Bit64);
-}
-
-#[test]
-fn quantization_level_derives() {
-    let a = QuantizationLevel::Bit16;
-    let b = a; // Copy
-    assert_eq!(a, b);
-    assert_eq!(a.clone(), QuantizationLevel::Bit16);
-    assert_ne!(QuantizationLevel::Bit8, QuantizationLevel::Bit32);
-    let mut set = HashSet::new();
-    set.insert(QuantizationLevel::Bit64);
-    assert!(set.contains(&QuantizationLevel::Bit64));
-    assert!(format!("{:?}", a).contains("Bit16"));
-}
-
-//endregion
 
 //region QuantizedIndexCountTrait
 
@@ -137,12 +101,6 @@ fn quantized_signed_integer_predicates() {
 
 #[test]
 fn quantized_element_base_constants() {
-    assert_eq!(<u8 as QuantizedElementBase>::QUANTIZATION_LEVEL, QuantizationLevel::Bit8);
-    assert_eq!(<u16 as QuantizedElementBase>::QUANTIZATION_LEVEL, QuantizationLevel::Bit16);
-    assert_eq!(<u32 as QuantizedElementBase>::QUANTIZATION_LEVEL, QuantizationLevel::Bit32);
-    assert_eq!(<u64 as QuantizedElementBase>::QUANTIZATION_LEVEL, QuantizationLevel::Bit64);
-    assert_eq!(<f32 as QuantizedElementBase>::QUANTIZATION_LEVEL, QuantizationLevel::Bit32);
-
     assert_eq!(<u8 as QuantizedElementBase>::QUANT_ZERO, 0);
     assert_eq!(<i32 as QuantizedElementBase>::QUANT_ZERO, 0);
     assert_eq!(<f32 as QuantizedElementBase>::QUANT_ZERO, 0.0);

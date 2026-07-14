@@ -2,7 +2,7 @@ use crate::synapse_models::synapse_model_traits::synapse_model_data::{
     SynapseModelAxonBundleData, SynapseModelQuantization, SynapseModelSynapseData,
 };
 use feagi_data::neurons::NeuronMembranePotential;
-use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialCPUQuantization;
+use feagi_data::quantization_levels::cortical_potential_quantization::CorticalPotentialQuantization;
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 
 /// Root base trait for defining synapse firing and alteration of
@@ -12,8 +12,8 @@ where
     FIQ: FeagiIndexQuantization,
     SMQ: SynapseModelQuantization,
     SMABD: SynapseModelAxonBundleData<SMQ>,
-    CPQIn: CorticalPotentialCPUQuantization,
-    CPQOut: CorticalPotentialCPUQuantization,
+    CPQIn: CorticalPotentialQuantization,
+    CPQOut: CorticalPotentialQuantization,
 {
     // TODO custom context may need to be moved somewhere else, cause wouldnt this cause slowdown for memory stuff?
     /// Some synapses require custom contexts / additional information. This advanced parameter
@@ -26,8 +26,8 @@ where
     FIQ: FeagiIndexQuantization,
     SMQ: SynapseModelQuantization,
     SMABD: SynapseModelAxonBundleData<SMQ>,
-    CPQIn: CorticalPotentialCPUQuantization,
-    CPQOut: CorticalPotentialCPUQuantization,
+    CPQIn: CorticalPotentialQuantization,
+    CPQOut: CorticalPotentialQuantization,
 {
     fn process_neuron_potential_through_bundle(
         outgoing_potential: &NeuronMembranePotential<CPQIn::MembranePotentialQuant>,
@@ -46,8 +46,8 @@ where
     SMQ: SynapseModelQuantization,
     SMABD: SynapseModelAxonBundleData<SMQ>,
     SMSD: SynapseModelSynapseData<SMQ>,
-    CPQIn: CorticalPotentialCPUQuantization,
-    CPQOut: CorticalPotentialCPUQuantization,
+    CPQIn: CorticalPotentialQuantization,
+    CPQOut: CorticalPotentialQuantization,
 {
     fn process_neuron_potential_through_synapse(
         outgoing_potential: &NeuronMembranePotential<CPQIn::MembranePotentialQuant>,

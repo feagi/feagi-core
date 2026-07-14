@@ -1,7 +1,4 @@
-pub mod feagi_standard;
-mod neuron_model_descriptor;
+pub mod feagi_advanced;
 pub mod neuron_model_traits;
-pub mod common_enums;
-pub mod cortical_writer;
+pub mod neuron_model_quantization_encoding;
 
-pub use neuron_model_descriptor::NeuronModelCPUDescriptor;

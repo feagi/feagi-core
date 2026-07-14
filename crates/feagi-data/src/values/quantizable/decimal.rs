@@ -1,11 +1,54 @@
-//! Values that hold some sort of decimal (float) value
+//! Values that hold some sort of decimal (float) value. Note that yes, different hardwares support
+//! different values types
 
 // TODO Equal check with epsilon
 
 use crate::values::percentage::PercentageUnsigned;
 use crate::values::quantizable::custom_data_types::StorageF8;
+use crate::values::quantizable::quantization_level_packing::QuantizationLevelPacking;
 use crate::values::quantizable::QuantizedElementBase;
-use half::f16;
+use half::{bf16, f16};
+
+/// Represents a value that is represented as a decimal number, main backbone for computations
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub enum DecimalQuantizationLevel {
+    F16 = 0,
+    BF16 = 1,
+    F32 = 2,
+    F64 = 3,
+    StorageF8 = 4,
+    // We can support a max of 16 quants
+}
+
+impl Into<u8> for DecimalQuantizationLevel {
+    fn into(self) -> u8 {
+        self as u8
+    }
+}
+
+impl TryFrom<u8> for DecimalQuantizationLevel {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(DecimalQuantizationLevel::F16),
+            1 => Ok(DecimalQuantizationLevel::BF16),
+            2 => Ok(DecimalQuantizationLevel::F32),
+            3 => Ok(DecimalQuantizationLevel::F64),
+            4 => Ok(DecimalQuantizationLevel::StorageF8),
+            _ => Err(()),
+        }
+    }
+}
+
+impl QuantizationLevelPacking for DecimalQuantizationLevel {
+    const NUMBER_BITS: usize = 4; // 16 quants
+
+    unsafe fn from_packed_byte(byte: u8) -> Self {
+        core::mem::transmute(byte)
+    }
+}
 
 /// Quantizable data for some decimal value (float)
 pub trait QuantizedDecimalTrait:
@@ -29,12 +72,15 @@ pub trait QuantizedDecimalTrait:
     + 'static
     + QuantizedElementBase
 {
-    // TODO to and from other quant levels!
     fn to_storage_f8(self) -> StorageF8;
     fn from_storage_f8(v: StorageF8) -> Self;
 
     fn to_f16(self) -> f16;
     fn from_f16(v: f16) -> Self;
+
+    fn to_bf16(self) -> bf16;
+
+    fn from_bf16(v: bf16) -> Self;
 
     fn to_f32(self) -> f32;
     fn from_f32(value: f32) -> Self;
@@ -59,6 +105,14 @@ impl QuantizedDecimalTrait for StorageF8 {
     }
 
     fn from_f16(v: f16) -> Self {
+        todo!()
+    }
+
+    fn to_bf16(self) -> bf16 {
+        todo!()
+    }
+
+    fn from_bf16(v: bf16) -> Self {
         todo!()
     }
 
@@ -100,12 +154,66 @@ impl QuantizedDecimalTrait for f16 {
         todo!()
     }
 
+    fn to_bf16(self) -> bf16 {
+        todo!()
+    }
+
+    fn from_bf16(v: bf16) -> Self {
+        todo!()
+    }
+
     fn to_f32(self) -> f32 {
         f16::to_f32(self)
     }
 
     fn from_f32(value: f32) -> Self {
         f16::from_f32(value)
+    }
+
+    fn to_f64(self) -> f64 {
+        todo!()
+    }
+
+    fn from_f64(value: f64) -> Self {
+        todo!()
+    }
+
+    fn from_unsigned_percentage(v: PercentageUnsigned) -> Self {
+        todo!()
+    }
+}
+
+impl QuantizedDecimalTrait for bf16 {
+    fn to_storage_f8(self) -> StorageF8 {
+        todo!()
+    }
+
+    fn from_storage_f8(v: StorageF8) -> Self {
+        todo!()
+    }
+
+    fn to_f16(self) -> f16 {
+        todo!()
+    }
+
+    fn from_f16(v: f16) -> Self {
+        todo!()
+    }
+
+    fn to_bf16(self) -> bf16 {
+        todo!()
+    }
+
+    fn from_bf16(v: bf16) -> Self {
+        todo!()
+    }
+
+    fn to_f32(self) -> f32 {
+        bf16::to_f32(self)
+    }
+
+    fn from_f32(value: f32) -> Self {
+        bf16::from_f32(value)
     }
 
     fn to_f64(self) -> f64 {
@@ -135,6 +243,14 @@ impl QuantizedDecimalTrait for f32 {
     }
 
     fn from_f16(v: f16) -> Self {
+        todo!()
+    }
+
+    fn to_bf16(self) -> bf16 {
+        todo!()
+    }
+
+    fn from_bf16(v: bf16) -> Self {
         todo!()
     }
 
@@ -173,6 +289,14 @@ impl QuantizedDecimalTrait for f64 {
     }
 
     fn from_f16(v: f16) -> Self {
+        todo!()
+    }
+
+    fn to_bf16(self) -> bf16 {
+        todo!()
+    }
+
+    fn from_bf16(v: bf16) -> Self {
         todo!()
     }
 

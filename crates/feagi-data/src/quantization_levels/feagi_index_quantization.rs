@@ -27,16 +27,19 @@ pub trait FeagiIndexQuantization: Clone + Copy {
 
     /// Indexing along the FCLC (the primary or its extensions)
     type FireCandidateListCacheIndexCountQuant: QuantizedIndexCountTrait;
-
-    fn max_number_neurons_globally() -> usize {
-        Self::NeuronIndexCountQuant::QUANT_MAX_AS_USIZE
-    }
-
-    // TODO other max readings
-    // TODO per type indexing?
 }
 
 //region Discrete Levels
+
+#[repr(u8)]
+#[derive(Default)]
+/// Enum that describes what `FeagiGlobalQuantization` implementation (quantization preset) to
+/// follow
+pub enum FeagiGlobalQuantizationLevel {
+    #[default]
+    Standard = 0,
+    // TODO tiny, mini, big, absurd
+}
 
 /// The default quantization level for most deployments. Practical balance between speed and
 /// indexing size. The only level supported by some platforms
@@ -55,10 +58,4 @@ impl FeagiIndexQuantization for FeagiGlobalQuantizationStandard {
 
 //endregion
 
-#[repr(u8)]
-#[derive(Default)]
-pub enum FeagiGlobalQuantizationLevel {
-    #[default]
-    Standard = 0,
-    // TODO tiny, mini, big, absurd
-}
+
