@@ -1,11 +1,10 @@
 use crate::burst_index::BurstIndex;
-use crate::cortical_area_layout::{CorticalAreaLayoutDataDimensional, CorticalAreaLayoutDataMemory};
 use crate::neuron_history::NeuronHistoryFull;
 use crate::neuron_models::feagi_advanced::data::{FeagiAdvancedModelCorticalData, FeagiAdvancedModelNeuronData};
 use crate::neuron_models::feagi_advanced::quantization::FeagiAdvancedModelQuantization;
 use crate::neuron_models::neuron_model_traits::neuron_model_processor::NeuronModelProcessor;
 use core::marker::PhantomData;
-use feagi_data::neurons::{NeuronCorticalLocalIndex, NeuronMembranePotential};
+use feagi_data::neurons::{DimensionalCorticalArea4DDimensions, NeuronCorticalLocalIndex, NeuronMembranePotential};
 use feagi_data::quantization_levels::feagi_index_quantization::FeagiIndexQuantization;
 use feagi_data::values::quantizable::QuantizedElementBase;
 
@@ -30,7 +29,7 @@ where
         incoming_potential: &NeuronMembranePotential<CPQ::MembranePotentialQuant>,
         neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
         burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
-        dimensional_cortical_layout: CorticalAreaLayoutDataDimensional<FIQ>,
+        dimensional_cortical_dimensions: DimensionalCorticalArea4DDimensions<FIQ::NeuronIndexCountQuant>,
         neuron_history: &Self::UsedNeuronHistory,
         cortical_area_data: &FeagiAdvancedModelCorticalData<CPQ>,
         neuron_model_data: &mut FeagiAdvancedModelNeuronData<CPQ>,
@@ -53,7 +52,7 @@ where
         incoming_potential: &NeuronMembranePotential<CPQ::MembranePotentialQuant>,
         neuron_linear_index: &NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
         burst_index: &BurstIndex<FIQ::GlobalBurstIndexQuant>,
-        memory_cortical_layout: CorticalAreaLayoutDataMemory<FIQ>,
+        memory_cortical_number_neurons: NeuronCorticalLocalIndex<FIQ::NeuronIndexCountQuant>,
         neuron_history: &Self::UsedNeuronHistory,
         cortical_area_data: &FeagiAdvancedModelCorticalData<CPQ>,
         neuron_model_data: &mut FeagiAdvancedModelNeuronData<CPQ>,
