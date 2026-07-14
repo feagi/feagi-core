@@ -1,5 +1,6 @@
 use crate::values::quantizable::QuantizedIndexCountTrait;
 use core::ops::Range;
+use crate::collections::index_range_managers::errors::FeagiIndexRangeManagerError;
 
 /// Contains a vector of incrementing (by start / end index) ranges that are not overlapping, as well as indexes to those
 /// ranges in order of decrementing lengths of each range. Inserting a range will attempt to insert
@@ -53,7 +54,7 @@ impl<Q: QuantizedIndexCountTrait> CombiningRangeVector<Q> {
     /// the range shares a side with a neighbor, they are merged. The ordered indexes will also be
     /// updated as a result.
     ///  NOTE: It is assumed that any inserting range may not overlap into existing ranges!
-    pub fn insert_range_merge(&mut self, range: Range<Q>) -> Result<(), ()> {
+    pub fn insert_range_merge(&mut self, range: Range<Q>) -> Result<(), FeagiIndexRangeManagerError> {
         todo!()
     }
 
